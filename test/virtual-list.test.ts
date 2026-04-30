@@ -113,6 +113,41 @@ describe("TVirtualList", () => {
     mounted.unmount();
   });
 
+  it("does not emit update:modelValue when wheel scrolling", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const onUpdateModelValue = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          itemCount: items.length,
+          itemVersion: 1,
+          getItem: (index: number) => items[index],
+          modelValue: 0,
+          autoFocus: true,
+          "onUpdate:modelValue": onUpdateModelValue,
+        }),
+      20,
+      8,
+    );
+
+    dispatchWheel(mounted.container()!);
+    await nextTick();
+    await nextTick();
+
+    expect(onUpdateModelValue).not.toHaveBeenCalled();
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
+      "item-1",
+      "item-2",
+      "item-3",
+      "item-4",
+    ]);
+    mounted.unmount();
+  });
+
   it("keeps scrollPlane fast path to exposed rows when no DOM renderer is attached", () => {
     const terminal = createTerminal({ cols: 12, rows: 6 });
     const render = createRenderManager(terminal);
