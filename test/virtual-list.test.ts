@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createTerminal } from "../src/index.js";
+import { createTerminal, createTerminalApp } from "../src/index.js";
 import { createRenderManager } from "../src/vue/render/render-manager.js";
 import { h, mountTerminal, nextTick, TVirtualList } from "./ui-regressions-support.js";
 
@@ -133,5 +133,42 @@ describe("TVirtualList", () => {
 
     expect(committedRows).toEqual([3]);
     expect(terminal.getCell(5, 3).ch).toBe("4");
+  });
+
+  it("mounted headless fast path emits only exposed dirty row after wheel", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: items.length,
+        itemVersion: 1,
+        getItem: (index: number) => items[index],
+        autoFocus: true,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+    const commits: Array<readonly number[] | null> = [];
+    const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(commits).toEqual([[3]]);
+    expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+      "item-1",
+      "item-2",
+      "item-3",
+      "item-4",
+    ]);
+    app.dispose();
   });
 });

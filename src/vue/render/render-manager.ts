@@ -331,13 +331,17 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       (typeof next.zIndex === "number" && next.zIndex !== prev.zIndex);
     const nextPlane = next.plane ?? prev.plane;
     const planeChanged = nextPlane !== prev.plane;
-    const nextRect = next.rect ?? prev.rect;
+    const hasRect = Object.prototype.hasOwnProperty.call(next, "rect");
+    const nextRect = hasRect ? (next.rect ?? null) : prev.rect;
     const rectChanged = !sameRect(prev.rect, nextRect);
     const bucketChanged = planeChanged || rectChanged;
     const { y0, y1 } = rectToYBounds(nextRect);
     const dirtyRowsHint = next.dirtyRowsHint;
     const canUseDirtyRowsHint =
-      nextPlane === prev.plane && dirtyRowsHint != null && dirtyRowsHint.length > 0;
+      !bucketChanged &&
+      nextPlane === prev.plane &&
+      dirtyRowsHint != null &&
+      dirtyRowsHint.length > 0;
     if (canUseDirtyRowsHint) {
       markRows(nextPlane, dirtyRowsHint);
     } else {
@@ -512,13 +516,13 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                 }
                 const globalIds = globalNodeIdsByPlane.get(plane);
                 if (globalIds) for (const id of globalIds) ids.add(id);
-                return Array.from(ids, (id) => nodes.get(id)).filter(
-                  (node): node is RenderNode => node != null,
-                ).sort(
-                  (a, b) =>
-                    (sortedPlaneNodeIndexById.get(a.id) ?? 0) -
-                    (sortedPlaneNodeIndexById.get(b.id) ?? 0),
-                );
+                return Array.from(ids, (id) => nodes.get(id))
+                  .filter((node): node is RenderNode => node != null)
+                  .sort(
+                    (a, b) =>
+                      (sortedPlaneNodeIndexById.get(a.id) ?? 0) -
+                      (sortedPlaneNodeIndexById.get(b.id) ?? 0),
+                  );
               })();
           scannedNodes += candidateNodes.length;
 

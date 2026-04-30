@@ -48,7 +48,7 @@ export const TVirtualList = defineComponent({
     itemCount: { type: Number, required: true },
     itemVersion: { type: Number, required: true },
     getItem: { type: Function as PropType<(index: number) => unknown>, required: true },
-        renderItem: {
+    renderItem: {
       type: Function as PropType<(item: unknown, index: number) => string>,
       default: undefined,
     },
@@ -93,10 +93,10 @@ export const TVirtualList = defineComponent({
       const h = Math.max(0, props.h);
       if (h <= 0) return;
       const maxTop = Math.max(0, props.itemCount - h);
-      scrollTop.value = clamp(scrollTop.value, 0, maxTop);
-      if (active.value < scrollTop.value) scrollTop.value = active.value;
-      else if (active.value >= scrollTop.value + h)
-        scrollTop.value = clamp(active.value - (h - 1), 0, maxTop);
+      let nextTop = clamp(scrollTop.value, 0, maxTop);
+      if (active.value < nextTop) nextTop = active.value;
+      else if (active.value >= nextTop + h) nextTop = clamp(active.value - (h - 1), 0, maxTop);
+      applyScrollTop(nextTop);
     }
 
     watch(
@@ -123,7 +123,8 @@ export const TVirtualList = defineComponent({
       active.value = clamp(index, 0, Math.max(0, props.itemCount - 1));
       emit("update:modelValue", active.value);
       ensureActiveVisible();
-      scheduler.invalidate();
+      if (!dirtyRowsHint?.length) setDirtyRowsHint(viewportRows());
+      scheduler.invalidate({ priority: "high", plane: plane.value });
     }
 
     function onKeydown(e: TerminalKeyboardEvent): void {
@@ -198,22 +199,7 @@ export const TVirtualList = defineComponent({
           );
           if (!dir || nextTop === scrollTop.value) return;
 
-          const delta = nextTop - scrollTop.value;
-          scrollTop.value = nextTop;
-          const r = absRect.value;
-          const canUseScrollPlane = !renderer.value && Math.abs(delta) < h;
-          if (canUseScrollPlane) {
-            render.scrollPlane(plane.value, r.y, r.y + h, delta);
-            const exposedRows: number[] = [];
-            if (delta > 0) {
-              for (let i = h - delta; i < h; i++) exposedRows.push(r.y + i);
-            } else {
-              for (let i = 0; i < -delta; i++) exposedRows.push(r.y + i);
-            }
-            setDirtyRowsHint(exposedRows);
-          } else {
-            setDirtyRowsHint(viewportRows());
-          }
+          applyScrollTop(nextTop);
           emit("scroll", nextTop);
           scheduler.invalidate({ priority: "high", plane: plane.value });
         },
@@ -241,6 +227,16 @@ export const TVirtualList = defineComponent({
       manager.focus(nodeId);
     });
 
+    function exposedRowsForDelta(y0: number, h: number, delta: number): number[] {
+      const rows: number[] = [];
+      if (delta > 0) {
+        for (let i = h - delta; i < h; i++) rows.push(y0 + i);
+      } else {
+        for (let i = 0; i < -delta; i++) rows.push(y0 + i);
+      }
+      return rows;
+    }
+
     function viewportRows(): number[] {
       const r = absRect.value;
       const rows: number[] = [];
@@ -261,6 +257,22 @@ export const TVirtualList = defineComponent({
       if (renderNodeId) render.update(renderNodeId, { dirtyRowsHint });
     }
 
+    function applyScrollTop(nextTop: number): void {
+      const r = absRect.value;
+      const h = Math.max(0, Math.floor(r.h));
+      const clampedTop = clamp(nextTop, 0, Math.max(0, props.itemCount - h));
+      const delta = clampedTop - scrollTop.value;
+      if (!delta) return;
+      scrollTop.value = clampedTop;
+      const canUseScrollPlane = !renderer.value && Math.abs(delta) < h;
+      if (canUseScrollPlane) {
+        render.scrollPlane(plane.value, r.y, r.y + h, delta);
+        setDirtyRowsHint(exposedRowsForDelta(r.y, h, delta));
+        return;
+      }
+      setDirtyRowsHint(viewportRows());
+    }
+
     const renderNode = useRenderNode(() => ({
       zIndex: props.zIndex,
       rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
@@ -271,7 +283,8 @@ export const TVirtualList = defineComponent({
         absRect.value,
         props.itemCount,
         props.itemVersion,
-        scrollTop.value,
+        props.getItem,
+        props.renderItem,
         active.value,
         focused.value,
         props.style,

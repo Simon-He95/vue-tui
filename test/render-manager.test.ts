@@ -450,4 +450,88 @@ describe("render-manager", () => {
     expect(paints).toEqual(["global"]);
   });
 
+  it("moves nodes between row buckets and global buckets when rect becomes null", () => {
+    const paints: string[] = [];
+    const listeners = new Map<string, Set<(...args: any[]) => void>>();
+    const terminal: any = {
+      size: () => ({ cols: 10, rows: 8 }),
+      on(event: string, cb: (...args: any[]) => void) {
+        let set = listeners.get(event);
+        if (!set) listeners.set(event, (set = new Set()));
+        set.add(cb);
+        return () => set!.delete(cb);
+      },
+      batch(fn: () => void) {
+        fn();
+      },
+      clear() {},
+    };
+
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 2, w: 10, h: 1 },
+      paint: () => paints.push("node"),
+    });
+    rm.render();
+
+    paints.length = 0;
+    rm.update(node.id, { rect: null });
+    rm.render();
+    expect(paints).toEqual(["node"]);
+
+    paints.length = 0;
+    rm.update(node.id, { dirtyRowsHint: [7] });
+    rm.render();
+    expect(paints).toEqual(["node"]);
+
+    paints.length = 0;
+    rm.update(node.id, { rect: { x: 0, y: 4, w: 10, h: 1 } });
+    rm.render();
+    expect(paints).toEqual(["node"]);
+
+    paints.length = 0;
+    rm.update(node.id, { dirtyRowsHint: [7] });
+    rm.render();
+    expect(paints).toEqual([]);
+  });
+
+  it("ignores dirtyRowsHint when rect changes so old and new rows repaint", () => {
+    const paints: string[] = [];
+    const dirtyArgs: string[] = [];
+    const listeners = new Map<string, Set<(...args: any[]) => void>>();
+    const terminal: any = {
+      size: () => ({ cols: 10, rows: 8 }),
+      on(event: string, cb: (...args: any[]) => void) {
+        let set = listeners.get(event);
+        if (!set) listeners.set(event, (set = new Set()));
+        set.add(cb);
+        return () => set!.delete(cb);
+      },
+      batch(fn: () => void) {
+        fn();
+      },
+      clear() {},
+    };
+
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: (dirtyRows) => {
+        paints.push("node");
+        dirtyArgs.push((dirtyRows ?? []).join(","));
+      },
+    });
+    rm.render();
+
+    paints.length = 0;
+    dirtyArgs.length = 0;
+    rm.update(node.id, { rect: { x: 0, y: 5, w: 10, h: 1 }, dirtyRowsHint: [5] });
+    const stats = rm.render();
+
+    expect(paints).toEqual(["node"]);
+    expect(dirtyArgs).toEqual(["1,5"]);
+    expect(stats?.rows).toBe(2);
+  });
 });
