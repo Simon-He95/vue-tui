@@ -120,10 +120,13 @@ export const TVirtualList = defineComponent({
     }
 
     function moveActive(index: number): void {
+      const prevTop = scrollTop.value;
       active.value = clamp(index, 0, Math.max(0, props.itemCount - 1));
       emit("update:modelValue", active.value);
       ensureActiveVisible();
-      if (!dirtyRowsHint?.length) setDirtyRowsHint(viewportRows());
+      if (scrollTop.value !== prevTop) dirtyRowsHint = viewportRows();
+      else setDirtyRowsHint(viewportRows());
+      if (renderNodeId) render.update(renderNodeId, { dirtyRowsHint });
       scheduler.invalidate({ priority: "high", plane: plane.value });
     }
 
@@ -264,7 +267,9 @@ export const TVirtualList = defineComponent({
       const delta = clampedTop - scrollTop.value;
       if (!delta) return;
       scrollTop.value = clampedTop;
-      const canUseScrollPlane = !renderer.value && Math.abs(delta) < h;
+      const size = terminal.size();
+      const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= size.cols;
+      const canUseScrollPlane = !renderer.value && ownsFullRows && Math.abs(delta) < h;
       if (canUseScrollPlane) {
         render.scrollPlane(plane.value, r.y, r.y + h, delta);
         setDirtyRowsHint(exposedRowsForDelta(r.y, h, delta));

@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTerminal, createTerminalApp } from "../src/index.js";
 import { createRenderManager } from "../src/vue/render/render-manager.js";
-import { h, mountTerminal, nextTick, TVirtualList } from "./ui-regressions-support.js";
+import {
+  defineComponent,
+  h,
+  mountTerminal,
+  nextTick,
+  TText,
+  TVirtualList,
+} from "./ui-regressions-support.js";
 
 function dispatchWheel(container: HTMLElement): void {
   const wheel = new Event("wheel", { bubbles: true }) as any;
@@ -138,7 +145,7 @@ describe("TVirtualList", () => {
   it("mounted headless fast path emits only exposed dirty row after wheel", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
-      cols: 20,
+      cols: 12,
       rows: 8,
       component: TVirtualList,
       props: {
@@ -169,6 +176,79 @@ describe("TVirtualList", () => {
       "item-3",
       "item-4",
     ]);
+    app.dispose();
+  });
+
+  it("repaints the viewport when keyboard navigation scrolls active state", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: items.length,
+        itemVersion: 1,
+        getItem: (index: number) => items[index],
+        modelValue: 3,
+        autoFocus: true,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+    const commits: Array<readonly number[] | null> = [];
+    const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+
+    app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: Date.now() });
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(commits).toEqual([[0, 1, 2, 3]]);
+    expect(rowText({ terminal: app.terminal } as any, 2)).toBe("item-3");
+    expect(rowText({ terminal: app.terminal } as any, 3)).toBe("item-4");
+    expect(app.terminal.getCell(0, 2).style.inverse).not.toBe(true);
+    expect(app.terminal.getCell(0, 3).style.inverse).toBe(true);
+    app.dispose();
+  });
+
+  it("does not shift same-plane content outside a non-full-row list", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "VirtualListWithSideContent",
+      setup() {
+        return () => [
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 4,
+            itemCount: items.length,
+            itemVersion: 1,
+            getItem: (index: number) => items[index],
+            autoFocus: true,
+          }),
+          h(TText, { x: 12, y: 1, w: 4, value: "SIDE" }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+    const commits: Array<readonly number[] | null> = [];
+    const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(commits).toEqual([[0, 1, 2, 3]]);
+    expect(rowText({ terminal: app.terminal } as any, 1)).toContain("SIDE");
+    expect(rowText({ terminal: app.terminal } as any, 0)).not.toContain("SIDE");
     app.dispose();
   });
 });
