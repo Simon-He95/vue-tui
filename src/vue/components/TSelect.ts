@@ -1,0 +1,717 @@
+import type { PropType } from "vue";
+import type { Style } from "../../core/types.js";
+import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
+import { computed, defineComponent, h, inject, ref, watchEffect } from "vue";
+import { charCellWidth } from "../../core/buffer/width.js";
+import { useLayout } from "../composables/use-layout.js";
+import { useRenderNode } from "../composables/use-render-node.js";
+import { useTerminalNode } from "../composables/use-terminal-node.js";
+import { useTerminal } from "../composables/use-terminal.js";
+import { useVisibility } from "../composables/use-visibility.js";
+import { DialogContextKey, EventZIndexContextKey } from "../context.js";
+import { intersectRect, translateRect } from "../utils/rect.js";
+import { sanitizeInlineText, sliceByCells, spaces, textCellWidth } from "../utils/text.js";
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
+}
+
+type TextHighlightRange = Readonly<{ start: number; end: number }>;
+type TextAccentSegment = Readonly<{
+  start: number;
+  end: number;
+  style?: Style;
+  highlightStyle?: Style;
+}>;
+
+export type SelectOptionWithStyle = Readonly<{
+  kind?: "separator";
+  label: string;
+  detail?: string;
+  style?: Style;
+  highlightStyle?: Style;
+  detailStyle?: Style;
+  highlightDetailStyle?: Style;
+  labelHighlightRanges?: readonly TextHighlightRange[];
+  detailHighlightRanges?: readonly TextHighlightRange[];
+  labelAccentRanges?: readonly TextHighlightRange[];
+  detailAccentRanges?: readonly TextHighlightRange[];
+  detailAccentSegments?: readonly TextAccentSegment[];
+  accentStyle?: Style;
+  highlightAccentStyle?: Style;
+}>;
+
+export type SelectOption = string | SelectOptionWithStyle;
+
+function isOptionObject(opt: SelectOption): opt is SelectOptionWithStyle {
+  return typeof opt !== "string";
+}
+
+function normalizeHighlightRanges(
+  ranges: readonly TextHighlightRange[] | undefined,
+): TextHighlightRange[] {
+  if (!Array.isArray(ranges) || ranges.length === 0) return [];
+  const out: TextHighlightRange[] = [];
+  for (const range of ranges) {
+    const start = Math.max(0, Math.trunc(Number(range?.start ?? -1)));
+    const end = Math.max(0, Math.trunc(Number(range?.end ?? -1)));
+    if (end <= start) continue;
+    out.push({ start, end });
+  }
+  out.sort((a, b) => a.start - b.start || a.end - b.end);
+  return out;
+}
+
+function normalizeAccentSegments(
+  segments: readonly TextAccentSegment[] | undefined,
+): TextAccentSegment[] {
+  if (!Array.isArray(segments) || segments.length === 0) return [];
+  const out: TextAccentSegment[] = [];
+  for (const segment of segments) {
+    const start = Math.max(0, Math.trunc(Number(segment?.start ?? -1)));
+    const end = Math.max(0, Math.trunc(Number(segment?.end ?? -1)));
+    if (end <= start) continue;
+    out.push({
+      start,
+      end,
+      style: segment?.style,
+      highlightStyle: segment?.highlightStyle,
+    });
+  }
+  out.sort((a, b) => a.start - b.start || a.end - b.end);
+  return out;
+}
+
+function writeHighlightedText(
+  opts: Readonly<{
+    terminal: {
+      write: (text: string, opts?: { x?: number; y?: number; style?: Style }) => void;
+    };
+    text: string;
+    ranges: readonly TextHighlightRange[];
+    x: number;
+    y: number;
+    maxCells: number;
+    baseStyle: Style;
+    highlightStyle: Style;
+    accentRanges?: readonly TextHighlightRange[];
+    accentStyle?: Style;
+    accentSegments?: readonly Readonly<{
+      start: number;
+      end: number;
+      style: Style;
+    }>[];
+  }>,
+): number {
+  const {
+    terminal,
+    text,
+    ranges,
+    x,
+    y,
+    maxCells,
+    baseStyle,
+    highlightStyle,
+    accentRanges = [],
+    accentStyle = baseStyle,
+    accentSegments = [],
+  } = opts;
+  const safeMax = Math.max(0, Math.floor(maxCells));
+  if (!text || safeMax <= 0) return 0;
+
+  let rangeIndex = 0;
+  let activeRange = ranges[rangeIndex];
+  let accentRangeIndex = 0;
+  let activeAccentRange = accentRanges[accentRangeIndex];
+  let accentSegmentIndex = 0;
+  let activeAccentSegment = accentSegments[accentSegmentIndex];
+  let cellPos = 0;
+  let cursorX = x;
+  let buffer = "";
+  let currentStyle: Style = baseStyle;
+
+  const flush = () => {
+    if (!buffer) return;
+    terminal.write(buffer, { x: cursorX, y, style: currentStyle });
+    cursorX += textCellWidth(buffer);
+    buffer = "";
+  };
+
+  for (let i = 0; i < text.length && cellPos < safeMax; ) {
+    const code = text.charCodeAt(i);
+    const seg = code <= 0x7f ? text[i]! : String.fromCodePoint(text.codePointAt(i) ?? 0);
+    const segLen = seg.length;
+    const segWidth = charCellWidth(seg);
+    if (cellPos + segWidth > safeMax) break;
+
+    while (activeRange && activeRange.end <= i) {
+      rangeIndex++;
+      activeRange = ranges[rangeIndex];
+    }
+    while (activeAccentRange && activeAccentRange.end <= i) {
+      accentRangeIndex++;
+      activeAccentRange = accentRanges[accentRangeIndex];
+    }
+    while (activeAccentSegment && activeAccentSegment.end <= i) {
+      accentSegmentIndex++;
+      activeAccentSegment = accentSegments[accentSegmentIndex];
+    }
+    const isHighlighted = Boolean(
+      activeRange && i < activeRange.end && i + segLen > activeRange.start,
+    );
+    const isAccented = Boolean(
+      activeAccentRange && i < activeAccentRange.end && i + segLen > activeAccentRange.start,
+    );
+    const accentSegmentStyle =
+      activeAccentSegment && i < activeAccentSegment.end && i + segLen > activeAccentSegment.start
+        ? activeAccentSegment.style
+        : undefined;
+    const nextStyle = isHighlighted
+      ? highlightStyle
+      : accentSegmentStyle || (isAccented ? accentStyle : baseStyle);
+    if (nextStyle !== currentStyle) {
+      flush();
+      currentStyle = nextStyle;
+    }
+
+    buffer += seg;
+    cellPos += segWidth;
+    i += segLen;
+  }
+
+  flush();
+  return cellPos;
+}
+
+export type TSelectMultipleChangePayload = Readonly<{
+  indices: number[];
+  values: string[];
+}>;
+export type TSelectMultipleEmitMode = "value" | "index" | "both";
+
+export const TSelect = defineComponent({
+  name: "TSelect",
+  props: {
+    x: { type: Number, required: true },
+    y: { type: Number, required: true },
+    w: { type: Number, required: true },
+    h: { type: Number, required: true },
+    zIndex: { type: Number, default: 0 },
+    options: { type: Array as PropType<SelectOption[]>, required: true },
+    modelValue: {
+      type: [Number, Array] as PropType<number | number[]>,
+      default: 0,
+    },
+    multiple: { type: Boolean, default: false },
+    multipleEmit: {
+      type: String as PropType<TSelectMultipleEmitMode>,
+      default: "value",
+    },
+    style: { type: Object as PropType<Style>, default: undefined },
+    highlightStyle: { type: Object as PropType<Style>, default: undefined },
+    matchStyle: { type: Object as PropType<Style>, default: undefined },
+    highlightMatchStyle: {
+      type: Object as PropType<Style>,
+      default: undefined,
+    },
+    autoFocus: { type: Boolean, default: false },
+    closeOnBlur: { type: Boolean, default: false },
+  },
+  emits: ["update:modelValue", "change", "confirm", "close", "focus", "blur", "keydown"],
+  setup(props, { emit }) {
+    const { terminal, scheduler, defaultStyle, events } = useTerminal();
+    const layout = useLayout();
+    const { visible, rootProps } = useVisibility();
+    const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
+    const inDialog = inject(DialogContextKey, false) as boolean;
+    const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
+
+    const focused = ref(false);
+    const initialActive = (() => {
+      const max = Math.max(0, props.options.length - 1);
+      if (!props.multiple) {
+        const idx = typeof props.modelValue === "number" ? props.modelValue : 0;
+        return clamp(idx, 0, max);
+      }
+      const selected = Array.isArray(props.modelValue) ? props.modelValue : [];
+      const first = selected[0] ?? 0;
+      return clamp(first, 0, max);
+    })();
+    const active = ref(initialActive);
+
+    function getScrollOffset(r: Rect): number {
+      const visibleH = Math.max(0, Math.floor(r.h));
+      const total = Math.max(0, props.options.length);
+      if (visibleH <= 0) return 0;
+      if (total <= visibleH) return 0;
+      const maxOffset = Math.max(0, total - visibleH);
+      const a = clamp(active.value, 0, Math.max(0, total - 1));
+      return clamp(a - (visibleH - 1), 0, maxOffset);
+    }
+
+    const absRect = computed<Rect>(() => {
+      const raw = { x: props.x, y: props.y, w: props.w, h: props.h };
+      const translated = translateRect(raw, layout.originX, layout.originY);
+      if (!layout.clipRect) return translated;
+      return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
+    });
+
+    watchEffect(() => {
+      const max = Math.max(0, props.options.length - 1);
+      if (!props.multiple) {
+        const idx = typeof props.modelValue === "number" ? props.modelValue : 0;
+        const next = clamp(idx, 0, max);
+        active.value = isOptionInteractive(props.options[next])
+          ? next
+          : (findNextInteractiveIndex(next, 1) ?? next);
+        return;
+      }
+      active.value = clamp(active.value, 0, max);
+    });
+
+    function getOptionLabel(opt: SelectOption): string {
+      return isOptionObject(opt) ? opt.label : opt;
+    }
+
+    function getOptionKind(opt: SelectOption): SelectOptionWithStyle["kind"] | undefined {
+      return isOptionObject(opt) ? opt.kind : undefined;
+    }
+
+    function isOptionInteractive(opt: SelectOption | undefined): boolean {
+      if (!opt) return false;
+      return getOptionKind(opt) !== "separator";
+    }
+
+    function findNextInteractiveIndex(start: number, delta: number): number | null {
+      const total = Math.max(0, props.options.length);
+      if (total <= 0) return null;
+      const step = delta >= 0 ? 1 : -1;
+      for (let offset = 1; offset <= total; offset++) {
+        const next = (start + step * offset + total) % total;
+        if (isOptionInteractive(props.options[next])) return next;
+      }
+      return null;
+    }
+
+    function getOptionDetail(opt: SelectOption): string | undefined {
+      return isOptionObject(opt) ? opt.detail : undefined;
+    }
+
+    function getOptionStyle(opt: SelectOption): Style | undefined {
+      return isOptionObject(opt) ? opt.style : undefined;
+    }
+
+    function getOptionHighlightStyle(opt: SelectOption): Style | undefined {
+      return isOptionObject(opt) ? opt.highlightStyle : undefined;
+    }
+
+    function getOptionDetailStyle(opt: SelectOption): Style | undefined {
+      return isOptionObject(opt) ? opt.detailStyle : undefined;
+    }
+
+    function getOptionHighlightDetailStyle(opt: SelectOption): Style | undefined {
+      return isOptionObject(opt) ? opt.highlightDetailStyle : undefined;
+    }
+
+    function getOptionLabelHighlightRanges(opt: SelectOption): readonly TextHighlightRange[] {
+      return normalizeHighlightRanges(isOptionObject(opt) ? opt.labelHighlightRanges : undefined);
+    }
+
+    function getOptionDetailHighlightRanges(opt: SelectOption): readonly TextHighlightRange[] {
+      return normalizeHighlightRanges(isOptionObject(opt) ? opt.detailHighlightRanges : undefined);
+    }
+
+    function getOptionLabelAccentRanges(opt: SelectOption): readonly TextHighlightRange[] {
+      return normalizeHighlightRanges(isOptionObject(opt) ? opt.labelAccentRanges : undefined);
+    }
+
+    function getOptionDetailAccentRanges(opt: SelectOption): readonly TextHighlightRange[] {
+      return normalizeHighlightRanges(isOptionObject(opt) ? opt.detailAccentRanges : undefined);
+    }
+
+    function getOptionDetailAccentSegments(opt: SelectOption): readonly TextAccentSegment[] {
+      return normalizeAccentSegments(isOptionObject(opt) ? opt.detailAccentSegments : undefined);
+    }
+
+    function getOptionAccentStyle(opt: SelectOption): Style | undefined {
+      return isOptionObject(opt) ? opt.accentStyle : undefined;
+    }
+
+    function getOptionHighlightAccentStyle(opt: SelectOption): Style | undefined {
+      return isOptionObject(opt) ? opt.highlightAccentStyle : undefined;
+    }
+
+    function commitSingle(index: number): void {
+      const next = clamp(index, 0, Math.max(0, props.options.length - 1));
+      if (!isOptionInteractive(props.options[next])) return;
+      active.value = next;
+      emit("update:modelValue", next);
+      const opt = props.options[next];
+      emit("change", opt ? getOptionLabel(opt) : null);
+    }
+
+    function getSelectedIndices(): number[] {
+      if (!props.multiple) return [];
+      const max = Math.max(0, props.options.length - 1);
+      const raw = Array.isArray(props.modelValue) ? props.modelValue : [];
+      const set = new Set<number>();
+      for (const v of raw) {
+        if (typeof v !== "number" || !Number.isFinite(v)) continue;
+        set.add(clamp(Math.trunc(v), 0, max));
+      }
+      return [...set].sort((a, b) => a - b);
+    }
+
+    function makeMultiplePayload(indices: number[]): TSelectMultipleChangePayload {
+      const values = indices
+        .map((i) => props.options[i])
+        .filter(Boolean)
+        .map((opt) => getOptionLabel(opt!));
+      return { indices, values };
+    }
+
+    function emitMultiple(name: "change" | "confirm", indices: number[]): void {
+      const payload = makeMultiplePayload(indices);
+      if (props.multipleEmit === "index") {
+        emit(name, payload.indices);
+        return;
+      }
+      if (props.multipleEmit === "both") {
+        emit(name, payload satisfies TSelectMultipleChangePayload);
+        return;
+      }
+      emit(name, payload.values);
+    }
+
+    function toggleMultiple(index: number): void {
+      const nextIndex = clamp(index, 0, Math.max(0, props.options.length - 1));
+      active.value = nextIndex;
+
+      const set = new Set(getSelectedIndices());
+      if (set.has(nextIndex)) set.delete(nextIndex);
+      else set.add(nextIndex);
+
+      const indices = [...set].sort((a, b) => a - b);
+
+      emit("update:modelValue", indices);
+      emitMultiple("change", indices);
+    }
+
+    function confirmMultiple(): void {
+      const indices = getSelectedIndices();
+      emitMultiple("confirm", indices);
+    }
+
+    function commit(index: number): void {
+      if (!isOptionInteractive(props.options[index])) return;
+      if (props.multiple) toggleMultiple(index);
+      else commitSingle(index);
+    }
+
+    function onKeydown(e: TerminalKeyboardEvent): void {
+      emit("keydown", e);
+      if (e.defaultPrevented) return;
+      const max = Math.max(0, props.options.length - 1);
+      if (e.key === "ArrowUp" || e.code === "ArrowUp") {
+        e.preventDefault();
+        const next = max <= 0 ? 0 : (findNextInteractiveIndex(active.value, -1) ?? active.value);
+        active.value = next;
+        if (!props.multiple) emit("update:modelValue", active.value);
+        scheduler.invalidate();
+        return;
+      }
+      if (e.key === "ArrowDown" || e.code === "ArrowDown") {
+        e.preventDefault();
+        const next = max <= 0 ? 0 : (findNextInteractiveIndex(active.value, 1) ?? active.value);
+        active.value = next;
+        if (!props.multiple) emit("update:modelValue", active.value);
+        scheduler.invalidate();
+        return;
+      }
+      if (props.multiple && (e.code === "Space" || e.key === " " || e.key === "Spacebar")) {
+        e.preventDefault();
+        toggleMultiple(active.value);
+        return;
+      }
+      if (e.key === "Enter") {
+        if (props.multiple) {
+          if (inDialog && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            (e as any).__tuiDialogConfirm = true;
+          }
+          e.preventDefault();
+          confirmMultiple();
+          return;
+        }
+        commit(active.value);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        emit("close");
+      }
+    }
+
+    const { id } = useTerminalNode(() => ({
+      rect: absRect.value,
+      zIndex: eventZ.value,
+      visible: visible.value,
+      focusable: true,
+      handlers: {
+        click: (e: TerminalPointerEvent) => {
+          const r = absRect.value;
+          const offset = getScrollOffset(r);
+          const idx = offset + (e.cellY - r.y);
+          if (idx >= 0 && idx < props.options.length) commit(idx);
+          else emit("close");
+        },
+        focus: () => {
+          focused.value = true;
+          emit("focus");
+          scheduler.invalidate();
+        },
+        blur: () => {
+          focused.value = false;
+          emit("blur");
+          if (props.closeOnBlur) emit("close");
+          scheduler.invalidate();
+        },
+        keydown: onKeydown,
+      },
+    }));
+
+    watchEffect(() => {
+      if (!props.autoFocus) return;
+      if (!visible.value) return;
+      const manager = events.value;
+      const nodeId = id.value;
+      if (!manager || !nodeId) return;
+      if (manager.getFocused() === nodeId) return;
+      manager.focus(nodeId);
+    });
+
+    useRenderNode(() => ({
+      zIndex: props.zIndex,
+      rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
+      deps: [
+        visible.value,
+        absRect.value,
+        props.w,
+        props.h,
+        props.options,
+        props.modelValue,
+        props.multiple,
+        props.multipleEmit,
+        props.style,
+        props.highlightStyle,
+        props.matchStyle,
+        props.highlightMatchStyle,
+        focused.value,
+        active.value,
+        defaultStyle.value,
+      ],
+      paint: (dirtyRows) => {
+        if (!visible.value) return;
+        const r = absRect.value;
+        if (r.w <= 0 || r.h <= 0) return;
+        const offset = getScrollOffset(r);
+        const base = props.style ?? defaultStyle.value;
+        const highlightBase = props.highlightStyle ?? {
+          ...base,
+          inverse: true,
+        };
+        const selectedSet = props.multiple ? new Set(getSelectedIndices()) : null;
+
+        const paintRow = (i: number): void => {
+          const optIndex = offset + i;
+          const opt = props.options[optIndex];
+          if (!opt) {
+            // Empty row
+            terminal.write(spaces(r.w), { x: r.x, y: r.y + i, style: base });
+            return;
+          }
+
+          const isActiveRow = optIndex === active.value;
+          const isChecked = props.multiple ? selectedSet!.has(optIndex) : isActiveRow;
+          const isHighlighted = props.multiple ? focused.value && isActiveRow : isActiveRow;
+          const prefix = props.multiple ? (isChecked ? "[x] " : "[ ] ") : "";
+          const label = sanitizeInlineText(getOptionLabel(opt));
+          const detail = getOptionDetail(opt);
+          const rawDetail = detail ? sanitizeInlineText(detail) : "";
+          const labelText = `${prefix}${label}`;
+          const labelHighlightRanges = getOptionLabelHighlightRanges(opt);
+          const detailHighlightRanges = getOptionDetailHighlightRanges(opt);
+          const labelAccentRanges = getOptionLabelAccentRanges(opt);
+          const detailAccentRanges = getOptionDetailAccentRanges(opt);
+          const detailAccentSegments = getOptionDetailAccentSegments(opt);
+
+          const optStyle = getOptionStyle(opt);
+          const rowBase: Style = optStyle ? { ...base, ...optStyle } : base;
+          const optHighlightStyle = getOptionHighlightStyle(opt);
+          const rowHighlightBase: Style = optHighlightStyle
+            ? { ...highlightBase, ...optHighlightStyle }
+            : highlightBase;
+          const optDetailStyle = getOptionDetailStyle(opt);
+          const rowDetailStyle: Style = {
+            ...rowBase,
+            ...(optDetailStyle ?? {}),
+            dim: true,
+          };
+          const optHighlightDetailStyle = getOptionHighlightDetailStyle(opt);
+          const rowHighlightDetailStyle: Style = {
+            ...rowHighlightBase,
+            ...(optHighlightDetailStyle ?? {}),
+            dim: true,
+          };
+          const optAccentStyle = getOptionAccentStyle(opt);
+          const rowAccentStyle: Style = optAccentStyle
+            ? { ...rowBase, ...optAccentStyle }
+            : rowBase;
+          const optHighlightAccentStyle = getOptionHighlightAccentStyle(opt);
+          const rowHighlightAccentStyle: Style = optHighlightAccentStyle
+            ? { ...rowHighlightBase, ...optHighlightAccentStyle }
+            : optAccentStyle
+              ? { ...rowHighlightBase, ...optAccentStyle }
+              : rowHighlightBase;
+          if (getOptionKind(opt) === "separator") {
+            terminal.write("─".repeat(r.w), {
+              x: r.x,
+              y: r.y + i,
+              style: { ...rowBase, dim: true },
+            });
+            return;
+          }
+          const rowDetailAccentSegments = detailAccentSegments.map((segment) => ({
+            start: segment.start,
+            end: segment.end,
+            style: isHighlighted
+              ? {
+                  ...rowHighlightDetailStyle,
+                  ...(segment.highlightStyle ?? segment.style ?? {}),
+                }
+              : { ...rowDetailStyle, ...(segment.style ?? {}) },
+          }));
+          const defaultMatchStyle: Style = { bold: true, dim: false, underline: true };
+          const matchStyle = props.matchStyle ?? defaultMatchStyle;
+          const highlightMatchStyle = props.highlightMatchStyle ?? matchStyle;
+          const rowMatchStyle: Style = { ...rowBase, ...matchStyle };
+          const rowHighlightMatchStyle: Style = {
+            ...rowHighlightBase,
+            ...highlightMatchStyle,
+          };
+          const rowDetailMatchStyle: Style = {
+            ...rowDetailStyle,
+            ...matchStyle,
+          };
+          const rowHighlightDetailMatchStyle: Style = {
+            ...rowHighlightDetailStyle,
+            ...highlightMatchStyle,
+          };
+
+          const labelCells = textCellWidth(labelText);
+          const minGap = 1;
+          const availableForDetail = Math.max(0, r.w - labelCells - minGap);
+
+          if (rawDetail && availableForDetail >= 4) {
+            // Draw label on the left
+            const labelStyle = isHighlighted ? rowHighlightBase : rowBase;
+            const labelHighlightStyle = isHighlighted ? rowHighlightMatchStyle : rowMatchStyle;
+            const usedLabelCells = writeHighlightedText({
+              terminal,
+              text: labelText,
+              ranges: labelHighlightRanges,
+              x: r.x,
+              y: r.y + i,
+              maxCells: r.w,
+              baseStyle: labelStyle,
+              highlightStyle: labelHighlightStyle,
+              accentRanges: labelAccentRanges,
+              accentStyle: isHighlighted ? rowHighlightAccentStyle : rowAccentStyle,
+            });
+
+            // Draw detail on the right (truncated if needed)
+            const detailText = sliceByCells(rawDetail, availableForDetail);
+            const detailCells = textCellWidth(detailText);
+
+            // Calculate gap to fill the space between label and detail
+            const gapWidth = Math.max(0, r.w - usedLabelCells - detailCells);
+            const gapStyle = isHighlighted ? rowHighlightBase : rowBase;
+            terminal.write(spaces(gapWidth), {
+              x: r.x + usedLabelCells,
+              y: r.y + i,
+              style: gapStyle,
+            });
+
+            const dStyle = isHighlighted ? rowHighlightDetailStyle : rowDetailStyle;
+            const dHighlightStyle = isHighlighted
+              ? rowHighlightDetailMatchStyle
+              : rowDetailMatchStyle;
+            writeHighlightedText({
+              terminal,
+              text: detailText,
+              ranges: detailHighlightRanges,
+              x: r.x + usedLabelCells + gapWidth,
+              y: r.y + i,
+              maxCells: detailCells,
+              baseStyle: dStyle,
+              highlightStyle: dHighlightStyle,
+              accentRanges: detailAccentRanges,
+              accentSegments: rowDetailAccentSegments,
+              accentStyle: isHighlighted ? rowHighlightAccentStyle : rowAccentStyle,
+            });
+          } else {
+            // No room for detail, just show label
+            const clippedLabel = sliceByCells(labelText, r.w);
+            const style = isHighlighted ? rowHighlightBase : rowBase;
+            const highlightStyle = isHighlighted ? rowHighlightMatchStyle : rowMatchStyle;
+            const usedCells = writeHighlightedText({
+              terminal,
+              text: clippedLabel,
+              ranges: labelHighlightRanges,
+              x: r.x,
+              y: r.y + i,
+              maxCells: r.w,
+              baseStyle: style,
+              highlightStyle,
+              accentRanges: labelAccentRanges,
+              accentStyle: isHighlighted ? rowHighlightAccentStyle : rowAccentStyle,
+            });
+            if (usedCells < r.w) {
+              terminal.write(spaces(r.w - usedCells), {
+                x: r.x + usedCells,
+                y: r.y + i,
+                style,
+              });
+            }
+          }
+        };
+
+        if (!dirtyRows) {
+          for (let i = 0; i < r.h; i++) paintRow(i);
+          return;
+        }
+
+        const y0 = Math.floor(r.y);
+        const y1 = y0 + Math.max(0, Math.floor(r.h));
+        if (y1 <= y0) return;
+
+        // `dirtyRows` is sorted; iterate only overlapping rows to avoid `includes()` per row.
+        let lo = 0;
+        let hi = dirtyRows.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if ((dirtyRows[mid] ?? 0) < y0) lo = mid + 1;
+          else hi = mid;
+        }
+        for (let idx = lo; idx < dirtyRows.length; idx++) {
+          const y = Math.floor(dirtyRows[idx] ?? -1);
+          if (y < y0) continue;
+          if (y >= y1) break;
+          const i = y - y0;
+          if (i >= 0 && i < r.h) paintRow(i);
+        }
+      },
+    }));
+
+    return () => h("span", rootProps);
+  },
+});

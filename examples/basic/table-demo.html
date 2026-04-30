@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Table Demo - Vue TUI</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 40px;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: #1a1a1a;
+        color: #fff;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 24px;
+        margin-bottom: 16px;
+      }
+      .description {
+        color: #888;
+        margin-bottom: 24px;
+        line-height: 1.6;
+      }
+      .hint {
+        background: #2a2a2a;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+        color: #aaa;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎯 Table Demo - 表格示例</h1>
+      <div class="description">
+        这是一个基于 Vue TUI 的表格组件示例，展示了：
+        <ul>
+          <li>带边框的表格布局</li>
+          <li>不同状态的颜色区分</li>
+          <li>格式化数据展示</li>
+        </ul>
+      </div>
+    </div>
+    <div id="app"></div>
+    <script type="module" src="/src/table-main.ts"></script>
+  </body>
+</html>

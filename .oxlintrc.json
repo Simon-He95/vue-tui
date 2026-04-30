@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-terminal/**",
+    "**/test-results/**",
+    "**/.*/**",
+    "**/*.min.*",
+    "**/*.d.ts",
+    "**/*.md",
+    "cli.mjs",
+    "e2e/**",
+    "examples/**",
+    "docs/**",
+    "scripts/**",
+    "test/**"
+  ],
+  "plugins": ["typescript", "unicorn", "oxc", "vue"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "no-new-func": "off",
+    "unicorn/no-useless-fallback-in-spread": "off"
+  },
+  "env": {
+    "builtin": true,
+    "node": true,
+    "browser": true
+  }
+}

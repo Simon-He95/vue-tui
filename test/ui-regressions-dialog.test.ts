@@ -1,0 +1,706 @@
+import { describe, expect, it } from "vitest";
+import {
+  createCliEventManager,
+  createEventManager,
+  createPromptMentionPlugin,
+  defineComponent,
+  expectBoxBorder,
+  h,
+  mountTerminal,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  spawnOutputsByCmd,
+  TBox,
+  TDialog,
+  TInput,
+  TInputBox,
+  TList,
+  TPathPicker,
+  TRenderPlane,
+  TSelect,
+  TText,
+  TView,
+  useLayout,
+  useRenderNode,
+  useTerminal,
+  useTerminalNode,
+  vShow,
+  waitFor,
+  watch,
+  watchEffect,
+  withDirectives,
+} from "./ui-regressions-support";
+
+import type { PropType } from "vue";
+
+describe("ui regressions dialog", () => {
+  it("dirty-row repaint never lets lower zIndex overwrite overlay", async () => {
+    const cols = 70;
+    const rows = 22;
+    const selected = ref(false);
+    const dialogOpen = ref(true);
+
+    // Underlay: a box whose right border passes through where the dialog will be.
+    const underX = 2;
+    const underY = 6;
+    const underW = 28;
+    const underH = 10;
+    const borderX = underX + underW - 1;
+
+    const dialogW = 34;
+    const dialogH = 9;
+    const dialogX = Math.floor((cols - dialogW) / 2);
+    const dialogY = Math.floor((rows - dialogH) / 2);
+
+    const App = defineComponent({
+      name: "DirtyRowsZIndexApp",
+      setup() {
+        return () =>
+          h(
+            TBox,
+            {
+              x: 0,
+              y: 0,
+              w: cols,
+              h: rows,
+              border: true,
+              title: "Root",
+              padding: 0,
+            },
+            () => [
+              h(TBox, {
+                x: underX,
+                y: underY,
+                w: underW,
+                h: underH,
+                border: true,
+                title: "Under",
+                padding: 0,
+                style: { fg: "blueBright" },
+              }),
+              h(
+                TDialog,
+                {
+                  modelValue: dialogOpen.value,
+                  "onUpdate:modelValue": (v: boolean) => (dialogOpen.value = v),
+                  w: dialogW,
+                  h: dialogH,
+                  title: "Confirm",
+                  placement: "center",
+                  teleport: true,
+                  style: { fg: "redBright" },
+                } as any,
+                () => [
+                  h(TText, {
+                    x: 0,
+                    y: 0,
+                    w: dialogW - 4,
+                    value: "This should cover underlay.",
+                  }),
+                  h(TText, {
+                    x: 0,
+                    y: 3,
+                    value: "[ Yes ]",
+                    style: { fg: "redBright", inverse: !selected.value },
+                  }),
+                  h(TText, {
+                    x: 14,
+                    y: 3,
+                    value: "[ No ]",
+                    style: { fg: "blueBright", inverse: selected.value },
+                  }),
+                ],
+              ),
+            ],
+          );
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), cols, rows);
+    await nextTick();
+    await nextTick();
+
+    // Pick a non-dirty row inside the dialog where the underlay border would pierce
+    // if a lower zIndex component incorrectly redraws outside dirty rows.
+    const probeX = borderX;
+    const probeY = dialogY + 1;
+    expect(probeX).toBeGreaterThanOrEqual(dialogX);
+    expect(probeX).toBeLessThan(dialogX + dialogW);
+
+    const before = mounted.terminal.snapshot().lines;
+    expect(before[probeY]?.[probeX]).not.toBe("│");
+
+    // Toggle only styles inside the dialog (dirty-row update).
+    selected.value = true;
+    await nextTick();
+    const after = mounted.terminal.snapshot().lines;
+    expect(after[probeY]?.[probeX]).not.toBe("│");
+
+    mounted.unmount();
+  });
+
+  it("v-for list updates when array mutates (add/remove)", async () => {
+    const cols = 30;
+    const rows = 8;
+    const items = ref<string[]>([]);
+
+    const App = defineComponent({
+      name: "VForListApp",
+      setup() {
+        return () =>
+          h(
+            TBox,
+            {
+              x: 0,
+              y: 0,
+              w: cols,
+              h: rows,
+              border: true,
+              title: "List",
+              padding: 1,
+            },
+            () => [
+              items.value.length === 0 ? h(TText, { x: 0, y: 0, value: "(empty)" }) : null,
+              items.value.map((t, i) =>
+                h(TText, { key: t, x: 0, y: i, w: cols - 4, value: `- ${t}` }),
+              ),
+            ],
+          );
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), cols, rows);
+    await nextTick();
+    expect(mounted.terminal.snapshot().lines.join("\n")).toContain("(empty)");
+
+    items.value = ["a", "b", "c"];
+    await nextTick();
+    const s1 = mounted.terminal.snapshot().lines.join("\n");
+    expect(s1).toContain("- a");
+    expect(s1).toContain("- b");
+    expect(s1).toContain("- c");
+
+    items.value = ["a", "c"];
+    await nextTick();
+    const s2 = mounted.terminal.snapshot().lines.join("\n");
+    expect(s2).toContain("- a");
+    expect(s2).not.toContain("- b");
+    expect(s2).toContain("- c");
+
+    mounted.unmount();
+  });
+
+  it("confirm dialog gates destructive action (v-if)", async () => {
+    const cols = 36;
+    const rows = 10;
+    const items = ref([
+      { id: 1, text: "a" },
+      { id: 2, text: "b" },
+    ]);
+    const confirmOpen = ref(false);
+    const pending = ref<number | null>(null);
+
+    function requestDelete(id: number) {
+      pending.value = id;
+      confirmOpen.value = true;
+    }
+
+    function cancel() {
+      confirmOpen.value = false;
+      pending.value = null;
+    }
+
+    function confirm() {
+      const id = pending.value;
+      if (id != null) items.value = items.value.filter((x) => x.id !== id);
+      cancel();
+    }
+
+    const App = defineComponent({
+      name: "ConfirmDeleteApp",
+      setup() {
+        return () =>
+          h(
+            TBox,
+            {
+              x: 0,
+              y: 0,
+              w: cols,
+              h: rows,
+              border: true,
+              title: "Root",
+              padding: 0,
+            },
+            () => [
+              items.value.map((t, i) =>
+                h(TText, {
+                  key: t.id,
+                  x: 0,
+                  y: i,
+                  w: cols - 4,
+                  value: `- ${t.text}`,
+                }),
+              ),
+              confirmOpen.value
+                ? h(
+                    TBox,
+                    {
+                      x: 0,
+                      y: 5,
+                      w: cols - 2,
+                      h: 3,
+                      border: true,
+                      title: "Confirm",
+                      padding: 0,
+                    },
+                    () => [
+                      h(TText, {
+                        x: 0,
+                        y: 0,
+                        w: cols - 4,
+                        value: `Delete id=${pending.value}`,
+                      }),
+                    ],
+                  )
+                : null,
+            ],
+          );
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), cols, rows);
+    await nextTick();
+    expect(mounted.terminal.snapshot().lines.join("\n")).toContain("- a");
+    expect(mounted.terminal.snapshot().lines.join("\n")).toContain("- b");
+
+    requestDelete(2);
+    await nextTick();
+    const before = mounted.terminal.snapshot().lines.join("\n");
+    expect(before).toContain("Confirm");
+    expect(before).toContain("- b");
+
+    cancel();
+    await nextTick();
+    const canceled = mounted.terminal.snapshot().lines.join("\n");
+    expect(canceled).not.toContain("Confirm");
+    expect(canceled).toContain("- b");
+
+    requestDelete(2);
+    await nextTick();
+    confirm();
+    await nextTick();
+    const after = mounted.terminal.snapshot().lines.join("\n");
+    expect(after).not.toContain("Confirm");
+    expect(after).toContain("- a");
+    expect(after).not.toContain("- b");
+
+    mounted.unmount();
+  });
+
+  it("TDialog centers and closes on backdrop/Escape", async () => {
+    const cols = 30;
+    const rows = 10;
+    const open = ref(true);
+
+    const App = defineComponent({
+      name: "TDialogApp",
+      setup() {
+        return () =>
+          h(
+            TDialog,
+            {
+              modelValue: open.value,
+              "onUpdate:modelValue": (v: boolean) => (open.value = v),
+              w: 10,
+              h: 5,
+              title: "Dlg",
+              placement: "center",
+            },
+            () => h(TText, { x: 0, y: 0, value: "Hi" }),
+          );
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), cols, rows);
+    await nextTick();
+    await nextTick();
+
+    expectBoxBorder(mounted.terminal.snapshot().lines, {
+      x: 10,
+      y: 2,
+      w: 10,
+      h: 5,
+    });
+
+    const container = mounted.container()!;
+    container.dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+    await nextTick();
+    expect(open.value).toBe(false);
+
+    open.value = true;
+    await nextTick();
+    await nextTick();
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        code: "Escape",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    expect(open.value).toBe(false);
+
+    mounted.unmount();
+  });
+
+  it("TDialog border stays closed even if a child overdraws it", async () => {
+    const cols = 40;
+    const rows = 10;
+    const open = ref(true);
+
+    const Overdraw = defineComponent({
+      name: "OverdrawBorder",
+      setup() {
+        const { terminal } = useTerminal();
+        const layout = useLayout();
+
+        useRenderNode(() => ({
+          zIndex: 9_999,
+          rect: { x: layout.originX - 2, y: layout.originY + 1, w: 20, h: 1 },
+          deps: [layout.originX, layout.originY],
+          paint: () => {
+            terminal.write("X".repeat(20), {
+              x: layout.originX - 2,
+              y: layout.originY + 1,
+            });
+          },
+        }));
+
+        return () => null;
+      },
+    });
+
+    const App = defineComponent({
+      name: "TDialogBorderOverdrawApp",
+      setup() {
+        return () =>
+          h(
+            TDialog,
+            {
+              modelValue: open.value,
+              "onUpdate:modelValue": (v: boolean) => (open.value = v),
+              w: 20,
+              h: 7,
+              title: "Dlg",
+              placement: "top-left",
+              backdrop: false,
+              padding: 1,
+            },
+            () => [h(Overdraw), h(TText, { x: 0, y: 0, value: "Hi" })],
+          );
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), cols, rows);
+    await nextTick();
+    await nextTick();
+
+    expectBoxBorder(mounted.terminal.snapshot().lines, {
+      x: 0,
+      y: 0,
+      w: 20,
+      h: 7,
+    });
+
+    mounted.unmount();
+  });
+
+  it("TDialog teleport positions relative to root, not parent", async () => {
+    const cols = 30;
+    const rows = 10;
+    const open = ref(true);
+
+    const App = defineComponent({
+      name: "TDialogTeleportApp",
+      setup() {
+        return () =>
+          h(
+            TBox,
+            {
+              x: 0,
+              y: 0,
+              w: 10,
+              h: 4,
+              border: true,
+              title: "Parent",
+              padding: 0,
+            },
+            () => [
+              h(
+                TDialog,
+                {
+                  modelValue: open.value,
+                  "onUpdate:modelValue": (v: boolean) => (open.value = v),
+                  w: 10,
+                  h: 5,
+                  title: "Dlg",
+                  placement: "center",
+                  teleport: true,
+                },
+                () => h(TText, { x: 0, y: 0, value: "Hi" }),
+              ),
+            ],
+          );
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), cols, rows);
+    await nextTick();
+    await nextTick();
+
+    const lines = mounted.terminal.snapshot().lines;
+    expectBoxBorder(lines, { x: 10, y: 2, w: 10, h: 5 });
+    expect(lines[1]?.[1]).not.toBe("┌");
+
+    mounted.unmount();
+  });
+
+  it("TDialog buttons support ArrowLeft/Right and Enter confirm", async () => {
+    const open = ref(true);
+    const confirmed = ref("");
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 26,
+            h: 7,
+            title: "Confirm",
+            placement: "center",
+            teleport: true,
+            closeOnConfirm: false,
+            buttons: [
+              { label: "Yes", value: "yes", kind: "primary", default: true },
+              { label: "No", value: "no" },
+            ],
+            onConfirm: (b: any) => {
+              confirmed.value = String(b?.value ?? "");
+            },
+          },
+          () => h(TText, { x: 0, y: 0, w: 22, value: "Hi" }),
+        ),
+      44,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowLeft",
+        code: "ArrowLeft",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    expect(confirmed.value).toBe("no");
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        code: "ArrowRight",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    expect(confirmed.value).toBe("yes");
+    mounted.unmount();
+  });
+
+  it("TDialog keeps Tab order in sync after ArrowLeft/Right button navigation", async () => {
+    const open = ref(true);
+    const confirmed = ref("");
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 30,
+            h: 7,
+            title: "Confirm",
+            placement: "center",
+            teleport: true,
+            closeOnConfirm: false,
+            buttons: [
+              { label: "One", value: "one", default: true },
+              { label: "Two", value: "two" },
+              { label: "Three", value: "three" },
+            ],
+            onConfirm: (b: any) => {
+              confirmed.value = String(b?.value ?? "");
+            },
+          },
+          () => h(TText, { x: 0, y: 0, w: 24, value: "Hi" }),
+        ),
+      48,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Tab",
+        code: "Tab",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowLeft",
+        code: "ArrowLeft",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Tab",
+        code: "Tab",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    expect(confirmed.value).toBe("two");
+    mounted.unmount();
+  });
+
+  it("TDialog tabMode=wrapFromButtons wraps back to content even when footer buttons are clipped", async () => {
+    const open = ref(true);
+    const value = ref("hi");
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 14,
+            h: 8,
+            title: "Settings",
+            placement: "top-left",
+            teleport: true,
+            tabMode: "wrapFromButtons",
+            closeOnConfirm: false,
+            buttons: [
+              { label: "ApplyApplyApply", value: "apply", default: true },
+              { label: "ResetResetReset", value: "reset" },
+              { label: "CancelCancel", value: "cancel" },
+            ],
+          },
+          () =>
+            h(TInput, {
+              x: 0,
+              y: 0,
+              w: 10,
+              modelValue: value.value,
+              "onUpdate:modelValue": (v: string) => (value.value = v),
+            }),
+        ),
+      40,
+      12,
+    );
+
+    const container = mounted.container()!;
+    const manager = await waitFor(() => mounted.events());
+    await nextTick();
+    await nextTick();
+
+    const focusables = await waitFor(() => {
+      const nodes = manager
+        .debugNodes()
+        .filter((n) => n.visible && n.focusable && n.rect.w > 0 && n.rect.h > 0)
+        .sort((a, b) => b.rect.w * b.rect.h - a.rect.w * a.rect.h);
+
+      const inner = nodes.slice(1);
+      if (inner.length < 2) return null;
+      const ys = new Set(inner.map((n) => n.rect.y));
+      return ys.size >= 2 ? inner : null;
+    });
+    const footerRowY = Math.max(...focusables.map((n) => n.rect.y));
+    const contentFocusables = focusables
+      .filter((n) => n.rect.y !== footerRowY)
+      .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
+    expect(contentFocusables.length).toBeGreaterThan(0);
+    manager.focus(contentFocusables[0]!.id);
+    await nextTick();
+    const focusedBeforeTab = manager.getFocused();
+    expect(focusedBeforeTab).toBeTruthy();
+    const initialNode = manager.debugNodes().find((n) => n.id === focusedBeforeTab);
+    expect(initialNode?.rect.y).not.toBe(footerRowY);
+
+    // Tab to the footer buttons, then Tab again should wrap back to the first content focusable,
+    // even if the button rects are clipped and can't be matched exactly.
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Tab", code: "Tab", bubbles: true }),
+    );
+    await nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const focusedAfterFirstTab = manager.getFocused();
+    expect(focusedAfterFirstTab).toBeTruthy();
+    const firstNode = manager.debugNodes().find((n) => n.id === focusedAfterFirstTab);
+    expect(firstNode?.rect.y).toBe(footerRowY);
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Tab", code: "Tab", bubbles: true }),
+    );
+    await nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const focusedAfterSecondTab = manager.getFocused();
+    const secondNode = manager.debugNodes().find((n) => n.id === focusedAfterSecondTab);
+    expect(secondNode?.rect.y).not.toBe(footerRowY);
+
+    mounted.unmount();
+  });
+});

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+dist-terminal/
+docs/.vitepress/cache/
+test-results/
+.eslintcache
+.DS_Store

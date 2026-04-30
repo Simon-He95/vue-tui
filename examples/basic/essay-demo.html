@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>20字小作文渲染</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Courier New", monospace;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 800px;
+      }
+
+      .terminal {
+        background: #0a0a0a;
+        border: 3px solid #00bcd4;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 0 30px rgba(0, 188, 212, 0.3);
+      }
+
+      .terminal-header {
+        color: #00bcd4;
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        text-align: center;
+        text-shadow: 0 0 10px rgba(0, 188, 212, 0.5);
+      }
+
+      .section {
+        margin-bottom: 20px;
+      }
+
+      .label {
+        color: #ffeb3b;
+        font-size: 14px;
+        margin-bottom: 8px;
+      }
+
+      .essay-display {
+        background: #1a1a2e;
+        border: 2px solid #4caf50;
+        border-radius: 5px;
+        padding: 15px;
+        color: #4caf50;
+        font-size: 20px;
+        font-weight: bold;
+        line-height: 1.8;
+        text-align: center;
+        min-height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .char-count {
+        color: #2196f3;
+        font-size: 14px;
+        margin-top: 10px;
+      }
+
+      .divider {
+        color: #757575;
+        font-size: 12px;
+        margin: 20px 0;
+        letter-spacing: 2px;
+      }
+
+      .input-area {
+        background: #1a1a2e;
+        border: 2px solid #ff9800;
+        border-radius: 5px;
+        padding: 15px;
+      }
+
+      textarea {
+        width: 100%;
+        background: #0a0a0a;
+        border: 1px solid #333;
+        border-radius: 3px;
+        color: #fff;
+        font-family: "Courier New", monospace;
+        font-size: 16px;
+        padding: 10px;
+        resize: vertical;
+        min-height: 80px;
+      }
+
+      textarea:focus {
+        outline: none;
+        border-color: #00bcd4;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      button {
+        background: #00bcd4;
+        color: #fff;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        font-family: "Courier New", monospace;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      button:hover {
+        background: #00acc1;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 188, 212, 0.3);
+      }
+
+      button.secondary {
+        background: #757575;
+      }
+
+      button.secondary:hover {
+        background: #616161;
+      }
+
+      .tips {
+        color: #e91e63;
+        font-size: 12px;
+        margin-top: 15px;
+        line-height: 1.6;
+      }
+
+      .tips li {
+        margin-bottom: 5px;
+      }
+
+      .status {
+        color: #4caf50;
+        font-size: 12px;
+        margin-top: 15px;
+      }
+
+      .highlight {
+        color: #fff;
+        font-weight: bold;
+      }
+
+      /* 动画效果 */
+      @keyframes blink {
+        0%,
+        50% {
+          opacity: 1;
+        }
+        51%,
+        100% {
+          opacity: 0;
+        }
+      }
+
+      .cursor {
+        animation: blink 1s infinite;
+      }
+
+      /* 响应式设计 */
+      @media (max-width: 600px) {
+        .terminal {
+          padding: 10px;
+        }
+
+        .essay-display {
+          font-size: 16px;
+        }
+
+        button {
+          padding: 8px 12px;
+          font-size: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="terminal">
+        <div class="terminal-header">═══ 20字小作文生成器 ═══</div>
+
+        <!-- 小作文显示区域 -->
+        <div class="section">
+          <div class="label">当前小作文：</div>
+          <div class="essay-display" id="essayDisplay">
+            春风拂面柳丝长，桃花满园映朝阳，燕子归来筑新巢，一派生机春意盎
+          </div>
+          <div class="char-count">字符数：<span id="charCount">20</span></div>
+        </div>
+
+        <!-- 分隔线 -->
+        <div class="divider">──────────────────────────────────────────────────────</div>
+
+        <!-- 输入区域 -->
+        <div class="section">
+          <div class="label">输入新的小作文：</div>
+          <div class="input-area">
+            <textarea id="essayInput" placeholder="请输入20字小作文...">
+春风拂面柳丝长，桃花满园映朝阳，燕子归来筑新巢，一派生机春意盎</textarea
+            >
+            <div class="button-group">
+              <button onclick="updateEssay()">确认修改</button>
+              <button class="secondary" onclick="resetEssay()">重置</button>
+              <button class="secondary" onclick="generateRandom()">随机生成</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 提示信息 -->
+        <div class="section">
+          <div class="label">提示：</div>
+          <ul class="tips">
+            <li>• 在输入框中输入文字</li>
+            <li>• 点击"确认修改"按钮保存</li>
+            <li>• 点击"随机生成"获取新的小作文</li>
+            <li>• 支持中文字符和标点符号</li>
+          </ul>
+        </div>
+
+        <!-- 底部状态栏 -->
+        <div class="status">系统状态：<span class="highlight">就绪</span></div>
+      </div>
+    </div>
+
+    <script>
+      // 预设的20字小作文
+      const essays = [
+        "春风拂面柳丝长，桃花满园映朝阳，燕子归来筑新巢，一派生机春意盎",
+        "夏荷映日蜻蜓舞，蝉鸣林间声声唤，绿荫深处觅清凉，夏日悠长心自安",
+        "秋枫满山红似火，稻谷金黄硕果累，丹桂飘香十里远，秋高气爽意从容",
+        "冬雪纷飞梅花艳，银装素裹山河壮，围炉夜话暖人心，冬日温情满庭芳",
+        "晨曦微露鸟声脆，露珠晶莹草叶尖，日出东方红胜火，一日之计在于晨",
+        "夕阳西下染红霞，归鸟投林影渐斜，炊烟袅袅农家乐，田园风光美如画",
+      ];
+
+      // 获取DOM元素
+      const essayDisplay = document.getElementById("essayDisplay");
+      const essayInput = document.getElementById("essayInput");
+      const charCount = document.getElementById("charCount");
+
+      // 更新小作文
+      function updateEssay() {
+        const text = essayInput.value.trim();
+        if (text) {
+          essayDisplay.textContent = text;
+          charCount.textContent = text.length;
+          updateStatus("小作文已更新", true);
+        } else {
+          updateStatus("请输入小作文内容", false);
+        }
+      }
+
+      // 重置小作文
+      function resetEssay() {
+        essayInput.value = essays[0];
+        updateEssay();
+        updateStatus("已重置为默认小作文", true);
+      }
+
+      // 随机生成小作文
+      function generateRandom() {
+        const randomIndex = Math.floor(Math.random() * essays.length);
+        essayInput.value = essays[randomIndex];
+        updateEssay();
+        updateStatus("已生成随机小作文", true);
+      }
+
+      // 更新状态栏
+      function updateStatus(message, success) {
+        const statusElement = document.querySelector(".status");
+        const color = success ? "#4caf50" : "#f44336";
+        statusElement.innerHTML = `系统状态：<span class="highlight" style="color: ${color}">${message}</span>`;
+
+        // 3秒后恢复默认状态
+        setTimeout(() => {
+          statusElement.innerHTML = '系统状态：<span class="highlight">就绪</span>';
+        }, 3000);
+      }
+
+      // 实时更新字符数
+      essayInput.addEventListener("input", function () {
+        charCount.textContent = this.value.length;
+      });
+
+      // 初始化
+      document.addEventListener("DOMContentLoaded", function () {
+        console.log("20字小作文生成器已启动");
+      });
+    </script>
+  </body>
+</html>

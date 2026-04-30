@@ -1,0 +1,44 @@
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Helvetica,
+    Arial,
+    "Apple Color Emoji",
+    "Segoe UI Emoji";
+  background: #0b1020;
+  color: #e6e6e6;
+}
+
+#app {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.panel {
+  width: min(1000px, 100%);
+  display: grid;
+  gap: 12px;
+}
+
+.hint {
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.terminal-frame {
+  display: inline-block;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}

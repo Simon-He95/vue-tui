@@ -1,0 +1,29 @@
+{
+  "name": "vue-terminal-example-basic",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:table": "vite --open table-demo.html",
+    "build": "vite build",
+    "build:terminal": "vite build --mode terminal",
+    "build:terminal:multi-select": "vite build --mode terminal-multi-select",
+    "build:terminal:table": "vite build --mode terminal-table",
+    "terminal": "vite build --mode terminal && node dist-terminal/terminal.js",
+    "terminal:multi-select": "vite build --mode terminal-multi-select && node dist-terminal-multi-select/terminal.js",
+    "terminal:table": "vite build --mode terminal-table && node dist-terminal-table/terminal.js",
+    "run:terminal": "vite build --mode terminal && node dist-terminal/terminal.js",
+    "run:terminal:multi-select": "vite build --mode terminal-multi-select && node dist-terminal-multi-select/terminal.js",
+    "run:terminal:table": "vite build --mode terminal-table && node dist-terminal-table/terminal.js",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@simon_he/vue-tui": "workspace:*",
+    "vue": "^3.5.33"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "typescript": "5.8.3",
+    "vite": "^5.4.21"
+  }
+}
