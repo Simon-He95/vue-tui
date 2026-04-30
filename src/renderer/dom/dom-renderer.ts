@@ -457,7 +457,7 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     }
   }
 
-  const offCommit = terminal.on("commit", ({ dirtyRows, planes }) => {
+  const offCommit = terminal.on("commit", ({ dirtyRows, planes, sync }) => {
     const activePlanes = planes?.length ? planes : TERMINAL_RENDER_PLANES;
     if (dirtyRows === null) {
       const size = terminal.size();
@@ -479,7 +479,9 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
         for (const y of dirtyRows) rows.add(y);
       }
     }
-    if (!raf) {
+    if (sync) {
+      flushPending();
+    } else if (!raf) {
       // Support test environments that stub rAF synchronously by avoiding the
       // `raf = requestAnimationFrame(...)` assignment trap (cb runs before the assignment).
       raf = -1;

@@ -839,7 +839,7 @@ export function createTerminal(opts: { cols: number; rows: number }): Terminal {
       },
       commit(meta) {
         assertNotDisposed();
-        return base.commit({ planes: meta?.planes ?? [plane] });
+        return base.commit({ planes: meta?.planes ?? [plane], sync: meta?.sync });
       },
       on(event, cb) {
         assertNotDisposed();

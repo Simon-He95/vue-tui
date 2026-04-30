@@ -351,4 +351,103 @@ describe("render-manager", () => {
     expect(stats?.candidatePlanes).toEqual(["transcript"]);
     expect(paints).toEqual(["transcript"]);
   });
+
+  it("uses row buckets to reduce partial repaint candidates", () => {
+    const paints: string[] = [];
+    const listeners = new Map<string, Set<(...args: any[]) => void>>();
+    const terminal: any = {
+      size: () => ({ cols: 10, rows: 100 }),
+      on(event: string, cb: (...args: any[]) => void) {
+        let set = listeners.get(event);
+        if (!set) listeners.set(event, (set = new Set()));
+        set.add(cb);
+        return () => set!.delete(cb);
+      },
+      batch(fn: () => void) {
+        fn();
+      },
+      clear() {},
+    };
+
+    const rm = createRenderManager(terminal);
+    let target: { id: string } | null = null;
+    for (let i = 0; i < 100; i++) {
+      const node = rm.register({
+        stack: rm.rootStack,
+        rect: { x: 0, y: i, w: 10, h: 1 },
+        paint: () => paints.push(`n${i}`),
+      });
+      if (i === 42) target = node;
+    }
+    rm.render();
+    paints.length = 0;
+
+    rm.update(target!.id, { dirtyRowsHint: [42] });
+    const stats = rm.render();
+
+    expect(paints).toEqual(["n42"]);
+    expect(stats?.paintedNodes).toBe(1);
+    expect(stats?.scannedNodes).toBeLessThan(100);
+  });
+
+  it("keeps row buckets in sync across rect updates, plane migration, unregister, and global nodes", () => {
+    const paints: string[] = [];
+    const listeners = new Map<string, Set<(...args: any[]) => void>>();
+    const terminal: any = {
+      size: () => ({ cols: 10, rows: 8 }),
+      on(event: string, cb: (...args: any[]) => void) {
+        let set = listeners.get(event);
+        if (!set) listeners.set(event, (set = new Set()));
+        set.add(cb);
+        return () => set!.delete(cb);
+      },
+      batch(fn: () => void) {
+        fn();
+      },
+      clear() {},
+    };
+
+    const rm = createRenderManager(terminal);
+    const global = rm.register({
+      stack: rm.rootStack,
+      rect: null,
+      paint: () => paints.push("global"),
+    });
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("node"),
+    });
+    const mover = rm.register({
+      stack: rm.rootStack,
+      plane: "default",
+      rect: { x: 0, y: 2, w: 10, h: 1 },
+      paint: () => paints.push("mover"),
+    });
+    rm.render();
+    paints.length = 0;
+
+    rm.update(node.id, { rect: { x: 0, y: 5, w: 10, h: 1 } });
+    rm.render();
+    expect(paints).toContain("node");
+
+    paints.length = 0;
+    rm.update(node.id, { dirtyRowsHint: [1] });
+    rm.render();
+    expect(paints).toEqual(["global"]);
+
+    paints.length = 0;
+    rm.update(mover.id, { plane: "overlay", dirtyRowsHint: [2] });
+    rm.render({ activePlanes: ["default"] });
+    expect(paints).toEqual(["global"]);
+
+    paints.length = 0;
+    rm.unregister(node.id);
+    rm.render();
+    paints.length = 0;
+    rm.update(global.id, { dirtyRowsHint: [5] });
+    rm.render();
+    expect(paints).toEqual(["global"]);
+  });
+
 });
