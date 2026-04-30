@@ -480,6 +480,8 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
       }
     }
     if (sync) {
+      if (raf > 0) cancelAnimationFrame(raf);
+      raf = 0;
       flushPending();
     } else if (!raf) {
       // Support test environments that stub rAF synchronously by avoiding the

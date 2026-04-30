@@ -96,6 +96,12 @@ function isEmptyRect(rect: RenderRect): boolean {
   return rect.w <= 0 || rect.h <= 0;
 }
 
+function sameRect(a: RenderRect | null, b: RenderRect | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
 export function createRenderManager(terminal: Terminal): RenderManager {
   let orderCounter = 0;
   const nodes = new Map<string, RenderNode>();
@@ -326,6 +332,8 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     const nextPlane = next.plane ?? prev.plane;
     const planeChanged = nextPlane !== prev.plane;
     const nextRect = next.rect ?? prev.rect;
+    const rectChanged = !sameRect(prev.rect, nextRect);
+    const bucketChanged = planeChanged || rectChanged;
     const { y0, y1 } = rectToYBounds(nextRect);
     const dirtyRowsHint = next.dirtyRowsHint;
     const canUseDirtyRowsHint =
@@ -336,7 +344,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       markRect(prev.plane, prev.rect);
       markRect(nextPlane, nextRect);
     }
-    removeFromRowBuckets(prev);
+    if (bucketChanged) removeFromRowBuckets(prev);
     const full: RenderNode = Object.freeze({
       ...prev,
       stack: next.stack ?? prev.stack,
@@ -348,7 +356,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       paint: next.paint ?? prev.paint,
     });
     nodes.set(id, full);
-    addToRowBuckets(full);
+    if (bucketChanged) addToRowBuckets(full);
     if (sortChanged || planeChanged) {
       sortedDirty = true;
     } else if (!sortedDirty) {
@@ -506,7 +514,11 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                 if (globalIds) for (const id of globalIds) ids.add(id);
                 return Array.from(ids, (id) => nodes.get(id)).filter(
                   (node): node is RenderNode => node != null,
-                ).sort(compareNodes);
+                ).sort(
+                  (a, b) =>
+                    (sortedPlaneNodeIndexById.get(a.id) ?? 0) -
+                    (sortedPlaneNodeIndexById.get(b.id) ?? 0),
+                );
               })();
           scannedNodes += candidateNodes.length;
 

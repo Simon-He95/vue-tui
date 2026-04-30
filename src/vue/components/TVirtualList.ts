@@ -48,20 +48,18 @@ export const TVirtualList = defineComponent({
     itemCount: { type: Number, required: true },
     itemVersion: { type: Number, required: true },
     getItem: { type: Function as PropType<(index: number) => unknown>, required: true },
-    getKey: { type: Function as PropType<(index: number) => string | number>, default: undefined },
-    renderItem: {
+        renderItem: {
       type: Function as PropType<(item: unknown, index: number) => string>,
       default: undefined,
     },
     modelValue: { type: Number, default: 0 },
-    overscan: { type: Number, default: 0 },
     style: { type: Object as PropType<Style>, default: undefined },
     activeStyle: { type: Object as PropType<Style>, default: undefined },
     autoFocus: { type: Boolean, default: false },
   },
   emits: ["update:modelValue", "change", "scroll", "focus", "blur", "keydown"],
   setup(props, { emit }) {
-    const { terminal, scheduler, render, defaultStyle, events } = useTerminal();
+    const { terminal, scheduler, render, renderer, defaultStyle, events } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const plane = inject(RenderPlaneContextKey, ref<TerminalRenderPlane>("default"));
@@ -166,7 +164,7 @@ export const TVirtualList = defineComponent({
       }
     }
 
-    const { id } = useTerminalNode(() => ({
+    const eventNode = useTerminalNode(() => ({
       rect: absRect.value,
       zIndex: eventZ.value,
       visible: visible.value,
@@ -202,17 +200,19 @@ export const TVirtualList = defineComponent({
 
           const delta = nextTop - scrollTop.value;
           scrollTop.value = nextTop;
-          if (Math.abs(delta) < h) {
-            render.scrollPlane(plane.value, absRect.value.y, absRect.value.y + h, delta);
+          const r = absRect.value;
+          const canUseScrollPlane = !renderer.value && Math.abs(delta) < h;
+          if (canUseScrollPlane) {
+            render.scrollPlane(plane.value, r.y, r.y + h, delta);
             const exposedRows: number[] = [];
             if (delta > 0) {
-              for (let i = h - delta; i < h; i++) exposedRows.push(absRect.value.y + i);
+              for (let i = h - delta; i < h; i++) exposedRows.push(r.y + i);
             } else {
-              for (let i = 0; i < -delta; i++) exposedRows.push(absRect.value.y + i);
+              for (let i = 0; i < -delta; i++) exposedRows.push(r.y + i);
             }
-            dirtyRowsHint = exposedRows;
+            setDirtyRowsHint(exposedRows);
           } else {
-            dirtyRowsHint = undefined;
+            setDirtyRowsHint(viewportRows());
           }
           emit("scroll", nextTop);
           scheduler.invalidate({ priority: "high", plane: plane.value });
@@ -235,13 +235,33 @@ export const TVirtualList = defineComponent({
       if (!props.autoFocus) return;
       if (!visible.value) return;
       const manager = events.value;
-      const nodeId = id.value;
+      const nodeId = eventNode.id.value;
       if (!manager || !nodeId) return;
       if (manager.getFocused() === nodeId) return;
       manager.focus(nodeId);
     });
 
-    useRenderNode(() => ({
+    function viewportRows(): number[] {
+      const r = absRect.value;
+      const rows: number[] = [];
+      for (let y = r.y; y < r.y + r.h; y++) rows.push(y);
+      return rows;
+    }
+
+    function unionDirtyRows(nextRows: readonly number[]): readonly number[] {
+      if (!dirtyRowsHint?.length) return nextRows.slice().sort((a, b) => a - b);
+      const rows = new Set(dirtyRowsHint);
+      for (const y of nextRows) rows.add(y);
+      return Array.from(rows).sort((a, b) => a - b);
+    }
+
+    let renderNodeId: string | null = null;
+    function setDirtyRowsHint(nextRows: readonly number[]): void {
+      dirtyRowsHint = unionDirtyRows(nextRows);
+      if (renderNodeId) render.update(renderNodeId, { dirtyRowsHint });
+    }
+
+    const renderNode = useRenderNode(() => ({
       zIndex: props.zIndex,
       rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
       dirtyRowsHint,
@@ -284,6 +304,10 @@ export const TVirtualList = defineComponent({
         for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
       },
     }));
+
+    watchEffect(() => {
+      renderNodeId = renderNode.id.value;
+    });
 
     return () => h("span", rootProps);
   },
