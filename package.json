@@ -33,6 +33,12 @@
       "bun": "./src/index.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./experimental": {
+      "bun": "./src/experimental.ts",
+      "types": "./dist/experimental.d.ts",
+      "import": "./dist/experimental.js",
+      "require": "./dist/experimental.cjs"
     }
   },
   "publishConfig": {

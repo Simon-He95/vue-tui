@@ -12,7 +12,7 @@ function rowText(container: HTMLElement, y: number, plane = "default"): string {
 }
 
 describe("DomRenderer sync flush", () => {
-  it("flushes sync commits without scheduling rAF", () => {
+  it("flushes small sync commits within budget without scheduling rAF", () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;
     let rafCalls = 0;

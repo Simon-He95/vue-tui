@@ -48,7 +48,6 @@ const {
   TRenderPlane,
   TSelect,
   TText,
-  TVirtualList,
   TView,
   useLayout,
   useTerminal,
@@ -57,6 +56,7 @@ const {
   createEventManager,
 } = await import("../src/index.js");
 
+const { TVirtualList } = await import("../src/experimental.js");
 const { useRenderNode } = await import("../src/vue/composables/use-render-node.js");
 
 const spawnOutputsByCmd = new Map<string, string | null>();

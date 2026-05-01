@@ -1,8 +1,12 @@
 import { build } from "esbuild";
 
 await build({
-  entryPoints: ["src/index.ts"],
-  outfile: "dist/index.cjs",
+  entryPoints: {
+    index: "src/index.ts",
+    experimental: "src/experimental.ts",
+  },
+  outdir: "dist",
+  outExtension: { ".js": ".cjs" },
   bundle: true,
   format: "cjs",
   platform: "node",

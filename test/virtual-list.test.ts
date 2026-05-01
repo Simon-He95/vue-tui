@@ -268,6 +268,46 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
+  it("warns in debug perf mode when useRowScroll shifts plane rows", async () => {
+    const previousDebugPerf = (globalThis as any).__VT_DEBUG_PERF__;
+    (globalThis as any).__VT_DEBUG_PERF__ = true;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: items.length,
+        itemVersion: 1,
+        getItem: (index: number) => items[index],
+        autoFocus: true,
+        useRowScroll: true,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+      await nextTick();
+      await nextTick();
+
+      expect(warn).toHaveBeenCalledWith(
+        "[vue-tui] TVirtualList.useRowScroll shifts whole plane rows. Use only when these rows are exclusively owned by this component.",
+      );
+    } finally {
+      warn.mockRestore();
+      app.dispose();
+      (globalThis as any).__VT_DEBUG_PERF__ = previousDebugPerf;
+    }
+  });
+
   it("coalesces consecutive headless wheel ticks into one scroll frame", async () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;

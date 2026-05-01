@@ -144,6 +144,7 @@ terminal.on("commit", ({ dirtyRows, planes, sync }) => {
 实现位置：新增 `src/vue/components/TVirtualList.ts`
 
 `TList` 保留小数据和简单选择语义。大数据使用 `TVirtualList`，避免把现有组件堆成全能组件。
+`TVirtualList` 当前通过 `@simon_he/vue-tui/experimental` 暴露，暂不进入 root export。
 
 建议 props：
 

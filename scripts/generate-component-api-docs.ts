@@ -471,8 +471,12 @@ async function main(): Promise<void> {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const packageRoot = path.resolve(here, "..");
   const vueIndex = path.join(packageRoot, "src/vue/index.ts");
+  const experimentalIndex = path.join(packageRoot, "src/experimental.ts");
 
-  const components = await listExportedComponents(vueIndex);
+  const components = [
+    ...(await listExportedComponents(vueIndex)),
+    ...(await listExportedComponents(experimentalIndex)),
+  ].sort((a, b) => a.name.localeCompare(b.name));
   const metas = components.map((c) => extractComponentMeta(c.name, c.absPath, packageRoot));
 
   const outPath = path.join(packageRoot, "docs/generated/components-api.md");

@@ -38,7 +38,6 @@ export type {
   TSelectMultipleEmitMode,
 } from "./components/TSelect.js";
 export { TText } from "./components/TText.js";
-export { TVirtualList } from "./components/TVirtualList.js";
 export { TTransition } from "./components/TTransition.js";
 export { TView } from "./components/TView.js";
 

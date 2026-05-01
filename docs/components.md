@@ -313,7 +313,7 @@ const app = createTerminalApp({
 
 大数据选择/浏览列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。它不是完整日志/streaming 组件；当前没有 bottom stickiness、append chunk 增量解析或 scroll anchor API。
 
-> Phase 1 experimental public API：当前从 root 入口导出，但 API 仍可能在 scheduler frame task、controlled scrollTop、overscan、TLogView 等后续能力落地前调整。
+> Phase 1 experimental API：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。API 仍可能在 scheduler frame task、controlled scrollTop、overscan、TLogView 等后续能力落地前调整。
 
 ### Props
 

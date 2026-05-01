@@ -19,6 +19,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
+import { createFrameCoalescer } from "../utils/frame-task.js";
 import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
 import { applyWheelScroll, createWheelScrollState } from "../utils/wheel-scroll.js";
 
@@ -96,11 +97,16 @@ export const TVirtualList = defineComponent({
     // One-shot manual dirty rows are only for stable-rect scroll fast paths.
     // Reactive deps and rect changes repaint through useRenderNode normally.
     let dirtyRowsHint: readonly number[] | undefined;
-    let pendingWheelTop: number | null = null;
-    let cancelPendingWheelFrame: (() => void) | null = null;
     let renderNodeId: string | null = null;
     let warnedIgnoredRowScroll = false;
+    let warnedEnabledRowScroll = false;
     const wheelState = createWheelScrollState();
+    const wheelFrame = createFrameCoalescer<number>((top) => {
+      const changed = applyScrollTop(top);
+      if (!changed) return;
+      emit("scroll", scrollTop.value);
+      invalidateSelf("high");
+    });
 
     const itemCount = computed(() => {
       const n = Math.floor(Number(props.itemCount));
@@ -228,53 +234,11 @@ export const TVirtualList = defineComponent({
     }
 
     function cancelWheelScrollFrame(): void {
-      cancelPendingWheelFrame?.();
-      cancelPendingWheelFrame = null;
-      pendingWheelTop = null;
+      wheelFrame.cancel();
     }
 
-    function scheduleWheelFrame(fn: () => void): void {
-      let pending = true;
-      const run = () => {
-        if (!pending) return;
-        pending = false;
-        fn();
-      };
-      if (typeof requestAnimationFrame === "function") {
-        let id = 0;
-        cancelPendingWheelFrame = () => {
-          if (!pending) return;
-          pending = false;
-          cancelAnimationFrame(id);
-        };
-        id = requestAnimationFrame(run);
-        return;
-      }
-      const id = setTimeout(run, 16);
-      cancelPendingWheelFrame = () => {
-        if (!pending) return;
-        pending = false;
-        clearTimeout(id);
-      };
-    }
-
-    // TODO: Phase 2 — replace this per-component rAF coalescing with a unified
-    // scheduler frame-task API (e.g. scheduler.requestFrameTask("scroll", ..., { priority: "high" })).
-    // Keeping wheel coalescing in each component risks duplicated scheduling logic
-    // across TVirtualList, TLogView, TTable, TTranscript, etc.
     function requestWheelScroll(nextTop: number): void {
-      pendingWheelTop = nextTop;
-      if (cancelPendingWheelFrame) return;
-      scheduleWheelFrame(() => {
-        cancelPendingWheelFrame = null;
-        const top = pendingWheelTop;
-        pendingWheelTop = null;
-        if (top == null) return;
-        const changed = applyScrollTop(top);
-        if (!changed) return;
-        emit("scroll", scrollTop.value);
-        invalidateSelf("high");
-      });
+      wheelFrame.request(nextTop);
     }
 
     function invalidateSelf(priority: "low" | "normal" | "high" = "normal"): void {
@@ -285,6 +249,14 @@ export const TVirtualList = defineComponent({
       if (warnedIgnoredRowScroll || !(globalThis as any).__VT_DEBUG_PERF__) return;
       warnedIgnoredRowScroll = true;
       console.warn(`[vue-tui] TVirtualList.useRowScroll ignored: ${reason}`);
+    }
+
+    function warnEnabledRowScroll(): void {
+      if (warnedEnabledRowScroll || !(globalThis as any).__VT_DEBUG_PERF__) return;
+      warnedEnabledRowScroll = true;
+      console.warn(
+        "[vue-tui] TVirtualList.useRowScroll shifts whole plane rows. Use only when these rows are exclusively owned by this component.",
+      );
     }
 
     function moveActive(index: number): void {
@@ -364,7 +336,7 @@ export const TVirtualList = defineComponent({
           const { deltaY, mode } = getWheelScrollInput(e);
           if (!deltaY) return;
           const maxTop = maxScrollTop();
-          const baseTop = pendingWheelTop ?? scrollTop.value;
+          const baseTop = wheelFrame.latest() ?? scrollTop.value;
           const { nextTop, dir } = applyWheelScroll(
             wheelState,
             deltaY,
@@ -468,6 +440,7 @@ export const TVirtualList = defineComponent({
         Math.abs(delta) < h &&
         !dirtyRowsHint?.length;
       if (canUseScrollPlane) {
+        warnEnabledRowScroll();
         render.scrollPlane(plane.value, r.y, r.y + h, delta);
         markRowsDirty(exposedRowsForDelta(r.y, h, delta));
         return true;

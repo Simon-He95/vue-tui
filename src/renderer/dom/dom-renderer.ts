@@ -449,6 +449,24 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     rows: readonly number[] | null;
   }
 
+  const pendingRowCountsByPlane = new Map<TerminalRenderPlane, number>();
+  let pendingTotalRowCount = 0;
+
+  function addPendingRow(plane: TerminalRenderPlane, rows: Set<number>, y: number): void {
+    if (rows.has(y)) return;
+    rows.add(y);
+    pendingTotalRowCount++;
+    pendingRowCountsByPlane.set(plane, (pendingRowCountsByPlane.get(plane) ?? 0) + 1);
+  }
+
+  function deletePendingRow(plane: TerminalRenderPlane, rows: Set<number>, y: number): void {
+    if (!rows.delete(y)) return;
+    pendingTotalRowCount--;
+    const nextCount = (pendingRowCountsByPlane.get(plane) ?? 1) - 1;
+    if (nextCount > 0) pendingRowCountsByPlane.set(plane, nextCount);
+    else pendingRowCountsByPlane.delete(plane);
+  }
+
   function recordLargeSyncFlush(scope: Readonly<FlushScope>): void {
     if (!(globalThis as any).__VT_DEBUG_PERF__) return;
     const size = terminal.size();
@@ -472,11 +490,18 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
   }
 
   function scopeWillDrainAllPending(scope: Readonly<FlushScope>): boolean {
+    if (pendingTotalRowCount === 0) return true;
+    if (scope.rows !== null && pendingTotalRowCount > scope.rows.length * scope.planes.length)
+      return false;
     const scopePlanes = new Set(scope.planes);
-    const scopeRows = scope.rows == null ? null : new Set(scope.rows);
+    for (const plane of pendingRowCountsByPlane.keys()) {
+      if (!scopePlanes.has(plane)) return false;
+    }
+    if (scope.rows === null) return true;
+    const scopeRows = new Set(scope.rows);
     for (const [plane, rows] of pending) {
       if (!scopePlanes.has(plane)) return false;
-      if (scopeRows === null) continue;
+      if (rows.size > scopeRows.size) return false;
       for (const y of rows) {
         if (!scopeRows.has(y)) return false;
       }
@@ -501,7 +526,7 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
         if (!rows.has(y)) return;
         const line = layer.lines[y];
         if (line) renderRow(layer.terminal, metrics, wideScaleX, y, line);
-        rows.delete(y);
+        deletePendingRow(plane, rows, y);
       };
 
       if (scope?.rows == null) {
@@ -541,7 +566,7 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
           rows = new Set<number>();
           pending.set(plane, rows);
         }
-        for (let y = 0; y < size.rows; y++) rows.add(y);
+        for (let y = 0; y < size.rows; y++) addPendingRow(plane, rows, y);
       }
     } else {
       for (const plane of activePlanes) {
@@ -550,7 +575,7 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
           rows = new Set<number>();
           pending.set(plane, rows);
         }
-        for (const y of dirtyRows) rows.add(y);
+        for (const y of dirtyRows) addPendingRow(plane, rows, y);
       }
     }
     if (sync) {
@@ -592,6 +617,8 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
       offResize();
       if (raf > 0) cancelAnimationFrame(raf);
       pending.clear();
+      pendingRowCountsByPlane.clear();
+      pendingTotalRowCount = 0;
       planeLayers.clear();
       container.replaceChildren();
     },

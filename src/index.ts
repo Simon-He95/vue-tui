@@ -112,7 +112,6 @@ export {
   TSelect,
   TText,
   TTransition,
-  TVirtualList,
   TView,
   useLayout,
   useRenderNode,
