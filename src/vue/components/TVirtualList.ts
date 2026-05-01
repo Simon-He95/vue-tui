@@ -269,6 +269,9 @@ export const TVirtualList = defineComponent({
       scrollTop.value = clampedTop;
       const size = terminal.size();
       const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= size.cols;
+      // DomRenderer currently repaints dirty rows but does not shift line DOM
+      // nodes from terminal scrollOperations, so keep row-scroll fast path to
+      // headless/CLI full-row lists until DOM scroll operation support lands.
       const canUseScrollPlane = !renderer.value && ownsFullRows && Math.abs(delta) < h;
       if (canUseScrollPlane) {
         render.scrollPlane(plane.value, r.y, r.y + h, delta);

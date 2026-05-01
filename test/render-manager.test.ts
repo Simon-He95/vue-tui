@@ -534,4 +534,43 @@ describe("render-manager", () => {
     expect(dirtyArgs).toEqual(["1,5"]);
     expect(stats?.rows).toBe(2);
   });
+
+  it("preserves sorted paint order for row-bucket partial repaint", () => {
+    const paints: string[] = [];
+    const listeners = new Map<string, Set<(...args: any[]) => void>>();
+    const terminal: any = {
+      size: () => ({ cols: 10, rows: 5 }),
+      on(event: string, cb: (...args: any[]) => void) {
+        let set = listeners.get(event);
+        if (!set) listeners.set(event, (set = new Set()));
+        set.add(cb);
+        return () => set!.delete(cb);
+      },
+      batch(fn: () => void) {
+        fn();
+      },
+      clear() {},
+    };
+
+    const rm = createRenderManager(terminal);
+    const low = rm.register({
+      stack: rm.rootStack,
+      zIndex: 0,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("low"),
+    });
+    rm.register({
+      stack: rm.rootStack,
+      zIndex: 10,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("high"),
+    });
+
+    rm.render();
+    paints.length = 0;
+    rm.update(low.id, { dirtyRowsHint: [1] });
+    rm.render();
+
+    expect(paints).toEqual(["low", "high"]);
+  });
 });
