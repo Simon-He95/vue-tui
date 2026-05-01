@@ -94,6 +94,7 @@ export const TVirtualList = defineComponent({
     let dirtyRowsHint: readonly number[] | undefined;
     let pendingWheelTop: number | null = null;
     let cancelPendingWheelFrame: (() => void) | null = null;
+    let renderNodeId: string | null = null;
     const wheelState = createWheelScrollState();
 
     const absRect = computed<Rect>(() => {
@@ -113,8 +114,12 @@ export const TVirtualList = defineComponent({
       active.value = clamp(props.modelValue, 0, Math.max(0, props.itemCount - 1));
     });
 
+    function viewportHeight(): number {
+      return Math.max(0, Math.floor(absRect.value.h));
+    }
+
     function ensureActiveVisible(): void {
-      const h = Math.max(0, props.h);
+      const h = viewportHeight();
       if (h <= 0) return;
       const maxTop = Math.max(0, props.itemCount - h);
       let nextTop = clamp(scrollTop.value, 0, maxTop);
@@ -124,7 +129,7 @@ export const TVirtualList = defineComponent({
     }
 
     watch(
-      [() => active.value, () => props.itemCount, () => props.h],
+      [() => active.value, () => props.itemCount, () => absRect.value.h],
       () => {
         ensureActiveVisible();
       },
@@ -194,6 +199,7 @@ export const TVirtualList = defineComponent({
     }
 
     function moveActive(index: number): void {
+      if (props.itemCount <= 0) return;
       cancelWheelScrollFrame();
       const prevTop = scrollTop.value;
       active.value = clamp(index, 0, Math.max(0, props.itemCount - 1));
@@ -219,12 +225,12 @@ export const TVirtualList = defineComponent({
       }
       if (e.key === "PageUp") {
         e.preventDefault();
-        moveActive(active.value - props.h);
+        moveActive(active.value - viewportHeight());
         return;
       }
       if (e.key === "PageDown") {
         e.preventDefault();
-        moveActive(active.value + props.h);
+        moveActive(active.value + viewportHeight());
         return;
       }
       if (e.key === "Home") {
@@ -334,7 +340,6 @@ export const TVirtualList = defineComponent({
       return Array.from(rows).sort((a, b) => a - b);
     }
 
-    let renderNodeId: string | null = null;
     function setDirtyRowsHint(nextRows: readonly number[]): void {
       dirtyRowsHint = unionDirtyRows(nextRows);
       if (renderNodeId) render.update(renderNodeId, { dirtyRowsHint });

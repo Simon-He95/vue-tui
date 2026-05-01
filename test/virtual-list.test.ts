@@ -7,6 +7,7 @@ import {
   mountTerminal,
   nextTick,
   ref,
+  TBox,
   TText,
   TVirtualList,
   useTerminal,
@@ -365,6 +366,36 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
+  it("does not emit update:modelValue on keyboard navigation for an empty list", async () => {
+    const onUpdateModelValue = vi.fn();
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: 0,
+        itemVersion: 1,
+        getItem: vi.fn(),
+        modelValue: 0,
+        autoFocus: true,
+        "onUpdate:modelValue": onUpdateModelValue,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+
+    app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: Date.now() });
+    app.events.dispatch({ type: "keydown", key: "End", code: "End", time: Date.now() });
+    await nextTick();
+
+    expect(onUpdateModelValue).not.toHaveBeenCalled();
+    app.dispose();
+  });
+
   it("repaints the viewport when keyboard navigation scrolls active state", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
@@ -398,6 +429,40 @@ describe("TVirtualList", () => {
     expect(rowText({ terminal: app.terminal } as any, 3)).toBe("item-4");
     expect(app.terminal.getCell(0, 2).style.inverse).not.toBe(true);
     expect(app.terminal.getCell(0, 3).style.inverse).toBe(true);
+    app.dispose();
+  });
+
+  it("keeps active item visible using clipped viewport height", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "ClippedVirtualList",
+      setup() {
+        return () =>
+          h(TBox, { x: 0, y: 0, w: 14, h: 6, border: true, padding: 0 }, () =>
+            h(TVirtualList, {
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 10,
+              itemCount: items.length,
+              itemVersion: 1,
+              getItem: (index: number) => items[index],
+              modelValue: 8,
+              autoFocus: true,
+            }),
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 16, rows: 8, component: App });
+    app.mount();
+    await nextTick();
+    app.scheduler.flushNow();
+
+    expect(rowText({ terminal: app.terminal } as any, 1)).toContain("item-5");
+    expect(rowText({ terminal: app.terminal } as any, 2)).toContain("item-6");
+    expect(rowText({ terminal: app.terminal } as any, 3)).toContain("item-7");
+    expect(rowText({ terminal: app.terminal } as any, 4)).toContain("item-8");
+    expect(app.terminal.getCell(1, 4).style.inverse).toBe(true);
     app.dispose();
   });
 
