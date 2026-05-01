@@ -573,4 +573,76 @@ describe("render-manager", () => {
 
     expect(paints).toEqual(["low", "high"]);
   });
+
+  it("ignores dirtyRowsHint when zIndex changes", () => {
+    const dirtyArgs: string[] = [];
+    const listeners = new Map<string, Set<(...args: any[]) => void>>();
+    const terminal: any = {
+      size: () => ({ cols: 10, rows: 5 }),
+      on(event: string, cb: (...args: any[]) => void) {
+        let set = listeners.get(event);
+        if (!set) listeners.set(event, (set = new Set()));
+        set.add(cb);
+        return () => set!.delete(cb);
+      },
+      batch(fn: () => void) {
+        fn();
+      },
+      clear() {},
+    };
+
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      zIndex: 0,
+      rect: { x: 0, y: 0, w: 10, h: 2 },
+      paint: (dirtyRows) => dirtyArgs.push((dirtyRows ?? []).join(",")),
+    });
+    rm.register({
+      stack: rm.rootStack,
+      zIndex: 10,
+      rect: { x: 0, y: 0, w: 10, h: 2 },
+      paint: () => {},
+    });
+    rm.render();
+    dirtyArgs.length = 0;
+
+    rm.update(node.id, { zIndex: 20, dirtyRowsHint: [0] });
+    rm.render();
+
+    expect(dirtyArgs).toEqual(["0,1"]);
+  });
+
+  it("ignores dirtyRowsHint when stack changes", () => {
+    const dirtyArgs: string[] = [];
+    const listeners = new Map<string, Set<(...args: any[]) => void>>();
+    const terminal: any = {
+      size: () => ({ cols: 10, rows: 5 }),
+      on(event: string, cb: (...args: any[]) => void) {
+        let set = listeners.get(event);
+        if (!set) listeners.set(event, (set = new Set()));
+        set.add(cb);
+        return () => set!.delete(cb);
+      },
+      batch(fn: () => void) {
+        fn();
+      },
+      clear() {},
+    };
+
+    const rm = createRenderManager(terminal);
+    const raisedStack = rm.createStack(rm.rootStack, 10);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 2 },
+      paint: (dirtyRows) => dirtyArgs.push((dirtyRows ?? []).join(",")),
+    });
+    rm.render();
+    dirtyArgs.length = 0;
+
+    rm.update(node.id, { stack: raisedStack, dirtyRowsHint: [0] });
+    rm.render();
+
+    expect(dirtyArgs).toEqual(["0,1"]);
+  });
 });

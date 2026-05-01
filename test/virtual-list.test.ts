@@ -214,6 +214,53 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
+  it("keeps headless full-row slow scroll correct across consecutive wheel ticks", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: items.length,
+        itemVersion: 1,
+        getItem: (index: number) => items[index],
+        autoFocus: true,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+    const commits: Array<readonly number[] | null> = [];
+    const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+    const dateNow = vi.spyOn(Date, "now");
+
+    try {
+      let now = 1_000;
+      dateNow.mockImplementation(() => now);
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: now });
+      await nextTick();
+      now += 10;
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: now });
+      await nextTick();
+      await nextTick();
+    } finally {
+      dateNow.mockRestore();
+      off();
+    }
+
+    expect(commits).toEqual([[3], [3]]);
+    expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+      "item-2",
+      "item-3",
+      "item-4",
+      "item-5",
+    ]);
+    app.dispose();
+  });
+
   it("repaints the viewport when keyboard navigation scrolls active state", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({

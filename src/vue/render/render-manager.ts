@@ -339,6 +339,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     const dirtyRowsHint = next.dirtyRowsHint;
     const canUseDirtyRowsHint =
       !bucketChanged &&
+      !sortChanged &&
       nextPlane === prev.plane &&
       dirtyRowsHint != null &&
       dirtyRowsHint.length > 0;
