@@ -91,15 +91,20 @@ describe("TVirtualList", () => {
       8,
     );
 
-    const commits: Array<readonly number[] | null> = [];
-    const off = mounted.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+    const commits: Array<{
+      dirtyRows: readonly number[] | null;
+      scrollOperations: unknown;
+    }> = [];
+    const off = mounted.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+      commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+    });
 
     dispatchWheel(mounted.container()!);
     await nextTick();
     await nextTick();
 
     off();
-    expect(commits.some((rows) => rows?.join(",") === "0,1,2,3")).toBe(true);
+    expect(commits).toContainEqual({ dirtyRows: [0, 1, 2, 3], scrollOperations: null });
     expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
       "item-1",
       "item-2",
@@ -238,15 +243,22 @@ describe("TVirtualList", () => {
     });
     app.mount();
     app.scheduler.flushNow();
-    const commits: Array<readonly number[] | null> = [];
-    const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+    const commits: Array<{
+      dirtyRows: readonly number[] | null;
+      scrollOperations: unknown;
+    }> = [];
+    const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+      commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+    });
 
     app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
     await nextTick();
     await nextTick();
 
     off();
-    expect(commits).toEqual([[3]]);
+    expect(commits).toEqual([
+      { dirtyRows: [3], scrollOperations: [{ startY: 0, endY: 4, delta: 1 }] },
+    ]);
     expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
       "item-1",
       "item-2",
@@ -292,8 +304,13 @@ describe("TVirtualList", () => {
     try {
       app.mount();
       app.scheduler.flushNow();
-      const commits: Array<readonly number[] | null> = [];
-      const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
       let now = 1_000;
       dateNow.mockImplementation(() => now);
 
@@ -307,7 +324,9 @@ describe("TVirtualList", () => {
       await nextTick();
 
       off();
-      expect(commits).toEqual([[2, 3]]);
+      expect(commits).toEqual([
+        { dirtyRows: [2, 3], scrollOperations: [{ startY: 0, endY: 4, delta: 2 }] },
+      ]);
       expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
         "item-2",
         "item-3",
@@ -704,6 +723,42 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
+  it("can scroll a bottom-clipped viewport to the last item", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "BottomClippedVirtualList",
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: 12, h: 4 }, () =>
+            h(TVirtualList, {
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 10,
+              itemCount: items.length,
+              itemVersion: 1,
+              getItem: (index: number) => items[index],
+              modelValue: 19,
+              autoFocus: true,
+            }),
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 6, component: App });
+    app.mount();
+    await nextTick();
+    app.scheduler.flushNow();
+
+    expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+      "item-16",
+      "item-17",
+      "item-18",
+      "item-19",
+    ]);
+    expect(app.terminal.getCell(0, 3).style.inverse).toBe(true);
+    app.dispose();
+  });
+
   it("renders correct item rows when the top is clipped", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
@@ -998,6 +1053,40 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
+  it("documents that useRowScroll shifts same-plane full-row overlay content", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "VirtualListWithUnsafeOverlay",
+      setup() {
+        return () => [
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: items.length,
+            itemVersion: 1,
+            getItem: (index: number) => items[index],
+            autoFocus: true,
+            useRowScroll: true,
+          }),
+          h(TText, { x: 0, y: 1, w: 6, value: "BADGE", zIndex: 999 }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+    await nextTick();
+    await nextTick();
+
+    expect(rowText({ terminal: app.terminal } as any, 0)).toContain("BADGE");
+    expect(rowText({ terminal: app.terminal } as any, 1)).not.toContain("BADGE");
+    app.dispose();
+  });
+
   it("only calls getItem for visible rows after itemVersion changes", async () => {
     const version = ref(1);
     const getItem = vi.fn((index: number) => `item-${index}`);
@@ -1119,6 +1208,102 @@ describe("TVirtualList", () => {
         "v2-item-2",
         "v2-item-3",
         "v2-item-4",
+      ]);
+    } finally {
+      restoreInvalidate?.();
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("repaints viewport when style changes with pending exposed scroll rows", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const style = ref<{ fg: "redBright" | "greenBright" }>({ fg: "redBright" });
+    let restoreInvalidate: (() => void) | null = null;
+
+    const Probe = defineComponent({
+      name: "HoldVirtualListStyleScheduler",
+      setup() {
+        const { scheduler } = useTerminal();
+        const original = scheduler.invalidate.bind(scheduler);
+        (scheduler as any).invalidate = () => {};
+        restoreInvalidate = () => {
+          (scheduler as any).invalidate = original;
+        };
+        return () => null;
+      },
+    });
+
+    const App = defineComponent({
+      name: "VirtualListPendingHintStyleProbe",
+      setup() {
+        return () => [
+          h(Probe),
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 100_000,
+            itemVersion: 1,
+            getItem: (index: number) => `item-${index}`,
+            autoFocus: true,
+            useRowScroll: true,
+            style: style.value,
+          }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+      expect(callbacks.size).toBe(1);
+      Array.from(callbacks.values())[0]?.(0);
+      await nextTick();
+
+      style.value = { fg: "greenBright" };
+      await nextTick();
+      restoreInvalidate?.();
+      app.scheduler.flushNow();
+      off();
+
+      expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
+      expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+        "item-1",
+        "item-2",
+        "item-3",
+        "item-4",
+      ]);
+      expect([0, 1, 2, 3].map((y) => app.terminal.getCell(0, y).style.fg)).toEqual([
+        "greenBright",
+        "greenBright",
+        "greenBright",
+        "greenBright",
       ]);
     } finally {
       restoreInvalidate?.();

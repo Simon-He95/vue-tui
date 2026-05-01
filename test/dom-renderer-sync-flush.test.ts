@@ -192,6 +192,7 @@ describe("DomRenderer sync flush", () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;
     const callbacks = new Map<number, FrameRequestCallback>();
+    const canceled = new Set<number>();
     let rafId = 0;
     globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
       const id = ++rafId;
@@ -199,6 +200,7 @@ describe("DomRenderer sync flush", () => {
       return id;
     }) as typeof requestAnimationFrame;
     globalThis.cancelAnimationFrame = ((id: number) => {
+      canceled.add(id);
       callbacks.delete(id);
     }) as typeof cancelAnimationFrame;
 
@@ -214,27 +216,25 @@ describe("DomRenderer sync flush", () => {
       // Normal commit: fill all rows with "A" — pending but rAF not yet run
       for (let y = 0; y < 4; y++) terminal.fill(0, y, 4, 1, "A");
       terminal.commit();
+      const normalRafId = rafId;
 
-      // First sync commit: only row 0
-      terminal.write("B", { x: 0, y: 0 });
-      terminal.commit({ sync: true });
-      expect(rowText(container, 0)).toContain("B");
+      for (let i = 0; i < 50; i++) {
+        terminal.write(String(i % 10), { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+      }
+      expect(rowText(container, 0)).toContain("9");
 
-      // Second sync commit: only row 1
-      terminal.write("C", { x: 0, y: 1 });
-      terminal.commit({ sync: true });
-      expect(rowText(container, 1)).toContain("C");
-
-      // Rows 2-3 should still be pending (not starved by consecutive syncs)
+      // Rows 1-3 should still be pending and the original rAF should remain scheduled.
+      expect(rowText(container, 1)).not.toContain("A");
       expect(rowText(container, 2)).not.toContain("A");
       expect(rowText(container, 3)).not.toContain("A");
-
-      // A rAF should still be scheduled for remaining pending rows
-      expect(callbacks.size).toBeGreaterThanOrEqual(1);
+      expect(canceled.has(normalRafId)).toBe(false);
+      expect(callbacks.has(normalRafId)).toBe(true);
 
       // Execute pending rAF — all rows should now be rendered
-      const remaining = Array.from(callbacks.values())[0]!;
+      const remaining = callbacks.get(normalRafId)!;
       remaining(0);
+      expect(rowText(container, 1)).toContain("A");
       expect(rowText(container, 2)).toContain("A");
       expect(rowText(container, 3)).toContain("A");
 
@@ -276,7 +276,7 @@ describe("DomRenderer sync flush", () => {
       terminal.commit({ sync: true });
 
       expect(warn).toHaveBeenCalledWith(
-        "[vue-tui] large sync DOM flush deferred: rows=40 cols=4 planes=4 cells=640",
+        "[vue-tui] sync DOM flush request deferred to rAF: rows=40 cols=4 planes=4 cells=640 cellBudget=4096",
       );
       expect(rowText(container, 39)).toContain("A");
       pending?.(0);

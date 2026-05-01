@@ -457,7 +457,7 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     const cellWork = rowCount * size.cols * planeCount;
     if (rowCount <= SYNC_FLUSH_WARN_ROWS && cellWork <= SYNC_FLUSH_CELL_BUDGET) return;
     console.warn(
-      `[vue-tui] large sync DOM flush deferred: rows=${rowCount} cols=${size.cols} planes=${planeCount} cells=${cellWork}`,
+      `[vue-tui] sync DOM flush request deferred to rAF: rows=${rowCount} cols=${size.cols} planes=${planeCount} cells=${cellWork} cellBudget=${SYNC_FLUSH_CELL_BUDGET}`,
     );
   }
 
@@ -471,8 +471,24 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     );
   }
 
-  function flushPending(scope?: Readonly<FlushScope>): void {
-    raf = 0;
+  function scopeWillDrainAllPending(scope: Readonly<FlushScope>): boolean {
+    const scopePlanes = new Set(scope.planes);
+    const scopeRows = scope.rows == null ? null : new Set(scope.rows);
+    for (const [plane, rows] of pending) {
+      if (!scopePlanes.has(plane)) return false;
+      if (scopeRows === null) continue;
+      for (const y of rows) {
+        if (!scopeRows.has(y)) return false;
+      }
+    }
+    return true;
+  }
+
+  function flushPending(
+    scope?: Readonly<FlushScope>,
+    options?: Readonly<{ clearRaf?: boolean }>,
+  ): void {
+    if (options?.clearRaf !== false) raf = 0;
     if (disposed) return;
     const planesToFlush = scope?.planes ?? TERMINAL_RENDER_PLANES;
 
@@ -481,13 +497,17 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
       const rows = pending.get(plane);
       if (!layer || !rows?.size) continue;
 
-      const targetRows =
-        scope?.rows == null ? Array.from(rows) : scope.rows.filter((y) => rows.has(y));
-
-      for (const y of targetRows) {
+      const flushRow = (y: number): void => {
+        if (!rows.has(y)) return;
         const line = layer.lines[y];
         if (line) renderRow(layer.terminal, metrics, wideScaleX, y, line);
         rows.delete(y);
+      };
+
+      if (scope?.rows == null) {
+        for (const y of rows) flushRow(y);
+      } else {
+        for (const y of scope.rows) flushRow(y);
       }
 
       if (rows.size === 0) pending.delete(plane);
@@ -540,9 +560,13 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
         scheduleRafIfNeeded();
         return;
       }
-      if (raf > 0) cancelAnimationFrame(raf);
-      raf = 0;
-      flushPending(scope);
+      const drainedAll = scopeWillDrainAllPending(scope);
+      if (raf > 0 && drainedAll) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      flushPending(scope, { clearRaf: drainedAll });
+      if (!drainedAll) scheduleRafIfNeeded();
     } else if (!raf) {
       scheduleRafIfNeeded();
     }

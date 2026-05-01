@@ -174,4 +174,28 @@ describe("terminal core", () => {
     expect(commits[0]?.scrollOperations).toEqual([{ startY: 1, endY: 4, delta: 1 }]);
     expect(t.snapshot().lines).toEqual(["    ", "B   ", "C   ", "D   ", "    "]);
   });
+
+  it("drops scroll operations covered by dirty rows", () => {
+    const t = createTerminal({ cols: 4, rows: 5 });
+    const transcript = getPlaneTerminal(t, "transcript");
+    const commits: any[] = [];
+    t.on("commit", (event) => commits.push(event));
+
+    transcript.write("A", { x: 0, y: 1 });
+    transcript.write("B", { x: 0, y: 2 });
+    transcript.write("C", { x: 0, y: 3 });
+    t.commit({ planes: ["transcript"] });
+    commits.length = 0;
+
+    scrollPlaneRows(t, "transcript", 1, 4, 1);
+    transcript.write("D", { x: 0, y: 1 });
+    transcript.write("E", { x: 0, y: 2 });
+    transcript.write("F", { x: 0, y: 3 });
+    const dirtyRows = t.commit({ planes: ["transcript"] });
+
+    expect(dirtyRows).toEqual([1, 2, 3]);
+    expect(commits).toHaveLength(1);
+    expect(commits[0]?.scrollOperations).toBeNull();
+    expect(t.snapshot().lines).toEqual(["    ", "D   ", "E   ", "F   ", "    "]);
+  });
 });

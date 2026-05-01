@@ -151,7 +151,9 @@ export const TVirtualList = defineComponent({
     }
 
     function maxScrollTop(): number {
-      return Math.max(0, itemCount.value - normalizedFullRect().h);
+      const clip = normalizedRect();
+      const { y: clipY } = clipOffsets();
+      return Math.max(0, itemCount.value - (clipY + clip.h));
     }
 
     const visibleWindow = computed(() => {
@@ -484,7 +486,6 @@ export const TVirtualList = defineComponent({
         defaultStyle.value,
       ],
       paint: (dirtyRows) => {
-        const consumedHint = dirtyRowsHint;
         dirtyRowsHint = undefined;
         if (!visible.value) return;
         const r = normalizedRect();
@@ -508,7 +509,7 @@ export const TVirtualList = defineComponent({
           terminal.write(line, { x: r.x, y, style });
         };
 
-        const rows = dirtyRows ?? consumedHint;
+        const rows = dirtyRows;
         if (rows?.length) {
           for (const y of rows) paintRow(y);
           return;
