@@ -198,7 +198,7 @@ wheel 行为：
 - 不满足 `useRowScroll` 条件或 DOM 环境下，wheel 直接 repaint viewport。
 - PageUp/PageDown/Home/End 或大跳转直接 repaint viewport。
 
-> **`useRowScroll` 语义**：`scrollPlane()` 会 shift 该 plane 的完整 row region，只适合 TVirtualList 独占这些 rows 的 CLI/headless 场景；如果同一 plane 上还有其它内容覆盖这些 rows，请保持默认 `useRowScroll: false`（repaint viewport）。
+> **`useRowScroll` 语义**：`scrollPlane()` 会 shift 该 plane 的完整 row region，只适合 TVirtualList 独占这些 rows 的 CLI/headless 场景；如果同一 plane 上还有其它内容覆盖这些 rows，请保持默认 `useRowScroll: false`（repaint viewport）。调用 `render.scrollPlane()` 前也必须确认当前 renderer 会消费 terminal `scrollOperations`；DOM renderer 在 Phase 1 不支持该能力。
 
 键盘和点击行为：
 
@@ -333,7 +333,7 @@ type FramePerf = {
 验收命令：
 
 ```bash
-pnpm vitest run test/render-manager.test.ts test/dom-renderer-sync-flush.test.ts test/virtual-list.test.ts test/ui-regressions.test.ts test/perf-budgets.test.ts test/scheduler-priority.test.ts
+pnpm vitest run test/render-manager.test.ts test/dom-renderer-sync-flush.test.ts test/virtual-list.test.ts test/ui-regressions.test.ts test/index.test.ts test/docs-components.test.ts
 pnpm run typecheck
 pnpm run lint
 ```

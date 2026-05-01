@@ -80,6 +80,7 @@ export const TVirtualList = defineComponent({
     style: { type: Object as PropType<Style>, default: undefined },
     activeStyle: { type: Object as PropType<Style>, default: undefined },
     autoFocus: { type: Boolean, default: false },
+    // Dangerous: shifts whole render plane rows, not only this component's rect.
     useRowScroll: { type: Boolean, default: false },
   },
   emits: ["update:modelValue", "change", "scroll", "focus", "blur", "keydown"],

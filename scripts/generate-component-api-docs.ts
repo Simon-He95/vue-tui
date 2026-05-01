@@ -424,6 +424,10 @@ function renderMarkdown(components: ComponentMeta[]): string {
     lines.push("");
     lines.push(`源码：\`${c.sourceRelPath}\``);
     lines.push("");
+    if (c.name === "TVirtualList") {
+      lines.push("> Experimental import: `@simon_he/vue-tui/experimental`");
+      lines.push("");
+    }
 
     lines.push("### Props");
     lines.push("");

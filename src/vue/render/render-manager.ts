@@ -40,6 +40,10 @@ export type RenderManager = Readonly<{
   rootStack: RenderStack;
   createStack: (parent: RenderStack, zIndex: number) => RenderStack;
   invalidatePlane: (plane: TerminalRenderPlane) => void;
+  /**
+   * Shifts whole terminal rows for the target plane. Callers must ensure the active
+   * renderer consumes terminal scrollOperations; DOM rendering currently does not.
+   */
   scrollPlane: (plane: TerminalRenderPlane, startY: number, endY: number, delta: number) => void;
   register: (node: {
     stack: RenderStack;

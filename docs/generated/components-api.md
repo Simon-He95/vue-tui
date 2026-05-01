@@ -612,6 +612,8 @@
 
 源码：`src/vue/components/TVirtualList.ts`
 
+> Experimental import: `@simon_he/vue-tui/experimental`
+
 ### Props
 
 | 名称                      | 类型                                                     | 默认值                 | 必填 | 说明 |

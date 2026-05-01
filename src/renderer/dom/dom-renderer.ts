@@ -431,6 +431,8 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
   }
 
   function refresh(): void {
+    cancelPendingRaf();
+    clearPendingRows();
     metrics = measureCell(container);
     const wideW = measureCharWidth(container, "中");
     wideScaleX = wideW > 0 ? Math.max(1, Math.min(2, (metrics.cellWidth * 2) / wideW)) : 1;
@@ -451,6 +453,18 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
 
   const pendingRowCountsByPlane = new Map<TerminalRenderPlane, number>();
   let pendingTotalRowCount = 0;
+  let lastSyncFlushWarnAt = 0;
+
+  function cancelPendingRaf(): void {
+    if (raf > 0) cancelAnimationFrame(raf);
+    raf = 0;
+  }
+
+  function clearPendingRows(): void {
+    pending.clear();
+    pendingRowCountsByPlane.clear();
+    pendingTotalRowCount = 0;
+  }
 
   function addPendingRow(plane: TerminalRenderPlane, rows: Set<number>, y: number): void {
     if (rows.has(y)) return;
@@ -474,6 +488,9 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     const planeCount = scope.planes.length || TERMINAL_RENDER_PLANES.length;
     const cellWork = rowCount * size.cols * planeCount;
     if (rowCount <= SYNC_FLUSH_WARN_ROWS && cellWork <= SYNC_FLUSH_CELL_BUDGET) return;
+    const now = Date.now();
+    if (now - lastSyncFlushWarnAt < 1_000) return;
+    lastSyncFlushWarnAt = now;
     console.warn(
       `[vue-tui] sync DOM flush request deferred to rAF: rows=${rowCount} cols=${size.cols} planes=${planeCount} cells=${cellWork} cellBudget=${SYNC_FLUSH_CELL_BUDGET}`,
     );
@@ -615,10 +632,8 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
       disposed = true;
       offCommit();
       offResize();
-      if (raf > 0) cancelAnimationFrame(raf);
-      pending.clear();
-      pendingRowCountsByPlane.clear();
-      pendingTotalRowCount = 0;
+      cancelPendingRaf();
+      clearPendingRows();
       planeLayers.clear();
       container.replaceChildren();
     },

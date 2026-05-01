@@ -246,6 +246,55 @@ describe("DomRenderer sync flush", () => {
     }
   });
 
+  it("refresh clears pending rows and cancels pending rAF", () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    const canceled = new Set<number>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      canceled.add(id);
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    try {
+      const terminal = createTerminal({ cols: 4, rows: 3 });
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const renderer = createDomRenderer(terminal, container);
+      callbacks.get(1)?.(0);
+      callbacks.clear();
+
+      for (let y = 0; y < 3; y++) terminal.fill(0, y, 4, 1, "A");
+      terminal.commit();
+      const normalRafId = rafId;
+      expect(callbacks.has(normalRafId)).toBe(true);
+
+      renderer.refresh();
+
+      expect(canceled.has(normalRafId)).toBe(true);
+      expect(callbacks.has(normalRafId)).toBe(false);
+      expect(rowText(container, 2)).toContain("A");
+
+      terminal.write("B", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      expect(rowText(container, 0)).toContain("B");
+      expect(callbacks.size).toBe(0);
+
+      renderer.dispose();
+      container.remove();
+    } finally {
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
   it("defers large sync full repaint and warns in debug perf mode", () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;
@@ -286,6 +335,53 @@ describe("DomRenderer sync flush", () => {
       container.remove();
     } finally {
       warn.mockRestore();
+      (globalThis as any).__VT_DEBUG_PERF__ = previousDebugPerf;
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("rate limits large sync flush warnings", () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const previousDebugPerf = (globalThis as any).__VT_DEBUG_PERF__;
+    const dateNow = vi.spyOn(Date, "now");
+    let now = 1_000;
+    dateNow.mockImplementation(() => now);
+    let pending: FrameRequestCallback | null = null;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      pending = cb;
+      return 1;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      (globalThis as any).__VT_DEBUG_PERF__ = true;
+      const terminal = createTerminal({ cols: 4, rows: 40 });
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const renderer = createDomRenderer(terminal, container);
+      pending?.(0);
+
+      terminal.clear();
+      terminal.commit({ sync: true });
+      terminal.fill(0, 0, 4, 40, "A");
+      terminal.commit({ sync: true });
+
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      now += 1_001;
+      terminal.clear();
+      terminal.commit({ sync: true });
+
+      expect(warn).toHaveBeenCalledTimes(2);
+
+      renderer.dispose();
+      container.remove();
+    } finally {
+      warn.mockRestore();
+      dateNow.mockRestore();
       (globalThis as any).__VT_DEBUG_PERF__ = previousDebugPerf;
       globalThis.requestAnimationFrame = previousRaf;
       globalThis.cancelAnimationFrame = previousCancel;
