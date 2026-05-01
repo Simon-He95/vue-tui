@@ -6,8 +6,10 @@ import {
   h,
   mountTerminal,
   nextTick,
+  ref,
   TText,
   TVirtualList,
+  useTerminal,
 } from "./ui-regressions-support.js";
 
 function dispatchWheel(container: HTMLElement): void {
@@ -476,43 +478,128 @@ describe("TVirtualList", () => {
   });
 
   it("only calls getItem for visible rows after itemVersion changes", async () => {
+    const version = ref(1);
     const getItem = vi.fn((index: number) => `item-${index}`);
+    const App = defineComponent({
+      name: "VirtualListVersionProbe",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 100_000,
+            itemVersion: version.value,
+            getItem,
+            autoFocus: true,
+          });
+      },
+    });
+
     const app = createTerminalApp({
       cols: 12,
       rows: 8,
-      component: TVirtualList,
-      props: {
-        x: 0,
-        y: 0,
-        w: 12,
-        h: 4,
-        itemCount: 100_000,
-        itemVersion: 1,
-        getItem,
-        autoFocus: true,
-      },
+      component: App,
     });
     app.mount();
     app.scheduler.flushNow();
     getItem.mockClear();
 
-    // Bump itemVersion — should only repaint visible window (4 items)
-    app.events.dispatch({
-      type: "propChange",
-      prop: "itemVersion",
-      value: 2,
-    });
+    version.value++;
     await nextTick();
     app.scheduler.flushNow();
     await nextTick();
 
-    // getItem should only be called for the 4 visible rows (indices 0-3)
     const calledIndices = getItem.mock.calls.map((call: any[]) => call[0] as number);
-    expect(calledIndices.length).toBeLessThanOrEqual(4);
-    expect(calledIndices.every((i) => i >= 0 && i < 4)).toBe(true);
-    // Should NOT have called getItem for thousands of rows
+    expect(calledIndices).toEqual([0, 1, 2, 3]);
     expect(getItem).not.toHaveBeenCalledWith(99999);
     app.dispose();
+  });
+
+  it("repaints viewport when itemVersion changes with pending exposed scroll rows", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const version = ref(1);
+    const getItem = vi.fn((index: number) => `v${version.value}-item-${index}`);
+    let restoreInvalidate: (() => void) | null = null;
+
+    const Probe = defineComponent({
+      name: "HoldVirtualListScheduler",
+      setup() {
+        const { scheduler } = useTerminal();
+        const original = scheduler.invalidate.bind(scheduler);
+        (scheduler as any).invalidate = () => {};
+        restoreInvalidate = () => {
+          (scheduler as any).invalidate = original;
+        };
+        return () => null;
+      },
+    });
+
+    const App = defineComponent({
+      name: "VirtualListPendingHintVersionProbe",
+      setup() {
+        return () => [
+          h(Probe),
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 100_000,
+            itemVersion: version.value,
+            getItem,
+            autoFocus: true,
+            useRowScroll: true,
+          }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      const commits: Array<readonly number[] | null> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+      expect(callbacks.size).toBe(1);
+      Array.from(callbacks.values())[0]?.(0);
+      await nextTick();
+
+      version.value++;
+      await nextTick();
+      restoreInvalidate?.();
+      app.scheduler.flushNow();
+      off();
+
+      expect(commits).toEqual([[0, 1, 2, 3]]);
+      expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+        "v2-item-1",
+        "v2-item-2",
+        "v2-item-3",
+        "v2-item-4",
+      ]);
+    } finally {
+      restoreInvalidate?.();
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
   });
 
   it("active style follows item after useRowScroll scrollPlane shift", async () => {

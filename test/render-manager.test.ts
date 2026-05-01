@@ -786,4 +786,40 @@ describe("render-manager", () => {
     expect(paints).toContain("A");
     expect(stats?.paintedNodes).toBe(1);
   });
+
+  it("fallback scan filters non-contiguous dirty rows exactly", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 100 });
+    const rm = createRenderManager(terminal);
+
+    const first = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      paint: () => paints.push("first"),
+    });
+
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 99, w: 10, h: 1 },
+      paint: () => paints.push("last"),
+    });
+
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 50, w: 10, h: 1 },
+      paint: () => paints.push("middle"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    rm.update(first.id, { dirtyRowsHint: [0, 99] });
+    const stats = rm.render();
+
+    expect(stats?.scannedNodes).toBe(3);
+    expect(paints).toContain("first");
+    expect(paints).toContain("last");
+    expect(paints).not.toContain("middle");
+    expect(stats?.paintedNodes).toBe(2);
+  });
 });

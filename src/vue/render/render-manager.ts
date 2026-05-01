@@ -429,15 +429,17 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     const requestedPlanes = activePlanes ?? TERMINAL_RENDER_PLANES;
     const env = process?.env;
 
-    // Check whether a node's y-range [y0, y1) intersects any dirty row.
-    // `rows` is sorted ascending, so we can use a binary-search-style range check.
     function intersectsDirtyRows(y0: number, y1: number, rows: readonly number[]): boolean {
-      if (rows.length === 0) return false;
-      // Quick range check: node entirely above or below dirty rows
-      if (y1 <= rows[0]!) return false;
-      if (y0 > rows[rows.length - 1]!) return false;
-      // Overlap confirmed by range check above
-      return true;
+      if (y1 <= y0 || rows.length === 0) return false;
+      let lo = 0;
+      let hi = rows.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if ((rows[mid] ?? 0) < y0) lo = mid + 1;
+        else hi = mid;
+      }
+      const y = rows[lo];
+      return y != null && y < y1;
     }
 
     if (env?.DIMCODE_DEBUG === "1") renderMgrDebugLog.render("[RENDER-MANAGER] render() called");

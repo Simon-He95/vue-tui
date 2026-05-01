@@ -188,7 +188,7 @@ export const TVirtualList = defineComponent({
         pendingWheelTop = null;
         if (top == null) return;
         applyScrollTop(top);
-        emit("scroll", top);
+        emit("scroll", scrollTop.value);
         scheduler.invalidate({ priority: "high", plane: plane.value });
       });
     }
@@ -355,7 +355,11 @@ export const TVirtualList = defineComponent({
       // Also requires useRowScroll opt-in so consumers explicitly acknowledge
       // row-bucket scrolling semantics.
       const canUseScrollPlane =
-        props.useRowScroll && !renderer.value && ownsFullRows && Math.abs(delta) < h && !dirtyRowsHint?.length;
+        props.useRowScroll &&
+        !renderer.value &&
+        ownsFullRows &&
+        Math.abs(delta) < h &&
+        !dirtyRowsHint?.length;
       if (canUseScrollPlane) {
         render.scrollPlane(plane.value, r.y, r.y + h, delta);
         setDirtyRowsHint(exposedRowsForDelta(r.y, h, delta));
@@ -367,8 +371,6 @@ export const TVirtualList = defineComponent({
     const renderNode = useRenderNode(() => ({
       zIndex: props.zIndex,
       rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
-      dirtyRowsHint,
-      priority: dirtyRowsHint?.length ? "high" : "normal",
       deps: [
         visible.value,
         absRect.value,
