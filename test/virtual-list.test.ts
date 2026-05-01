@@ -194,7 +194,7 @@ describe("TVirtualList", () => {
     mounted.unmount();
   });
 
-  it("keeps scrollPlane fast path to exposed rows when no DOM renderer is attached", () => {
+  it("keeps unsafe row-scroll fast path to exposed rows when no DOM renderer is attached", () => {
     const terminal = createTerminal({ cols: 12, rows: 6 });
     const render = createRenderManager(terminal);
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
@@ -213,7 +213,7 @@ describe("TVirtualList", () => {
     terminal.commit();
 
     top = 1;
-    render.scrollPlane("default", 0, 4, 1);
+    render.unsafeScrollPlaneRows("default", 0, 4, 1);
     dirtyRowsHint = [3];
     render.update(node.id, { dirtyRowsHint });
     render.render();
@@ -1063,7 +1063,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it("does not use scrollPlane when useRowScroll is true but list does not own full rows", async () => {
+  it("does not use unsafe row-scroll when useRowScroll is true but list does not own full rows", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "VirtualListWithSideContent",
@@ -1101,7 +1101,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it("does not use scrollPlane when useRowScroll is true but the list is clipped", async () => {
+  it("does not use unsafe row-scroll when useRowScroll is true but the list is clipped", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "ClippedRowScrollVirtualList",
@@ -1162,7 +1162,7 @@ describe("TVirtualList", () => {
             itemVersion: 1,
             getItem: (index: number) => items[index],
             autoFocus: true,
-            // useRowScroll defaults to false — should NOT use scrollPlane
+            // useRowScroll defaults to false — should NOT use unsafe row-scroll
           }),
           h(TText, { x: 0, y: 1, w: 6, value: "BADGE", zIndex: 999 }),
         ];
@@ -1179,7 +1179,7 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    // With useRowScroll=false, scrollPlane is NOT used, so BADGE is not shifted
+    // With useRowScroll=false, unsafe row-scroll is NOT used, so BADGE is not shifted
     expect(rowText({ terminal: app.terminal } as any, 1)).toContain("BADGE");
     // Full viewport repaint, not exposed-only
     expect(commits).toEqual([[0, 1, 2, 3]]);
@@ -1486,7 +1486,53 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it("active style follows item after useRowScroll scrollPlane shift", async () => {
+  it("warns in debug perf mode when data function identities change", async () => {
+    const previousDebugPerf = (globalThis as any).__VT_DEBUG_PERF__;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    (globalThis as any).__VT_DEBUG_PERF__ = true;
+    const getItem = ref((index: number) => `item-${index}`);
+    const renderItem = ref((item: unknown) => String(item));
+
+    const App = defineComponent({
+      name: "VirtualListDataFunctionIdentityProbe",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 3,
+            itemCount: 5,
+            itemVersion: 1,
+            getItem: getItem.value,
+            renderItem: renderItem.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 6, component: App });
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      getItem.value = (index: number) => `next-${index}`;
+      renderItem.value = (item: unknown) => `row-${item}`;
+      await nextTick();
+
+      expect(warn).toHaveBeenCalledWith(
+        "[vue-tui] TVirtualList getItem changed identity; use a stable function reference and itemVersion.",
+      );
+      expect(warn).toHaveBeenCalledWith(
+        "[vue-tui] TVirtualList renderItem changed identity; use a stable function reference and itemVersion.",
+      );
+    } finally {
+      app.dispose();
+      warn.mockRestore();
+      (globalThis as any).__VT_DEBUG_PERF__ = previousDebugPerf;
+    }
+  });
+
+  it("active style follows item after useRowScroll unsafe row-scroll shift", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
       cols: 12,

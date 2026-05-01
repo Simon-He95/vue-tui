@@ -44,7 +44,12 @@ export type RenderManager = Readonly<{
    * Shifts whole terminal rows for the target plane. Callers must ensure the active
    * renderer consumes terminal scrollOperations; DOM rendering currently does not.
    */
-  scrollPlane: (plane: TerminalRenderPlane, startY: number, endY: number, delta: number) => void;
+  unsafeScrollPlaneRows: (
+    plane: TerminalRenderPlane,
+    startY: number,
+    endY: number,
+    delta: number,
+  ) => void;
   register: (node: {
     stack: RenderStack;
     plane?: TerminalRenderPlane;
@@ -81,11 +86,20 @@ interface DirtyPlaneState {
   dirtyMaxY: number;
 }
 
+export type RowBucketFallback = Readonly<{
+  plane: TerminalRenderPlane;
+  reason: "dirty-ratio" | "candidate-ratio";
+  dirtyRows: number;
+  planeNodes: number;
+  candidates?: number;
+}>;
+
 export type RenderStats = Readonly<{
   rows: number;
   scannedNodes: number;
   paintedNodes: number;
   candidatePlanes: readonly TerminalRenderPlane[];
+  rowBucketFallbacks?: readonly RowBucketFallback[];
 }>;
 
 function createDirtyPlaneState(rows: number): DirtyPlaneState {
@@ -278,7 +292,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     }
   }
 
-  function scrollPlane(
+  function unsafeScrollPlaneRows(
     plane: TerminalRenderPlane,
     startY: number,
     endY: number,
@@ -481,6 +495,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     let paintedNodes = 0;
     let fullRepaint = false;
     const processedPlanes: TerminalRenderPlane[] = [];
+    const rowBucketFallbacks: RowBucketFallback[] = [];
     const renderedRows = new Uint8Array(terminalRows);
     let renderedRowCount = 0;
 
@@ -540,6 +555,12 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                 const dirtyRatio = rows.length / terminalRows;
                 if (dirtyRatio > ROW_BUCKET_DIRTY_RATIO_FALLBACK) {
                   needsIntersectFilter = true;
+                  rowBucketFallbacks.push({
+                    plane,
+                    reason: "dirty-ratio",
+                    dirtyRows: rows.length,
+                    planeNodes: planeNodes.length,
+                  });
                   return planeNodes;
                 }
                 const ids = new Set<string>();
@@ -553,14 +574,22 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                 if (globalIds) for (const id of globalIds) ids.add(id);
                 const candidates = Array.from(ids, (id) => nodes.get(id))
                   .filter((node): node is RenderNode => node != null)
-                  .sort(
-                    (a, b) =>
-                      (sortedPlaneNodeIndexById.get(a.id) ?? 0) -
-                      (sortedPlaneNodeIndexById.get(b.id) ?? 0),
-                  );
+                  .sort((a, b) => {
+                    const ai = sortedPlaneNodeIndexById.get(a.id);
+                    const bi = sortedPlaneNodeIndexById.get(b.id);
+                    if (ai == null || bi == null) return compareNodes(a, b);
+                    return ai - bi;
+                  });
                 // Row bucket degradation: fall back to planeNodes when bucket candidates exceed 60%
                 if (candidates.length > planeNodes.length * ROW_BUCKET_CANDIDATE_RATIO_FALLBACK) {
                   needsIntersectFilter = true;
+                  rowBucketFallbacks.push({
+                    plane,
+                    reason: "candidate-ratio",
+                    dirtyRows: rows.length,
+                    planeNodes: planeNodes.length,
+                    candidates: candidates.length,
+                  });
                   return planeNodes;
                 }
                 return candidates;
@@ -608,19 +637,26 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     if (env?.DIMCODE_DEBUG === "1")
       renderMgrDebugLog.render("[RENDER-MANAGER] terminal.batch() completed");
 
-    return {
+    const stats: RenderStats = {
       rows: renderedRowCount,
       scannedNodes,
       paintedNodes,
       candidatePlanes: processedPlanes,
     };
+    if (rowBucketFallbacks.length) {
+      return {
+        ...stats,
+        rowBucketFallbacks,
+      };
+    }
+    return stats;
   }
 
   return {
     rootStack,
     createStack,
     invalidatePlane,
-    scrollPlane,
+    unsafeScrollPlaneRows,
     register,
     update,
     unregister,

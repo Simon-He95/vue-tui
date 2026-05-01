@@ -188,6 +188,51 @@ describe("DomRenderer sync flush", () => {
     }
   });
 
+  it("sync commit flushes overlapping pending row and keeps other rows pending", () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    try {
+      const terminal = createTerminal({ cols: 4, rows: 3 });
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const renderer = createDomRenderer(terminal, container);
+      callbacks.get(1)?.(0);
+      callbacks.clear();
+
+      for (let y = 0; y < 3; y++) terminal.fill(0, y, 4, 1, "A");
+      terminal.commit();
+
+      terminal.write("B", { x: 0, y: 1 });
+      terminal.commit({ sync: true });
+
+      expect(rowText(container, 1)).toContain("B");
+      expect(rowText(container, 0)).not.toContain("A");
+      expect(rowText(container, 2)).not.toContain("A");
+
+      const remaining = Array.from(callbacks.values())[0]!;
+      remaining(0);
+      expect(rowText(container, 0)).toContain("A");
+      expect(rowText(container, 2)).toContain("A");
+
+      renderer.dispose();
+      container.remove();
+    } finally {
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
   it("consecutive sync commits do not starve pending normal rows", () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;
@@ -423,6 +468,47 @@ describe("DomRenderer sync flush", () => {
       terminal.commit({ planes: ["default"], sync: true });
 
       expect(rowText(container, 5)).toContain("B");
+
+      renderer.dispose();
+      container.remove();
+    } finally {
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("uses configured sync flush budget", () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    try {
+      const terminal = createTerminal({ cols: 4, rows: 2 });
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const renderer = createDomRenderer(terminal, container, {
+        syncFlushMaxRows: 1,
+        syncFlushCellBudget: 16,
+      });
+      callbacks.get(1)?.(0);
+      callbacks.clear();
+
+      terminal.fill(0, 0, 4, 2, "A");
+      terminal.commit({ sync: true });
+
+      expect(rowText(container, 1)).not.toContain("A");
+      expect(callbacks.size).toBeGreaterThanOrEqual(1);
+      Array.from(callbacks.values())[0]?.(0);
+      expect(rowText(container, 1)).toContain("A");
 
       renderer.dispose();
       container.remove();

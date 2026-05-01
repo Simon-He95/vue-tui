@@ -321,15 +321,15 @@ const app = createTerminalApp({
 - `itemCount` `(number, required)`
 - `itemVersion` `(number, required)`：数据变更版本号
 - `getItem` `((index: number) => unknown, required)`
-- `renderItem` `((item, index) => string?)`
+- `renderItem` `((item, index) => unknown)`
 - `modelValue` `(number)` + `update:modelValue`
 - `style` / `activeStyle` `(Style?)`
 - `autoFocus` `(boolean)`
-- `useRowScroll` `(boolean)`：headless/CLI full-row 场景的 opt-in scrollPlane 优化
+- `useRowScroll` `(boolean)`：headless/CLI full-row 场景的 opt-in unsafe row-scroll 优化
 
 ### Data source
 
-`getItem` 和 `renderItem` 应保持稳定引用，数据变化用 `itemVersion` 通知组件。
+`getItem` 和 `renderItem` 应保持稳定引用，数据变化用 `itemVersion` 通知组件。`style` / `activeStyle` 对象也应按 immutable 方式使用；样式变化时替换对象 identity。
 
 ```ts
 const items = markRaw(bigArray);
@@ -346,7 +346,7 @@ const renderItem = (item: Row) => item.title;
 
 ### Row scroll
 
-`useRowScroll` 是危险优化开关，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占且列表没有被裁剪的场景。它是 headless/CLI 优化：当 DOM renderer 已挂载、列表没有占满终端整行或列表 rect 被裁剪时，会退回 viewport repaint；debug perf 模式会对这些被忽略的场景发出一次 warning。DOM renderer 当前不消费 terminal `scrollOperations`，所以 DOM 慢滚即使设置 `useRowScroll: true` 仍会重绘可见窗口。
+`useRowScroll` 是危险优化开关，不是列表内部局部滚动。它会 shift 当前 render plane 的整行区域，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占且列表没有被裁剪的场景；同 plane 其它内容会被一起移动。它是 headless/CLI 优化：当 DOM renderer 已挂载、列表没有占满终端整行、列表 rect 被裁剪或 rows 超出 terminal bounds 时，会退回 viewport repaint；debug perf 模式会对这些被忽略的场景发出一次 warning。DOM renderer 当前不消费 terminal `scrollOperations`，所以 DOM 慢滚即使设置 `useRowScroll: true` 仍会重绘可见窗口。
 
 ### Events
 

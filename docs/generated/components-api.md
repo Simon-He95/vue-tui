@@ -616,22 +616,22 @@
 
 ### Props
 
-| 名称                      | 类型                                                     | 默认值                 | 必填 | 说明 |
-| ------------------------- | -------------------------------------------------------- | ---------------------- | ---- | ---- |
-| <code>x</code>            | <code>number</code>                                      | —                      | 是   | —    |
-| <code>y</code>            | <code>number</code>                                      | —                      | 是   | —    |
-| <code>w</code>            | <code>number</code>                                      | —                      | 是   | —    |
-| <code>h</code>            | <code>number</code>                                      | —                      | 是   | —    |
-| <code>zIndex</code>       | <code>number</code>                                      | <code>0</code>         | 否   | —    |
-| <code>itemCount</code>    | <code>number</code>                                      | —                      | 是   | —    |
-| <code>itemVersion</code>  | <code>number</code>                                      | —                      | 是   | —    |
-| <code>getItem</code>      | <code>(index: number) =&gt; unknown</code>               | —                      | 是   | —    |
-| <code>renderItem</code>   | <code>(item: unknown, index: number) =&gt; string</code> | <code>undefined</code> | 否   | —    |
-| <code>modelValue</code>   | <code>number</code>                                      | <code>0</code>         | 否   | —    |
-| <code>style</code>        | <code>Style</code>                                       | <code>undefined</code> | 否   | —    |
-| <code>activeStyle</code>  | <code>Style</code>                                       | <code>undefined</code> | 否   | —    |
-| <code>autoFocus</code>    | <code>boolean</code>                                     | <code>false</code>     | 否   | —    |
-| <code>useRowScroll</code> | <code>boolean</code>                                     | <code>false</code>     | 否   | —    |
+| 名称                      | 类型                                                      | 默认值                 | 必填 | 说明 |
+| ------------------------- | --------------------------------------------------------- | ---------------------- | ---- | ---- |
+| <code>x</code>            | <code>number</code>                                       | —                      | 是   | —    |
+| <code>y</code>            | <code>number</code>                                       | —                      | 是   | —    |
+| <code>w</code>            | <code>number</code>                                       | —                      | 是   | —    |
+| <code>h</code>            | <code>number</code>                                       | —                      | 是   | —    |
+| <code>zIndex</code>       | <code>number</code>                                       | <code>0</code>         | 否   | —    |
+| <code>itemCount</code>    | <code>number</code>                                       | —                      | 是   | —    |
+| <code>itemVersion</code>  | <code>number</code>                                       | —                      | 是   | —    |
+| <code>getItem</code>      | <code>(index: number) =&gt; unknown</code>                | —                      | 是   | —    |
+| <code>renderItem</code>   | <code>(item: unknown, index: number) =&gt; unknown</code> | <code>undefined</code> | 否   | —    |
+| <code>modelValue</code>   | <code>number</code>                                       | <code>0</code>         | 否   | —    |
+| <code>style</code>        | <code>Style</code>                                        | <code>undefined</code> | 否   | —    |
+| <code>activeStyle</code>  | <code>Style</code>                                        | <code>undefined</code> | 否   | —    |
+| <code>autoFocus</code>    | <code>boolean</code>                                      | <code>false</code>     | 否   | —    |
+| <code>useRowScroll</code> | <code>boolean</code>                                      | <code>false</code>     | 否   | —    |
 
 ### Events
 

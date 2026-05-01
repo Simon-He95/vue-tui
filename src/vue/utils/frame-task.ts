@@ -4,7 +4,8 @@ export interface FrameCoalescer<T> {
   latest(): T | undefined;
 }
 
-// Phase 2 should replace this component-local helper with scheduler-owned frame tasks.
+// Internal Phase 1 helper; new high-frequency components should wait for
+// scheduler-owned frame tasks instead of copying this component-local queue.
 export function createFrameCoalescer<T>(apply: (latest: T) => void): FrameCoalescer<T> {
   let queued = false;
   let latestValue: T | undefined;

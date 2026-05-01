@@ -18,6 +18,11 @@ export interface DomRenderer {
   ) => void;
 }
 
+export interface DomRendererOptions {
+  syncFlushMaxRows?: number;
+  syncFlushCellBudget?: number;
+}
+
 interface PlaneLayer {
   el: HTMLElement;
   contentEl: HTMLElement;
@@ -41,8 +46,8 @@ const DEFAULT_FONT_FAMILY = [
   '"Courier New"',
   "monospace",
 ].join(", ");
-const SYNC_FLUSH_WARN_ROWS = 32;
-const SYNC_FLUSH_CELL_BUDGET = 4096;
+const DEFAULT_SYNC_FLUSH_MAX_ROWS = 32;
+const DEFAULT_SYNC_FLUSH_CELL_BUDGET = 4096;
 
 const styleKeyCache = new WeakMap<object, string>();
 
@@ -306,7 +311,11 @@ function renderRow(
   lineEl.replaceChildren(fragment);
 }
 
-export function createDomRenderer(terminal: Terminal, container: HTMLElement): DomRenderer {
+export function createDomRenderer(
+  terminal: Terminal,
+  container: HTMLElement,
+  options: DomRendererOptions = {},
+): DomRenderer {
   container.style.fontFamily = DEFAULT_FONT_FAMILY;
   container.style.whiteSpace = "pre";
   container.style.display = "inline-block";
@@ -327,6 +336,14 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
   let raf = 0;
   const pending = new Map<TerminalRenderPlane, Set<number>>();
   let disposed = false;
+  const syncFlushMaxRows = Math.max(
+    0,
+    Math.floor(options.syncFlushMaxRows ?? DEFAULT_SYNC_FLUSH_MAX_ROWS),
+  );
+  const syncFlushCellBudget = Math.max(
+    0,
+    Math.floor(options.syncFlushCellBudget ?? DEFAULT_SYNC_FLUSH_CELL_BUDGET),
+  );
 
   function applyPlaneOffset(plane: TerminalRenderPlane, offsetPx: number): void {
     const layer = planeLayers.get(plane);
@@ -487,12 +504,12 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     const rowCount = scope.rows == null ? size.rows : scope.rows.length;
     const planeCount = scope.planes.length || TERMINAL_RENDER_PLANES.length;
     const cellWork = rowCount * size.cols * planeCount;
-    if (rowCount <= SYNC_FLUSH_WARN_ROWS && cellWork <= SYNC_FLUSH_CELL_BUDGET) return;
+    if (rowCount <= syncFlushMaxRows && cellWork <= syncFlushCellBudget) return;
     const now = Date.now();
     if (now - lastSyncFlushWarnAt < 1_000) return;
     lastSyncFlushWarnAt = now;
     console.warn(
-      `[vue-tui] sync DOM flush request deferred to rAF: rows=${rowCount} maxRows=${SYNC_FLUSH_WARN_ROWS} cols=${size.cols} planes=${planeCount} cells=${cellWork} maxCells=${SYNC_FLUSH_CELL_BUDGET}`,
+      `[vue-tui] sync DOM flush request deferred to rAF: rows=${rowCount} maxRows=${syncFlushMaxRows} cols=${size.cols} planes=${planeCount} cells=${cellWork} maxCells=${syncFlushCellBudget}`,
     );
   }
 
@@ -500,10 +517,7 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     const size = terminal.size();
     const rowCount = scope.rows == null ? size.rows : scope.rows.length;
     const planeCount = scope.planes.length || TERMINAL_RENDER_PLANES.length;
-    return (
-      rowCount <= SYNC_FLUSH_WARN_ROWS &&
-      rowCount * size.cols * planeCount <= SYNC_FLUSH_CELL_BUDGET
-    );
+    return rowCount <= syncFlushMaxRows && rowCount * size.cols * planeCount <= syncFlushCellBudget;
   }
 
   function scopeWillDrainAllPending(scope: Readonly<FlushScope>): boolean {

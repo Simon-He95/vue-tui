@@ -73,7 +73,7 @@ export const TVirtualList = defineComponent({
     itemVersion: { type: Number, required: true },
     getItem: { type: Function as PropType<(index: number) => unknown>, required: true },
     renderItem: {
-      type: Function as PropType<(item: unknown, index: number) => string>,
+      type: Function as PropType<(item: unknown, index: number) => unknown>,
       default: undefined,
     },
     modelValue: { type: Number, default: 0 },
@@ -101,6 +101,8 @@ export const TVirtualList = defineComponent({
     let renderNodeId: string | null = null;
     let warnedIgnoredRowScroll = false;
     let warnedEnabledRowScroll = false;
+    let warnedGetItemIdentity = false;
+    let warnedRenderItemIdentity = false;
     const wheelState = createWheelScrollState();
     const wheelFrame = createFrameCoalescer<number>((top) => {
       const changed = applyScrollTop(top);
@@ -218,6 +220,30 @@ export const TVirtualList = defineComponent({
         invalidateSelf();
       },
       { immediate: true },
+    );
+
+    watch(
+      () => props.getItem,
+      (next, prev) => {
+        if (next === prev || warnedGetItemIdentity || !(globalThis as any).__VT_DEBUG_PERF__)
+          return;
+        warnedGetItemIdentity = true;
+        console.warn(
+          "[vue-tui] TVirtualList getItem changed identity; use a stable function reference and itemVersion.",
+        );
+      },
+    );
+
+    watch(
+      () => props.renderItem,
+      (next, prev) => {
+        if (next === prev || warnedRenderItemIdentity || !(globalThis as any).__VT_DEBUG_PERF__)
+          return;
+        warnedRenderItemIdentity = true;
+        console.warn(
+          "[vue-tui] TVirtualList renderItem changed identity; use a stable function reference and itemVersion.",
+        );
+      },
     );
 
     function itemText(index: number): string {
@@ -422,10 +448,12 @@ export const TVirtualList = defineComponent({
       scrollTop.value = clampedTop;
       const size = terminal.size();
       const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= size.cols;
+      const withinTerminalRows = r.y >= 0 && r.y + h <= size.rows;
       if (strategy === "auto" && props.useRowScroll) {
         if (renderer.value) warnIgnoredRowScroll("DOM renderer does not support row scroll");
         else if (!ownsFullRows) warnIgnoredRowScroll("list does not own full terminal rows");
         else if (isClipped()) warnIgnoredRowScroll("list rect is clipped");
+        else if (!withinTerminalRows) warnIgnoredRowScroll("list rows are outside terminal bounds");
       }
       // DomRenderer currently repaints dirty rows but does not shift line DOM
       // nodes from terminal scrollOperations, so keep row-scroll fast path to
@@ -437,12 +465,13 @@ export const TVirtualList = defineComponent({
         props.useRowScroll &&
         !renderer.value &&
         ownsFullRows &&
+        withinTerminalRows &&
         !isClipped() &&
         Math.abs(delta) < h &&
         !dirtyRowsHint?.length;
       if (canUseScrollPlane) {
         warnEnabledRowScroll();
-        render.scrollPlane(plane.value, r.y, r.y + h, delta);
+        render.unsafeScrollPlaneRows(plane.value, r.y, r.y + h, delta);
         markRowsDirty(exposedRowsForDelta(r.y, h, delta));
         return true;
       }

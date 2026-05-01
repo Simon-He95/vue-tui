@@ -701,6 +701,9 @@ describe("render-manager", () => {
 
     // All nodes should be scanned (full plane fallback)
     expect(stats?.scannedNodes).toBe(11); // 10 original + 1 wide
+    expect(stats?.rowBucketFallbacks).toEqual([
+      { plane: "default", reason: "dirty-ratio", dirtyRows: 60, planeNodes: 11 },
+    ]);
     // But only nodes intersecting dirty rows [0-59] should paint:
     // wide (0-59), n0 (0-9), n1 (10-19), n2 (20-29), n3 (30-39), n4 (40-49), n5 (50-59)
     // n6 (60-69), n7 (70-79), n8 (80-89), n9 (90-99) should NOT paint
@@ -746,6 +749,15 @@ describe("render-manager", () => {
 
     // Should fall back to planeNodes since candidates (5) > planeNodes (5) * 0.6
     expect(stats?.scannedNodes).toBe(5);
+    expect(stats?.rowBucketFallbacks).toEqual([
+      {
+        plane: "default",
+        reason: "candidate-ratio",
+        dirtyRows: 4,
+        planeNodes: 5,
+        candidates: 5,
+      },
+    ]);
     // All 5 nodes intersect dirty rows 0-3, so all should paint
     expect(paints.sort()).toEqual(["n0", "n1", "n2", "n3", "n4"]);
     expect(stats?.paintedNodes).toBe(5);

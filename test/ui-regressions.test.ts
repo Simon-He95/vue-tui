@@ -471,6 +471,46 @@ describe("ui regressions", () => {
     mounted.unmount();
   });
 
+  it("TRenderPlane preserves explicit all-plane invalidation", async () => {
+    const parentInvalidates: string[] = [];
+
+    const Spy = defineComponent({
+      name: "ParentSchedulerSpy",
+      setup() {
+        const { scheduler } = useTerminal();
+        const original = scheduler.invalidate.bind(scheduler);
+        (scheduler as any).invalidate = (options?: any) => {
+          const hasPlane = options && Object.prototype.hasOwnProperty.call(options, "plane");
+          parentInvalidates.push(hasPlane ? String(options.plane) : "missing");
+          return original(options);
+        };
+        return () => null;
+      },
+    });
+
+    const Node = defineComponent({
+      name: "ExplicitAllPlaneInvalidateNode",
+      setup() {
+        const { scheduler } = useTerminal();
+        onMounted(() => {
+          scheduler.invalidate({ plane: undefined as any });
+        });
+        return () => h(TText, { x: 0, y: 0, value: "plane" });
+      },
+    });
+
+    const mounted = await mountTerminal(() =>
+      h("div", null, [h(Spy), h(TRenderPlane, { plane: "transcript" }, () => [h(Node)])]),
+    );
+
+    await nextTick();
+    await Promise.resolve();
+
+    expect(parentInvalidates).toContain("undefined");
+
+    mounted.unmount();
+  });
+
   it("runtime portals preserve their overlay plane in commit metadata", async () => {
     const mounted = await mountTerminal(() => null);
     const commits: Array<{

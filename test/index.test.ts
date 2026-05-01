@@ -198,4 +198,56 @@ describe("terminal core", () => {
     expect(commits[0]?.scrollOperations).toBeNull();
     expect(t.snapshot().lines).toEqual(["    ", "D   ", "E   ", "F   ", "    "]);
   });
+
+  it("keeps scroll operations when dirty rows only partially cover the range", () => {
+    const t = createTerminal({ cols: 4, rows: 5 });
+    const transcript = getPlaneTerminal(t, "transcript");
+    const commits: any[] = [];
+    t.on("commit", (event) => commits.push(event));
+
+    transcript.write("A", { x: 0, y: 1 });
+    transcript.write("B", { x: 0, y: 2 });
+    transcript.write("C", { x: 0, y: 3 });
+    t.commit({ planes: ["transcript"] });
+    commits.length = 0;
+
+    scrollPlaneRows(t, "transcript", 1, 4, 1);
+    transcript.write("D", { x: 0, y: 2 });
+    transcript.write("E", { x: 0, y: 3 });
+    const dirtyRows = t.commit({ planes: ["transcript"] });
+
+    expect(dirtyRows).toEqual([2, 3]);
+    expect(commits).toHaveLength(1);
+    expect(commits[0]?.scrollOperations).toEqual([{ startY: 1, endY: 4, delta: 1 }]);
+  });
+
+  it("drops only scroll operations fully covered by dirty rows", () => {
+    const t = createTerminal({ cols: 4, rows: 9 });
+    const transcript = getPlaneTerminal(t, "transcript");
+    const chrome = getPlaneTerminal(t, "chrome");
+    const commits: any[] = [];
+    t.on("commit", (event) => commits.push(event));
+
+    transcript.write("A", { x: 0, y: 0 });
+    transcript.write("B", { x: 0, y: 1 });
+    transcript.write("C", { x: 0, y: 2 });
+    transcript.write("D", { x: 0, y: 3 });
+    chrome.write("E", { x: 0, y: 5 });
+    chrome.write("F", { x: 0, y: 6 });
+    chrome.write("G", { x: 0, y: 7 });
+    t.commit({ planes: ["transcript", "chrome"] });
+    commits.length = 0;
+
+    scrollPlaneRows(t, "transcript", 0, 4, 1);
+    transcript.write("H", { x: 0, y: 3 });
+    scrollPlaneRows(t, "chrome", 5, 8, 1);
+    chrome.write("I", { x: 0, y: 5 });
+    chrome.write("J", { x: 0, y: 6 });
+    chrome.write("K", { x: 0, y: 7 });
+    const dirtyRows = t.commit({ planes: ["transcript", "chrome"] });
+
+    expect(dirtyRows).toEqual([3, 5, 6, 7]);
+    expect(commits).toHaveLength(1);
+    expect(commits[0]?.scrollOperations).toEqual([{ startY: 0, endY: 4, delta: 1 }]);
+  });
 });
