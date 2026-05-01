@@ -311,6 +311,8 @@ const app = createTerminalApp({
 
 大数据列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。
 
+> Phase 1 experimental：API 仍可能在 scheduler frame task、controlled scrollTop、overscan、TLogView 等后续能力落地前调整。
+
 ### Props
 
 - `x`/`y`/`w`/`h` `(number, required)`
@@ -321,6 +323,7 @@ const app = createTerminalApp({
 - `modelValue` `(number)` + `update:modelValue`
 - `style` / `activeStyle` `(Style?)`
 - `autoFocus` `(boolean)`
+- `useRowScroll` `(boolean)`：headless/CLI full-row 场景的 opt-in scrollPlane 优化
 
 ### Data source
 
@@ -338,6 +341,10 @@ const renderItem = (item: Row) => item.title;
 ```vue
 <TVirtualList :get-item="(index) => items[index]" />
 ```
+
+### Row scroll
+
+`useRowScroll` 只能用于该 plane 的这些 rows 被 `TVirtualList` 独占的场景。它是 headless/CLI 优化：当 DOM renderer 已挂载，或列表没有占满终端整行时，会退回 viewport repaint。DOM 慢滚目前不会移动 DOM line nodes，仍会重绘可见窗口。
 
 ### Events
 

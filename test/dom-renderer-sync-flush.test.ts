@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { getPlaneTerminal } from "../src/core/terminal/create-terminal.js";
 import { createDomRenderer, createTerminal } from "../src/index.js";
 
-function rowText(container: HTMLElement, y: number): string {
+function rowText(container: HTMLElement, y: number, plane = "default"): string {
   // The DOM renderer structures: container > [data-vt-plane] > contentEl > line divs
-  const defaultPlane = container.querySelector('[data-vt-plane="default"]');
+  const defaultPlane = container.querySelector(`[data-vt-plane="${plane}"]`);
   if (!defaultPlane) return "";
   const lines = defaultPlane.children[0]?.children;
   if (!lines || y >= lines.length) return "";
@@ -236,6 +237,92 @@ describe("DomRenderer sync flush", () => {
       remaining(0);
       expect(rowText(container, 2)).toContain("A");
       expect(rowText(container, 3)).toContain("A");
+
+      renderer.dispose();
+      container.remove();
+    } finally {
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("warns in debug perf mode when sync commit flushes a full repaint", () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const previousDebugPerf = (globalThis as any).__VT_DEBUG_PERF__;
+    let pending: FrameRequestCallback | null = null;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      pending = cb;
+      return 1;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      const terminal = createTerminal({ cols: 4, rows: 40 });
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const renderer = createDomRenderer(terminal, container);
+      pending?.(0);
+
+      for (let y = 0; y < 40; y++) terminal.fill(0, y, 4, 1, "A");
+      terminal.commit({ sync: true });
+      expect(rowText(container, 39)).toContain("A");
+
+      (globalThis as any).__VT_DEBUG_PERF__ = true;
+      terminal.clear();
+      terminal.commit({ sync: true });
+
+      expect(warn).toHaveBeenCalledWith("[vue-tui] large sync DOM flush: 40 rows");
+      expect(rowText(container, 39)).not.toContain("A");
+
+      renderer.dispose();
+      container.remove();
+    } finally {
+      warn.mockRestore();
+      (globalThis as any).__VT_DEBUG_PERF__ = previousDebugPerf;
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("sync commit flushes only active planes and leaves other planes pending", () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    try {
+      const terminal = createTerminal({ cols: 4, rows: 1 });
+      const overlay = getPlaneTerminal(terminal, "overlay");
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const renderer = createDomRenderer(terminal, container);
+      callbacks.get(1)?.(0);
+      callbacks.clear();
+
+      terminal.write("D", { x: 0, y: 0 });
+      terminal.commit({ planes: ["default"] });
+      overlay.write("O", { x: 0, y: 0 });
+      overlay.commit();
+
+      overlay.write("S", { x: 1, y: 0 });
+      overlay.commit({ sync: true });
+
+      expect(rowText(container, 0, "overlay")).toContain("OS");
+      expect(rowText(container, 0, "default")).not.toContain("D");
+
+      const remaining = Array.from(callbacks.values())[0]!;
+      remaining(0);
+      expect(rowText(container, 0, "default")).toContain("D");
 
       renderer.dispose();
       container.remove();

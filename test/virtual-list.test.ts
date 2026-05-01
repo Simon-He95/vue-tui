@@ -466,7 +466,40 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it("does not shift same-plane content outside a non-full-row list", async () => {
+  it("normalizes fractional rect values for row-scroll dirty rows", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0.4,
+        w: 12.8,
+        h: 4.8,
+        itemCount: items.length,
+        itemVersion: 1,
+        getItem: (index: number) => items[index],
+        autoFocus: true,
+        useRowScroll: true,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+    const commits: Array<readonly number[] | null> = [];
+    const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(commits).toEqual([[3]]);
+    expect(rowText({ terminal: app.terminal } as any, 3)).toBe("item-4");
+    app.dispose();
+  });
+
+  it("does not use scrollPlane when useRowScroll is true but list does not own full rows", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "VirtualListWithSideContent",
@@ -481,6 +514,7 @@ describe("TVirtualList", () => {
             itemVersion: 1,
             getItem: (index: number) => items[index],
             autoFocus: true,
+            useRowScroll: true,
           }),
           h(TText, { x: 12, y: 1, w: 4, value: "SIDE" }),
         ];

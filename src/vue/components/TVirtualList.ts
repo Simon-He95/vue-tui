@@ -91,6 +91,8 @@ export const TVirtualList = defineComponent({
     const focused = ref(false);
     const active = ref(props.modelValue);
     const scrollTop = ref(0);
+    // One-shot manual dirty rows are only for stable-rect scroll fast paths.
+    // Reactive deps and rect changes repaint through useRenderNode normally.
     let dirtyRowsHint: readonly number[] | undefined;
     let pendingWheelTop: number | null = null;
     let cancelPendingWheelFrame: (() => void) | null = null;
@@ -104,8 +106,18 @@ export const TVirtualList = defineComponent({
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
+    function normalizedRect(): Rect {
+      const r = absRect.value;
+      return {
+        x: Math.floor(r.x),
+        y: Math.floor(r.y),
+        w: Math.max(0, Math.floor(r.w)),
+        h: Math.max(0, Math.floor(r.h)),
+      };
+    }
+
     const visibleWindow = computed(() => {
-      const h = Math.max(0, absRect.value.h);
+      const h = normalizedRect().h;
       const top = clamp(scrollTop.value, 0, Math.max(0, props.itemCount - h));
       return { top, end: Math.min(props.itemCount, top + h), h };
     });
@@ -115,7 +127,7 @@ export const TVirtualList = defineComponent({
     });
 
     function viewportHeight(): number {
-      return Math.max(0, Math.floor(absRect.value.h));
+      return normalizedRect().h;
     }
 
     function ensureActiveVisible(): void {
@@ -138,7 +150,8 @@ export const TVirtualList = defineComponent({
 
     function itemText(index: number): string {
       const item = props.getItem(index);
-      return props.renderItem ? props.renderItem(item, index) : String(item ?? "");
+      const raw = props.renderItem ? props.renderItem(item, index) : item;
+      return String(raw ?? "");
     }
 
     function commit(index: number): void {
@@ -194,8 +207,12 @@ export const TVirtualList = defineComponent({
         if (top == null) return;
         applyScrollTop(top);
         emit("scroll", scrollTop.value);
-        scheduler.invalidate({ priority: "high", plane: plane.value });
+        invalidateSelf("high");
       });
+    }
+
+    function invalidateSelf(priority: "low" | "normal" | "high" = "normal"): void {
+      scheduler.invalidate({ priority, plane: plane.value });
     }
 
     function moveActive(index: number): void {
@@ -208,7 +225,7 @@ export const TVirtualList = defineComponent({
       if (scrollTop.value !== prevTop) dirtyRowsHint = viewportRows();
       else setDirtyRowsHint(viewportRows());
       if (renderNodeId) render.update(renderNodeId, { dirtyRowsHint });
-      scheduler.invalidate({ priority: "high", plane: plane.value });
+      invalidateSelf("high");
     }
 
     function onKeydown(e: TerminalKeyboardEvent): void {
@@ -250,30 +267,30 @@ export const TVirtualList = defineComponent({
     }
 
     const eventNode = useTerminalNode(() => ({
-      rect: absRect.value,
+      rect: normalizedRect(),
       zIndex: eventZ.value,
       visible: visible.value,
       focusable: true,
       handlers: {
         click: (e: TerminalPointerEvent) => {
           cancelWheelScrollFrame();
-          const r = absRect.value;
+          const r = normalizedRect();
           const idx = scrollTop.value + (e.cellY - r.y);
           if (idx < 0 || idx >= props.itemCount) return;
           active.value = idx;
           emit("update:modelValue", idx);
-          scheduler.invalidate();
+          invalidateSelf("high");
         },
         dblclick: (e: TerminalPointerEvent) => {
           cancelWheelScrollFrame();
-          const r = absRect.value;
+          const r = normalizedRect();
           const idx = scrollTop.value + (e.cellY - r.y);
           if (idx >= 0 && idx < props.itemCount) commit(idx);
         },
         wheel: (e: any) => {
           const { deltaY, mode } = getWheelScrollInput(e);
           if (!deltaY) return;
-          const h = Math.max(0, absRect.value.h);
+          const h = viewportHeight();
           const maxTop = Math.max(0, props.itemCount - h);
           const baseTop = pendingWheelTop ?? scrollTop.value;
           const { nextTop, dir } = applyWheelScroll(
@@ -291,12 +308,12 @@ export const TVirtualList = defineComponent({
         focus: () => {
           focused.value = true;
           emit("focus");
-          scheduler.invalidate();
+          invalidateSelf();
         },
         blur: () => {
           focused.value = false;
           emit("blur");
-          scheduler.invalidate();
+          invalidateSelf();
         },
         keydown: onKeydown,
       },
@@ -327,7 +344,7 @@ export const TVirtualList = defineComponent({
     }
 
     function viewportRows(): number[] {
-      const r = absRect.value;
+      const r = normalizedRect();
       const rows: number[] = [];
       for (let y = r.y; y < r.y + r.h; y++) rows.push(y);
       return rows;
@@ -346,8 +363,8 @@ export const TVirtualList = defineComponent({
     }
 
     function applyScrollTop(nextTop: number): void {
-      const r = absRect.value;
-      const h = Math.max(0, Math.floor(r.h));
+      const r = normalizedRect();
+      const h = r.h;
       const clampedTop = clamp(nextTop, 0, Math.max(0, props.itemCount - h));
       const delta = clampedTop - scrollTop.value;
       if (!delta) return;
@@ -375,7 +392,7 @@ export const TVirtualList = defineComponent({
 
     const renderNode = useRenderNode(() => ({
       zIndex: props.zIndex,
-      rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
+      rect: visible.value ? normalizedRect() : { x: 0, y: 0, w: 0, h: 0 },
       deps: [
         visible.value,
         absRect.value,
@@ -393,7 +410,7 @@ export const TVirtualList = defineComponent({
         const consumedHint = dirtyRowsHint;
         dirtyRowsHint = undefined;
         if (!visible.value) return;
-        const r = absRect.value;
+        const r = normalizedRect();
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
         const activeStyle = props.activeStyle ?? defaultActiveStyle(base);

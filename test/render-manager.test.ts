@@ -822,4 +822,93 @@ describe("render-manager", () => {
     expect(paints).not.toContain("middle");
     expect(stats?.paintedNodes).toBe(2);
   });
+
+  it("rebuilds row buckets after terminal resize shrink", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 8 });
+    const rm = createRenderManager(terminal);
+    const target = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("target"),
+    });
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 7, w: 10, h: 1 },
+      paint: () => paints.push("outside"),
+    });
+    rm.register({
+      stack: rm.rootStack,
+      rect: null,
+      paint: () => paints.push("global"),
+    });
+
+    rm.render();
+    terminal.resize(10, 4);
+    rm.render();
+    paints.length = 0;
+
+    rm.update(target.id, { dirtyRowsHint: [1] });
+    rm.render();
+
+    expect(paints).toEqual(["target", "global"]);
+  });
+
+  it("rebuilds row buckets after terminal resize grow", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 4 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 6, w: 10, h: 1 },
+      paint: () => paints.push("node"),
+    });
+    rm.register({
+      stack: rm.rootStack,
+      rect: null,
+      paint: () => paints.push("global"),
+    });
+
+    rm.render();
+    terminal.resize(10, 8);
+    rm.render();
+    paints.length = 0;
+
+    rm.update(node.id, { dirtyRowsHint: [6] });
+    rm.render();
+
+    expect(paints).toEqual(["node", "global"]);
+  });
+
+  it("preserves nested stack order for row-bucket partial repaint", () => {
+    const fullPaints: string[] = [];
+    const partialPaints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 5 });
+    const rm = createRenderManager(terminal);
+    const stackA = rm.createStack(rm.rootStack, 10);
+    const stackB = rm.createStack(rm.rootStack, 20);
+    const childA = rm.createStack(stackA, 0);
+    const childB = rm.createStack(stackB, 0);
+    let target: { id: string } | null = null;
+    let phase: "full" | "partial" = "full";
+
+    target = rm.register({
+      stack: childA,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => (phase === "full" ? fullPaints : partialPaints).push("a"),
+    });
+    rm.register({
+      stack: childB,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => (phase === "full" ? fullPaints : partialPaints).push("b"),
+    });
+
+    rm.render();
+    phase = "partial";
+    rm.update(target.id, { dirtyRowsHint: [1] });
+    rm.render();
+
+    expect(fullPaints).toEqual(["a", "b"]);
+    expect(partialPaints).toEqual(["a", "b"]);
+  });
 });
