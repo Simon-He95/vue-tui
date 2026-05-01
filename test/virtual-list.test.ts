@@ -1446,6 +1446,46 @@ describe("TVirtualList", () => {
     }
   });
 
+  it("repaints active row when activeStyle changes", async () => {
+    const activeStyle = ref<{ fg: "redBright" | "greenBright"; inverse: boolean }>({
+      fg: "redBright",
+      inverse: true,
+    });
+    const App = defineComponent({
+      name: "VirtualListActiveStyleProbe",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 3,
+            itemCount: 5,
+            itemVersion: 1,
+            getItem: (index: number) => `item-${index}`,
+            modelValue: 1,
+            activeStyle: activeStyle.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 6, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+
+    expect(rowText({ terminal: app.terminal } as any, 1)).toBe("item-1");
+    expect(app.terminal.getCell(0, 1).style.fg).toBe("redBright");
+
+    activeStyle.value = { fg: "greenBright", inverse: true };
+    await nextTick();
+    app.scheduler.flushNow();
+
+    expect(rowText({ terminal: app.terminal } as any, 1)).toBe("item-1");
+    expect(app.terminal.getCell(0, 1).style.fg).toBe("greenBright");
+
+    app.dispose();
+  });
+
   it("active style follows item after useRowScroll scrollPlane shift", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({

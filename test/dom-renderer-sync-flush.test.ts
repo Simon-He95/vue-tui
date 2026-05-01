@@ -325,7 +325,7 @@ describe("DomRenderer sync flush", () => {
       terminal.commit({ sync: true });
 
       expect(warn).toHaveBeenCalledWith(
-        "[vue-tui] sync DOM flush request deferred to rAF: rows=40 cols=4 planes=4 cells=640 cellBudget=4096",
+        "[vue-tui] sync DOM flush request deferred to rAF: rows=40 maxRows=32 cols=4 planes=4 cells=640 maxCells=4096",
       );
       expect(rowText(container, 39)).toContain("A");
       pending?.(0);

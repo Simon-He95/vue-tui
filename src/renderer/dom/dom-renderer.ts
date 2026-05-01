@@ -492,7 +492,7 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     if (now - lastSyncFlushWarnAt < 1_000) return;
     lastSyncFlushWarnAt = now;
     console.warn(
-      `[vue-tui] sync DOM flush request deferred to rAF: rows=${rowCount} cols=${size.cols} planes=${planeCount} cells=${cellWork} cellBudget=${SYNC_FLUSH_CELL_BUDGET}`,
+      `[vue-tui] sync DOM flush request deferred to rAF: rows=${rowCount} maxRows=${SYNC_FLUSH_WARN_ROWS} cols=${size.cols} planes=${planeCount} cells=${cellWork} maxCells=${SYNC_FLUSH_CELL_BUDGET}`,
     );
   }
 
