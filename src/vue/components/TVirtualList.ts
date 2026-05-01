@@ -174,6 +174,10 @@ export const TVirtualList = defineComponent({
       };
     }
 
+    // TODO: Phase 2 — replace this per-component rAF coalescing with a unified
+    // scheduler frame-task API (e.g. scheduler.requestFrameTask("scroll", ..., { priority: "high" })).
+    // Keeping wheel coalescing in each component risks duplicated scheduling logic
+    // across TVirtualList, TLogView, TTable, TTranscript, etc.
     function requestWheelScroll(nextTop: number): void {
       pendingWheelTop = nextTop;
       if (cancelPendingWheelFrame) return;

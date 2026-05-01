@@ -442,23 +442,53 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     }
   }
 
-  function flushPending(): void {
+  interface FlushScope {
+    planes: readonly TerminalRenderPlane[];
+    rows: readonly number[] | null;
+  }
+
+  function flushPending(scope?: Readonly<FlushScope>): void {
     raf = 0;
     if (disposed) return;
-    for (const plane of TERMINAL_RENDER_PLANES) {
+    const planesToFlush = scope?.planes ?? TERMINAL_RENDER_PLANES;
+
+    for (const plane of planesToFlush) {
       const layer = planeLayers.get(plane);
       const rows = pending.get(plane);
       if (!layer || !rows?.size) continue;
-      for (const y of rows) {
+
+      const targetRows =
+        scope?.rows == null ? Array.from(rows) : scope.rows.filter((y) => rows.has(y));
+
+      for (const y of targetRows) {
         const line = layer.lines[y];
         if (line) renderRow(layer.terminal, metrics, wideScaleX, y, line);
+        rows.delete(y);
       }
-      rows.clear();
+
+      if (rows.size === 0) pending.delete(plane);
     }
+
+    if (pending.size > 0) scheduleRafIfNeeded();
+  }
+
+  function scheduleRafIfNeeded(): void {
+    if (raf || disposed) return;
+    // Support test environments that stub rAF synchronously by avoiding the
+    // `raf = requestAnimationFrame(...)` assignment trap (cb runs before the assignment).
+    raf = -1;
+    const id = requestAnimationFrame(() => {
+      flushPending();
+    });
+    if (raf === -1) raf = id;
   }
 
   const offCommit = terminal.on("commit", ({ dirtyRows, planes, sync }) => {
     const activePlanes = planes?.length ? planes : TERMINAL_RENDER_PLANES;
+    // Track which rows this specific commit adds to pending, so scoped sync
+    // flush can limit DOM work to just the high-priority update.
+    const commitRows: number[] | null = dirtyRows === null ? null : [...dirtyRows];
+
     if (dirtyRows === null) {
       const size = terminal.size();
       for (const plane of activePlanes) {
@@ -482,15 +512,9 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     if (sync) {
       if (raf > 0) cancelAnimationFrame(raf);
       raf = 0;
-      flushPending();
+      flushPending({ planes: activePlanes, rows: commitRows });
     } else if (!raf) {
-      // Support test environments that stub rAF synchronously by avoiding the
-      // `raf = requestAnimationFrame(...)` assignment trap (cb runs before the assignment).
-      raf = -1;
-      const id = requestAnimationFrame(() => {
-        flushPending();
-      });
-      if (raf === -1) raf = id;
+      scheduleRafIfNeeded();
     }
   });
 

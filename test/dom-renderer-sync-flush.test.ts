@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createDomRenderer, createTerminal } from "../src/index.js";
 
+function rowText(container: HTMLElement, y: number): string {
+  // The DOM renderer structures: container > [data-vt-plane] > contentEl > line divs
+  const defaultPlane = container.querySelector('[data-vt-plane="default"]');
+  if (!defaultPlane) return "";
+  const lines = defaultPlane.children[0]?.children;
+  if (!lines || y >= lines.length) return "";
+  return (lines[y] as HTMLElement).textContent ?? "";
+}
+
 describe("DomRenderer sync flush", () => {
   it("flushes sync commits without scheduling rAF", () => {
     const previousRaf = globalThis.requestAnimationFrame;
@@ -111,6 +120,64 @@ describe("DomRenderer sync flush", () => {
       const next = Array.from(callbacks.values())[0]!;
       next(0);
       expect(container.textContent).toContain("ABC");
+
+      renderer.dispose();
+      container.remove();
+    } finally {
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("sync commit does not flush unrelated pending rows", () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    try {
+      const terminal = createTerminal({ cols: 4, rows: 4 });
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const renderer = createDomRenderer(terminal, container);
+      // Flush initial commit
+      callbacks.get(1)?.(0);
+      callbacks.clear();
+
+      // Normal commit: fill all rows — pending but rAF not yet run
+      for (let y = 0; y < 4; y++) terminal.fill(0, y, 4, 1, "A");
+      terminal.commit();
+      // rAF id 2 is now pending but not yet executed
+
+      // Sync commit: only update row 0
+      terminal.write("B", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      // Row 0 was in the sync scope and should be flushed immediately
+      expect(rowText(container, 0)).toContain("B");
+
+      // Rows 1-3 should remain pending (not forced sync)
+      expect(rowText(container, 1)).not.toContain("A");
+      expect(rowText(container, 2)).not.toContain("A");
+      expect(rowText(container, 3)).not.toContain("A");
+
+      // A new rAF should be scheduled for the remaining pending rows
+      expect(callbacks.size).toBeGreaterThanOrEqual(1);
+
+      // Execute the pending rAF — rows 1-3 should now be rendered
+      const remaining = Array.from(callbacks.values())[0]!;
+      remaining(0);
+      expect(rowText(container, 1)).toContain("A");
+      expect(rowText(container, 2)).toContain("A");
+      expect(rowText(container, 3)).toContain("A");
 
       renderer.dispose();
       container.remove();

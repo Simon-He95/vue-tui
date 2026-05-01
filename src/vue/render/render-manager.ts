@@ -508,6 +508,9 @@ export function createRenderManager(terminal: Terminal): RenderManager {
           const candidateNodes = isFullPlaneRepaint
             ? planeNodes
             : (() => {
+                // TODO: Phase 2 — reuse a scratch set/array across frames to reduce
+                // per-frame allocation for high-frequency scroll. A numeric node index
+                // with a Uint8Array/generation marker could also eliminate string Set overhead.
                 const ids = new Set<string>();
                 const buckets = rowBuckets.get(plane);
                 for (const y of rows) {
