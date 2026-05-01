@@ -192,7 +192,7 @@ describe("ui regressions", () => {
     mounted.unmount();
   });
 
-  it("useRenderNode can apply a dirtyRowsHint during the same render as another dep update", async () => {
+  it("useRenderNode ignores dirtyRowsHint when rect changes during the same render", async () => {
     const dirtyRowsHint = ref<readonly number[] | null>(null);
     const row = ref(0);
     const paints: string[] = [];
@@ -221,7 +221,7 @@ describe("ui regressions", () => {
         );
 
         useRenderNode(() => ({
-          rect: { x: 0, y: props.row, w: 4, h: 6 },
+          rect: { x: 0, y: props.row, w: 4, h: 2 },
           dirtyRowsHint: props.dirtyRowsHint?.length ? props.dirtyRowsHint : pendingDirtyRowsHint,
           deps: [props.row, dirtyRowsHintVersion.value],
           paint: (rows) => {
@@ -248,7 +248,7 @@ describe("ui regressions", () => {
     await nextTick();
     await Promise.resolve();
 
-    expect(paints).toEqual(["4,5"]);
+    expect(paints).toEqual(["0,1,2"]);
     mounted.unmount();
   });
 

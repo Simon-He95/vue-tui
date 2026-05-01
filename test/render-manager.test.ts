@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createTerminal } from "../src/index.js";
 import { createRenderManager } from "../src/vue/render/render-manager.js";
 
 describe("render-manager", () => {
@@ -496,43 +497,56 @@ describe("render-manager", () => {
     expect(paints).toEqual([]);
   });
 
-  it("keeps dirtyRowsHint when rect changes without changing paint order", () => {
+  it("marks old rect dirty when rect changes even with dirtyRowsHint", () => {
     const paints: string[] = [];
     const dirtyArgs: string[] = [];
-    const listeners = new Map<string, Set<(...args: any[]) => void>>();
-    const terminal: any = {
-      size: () => ({ cols: 10, rows: 8 }),
-      on(event: string, cb: (...args: any[]) => void) {
-        let set = listeners.get(event);
-        if (!set) listeners.set(event, (set = new Set()));
-        set.add(cb);
-        return () => set!.delete(cb);
-      },
-      batch(fn: () => void) {
-        fn();
-      },
-      clear() {},
-    };
-
+    const terminal = createTerminal({ cols: 10, rows: 8 });
     const rm = createRenderManager(terminal);
+    let currentY = 1;
     const node = rm.register({
       stack: rm.rootStack,
       rect: { x: 0, y: 1, w: 10, h: 1 },
       paint: (dirtyRows) => {
         paints.push("node");
         dirtyArgs.push((dirtyRows ?? []).join(","));
+        const rows = dirtyRows ?? [currentY];
+        for (const y of rows) {
+          if (y === currentY) terminal.write("NODE", { x: 0, y });
+        }
       },
     });
     rm.render();
+    terminal.commit();
+    expect(
+      terminal
+        .getRow(1)
+        .map((cell) => cell.ch)
+        .join(""),
+    ).toContain("NODE");
 
     paints.length = 0;
     dirtyArgs.length = 0;
+    currentY = 5;
     rm.update(node.id, { rect: { x: 0, y: 5, w: 10, h: 1 }, dirtyRowsHint: [5] });
     const stats = rm.render();
+    terminal.commit();
 
     expect(paints).toEqual(["node"]);
-    expect(dirtyArgs).toEqual(["5"]);
-    expect(stats?.rows).toBe(1);
+    expect(dirtyArgs).toEqual(["1,5"]);
+    expect(stats?.rows).toBe(2);
+    expect(
+      terminal
+        .getRow(1)
+        .map((cell) => cell.ch)
+        .join("")
+        .trim(),
+    ).toBe("");
+    expect(
+      terminal
+        .getRow(5)
+        .map((cell) => cell.ch)
+        .join(""),
+    ).toContain("NODE");
   });
 
   it("preserves sorted paint order for row-bucket partial repaint", () => {
