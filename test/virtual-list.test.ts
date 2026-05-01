@@ -474,4 +474,92 @@ describe("TVirtualList", () => {
     expect(commits).toEqual([[0, 1, 2, 3]]);
     app.dispose();
   });
+
+  it("only calls getItem for visible rows after itemVersion changes", async () => {
+    const getItem = vi.fn((index: number) => `item-${index}`);
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: 100_000,
+        itemVersion: 1,
+        getItem,
+        autoFocus: true,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+    getItem.mockClear();
+
+    // Bump itemVersion — should only repaint visible window (4 items)
+    app.events.dispatch({
+      type: "propChange",
+      prop: "itemVersion",
+      value: 2,
+    });
+    await nextTick();
+    app.scheduler.flushNow();
+    await nextTick();
+
+    // getItem should only be called for the 4 visible rows (indices 0-3)
+    const calledIndices = getItem.mock.calls.map((call: any[]) => call[0] as number);
+    expect(calledIndices.length).toBeLessThanOrEqual(4);
+    expect(calledIndices.every((i) => i >= 0 && i < 4)).toBe(true);
+    // Should NOT have called getItem for thousands of rows
+    expect(getItem).not.toHaveBeenCalledWith(99999);
+    app.dispose();
+  });
+
+  it("active style follows item after useRowScroll scrollPlane shift", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: items.length,
+        itemVersion: 1,
+        getItem: (index: number) => items[index],
+        modelValue: 0,
+        autoFocus: true,
+        useRowScroll: true,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+
+    // Item 0 is active with inverse style at row 0
+    expect(app.terminal.getCell(0, 0).style.inverse).toBe(true);
+    expect(app.terminal.getCell(0, 1).style.inverse).not.toBe(true);
+
+    // Wheel scroll down by 1 — active stays at item 0 but scrolls out of view
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+    await nextTick();
+    await nextTick();
+
+    // Row 0 now shows item-1, row 1 shows item-2
+    // Active item 0 has scrolled out of view — no inverse on visible rows
+    expect(rowText({ terminal: app.terminal } as any, 0)).toContain("item-1");
+    expect(app.terminal.getCell(0, 0).style.inverse).not.toBe(true);
+
+    // Navigate down — active moves from 0 to 1
+    // Item 1 is at row 0, should now have inverse style
+    app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: Date.now() });
+    await nextTick();
+    await nextTick();
+
+    // Item 1 (active) is displayed at row 0 — should have inverse
+    expect(app.terminal.getCell(0, 0).style.inverse).toBe(true);
+    expect(rowText({ terminal: app.terminal } as any, 0)).toContain("item-1");
+    app.dispose();
+  });
 });
