@@ -14,7 +14,7 @@
 | Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane` | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
 | Text / Motion | `TText` `TTransition`                                          | 文本渲染、状态切换、动画插值                    | 通用                                               |
 | Input         | `TInput` `TInputBox` `TJsonEditor`                             | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
-| Pickers       | `TList` `TSelect` `TPathPicker`                                | palette、列表、路径选择                         | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Pickers       | `TList` `TVirtualList` `TSelect` `TPathPicker`                 | palette、列表、路径选择                         | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
 | Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                    | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
 | Navigation    | `TRouterView` + `createTerminalRouter()`                       | 多页面 TUI / shell                              | 通用                                               |
 
@@ -306,6 +306,44 @@ const app = createTerminalApp({
 - `change`: `{ index, value }`
 - `scroll`: `scrollTop`（number）
 - `close` / `focus` / `blur` / `keydown`
+
+## TVirtualList
+
+大数据列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。
+
+### Props
+
+- `x`/`y`/`w`/`h` `(number, required)`
+- `itemCount` `(number, required)`
+- `itemVersion` `(number, required)`：数据变更版本号
+- `getItem` `((index: number) => unknown, required)`
+- `renderItem` `((item, index) => string?)`
+- `modelValue` `(number)` + `update:modelValue`
+- `style` / `activeStyle` `(Style?)`
+- `autoFocus` `(boolean)`
+
+### Data source
+
+`getItem` 和 `renderItem` 应保持稳定引用，数据变化用 `itemVersion` 通知组件。
+
+```ts
+const items = markRaw(bigArray);
+const itemVersion = ref(0);
+const getItem = (index: number) => items[index];
+const renderItem = (item: Row) => item.title;
+```
+
+避免在模板里传 inline function：
+
+```vue
+<TVirtualList :get-item="(index) => items[index]" />
+```
+
+### Events
+
+- `change`: `{ index, value }`
+- `scroll`: `scrollTop`（number）
+- `focus` / `blur` / `keydown`
 
 ## TSelect
 

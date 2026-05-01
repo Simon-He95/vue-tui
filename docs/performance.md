@@ -6,6 +6,8 @@ Vue TUI 的性能瓶颈通常来自三部分：
 2. **Terminal 写入范围**：一次交互是否触发了过大的 dirty rows 或错误的 plane repaint
 3. **Renderer 输出成本**：DOM span 更新量 / stdout 输出量是否与真实变化区域成正比
 
+大列表、日志、streaming 输出和高频滚动的后续架构与验收标准见 [高吞吐渲染架构规格](/high-throughput-rendering)。
+
 ## 当前库已具备的性能设计
 
 - **plane-local dirty rows**：RenderManager 按 `default/transcript/chrome/overlay` 分别维护 dirty rows。

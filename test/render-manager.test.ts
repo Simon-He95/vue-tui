@@ -496,7 +496,7 @@ describe("render-manager", () => {
     expect(paints).toEqual([]);
   });
 
-  it("ignores dirtyRowsHint when rect changes so old and new rows repaint", () => {
+  it("keeps dirtyRowsHint when rect changes without changing paint order", () => {
     const paints: string[] = [];
     const dirtyArgs: string[] = [];
     const listeners = new Map<string, Set<(...args: any[]) => void>>();
@@ -531,8 +531,8 @@ describe("render-manager", () => {
     const stats = rm.render();
 
     expect(paints).toEqual(["node"]);
-    expect(dirtyArgs).toEqual(["1,5"]);
-    expect(stats?.rows).toBe(2);
+    expect(dirtyArgs).toEqual(["5"]);
+    expect(stats?.rows).toBe(1);
   });
 
   it("preserves sorted paint order for row-bucket partial repaint", () => {

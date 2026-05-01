@@ -68,7 +68,7 @@ describe("TVirtualList", () => {
     mounted.unmount();
   });
 
-  it("coalesces consecutive DOM wheel ticks without stale or blank rows", async () => {
+  it("handles consecutive DOM wheel ticks without stale or blank rows", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const mounted = await mountTerminal(
       () =>
@@ -214,6 +214,71 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
+  it("coalesces consecutive headless wheel ticks into one scroll frame", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: items.length,
+        itemVersion: 1,
+        getItem: (index: number) => items[index],
+        autoFocus: true,
+      },
+    });
+    const dateNow = vi.spyOn(Date, "now");
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      const commits: Array<readonly number[] | null> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+      let now = 1_000;
+      dateNow.mockImplementation(() => now);
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: now });
+      now += 10;
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: now });
+
+      expect(commits).toEqual([]);
+      expect(callbacks.size).toBe(1);
+      Array.from(callbacks.values())[0]?.(0);
+      await nextTick();
+
+      off();
+      expect(commits).toEqual([[2, 3]]);
+      expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+        "item-2",
+        "item-3",
+        "item-4",
+        "item-5",
+      ]);
+    } finally {
+      dateNow.mockRestore();
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
   it("keeps headless full-row slow scroll correct across consecutive wheel ticks", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
@@ -258,6 +323,40 @@ describe("TVirtualList", () => {
       "item-4",
       "item-5",
     ]);
+    app.dispose();
+  });
+
+  it("does not emit change or read item 0 when committing an empty list", async () => {
+    const getItem = vi.fn();
+    const onChange = vi.fn();
+    const onUpdateModelValue = vi.fn();
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: 0,
+        itemVersion: 1,
+        getItem,
+        modelValue: 0,
+        autoFocus: true,
+        onChange,
+        "onUpdate:modelValue": onUpdateModelValue,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+
+    app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: Date.now() });
+    await nextTick();
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onUpdateModelValue).not.toHaveBeenCalled();
+    expect(getItem).not.toHaveBeenCalled();
     app.dispose();
   });
 

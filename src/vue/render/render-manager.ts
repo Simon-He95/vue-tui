@@ -338,11 +338,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     const { y0, y1 } = rectToYBounds(nextRect);
     const dirtyRowsHint = next.dirtyRowsHint;
     const canUseDirtyRowsHint =
-      !bucketChanged &&
-      !sortChanged &&
-      nextPlane === prev.plane &&
-      dirtyRowsHint != null &&
-      dirtyRowsHint.length > 0;
+      !sortChanged && nextPlane === prev.plane && dirtyRowsHint != null && dirtyRowsHint.length > 0;
     if (canUseDirtyRowsHint) {
       markRows(nextPlane, dirtyRowsHint);
     } else {

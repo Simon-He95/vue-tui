@@ -2,7 +2,16 @@ import type { PropType } from "vue";
 import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
-import { computed, defineComponent, h, inject, ref, watch, watchEffect } from "vue";
+import {
+  computed,
+  defineComponent,
+  h,
+  inject,
+  onBeforeUnmount,
+  ref,
+  watch,
+  watchEffect,
+} from "vue";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminalNode } from "../composables/use-terminal-node.js";
@@ -15,6 +24,18 @@ import { applyWheelScroll, createWheelScrollState } from "../utils/wheel-scroll.
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
+}
+
+const activeStyleCache = new WeakMap<Style, Style>();
+
+function defaultActiveStyle(base: Style): Style {
+  if (base.inverse) return base;
+  let cached = activeStyleCache.get(base);
+  if (!cached) {
+    cached = Object.freeze({ ...base, inverse: true });
+    activeStyleCache.set(base, cached);
+  }
+  return cached;
 }
 
 function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
@@ -70,6 +91,8 @@ export const TVirtualList = defineComponent({
     const active = ref(props.modelValue);
     const scrollTop = ref(0);
     let dirtyRowsHint: readonly number[] | undefined;
+    let pendingWheelTop: number | null = null;
+    let cancelPendingWheelFrame: (() => void) | null = null;
     const wheelState = createWheelScrollState();
 
     const absRect = computed<Rect>(() => {
@@ -113,13 +136,60 @@ export const TVirtualList = defineComponent({
     }
 
     function commit(index: number): void {
-      const next = clamp(index, 0, Math.max(0, props.itemCount - 1));
+      if (props.itemCount <= 0) return;
+      const next = clamp(index, 0, props.itemCount - 1);
       active.value = next;
       emit("update:modelValue", next);
       emit("change", { index: next, value: props.getItem(next) });
     }
 
+    function cancelWheelScrollFrame(): void {
+      cancelPendingWheelFrame?.();
+      cancelPendingWheelFrame = null;
+      pendingWheelTop = null;
+    }
+
+    function scheduleWheelFrame(fn: () => void): void {
+      let pending = true;
+      const run = () => {
+        if (!pending) return;
+        pending = false;
+        fn();
+      };
+      if (typeof requestAnimationFrame === "function") {
+        let id = 0;
+        cancelPendingWheelFrame = () => {
+          if (!pending) return;
+          pending = false;
+          cancelAnimationFrame(id);
+        };
+        id = requestAnimationFrame(run);
+        return;
+      }
+      const id = setTimeout(run, 16);
+      cancelPendingWheelFrame = () => {
+        if (!pending) return;
+        pending = false;
+        clearTimeout(id);
+      };
+    }
+
+    function requestWheelScroll(nextTop: number): void {
+      pendingWheelTop = nextTop;
+      if (cancelPendingWheelFrame) return;
+      scheduleWheelFrame(() => {
+        cancelPendingWheelFrame = null;
+        const top = pendingWheelTop;
+        pendingWheelTop = null;
+        if (top == null) return;
+        applyScrollTop(top);
+        emit("scroll", top);
+        scheduler.invalidate({ priority: "high", plane: plane.value });
+      });
+    }
+
     function moveActive(index: number): void {
+      cancelWheelScrollFrame();
       const prevTop = scrollTop.value;
       active.value = clamp(index, 0, Math.max(0, props.itemCount - 1));
       emit("update:modelValue", active.value);
@@ -175,6 +245,7 @@ export const TVirtualList = defineComponent({
       focusable: true,
       handlers: {
         click: (e: TerminalPointerEvent) => {
+          cancelWheelScrollFrame();
           const r = absRect.value;
           const idx = scrollTop.value + (e.cellY - r.y);
           if (idx < 0 || idx >= props.itemCount) return;
@@ -183,6 +254,7 @@ export const TVirtualList = defineComponent({
           scheduler.invalidate();
         },
         dblclick: (e: TerminalPointerEvent) => {
+          cancelWheelScrollFrame();
           const r = absRect.value;
           const idx = scrollTop.value + (e.cellY - r.y);
           if (idx >= 0 && idx < props.itemCount) commit(idx);
@@ -192,19 +264,18 @@ export const TVirtualList = defineComponent({
           if (!deltaY) return;
           const h = Math.max(0, absRect.value.h);
           const maxTop = Math.max(0, props.itemCount - h);
+          const baseTop = pendingWheelTop ?? scrollTop.value;
           const { nextTop, dir } = applyWheelScroll(
             wheelState,
             deltaY,
-            scrollTop.value,
+            baseTop,
             maxTop,
             Date.now(),
             mode,
           );
-          if (!dir || nextTop === scrollTop.value) return;
+          if (!dir || nextTop === baseTop) return;
 
-          applyScrollTop(nextTop);
-          emit("scroll", nextTop);
-          scheduler.invalidate({ priority: "high", plane: plane.value });
+          requestWheelScroll(nextTop);
         },
         focus: () => {
           focused.value = true;
@@ -228,6 +299,10 @@ export const TVirtualList = defineComponent({
       if (!manager || !nodeId) return;
       if (manager.getFocused() === nodeId) return;
       manager.focus(nodeId);
+    });
+
+    onBeforeUnmount(() => {
+      cancelWheelScrollFrame();
     });
 
     function exposedRowsForDelta(y0: number, h: number, delta: number): number[] {
@@ -272,7 +347,8 @@ export const TVirtualList = defineComponent({
       // DomRenderer currently repaints dirty rows but does not shift line DOM
       // nodes from terminal scrollOperations, so keep row-scroll fast path to
       // headless/CLI full-row lists until DOM scroll operation support lands.
-      const canUseScrollPlane = !renderer.value && ownsFullRows && Math.abs(delta) < h;
+      const canUseScrollPlane =
+        !renderer.value && ownsFullRows && Math.abs(delta) < h && !dirtyRowsHint?.length;
       if (canUseScrollPlane) {
         render.scrollPlane(plane.value, r.y, r.y + h, delta);
         setDirtyRowsHint(exposedRowsForDelta(r.y, h, delta));
@@ -306,7 +382,7 @@ export const TVirtualList = defineComponent({
         const r = absRect.value;
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
-        const activeStyle = props.activeStyle ?? (base.inverse ? base : { ...base, inverse: true });
+        const activeStyle = props.activeStyle ?? defaultActiveStyle(base);
         const top = visibleWindow.value.top;
 
         const paintRow = (y: number): void => {
