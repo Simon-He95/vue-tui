@@ -431,6 +431,99 @@ describe("TVirtualList", () => {
     }
   });
 
+  it("preserves wheel scroll position when itemCount grows", async () => {
+    const itemCount = ref(100);
+    const App = defineComponent({
+      name: "VirtualListGrowPreserveScroll",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: itemCount.value,
+            itemVersion: itemCount.value,
+            getItem: (index: number) => `item-${index}`,
+            modelValue: 0,
+            autoFocus: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 500, time: Date.now() });
+    await nextTick();
+    await nextTick();
+    expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+      "item-5",
+      "item-6",
+      "item-7",
+      "item-8",
+    ]);
+
+    itemCount.value = 101;
+    await nextTick();
+    app.scheduler.flushNow();
+
+    expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+      "item-5",
+      "item-6",
+      "item-7",
+      "item-8",
+    ]);
+    app.dispose();
+  });
+
+  it("clamps scrollTop when itemCount shrinks without snapping back to active", async () => {
+    const itemCount = ref(100);
+    const getItem = vi.fn((index: number) => {
+      if (index >= itemCount.value) throw new Error(`out of range ${index}`);
+      return `item-${index}`;
+    });
+    const App = defineComponent({
+      name: "VirtualListShrinkPreserveScroll",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: itemCount.value,
+            itemVersion: itemCount.value,
+            getItem,
+            modelValue: 0,
+            autoFocus: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: Date.now() });
+    await nextTick();
+    await nextTick();
+    expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-96");
+
+    getItem.mockClear();
+    itemCount.value = 20;
+    await nextTick();
+    app.scheduler.flushNow();
+
+    expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+      "item-16",
+      "item-17",
+      "item-18",
+      "item-19",
+    ]);
+    expect(getItem.mock.calls.every((call) => (call[0] as number) < 20)).toBe(true);
+    app.dispose();
+  });
+
   it("does not emit scroll when pending wheel frame resolves to unchanged scrollTop", async () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;

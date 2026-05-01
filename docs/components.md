@@ -292,7 +292,7 @@ const app = createTerminalApp({
 
 可滚动列表（单选）：支持点击/双击、键盘导航、滚轮滚动，`v-model` 维护选中 index。
 
-`TList` 适合小数据选择器。大数据、高频更新、日志/streaming 场景请使用 `TVirtualList` 或后续专用日志组件，避免把大数组直接传进 Vue deep reactivity。
+`TList` 适合小数据选择器。大数据选择/浏览场景请使用 `TVirtualList`，日志、streaming transcript、append-only output 场景应使用后续专用日志组件，避免把大数组直接传进 Vue deep reactivity。
 
 ### Props
 
@@ -311,7 +311,7 @@ const app = createTerminalApp({
 
 ## TVirtualList
 
-大数据列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。
+大数据选择/浏览列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。它不是完整日志/streaming 组件；当前没有 bottom stickiness、append chunk 增量解析或 scroll anchor API。
 
 > Phase 1 experimental public API：当前从 root 入口导出，但 API 仍可能在 scheduler frame task、controlled scrollTop、overscan、TLogView 等后续能力落地前调整。
 

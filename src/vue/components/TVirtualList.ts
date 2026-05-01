@@ -167,10 +167,6 @@ export const TVirtualList = defineComponent({
       };
     });
 
-    watchEffect(() => {
-      active.value = clamp(props.modelValue, 0, Math.max(0, itemCount.value - 1));
-    });
-
     function viewportHeight(): number {
       return normalizedRect().h;
     }
@@ -191,8 +187,16 @@ export const TVirtualList = defineComponent({
     }
 
     watch(
+      () => props.modelValue,
+      () => {
+        active.value = clamp(props.modelValue, 0, Math.max(0, itemCount.value - 1));
+        ensureActiveVisible();
+      },
+      { immediate: true },
+    );
+
+    watch(
       [
-        () => active.value,
         () => itemCount.value,
         () => fullRect.value.y,
         () => fullRect.value.h,
@@ -200,7 +204,11 @@ export const TVirtualList = defineComponent({
         () => absRect.value.h,
       ],
       () => {
-        ensureActiveVisible();
+        active.value = clamp(active.value, 0, Math.max(0, itemCount.value - 1));
+        const nextTop = clamp(scrollTop.value, 0, maxScrollTop());
+        const changed = applyScrollTop(nextTop, "viewport-repaint");
+        if (!changed) markViewportDirty();
+        invalidateSelf();
       },
       { immediate: true },
     );
