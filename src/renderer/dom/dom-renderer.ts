@@ -42,6 +42,7 @@ const DEFAULT_FONT_FAMILY = [
   "monospace",
 ].join(", ");
 const SYNC_FLUSH_WARN_ROWS = 32;
+const SYNC_FLUSH_CELL_BUDGET = 4096;
 
 const styleKeyCache = new WeakMap<object, string>();
 
@@ -455,6 +456,12 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     console.warn(`[vue-tui] large sync DOM flush: ${rowCount} rows`);
   }
 
+  function shouldSyncFlush(scope: Readonly<FlushScope>): boolean {
+    const size = terminal.size();
+    const rowCount = scope.rows == null ? size.rows : scope.rows.length;
+    return rowCount <= SYNC_FLUSH_WARN_ROWS && rowCount * size.cols <= SYNC_FLUSH_CELL_BUDGET;
+  }
+
   function flushPending(scope?: Readonly<FlushScope>): void {
     raf = 0;
     if (disposed) return;
@@ -518,10 +525,14 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
       }
     }
     if (sync) {
-      if (raf > 0) cancelAnimationFrame(raf);
-      raf = 0;
       const scope = { planes: activePlanes, rows: commitRows };
       recordLargeSyncFlush(scope);
+      if (!shouldSyncFlush(scope)) {
+        scheduleRafIfNeeded();
+        return;
+      }
+      if (raf > 0) cancelAnimationFrame(raf);
+      raf = 0;
       flushPending(scope);
     } else if (!raf) {
       scheduleRafIfNeeded();

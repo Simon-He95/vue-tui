@@ -137,6 +137,127 @@ describe("ui regressions", () => {
     mounted.unmount();
   });
 
+  it("useRenderNode invalidates old and new planes when plane changes", async () => {
+    const plane = ref<"default" | "overlay">("default");
+    const invalidatePlanes: Array<string | null> = [];
+
+    const Probe = defineComponent({
+      name: "PlaneMigrationProbe",
+      setup() {
+        const { scheduler } = useTerminal();
+        const original = scheduler.invalidate.bind(scheduler);
+        (scheduler as any).invalidate = (options?: any) => {
+          invalidatePlanes.push(options?.plane ?? null);
+          return original(options);
+        };
+        onUnmounted(() => {
+          (scheduler as any).invalidate = original;
+        });
+        return () => null;
+      },
+    });
+
+    const Node = defineComponent({
+      name: "MigratingPlaneNode",
+      setup() {
+        useRenderNode(() => ({
+          rect: { x: 0, y: 0, w: 1, h: 1 },
+          paint: () => {},
+        }));
+        return () => null;
+      },
+    });
+
+    const mounted = await mountTerminal(() => [
+      h(Probe),
+      h(TRenderPlane, { plane: plane.value }, () => [h(Node)]),
+    ]);
+
+    await nextTick();
+    await Promise.resolve();
+    invalidatePlanes.length = 0;
+
+    plane.value = "overlay";
+    await nextTick();
+    await Promise.resolve();
+
+    expect(invalidatePlanes).toContain(null);
+    mounted.unmount();
+  });
+
+  it("TerminalProvider high priority flush updates DOM without waiting for renderer rAF", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const runNextRaf = async (): Promise<boolean> => {
+      const entry = callbacks.entries().next().value as [number, FrameRequestCallback] | undefined;
+      if (!entry) return false;
+      callbacks.delete(entry[0]);
+      entry[1](0);
+      await nextTick();
+      await Promise.resolve();
+      return true;
+    };
+
+    const drainRaf = async (): Promise<void> => {
+      for (let i = 0; i < 10 && callbacks.size; i++) await runNextRaf();
+    };
+
+    const value = ref("A");
+    let scheduler: ReturnType<typeof useTerminal>["scheduler"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TerminalProviderSchedulerProbe",
+      setup() {
+        scheduler = useTerminal().scheduler;
+        return () => null;
+      },
+    });
+
+    let mounted: Awaited<ReturnType<typeof mountTerminal>> | null = null;
+    try {
+      mounted = await mountTerminal(
+        () => [h(Probe), h(TText, { x: 0, y: 0, w: 4, value: value.value })],
+        8,
+        2,
+      );
+      await nextTick();
+      await Promise.resolve();
+      await drainRaf();
+      const container = mounted.container()!;
+      expect(container.textContent).toContain("A");
+
+      value.value = "B";
+      await nextTick();
+      await Promise.resolve();
+      expect(container.textContent).not.toContain("B");
+      scheduler!.flushNow();
+      expect(container.textContent).toContain("B");
+
+      callbacks.clear();
+      value.value = "C";
+      await nextTick();
+      await Promise.resolve();
+      expect(container.textContent).not.toContain("C");
+      await drainRaf();
+      expect(container.textContent).toContain("C");
+    } finally {
+      mounted?.unmount();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
   it("useRenderNode can consume a one-shot dirtyRowsHint without other dep changes", async () => {
     const dirtyRowsHint = ref<readonly number[] | null>(null);
     const paints: string[] = [];

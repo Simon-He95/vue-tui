@@ -71,6 +71,43 @@ describe("TVirtualList", () => {
     mounted.unmount();
   });
 
+  it("repaints the DOM viewport even when useRowScroll is enabled", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          itemCount: items.length,
+          itemVersion: 1,
+          getItem: (index: number) => items[index],
+          autoFocus: true,
+          useRowScroll: true,
+        }),
+      20,
+      8,
+    );
+
+    const commits: Array<readonly number[] | null> = [];
+    const off = mounted.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+
+    dispatchWheel(mounted.container()!);
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(commits.some((rows) => rows?.join(",") === "0,1,2,3")).toBe(true);
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
+      "item-1",
+      "item-2",
+      "item-3",
+      "item-4",
+    ]);
+    mounted.unmount();
+  });
+
   it("handles consecutive DOM wheel ticks without stale or blank rows", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const mounted = await mountTerminal(
@@ -284,6 +321,96 @@ describe("TVirtualList", () => {
     }
   });
 
+  it("clamps pending wheel scroll when itemCount shrinks before the frame", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const itemCount = ref(100);
+    const getItem = vi.fn((index: number) => {
+      if (index >= itemCount.value) throw new Error(`out of range ${index}`);
+      return `item-${index}`;
+    });
+    const onScroll = vi.fn();
+    let restoreInvalidate: (() => void) | null = null;
+
+    const Probe = defineComponent({
+      name: "HoldVirtualListSchedulerForShrink",
+      setup() {
+        const { scheduler } = useTerminal();
+        const original = scheduler.invalidate.bind(scheduler);
+        (scheduler as any).invalidate = () => {};
+        restoreInvalidate = () => {
+          (scheduler as any).invalidate = original;
+        };
+        return () => null;
+      },
+    });
+
+    const App = defineComponent({
+      name: "VirtualListShrinkProbe",
+      setup() {
+        return () => [
+          h(Probe),
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: itemCount.value,
+            itemVersion: itemCount.value,
+            getItem,
+            autoFocus: true,
+            useRowScroll: true,
+            onScroll,
+          }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      getItem.mockClear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 6000, time: Date.now() });
+      expect(callbacks.size).toBe(1);
+
+      itemCount.value = 20;
+      await nextTick();
+      Array.from(callbacks.values())[0]?.(0);
+      await nextTick();
+
+      restoreInvalidate?.();
+      app.scheduler.flushNow();
+
+      expect(onScroll).toHaveBeenCalledWith(16);
+      expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+        "item-16",
+        "item-17",
+        "item-18",
+        "item-19",
+      ]);
+      expect(getItem.mock.calls.every((call) => (call[0] as number) < 20)).toBe(true);
+    } finally {
+      restoreInvalidate?.();
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
   it("keeps headless full-row slow scroll correct across consecutive wheel ticks", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
@@ -412,6 +539,7 @@ describe("TVirtualList", () => {
         getItem: (index: number) => items[index],
         modelValue: 3,
         autoFocus: true,
+        useRowScroll: true,
       },
     });
     app.mount();
@@ -463,6 +591,52 @@ describe("TVirtualList", () => {
     expect(rowText({ terminal: app.terminal } as any, 3)).toContain("item-7");
     expect(rowText({ terminal: app.terminal } as any, 4)).toContain("item-8");
     expect(app.terminal.getCell(1, 4).style.inverse).toBe(true);
+    app.dispose();
+  });
+
+  it("scrolls external modelValue changes into view without emitting model updates", async () => {
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    const modelValue = ref(0);
+    const onUpdateModelValue = vi.fn();
+    const App = defineComponent({
+      name: "ExternalModelVirtualList",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: items.length,
+            itemVersion: 1,
+            getItem: (index: number) => items[index],
+            modelValue: modelValue.value,
+            autoFocus: true,
+            useRowScroll: true,
+            "onUpdate:modelValue": onUpdateModelValue,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+    const commits: Array<readonly number[] | null> = [];
+    const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+
+    modelValue.value = 80;
+    await nextTick();
+    app.scheduler.flushNow();
+
+    off();
+    expect(onUpdateModelValue).not.toHaveBeenCalled();
+    expect(commits).toEqual([[0, 1, 2, 3]]);
+    expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+      "item-77",
+      "item-78",
+      "item-79",
+      "item-80",
+    ]);
+    expect(app.terminal.getCell(0, 3).style.inverse).toBe(true);
     app.dispose();
   });
 

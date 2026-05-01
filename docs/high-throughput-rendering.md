@@ -136,6 +136,7 @@ terminal.on("commit", ({ dirtyRows, planes, sync }) => {
 
 - DOM renderer unit test 使用同步 rAF 计数，`terminal.commit({ sync: true })` 不应创建新的 rAF。
 - 普通 `commit()` 仍合并到下一帧，避免大量低优先级 DOM 更新同步阻塞。
+- `commit({ sync: true })` 只应用于输入、光标、滚动这类小范围高优先级更新；大范围/full repaint sync flush 在 debug perf 模式下需要可观测告警。
 
 ### 4. `TVirtualList`
 
@@ -312,18 +313,20 @@ type FramePerf = {
 
 目标是降低滚动卡顿和一帧延迟，尽量少改公共 API。
 
-| 项目                                                                    | 状态       |
-| ----------------------------------------------------------------------- | ---------- |
-| DOM renderer `commit({ sync: true })` same-frame flush                  | ✅ done    |
-| RenderManager row buckets (partial repaint)                             | ✅ done    |
-| `TVirtualList` (`itemCount/getItem/itemVersion`, headless exposed rows) | ✅ done    |
-| DOM sync flush scoped to current commit rows/planes                     | ✅ done    |
-| Row bucket degradation threshold (50%/60%)                              | ✅ done    |
-| `TVirtualList.useRowScroll` opt-in for scrollPlane fast path            | ✅ done    |
-| `TList` wheel 行为修改（不再同步更新 active/modelValue）                | 🔲 planned |
-| Debug overlay 展示 `scannedNodes/paintedNodes/dirtyRows/frameMs`        | 🔲 planned |
+| 项目                                                             | 状态       |
+| ---------------------------------------------------------------- | ---------- |
+| DOM renderer `commit({ sync: true })` same-frame flush           | ✅ done    |
+| RenderManager row buckets (partial repaint)                      | ✅ done    |
+| `TVirtualList` data-source API (`itemCount/getItem/itemVersion`) | ✅ done    |
+| Headless/CLI full-row `useRowScroll` exposed rows                | ✅ done    |
+| DOM `TVirtualList` slow wheel exposed rows                       | 🔲 Phase 2 |
+| DOM sync flush scoped to current commit rows/planes              | ✅ done    |
+| Row bucket degradation threshold (50%/60%)                       | ✅ done    |
+| `TVirtualList.useRowScroll` opt-in for scrollPlane fast path     | ✅ done    |
+| `TList` wheel 行为修改（不再同步更新 active/modelValue）         | 🔲 planned |
+| Debug overlay 展示 `scannedNodes/paintedNodes/dirtyRows/frameMs` | 🔲 planned |
 
-> **注意**：`TVirtualList` 的 `useRowScroll` 默认为 `false`。只有显式设置 `useRowScroll: true` 的 headless/CLI full-row 场景才会使用 `scrollPlane()` + exposed dirty rows。DOM 端慢滚仍然 repaint viewport，真正 DOM exposed rows 要等 DomRenderer 支持 `scrollOperations`。
+> **注意**：`TVirtualList` 的 `useRowScroll` 默认为 `false`。这是危险优化开关，只有显式设置 `useRowScroll: true` 的 headless/CLI full-row 且独占这些 plane rows 的场景才会使用 `scrollPlane()` + exposed dirty rows。DOM 端慢滚仍然 repaint viewport，真正 DOM exposed rows 要等 DomRenderer 支持 `scrollOperations`。
 
 验收命令：
 

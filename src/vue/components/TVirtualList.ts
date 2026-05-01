@@ -58,6 +58,8 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
   return { deltaY, mode: "auto" };
 }
 
+type ScrollStrategy = "auto" | "viewport-repaint";
+
 export const TVirtualList = defineComponent({
   name: "TVirtualList",
   props: {
@@ -97,6 +99,7 @@ export const TVirtualList = defineComponent({
     let pendingWheelTop: number | null = null;
     let cancelPendingWheelFrame: (() => void) | null = null;
     let renderNodeId: string | null = null;
+    let warnedIgnoredRowScroll = false;
     const wheelState = createWheelScrollState();
 
     const absRect = computed<Rect>(() => {
@@ -130,14 +133,14 @@ export const TVirtualList = defineComponent({
       return normalizedRect().h;
     }
 
-    function ensureActiveVisible(): void {
+    function ensureActiveVisible(strategy: ScrollStrategy = "viewport-repaint"): boolean {
       const h = viewportHeight();
-      if (h <= 0) return;
+      if (h <= 0) return false;
       const maxTop = Math.max(0, props.itemCount - h);
       let nextTop = clamp(scrollTop.value, 0, maxTop);
       if (active.value < nextTop) nextTop = active.value;
       else if (active.value >= nextTop + h) nextTop = clamp(active.value - (h - 1), 0, maxTop);
-      applyScrollTop(nextTop);
+      return applyScrollTop(nextTop, strategy);
     }
 
     watch(
@@ -215,16 +218,20 @@ export const TVirtualList = defineComponent({
       scheduler.invalidate({ priority, plane: plane.value });
     }
 
+    function warnIgnoredRowScroll(reason: string): void {
+      if (warnedIgnoredRowScroll || !(globalThis as any).__VT_DEBUG_PERF__) return;
+      warnedIgnoredRowScroll = true;
+      console.warn(`[vue-tui] TVirtualList.useRowScroll ignored: ${reason}`);
+    }
+
     function moveActive(index: number): void {
       if (props.itemCount <= 0) return;
       cancelWheelScrollFrame();
       const prevTop = scrollTop.value;
       active.value = clamp(index, 0, Math.max(0, props.itemCount - 1));
       emit("update:modelValue", active.value);
-      ensureActiveVisible();
-      if (scrollTop.value !== prevTop) dirtyRowsHint = viewportRows();
-      else setDirtyRowsHint(viewportRows());
-      if (renderNodeId) render.update(renderNodeId, { dirtyRowsHint });
+      const scrolled = ensureActiveVisible("viewport-repaint");
+      if (!scrolled || scrollTop.value === prevTop) markViewportDirty();
       invalidateSelf("high");
     }
 
@@ -279,6 +286,7 @@ export const TVirtualList = defineComponent({
           if (idx < 0 || idx >= props.itemCount) return;
           active.value = idx;
           emit("update:modelValue", idx);
+          markViewportDirty();
           invalidateSelf("high");
         },
         dblclick: (e: TerminalPointerEvent) => {
@@ -357,26 +365,35 @@ export const TVirtualList = defineComponent({
       return Array.from(rows).sort((a, b) => a - b);
     }
 
-    function setDirtyRowsHint(nextRows: readonly number[]): void {
+    function markRowsDirty(nextRows: readonly number[]): void {
       dirtyRowsHint = unionDirtyRows(nextRows);
       if (renderNodeId) render.update(renderNodeId, { dirtyRowsHint });
     }
 
-    function applyScrollTop(nextTop: number): void {
+    function markViewportDirty(): void {
+      markRowsDirty(viewportRows());
+    }
+
+    function applyScrollTop(nextTop: number, strategy: ScrollStrategy = "auto"): boolean {
       const r = normalizedRect();
       const h = r.h;
       const clampedTop = clamp(nextTop, 0, Math.max(0, props.itemCount - h));
       const delta = clampedTop - scrollTop.value;
-      if (!delta) return;
+      if (!delta) return false;
       scrollTop.value = clampedTop;
       const size = terminal.size();
       const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= size.cols;
+      if (strategy === "auto" && props.useRowScroll) {
+        if (renderer.value) warnIgnoredRowScroll("DOM renderer does not support row scroll");
+        else if (!ownsFullRows) warnIgnoredRowScroll("list does not own full terminal rows");
+      }
       // DomRenderer currently repaints dirty rows but does not shift line DOM
       // nodes from terminal scrollOperations, so keep row-scroll fast path to
       // headless/CLI full-row lists until DOM scroll operation support lands.
       // Also requires useRowScroll opt-in so consumers explicitly acknowledge
       // row-bucket scrolling semantics.
       const canUseScrollPlane =
+        strategy === "auto" &&
         props.useRowScroll &&
         !renderer.value &&
         ownsFullRows &&
@@ -384,10 +401,11 @@ export const TVirtualList = defineComponent({
         !dirtyRowsHint?.length;
       if (canUseScrollPlane) {
         render.scrollPlane(plane.value, r.y, r.y + h, delta);
-        setDirtyRowsHint(exposedRowsForDelta(r.y, h, delta));
-        return;
+        markRowsDirty(exposedRowsForDelta(r.y, h, delta));
+        return true;
       }
-      setDirtyRowsHint(viewportRows());
+      markViewportDirty();
+      return true;
     }
 
     const renderNode = useRenderNode(() => ({

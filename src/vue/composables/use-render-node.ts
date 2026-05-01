@@ -51,7 +51,7 @@ function requestBatchedInvalidate(
     pendingInvalidateByScheduler.set(scheduler as object, state);
   }
   if (state.queued) {
-    state.plane = state.plane == null || state.plane === plane ? plane : null;
+    if (state.plane !== null && state.plane !== plane) state.plane = null;
     state.priority = mergePriority(state.priority, priority);
     return;
   }
@@ -64,14 +64,10 @@ function requestBatchedInvalidate(
     const queuedPriority = state!.priority;
     state!.plane = null;
     state!.priority = "low";
-    scheduler.invalidate(
-      queuedPlane || queuedPriority !== "normal"
-        ? {
-            plane: queuedPlane ?? undefined,
-            priority: queuedPriority,
-          }
-        : undefined,
-    );
+    scheduler.invalidate({
+      plane: queuedPlane ?? undefined,
+      priority: queuedPriority,
+    });
   });
 }
 
@@ -90,29 +86,34 @@ export function useRenderNode(getOptions: () => RenderNodeOptions): {
     const opt = options.value;
     void opt.deps;
     const stack = opt.stack ?? parentStack.value;
-    lastPlane.value = plane.value;
+    const nextPlane = plane.value;
     if (!stack) return;
     if (!id.value) {
       const node: RenderNode = render.register({
         stack,
         zIndex: opt.zIndex,
         rect: opt.rect,
-        plane: plane.value,
+        plane: nextPlane,
         paint: opt.paint,
       });
       id.value = node.id;
-      requestBatchedInvalidate(scheduler, plane.value, opt.priority ?? "normal");
+      lastPlane.value = nextPlane;
+      requestBatchedInvalidate(scheduler, nextPlane, opt.priority ?? "normal");
       return;
     }
+    const prevPlane = lastPlane.value;
     render.update(id.value, {
       stack,
       zIndex: opt.zIndex ?? 0,
       rect: opt.rect ?? null,
       dirtyRowsHint: opt.dirtyRowsHint,
-      plane: plane.value,
+      plane: nextPlane,
       paint: opt.paint,
     });
-    requestBatchedInvalidate(scheduler, plane.value, opt.priority ?? "normal");
+    lastPlane.value = nextPlane;
+    const priority = opt.priority ?? "normal";
+    requestBatchedInvalidate(scheduler, prevPlane, priority);
+    if (prevPlane !== nextPlane) requestBatchedInvalidate(scheduler, nextPlane, priority);
   });
 
   onBeforeUnmount(() => {

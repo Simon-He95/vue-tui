@@ -292,6 +292,8 @@ const app = createTerminalApp({
 
 可滚动列表（单选）：支持点击/双击、键盘导航、滚轮滚动，`v-model` 维护选中 index。
 
+`TList` 适合小数据选择器。大数据、高频更新、日志/streaming 场景请使用 `TVirtualList` 或后续专用日志组件，避免把大数组直接传进 Vue deep reactivity。
+
 ### Props
 
 - `x`/`y`/`w`/`h` `(number, required)`
@@ -344,7 +346,7 @@ const renderItem = (item: Row) => item.title;
 
 ### Row scroll
 
-`useRowScroll` 只能用于该 plane 的这些 rows 被 `TVirtualList` 独占的场景。它是 headless/CLI 优化：当 DOM renderer 已挂载，或列表没有占满终端整行时，会退回 viewport repaint。DOM 慢滚目前不会移动 DOM line nodes，仍会重绘可见窗口。
+`useRowScroll` 是危险优化开关，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占的场景。它是 headless/CLI 优化：当 DOM renderer 已挂载，或列表没有占满终端整行时，会退回 viewport repaint；debug perf 模式会对这些被忽略的场景发出一次 warning。DOM 慢滚目前不会移动 DOM line nodes，仍会重绘可见窗口。
 
 ### Events
 

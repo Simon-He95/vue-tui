@@ -7,6 +7,8 @@ import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { clearTextCaches, withTextRenderPass } from "../utils/text.js";
 
 const renderMgrDebugLog = createDebugLogger(isDebugEnabled());
+const ROW_BUCKET_DIRTY_RATIO_FALLBACK = 0.5;
+const ROW_BUCKET_CANDIDATE_RATIO_FALLBACK = 0.6;
 
 export type RenderRect = Readonly<{
   x: number;
@@ -532,7 +534,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                 // with a Uint8Array/generation marker could also eliminate string Set overhead.
                 // Row bucket degradation: skip bucket collection when dirty rows cover > 50% of terminal
                 const dirtyRatio = rows.length / terminalRows;
-                if (dirtyRatio > 0.5) {
+                if (dirtyRatio > ROW_BUCKET_DIRTY_RATIO_FALLBACK) {
                   needsIntersectFilter = true;
                   return planeNodes;
                 }
@@ -553,7 +555,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                       (sortedPlaneNodeIndexById.get(b.id) ?? 0),
                   );
                 // Row bucket degradation: fall back to planeNodes when bucket candidates exceed 60%
-                if (candidates.length > planeNodes.length * 0.6) {
+                if (candidates.length > planeNodes.length * ROW_BUCKET_CANDIDATE_RATIO_FALLBACK) {
                   needsIntersectFilter = true;
                   return planeNodes;
                 }

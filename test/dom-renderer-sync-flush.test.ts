@@ -246,7 +246,7 @@ describe("DomRenderer sync flush", () => {
     }
   });
 
-  it("warns in debug perf mode when sync commit flushes a full repaint", () => {
+  it("defers large sync full repaint and warns in debug perf mode", () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;
     const previousDebugPerf = (globalThis as any).__VT_DEBUG_PERF__;
@@ -267,6 +267,8 @@ describe("DomRenderer sync flush", () => {
 
       for (let y = 0; y < 40; y++) terminal.fill(0, y, 4, 1, "A");
       terminal.commit({ sync: true });
+      expect(rowText(container, 39)).not.toContain("A");
+      pending?.(0);
       expect(rowText(container, 39)).toContain("A");
 
       (globalThis as any).__VT_DEBUG_PERF__ = true;
@@ -274,6 +276,8 @@ describe("DomRenderer sync flush", () => {
       terminal.commit({ sync: true });
 
       expect(warn).toHaveBeenCalledWith("[vue-tui] large sync DOM flush: 40 rows");
+      expect(rowText(container, 39)).toContain("A");
+      pending?.(0);
       expect(rowText(container, 39)).not.toContain("A");
 
       renderer.dispose();
