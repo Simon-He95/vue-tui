@@ -77,6 +77,7 @@ export const TVirtualList = defineComponent({
     style: { type: Object as PropType<Style>, default: undefined },
     activeStyle: { type: Object as PropType<Style>, default: undefined },
     autoFocus: { type: Boolean, default: false },
+    useRowScroll: { type: Boolean, default: false },
   },
   emits: ["update:modelValue", "change", "scroll", "focus", "blur", "keydown"],
   setup(props, { emit }) {
@@ -351,8 +352,10 @@ export const TVirtualList = defineComponent({
       // DomRenderer currently repaints dirty rows but does not shift line DOM
       // nodes from terminal scrollOperations, so keep row-scroll fast path to
       // headless/CLI full-row lists until DOM scroll operation support lands.
+      // Also requires useRowScroll opt-in so consumers explicitly acknowledge
+      // row-bucket scrolling semantics.
       const canUseScrollPlane =
-        !renderer.value && ownsFullRows && Math.abs(delta) < h && !dirtyRowsHint?.length;
+        props.useRowScroll && !renderer.value && ownsFullRows && Math.abs(delta) < h && !dirtyRowsHint?.length;
       if (canUseScrollPlane) {
         render.scrollPlane(plane.value, r.y, r.y + h, delta);
         setDirtyRowsHint(exposedRowsForDelta(r.y, h, delta));

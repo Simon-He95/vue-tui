@@ -511,6 +511,9 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                 // TODO: Phase 2 — reuse a scratch set/array across frames to reduce
                 // per-frame allocation for high-frequency scroll. A numeric node index
                 // with a Uint8Array/generation marker could also eliminate string Set overhead.
+                // Row bucket degradation: skip bucket collection when dirty rows cover > 50% of terminal
+                const dirtyRatio = rows.length / terminalRows;
+                if (dirtyRatio > 0.5) return planeNodes;
                 const ids = new Set<string>();
                 const buckets = rowBuckets.get(plane);
                 for (const y of rows) {
@@ -520,13 +523,15 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                 }
                 const globalIds = globalNodeIdsByPlane.get(plane);
                 if (globalIds) for (const id of globalIds) ids.add(id);
-                return Array.from(ids, (id) => nodes.get(id))
+                const candidates = Array.from(ids, (id) => nodes.get(id))
                   .filter((node): node is RenderNode => node != null)
                   .sort(
                     (a, b) =>
                       (sortedPlaneNodeIndexById.get(a.id) ?? 0) -
                       (sortedPlaneNodeIndexById.get(b.id) ?? 0),
                   );
+                // Row bucket degradation: fall back to planeNodes when bucket candidates exceed 60%
+                return candidates.length > planeNodes.length * 0.6 ? planeNodes : candidates;
               })();
           scannedNodes += candidateNodes.length;
 

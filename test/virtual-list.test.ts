@@ -192,6 +192,7 @@ describe("TVirtualList", () => {
         itemVersion: 1,
         getItem: (index: number) => items[index],
         autoFocus: true,
+        useRowScroll: true,
       },
     });
     app.mount();
@@ -242,6 +243,7 @@ describe("TVirtualList", () => {
         itemVersion: 1,
         getItem: (index: number) => items[index],
         autoFocus: true,
+        useRowScroll: true,
       },
     });
     const dateNow = vi.spyOn(Date, "now");
@@ -294,6 +296,7 @@ describe("TVirtualList", () => {
         itemVersion: 1,
         getItem: (index: number) => items[index],
         autoFocus: true,
+        useRowScroll: true,
       },
     });
     app.mount();
@@ -430,6 +433,45 @@ describe("TVirtualList", () => {
     expect(commits).toEqual([[0, 1, 2, 3]]);
     expect(rowText({ terminal: app.terminal } as any, 1)).toContain("SIDE");
     expect(rowText({ terminal: app.terminal } as any, 0)).not.toContain("SIDE");
+    app.dispose();
+  });
+
+  it("does not shift same-plane overlay when useRowScroll is false (default)", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "VirtualListWithOverlay",
+      setup() {
+        return () => [
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: items.length,
+            itemVersion: 1,
+            getItem: (index: number) => items[index],
+            autoFocus: true,
+            // useRowScroll defaults to false — should NOT use scrollPlane
+          }),
+          h(TText, { x: 0, y: 1, w: 6, value: "BADGE", zIndex: 999 }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+    const commits: Array<readonly number[] | null> = [];
+    const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+    await nextTick();
+    await nextTick();
+
+    off();
+    // With useRowScroll=false, scrollPlane is NOT used, so BADGE is not shifted
+    expect(rowText({ terminal: app.terminal } as any, 1)).toContain("BADGE");
+    // Full viewport repaint, not exposed-only
+    expect(commits).toEqual([[0, 1, 2, 3]]);
     app.dispose();
   });
 });

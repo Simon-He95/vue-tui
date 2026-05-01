@@ -186,4 +186,62 @@ describe("DomRenderer sync flush", () => {
       globalThis.cancelAnimationFrame = previousCancel;
     }
   });
+
+  it("consecutive sync commits do not starve pending normal rows", () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    try {
+      const terminal = createTerminal({ cols: 4, rows: 4 });
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const renderer = createDomRenderer(terminal, container);
+      // Flush initial commit
+      callbacks.get(1)?.(0);
+      callbacks.clear();
+
+      // Normal commit: fill all rows with "A" — pending but rAF not yet run
+      for (let y = 0; y < 4; y++) terminal.fill(0, y, 4, 1, "A");
+      terminal.commit();
+
+      // First sync commit: only row 0
+      terminal.write("B", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+      expect(rowText(container, 0)).toContain("B");
+
+      // Second sync commit: only row 1
+      terminal.write("C", { x: 0, y: 1 });
+      terminal.commit({ sync: true });
+      expect(rowText(container, 1)).toContain("C");
+
+      // Rows 2-3 should still be pending (not starved by consecutive syncs)
+      expect(rowText(container, 2)).not.toContain("A");
+      expect(rowText(container, 3)).not.toContain("A");
+
+      // A rAF should still be scheduled for remaining pending rows
+      expect(callbacks.size).toBeGreaterThanOrEqual(1);
+
+      // Execute pending rAF — all rows should now be rendered
+      const remaining = Array.from(callbacks.values())[0]!;
+      remaining(0);
+      expect(rowText(container, 2)).toContain("A");
+      expect(rowText(container, 3)).toContain("A");
+
+      renderer.dispose();
+      container.remove();
+    } finally {
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
 });

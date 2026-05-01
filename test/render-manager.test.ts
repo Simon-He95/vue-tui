@@ -659,4 +659,89 @@ describe("render-manager", () => {
 
     expect(dirtyArgs).toEqual(["0,1"]);
   });
+
+  it("falls back to full plane scan when dirty rows exceed 50% of terminal rows", () => {
+    const paints: string[] = [];
+    const listeners = new Map<string, Set<(...args: any[]) => void>>();
+    const terminal: any = {
+      size: () => ({ cols: 10, rows: 100 }),
+      on(event: string, cb: (...args: any[]) => void) {
+        let set = listeners.get(event);
+        if (!set) listeners.set(event, (set = new Set()));
+        set.add(cb);
+        return () => set!.delete(cb);
+      },
+      batch(fn: () => void) {
+        fn();
+      },
+      clear() {},
+    };
+
+    const rm = createRenderManager(terminal);
+    // Register 10 nodes across different rows
+    for (let i = 0; i < 10; i++) {
+      rm.register({
+        stack: rm.rootStack,
+        rect: { x: 0, y: i * 10, w: 10, h: 1 },
+        paint: () => paints.push(`n${i}`),
+      });
+    }
+    rm.render();
+    paints.length = 0;
+
+    // Mark 60 rows dirty (60% of 100) — should trigger dirtyRatio > 0.5 fallback
+    // Use a node that covers rows 0-5 to create > 50% dirty
+    const wide = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 60 },
+      paint: () => paints.push("wide"),
+    });
+    const stats = rm.render();
+
+    // All nodes should be scanned (full plane fallback)
+    expect(stats?.scannedNodes).toBe(11); // 10 original + 1 wide
+    // The wide node and the first 6 original nodes (rows 0,10,20,30,40,50) should paint
+    expect(paints).toContain("wide");
+  });
+
+  it("falls back to full plane scan when bucket candidates exceed 60% of planeNodes", () => {
+    const paints: string[] = [];
+    const listeners = new Map<string, Set<(...args: any[]) => void>>();
+    const terminal: any = {
+      size: () => ({ cols: 10, rows: 10 }),
+      on(event: string, cb: (...args: any[]) => void) {
+        let set = listeners.get(event);
+        if (!set) listeners.set(event, (set = new Set()));
+        set.add(cb);
+        return () => set!.delete(cb);
+      },
+      batch(fn: () => void) {
+        fn();
+      },
+      clear() {},
+    };
+
+    const rm = createRenderManager(terminal);
+    // Register 5 nodes that all overlap rows 0-4
+    const nodes: { id: string }[] = [];
+    for (let i = 0; i < 5; i++) {
+      nodes.push(
+        rm.register({
+          stack: rm.rootStack,
+          rect: { x: 0, y: 0, w: 10, h: 5 },
+          paint: () => paints.push(`n${i}`),
+        }),
+      );
+    }
+    rm.render();
+    paints.length = 0;
+
+    // Dirty rows 0-3 — all 5 nodes are candidates, which is 5/5 = 100% > 60% threshold
+    rm.update(nodes[0]!.id, { dirtyRowsHint: [0, 1, 2, 3] });
+    const stats = rm.render();
+
+    // Should fall back to planeNodes since candidates (5) > planeNodes (5) * 0.6
+    expect(stats?.scannedNodes).toBe(5);
+    expect(paints.sort()).toEqual(["n0", "n1", "n2", "n3", "n4"]);
+  });
 });
