@@ -9,6 +9,7 @@ import {
   ref,
   TBox,
   TText,
+  TView,
   TVirtualList,
   useTerminal,
 } from "./ui-regressions-support.js";
@@ -411,6 +412,115 @@ describe("TVirtualList", () => {
     }
   });
 
+  it("does not emit scroll when pending wheel frame resolves to unchanged scrollTop", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const itemCount = ref(20);
+    const onScroll = vi.fn();
+    const App = defineComponent({
+      name: "VirtualListNoopPendingScroll",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: itemCount.value,
+            itemVersion: itemCount.value,
+            getItem: (index: number) => `item-${index}`,
+            autoFocus: true,
+            onScroll,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+      expect(callbacks.size).toBe(1);
+
+      itemCount.value = 4;
+      await nextTick();
+      Array.from(callbacks.values())[0]?.(0);
+      await nextTick();
+
+      expect(onScroll).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("sanitizes invalid itemCount values", async () => {
+    const itemCount = ref(-1);
+    const getItem = vi.fn((index: number) => `item-${index}`);
+    const onUpdateModelValue = vi.fn();
+    const App = defineComponent({
+      name: "VirtualListItemCountSanitize",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: itemCount.value,
+            itemVersion: itemCount.value,
+            getItem,
+            autoFocus: true,
+            "onUpdate:modelValue": onUpdateModelValue,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      expect(getItem).not.toHaveBeenCalled();
+
+      app.events.dispatch({
+        type: "keydown",
+        key: "ArrowDown",
+        code: "ArrowDown",
+        time: Date.now(),
+      });
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
+
+      itemCount.value = Number.NaN;
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(getItem).not.toHaveBeenCalled();
+
+      itemCount.value = 2.9;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(getItem.mock.calls.map((call) => call[0])).toEqual([0, 1]);
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-0");
+      expect(rowText({ terminal: app.terminal } as any, 1)).toBe("item-1");
+      expect(rowText({ terminal: app.terminal } as any, 2)).toBe("");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("keeps headless full-row slow scroll correct across consecutive wheel ticks", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
@@ -594,6 +704,98 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
+  it("renders correct item rows when the top is clipped", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "TopClippedVirtualList",
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: 12, h: 3 }, () =>
+            h(TVirtualList, {
+              x: 0,
+              y: -2,
+              w: 12,
+              h: 5,
+              itemCount: items.length,
+              itemVersion: 1,
+              getItem: (index: number) => items[index],
+            }),
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 5, component: App });
+    app.mount();
+    await nextTick();
+    app.scheduler.flushNow();
+
+    expect([0, 1, 2].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+      "item-2",
+      "item-3",
+      "item-4",
+    ]);
+    app.dispose();
+  });
+
+  it("clips horizontally from the correct cell offset", async () => {
+    const App = defineComponent({
+      name: "HorizontallyClippedVirtualList",
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: 4, h: 1 }, () =>
+            h(TVirtualList, {
+              x: -3,
+              y: 0,
+              w: 10,
+              h: 1,
+              itemCount: 1,
+              itemVersion: 1,
+              getItem: () => "ABCDEFGH",
+            }),
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 8, rows: 2, component: App });
+    app.mount();
+    await nextTick();
+    app.scheduler.flushNow();
+
+    expect(rowText({ terminal: app.terminal } as any, 0)).toBe("DEFG");
+    app.dispose();
+  });
+
+  it("maps clicks through clipped top rows to the correct item index", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const onUpdateModelValue = vi.fn();
+    const App = defineComponent({
+      name: "TopClippedVirtualListClick",
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: 12, h: 3 }, () =>
+            h(TVirtualList, {
+              x: 0,
+              y: -2,
+              w: 12,
+              h: 5,
+              itemCount: items.length,
+              itemVersion: 1,
+              getItem: (index: number) => items[index],
+              "onUpdate:modelValue": onUpdateModelValue,
+            }),
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 5, component: App });
+    app.mount();
+    await nextTick();
+    app.scheduler.flushNow();
+
+    app.events.dispatch({ type: "click", cellX: 0, cellY: 0, time: Date.now() });
+    await nextTick();
+
+    expect(onUpdateModelValue).toHaveBeenCalledWith(2);
+    app.dispose();
+  });
+
   it("scrolls external modelValue changes into view without emitting model updates", async () => {
     const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
     const modelValue = ref(0);
@@ -708,6 +910,52 @@ describe("TVirtualList", () => {
     expect(commits).toEqual([[0, 1, 2, 3]]);
     expect(rowText({ terminal: app.terminal } as any, 1)).toContain("SIDE");
     expect(rowText({ terminal: app.terminal } as any, 0)).not.toContain("SIDE");
+    app.dispose();
+  });
+
+  it("does not use scrollPlane when useRowScroll is true but the list is clipped", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "ClippedRowScrollVirtualList",
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: 12, h: 3 }, () =>
+            h(TVirtualList, {
+              x: 0,
+              y: -1,
+              w: 12,
+              h: 4,
+              itemCount: items.length,
+              itemVersion: 1,
+              getItem: (index: number) => items[index],
+              autoFocus: true,
+              useRowScroll: true,
+            }),
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 6, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+    const commits: Array<{
+      dirtyRows: readonly number[] | null;
+      scrollOperations: unknown;
+    }> = [];
+    const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+      commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+    });
+
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(commits).toEqual([{ dirtyRows: [0, 1, 2], scrollOperations: null }]);
+    expect([0, 1, 2].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
+      "item-2",
+      "item-3",
+      "item-4",
+    ]);
     app.dispose();
   });
 
@@ -846,8 +1094,13 @@ describe("TVirtualList", () => {
     try {
       app.mount();
       app.scheduler.flushNow();
-      const commits: Array<readonly number[] | null> = [];
-      const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
       expect(callbacks.size).toBe(1);
@@ -860,7 +1113,7 @@ describe("TVirtualList", () => {
       app.scheduler.flushNow();
       off();
 
-      expect(commits).toEqual([[0, 1, 2, 3]]);
+      expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
       expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
         "v2-item-1",
         "v2-item-2",

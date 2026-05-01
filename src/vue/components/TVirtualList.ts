@@ -19,7 +19,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
-import { formatInlineCellLine } from "../utils/text.js";
+import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
 import { applyWheelScroll, createWheelScrollState } from "../utils/wheel-scroll.js";
 
 function clamp(n: number, min: number, max: number): number {
@@ -102,15 +102,23 @@ export const TVirtualList = defineComponent({
     let warnedIgnoredRowScroll = false;
     const wheelState = createWheelScrollState();
 
-    const absRect = computed<Rect>(() => {
+    const itemCount = computed(() => {
+      const n = Math.floor(Number(props.itemCount));
+      return Number.isFinite(n) ? Math.max(0, n) : 0;
+    });
+
+    const fullRect = computed<Rect>(() => {
       const raw = { x: props.x, y: props.y, w: props.w, h: props.h };
-      const translated = translateRect(raw, layout.originX, layout.originY);
+      return translateRect(raw, layout.originX, layout.originY);
+    });
+
+    const absRect = computed<Rect>(() => {
+      const translated = fullRect.value;
       if (!layout.clipRect) return translated;
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
-    function normalizedRect(): Rect {
-      const r = absRect.value;
+    function normalizeRect(r: Rect): Rect {
       return {
         x: Math.floor(r.x),
         y: Math.floor(r.y),
@@ -119,14 +127,46 @@ export const TVirtualList = defineComponent({
       };
     }
 
+    function normalizedRect(): Rect {
+      return normalizeRect(absRect.value);
+    }
+
+    function normalizedFullRect(): Rect {
+      return normalizeRect(fullRect.value);
+    }
+
+    function clipOffsets(): { x: number; y: number } {
+      const full = normalizedFullRect();
+      const clip = normalizedRect();
+      return {
+        x: Math.max(0, clip.x - full.x),
+        y: Math.max(0, clip.y - full.y),
+      };
+    }
+
+    function isClipped(): boolean {
+      const full = normalizedFullRect();
+      const clip = normalizedRect();
+      return full.x !== clip.x || full.y !== clip.y || full.w !== clip.w || full.h !== clip.h;
+    }
+
+    function maxScrollTop(): number {
+      return Math.max(0, itemCount.value - normalizedFullRect().h);
+    }
+
     const visibleWindow = computed(() => {
-      const h = normalizedRect().h;
-      const top = clamp(scrollTop.value, 0, Math.max(0, props.itemCount - h));
-      return { top, end: Math.min(props.itemCount, top + h), h };
+      const clip = normalizedRect();
+      const { y: clipY } = clipOffsets();
+      const top = clamp(scrollTop.value, 0, maxScrollTop());
+      return {
+        top,
+        end: Math.min(itemCount.value, top + clipY + clip.h),
+        h: clip.h,
+      };
     });
 
     watchEffect(() => {
-      active.value = clamp(props.modelValue, 0, Math.max(0, props.itemCount - 1));
+      active.value = clamp(props.modelValue, 0, Math.max(0, itemCount.value - 1));
     });
 
     function viewportHeight(): number {
@@ -134,17 +174,29 @@ export const TVirtualList = defineComponent({
     }
 
     function ensureActiveVisible(strategy: ScrollStrategy = "viewport-repaint"): boolean {
-      const h = viewportHeight();
-      if (h <= 0) return false;
-      const maxTop = Math.max(0, props.itemCount - h);
+      const clip = normalizedRect();
+      const full = normalizedFullRect();
+      if (clip.h <= 0 || full.h <= 0) return false;
+      const { y: clipY } = clipOffsets();
+      const maxTop = maxScrollTop();
       let nextTop = clamp(scrollTop.value, 0, maxTop);
-      if (active.value < nextTop) nextTop = active.value;
-      else if (active.value >= nextTop + h) nextTop = clamp(active.value - (h - 1), 0, maxTop);
+      const visibleStart = nextTop + clipY;
+      const visibleEnd = visibleStart + clip.h - 1;
+      if (active.value < visibleStart) nextTop = clamp(active.value - clipY, 0, maxTop);
+      else if (active.value > visibleEnd)
+        nextTop = clamp(active.value - (clipY + clip.h - 1), 0, maxTop);
       return applyScrollTop(nextTop, strategy);
     }
 
     watch(
-      [() => active.value, () => props.itemCount, () => absRect.value.h],
+      [
+        () => active.value,
+        () => itemCount.value,
+        () => fullRect.value.y,
+        () => fullRect.value.h,
+        () => absRect.value.y,
+        () => absRect.value.h,
+      ],
       () => {
         ensureActiveVisible();
       },
@@ -158,8 +210,8 @@ export const TVirtualList = defineComponent({
     }
 
     function commit(index: number): void {
-      if (props.itemCount <= 0) return;
-      const next = clamp(index, 0, props.itemCount - 1);
+      if (itemCount.value <= 0) return;
+      const next = clamp(index, 0, itemCount.value - 1);
       active.value = next;
       emit("update:modelValue", next);
       emit("change", { index: next, value: props.getItem(next) });
@@ -208,7 +260,8 @@ export const TVirtualList = defineComponent({
         const top = pendingWheelTop;
         pendingWheelTop = null;
         if (top == null) return;
-        applyScrollTop(top);
+        const changed = applyScrollTop(top);
+        if (!changed) return;
         emit("scroll", scrollTop.value);
         invalidateSelf("high");
       });
@@ -225,10 +278,10 @@ export const TVirtualList = defineComponent({
     }
 
     function moveActive(index: number): void {
-      if (props.itemCount <= 0) return;
+      if (itemCount.value <= 0) return;
       cancelWheelScrollFrame();
       const prevTop = scrollTop.value;
-      active.value = clamp(index, 0, Math.max(0, props.itemCount - 1));
+      active.value = clamp(index, 0, Math.max(0, itemCount.value - 1));
       emit("update:modelValue", active.value);
       const scrolled = ensureActiveVisible("viewport-repaint");
       if (!scrolled || scrollTop.value === prevTop) markViewportDirty();
@@ -264,7 +317,7 @@ export const TVirtualList = defineComponent({
       }
       if (e.key === "End") {
         e.preventDefault();
-        moveActive(props.itemCount - 1);
+        moveActive(itemCount.value - 1);
         return;
       }
       if (e.key === "Enter") {
@@ -282,8 +335,9 @@ export const TVirtualList = defineComponent({
         click: (e: TerminalPointerEvent) => {
           cancelWheelScrollFrame();
           const r = normalizedRect();
-          const idx = scrollTop.value + (e.cellY - r.y);
-          if (idx < 0 || idx >= props.itemCount) return;
+          const { y: clipY } = clipOffsets();
+          const idx = scrollTop.value + clipY + (e.cellY - r.y);
+          if (idx < 0 || idx >= itemCount.value) return;
           active.value = idx;
           emit("update:modelValue", idx);
           markViewportDirty();
@@ -292,14 +346,14 @@ export const TVirtualList = defineComponent({
         dblclick: (e: TerminalPointerEvent) => {
           cancelWheelScrollFrame();
           const r = normalizedRect();
-          const idx = scrollTop.value + (e.cellY - r.y);
-          if (idx >= 0 && idx < props.itemCount) commit(idx);
+          const { y: clipY } = clipOffsets();
+          const idx = scrollTop.value + clipY + (e.cellY - r.y);
+          if (idx >= 0 && idx < itemCount.value) commit(idx);
         },
         wheel: (e: any) => {
           const { deltaY, mode } = getWheelScrollInput(e);
           if (!deltaY) return;
-          const h = viewportHeight();
-          const maxTop = Math.max(0, props.itemCount - h);
+          const maxTop = maxScrollTop();
           const baseTop = pendingWheelTop ?? scrollTop.value;
           const { nextTop, dir } = applyWheelScroll(
             wheelState,
@@ -376,8 +430,10 @@ export const TVirtualList = defineComponent({
 
     function applyScrollTop(nextTop: number, strategy: ScrollStrategy = "auto"): boolean {
       const r = normalizedRect();
+      const full = normalizedFullRect();
       const h = r.h;
-      const clampedTop = clamp(nextTop, 0, Math.max(0, props.itemCount - h));
+      if (h <= 0 || full.h <= 0) return false;
+      const clampedTop = clamp(nextTop, 0, maxScrollTop());
       const delta = clampedTop - scrollTop.value;
       if (!delta) return false;
       scrollTop.value = clampedTop;
@@ -386,6 +442,7 @@ export const TVirtualList = defineComponent({
       if (strategy === "auto" && props.useRowScroll) {
         if (renderer.value) warnIgnoredRowScroll("DOM renderer does not support row scroll");
         else if (!ownsFullRows) warnIgnoredRowScroll("list does not own full terminal rows");
+        else if (isClipped()) warnIgnoredRowScroll("list rect is clipped");
       }
       // DomRenderer currently repaints dirty rows but does not shift line DOM
       // nodes from terminal scrollOperations, so keep row-scroll fast path to
@@ -397,6 +454,7 @@ export const TVirtualList = defineComponent({
         props.useRowScroll &&
         !renderer.value &&
         ownsFullRows &&
+        !isClipped() &&
         Math.abs(delta) < h &&
         !dirtyRowsHint?.length;
       if (canUseScrollPlane) {
@@ -414,7 +472,8 @@ export const TVirtualList = defineComponent({
       deps: [
         visible.value,
         absRect.value,
-        props.itemCount,
+        fullRect.value,
+        itemCount.value,
         props.itemVersion,
         props.getItem,
         props.renderItem,
@@ -429,16 +488,23 @@ export const TVirtualList = defineComponent({
         dirtyRowsHint = undefined;
         if (!visible.value) return;
         const r = normalizedRect();
+        const full = normalizedFullRect();
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
         const activeStyle = props.activeStyle ?? defaultActiveStyle(base);
         const top = visibleWindow.value.top;
+        const { x: clipX, y: clipY } = clipOffsets();
 
         const paintRow = (y: number): void => {
           if (y < r.y || y >= r.y + r.h) return;
-          const idx = top + (y - r.y);
-          const line = formatInlineCellLine(idx < props.itemCount ? itemText(idx) : "", r.w);
-          const style = idx === active.value ? activeStyle : base;
+          const idx = top + clipY + (y - r.y);
+          const fullLine = formatInlineCellLine(
+            idx >= 0 && idx < itemCount.value ? itemText(idx) : "",
+            full.w,
+          );
+          const line = padEndByCells(sliceByCellsRange(fullLine, clipX, clipX + r.w), r.w);
+          const style =
+            idx >= 0 && idx < itemCount.value && idx === active.value ? activeStyle : base;
           terminal.write(line, { x: r.x, y, style });
         };
 

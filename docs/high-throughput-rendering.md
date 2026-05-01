@@ -137,6 +137,7 @@ terminal.on("commit", ({ dirtyRows, planes, sync }) => {
 - DOM renderer unit test 使用同步 rAF 计数，`terminal.commit({ sync: true })` 不应创建新的 rAF。
 - 普通 `commit()` 仍合并到下一帧，避免大量低优先级 DOM 更新同步阻塞。
 - `commit({ sync: true })` 只应用于输入、光标、滚动这类小范围高优先级更新；大范围/full repaint sync flush 在 debug perf 模式下需要可观测告警。
+- DOM renderer 的 `sync: true` 是 budgeted sync：表示允许在预算内同帧 flush，不表示强制所有 DOM work 在调用返回前完成。
 
 ### 4. `TVirtualList`
 
@@ -170,12 +171,12 @@ deps 只允许包含：
 ```ts
 [
   visible.value,
-  absRect.value,
-  props.itemCount,
+  fullRect.value,
+  clipRect.value,
+  itemCount.value,
   props.itemVersion,
   props.getItem,
   props.renderItem,
-  scrollTop.value,
   active.value,
   focused.value,
   props.style,
@@ -184,7 +185,7 @@ deps 只允许包含：
 ];
 ```
 
-不允许把大数组或每行对象数组放进 deps。数据本体由外部 `shallowRef`、`markRaw` 或普通 store 管理。`getItem` 和 `renderItem` 应保持稳定引用，数据变化通过 `itemVersion` 驱动。
+不允许把大数组或每行对象数组放进 deps。数据本体由外部 `shallowRef`、`markRaw` 或普通 store 管理。`getItem` 和 `renderItem` 应保持稳定引用，数据变化通过 `itemVersion` 驱动。`scrollTop` 不进入 deps；滚动由组件内部 `render.update({ dirtyRowsHint })` 标记 dirty rows，否则会退化成每次滚动都整块 repaint。
 
 wheel 行为：
 
@@ -331,7 +332,7 @@ type FramePerf = {
 验收命令：
 
 ```bash
-pnpm vitest run test/render-manager.test.ts test/perf-budgets.test.ts test/scheduler-priority.test.ts
+pnpm vitest run test/render-manager.test.ts test/dom-renderer-sync-flush.test.ts test/virtual-list.test.ts test/ui-regressions.test.ts test/perf-budgets.test.ts test/scheduler-priority.test.ts
 pnpm run typecheck
 pnpm run lint
 ```

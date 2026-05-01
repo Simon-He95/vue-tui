@@ -313,7 +313,7 @@ const app = createTerminalApp({
 
 大数据列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。
 
-> Phase 1 experimental：API 仍可能在 scheduler frame task、controlled scrollTop、overscan、TLogView 等后续能力落地前调整。
+> Phase 1 experimental public API：当前从 root 入口导出，但 API 仍可能在 scheduler frame task、controlled scrollTop、overscan、TLogView 等后续能力落地前调整。
 
 ### Props
 
@@ -346,7 +346,7 @@ const renderItem = (item: Row) => item.title;
 
 ### Row scroll
 
-`useRowScroll` 是危险优化开关，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占的场景。它是 headless/CLI 优化：当 DOM renderer 已挂载，或列表没有占满终端整行时，会退回 viewport repaint；debug perf 模式会对这些被忽略的场景发出一次 warning。DOM 慢滚目前不会移动 DOM line nodes，仍会重绘可见窗口。
+`useRowScroll` 是危险优化开关，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占且列表没有被裁剪的场景。它是 headless/CLI 优化：当 DOM renderer 已挂载、列表没有占满终端整行或列表 rect 被裁剪时，会退回 viewport repaint；debug perf 模式会对这些被忽略的场景发出一次 warning。DOM renderer 当前不消费 terminal `scrollOperations`，所以 DOM 慢滚即使设置 `useRowScroll: true` 仍会重绘可见窗口。
 
 ### Events
 

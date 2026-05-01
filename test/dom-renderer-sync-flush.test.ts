@@ -275,7 +275,9 @@ describe("DomRenderer sync flush", () => {
       terminal.clear();
       terminal.commit({ sync: true });
 
-      expect(warn).toHaveBeenCalledWith("[vue-tui] large sync DOM flush: 40 rows");
+      expect(warn).toHaveBeenCalledWith(
+        "[vue-tui] large sync DOM flush deferred: rows=40 cols=4 planes=4 cells=640",
+      );
       expect(rowText(container, 39)).toContain("A");
       pending?.(0);
       expect(rowText(container, 39)).not.toContain("A");
@@ -285,6 +287,50 @@ describe("DomRenderer sync flush", () => {
     } finally {
       warn.mockRestore();
       (globalThis as any).__VT_DEBUG_PERF__ = previousDebugPerf;
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("sync flush budget accounts for active plane count", () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    try {
+      const terminal = createTerminal({ cols: 200, rows: 6 });
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const renderer = createDomRenderer(terminal, container);
+      callbacks.get(1)?.(0);
+      callbacks.clear();
+
+      for (let y = 0; y < 6; y++) terminal.fill(0, y, 200, 1, "A");
+      terminal.commit({ sync: true });
+
+      expect(rowText(container, 5)).not.toContain("A");
+      expect(callbacks.size).toBeGreaterThanOrEqual(1);
+      Array.from(callbacks.values())[0]?.(0);
+      callbacks.clear();
+      expect(rowText(container, 5)).toContain("A");
+
+      for (let y = 0; y < 6; y++) terminal.fill(0, y, 200, 1, "B");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(rowText(container, 5)).toContain("B");
+
+      renderer.dispose();
+      container.remove();
+    } finally {
       globalThis.requestAnimationFrame = previousRaf;
       globalThis.cancelAnimationFrame = previousCancel;
     }

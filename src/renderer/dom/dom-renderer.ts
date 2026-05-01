@@ -451,15 +451,24 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
 
   function recordLargeSyncFlush(scope: Readonly<FlushScope>): void {
     if (!(globalThis as any).__VT_DEBUG_PERF__) return;
-    const rowCount = scope.rows == null ? terminal.size().rows : scope.rows.length;
-    if (rowCount <= SYNC_FLUSH_WARN_ROWS) return;
-    console.warn(`[vue-tui] large sync DOM flush: ${rowCount} rows`);
+    const size = terminal.size();
+    const rowCount = scope.rows == null ? size.rows : scope.rows.length;
+    const planeCount = scope.planes.length || TERMINAL_RENDER_PLANES.length;
+    const cellWork = rowCount * size.cols * planeCount;
+    if (rowCount <= SYNC_FLUSH_WARN_ROWS && cellWork <= SYNC_FLUSH_CELL_BUDGET) return;
+    console.warn(
+      `[vue-tui] large sync DOM flush deferred: rows=${rowCount} cols=${size.cols} planes=${planeCount} cells=${cellWork}`,
+    );
   }
 
   function shouldSyncFlush(scope: Readonly<FlushScope>): boolean {
     const size = terminal.size();
     const rowCount = scope.rows == null ? size.rows : scope.rows.length;
-    return rowCount <= SYNC_FLUSH_WARN_ROWS && rowCount * size.cols <= SYNC_FLUSH_CELL_BUDGET;
+    const planeCount = scope.planes.length || TERMINAL_RENDER_PLANES.length;
+    return (
+      rowCount <= SYNC_FLUSH_WARN_ROWS &&
+      rowCount * size.cols * planeCount <= SYNC_FLUSH_CELL_BUDGET
+    );
   }
 
   function flushPending(scope?: Readonly<FlushScope>): void {
