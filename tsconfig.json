@@ -1,4 +1,12 @@
 {
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "lib": ["ES2022", "ES2022.Intl", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true
+  },
   "include": ["src", "test"],
   "exclude": ["examples", "dist", "node_modules"]
 }
