@@ -24,6 +24,32 @@ export type TerminalSchedulerInvalidateOptions = Readonly<{
   reason?: FramePerfReason;
 }>;
 
+export type TerminalFrameTaskPriority = "high" | "normal" | "low";
+
+export type TerminalFrameContext = Readonly<{
+  frameId: number;
+  startedAt: number;
+  now: () => number;
+  budgetMs: number;
+  remainingMs: () => number;
+  requestMore: () => void;
+  invalidate: (options?: TerminalSchedulerInvalidateOptions) => void;
+}>;
+
+export type TerminalFrameTask = Readonly<{
+  id?: string;
+  reason?: FramePerfReason;
+  priority?: TerminalFrameTaskPriority;
+  sync?: boolean;
+  run: (ctx: TerminalFrameContext) => void;
+}>;
+
+export type TerminalSchedulerConfig = Readonly<{
+  targetFps?: number;
+  maxFps?: number;
+  frameBudgetMs?: number;
+}>;
+
 export type TerminalScheduler = Readonly<{
   invalidate: (options?: TerminalSchedulerInvalidateOptions) => void;
   flush: () => void;
@@ -32,6 +58,11 @@ export type TerminalScheduler = Readonly<{
    * DOM row updates may still defer to rAF when they exceed the renderer sync budget.
    */
   flushNow: () => void;
+  configure: (options: TerminalSchedulerConfig) => void;
+  queueFrameTask: (task: TerminalFrameTask) => void;
+  requestLive: (reason: string) => () => void;
+  dropLive: (reason: string) => void;
+  isInsideFrame: () => boolean;
 }>;
 
 export type TerminalRuntimeHandle = Readonly<{

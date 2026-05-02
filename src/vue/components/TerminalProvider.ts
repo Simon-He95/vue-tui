@@ -10,6 +10,7 @@ import type {
   TerminalContext,
   TerminalRuntime,
   TerminalRuntimeHandle,
+  TerminalScheduler,
   TerminalSchedulerInvalidateOptions,
 } from "../context.js";
 import type { TInputPlugin } from "./input/plugins/types.js";
@@ -47,6 +48,11 @@ import {
 } from "../context.js";
 import { RenderStackKey } from "../render/context.js";
 import { createRenderManager } from "../render/render-manager.js";
+import {
+  EMPTY_FRAME_TASK_RUN_STATS,
+  type SchedulerFrameTaskRunStats,
+  createSchedulerFrameTasks,
+} from "../scheduler/frame-scheduler.js";
 import { clearTextCaches } from "../utils/text.js";
 import { defaultTInputHostPlugin } from "./input/plugins/hostPlugin.js";
 import { TRenderPlane } from "./TRenderPlane.js";
@@ -174,6 +180,7 @@ export const TerminalProvider = defineComponent({
     let timer: ReturnType<typeof setTimeout> | null = null;
     let holdNormalInvalidates = false;
     let holdReleaseToken = 0;
+    let pendingInvalidateDuringFrame = false;
     let pendingInvalidateAllPlanes = false;
     const pendingInvalidatePlanes = new Set<TerminalRenderPlane>();
     let frameId = 0;
@@ -185,6 +192,7 @@ export const TerminalProvider = defineComponent({
     const render = createRenderManager(terminal);
     const profiler = createTuiProfiler("dom-scheduler");
     const scope = effectScope();
+    let schedulerApi: TerminalScheduler;
 
     function queueInvalidatePlane(plane?: TerminalRenderPlane): void {
       if (!plane) {
@@ -209,12 +217,19 @@ export const TerminalProvider = defineComponent({
     }
 
     function queueDepth(): number {
-      return (raf ? 1 : 0) + (timer ? 1 : 0) + (pendingInvalidate ? 1 : 0);
+      return (
+        (raf ? 1 : 0) + (timer ? 1 : 0) + (pendingInvalidate ? 1 : 0) + frameScheduler.queueDepth()
+      );
     }
 
     function noteFrameReason(reason: TerminalSchedulerInvalidateOptions["reason"]): void {
       if (!reason || reason === "unknown") return;
       pendingFrameReason = mergeFramePerfReason(pendingFrameReason, reason);
+    }
+
+    function resetPendingFramePerfState(): void {
+      pendingFrameReason = "unknown";
+      pendingCoalescedInvalidates = 0;
     }
 
     function rendererFlushCount(): number {
@@ -227,22 +242,35 @@ export const TerminalProvider = defineComponent({
       return flush.last?.durationMs;
     }
 
-    function flush(sync = false): void {
+    const frameScheduler = createSchedulerFrameTasks({
+      isActive: () => !unmounting,
+      invalidate: (options) => schedulerApi.invalidate(options),
+      flushFrame: (stats) => {
+        if (!pendingInvalidateDuringFrame) return;
+        pendingInvalidateDuringFrame = false;
+        flush(stats.sync, stats);
+      },
+    });
+
+    function flush(
+      sync = false,
+      frameTasks: SchedulerFrameTaskRunStats = EMPTY_FRAME_TASK_RUN_STATS,
+    ): void {
       if (unmounting) return;
       const activePlanes = takeActivePlanes();
       if (!framePerf.enabled.value) {
         render.render({ activePlanes });
         terminal.commit({ planes: activePlanes, sync });
+        resetPendingFramePerfState();
         updateImePositionAfterFlush?.();
         return;
       }
 
       const startedAt = framePerfNow();
       const currentFrameId = ++frameId;
-      const reason = pendingFrameReason ?? "unknown";
+      const reason = mergeFramePerfReason(pendingFrameReason, frameTasks.reason);
       const coalescedInvalidates = pendingCoalescedInvalidates;
-      pendingFrameReason = "unknown";
-      pendingCoalescedInvalidates = 0;
+      resetPendingFramePerfState();
       const renderStartedAt = framePerfNow();
       const stats = render.render({ activePlanes });
       const renderManagerMs = framePerfNow() - renderStartedAt;
@@ -264,8 +292,15 @@ export const TerminalProvider = defineComponent({
         paintedNodes: stats?.paintedNodes ?? 0,
         rowBucketFallbacks: stats?.rowBucketFallbacks,
         coalescedInvalidates,
+        frameTaskCount: frameTasks.frameTaskCount,
+        coalescedFrameTasks: frameTasks.coalescedFrameTasks,
+        remainingFrameTasks: frameTasks.remainingFrameTasks,
         droppedUpdates: 0,
         queueDepth: queueDepth(),
+        liveReasons: (() => {
+          const reasons = frameScheduler.liveReasonList();
+          return reasons.length ? reasons : undefined;
+        })(),
       });
       updateImePositionAfterFlush?.();
     }
@@ -289,6 +324,7 @@ export const TerminalProvider = defineComponent({
 
     function flushNow(): void {
       if (unmounting) return;
+      if (frameScheduler.isInsideFrame()) return;
       pendingInvalidate = false;
       if (raf) {
         rafToken++;
@@ -296,9 +332,13 @@ export const TerminalProvider = defineComponent({
         raf = 0;
       }
       clearTimer();
+      frameScheduler.cancelScheduledFrame();
+      const frameTasks = frameScheduler.runPendingFrameTasks({ force: true });
+      pendingInvalidateDuringFrame = false;
       holdNormalInvalidates = true;
       scheduleNormalInvalidateRelease();
-      flush(true);
+      flush(true, frameTasks);
+      frameScheduler.scheduleIfNeeded(frameTasks.requestMore);
     }
 
     function invalidate(options?: TerminalSchedulerInvalidateOptions): void {
@@ -307,6 +347,11 @@ export const TerminalProvider = defineComponent({
       const priority = options?.priority ?? "normal";
       noteFrameReason(options?.reason);
       queueInvalidatePlane(options?.plane);
+      if (frameScheduler.isInsideFrame()) {
+        pendingInvalidateDuringFrame = true;
+        profiler?.recordInvalidate({ plane: options?.plane ?? null });
+        return;
+      }
       if (priority === "high") {
         profiler?.recordInvalidate({ plane: options?.plane ?? null });
         flushNow();
@@ -419,12 +464,23 @@ export const TerminalProvider = defineComponent({
       clipRect: { x: 0, y: 0, w: props.cols, h: props.rows },
     });
 
+    schedulerApi = {
+      invalidate,
+      flush,
+      flushNow,
+      configure: frameScheduler.configure,
+      queueFrameTask: frameScheduler.queueFrameTask,
+      requestLive: frameScheduler.requestLive,
+      dropLive: frameScheduler.dropLive,
+      isInsideFrame: frameScheduler.isInsideFrame,
+    };
+
     const ctx: TerminalContext = {
       terminal,
       renderer,
       rendererCapabilities,
       events,
-      scheduler: { invalidate, flush, flushNow },
+      scheduler: schedulerApi,
       runtime,
       observability: { trace, framePerf },
       defaultStyle: toRef(props, "defaultStyle"),
@@ -930,6 +986,7 @@ export const TerminalProvider = defineComponent({
       offCommit?.();
       clearTimer();
       holdReleaseToken++;
+      frameScheduler.cancelScheduledFrame();
       if (raf > 0) cancelAnimationFrame(raf);
       raf = 0;
       scope.stop();

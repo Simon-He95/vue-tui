@@ -27,6 +27,9 @@ describe("TDebugOverlay", () => {
           scannedNodes: 3,
           paintedNodes: 2,
           coalescedInvalidates: 4,
+          frameTaskCount: 1,
+          coalescedFrameTasks: 3,
+          remainingFrameTasks: 0,
           droppedUpdates: 0,
           queueDepth: 0,
         });
@@ -54,6 +57,8 @@ describe("TDebugOverlay", () => {
       expect(text).toContain("paintedNodes: 2");
       expect(text).toContain("domFlush: 1.2ms");
       expect(text).toContain("coalescedInvalidates: 4");
+      expect(text).toContain("frameTasks: 1");
+      expect(text).toContain("coalescedTasks: 3");
       expect(text).toContain("queueDepth: 0");
     } finally {
       app.dispose();
@@ -98,6 +103,9 @@ describe("TDebugOverlay", () => {
         scannedNodes: 1,
         paintedNodes: 1,
         coalescedInvalidates: 0,
+        frameTaskCount: 0,
+        coalescedFrameTasks: 0,
+        remainingFrameTasks: 0,
         droppedUpdates: 0,
         queueDepth: 0,
       });

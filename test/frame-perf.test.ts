@@ -27,6 +27,9 @@ function sample(frameId: number) {
     scannedNodes: 1,
     paintedNodes: 1,
     coalescedInvalidates: 0,
+    frameTaskCount: 0,
+    coalescedFrameTasks: 0,
+    remainingFrameTasks: 0,
     droppedUpdates: 0,
     queueDepth: 0,
   };
@@ -127,6 +130,38 @@ describe("frame perf sampling", () => {
       expect(latest!.renderManagerMs).toBeGreaterThanOrEqual(0);
       expect(latest!.commitMs).toBeGreaterThanOrEqual(0);
       expect(latest!.durationMs).toBeGreaterThanOrEqual(latest!.renderManagerMs);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not leak pending frame reason from disabled perf periods", async () => {
+    let framePerf: FramePerfStore | null = null;
+
+    const App = defineComponent({
+      name: "FramePerfDisabledReasonResetApp",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        return () => h(TText, { x: 0, y: 0, w: 10, value: "reason" });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App as any });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+
+      framePerf!.enabled.value = false;
+      app.scheduler.invalidate({ priority: "low", reason: "scroll", plane: "default" });
+      app.scheduler.flushNow();
+      expect(framePerf!.latest()).toBeNull();
+
+      framePerf!.enabled.value = true;
+      app.scheduler.invalidate({ priority: "high", reason: "data", plane: "default" });
+
+      expect(framePerf!.latest()?.reason).toBe("data");
     } finally {
       app.dispose();
     }
