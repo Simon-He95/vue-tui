@@ -16,6 +16,8 @@ describe("package exports", () => {
     const experimental = await import("../src/experimental.js");
 
     expect("TVirtualList" in root).toBe(false);
+    expect(root.createFramePerfStore).toBeTruthy();
+    expect(root.framePerfNow).toBeTruthy();
     expect(experimental.TVirtualList).toBeTruthy();
   });
 
@@ -35,7 +37,11 @@ describe("package exports", () => {
 
       expect("TVirtualList" in root).toBe(false);
       expect(root.TerminalProvider).toBeTruthy();
+      expect(root.createFramePerfStore).toBeTruthy();
+      expect(root.framePerfNow).toBeTruthy();
       expect(rootCjs.TerminalProvider).toBeTruthy();
+      expect(rootCjs.createFramePerfStore).toBeTruthy();
+      expect(rootCjs.framePerfNow).toBeTruthy();
       expect(experimental.TVirtualList).toBeTruthy();
       expect(experimentalCjs.TVirtualList).toBeTruthy();
     },

@@ -5,6 +5,8 @@ import type { Style, Terminal } from "../core/types.js";
 import type { EventManager, Rect } from "../events/index.js";
 import type { RendererCapabilities, TerminalRendererLike } from "../renderer/index.js";
 import type { TraceStore } from "../observability/trace.js";
+import type { FramePerfReason } from "../observability/frame-perf.js";
+import type { FramePerfStore } from "../observability/frame-perf-store.js";
 import type { TInputPlugin } from "./components/input/plugins/types.js";
 import type { RenderManager } from "./render/render-manager.js";
 
@@ -19,6 +21,7 @@ export type TerminalSchedulerPriority = "high" | "normal" | "low";
 export type TerminalSchedulerInvalidateOptions = Readonly<{
   priority?: TerminalSchedulerPriority;
   plane?: TerminalRenderPlane;
+  reason?: FramePerfReason;
 }>;
 
 export type TerminalScheduler = Readonly<{
@@ -60,6 +63,7 @@ export type TerminalContext = Readonly<{
   runtime: TerminalRuntime;
   observability: Readonly<{
     trace: TraceStore;
+    framePerf: FramePerfStore;
   }>;
   defaultStyle: Ref<Style>;
   render: RenderManager;

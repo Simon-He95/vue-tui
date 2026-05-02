@@ -2,6 +2,7 @@ import type { PropType } from "vue";
 import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
+import type { FramePerfReason } from "../../observability/frame-perf.js";
 import {
   computed,
   defineComponent,
@@ -120,7 +121,7 @@ export const TVirtualList = defineComponent({
     let warnedRenderItemIdentity = false;
     const wheelState = createWheelScrollState();
     const wheelFrame = createFrameCoalescer<number>((top) => {
-      applyScrollTop(top, "auto", { emitScroll: true, priority: "high" });
+      applyScrollTop(top, "auto", { emitScroll: true, priority: "high", reason: "scroll" });
     });
 
     const itemCount = computed(() => {
@@ -194,7 +195,11 @@ export const TVirtualList = defineComponent({
 
     function ensureActiveVisible(
       strategy: ScrollStrategy = "viewport-repaint",
-      options?: Readonly<{ emitScroll?: boolean; priority?: "low" | "normal" | "high" }>,
+      options?: Readonly<{
+        emitScroll?: boolean;
+        priority?: "low" | "normal" | "high";
+        reason?: FramePerfReason;
+      }>,
     ): boolean {
       const clip = normalizedRect();
       const full = normalizedFullRect();
@@ -297,8 +302,11 @@ export const TVirtualList = defineComponent({
       wheelFrame.request(nextTop);
     }
 
-    function invalidateSelf(priority: "low" | "normal" | "high" = "normal"): void {
-      scheduler.invalidate({ priority, plane: plane.value });
+    function invalidateSelf(
+      priority: "low" | "normal" | "high" = "normal",
+      reason?: FramePerfReason,
+    ): void {
+      scheduler.invalidate({ priority, plane: plane.value, reason });
     }
 
     function warnIgnoredRowScroll(reason: string): void {
@@ -325,7 +333,7 @@ export const TVirtualList = defineComponent({
       const scrolled = ensureActiveVisible("viewport-repaint");
       if (scrolled) emit("scroll", scrollTop.value);
       if (!scrolled || scrollTop.value === prevTop) markViewportDirty();
-      invalidateSelf("high");
+      invalidateSelf("high", "input");
     }
 
     function onKeydown(e: TerminalKeyboardEvent): void {
@@ -481,7 +489,11 @@ export const TVirtualList = defineComponent({
     function applyScrollTop(
       nextTop: number,
       strategy: ScrollStrategy = "auto",
-      options?: Readonly<{ emitScroll?: boolean; priority?: "low" | "normal" | "high" }>,
+      options?: Readonly<{
+        emitScroll?: boolean;
+        priority?: "low" | "normal" | "high";
+        reason?: FramePerfReason;
+      }>,
     ): boolean {
       const r = normalizedRect();
       const full = normalizedFullRect();
@@ -519,12 +531,12 @@ export const TVirtualList = defineComponent({
         render.unsafeScrollPlaneRows(plane.value, r.y, r.y + h, delta);
         markRowsDirty(exposedRowsForDelta(r.y, h, delta));
         if (options?.emitScroll) emit("scroll", scrollTop.value);
-        if (options?.priority) invalidateSelf(options.priority);
+        if (options?.priority) invalidateSelf(options.priority, options.reason ?? "scroll");
         return true;
       }
       markViewportDirty();
       if (options?.emitScroll) emit("scroll", scrollTop.value);
-      if (options?.priority) invalidateSelf(options.priority);
+      if (options?.priority) invalidateSelf(options.priority, options.reason ?? "scroll");
       return true;
     }
 

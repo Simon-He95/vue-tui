@@ -47,6 +47,7 @@ Vue TUI 的性能瓶颈通常来自三部分：
 
 - 关注 `dirtyRows`：是否明显偏大（接近全屏）
 - 关注 `planes`：一次很小的交互是否错误地带上了 `transcript + chrome + overlay`
+- 关注 FramePerf：`frameMs`、`renderManagerMs`、`commitMs`、`domFlushMs`、`scannedNodes` 和 `paintedNodes`
 - stdout 模式：是否频繁输出大量 `\u001B[row;colH` + 多行文本（说明 repaint 行多）
 - DOM 模式：是否每次交互都重建大量 span（说明 repaint 范围大或节点过多）
 - 开启 `DIMCODE_PROFILE_TUI=1` 后，重点看：
@@ -55,3 +56,21 @@ Vue TUI 的性能瓶颈通常来自三部分：
   - `avgNodes`
   - `maxMs`
   - `maxWriteMs`
+
+## Benchmark baseline
+
+Phase 2 baseline 使用：
+
+```bash
+pnpm run bench:phase2
+```
+
+脚本输出 JSON，覆盖：
+
+- 1000 render nodes / dirty 1 row
+- `TVirtualList` 10k / 100k rows spaced wheel 100 ticks
+- `TVirtualList` 10k / 100k rows burst wheel 100 ticks with manual rAF flush
+- DOM sync flush 1 / 5 / 20 / 40 dirty rows
+- append-only 1000 lines simulated path
+
+`bench:phase2` 使用 happy-dom synthetic baseline，适合做相同环境下的回归对比，不代表真实浏览器 FPS。

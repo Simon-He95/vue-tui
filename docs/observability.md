@@ -7,9 +7,10 @@
 - 某个局部更新意外带动了整轮 redraw
 - plane 本来应该隔离，却在同一帧里一起刷新了
 
-这个仓库现在提供 3 类轻量 observability 能力：
+这个仓库现在提供 4 类轻量 observability 能力：
 
 - **Frame trace**：按 commit 记录 `dirtyRows`、`planes` 和 `focusedId`
+- **FramePerf samples**：按 scheduler frame 记录 `frameMs`、`renderManagerMs`、`commitMs`、renderer flush 和 dirty row/node 统计
 - **TUI profiler**：按时间窗口统计 invalidates / renders / writes，并拆分 plane 维度
 - **Debug overlay**：可视化 focus ring 和 rect outlines
 
@@ -63,6 +64,27 @@ DIMCODE_PROFILE_TUI=1
 - `chrome` 更新时 `transcript` 是否仍被拉进了 render
 - stdout 最坏一次写出是否在变大
 
+## FramePerf
+
+`createFramePerfStore()` 使用 bounded ring buffer 保存最近 frame samples。默认不开启；设置 `globalThis.__VT_DEBUG_PERF__ = true` 或挂载 `TDebugOverlay` 后开始采样。
+
+每个 sample 包含：
+
+- `durationMs`
+- `renderManagerMs`
+- `commitMs`
+- `domFlushMs` / `stdoutFlushMs`
+- `dirtyRows`
+- `activePlanes`
+- `scannedNodes` / `paintedNodes`
+- `rowBucketFallbacks`
+- `coalescedInvalidates`
+- `queueDepth`
+
+Phase 2.0 里 `droppedUpdates` 保留为后续 scheduler backpressure 指标，当前恒为 `0`。`coalescedInvalidates` 只统计 scheduler invalidate coalescing，不包含组件本地 wheel/input coalescer。`domFlushMs` 只记录与本 scheduler frame 同调用栈完成的 DOM flush；普通 rAF-deferred DOM flush 会体现在 `renderer.debugStats.flush.last`，不会 retroactively 更新已经 push 的 frame sample。DOM renderer flush stats 里的 `planeRows` 是 flushed plane-row line elements，不是去重后的 terminal rows。
+
+这让高频输入、滚动和 streaming 输出可以用同一组指标比较，而不是只看体感。
+
 ## Debug Overlay
 
 `TDebugOverlay` 适合看：
@@ -70,11 +92,13 @@ DIMCODE_PROFILE_TUI=1
 - focus 现在落在哪个 node
 - 命中矩形是否偏移
 - 哪块区域的交互边界和视觉边界不一致
+- 最近一帧的 `frameMs`、dirty rows、RenderManager nodes 和 DOM flush 数据
 
 这类问题通常和性能问题一起出现，因为“错误的 rect”经常也意味着“错误的重绘范围”。
 
 ## 推荐排查顺序
 
 1. 先开 trace，看 `commit.planes` 是否符合预期
-2. 再开 profiler，看 `planes.invalidate` / `planes.render` 是否收敛
-3. 如果是点击、焦点、hover 这类问题，再用 `TDebugOverlay` 看 rect 和 focus
+2. 再看 FramePerf，确认瓶颈在 scheduler frame、RenderManager、commit 还是 renderer flush
+3. 再开 profiler，看 `planes.invalidate` / `planes.render` 是否收敛
+4. 如果是点击、焦点、hover 这类问题，再用 `TDebugOverlay` 看 rect 和 focus

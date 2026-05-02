@@ -1,6 +1,7 @@
 import type { PropType } from "vue";
+import type { FramePerfSample } from "../../observability/frame-perf.js";
 import type { Style } from "../../core/types.js";
-import { defineComponent, h } from "vue";
+import { defineComponent, h, onMounted, onUnmounted, shallowRef } from "vue";
 import { useTerminal } from "../composables/use-terminal.js";
 import { TBox } from "./TBox.js";
 import { TText } from "./TText.js";
@@ -15,8 +16,32 @@ export const TDebugOverlay = defineComponent({
     zIndex: { type: Number, default: 90 },
   },
   setup(props) {
-    const { terminal, events, observability } = useTerminal();
+    const { terminal, events, observability, scheduler } = useTerminal();
     const trace = observability.trace;
+    const framePerf = observability.framePerf;
+    const releasePerf = framePerf.acquire("debug-overlay");
+    const latestPerf = shallowRef<FramePerfSample | null>(framePerf.latest());
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    function refreshLatestPerf(): void {
+      const next = framePerf.latest();
+      if (!next) return;
+      if (next.reason === "manual") return;
+      if (latestPerf.value?.frameId === next.frameId) return;
+      latestPerf.value = next;
+      scheduler.invalidate({ priority: "low", reason: "manual" });
+    }
+
+    onMounted(() => {
+      refreshLatestPerf();
+      timer = setInterval(refreshLatestPerf, 250);
+    });
+
+    onUnmounted(() => {
+      releasePerf();
+      if (timer) clearInterval(timer);
+      timer = null;
+    });
 
     function boxStyle(kind: "panel" | "focus" | "rect"): Style {
       if (kind === "panel") return { fg: "whiteBright", bg: "black" };
@@ -41,16 +66,33 @@ export const TDebugOverlay = defineComponent({
         if (!props.panel) return "";
         const records = trace.records;
         const last = [...records].reverse().find((r) => r.type === "commit") as any;
+        const perf = latestPerf.value ?? framePerf.latest();
         const dirty = last
           ? last.dirtyRows === null
             ? "all"
             : String(last.dirtyRows?.length ?? 0)
           : "0";
-        return [
+        const lines = [
           `trace: ${trace.enabled.value ? "ON" : "OFF"}`,
           `focus: ${focused ?? "null"}`,
           last ? `last commit: dirtyRows=${dirty}` : "last commit: -",
-        ].join("\n");
+        ];
+        if (perf) {
+          lines.push(
+            `frame: ${perf.durationMs.toFixed(1)}ms`,
+            `reason: ${perf.reason}`,
+            `dirtyRows: ${perf.dirtyRows === null ? "all" : perf.dirtyRows}`,
+            `scannedNodes: ${perf.scannedNodes}`,
+            `paintedNodes: ${perf.paintedNodes}`,
+            `commit: ${perf.commitMs.toFixed(1)}ms`,
+            `domFlush: ${perf.domFlushMs == null ? "-" : `${perf.domFlushMs.toFixed(1)}ms`}`,
+            `coalescedInvalidates: ${perf.coalescedInvalidates}`,
+            `queueDepth: ${perf.queueDepth}`,
+          );
+        } else {
+          lines.push("frame: -");
+        }
+        return lines.join("\n");
       })();
 
       const children: any[] = [];
@@ -93,8 +135,8 @@ export const TDebugOverlay = defineComponent({
       }
 
       if (props.panel) {
-        const panelW = Math.min(cols, 34);
-        const panelH = Math.min(rows, 6);
+        const panelW = Math.min(cols, 42);
+        const panelH = rows >= 14 ? Math.min(rows, 14) : Math.min(rows, 6);
         children.push(
           h(
             TBox as any,

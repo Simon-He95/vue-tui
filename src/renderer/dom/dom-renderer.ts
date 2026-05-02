@@ -25,8 +25,22 @@ export type DomRendererSyncFlushStats = Readonly<{
   last: DomRendererSyncFlushDecision | null;
 }>;
 
+export type DomRendererFlushSample = Readonly<{
+  mode: "sync" | "deferred";
+  startedAt: number;
+  durationMs: number;
+  planeRows: number;
+  planes: number;
+}>;
+
+export type DomRendererFlushStats = Readonly<{
+  count: number;
+  last: DomRendererFlushSample | null;
+}>;
+
 export type DomRendererDebugStats = Readonly<{
   syncFlush: DomRendererSyncFlushStats;
+  flush: DomRendererFlushStats;
 }>;
 
 export interface DomRenderer {
@@ -275,6 +289,12 @@ function computeRowSegments(terminal: Terminal, y: number): RowSegment[] {
 // Cache for row content comparison - avoids unnecessary DOM updates
 const rowCache = new WeakMap<HTMLElement, string>();
 
+function nowMs(): number {
+  const p = (globalThis as any).performance;
+  if (p && typeof p.now === "function") return p.now();
+  return Date.now();
+}
+
 function segmentsToKey(segments: RowSegment[]): string {
   return segments.map((s) => `${s.key}:${s.text}:${s.cols}:${s.wide}`).join("|");
 }
@@ -381,6 +401,8 @@ export function createDomRenderer(
   let syncFlushPerformed = 0;
   let syncFlushDeferred = 0;
   let lastSyncFlushDecision: DomRendererSyncFlushDecision | null = null;
+  let domFlushCount = 0;
+  let lastDomFlush: DomRendererFlushSample | null = null;
   const debugStats: DomRendererDebugStats = {
     get syncFlush() {
       return {
@@ -388,6 +410,12 @@ export function createDomRenderer(
         performed: syncFlushPerformed,
         deferred: syncFlushDeferred,
         last: lastSyncFlushDecision,
+      };
+    },
+    get flush() {
+      return {
+        count: domFlushCount,
+        last: lastDomFlush,
       };
     },
   };
@@ -616,11 +644,13 @@ export function createDomRenderer(
 
   function flushPending(
     scope?: Readonly<FlushScope>,
-    options?: Readonly<{ clearRaf?: boolean }>,
+    options?: Readonly<{ clearRaf?: boolean; mode?: "sync" | "deferred" }>,
   ): void {
     if (options?.clearRaf !== false) raf = 0;
     if (disposed) return;
+    const startedAt = nowMs();
     const planesToFlush = scope?.planes ?? TERMINAL_RENDER_PLANES;
+    let flushedRows = 0;
 
     for (const plane of planesToFlush) {
       const layer = planeLayers.get(plane);
@@ -632,6 +662,7 @@ export function createDomRenderer(
         const line = layer.lines[y];
         if (line) renderRow(layer.terminal, metrics, wideScaleX, y, line);
         deletePendingRow(plane, rows, y);
+        flushedRows++;
       };
 
       if (scope?.rows == null) {
@@ -643,6 +674,17 @@ export function createDomRenderer(
       if (rows.size === 0) pending.delete(plane);
     }
 
+    if (flushedRows > 0) {
+      domFlushCount++;
+      lastDomFlush = {
+        mode: options?.mode ?? "deferred",
+        startedAt,
+        durationMs: nowMs() - startedAt,
+        planeRows: flushedRows,
+        planes: planesToFlush.length,
+      };
+    }
+
     if (pending.size > 0) scheduleRafIfNeeded();
   }
 
@@ -652,7 +694,7 @@ export function createDomRenderer(
     // `raf = requestAnimationFrame(...)` assignment trap (cb runs before the assignment).
     raf = -1;
     const id = requestAnimationFrame(() => {
-      flushPending();
+      flushPending(undefined, { mode: "deferred" });
     });
     if (raf === -1) raf = id;
   }
@@ -698,7 +740,7 @@ export function createDomRenderer(
         cancelAnimationFrame(raf);
         raf = 0;
       }
-      flushPending(scope, { clearRaf: drainedAll });
+      flushPending(scope, { clearRaf: drainedAll, mode: "sync" });
       if (!drainedAll) scheduleRafIfNeeded();
     } else if (!raf) {
       scheduleRafIfNeeded();
