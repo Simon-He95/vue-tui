@@ -31,6 +31,13 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
+function normalizeIndex(value: unknown, count: number): number {
+  const max = Math.max(0, count - 1);
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return 0;
+  return clamp(n, 0, max);
+}
+
 const activeStyleCache = new WeakMap<Style, Style>();
 
 function defaultActiveStyle(base: Style): Style {
@@ -204,7 +211,7 @@ export const TVirtualList = defineComponent({
     }
 
     function normalizedModelValue(): number {
-      return clamp(props.modelValue, 0, Math.max(0, itemCount.value - 1));
+      return normalizeIndex(props.modelValue, itemCount.value);
     }
 
     let initializedModel = false;

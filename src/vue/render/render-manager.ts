@@ -41,8 +41,10 @@ export type RenderManager = Readonly<{
   createStack: (parent: RenderStack, zIndex: number) => RenderStack;
   invalidatePlane: (plane: TerminalRenderPlane) => void;
   /**
-   * Shifts whole terminal rows for the target plane. Callers must ensure the active
-   * renderer consumes terminal scrollOperations; DOM rendering currently does not.
+   * Dangerous escape hatch: shifts whole terminal rows for the target plane, not a
+   * component-local region. Do not call in DOM mode unless the caller also repaints
+   * the whole affected viewport; DOM rendering currently does not consume terminal
+   * scrollOperations.
    */
   unsafeScrollPlaneRows: (
     plane: TerminalRenderPlane,

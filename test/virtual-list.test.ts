@@ -8,6 +8,7 @@ import {
   nextTick,
   ref,
   TBox,
+  TRenderPlane,
   TText,
   TView,
   TVirtualList,
@@ -626,6 +627,7 @@ describe("TVirtualList", () => {
     });
     const app = createTerminalApp({ cols: 12, rows: 8, component: App });
     app.mount();
+    await nextTick();
     app.scheduler.flushNow();
 
     app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 500, time: Date.now() });
@@ -678,6 +680,7 @@ describe("TVirtualList", () => {
     });
     const app = createTerminalApp({ cols: 12, rows: 8, component: App });
     app.mount();
+    await nextTick();
     app.scheduler.flushNow();
 
     app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: Date.now() });
@@ -1152,6 +1155,7 @@ describe("TVirtualList", () => {
     });
     const app = createTerminalApp({ cols: 12, rows: 8, component: App });
     app.mount();
+    await nextTick();
     app.scheduler.flushNow();
     const commits: Array<readonly number[] | null> = [];
     const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
@@ -1280,6 +1284,54 @@ describe("TVirtualList", () => {
 
     expect(app.terminal.getCell(0, 0).style.inverse).toBe(true);
     expect(app.terminal.getCell(0, 2).style.inverse).not.toBe(true);
+    app.dispose();
+  });
+
+  it("sanitizes invalid modelValue values", async () => {
+    const modelValue = ref<number>(Number.NaN);
+    const onChange = vi.fn();
+    const App = defineComponent({
+      name: "InvalidModelVirtualList",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 5,
+            itemVersion: 1,
+            getItem: (index: number) => `item-${index}`,
+            modelValue: modelValue.value,
+            autoFocus: true,
+            onChange,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+
+    expect(app.terminal.getCell(0, 0).style.inverse).toBe(true);
+
+    app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: Date.now() });
+    app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: Date.now() });
+    await nextTick();
+    expect(onChange).toHaveBeenLastCalledWith({ index: 1, value: "item-1" });
+
+    modelValue.value = Number.POSITIVE_INFINITY;
+    await nextTick();
+    app.scheduler.flushNow();
+    app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: Date.now() });
+    await nextTick();
+    expect(onChange).toHaveBeenLastCalledWith({ index: 0, value: "item-0" });
+
+    modelValue.value = Number.NEGATIVE_INFINITY;
+    await nextTick();
+    app.scheduler.flushNow();
+    app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: Date.now() });
+    await nextTick();
+    expect(onChange).toHaveBeenLastCalledWith({ index: 0, value: "item-0" });
     app.dispose();
   });
 
@@ -1536,6 +1588,58 @@ describe("TVirtualList", () => {
 
     expect(rowText({ terminal: app.terminal } as any, 0)).toContain("BADGE");
     expect(rowText({ terminal: app.terminal } as any, 1)).not.toContain("BADGE");
+    app.dispose();
+  });
+
+  it("keeps higher-plane overlay stable while default plane unsafe row-scrolls", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "VirtualListWithHigherPlaneOverlay",
+      setup() {
+        return () => [
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: items.length,
+            itemVersion: 1,
+            getItem: (index: number) => items[index],
+            autoFocus: true,
+            rowScrollMode: "unsafe-full-row",
+          }),
+          h(TRenderPlane, { plane: "overlay" }, () =>
+            h(TText, { x: 0, y: 1, w: 5, value: "BADGE" }),
+          ),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+    app.mount();
+    await nextTick();
+    app.scheduler.flushNow();
+    const commits: Array<{
+      dirtyRows: readonly number[] | null;
+      scrollOperations: unknown;
+    }> = [];
+    const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+      commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+    });
+
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(commits).toEqual([
+      {
+        dirtyRows: [0, 1, 3],
+        scrollOperations: [{ startY: 2, endY: 4, delta: 1 }],
+      },
+    ]);
+    expect(rowText({ terminal: app.terminal } as any, 1)).toMatch(/^BADGE/);
+    expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-1");
+    expect(rowText({ terminal: app.terminal } as any, 3)).toBe("item-4");
     app.dispose();
   });
 
