@@ -105,7 +105,7 @@ const {
   TText,
   useTerminal,
 } = await import("../src/index.js");
-const { TVirtualList } = await import("../src/experimental.js");
+const { createAppendOnlyLogStore, TLogView, TVirtualList } = await import("../src/experimental.js");
 const { createRenderManager } = await import("../src/vue/render/render-manager.js");
 
 function round(n: number): number {
@@ -124,6 +124,8 @@ function summarizeSamples(samples: any[]): Record<string, number> {
       avgScannedNodes: 0,
       avgPaintedNodes: 0,
       avgCoalescedInvalidates: 0,
+      avgFrameTaskCount: 0,
+      avgCoalescedFrameTasks: 0,
     };
   }
   const total = samples.reduce(
@@ -135,6 +137,8 @@ function summarizeSamples(samples: any[]): Record<string, number> {
       acc.scanned += sample.scannedNodes;
       acc.painted += sample.paintedNodes;
       acc.coalescedInvalidates += sample.coalescedInvalidates ?? 0;
+      acc.frameTasks += sample.frameTaskCount ?? 0;
+      acc.coalescedFrameTasks += sample.coalescedFrameTasks ?? 0;
       if (sample.durationMs > acc.maxFrame) acc.maxFrame = sample.durationMs;
       return acc;
     },
@@ -146,6 +150,8 @@ function summarizeSamples(samples: any[]): Record<string, number> {
       scanned: 0,
       painted: 0,
       coalescedInvalidates: 0,
+      frameTasks: 0,
+      coalescedFrameTasks: 0,
       maxFrame: 0,
     },
   );
@@ -159,6 +165,8 @@ function summarizeSamples(samples: any[]): Record<string, number> {
     avgScannedNodes: round(total.scanned / samples.length),
     avgPaintedNodes: round(total.painted / samples.length),
     avgCoalescedInvalidates: round(total.coalescedInvalidates / samples.length),
+    avgFrameTaskCount: round(total.frameTasks / samples.length),
+    avgCoalescedFrameTasks: round(total.coalescedFrameTasks / samples.length),
   };
 }
 
@@ -445,6 +453,150 @@ async function benchAppendOnly(): Promise<Record<string, unknown>> {
   }
 }
 
+async function benchDomTLogView(
+  mode: "stick-bottom" | "not-bottom" | "burst",
+): Promise<Record<string, unknown>> {
+  let framePerf: any = null;
+  let rendererRef: any = null;
+  let finalTop = 0;
+  let atBottom = true;
+  let lastFlushCount = 0;
+  let domFlushPlaneRows = 0;
+  let domFlushSamples = 0;
+  let getLineCalls = 0;
+  const appendCount = 1000;
+  const log = createAppendOnlyLogStore();
+  log.appendLines(Array.from({ length: 1000 }, (_, index) => `seed ${index}`));
+  const source = {
+    lineCount: () => log.source.lineCount(),
+    getLine(index: number) {
+      getLineCalls++;
+      return log.source.getLine(index);
+    },
+  };
+  const root = document.createElement("div");
+  document.body.appendChild(root);
+  let raf = installCountingSyncRaf();
+
+  const Probe = defineComponent({
+    name: `BenchDomTLogView${mode}`,
+    setup() {
+      const ctx = useTerminal();
+      framePerf = ctx.observability.framePerf;
+      rendererRef = ctx.renderer;
+      framePerf.enabled.value = true;
+      return () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 80,
+          h: 20,
+          source,
+          version: log.version.value,
+          autoFocus: true,
+          rowScrollMode: "unsafe-full-row",
+          onScroll: (payload: { scrollTop: number; atBottom: boolean }) => {
+            finalTop = payload.scrollTop;
+            atBottom = payload.atBottom;
+          },
+        });
+    },
+  });
+
+  const app = createApp({
+    name: "BenchDomTLogViewRoot",
+    render() {
+      return h(TerminalProvider, { cols: 80, rows: 24 }, { default: () => h(Probe) });
+    },
+  });
+
+  function collectDomFlush(): void {
+    const flush = rendererRef?.value?.debugStats?.flush;
+    if (!flush || flush.count === lastFlushCount || !flush.last) return;
+    lastFlushCount = flush.count;
+    domFlushPlaneRows += flush.last.planeRows;
+    domFlushSamples++;
+  }
+
+  try {
+    app.mount(root);
+    await nextTick();
+    collectDomFlush();
+
+    const container = root.querySelector("[data-vt-container]") as HTMLElement | null;
+    if (!container) throw new Error("DOM terminal container not mounted");
+
+    if (mode === "not-bottom") {
+      const wheel = new Event("wheel", { bubbles: true, cancelable: true }) as any;
+      Object.defineProperties(wheel, {
+        clientX: { value: 0 },
+        clientY: { value: 0 },
+        deltaY: { value: -300 },
+        deltaMode: { value: 0 },
+      });
+      container.dispatchEvent(wheel);
+      await nextTick();
+      collectDomFlush();
+    }
+
+    if (mode === "burst") {
+      raf.restore();
+      raf = installManualRaf();
+    }
+
+    framePerf.clear();
+    getLineCalls = 0;
+    lastFlushCount = rendererRef?.value?.debugStats?.flush.count ?? 0;
+    domFlushPlaneRows = 0;
+    domFlushSamples = 0;
+
+    const startedAt = now();
+    for (let i = 0; i < appendCount; i++) {
+      log.appendLine(`${mode} ${i}`);
+      if (mode === "burst") {
+        await nextTick();
+      } else {
+        await nextTick();
+        collectDomFlush();
+      }
+    }
+    const pendingRafFramesBeforeFlush = raf.pendingRafFrames();
+    const flushedRafCallbacks = mode === "burst" ? raf.flushOneFrame() : 0;
+    if (mode === "burst") {
+      await nextTick();
+      collectDomFlush();
+    }
+    const durationMs = now() - startedAt;
+    const samples = framePerf.list();
+
+    return {
+      name: `tlog-view-1000-lines-${mode}`,
+      appendCount,
+      scheduledRafFrames: raf.scheduledRafFrames(),
+      pendingRafFramesBeforeFlush,
+      flushedRafCallbacks,
+      durationMs: round(durationMs),
+      avgDomFlushPlaneRows: round(domFlushPlaneRows / Math.max(1, domFlushSamples)),
+      coalescedFrameTasks: samples.reduce(
+        (acc: number, sample: any) => acc + (sample.coalescedFrameTasks ?? 0),
+        0,
+      ),
+      frameTaskCount: samples.reduce(
+        (acc: number, sample: any) => acc + (sample.frameTaskCount ?? 0),
+        0,
+      ),
+      finalTop,
+      atBottom,
+      getLineCalls,
+      ...summarizeSamples(samples),
+    };
+  } finally {
+    app.unmount();
+    root.remove();
+    raf.restore();
+  }
+}
+
 async function main(): Promise<void> {
   const scenarios = [
     await benchRenderManagerDirtyRow(),
@@ -456,6 +608,9 @@ async function main(): Promise<void> {
     await benchDomVirtualList(100_000, "unsafe-full-row"),
     ...[1, 5, 20, 40].map((rows) => benchDomSyncFlush(rows)),
     await benchAppendOnly(),
+    await benchDomTLogView("stick-bottom"),
+    await benchDomTLogView("not-bottom"),
+    await benchDomTLogView("burst"),
   ];
 
   // eslint-disable-next-line no-console

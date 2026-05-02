@@ -14,7 +14,7 @@
 | Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane` | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
 | Text / Motion | `TText` `TTransition`                                          | 文本渲染、状态切换、动画插值                    | 通用                                               |
 | Input         | `TInput` `TInputBox` `TJsonEditor`                             | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
-| Pickers       | `TList` `TVirtualList` `TSelect` `TPathPicker`                 | palette、列表、路径选择                         | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Pickers       | `TList` `TVirtualList` `TLogView` `TSelect` `TPathPicker`      | palette、列表、日志、路径选择                   | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
 | Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                    | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
 | Navigation    | `TRouterView` + `createTerminalRouter()`                       | 多页面 TUI / shell                              | 通用                                               |
 
@@ -293,7 +293,7 @@ const app = createTerminalApp({
 
 可滚动列表（单选）：支持点击/双击、键盘导航、滚轮滚动，`v-model` 维护选中 index。
 
-`TList` 适合小数据选择器。大数据选择/浏览场景请使用 `TVirtualList`，日志、streaming transcript、append-only output 场景应使用后续专用日志组件，避免把大数组直接传进 Vue deep reactivity。
+`TList` 适合小数据选择器。大数据选择/浏览场景请使用 `TVirtualList`，日志、streaming transcript、append-only output 场景请使用 experimental `TLogView`，避免把大数组直接传进 Vue deep reactivity。
 
 ### Props
 
@@ -312,7 +312,7 @@ const app = createTerminalApp({
 
 ## TVirtualList
 
-大数据选择/浏览列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。它不是完整日志/streaming 组件；当前没有 bottom stickiness、append chunk 增量解析或 scroll anchor API。
+大数据选择/浏览列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。它不是日志/streaming 组件；append-only 输出请使用 `TLogView`。
 
 > Phase 1 experimental API：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。API 仍可能在 scheduler frame task、controlled scrollTop、overscan、TLogView 等后续能力落地前调整。
 
@@ -357,6 +357,61 @@ const renderItem = (item: Row) => item.title;
 
 - `change`: `{ index, value }`
 - `scroll`: `scrollTop`（number）
+- `focus` / `blur` / `keydown`
+
+## TLogView
+
+Append-only / streaming 日志视图：从 `source` / `version` 数据源读取可见窗口，不接收大数组，也不把日志内容放进 Vue deep reactivity。
+
+> Experimental API：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。第一版只支持 fixed one-line rows；wrap、ANSI、高亮和 variable-height rows 是后续能力。
+
+### Props
+
+- `x`/`y`/`w`/`h` `(number, required)`
+- `source` `(TLogDataSource, required)`：只提供 `lineCount()` 和 `getLine(index)`
+- `version` `(number, required)`：数据变化版本号；template 里 `Ref<number>` 会自动 unwrap
+- `style` `(Style?)`
+- `autoFocus` `(boolean)`
+- `autoStickToBottom` `(boolean)`：在底部时 append 自动贴底，默认 `true`
+- `overscan` `(number)`：预留给后续 wrap/highlight，当前 fixed-row paint 不依赖它
+- `rowScrollMode` `("off" | "unsafe-full-row")`：full-row append 的 opt-in unsafe row-scroll 优化，默认 `"off"`
+
+### Data source
+
+```ts
+import { createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
+
+const log = createAppendOnlyLogStore();
+
+log.appendChunk("hello");
+log.appendChunk(" world\nnext line");
+```
+
+```vue
+<TLogView :source="log.source" :version="log.version" :x="0" :y="0" :w="80" :h="20" />
+```
+
+`createAppendOnlyLogStore()` 使用普通 `string[]` 和单独的 `version` ref。不要把日志行做成 reactive array，也不要每次 append 都重建全文字符串。
+
+`createAppendOnlyLogStore()` 保存 completed lines 和一个 mutable tail。`appendChunk()` 会追加到 tail，并按 `\n` 拆出 completed lines；`appendLine()` 如果存在 tail，会先完成 `tail + line`，否则追加一条 completed line；`replaceTail()` 只替换 mutable tail，不会修改最后一条 completed line。
+
+`appendLine()` / `appendLines()` 期望调用方传入单行文本；需要处理包含 newline 的 streaming 输入时，请使用 `appendChunk()`。
+
+`TLogView` 假设数据源是 append-only 或 tail-only mutation。任意可见历史行会变化的 source 不适合只靠 `version` 驱动这个组件；这类浏览/选择场景应使用 `TVirtualList`，或者等后续显式 viewport refresh API。
+
+当前 `TLogView` 只支持 fixed one-line rows。超出宽度的行会被 clip，不会 wrap。
+
+### Scroll behavior
+
+- `appendLine` / `appendChunk` / `replaceTail` 通过 `scheduler.queueFrameTask()` 合并为 stream frame。
+- `TLogView` 每次 paint 只调用当前 visible rows 的 `source.getLine()`。
+- 初始 mount 默认显示当前底部；`autoStickToBottom=false` 只影响后续 append 是否继续贴底，不改变初始定位。
+- 用户在底部时 append 会贴底；用户滚离底部后 append 不改变当前 `scrollTop`，也不会 repaint 当前 viewport。
+- `rowScrollMode="unsafe-full-row"` 只有在组件占满整行、未被裁剪、renderer 支持 `scrollOperations` 时才会用 exposed-row repaint；其它情况回退到 viewport repaint。
+
+### Events
+
+- `scroll`: `{ scrollTop, atBottom, lineCount }`
 - `focus` / `blur` / `keydown`
 
 ## TSelect

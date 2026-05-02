@@ -221,38 +221,52 @@ wheel 行为：
 
 ### 5. `TLogView` streaming path
 
-实现位置：新增 `src/vue/components/TLogView.ts`，必要时先以内部实验组件落地。
+实现位置：`src/vue/components/TLogView.ts`、`src/vue/log/append-only-log-store.ts`。
+`TLogView` 当前通过 `@simon_he/vue-tui/experimental` 暴露，暂不进入 root export。
 
 数据接口：
 
 ```ts
-interface LogDataSource {
+interface TLogDataSource {
   lineCount(): number;
-  version(): number;
   getLine(index: number): string;
 }
 ```
 
-组件 API：
+append-only store：
 
 ```ts
-appendLine(line: string): void;
-appendChunk(chunk: string): void;
-replaceTail(text: string): void;
+const log = createAppendOnlyLogStore();
+
+log.appendLine("ready");
+log.appendChunk("hello");
+log.appendChunk(" world\nnext line");
+log.replaceTail("next line...");
+```
+
+组件 API：
+
+```vue
+<TLogView :source="log.source" :version="log.version" />
 ```
 
 策略：
 
+- `appendLine` / `appendLines` / `appendChunk` / `replaceTail` 只更新普通 store 和 `version` ref，不把日志数组放进 Vue deep reactivity。
 - chunk append 不重建全文字符串。
-- 每帧 drain pending chunks，受 `frameBudgetMs` 限制。
-- wrap、ANSI parse、highlight 只对 visible + overscan 范围执行。
-- 用户在底部时 stick-to-bottom；离开底部后新内容不抢 scrollTop。
+- `TLogView` paint 只读取 visible window；当前 fixed one-line rows 不做 wrap、ANSI parse 或 highlight。
+- `version` 不进入 render deps；source 变化通过 scheduler frame task 以 `reason: "stream"` 合并。
+- 用户在底部时 stick-to-bottom；离开底部后 append 不抢 scrollTop，也不 repaint 当前 viewport。
+- `TLogView` 假设 source 只做 append-only 或 tail-only mutation，不支持任意可见历史行变化的 repaint 语义。
+- full-row 且 `rowScrollMode="unsafe-full-row"` 时，单行 append 可以使用 `unsafeScrollPlaneRows()` + exposed dirty rows；非 full-row、clipped 或 renderer 不支持 `scrollOperations` 时回退 viewport repaint。
 
 验收测试：
 
-- append chunk 只 dirty tail rows。
+- `getLine()` 调用量随 viewport 高度增长，不随总行数增长。
+- append at bottom 在 full-row unsafe 场景只 dirty exposed rows。
 - 用户离开底部后 append 不改变当前 visible top。
-- 每帧处理预算耗尽时保留 pending backlog，并用 low priority 继续调度。
+- clear/shrink 会 clamp scrollTop 并 repaint viewport。
+- stream frame 在 FramePerf 中记录 `reason: "stream"`、`frameTaskCount` 和 coalescing 数据。
 
 ### 6. Style interning
 
@@ -340,6 +354,7 @@ type FramePerf = {
 | Row bucket degradation threshold (50%/60%)                          | ✅ done      |
 | `TVirtualList.rowScrollMode` opt-in for unsafe row-scroll fast path | ✅ done      |
 | Scheduler-owned frame tasks / live mode                             | ✅ Phase 2.1 |
+| Experimental `TLogView` append-only streaming path                  | ✅ Phase 2.2 |
 | `TList` wheel 行为修改（不再同步更新 active/modelValue）            | 🔲 planned   |
 | Debug overlay 展示 `scannedNodes/paintedNodes/dirtyRows/frameMs`    | ✅ Phase 2.0 |
 
@@ -358,8 +373,8 @@ pnpm run lint
 目标是让大数据追加和 streaming 输出可控。
 
 1. scheduler 增加 `queueFrameTask/requestLive/dropLive/configure/isInsideFrame`，`TVirtualList` wheel 已迁移到 scheduler frame task。
-2. 新增 stream coalescer，按 `frameBudgetMs` drain。
-3. 新增 `TLogView`，只对 tail rows 和 visible window 做增量处理。
+2. 新增 `TLogView` append-only store + visible-window streaming path。
+3. 后续 stream coalescer 再按 `frameBudgetMs` drain 更复杂输入。
 4. 文本 wrap/width cache 拆到 line-level。
 5. 补 benchmark 脚本：10k/100k rows 滚动、500 lines/s log append。
 

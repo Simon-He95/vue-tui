@@ -74,6 +74,51 @@ function formatTextCell(text: string | null): string {
   return escapeTableText(text);
 }
 
+function markdownCellWidth(text: string): number {
+  let width = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    width +=
+      cp >= 0x1100 &&
+      (cp <= 0x115f ||
+        cp === 0x2329 ||
+        cp === 0x232a ||
+        (cp >= 0x2e80 && cp <= 0xa4cf && cp !== 0x303f) ||
+        (cp >= 0xac00 && cp <= 0xd7a3) ||
+        (cp >= 0xf900 && cp <= 0xfaff) ||
+        (cp >= 0xfe10 && cp <= 0xfe19) ||
+        (cp >= 0xfe30 && cp <= 0xfe6f) ||
+        (cp >= 0xff00 && cp <= 0xff60) ||
+        (cp >= 0xffe0 && cp <= 0xffe6))
+        ? 2
+        : 1;
+  }
+  return width;
+}
+
+function padMarkdownCell(text: string, width: number): string {
+  return `${text}${" ".repeat(Math.max(0, width - markdownCellWidth(text)))}`;
+}
+
+function renderTable(headers: readonly string[], rows: readonly (readonly string[])[]): string[] {
+  const widths = headers.map((header, index) =>
+    Math.max(
+      3,
+      markdownCellWidth(header),
+      ...rows.map((row) => markdownCellWidth(row[index] ?? "")),
+    ),
+  );
+  const out: string[] = [];
+  out.push(
+    `| ${headers.map((cell, index) => padMarkdownCell(cell, widths[index]!)).join(" | ")} |`,
+  );
+  out.push(`| ${widths.map((width) => "-".repeat(width)).join(" | ")} |`);
+  for (const row of rows) {
+    out.push(`| ${row.map((cell, index) => padMarkdownCell(cell, widths[index]!)).join(" | ")} |`);
+  }
+  return out;
+}
+
 function isPropTypeRef(typeNode: ts.TypeNode): typeNode is ts.TypeReferenceNode {
   if (!ts.isTypeReferenceNode(typeNode)) return false;
   const name = typeNode.typeName;
@@ -424,7 +469,7 @@ function renderMarkdown(components: ComponentMeta[]): string {
     lines.push("");
     lines.push(`源码：\`${c.sourceRelPath}\``);
     lines.push("");
-    if (c.name === "TVirtualList") {
+    if (c.name === "TVirtualList" || c.name === "TLogView") {
       lines.push("> Experimental import: `@simon_he/vue-tui/experimental`");
       lines.push("");
     }
@@ -435,17 +480,18 @@ function renderMarkdown(components: ComponentMeta[]): string {
       lines.push("—");
       lines.push("");
     } else {
-      lines.push("| 名称 | 类型 | 默认值 | 必填 | 说明 |");
-      lines.push("| --- | --- | --- | --- | --- |");
-      for (const p of c.props) {
-        lines.push(
-          `| ${formatMaybeCode(p.name)} | ${formatMaybeCode(
-            p.type,
-          )} | ${formatMaybeCode(p.defaultValue)} | ${p.required ? "是" : "否"} | ${formatTextCell(
-            p.description,
-          )} |`,
-        );
-      }
+      lines.push(
+        ...renderTable(
+          ["名称", "类型", "默认值", "必填", "说明"],
+          c.props.map((p) => [
+            formatMaybeCode(p.name),
+            formatMaybeCode(p.type),
+            formatMaybeCode(p.defaultValue),
+            p.required ? "是" : "否",
+            formatTextCell(p.description),
+          ]),
+        ),
+      );
       lines.push("");
     }
 
@@ -455,19 +501,21 @@ function renderMarkdown(components: ComponentMeta[]): string {
       lines.push("—");
       lines.push("");
     } else {
-      lines.push("| 名称 | Payload | 说明 |");
-      lines.push("| --- | --- | --- |");
-      for (const e of c.events) {
-        lines.push(
-          `| ${formatMaybeCode(e.name)} | ${formatMaybeCode(
-            e.payload,
-          )} | ${formatTextCell(e.description)} |`,
-        );
-      }
+      lines.push(
+        ...renderTable(
+          ["名称", "Payload", "说明"],
+          c.events.map((e) => [
+            formatMaybeCode(e.name),
+            formatMaybeCode(e.payload),
+            formatTextCell(e.description),
+          ]),
+        ),
+      );
       lines.push("");
     }
   }
 
+  while (lines.at(-1) === "") lines.pop();
   return `${lines.join("\n")}\n`;
 }
 

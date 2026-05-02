@@ -48,7 +48,9 @@ DOM renderer 的 `scrollOperations` 是输出层优化：terminal/compositor 先
 - 对于会频繁变化的文本：尽量把变化限制在小 rect 内（例如固定输入框区域）。
 - 避免在一个 tick 内创建/销毁大量节点（频繁 `v-if` / 动态 key 重建）。
 - 长列表用“视口”思路渲染（只渲染可见行），避免一次性生成上千 `TText`。
+- append-only / streaming 日志用 experimental `TLogView` + `createAppendOnlyLogStore()`，不要把大数组传进组件，也不要每次 chunk 都重建全文字符串。
 - `TVirtualList rowScrollMode="unsafe-full-row"` 只用于 unclipped full-row 且独占 plane rows 的场景；DOM renderer 会只 repaint exposed dirty rows，pending rows 或不安全条件会回退到 viewport repaint。
+- `TLogView` 用户离底后 append 不会抢 `scrollTop`；如果需要实时 tail，按 End 回到底部后会恢复 stick-to-bottom。
 - `style`/`highlightStyle` 这类对象尽量复用（避免每次都创建新对象导致 watchEffect 触发）。
 
 ## 如何排查
@@ -80,5 +82,6 @@ pnpm run bench:phase2
 - `TVirtualList` 10k / 100k rows burst wheel 100 ticks through scheduler frame-task coalescing
 - DOM sync flush 1 / 5 / 20 / 40 dirty rows
 - append-only 1000 lines simulated path
+- `TLogView` append 1000 lines at bottom / while detached from bottom / burst append
 
 `bench:phase2` 使用 happy-dom synthetic baseline，适合做相同环境下的回归对比，不代表真实浏览器 FPS。
