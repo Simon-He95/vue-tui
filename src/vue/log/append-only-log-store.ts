@@ -1,31 +1,48 @@
 import type { AppendOnlyLogStore } from "./types.js";
 import { ref } from "vue";
 
+type StoredLine = {
+  id: number;
+  text: string;
+};
+
 export function createAppendOnlyLogStore(): AppendOnlyLogStore {
-  const lines: string[] = [];
+  const lines: StoredLine[] = [];
   const version = ref(0);
   let tail = "";
+  let tailVersion = 0;
+  let nextLineId = 0;
 
   function bump(): void {
     version.value++;
+  }
+
+  function pushLine(text: string): void {
+    lines.push({ id: nextLineId++, text });
   }
 
   return {
     source: {
       lineCount: () => lines.length + (tail ? 1 : 0),
       getLine(index) {
-        if (index < lines.length) return lines[index] ?? "";
+        if (index < lines.length) return lines[index]?.text ?? "";
         if (index === lines.length) return tail;
         return "";
+      },
+      getLineKey(index) {
+        if (index < lines.length) return lines[index]?.id ?? `missing:${index}`;
+        if (index === lines.length && tail) return `tail:${tailVersion}`;
+        return `empty:${index}`;
       },
     },
     version,
     appendLine(line) {
       if (tail) {
-        lines.push(tail + line);
+        pushLine(tail + line);
         tail = "";
+        tailVersion++;
       } else {
-        lines.push(line);
+        pushLine(line);
       }
       bump();
     },
@@ -33,11 +50,12 @@ export function createAppendOnlyLogStore(): AppendOnlyLogStore {
       if (nextLines.length === 0) return;
       let start = 0;
       if (tail) {
-        lines.push(tail + (nextLines[0] ?? ""));
+        pushLine(tail + (nextLines[0] ?? ""));
         tail = "";
+        tailVersion++;
         start = 1;
       }
-      for (let i = start; i < nextLines.length; i++) lines.push(nextLines[i] ?? "");
+      for (let i = start; i < nextLines.length; i++) pushLine(nextLines[i] ?? "");
       bump();
     },
     appendChunk(chunk) {
@@ -45,18 +63,21 @@ export function createAppendOnlyLogStore(): AppendOnlyLogStore {
       const parts = chunk.replace(/\r/g, "").split("\n");
       tail += parts[0] ?? "";
       for (let i = 1; i < parts.length; i++) {
-        lines.push(tail);
+        pushLine(tail);
         tail = parts[i] ?? "";
       }
+      tailVersion++;
       bump();
     },
     replaceTail(text) {
       tail = text.replace(/[\r\n]/g, "");
+      tailVersion++;
       bump();
     },
     clear() {
       lines.length = 0;
       tail = "";
+      tailVersion++;
       bump();
     },
   };
