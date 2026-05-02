@@ -304,6 +304,49 @@ describe("TLogView", () => {
     }
   });
 
+  it("supports center and end alignment in scrollToLine", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewScrollToLineAlignApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 5,
+            source,
+            version: 1,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      logView.value!.scrollToLine(50, { align: "center" });
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 2)).toBe("line-50");
+
+      logView.value!.scrollToLine(60, { align: "end" });
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 4)).toBe("line-60");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("exposes scrollToLine for the first visual row of a wrapped logical line", async () => {
     const source: TLogDataSource = {
       lineCount: () => 12,
@@ -427,6 +470,164 @@ describe("TLogView", () => {
       app.scheduler.flushNow();
 
       expect(rowText(app, 3)).toBe("line-100");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keeps controlled bottom stickiness when parent ignores a user scroll request", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 100 }, (_, index) => `line-${index}`));
+    const controlledTop = ref(96);
+    const onUpdateScrollTop = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewControlledIgnoredScrollStickApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            scrollTop: controlledTop.value,
+            autoFocus: true,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 3)).toBe("line-99");
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: Date.now() });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onUpdateScrollTop).toHaveBeenCalledWith(95);
+      expect(rowText(app, 3)).toBe("line-99");
+
+      onUpdateScrollTop.mockClear();
+      log.appendLine("line-100");
+      await nextTick();
+      await nextTick();
+
+      expect(onUpdateScrollTop).toHaveBeenCalledWith(97);
+      expect(rowText(app, 3)).toBe("line-99");
+
+      controlledTop.value = 97;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 3)).toBe("line-100");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("detaches controlled bottom stickiness after parent accepts a user scroll request", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 100 }, (_, index) => `line-${index}`));
+    const controlledTop = ref(96);
+    const onUpdateScrollTop = vi.fn((next: number) => {
+      controlledTop.value = next;
+    });
+
+    const App = defineComponent({
+      name: "TLogViewControlledAcceptedScrollDetachApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            scrollTop: controlledTop.value,
+            autoFocus: true,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: Date.now() });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onUpdateScrollTop).toHaveBeenCalledWith(95);
+      expect(rowText(app, 0)).toBe("line-95");
+
+      onUpdateScrollTop.mockClear();
+      log.appendLine("line-100");
+      await nextTick();
+      await nextTick();
+
+      expect(onUpdateScrollTop).not.toHaveBeenCalledWith(97);
+      expect(rowText(app, 3)).toBe("line-98");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("emits controlled imperative scroll requests without rendering until parent applies them", async () => {
+    const controlledTop = ref(10);
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+    const onUpdateScrollTop = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewControlledImperativeScrollApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            scrollTop: controlledTop.value,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("line-10");
+
+      logView.value!.scrollToVisualRow(20);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onUpdateScrollTop).toHaveBeenCalledWith(20);
+      expect(rowText(app, 0)).toBe("line-10");
+
+      controlledTop.value = 20;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("line-20");
     } finally {
       app.dispose();
     }

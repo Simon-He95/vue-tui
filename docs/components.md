@@ -426,6 +426,7 @@ type TLogDataSource = {
 - 非受控模式：省略 `scrollTop`，`TLogView` 内部维护滚动位置；`defaultScrollTop` 只在初始 mount 使用一次，省略时初始显示底部。
 - 受控模式：传入 `scrollTop` 并监听 `update:scrollTop`。`TLogView` 会 emit 期望的 next `scrollTop`，但不会在父组件回写 prop 前改变渲染出来的 rows。
 - 受控模式下 `scrollTop` 是 source of truth；`autoStickToBottom` 只会在贴底 append 时 emit 新底部位置，不会绕过父组件直接改变视图。
+- 建议不要在同一个 `TLogView` 生命周期中切换 controlled/uncontrolled 模式；需要切换时重新挂载组件或显式管理 `scrollTop`。
 - `appendLine` / `appendChunk` / `replaceTail` 通过 `scheduler.queueFrameTask()` 合并为 stream frame。
 - `TLogView` 每次 paint 只读取当前 visible rows；命中 line-level render cache 的行不会再次调用 `source.getLine()`。
 - `wrap=true` 初始底部和 append-only streaming 路径只测量 bottom/visible window 加 overscan，不会为了计算 wrap 结果全量读取大日志。

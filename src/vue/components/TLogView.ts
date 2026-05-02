@@ -658,9 +658,11 @@ export const TLogView = defineComponent({
         return false;
       }
       const uncontrolled = !isScrollControlled();
-      if (uncontrolled) innerScrollTop.value = clampedTop;
+      if (uncontrolled) {
+        innerScrollTop.value = clampedTop;
+        stickToBottom.value = options?.stickToBottom ?? isAtBottom(clampedTop);
+      }
       if (options?.emitUpdate !== false) emit("update:scrollTop", clampedTop);
-      stickToBottom.value = options?.stickToBottom ?? isAtBottom(clampedTop);
 
       if (!uncontrolled) {
         markViewportDirty();
