@@ -656,24 +656,10 @@ export function createDomRenderer(
     addPendingRowRange(plane, startY, endY);
   }
 
-  function applyScrollOperationToLayer(
-    plane: TerminalRenderPlane,
-    layer: PlaneLayer,
-    op: TerminalScrollOperation,
-  ): readonly number[] {
+  function applyScrollOperationToLayer(layer: PlaneLayer, op: TerminalScrollOperation): void {
     const { startY, endY } = scrollOperationRange(op);
     const delta = Math.trunc(op.delta);
     const height = endY - startY;
-
-    if (height <= 0 || delta === 0 || Math.abs(delta) >= height) {
-      invalidateAndRepaintScrollRange(plane, layer, startY, endY);
-      return height > 0 ? Array.from({ length: height }, (_, i) => startY + i) : [];
-    }
-
-    if (hasPendingRowsInRange(plane, startY, endY)) {
-      invalidateAndRepaintScrollRange(plane, layer, startY, endY);
-      return Array.from({ length: height }, (_, i) => startY + i);
-    }
 
     const region = layer.lines.slice(startY, endY);
     const nextRegion =
@@ -689,36 +675,57 @@ export function createDomRenderer(
     }
 
     reorderLayerDomRows(layer, startY, endY);
-    return [];
+  }
+
+  function canApplyScrollOperations(
+    planes: readonly TerminalRenderPlane[],
+    operations: readonly TerminalScrollOperation[] | null | undefined,
+  ): boolean {
+    if (!capabilities.scrollOperations || planes.length !== 1 || !operations?.length) return false;
+    const plane = planes[0]!;
+    const layer = planeLayers.get(plane);
+    if (!layer) return false;
+
+    for (const op of operations) {
+      const { startY, endY } = scrollOperationRange(op);
+      const delta = Math.trunc(op.delta);
+      const height = endY - startY;
+      if (height <= 0 || delta === 0 || Math.abs(delta) >= height) return false;
+      if (hasPendingRowsInRange(plane, startY, endY)) return false;
+    }
+
+    return true;
   }
 
   function applyScrollOperations(
+    planes: readonly TerminalRenderPlane[],
+    operations: readonly TerminalScrollOperation[] | null | undefined,
+  ): void {
+    if (!operations?.length) return;
+    for (const plane of planes) {
+      const layer = planeLayers.get(plane);
+      if (!layer) continue;
+      for (const op of operations) applyScrollOperationToLayer(layer, op);
+    }
+  }
+
+  function markScrollOperationRangesPending(
     planes: readonly TerminalRenderPlane[],
     operations: readonly TerminalScrollOperation[] | null | undefined,
   ): readonly number[] {
     if (!operations?.length) return [];
     const fallbackRows = new Set<number>();
 
-    if (!capabilities.scrollOperations || planes.length !== 1) {
-      for (const plane of planes) {
-        const layer = planeLayers.get(plane);
-        if (!layer) continue;
-        for (const op of operations) {
-          const { startY, endY } = scrollOperationRange(op);
-          invalidateAndRepaintScrollRange(plane, layer, startY, endY);
-          addFallbackRows(fallbackRows, startY, endY);
-        }
-      }
-      return Array.from(fallbackRows).sort((a, b) => a - b);
-    }
-
     for (const plane of planes) {
       const layer = planeLayers.get(plane);
       if (!layer) continue;
       for (const op of operations) {
-        for (const y of applyScrollOperationToLayer(plane, layer, op)) fallbackRows.add(y);
+        const { startY, endY } = scrollOperationRange(op);
+        invalidateAndRepaintScrollRange(plane, layer, startY, endY);
+        addFallbackRows(fallbackRows, startY, endY);
       }
     }
+
     return Array.from(fallbackRows).sort((a, b) => a - b);
   }
 
@@ -844,11 +851,23 @@ export function createDomRenderer(
 
   const offCommit = terminal.on("commit", ({ dirtyRows, planes, sync, scrollOperations }) => {
     const activePlanes = planes?.length ? planes : TERMINAL_RENDER_PLANES;
-    const fallbackRows = applyScrollOperations(activePlanes, scrollOperations);
+    const dirtyCommitRows = dirtyRows === null ? null : [...dirtyRows];
+    const initialSyncWork = estimateSyncFlushWork({
+      planes: activePlanes,
+      rows: dirtyCommitRows,
+    });
+    const shouldApplyScrollOperations =
+      Boolean(sync) &&
+      shouldSyncFlush(initialSyncWork) &&
+      canApplyScrollOperations(activePlanes, scrollOperations);
+    const fallbackRows = shouldApplyScrollOperations
+      ? []
+      : markScrollOperationRangesPending(activePlanes, scrollOperations);
+    if (shouldApplyScrollOperations) applyScrollOperations(activePlanes, scrollOperations);
 
     // Track which rows this specific commit adds to pending, so scoped sync
     // flush can limit DOM work to just the high-priority update.
-    const commitRows = unionRows(dirtyRows === null ? null : [...dirtyRows], fallbackRows);
+    const commitRows = unionRows(dirtyCommitRows, fallbackRows);
 
     if (dirtyRows === null) {
       const size = terminal.size();
