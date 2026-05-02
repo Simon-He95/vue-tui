@@ -447,6 +447,46 @@ describe("ui regressions", () => {
     mounted.unmount();
   });
 
+  it("useRenderNode preserves previous rect when rect option is omitted on update", async () => {
+    const version = ref(0);
+    const omitRect = ref(false);
+    const paints: string[] = [];
+
+    const Node = defineComponent({
+      name: "OmittedRectDirtyRowsHintNode",
+      setup() {
+        useRenderNode(() => {
+          const options: any = {
+            deps: version.value,
+            dirtyRowsHint: version.value > 0 ? [2] : undefined,
+            paint: (rows?: readonly number[]) => {
+              paints.push((rows ?? []).join(","));
+            },
+          };
+          if (!omitRect.value) options.rect = { x: 0, y: 2, w: 4, h: 1 };
+          return options;
+        });
+        return () => null;
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(Node));
+
+    await nextTick();
+    await Promise.resolve();
+    paints.length = 0;
+
+    omitRect.value = true;
+    version.value++;
+    await nextTick();
+    await Promise.resolve();
+    await nextTick();
+    await Promise.resolve();
+
+    expect(paints).toEqual(["2"]);
+    mounted.unmount();
+  });
+
   it("useRenderNode ignores dirtyRowsHint when rect changes during the same render", async () => {
     const dirtyRowsHint = ref<readonly number[] | null>(null);
     const row = ref(0);

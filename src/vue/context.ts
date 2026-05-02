@@ -24,6 +24,10 @@ export type TerminalSchedulerInvalidateOptions = Readonly<{
 export type TerminalScheduler = Readonly<{
   invalidate: (options?: TerminalSchedulerInvalidateOptions) => void;
   flush: () => void;
+  /**
+   * Flushes render-manager work and requests a sync terminal commit immediately.
+   * DOM row updates may still defer to rAF when they exceed the renderer sync budget.
+   */
   flushNow: () => void;
 }>;
 

@@ -35,6 +35,22 @@ describe("DomRenderer sync flush", () => {
 
       expect(rafCalls).toBe(0);
       expect(container.textContent).toContain("A");
+      expect(renderer.capabilities).toEqual({
+        syncFlush: true,
+        scrollOperations: false,
+        domRows: true,
+      });
+      expect(renderer.debugStats.syncFlush).toMatchObject({
+        requested: 1,
+        performed: 1,
+        deferred: 0,
+      });
+      expect(renderer.debugStats.syncFlush.last).toMatchObject({
+        performed: true,
+        rows: 1,
+        planes: 4,
+        cells: 16,
+      });
 
       renderer.dispose();
       container.remove();
@@ -506,6 +522,20 @@ describe("DomRenderer sync flush", () => {
       terminal.commit({ sync: true });
 
       expect(rowText(container, 1)).not.toContain("A");
+      expect(renderer.debugStats.syncFlush).toMatchObject({
+        requested: 1,
+        performed: 0,
+        deferred: 1,
+      });
+      expect(renderer.debugStats.syncFlush.last).toMatchObject({
+        performed: false,
+        deferredReason: "budget",
+        rows: 2,
+        planes: 4,
+        cells: 32,
+        maxRows: 1,
+        maxCells: 16,
+      });
       expect(callbacks.size).toBeGreaterThanOrEqual(1);
       Array.from(callbacks.values())[0]?.(0);
       expect(rowText(container, 1)).toContain("A");

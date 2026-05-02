@@ -11,6 +11,10 @@ export interface RenderNodeOptions {
   zIndex?: number;
   stack?: RenderStack;
   rect?: RenderRect | null;
+  /**
+   * One-shot absolute terminal rows for row-local content changes only.
+   * Omit this when geometry, z-order, style, data identity, or paint semantics changed.
+   */
   dirtyRowsHint?: readonly number[];
   priority?: TerminalSchedulerPriority;
   deps?: unknown;
@@ -102,14 +106,15 @@ export function useRenderNode(getOptions: () => RenderNodeOptions): {
       return;
     }
     const prevPlane = lastPlane.value;
-    render.update(id.value, {
+    const updatePayload: Parameters<typeof render.update>[1] = {
       stack,
       zIndex: opt.zIndex ?? 0,
-      rect: opt.rect ?? null,
       dirtyRowsHint: opt.dirtyRowsHint,
       plane: nextPlane,
       paint: opt.paint,
-    });
+    };
+    if (Object.prototype.hasOwnProperty.call(opt, "rect")) updatePayload.rect = opt.rect ?? null;
+    render.update(id.value, updatePayload);
     lastPlane.value = nextPlane;
     const priority = opt.priority ?? "normal";
     requestBatchedInvalidate(scheduler, prevPlane, priority);

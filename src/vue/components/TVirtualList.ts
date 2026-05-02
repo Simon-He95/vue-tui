@@ -106,7 +106,7 @@ export const TVirtualList = defineComponent({
     // Reactive deps and rect changes repaint through useRenderNode normally.
     let dirtyRowsHint: readonly number[] | undefined;
     let renderNodeId: string | null = null;
-    let warnedIgnoredRowScroll = false;
+    const warnedIgnoredRowScrollReasons = new Set<string>();
     let warnedEnabledRowScroll = false;
     let warnedGetItemIdentity = false;
     let warnedRenderItemIdentity = false;
@@ -294,8 +294,9 @@ export const TVirtualList = defineComponent({
     }
 
     function warnIgnoredRowScroll(reason: string): void {
-      if (warnedIgnoredRowScroll || !(globalThis as any).__VT_DEBUG_PERF__) return;
-      warnedIgnoredRowScroll = true;
+      if (warnedIgnoredRowScrollReasons.has(reason) || !(globalThis as any).__VT_DEBUG_PERF__)
+        return;
+      warnedIgnoredRowScrollReasons.add(reason);
       console.warn(`[vue-tui] TVirtualList.rowScrollMode="unsafe-full-row" ignored: ${reason}`);
     }
 
@@ -475,21 +476,20 @@ export const TVirtualList = defineComponent({
       const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= size.cols;
       const withinTerminalRows = r.y >= 0 && r.y + h <= size.rows;
       const wantsUnsafeRowScroll = props.rowScrollMode === "unsafe-full-row";
+      const supportsScrollOperations = renderer.value?.capabilities?.scrollOperations ?? true;
       if (strategy === "auto" && wantsUnsafeRowScroll) {
-        if (renderer.value) warnIgnoredRowScroll("DOM renderer does not support row scroll");
+        if (!supportsScrollOperations)
+          warnIgnoredRowScroll("renderer does not support scroll operations");
         else if (!ownsFullRows) warnIgnoredRowScroll("list does not own full terminal rows");
         else if (isClipped()) warnIgnoredRowScroll("list rect is clipped");
         else if (!withinTerminalRows) warnIgnoredRowScroll("list rows are outside terminal bounds");
       }
-      // DomRenderer currently repaints dirty rows but does not shift line DOM
-      // nodes from terminal scrollOperations, so keep row-scroll fast path to
-      // headless/CLI full-row lists until DOM scroll operation support lands.
-      // Also requires unsafe opt-in so consumers explicitly acknowledge plane
-      // row-shift semantics.
+      // Row-scroll requires a renderer that consumes terminal scrollOperations.
+      // It also requires unsafe opt-in so consumers acknowledge plane row-shift semantics.
       const canUseScrollPlane =
         strategy === "auto" &&
         wantsUnsafeRowScroll &&
-        !renderer.value &&
+        supportsScrollOperations &&
         ownsFullRows &&
         withinTerminalRows &&
         !isClipped() &&

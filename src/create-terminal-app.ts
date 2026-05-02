@@ -83,6 +83,10 @@ export type TerminalApp = Readonly<{
   scheduler: {
     invalidate: (options?: TerminalSchedulerInvalidateOptions) => void;
     flush: () => void;
+    /**
+     * Flushes render-manager work and requests a sync terminal commit immediately.
+     * Renderer backends may still defer expensive output work to their frame budget.
+     */
     flushNow: () => void;
   };
   defaultStyle: Ref<Style>;

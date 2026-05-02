@@ -80,7 +80,11 @@ export { getStdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export type {
   CellMetrics,
   DomRenderer,
+  DomRendererDebugStats,
   DomRendererOptions,
+  DomRendererSyncFlushDecision,
+  DomRendererSyncFlushStats,
+  RendererCapabilities,
   StdoutRenderer,
 } from "./renderer/index.js";
 export { createDomRenderer, createStdoutRenderer } from "./renderer/index.js";

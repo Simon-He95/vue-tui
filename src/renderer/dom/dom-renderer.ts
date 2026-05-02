@@ -6,8 +6,37 @@ import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
 
 export type CellMetrics = Readonly<{ cellWidth: number; cellHeight: number }>;
 
+export type RendererCapabilities = Readonly<{
+  syncFlush: boolean;
+  scrollOperations: boolean;
+  domRows: boolean;
+}>;
+
+export type DomRendererSyncFlushDecision = Readonly<{
+  performed: boolean;
+  deferredReason?: "budget";
+  rows: number;
+  planes: number;
+  cells: number;
+  maxRows: number;
+  maxCells: number;
+}>;
+
+export type DomRendererSyncFlushStats = Readonly<{
+  requested: number;
+  performed: number;
+  deferred: number;
+  last: DomRendererSyncFlushDecision | null;
+}>;
+
+export type DomRendererDebugStats = Readonly<{
+  syncFlush: DomRendererSyncFlushStats;
+}>;
+
 export interface DomRenderer {
   readonly container: HTMLElement;
+  readonly capabilities: RendererCapabilities;
+  readonly debugStats: DomRendererDebugStats;
   readonly metrics: CellMetrics;
   dispose: () => void;
   refresh: () => void;
@@ -19,7 +48,14 @@ export interface DomRenderer {
 }
 
 export interface DomRendererOptions {
+  /**
+   * Maximum dirty row count allowed for same-call DOM flush when commit({ sync: true }).
+   * Larger updates are rAF-batched to avoid blocking the main thread.
+   */
   syncFlushMaxRows?: number;
+  /**
+   * Maximum estimated cell work for sync DOM flush: dirtyRows * cols * activePlanes.
+   */
   syncFlushCellBudget?: number;
 }
 
@@ -344,6 +380,25 @@ export function createDomRenderer(
     0,
     Math.floor(options.syncFlushCellBudget ?? DEFAULT_SYNC_FLUSH_CELL_BUDGET),
   );
+  const capabilities: RendererCapabilities = Object.freeze({
+    syncFlush: true,
+    scrollOperations: false,
+    domRows: true,
+  });
+  let syncFlushRequested = 0;
+  let syncFlushPerformed = 0;
+  let syncFlushDeferred = 0;
+  let lastSyncFlushDecision: DomRendererSyncFlushDecision | null = null;
+  const debugStats: DomRendererDebugStats = {
+    get syncFlush() {
+      return {
+        requested: syncFlushRequested,
+        performed: syncFlushPerformed,
+        deferred: syncFlushDeferred,
+        last: lastSyncFlushDecision,
+      };
+    },
+  };
 
   function applyPlaneOffset(plane: TerminalRenderPlane, offsetPx: number): void {
     const layer = planeLayers.get(plane);
@@ -468,6 +523,12 @@ export function createDomRenderer(
     rows: readonly number[] | null;
   }
 
+  type SyncFlushWork = Readonly<{
+    rowCount: number;
+    planeCount: number;
+    cellWork: number;
+  }>;
+
   const pendingRowCountsByPlane = new Map<TerminalRenderPlane, number>();
   let pendingTotalRowCount = 0;
   let lastSyncFlushWarnAt = 0;
@@ -498,26 +559,47 @@ export function createDomRenderer(
     else pendingRowCountsByPlane.delete(plane);
   }
 
-  function recordLargeSyncFlush(scope: Readonly<FlushScope>): void {
-    if (!(globalThis as any).__VT_DEBUG_PERF__) return;
+  function estimateSyncFlushWork(scope: Readonly<FlushScope>): SyncFlushWork {
     const size = terminal.size();
     const rowCount = scope.rows == null ? size.rows : scope.rows.length;
     const planeCount = scope.planes.length || TERMINAL_RENDER_PLANES.length;
     const cellWork = rowCount * size.cols * planeCount;
-    if (rowCount <= syncFlushMaxRows && cellWork <= syncFlushCellBudget) return;
+    return { rowCount, planeCount, cellWork };
+  }
+
+  function recordSyncFlushDecision(
+    work: SyncFlushWork,
+    performed: boolean,
+    deferredReason?: "budget",
+  ): void {
+    syncFlushRequested++;
+    if (performed) syncFlushPerformed++;
+    else syncFlushDeferred++;
+    lastSyncFlushDecision = {
+      performed,
+      deferredReason,
+      rows: work.rowCount,
+      planes: work.planeCount,
+      cells: work.cellWork,
+      maxRows: syncFlushMaxRows,
+      maxCells: syncFlushCellBudget,
+    };
+  }
+
+  function recordLargeSyncFlush(work: SyncFlushWork): void {
+    if (!(globalThis as any).__VT_DEBUG_PERF__) return;
+    if (work.rowCount <= syncFlushMaxRows && work.cellWork <= syncFlushCellBudget) return;
+    const size = terminal.size();
     const now = Date.now();
     if (now - lastSyncFlushWarnAt < 1_000) return;
     lastSyncFlushWarnAt = now;
     console.warn(
-      `[vue-tui] sync DOM flush request deferred to rAF: rows=${rowCount} maxRows=${syncFlushMaxRows} cols=${size.cols} planes=${planeCount} cells=${cellWork} maxCells=${syncFlushCellBudget}`,
+      `[vue-tui] sync DOM flush request deferred to rAF: rows=${work.rowCount} maxRows=${syncFlushMaxRows} cols=${size.cols} planes=${work.planeCount} cells=${work.cellWork} maxCells=${syncFlushCellBudget}`,
     );
   }
 
-  function shouldSyncFlush(scope: Readonly<FlushScope>): boolean {
-    const size = terminal.size();
-    const rowCount = scope.rows == null ? size.rows : scope.rows.length;
-    const planeCount = scope.planes.length || TERMINAL_RENDER_PLANES.length;
-    return rowCount <= syncFlushMaxRows && rowCount * size.cols * planeCount <= syncFlushCellBudget;
+  function shouldSyncFlush(work: SyncFlushWork): boolean {
+    return work.rowCount <= syncFlushMaxRows && work.cellWork <= syncFlushCellBudget;
   }
 
   function scopeWillDrainAllPending(scope: Readonly<FlushScope>): boolean {
@@ -611,11 +693,14 @@ export function createDomRenderer(
     }
     if (sync) {
       const scope = { planes: activePlanes, rows: commitRows };
-      recordLargeSyncFlush(scope);
-      if (!shouldSyncFlush(scope)) {
+      const syncWork = estimateSyncFlushWork(scope);
+      recordLargeSyncFlush(syncWork);
+      if (!shouldSyncFlush(syncWork)) {
+        recordSyncFlushDecision(syncWork, false, "budget");
         scheduleRafIfNeeded();
         return;
       }
+      recordSyncFlushDecision(syncWork, true);
       const drainedAll = scopeWillDrainAllPending(scope);
       if (raf > 0 && drainedAll) {
         cancelAnimationFrame(raf);
@@ -638,6 +723,8 @@ export function createDomRenderer(
 
   return {
     container,
+    capabilities,
+    debugStats,
     get metrics() {
       return metrics;
     },
