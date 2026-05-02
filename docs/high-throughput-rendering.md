@@ -376,18 +376,18 @@ pnpm run typecheck
 
 ## 测试矩阵
 
-| 场景                          | 断言                                               | 文件                                            |
-| ----------------------------- | -------------------------------------------------- | ----------------------------------------------- |
-| dirty 一行但 plane 有大量节点 | `scannedNodes` 低于 plane 总节点数，paint 顺序不变 | `test/render-manager.test.ts`                   |
-| node rect 跨行更新            | 旧行和新行 bucket 都正确更新                       | `test/render-manager.test.ts`                   |
-| wheel 慢滚一行                | `dirtyRows` 等于 exposed row                       | 新增 `test/virtual-list.test.ts`                |
-| wheel 连续输入                | 多个 wheel event 合成一次 frame update             | 新增 `test/virtual-list.test.ts`                |
-| wheel 不改 selection          | 不触发 `update:modelValue`                         | 新增 `test/virtual-list.test.ts`                |
-| DOM sync commit               | `commit({ sync: true })` 不排第二个 rAF            | 新增 `test/dom-renderer.test.ts`                |
-| high priority invalidate      | 仍同 tick flush                                    | `test/scheduler-priority.test.ts`               |
-| live mode 引用计数            | 全部 drop 后停止 loop                              | `test/scheduler-priority.test.ts`               |
-| stream append                 | 只 dirty tail rows，离底部不 auto-scroll           | 新增 `test/tlog-view.test.ts`                   |
-| debug stats                   | overlay 展示 `scannedNodes/paintedNodes/dirtyRows` | `test/perf-budgets.test.ts` 或新增 overlay test |
+| 场景                                 | 断言                                                  | 文件                                            |
+| ------------------------------------ | ----------------------------------------------------- | ----------------------------------------------- |
+| dirty 一行但 plane 有大量节点        | `scannedNodes` 低于 plane 总节点数，paint 顺序不变    | `test/render-manager.test.ts`                   |
+| node rect 跨行更新                   | 旧行和新行 bucket 都正确更新                          | `test/render-manager.test.ts`                   |
+| headless/CLI full-row wheel 慢滚一行 | `dirtyRows` 等于 exposed row；DOM 仍 repaint viewport | 新增 `test/virtual-list.test.ts`                |
+| wheel 连续输入                       | 多个 wheel event 合成一次 frame update                | 新增 `test/virtual-list.test.ts`                |
+| wheel 不改 selection                 | 不触发 `update:modelValue`                            | 新增 `test/virtual-list.test.ts`                |
+| DOM sync commit                      | `commit({ sync: true })` 不排第二个 rAF               | 新增 `test/dom-renderer.test.ts`                |
+| high priority invalidate             | 仍同 tick flush                                       | `test/scheduler-priority.test.ts`               |
+| live mode 引用计数                   | 全部 drop 后停止 loop                                 | `test/scheduler-priority.test.ts`               |
+| stream append                        | 只 dirty tail rows，离底部不 auto-scroll              | 新增 `test/tlog-view.test.ts`                   |
+| debug stats                          | overlay 展示 `scannedNodes/paintedNodes/dirtyRows`    | `test/perf-budgets.test.ts` 或新增 overlay test |
 
 ## 文档要求
 

@@ -431,6 +431,7 @@ export function createCliEventManager(
       altKey: record.altKey,
       metaKey: record.metaKey,
       deltaY: record.type === "wheel" ? record.deltaY : undefined,
+      deltaMode: record.type === "wheel" ? record.deltaMode : undefined,
     });
   }
 

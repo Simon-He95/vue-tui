@@ -61,7 +61,7 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
     deltaY !== 0 &&
     Math.abs(deltaY) >= 100 &&
     Math.abs(deltaY) % 100 === 0 &&
-    (deltaMode == null || deltaMode === 0)
+    deltaMode == null
   ) {
     return { deltaY: deltaY / 100, mode: "line" };
   }
@@ -401,7 +401,17 @@ export const TVirtualList = defineComponent({
               : typeof e.timeStamp === "number"
                 ? e.timeStamp
                 : Date.now();
-          const { nextTop, dir } = applyWheelScroll(wheelState, deltaY, baseTop, maxTop, now, mode);
+          const { nextTop, dir } = applyWheelScroll(
+            wheelState,
+            deltaY,
+            baseTop,
+            maxTop,
+            now,
+            mode,
+            {
+              disableAcceleration: mode === "pixel",
+            },
+          );
           if (!dir || nextTop === baseTop) return;
 
           e.preventDefault?.();

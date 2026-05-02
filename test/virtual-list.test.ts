@@ -23,6 +23,27 @@ function dispatchWheel(container: HTMLElement): void {
   container.dispatchEvent(wheel);
 }
 
+function dispatchDomWheel(
+  container: HTMLElement,
+  init: Readonly<{ deltaY: number; deltaMode: number }>,
+): void {
+  const wheel = new WheelEvent("wheel", {
+    bubbles: true,
+    cancelable: true,
+    clientX: 0,
+    clientY: 0,
+    deltaY: init.deltaY,
+    deltaMode: init.deltaMode,
+  }) as any;
+  Object.defineProperties(wheel, {
+    clientX: { value: 0 },
+    clientY: { value: 0 },
+    deltaY: { value: init.deltaY },
+    deltaMode: { value: init.deltaMode },
+  });
+  container.dispatchEvent(wheel);
+}
+
 function rowText(mounted: Awaited<ReturnType<typeof mountTerminal>>, y: number): string {
   return mounted.terminal
     .getRow(y)
@@ -112,6 +133,86 @@ describe("TVirtualList", () => {
       "item-3",
       "item-4",
     ]);
+    mounted.unmount();
+  });
+
+  it("normalizes DOM pixel wheel deltas without large jumps", async () => {
+    const items = Array.from({ length: 40 }, (_, index) => `item-${index}`);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          itemCount: items.length,
+          itemVersion: 1,
+          getItem: (index: number) => items[index],
+          autoFocus: true,
+        }),
+      20,
+      8,
+    );
+
+    dispatchDomWheel(mounted.container()!, { deltaY: 10, deltaMode: 0 });
+    await nextTick();
+    await nextTick();
+
+    expect(rowText(mounted, 0)).toBe("item-0");
+    mounted.unmount();
+  });
+
+  it("accumulates fractional trackpad pixel deltas without large jumps", async () => {
+    const items = Array.from({ length: 40 }, (_, index) => `item-${index}`);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          itemCount: items.length,
+          itemVersion: 1,
+          getItem: (index: number) => items[index],
+          autoFocus: true,
+        }),
+      20,
+      8,
+    );
+
+    for (let i = 0; i < 40; i++)
+      dispatchDomWheel(mounted.container()!, { deltaY: 0.5, deltaMode: 0 });
+    await nextTick();
+    await nextTick();
+
+    expect(rowText(mounted, 0)).toBe("item-1");
+    expect(rowText(mounted, 1)).toBe("item-2");
+    mounted.unmount();
+  });
+
+  it("keeps DOM line-mode wheel at one row per logical tick", async () => {
+    const items = Array.from({ length: 40 }, (_, index) => `item-${index}`);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          itemCount: items.length,
+          itemVersion: 1,
+          getItem: (index: number) => items[index],
+          autoFocus: true,
+        }),
+      20,
+      8,
+    );
+
+    dispatchDomWheel(mounted.container()!, { deltaY: 1, deltaMode: 1 });
+    await nextTick();
+    await nextTick();
+
+    expect(rowText(mounted, 0)).toBe("item-1");
     mounted.unmount();
   });
 
