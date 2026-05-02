@@ -12,7 +12,7 @@ export type TerminalRendererLike = Readonly<{
 
 export const DOM_RENDERER_CAPABILITIES: RendererCapabilities = Object.freeze({
   syncFlush: true,
-  scrollOperations: false,
+  scrollOperations: true,
   domRows: true,
 });
 

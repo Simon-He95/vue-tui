@@ -37,7 +37,7 @@ describe("DomRenderer sync flush", () => {
       expect(container.textContent).toContain("A");
       expect(renderer.capabilities).toEqual({
         syncFlush: true,
-        scrollOperations: false,
+        scrollOperations: true,
         domRows: true,
       });
       expect(renderer.debugStats.syncFlush).toMatchObject({

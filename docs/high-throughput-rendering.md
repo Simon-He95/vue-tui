@@ -199,10 +199,10 @@ wheel 行为：
 - wheel 不 emit `update:modelValue`。
 - `scroll` event 每 frame 最多 emit 一次。
 - 小 delta 且 `abs(delta) < viewportHeight` 时，**仅当 `rowScrollMode: "unsafe-full-row"`**、当前 renderer capability 明确支持 `scrollOperations`、且 ownsFullRows 时使用 `render.unsafeScrollPlaneRows(plane, y, y + h, delta)`，只 dirty exposed rows。
-- 不满足 `rowScrollMode` 条件或 DOM 环境下，wheel 直接 repaint viewport。
+- 不满足 `rowScrollMode` 条件、DOM renderer 关闭 `enableScrollOperations`、list 非 full-row 或被 clip 时，wheel 直接 repaint viewport。
 - PageUp/PageDown/Home/End 或大跳转直接 repaint viewport。
 
-> **`rowScrollMode` 语义**：`unsafeScrollPlaneRows()` 会 shift 该 plane 的完整 row region，只适合 TVirtualList 独占这些 rows 的 CLI/headless 场景；如果同一 plane 上还有其它内容覆盖这些 rows，请保持默认 `rowScrollMode: "off"`（repaint viewport）。调用 `render.unsafeScrollPlaneRows()` 前也必须确认当前 renderer 会消费 terminal `scrollOperations`；DOM renderer 在 Phase 1 不支持该能力。
+> **`rowScrollMode` 语义**：`unsafeScrollPlaneRows()` 会 shift 该 plane 的完整 row region，只适合 TVirtualList 独占这些 rows 的 full-row 场景；如果同一 plane 上还有其它内容覆盖这些 rows，请保持默认 `rowScrollMode: "off"`（repaint viewport）。调用 `render.unsafeScrollPlaneRows()` 前也必须确认当前 renderer 会消费 terminal `scrollOperations`；DOM renderer 会通过移动 line nodes 消费该 hint，但这仍然不是组件内部的局部 rect scroll。
 
 键盘和点击行为：
 
@@ -332,8 +332,10 @@ type FramePerf = {
 | DOM renderer `commit({ sync: true })` same-frame flush              | ✅ done      |
 | RenderManager row buckets (partial repaint)                         | ✅ done      |
 | `TVirtualList` data-source API (`itemCount/getItem/itemVersion`)    | ✅ done      |
-| Headless/CLI full-row `rowScrollMode` exposed rows                  | ✅ done      |
-| DOM `TVirtualList` slow wheel exposed rows                          | 🔲 Phase 2   |
+| Full-row `rowScrollMode` exposed rows                               | ✅ done      |
+| DOM renderer consume `scrollOperations`                             | ✅ done      |
+| DOM `TVirtualList` full-row exposed rows                            | ✅ done      |
+| DOM non-full-row/clipped/disabled fallback                          | ✅ done      |
 | DOM sync flush scoped to current commit rows/planes                 | ✅ done      |
 | Row bucket degradation threshold (50%/60%)                          | ✅ done      |
 | `TVirtualList.rowScrollMode` opt-in for unsafe row-scroll fast path | ✅ done      |
@@ -341,7 +343,7 @@ type FramePerf = {
 | `TList` wheel 行为修改（不再同步更新 active/modelValue）            | 🔲 planned   |
 | Debug overlay 展示 `scannedNodes/paintedNodes/dirtyRows/frameMs`    | ✅ Phase 2.0 |
 
-> **注意**：`TVirtualList` 的 `rowScrollMode` 默认为 `"off"`。这是危险优化开关，只有显式设置 `rowScrollMode: "unsafe-full-row"` 的 headless/CLI full-row 且独占这些 plane rows 的场景才会使用 `unsafeScrollPlaneRows()` + exposed dirty rows。DOM 端慢滚仍然 repaint viewport，真正 DOM exposed rows 要等 DomRenderer 支持 `scrollOperations`。
+> **注意**：`TVirtualList` 的 `rowScrollMode` 默认为 `"off"`。这是危险优化开关，只有显式设置 `rowScrollMode: "unsafe-full-row"`、当前 renderer 支持 `scrollOperations`、且 list 是 unclipped full-row 并独占这些 plane rows 时，才会使用 `unsafeScrollPlaneRows()` + exposed dirty rows。DOM renderer 的优化只移动 line nodes 并 repaint exposed dirty rows，不改变 terminal buffer/compositor 语义。
 
 验收命令：
 
@@ -380,18 +382,19 @@ pnpm run typecheck
 
 ## 测试矩阵
 
-| 场景                                 | 断言                                                  | 文件                                            |
-| ------------------------------------ | ----------------------------------------------------- | ----------------------------------------------- |
-| dirty 一行但 plane 有大量节点        | `scannedNodes` 低于 plane 总节点数，paint 顺序不变    | `test/render-manager.test.ts`                   |
-| node rect 跨行更新                   | 旧行和新行 bucket 都正确更新                          | `test/render-manager.test.ts`                   |
-| headless/CLI full-row wheel 慢滚一行 | `dirtyRows` 等于 exposed row；DOM 仍 repaint viewport | 新增 `test/virtual-list.test.ts`                |
-| wheel 连续输入                       | 多个 wheel event 合成一次 frame update                | 新增 `test/virtual-list.test.ts`                |
-| wheel 不改 selection                 | 不触发 `update:modelValue`                            | 新增 `test/virtual-list.test.ts`                |
-| DOM sync commit                      | `commit({ sync: true })` 不排第二个 rAF               | 新增 `test/dom-renderer.test.ts`                |
-| high priority invalidate             | 仍同 tick flush                                       | `test/scheduler-priority.test.ts`               |
-| live mode 引用计数                   | 全部 drop 后停止 loop                                 | `test/scheduler-priority.test.ts`               |
-| stream append                        | 只 dirty tail rows，离底部不 auto-scroll              | 新增 `test/tlog-view.test.ts`                   |
-| debug stats                          | overlay 展示 `scannedNodes/paintedNodes/dirtyRows`    | `test/perf-budgets.test.ts` 或新增 overlay test |
+| 场景                          | 断言                                                   | 文件                                            |
+| ----------------------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| dirty 一行但 plane 有大量节点 | `scannedNodes` 低于 plane 总节点数，paint 顺序不变     | `test/render-manager.test.ts`                   |
+| node rect 跨行更新            | 旧行和新行 bucket 都正确更新                           | `test/render-manager.test.ts`                   |
+| full-row wheel 慢滚一行       | `dirtyRows` 等于 exposed row；DOM 只 flush exposed row | `test/virtual-list.test.ts`                     |
+| DOM renderer scrollOperations | line nodes 被移动；pending overlap 回退 repaint        | `test/dom-renderer-scroll-operations.test.ts`   |
+| wheel 连续输入                | 多个 wheel event 合成一次 frame update                 | 新增 `test/virtual-list.test.ts`                |
+| wheel 不改 selection          | 不触发 `update:modelValue`                             | 新增 `test/virtual-list.test.ts`                |
+| DOM sync commit               | `commit({ sync: true })` 不排第二个 rAF                | `test/dom-renderer-sync-flush.test.ts`          |
+| high priority invalidate      | 仍同 tick flush                                        | `test/scheduler-priority.test.ts`               |
+| live mode 引用计数            | 全部 drop 后停止 loop                                  | `test/scheduler-priority.test.ts`               |
+| stream append                 | 只 dirty tail rows，离底部不 auto-scroll               | 新增 `test/tlog-view.test.ts`                   |
+| debug stats                   | overlay 展示 `scannedNodes/paintedNodes/dirtyRows`     | `test/perf-budgets.test.ts` 或新增 overlay test |
 
 ## 文档要求
 
