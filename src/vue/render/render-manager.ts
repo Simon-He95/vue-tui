@@ -42,9 +42,8 @@ export type RenderManager = Readonly<{
   invalidatePlane: (plane: TerminalRenderPlane) => void;
   /**
    * Dangerous escape hatch: shifts whole terminal rows for the target plane, not a
-   * component-local region. Do not call in DOM mode unless the caller also repaints
-   * the whole affected viewport; DOM rendering currently does not consume terminal
-   * scrollOperations.
+   * component-local region. Only call when the active renderer consumes terminal
+   * scrollOperations or when the caller repaints the whole affected viewport.
    */
   unsafeScrollPlaneRows: (
     plane: TerminalRenderPlane,

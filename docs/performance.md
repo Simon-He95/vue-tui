@@ -13,7 +13,14 @@ Vue TUI 的性能瓶颈通常来自三部分：
 - **plane-local dirty rows**：RenderManager 按 `default/transcript/chrome/overlay` 分别维护 dirty rows。
 - **plane-scoped compositor**：Terminal commit 时从各 plane row buffer 合成最终可见 buffer，而不是共享一块渲染面反复清空。
 - **增量渲染**：RenderManager 会尽量只重绘被请求的 dirty plane，避免无关区域参与本轮 repaint。
+- **DOM scrollOperations**：DOM renderer 可消费 terminal commit 里的 `scrollOperations`，通过移动 line nodes 优化 full-row 慢滚；`dirtyRows` 仍由 terminal/compositor 决定。
 - **stdout 原子输出**：StdoutRenderer 单帧合成一次性输出，减少闪烁与撕裂。
+
+## DOM scrollOperations
+
+DOM renderer 的 `scrollOperations` 是输出层优化：terminal/compositor 先完成 buffer scroll、dirty rows 和 exposed rows 计算，DOM renderer 只按 commit hint 移动对应 plane 的整行 line nodes，然后 repaint commit 给出的 dirty rows。
+
+这不是组件局部 rect scroll。`TVirtualList rowScrollMode="unsafe-full-row"` 只有在 full-row、unclipped、rows 在 terminal bounds 内且 renderer capability 开启时才会使用；如果存在 pending rows overlap 或不安全条件，DOM 端会回退到 repaint affected rows / viewport。
 
 ## 性能“验收”建议（可量化）
 
@@ -41,6 +48,7 @@ Vue TUI 的性能瓶颈通常来自三部分：
 - 对于会频繁变化的文本：尽量把变化限制在小 rect 内（例如固定输入框区域）。
 - 避免在一个 tick 内创建/销毁大量节点（频繁 `v-if` / 动态 key 重建）。
 - 长列表用“视口”思路渲染（只渲染可见行），避免一次性生成上千 `TText`。
+- `TVirtualList rowScrollMode="unsafe-full-row"` 只用于 unclipped full-row 且独占 plane rows 的场景；DOM renderer 会只 repaint exposed dirty rows，pending rows 或不安全条件会回退到 viewport repaint。
 - `style`/`highlightStyle` 这类对象尽量复用（避免每次都创建新对象导致 watchEffect 触发）。
 
 ## 如何排查

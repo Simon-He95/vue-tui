@@ -94,7 +94,7 @@ describe("TVirtualList", () => {
     mounted.unmount();
   });
 
-  it("repaints the DOM viewport even when rowScrollMode is enabled", async () => {
+  it("uses DOM scrollOperations for full-row unsafe slow wheel scroll", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const mounted = await mountTerminal(
       () =>
@@ -126,6 +126,53 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
+    expect(commits).toContainEqual({
+      dirtyRows: [3],
+      scrollOperations: [{ startY: 0, endY: 4, delta: 1 }],
+    });
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
+      "item-1",
+      "item-2",
+      "item-3",
+      "item-4",
+    ]);
+    expect(mounted.container()!.textContent).not.toContain("item-0");
+    mounted.unmount();
+  });
+
+  it("repaints the DOM viewport when scrollOperations are disabled", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          itemCount: items.length,
+          itemVersion: 1,
+          getItem: (index: number) => items[index],
+          autoFocus: true,
+          rowScrollMode: "unsafe-full-row",
+        }),
+      20,
+      8,
+      { domRendererOptions: { enableScrollOperations: false } },
+    );
+
+    const commits: Array<{
+      dirtyRows: readonly number[] | null;
+      scrollOperations: unknown;
+    }> = [];
+    const off = mounted.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+      commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+    });
+
+    dispatchWheel(mounted.container()!);
+    await nextTick();
+    await nextTick();
+
+    off();
     expect(commits).toContainEqual({ dirtyRows: [0, 1, 2, 3], scrollOperations: null });
     expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
       "item-1",
@@ -133,6 +180,45 @@ describe("TVirtualList", () => {
       "item-3",
       "item-4",
     ]);
+    mounted.unmount();
+  });
+
+  it("repaints the DOM viewport when unsafe row scroll does not own full rows", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const mounted = await mountTerminal(
+      () => [
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 4,
+          itemCount: items.length,
+          itemVersion: 1,
+          getItem: (index: number) => items[index],
+          autoFocus: true,
+          rowScrollMode: "unsafe-full-row",
+        }),
+        h(TText, { x: 12, y: 1, w: 4, value: "SIDE" }),
+      ],
+      20,
+      8,
+    );
+
+    const commits: Array<{
+      dirtyRows: readonly number[] | null;
+      scrollOperations: unknown;
+    }> = [];
+    const off = mounted.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+      commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+    });
+
+    dispatchWheel(mounted.container()!);
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(commits).toContainEqual({ dirtyRows: [0, 1, 2, 3], scrollOperations: null });
+    expect(rowText(mounted, 1)).toContain("SIDE");
     mounted.unmount();
   });
 

@@ -326,7 +326,7 @@ const app = createTerminalApp({
 - `modelValue` `(number)` + `update:modelValue`
 - `style` / `activeStyle` `(Style?)`
 - `autoFocus` `(boolean)`
-- `rowScrollMode` `("off" | "unsafe-full-row")`：headless/CLI full-row 场景的 opt-in unsafe row-scroll 优化
+- `rowScrollMode` `("off" | "unsafe-full-row")`：full-row 场景的 opt-in unsafe row-scroll 优化
 
 ### Data source
 
@@ -347,7 +347,7 @@ const renderItem = (item: Row) => item.title;
 
 ### Row scroll
 
-`rowScrollMode` 是危险优化开关，不是列表内部局部滚动。它会 shift 当前 render plane 的整行区域，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占且列表没有被裁剪的场景；同 plane 其它内容会被一起移动。它是 headless/CLI 优化：当 DOM renderer 已挂载、列表没有占满终端整行、列表 rect 被裁剪或 rows 超出 terminal bounds 时，会退回 viewport repaint；debug perf 模式会对这些被忽略的场景发出一次 warning。DOM renderer 当前不消费 terminal `scrollOperations`，所以 DOM 慢滚即使设置 `rowScrollMode: "unsafe-full-row"` 仍会重绘可见窗口。
+`rowScrollMode` 是危险优化开关，不是列表内部局部滚动。它会 shift 当前 render plane 的整行区域，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占且列表没有被裁剪的场景；同 plane 其它内容会被一起移动。DOM renderer 支持通过移动 line nodes 消费 terminal `scrollOperations`，但只有列表占满终端整行、列表 rect 未被裁剪、rows 在 terminal bounds 内且 renderer capability 开启时才会走 exposed-row repaint；其它场景会退回 viewport repaint。debug perf 模式会对这些被忽略的场景发出一次 warning。
 
 ### Selection model
 

@@ -96,9 +96,15 @@ function installManualRaf(): RafHarness {
   };
 }
 
-const { defineComponent, h, nextTick, ref } = await import("vue");
-const { createDomRenderer, createTerminal, createTerminalApp, TText, useTerminal } =
-  await import("../src/index.js");
+const { createApp, defineComponent, h, nextTick, ref } = await import("vue");
+const {
+  createDomRenderer,
+  createTerminal,
+  createTerminalApp,
+  TerminalProvider,
+  TText,
+  useTerminal,
+} = await import("../src/index.js");
 const { TVirtualList } = await import("../src/experimental.js");
 const { createRenderManager } = await import("../src/vue/render/render-manager.js");
 
@@ -268,6 +274,106 @@ async function benchVirtualList(
   }
 }
 
+async function benchDomVirtualList(
+  itemCount: number,
+  rowScrollMode: "off" | "unsafe-full-row",
+): Promise<Record<string, unknown>> {
+  let framePerf: any = null;
+  let rendererRef: any = null;
+  let finalTop = 0;
+  let lastFlushCount = 0;
+  let domFlushPlaneRows = 0;
+  let domFlushSamples = 0;
+  const dispatchedEvents = 100;
+  const getItem = (index: number) => `item-${index}`;
+  const root = document.createElement("div");
+  document.body.appendChild(root);
+
+  const Probe = defineComponent({
+    name: `BenchDomVirtualList${itemCount}${rowScrollMode}`,
+    setup() {
+      const ctx = useTerminal();
+      framePerf = ctx.observability.framePerf;
+      rendererRef = ctx.renderer;
+      framePerf.enabled.value = true;
+      return () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 80,
+          h: 20,
+          itemCount,
+          itemVersion: 1,
+          getItem,
+          autoFocus: true,
+          rowScrollMode,
+          onScroll: (top: number) => {
+            finalTop = top;
+          },
+        });
+    },
+  });
+
+  const app = createApp({
+    name: "BenchDomVirtualListRoot",
+    render() {
+      return h(TerminalProvider, { cols: 80, rows: 24 }, { default: () => h(Probe) });
+    },
+  });
+
+  function collectDomFlush(): void {
+    const flush = rendererRef?.value?.debugStats?.flush;
+    if (!flush || flush.count === lastFlushCount || !flush.last) return;
+    lastFlushCount = flush.count;
+    domFlushPlaneRows += flush.last.planeRows;
+    domFlushSamples++;
+  }
+
+  try {
+    app.mount(root);
+    await nextTick();
+    framePerf.clear();
+    collectDomFlush();
+
+    const container = root.querySelector("[data-vt-container]") as HTMLElement | null;
+    if (!container) throw new Error("DOM terminal container not mounted");
+
+    const startedAt = now();
+    for (let i = 0; i < dispatchedEvents; i++) {
+      const wheel = new Event("wheel", {
+        bubbles: true,
+        cancelable: true,
+      }) as any;
+      Object.defineProperties(wheel, {
+        clientX: { value: 0 },
+        clientY: { value: 0 },
+        deltaY: { value: 100 },
+        deltaMode: { value: 0 },
+      });
+      container.dispatchEvent(wheel);
+      await nextTick();
+      collectDomFlush();
+    }
+    const durationMs = now() - startedAt;
+    const samples = framePerf.list();
+    const acceptedScrollFrames = samples.filter((sample: any) => sample.reason === "scroll").length;
+
+    return {
+      name: `dom-virtual-list-${itemCount}-rows-${rowScrollMode}-wheel-100`,
+      dispatchedEvents,
+      acceptedScrollFrames,
+      coalescingRatio: round(dispatchedEvents / Math.max(1, acceptedScrollFrames)),
+      finalTop,
+      durationMs: round(durationMs),
+      avgDomFlushPlaneRows: round(domFlushPlaneRows / Math.max(1, domFlushSamples)),
+      ...summarizeSamples(samples),
+    };
+  } finally {
+    app.unmount();
+    root.remove();
+  }
+}
+
 function benchDomSyncFlush(dirtyRowCount: number): Record<string, unknown> {
   const terminal = createTerminal({ cols: 80, rows: 40 });
   const container = document.createElement("div");
@@ -346,6 +452,8 @@ async function main(): Promise<void> {
     await benchVirtualList(10_000, "burst"),
     await benchVirtualList(100_000, "spaced"),
     await benchVirtualList(100_000, "burst"),
+    await benchDomVirtualList(100_000, "off"),
+    await benchDomVirtualList(100_000, "unsafe-full-row"),
     ...[1, 5, 20, 40].map((rows) => benchDomSyncFlush(rows)),
     await benchAppendOnly(),
   ];
