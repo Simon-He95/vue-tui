@@ -393,6 +393,8 @@ log.appendChunk(" world\nnext line");
 
 `createAppendOnlyLogStore()` 使用普通 `string[]` 和单独的 `version` ref。不要把日志行做成 reactive array，也不要每次 append 都重建全文字符串。
 
+`TLogView` 假设数据源是 append-only 或 tail-only mutation。任意可见历史行会变化的 source 不适合只靠 `version` 驱动这个组件；这类浏览/选择场景应使用 `TVirtualList`，或者等后续显式 viewport refresh API。
+
 ### Scroll behavior
 
 - `appendLine` / `appendChunk` / `replaceTail` 通过 `scheduler.queueFrameTask()` 合并为 stream frame。

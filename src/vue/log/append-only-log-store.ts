@@ -31,7 +31,13 @@ export function createAppendOnlyLogStore(): AppendOnlyLogStore {
     },
     appendLines(nextLines) {
       if (nextLines.length === 0) return;
-      for (const line of nextLines) lines.push(line);
+      let start = 0;
+      if (tail) {
+        lines.push(tail + (nextLines[0] ?? ""));
+        tail = "";
+        start = 1;
+      }
+      for (let i = start; i < nextLines.length; i++) lines.push(nextLines[i] ?? "");
       bump();
     },
     appendChunk(chunk) {
@@ -45,7 +51,7 @@ export function createAppendOnlyLogStore(): AppendOnlyLogStore {
       bump();
     },
     replaceTail(text) {
-      tail = text.replace(/\r/g, "");
+      tail = text.replace(/[\r\n]/g, "");
       bump();
     },
     clear() {

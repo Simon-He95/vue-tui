@@ -34,6 +34,17 @@ describe("createAppendOnlyLogStore", () => {
     expect(store.source.lineCount()).toBe(0);
   });
 
+  it("does not flush tail for empty appendLines", () => {
+    const store = createAppendOnlyLogStore();
+
+    store.appendChunk("partial");
+    store.appendLines([]);
+
+    expect(store.version.value).toBe(1);
+    expect(store.source.lineCount()).toBe(1);
+    expect(store.source.getLine(0)).toBe("partial");
+  });
+
   it("streams chunks without rebuilding a full string", () => {
     const store = createAppendOnlyLogStore();
 
@@ -62,6 +73,26 @@ describe("createAppendOnlyLogStore", () => {
 
     store.appendChunk("ab");
     store.appendLine("c");
+
+    expect(store.source.lineCount()).toBe(1);
+    expect(store.source.getLine(0)).toBe("abc");
+  });
+
+  it("merges appendLines first line into an existing tail", () => {
+    const store = createAppendOnlyLogStore();
+
+    store.appendChunk("partial");
+    store.appendLines(["-done", "next"]);
+
+    expect(store.source.lineCount()).toBe(2);
+    expect(store.source.getLine(0)).toBe("partial-done");
+    expect(store.source.getLine(1)).toBe("next");
+  });
+
+  it("keeps replaceTail single-line", () => {
+    const store = createAppendOnlyLogStore();
+
+    store.replaceTail("a\nb\rc");
 
     expect(store.source.lineCount()).toBe(1);
     expect(store.source.getLine(0)).toBe("abc");

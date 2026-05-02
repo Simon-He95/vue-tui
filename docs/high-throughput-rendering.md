@@ -257,6 +257,7 @@ log.replaceTail("next line...");
 - `TLogView` paint 只读取 visible window；当前 fixed one-line rows 不做 wrap、ANSI parse 或 highlight。
 - `version` 不进入 render deps；source 变化通过 scheduler frame task 以 `reason: "stream"` 合并。
 - 用户在底部时 stick-to-bottom；离开底部后 append 不抢 scrollTop，也不 repaint 当前 viewport。
+- `TLogView` 假设 source 只做 append-only 或 tail-only mutation，不支持任意可见历史行变化的 repaint 语义。
 - full-row 且 `rowScrollMode="unsafe-full-row"` 时，单行 append 可以使用 `unsafeScrollPlaneRows()` + exposed dirty rows；非 full-row、clipped 或 renderer 不支持 `scrollOperations` 时回退 viewport repaint。
 
 验收测试：
