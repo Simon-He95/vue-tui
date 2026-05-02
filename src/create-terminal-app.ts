@@ -20,6 +20,8 @@ import { createNodePathPickerProvider } from "./cli/path-provider.js";
 import { createTerminal } from "./core/index.js";
 import { createCliEventManager } from "./events/index.js";
 import { getCliLatencyProfiler } from "./observability/cli-latency.js";
+import { framePerfNow, mergeFramePerfReason } from "./observability/frame-perf.js";
+import { createFramePerfStore } from "./observability/frame-perf-store.js";
 import { createTraceStore } from "./observability/trace.js";
 import { createTuiProfiler } from "./observability/tui-profiler.js";
 import { HEADLESS_RENDERER_CAPABILITIES } from "./renderer/index.js";
@@ -115,6 +117,9 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   const trace = createTraceStore({
     enabled: Boolean((globalThis as any).__VT_DEBUG_TRACE__),
   });
+  const framePerf = createFramePerfStore(120, {
+    enabled: Boolean((globalThis as any).__VT_DEBUG_PERF__),
+  });
   const latency = getCliLatencyProfiler();
   const profiler = createTuiProfiler("cli-scheduler");
   const events = createCliEventManager({
@@ -151,6 +156,9 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   let pendingInvalidateAfterFlush = false;
   let pendingInvalidateAllPlanes = false;
   const pendingInvalidatePlanes = new Set<TerminalRenderPlane>();
+  let frameId = 0;
+  let pendingFrameReason: TerminalSchedulerInvalidateOptions["reason"] = "unknown";
+  let pendingCoalescedInvalidates = 0;
   const env = (process?.env ?? {}) as Record<string, unknown>;
   const throttleMs = (() => {
     const raw = env.DIMCODE_TUI_THROTTLE_MS;
@@ -185,6 +193,15 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     return activePlanes;
   }
 
+  function queueDepth(): number {
+    return (scheduled ? 1 : 0) + (timer ? 1 : 0) + (pendingInvalidateAfterFlush ? 1 : 0);
+  }
+
+  function noteFrameReason(reason: TerminalSchedulerInvalidateOptions["reason"]): void {
+    if (!reason || reason === "unknown") return;
+    pendingFrameReason = mergeFramePerfReason(pendingFrameReason, reason);
+  }
+
   function flush(sync?: boolean): void {
     if (disposed) return;
 
@@ -193,15 +210,63 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
 
     const activePlanes = takeActivePlanes();
     latency?.recordFlushStart({ sync, activePlanes });
+    if (!framePerf.enabled.value) {
+      try {
+        render.render({ activePlanes });
+        terminal.commit({ planes: activePlanes, sync });
+      } finally {
+        latency?.recordFlushEnd();
+        flushing = false;
+        lastFlushAtMs = Date.now();
+        scheduledAtMs = 0;
+      }
+
+      if (pendingInvalidateAfterFlush) {
+        pendingInvalidateAfterFlush = false;
+        flush(true);
+      }
+      return;
+    }
+
+    const startedAt = framePerfNow();
+    const currentFrameId = ++frameId;
+    const reason = pendingFrameReason ?? "unknown";
+    const coalescedInvalidates = pendingCoalescedInvalidates;
+    pendingFrameReason = "unknown";
+    pendingCoalescedInvalidates = 0;
+    let stats: ReturnType<typeof render.render> = null;
+    let dirtyRows: readonly number[] | null = [];
+    let renderManagerMs = 0;
+    let commitMs = 0;
     try {
-      render.render({ activePlanes });
-      terminal.commit({ planes: activePlanes, sync });
+      const renderStartedAt = framePerfNow();
+      stats = render.render({ activePlanes });
+      renderManagerMs = framePerfNow() - renderStartedAt;
+      const commitStartedAt = framePerfNow();
+      dirtyRows = terminal.commit({ planes: activePlanes, sync });
+      commitMs = framePerfNow() - commitStartedAt;
     } finally {
       latency?.recordFlushEnd();
       flushing = false;
       lastFlushAtMs = Date.now();
       scheduledAtMs = 0;
     }
+    framePerf.push({
+      frameId: currentFrameId,
+      reason,
+      startedAt,
+      durationMs: framePerfNow() - startedAt,
+      renderManagerMs,
+      commitMs,
+      dirtyRows: dirtyRows === null ? null : dirtyRows.length,
+      activePlanes: activePlanes ? [...activePlanes] : null,
+      scannedNodes: stats?.scannedNodes ?? 0,
+      paintedNodes: stats?.paintedNodes ?? 0,
+      rowBucketFallbacks: stats?.rowBucketFallbacks,
+      coalescedInvalidates,
+      droppedUpdates: 0,
+      queueDepth: queueDepth(),
+    });
 
     if (pendingInvalidateAfterFlush) {
       pendingInvalidateAfterFlush = false;
@@ -260,6 +325,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   function invalidate(options?: TerminalSchedulerInvalidateOptions): void {
     if (disposed) return;
     const priority = options?.priority ?? "normal";
+    noteFrameReason(options?.reason);
     latency?.recordSchedulerInvalidate({
       priority,
       plane: options?.plane ?? null,
@@ -294,6 +360,8 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       scheduleFlushAt(desiredAtMs);
       return;
     }
+
+    pendingCoalescedInvalidates++;
 
     if (!scheduledAtMs) {
       scheduleFlushAt(desiredAtMs);
@@ -362,7 +430,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   const offResize = terminal.on("resize", ({ cols, rows }) => {
     rootLayout.clipRect = { x: 0, y: 0, w: cols, h: rows };
     // Ensure resize triggers a re-render even if no other reactive state changes.
-    invalidate();
+    invalidate({ reason: "resize" });
   });
 
   const ctx: TerminalContext = {
@@ -372,7 +440,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     events: shallowRef(events as any),
     scheduler: { invalidate, flush, flushNow },
     runtime,
-    observability: { trace },
+    observability: { trace, framePerf },
     defaultStyle: ref(options.defaultStyle ?? {}),
     render,
   };

@@ -472,7 +472,7 @@ export const TPathPicker = defineComponent({
             const newActive = dir > 0 ? visibleEnd : visibleStart;
             active.value = clamp(newActive, 0, Math.max(0, suggestions.value.length - 1));
           }
-          scheduler.invalidate();
+          scheduler.invalidate({ reason: "scroll" });
         },
       },
     }));

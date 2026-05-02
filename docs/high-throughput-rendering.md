@@ -297,7 +297,7 @@ type FramePerf = {
     candidates?: number;
   }>;
   droppedUpdates: number;
-  coalescedEvents: number;
+  coalescedInvalidates: number;
   heapUsed?: number;
 };
 ```
@@ -309,7 +309,7 @@ type FramePerf = {
 - `scannedNodes`
 - `paintedNodes`
 - `queueDepth`
-- `coalescedEvents`
+- `coalescedInvalidates`
 - `droppedUpdates`
 
 验收测试：
@@ -324,18 +324,18 @@ type FramePerf = {
 
 目标是降低滚动卡顿和一帧延迟，尽量少改公共 API。
 
-| 项目                                                                | 状态       |
-| ------------------------------------------------------------------- | ---------- |
-| DOM renderer `commit({ sync: true })` same-frame flush              | ✅ done    |
-| RenderManager row buckets (partial repaint)                         | ✅ done    |
-| `TVirtualList` data-source API (`itemCount/getItem/itemVersion`)    | ✅ done    |
-| Headless/CLI full-row `rowScrollMode` exposed rows                  | ✅ done    |
-| DOM `TVirtualList` slow wheel exposed rows                          | 🔲 Phase 2 |
-| DOM sync flush scoped to current commit rows/planes                 | ✅ done    |
-| Row bucket degradation threshold (50%/60%)                          | ✅ done    |
-| `TVirtualList.rowScrollMode` opt-in for unsafe row-scroll fast path | ✅ done    |
-| `TList` wheel 行为修改（不再同步更新 active/modelValue）            | 🔲 planned |
-| Debug overlay 展示 `scannedNodes/paintedNodes/dirtyRows/frameMs`    | 🔲 planned |
+| 项目                                                                | 状态         |
+| ------------------------------------------------------------------- | ------------ |
+| DOM renderer `commit({ sync: true })` same-frame flush              | ✅ done      |
+| RenderManager row buckets (partial repaint)                         | ✅ done      |
+| `TVirtualList` data-source API (`itemCount/getItem/itemVersion`)    | ✅ done      |
+| Headless/CLI full-row `rowScrollMode` exposed rows                  | ✅ done      |
+| DOM `TVirtualList` slow wheel exposed rows                          | 🔲 Phase 2   |
+| DOM sync flush scoped to current commit rows/planes                 | ✅ done      |
+| Row bucket degradation threshold (50%/60%)                          | ✅ done      |
+| `TVirtualList.rowScrollMode` opt-in for unsafe row-scroll fast path | ✅ done      |
+| `TList` wheel 行为修改（不再同步更新 active/modelValue）            | 🔲 planned   |
+| Debug overlay 展示 `scannedNodes/paintedNodes/dirtyRows/frameMs`    | ✅ Phase 2.0 |
 
 > **注意**：`TVirtualList` 的 `rowScrollMode` 默认为 `"off"`。这是危险优化开关，只有显式设置 `rowScrollMode: "unsafe-full-row"` 的 headless/CLI full-row 且独占这些 plane rows 的场景才会使用 `unsafeScrollPlaneRows()` + exposed dirty rows。DOM 端慢滚仍然 repaint viewport，真正 DOM exposed rows 要等 DomRenderer 支持 `scrollOperations`。
 

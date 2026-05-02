@@ -31,6 +31,8 @@ import {
 } from "vue";
 import { createTerminal } from "../../core/index.js";
 import { createEventManager } from "../../events/index.js";
+import { framePerfNow, mergeFramePerfReason } from "../../observability/frame-perf.js";
+import { createFramePerfStore } from "../../observability/frame-perf-store.js";
 import { createTraceStore } from "../../observability/trace.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { createDomRenderer, DOM_RENDERER_CAPABILITIES } from "../../renderer/index.js";
@@ -137,6 +139,9 @@ export const TerminalProvider = defineComponent({
     const trace = createTraceStore({
       enabled: props.debugTrace || Boolean((globalThis as any).__VT_DEBUG_TRACE__),
     });
+    const framePerf = createFramePerfStore(120, {
+      enabled: Boolean((globalThis as any).__VT_DEBUG_PERF__),
+    });
     const offCommit = terminal.on("commit", ({ dirtyRows, planes, sync }) => {
       if (!trace.enabled.value) return;
       // Avoid mutating Vue reactive state during the render/flush call stack.
@@ -171,6 +176,9 @@ export const TerminalProvider = defineComponent({
     let holdReleaseToken = 0;
     let pendingInvalidateAllPlanes = false;
     const pendingInvalidatePlanes = new Set<TerminalRenderPlane>();
+    let frameId = 0;
+    let pendingFrameReason: TerminalSchedulerInvalidateOptions["reason"] = "unknown";
+    let pendingCoalescedInvalidates = 0;
     let imeComposing = false;
     let unmounting = false;
     let updateImePositionAfterFlush: (() => void) | null = null;
@@ -200,11 +208,65 @@ export const TerminalProvider = defineComponent({
       return activePlanes;
     }
 
+    function queueDepth(): number {
+      return (raf ? 1 : 0) + (timer ? 1 : 0) + (pendingInvalidate ? 1 : 0);
+    }
+
+    function noteFrameReason(reason: TerminalSchedulerInvalidateOptions["reason"]): void {
+      if (!reason || reason === "unknown") return;
+      pendingFrameReason = mergeFramePerfReason(pendingFrameReason, reason);
+    }
+
+    function rendererFlushCount(): number {
+      return renderer.value?.debugStats.flush.count ?? 0;
+    }
+
+    function latestRendererFlushMs(previousCount: number): number | undefined {
+      const flush = renderer.value?.debugStats.flush;
+      if (!flush || flush.count === previousCount) return undefined;
+      return flush.last?.durationMs;
+    }
+
     function flush(sync = false): void {
       if (unmounting) return;
       const activePlanes = takeActivePlanes();
-      render.render({ activePlanes });
-      terminal.commit({ planes: activePlanes, sync });
+      if (!framePerf.enabled.value) {
+        render.render({ activePlanes });
+        terminal.commit({ planes: activePlanes, sync });
+        updateImePositionAfterFlush?.();
+        return;
+      }
+
+      const startedAt = framePerfNow();
+      const currentFrameId = ++frameId;
+      const reason = pendingFrameReason ?? "unknown";
+      const coalescedInvalidates = pendingCoalescedInvalidates;
+      pendingFrameReason = "unknown";
+      pendingCoalescedInvalidates = 0;
+      const renderStartedAt = framePerfNow();
+      const stats = render.render({ activePlanes });
+      const renderManagerMs = framePerfNow() - renderStartedAt;
+      const flushCountBeforeCommit = rendererFlushCount();
+      const commitStartedAt = framePerfNow();
+      const dirtyRows = terminal.commit({ planes: activePlanes, sync });
+      const commitMs = framePerfNow() - commitStartedAt;
+      framePerf.push({
+        frameId: currentFrameId,
+        reason,
+        startedAt,
+        durationMs: framePerfNow() - startedAt,
+        renderManagerMs,
+        commitMs,
+        domFlushMs: latestRendererFlushMs(flushCountBeforeCommit),
+        dirtyRows: dirtyRows === null ? null : dirtyRows.length,
+        activePlanes: activePlanes ? [...activePlanes] : null,
+        scannedNodes: stats?.scannedNodes ?? 0,
+        paintedNodes: stats?.paintedNodes ?? 0,
+        rowBucketFallbacks: stats?.rowBucketFallbacks,
+        coalescedInvalidates,
+        droppedUpdates: 0,
+        queueDepth: queueDepth(),
+      });
       updateImePositionAfterFlush?.();
     }
 
@@ -243,6 +305,7 @@ export const TerminalProvider = defineComponent({
       if (unmounting) return;
 
       const priority = options?.priority ?? "normal";
+      noteFrameReason(options?.reason);
       queueInvalidatePlane(options?.plane);
       if (priority === "high") {
         profiler?.recordInvalidate({ plane: options?.plane ?? null });
@@ -256,7 +319,10 @@ export const TerminalProvider = defineComponent({
       }
 
       if (priority === "low") {
-        if (timer || raf) return;
+        if (timer || raf) {
+          pendingCoalescedInvalidates++;
+          return;
+        }
         profiler?.recordInvalidate({ plane: options?.plane ?? null });
         timer = setTimeout(() => {
           timer = null;
@@ -267,6 +333,7 @@ export const TerminalProvider = defineComponent({
 
       if (raf) {
         pendingInvalidate = true;
+        pendingCoalescedInvalidates++;
         return;
       }
       profiler?.recordInvalidate({ plane: options?.plane ?? null });
@@ -359,7 +426,7 @@ export const TerminalProvider = defineComponent({
       events,
       scheduler: { invalidate, flush, flushNow },
       runtime,
-      observability: { trace },
+      observability: { trace, framePerf },
       defaultStyle: toRef(props, "defaultStyle"),
       render,
     };
@@ -417,6 +484,7 @@ export const TerminalProvider = defineComponent({
           m.setMetrics(r.metrics);
           rootLayout.clipRect = { x: 0, y: 0, w: cols, h: rows };
           clearTextCaches();
+          invalidate({ reason: "resize" });
         });
         onScopeDispose(() => {
           offResize?.();

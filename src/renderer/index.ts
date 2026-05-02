@@ -7,6 +7,8 @@ export type {
   CellMetrics,
   DomRenderer,
   DomRendererDebugStats,
+  DomRendererFlushSample,
+  DomRendererFlushStats,
   DomRendererOptions,
   DomRendererSyncFlushDecision,
   DomRendererSyncFlushStats,

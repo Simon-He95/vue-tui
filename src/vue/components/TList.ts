@@ -107,7 +107,7 @@ export const TList = defineComponent({
         active.value = next;
         emit("update:modelValue", next);
         ensureActiveVisible();
-        scheduler.invalidate();
+        scheduler.invalidate({ reason: "input" });
         return;
       }
       if (e.key === "ArrowDown") {
@@ -116,7 +116,7 @@ export const TList = defineComponent({
         active.value = next;
         emit("update:modelValue", next);
         ensureActiveVisible();
-        scheduler.invalidate();
+        scheduler.invalidate({ reason: "input" });
         return;
       }
       if (e.key === "PageUp") {
@@ -125,7 +125,7 @@ export const TList = defineComponent({
         active.value = next;
         emit("update:modelValue", next);
         ensureActiveVisible();
-        scheduler.invalidate();
+        scheduler.invalidate({ reason: "input" });
         return;
       }
       if (e.key === "PageDown") {
@@ -134,7 +134,7 @@ export const TList = defineComponent({
         active.value = next;
         emit("update:modelValue", next);
         ensureActiveVisible();
-        scheduler.invalidate();
+        scheduler.invalidate({ reason: "input" });
         return;
       }
       if (e.key === "Home") {
@@ -142,7 +142,7 @@ export const TList = defineComponent({
         active.value = 0;
         emit("update:modelValue", 0);
         ensureActiveVisible();
-        scheduler.invalidate();
+        scheduler.invalidate({ reason: "input" });
         return;
       }
       if (e.key === "End") {
@@ -151,7 +151,7 @@ export const TList = defineComponent({
         active.value = last;
         emit("update:modelValue", last);
         ensureActiveVisible();
-        scheduler.invalidate();
+        scheduler.invalidate({ reason: "input" });
         return;
       }
       if (e.key === "Enter") {
@@ -177,7 +177,7 @@ export const TList = defineComponent({
           if (idx >= 0 && idx < props.items.length) {
             active.value = idx;
             emit("update:modelValue", idx);
-            scheduler.invalidate();
+            scheduler.invalidate({ reason: "input" });
           } else {
             emit("close");
           }
@@ -220,7 +220,7 @@ export const TList = defineComponent({
             }
           }
           emit("scroll", nextTop);
-          scheduler.invalidate();
+          scheduler.invalidate({ reason: "scroll" });
         },
         focus: () => {
           focused.value = true;
