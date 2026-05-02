@@ -261,8 +261,9 @@ log.replaceTail("next line...");
 - 未提供 `getLineKey` 时使用 `version + index` 作为 fallback，保证正确性但限制跨 version 复用。
 - `version` 不进入 render deps；source 变化通过 scheduler frame task 以 `reason: "stream"` 合并。
 - 用户在底部时 stick-to-bottom；离开底部后 append 不抢 scrollTop，也不 repaint 当前 viewport。
-- `TLogView` 优先服务 append-only 或 tail-only mutation；如果自定义 source 会修改可见历史行，必须 bump `version`，并在提供 `getLineKey` 时让变更行的 key 随文本变化。
+- `TLogView` 优先服务 append-only 或 tail-only mutation。`getLineKey(index)` 用于缓存正确性和 append/tail 场景；它不是任意历史行 diff 机制。自定义 source 如果会修改任意可见历史行，应替换 source identity，或等待后续 explicit viewport refresh API。
 - `wrap=true` 的大日志初始底部和 append-only streaming 路径只测量 bottom/visible window 加 overscan，不做全量 wrap。plain-text wrap 不支持 ANSI span、highlight、rich span 或 arbitrary variable-height rows。
+- `wrap=true` 下，`scroll` payload 的 `estimatedVisualRowCount` 和内部 scroll range 基于已测量 visual rows + 未测量行的 1-row estimate；bottom stickiness、append、visible-window rendering 是准确路径，精确 total visual rows 只有在所有行都被测量后才成立。
 - full-row 且 `rowScrollMode="unsafe-full-row"` 时，单行 append 可以使用 `unsafeScrollPlaneRows()` + exposed dirty rows；非 full-row、clipped 或 renderer 不支持 `scrollOperations` 时回退 viewport repaint。
 
 验收测试：

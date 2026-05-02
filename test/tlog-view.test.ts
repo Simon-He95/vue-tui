@@ -1210,6 +1210,105 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
+  it("reports estimated visual row count for large lazy wrapped sources", async () => {
+    const onScroll = vi.fn();
+    const getLine = vi.fn((index: number) => `line-${index}-${"x".repeat(100)}`);
+    const source: TLogDataSource = {
+      lineCount: () => 100_000,
+      getLine,
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWrapEstimatedPayloadApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            wrap: true,
+            onScroll,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 10, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "keydown", key: "PageUp", code: "PageUp", time: Date.now() });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const payload = onScroll.mock.calls.at(-1)?.[0];
+      expect(payload).toMatchObject({
+        lineCount: 100_000,
+        atBottom: false,
+      });
+      expect(payload).toHaveProperty("estimatedVisualRowCount");
+      expect(payload).not.toHaveProperty("visualRowCount");
+      expect(payload.estimatedVisualRowCount).toBeLessThan(200_000);
+      expect(getLine.mock.calls.length).toBeLessThan(100);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("scrolls upward through unmeasured wrapped lines without full-source wrapping", async () => {
+    const getLine = vi.fn((index: number) => `line-${index}-${"x".repeat(40)}`);
+    const source: TLogDataSource = {
+      lineCount: () => 100_000,
+      getLine,
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWrapLazyPageUpApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 10, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      const before = [0, 1, 2, 3].map((y) => rowText(app, y));
+
+      for (let i = 0; i < 3; i++) {
+        app.events.dispatch({ type: "keydown", key: "PageUp", code: "PageUp", time: Date.now() });
+        await nextTick();
+        app.scheduler.flushNow();
+      }
+
+      const after = [0, 1, 2, 3].map((y) => rowText(app, y));
+      expect(after).not.toEqual(before);
+      expect(after.every((row) => row.length > 0)).toBe(true);
+      expect(after.join("")).toContain("line-");
+      expect(getLine.mock.calls.length).toBeLessThan(200);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("uses DOM exposed row flush for full-row append", async () => {
     const log = createAppendOnlyLogStore();
     log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));

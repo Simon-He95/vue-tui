@@ -421,7 +421,7 @@ export const TLogView = defineComponent({
       }
     }
 
-    function visualRowCount(): number {
+    function estimatedVisualRowCount(): number {
       if (!props.wrap) return lineCount();
       ensureVisualIndex();
       return fenwickSum(visualIndexLineCount);
@@ -455,7 +455,7 @@ export const TLogView = defineComponent({
 
     function locateVisualRow(visualRow: number): LocatedVisualRow | null {
       ensureVisualIndex();
-      if (visualRow < 0 || visualRow >= visualRowCount()) return null;
+      if (visualRow < 0 || visualRow >= estimatedVisualRowCount()) return null;
 
       for (let attempt = 0; attempt < 3; attempt++) {
         const lineIndex = findLineForVisualRow(visualRow);
@@ -500,7 +500,7 @@ export const TLogView = defineComponent({
     function maxScrollTop(): number {
       const clip = normalizedRect();
       const { y: clipY } = clipOffsets();
-      return Math.max(0, visualRowCount() - (clipY + clip.h));
+      return Math.max(0, estimatedVisualRowCount() - (clipY + clip.h));
     }
 
     function viewportHeight(): number {
@@ -516,7 +516,7 @@ export const TLogView = defineComponent({
         scrollTop: scrollTop.value,
         atBottom: isAtBottom(),
         lineCount: lineCount(),
-        visualRowCount: visualRowCount(),
+        estimatedVisualRowCount: estimatedVisualRowCount(),
       };
     }
 
@@ -648,7 +648,8 @@ export const TLogView = defineComponent({
         if (startIndex >= endIndex) return false;
         const visible = visibleLineRange();
         const start = visualStartForLine(startIndex);
-        const end = endIndex >= lineCount() ? visualRowCount() : visualStartForLine(endIndex);
+        const end =
+          endIndex >= lineCount() ? estimatedVisualRowCount() : visualStartForLine(endIndex);
         return start < visible.end && end > visible.start;
       }
 

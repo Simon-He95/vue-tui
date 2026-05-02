@@ -414,6 +414,8 @@ type TLogDataSource = {
 
 未提供 `getLineKey` 时，`TLogView` 会退回到 `version + index`，确保 `version` 变化后不会出现 stale text，但跨 version 的缓存复用会受限。
 
+`TLogView` 仍按 append-only / tail-only mutation 优化。`getLineKey(index)` 用于缓存正确性和 append/tail 场景；它不是任意历史行 diff 机制。自定义 source 如果会修改任意可见历史行，应替换 source identity，或等待后续 explicit viewport refresh API。
+
 `wrap=false` 是默认行为，超出宽度的行会被 clip。`wrap=true` 时，一个 logical source line 可以渲染成多个 visual rows，`scrollTop` 也按 visual row 计数。wrap 仍是纯文本 cell wrap，不包含 ANSI parse、syntax highlight、rich span 或 arbitrary variable-height row model。
 
 ### Scroll behavior
@@ -421,13 +423,14 @@ type TLogDataSource = {
 - `appendLine` / `appendChunk` / `replaceTail` 通过 `scheduler.queueFrameTask()` 合并为 stream frame。
 - `TLogView` 每次 paint 只读取当前 visible rows；命中 line-level render cache 的行不会再次调用 `source.getLine()`。
 - `wrap=true` 初始底部和 append-only streaming 路径只测量 bottom/visible window 加 overscan，不会为了计算 wrap 结果全量读取大日志。
+- `wrap=true` 为避免全量 wrap，会 lazy-measure visual rows。bottom stickiness、append 和 visible-window rendering 是准确路径；全量 scrollbar 所需的 total visual rows 在大日志上是估计值，除非所有行都被测量。
 - 初始 mount 默认显示当前底部；`autoStickToBottom=false` 只影响后续 append 是否继续贴底，不改变初始定位。
 - 用户在底部时 append 会贴底；用户滚离底部后 append 不改变当前 `scrollTop`，也不会 repaint 当前 viewport。
 - `rowScrollMode="unsafe-full-row"` 只有在组件占满整行、未被裁剪、renderer 支持 `scrollOperations` 时才会用 exposed-row repaint；其它情况回退到 viewport repaint。
 
 ### Events
 
-- `scroll`: `{ scrollTop, atBottom, lineCount, visualRowCount }`
+- `scroll`: `{ scrollTop, atBottom, lineCount, estimatedVisualRowCount }`
 - `focus` / `blur` / `keydown`
 
 ## TSelect
