@@ -22,11 +22,13 @@ export const TRenderPlane = defineComponent({
       invalidate: (options?: {
         priority?: "high" | "normal" | "low";
         plane?: TerminalRenderPlane;
-      }) =>
-        parentCtx.scheduler.invalidate({
+      }) => {
+        const hasPlane = options && Object.prototype.hasOwnProperty.call(options, "plane");
+        return parentCtx.scheduler.invalidate({
           ...options,
-          plane: options?.plane ?? props.plane,
-        }),
+          plane: hasPlane ? options.plane : props.plane,
+        });
+      },
       flush: () => parentCtx.scheduler.flush(),
       flushNow: () => parentCtx.scheduler.flushNow(),
     } as const;

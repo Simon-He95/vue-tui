@@ -31,6 +31,7 @@ export type TerminalEventRecord =
       clientX?: number;
       clientY?: number;
       deltaY: number;
+      deltaMode?: number;
       ctrlKey?: boolean;
       shiftKey?: boolean;
       altKey?: boolean;

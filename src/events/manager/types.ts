@@ -48,6 +48,7 @@ export type TerminalPointerEvent = TerminalBaseEvent & {
   altKey?: boolean;
   metaKey?: boolean;
   deltaY?: number;
+  deltaMode?: number;
 };
 
 export type TerminalKeyboardEvent = TerminalBaseEvent & {

@@ -39,7 +39,7 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
     deltaY !== 0 &&
     Math.abs(deltaY) >= 100 &&
     Math.abs(deltaY) % 100 === 0 &&
-    (deltaMode == null || deltaMode === 0)
+    deltaMode == null
   ) {
     return { deltaY: deltaY / 100, mode: "line" };
   }
@@ -457,6 +457,9 @@ export const TPathPicker = defineComponent({
             maxTop,
             Date.now(),
             mode,
+            {
+              disableAcceleration: mode === "pixel",
+            },
           );
           if (!dir || nextTop === scrollTop.value) return;
           scrollTop.value = nextTop;

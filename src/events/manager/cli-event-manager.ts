@@ -248,6 +248,7 @@ export function createCliEventManager(
   function makeBaseEvent(
     type: TerminalEventType,
     path: TerminalNode[],
+    time?: number,
   ): TerminalBaseEvent & { __stopped: boolean } {
     return {
       type,
@@ -257,7 +258,7 @@ export function createCliEventManager(
       bubbles: true,
       cancelable: true,
       defaultPrevented: false,
-      timeStamp: now(),
+      timeStamp: typeof time === "number" ? time : now(),
       __stopped: false,
       stopPropagation() {
         this.__stopped = true;
@@ -417,7 +418,7 @@ export function createCliEventManager(
     path: TerminalNode[],
     record: PointerLikeRecord,
   ): TerminalPointerEvent & { __stopped: boolean } {
-    const base = makeBaseEvent(type, path);
+    const base = makeBaseEvent(type, path, record.time);
     return Object.assign(base, {
       clientX: record.clientX ?? record.cellX,
       clientY: record.clientY ?? record.cellY,
@@ -430,6 +431,7 @@ export function createCliEventManager(
       altKey: record.altKey,
       metaKey: record.metaKey,
       deltaY: record.type === "wheel" ? record.deltaY : undefined,
+      deltaMode: record.type === "wheel" ? record.deltaMode : undefined,
     });
   }
 
@@ -448,7 +450,7 @@ export function createCliEventManager(
     path: TerminalNode[],
     record: Extract<TerminalEventRecord, { type: "keydown" | "keyup" }>,
   ): TerminalKeyboardEvent & { __stopped: boolean } {
-    const base = makeBaseEvent(type, path);
+    const base = makeBaseEvent(type, path, record.time);
     return Object.assign(base, {
       key: record.key,
       code: record.code ?? "",
@@ -477,7 +479,7 @@ export function createCliEventManager(
       }
     >,
   ): TerminalInputEvent & { __stopped: boolean } {
-    const base = makeBaseEvent(type, path);
+    const base = makeBaseEvent(type, path, record.time);
     return Object.assign(base, {
       data: record.data,
       inputType: record.inputType,
@@ -490,12 +492,13 @@ export function createCliEventManager(
     type: TerminalEventType,
     record: PointerLikeRecord,
     targetOverride?: TerminalNode | null,
-  ): void {
+  ): boolean {
     const list = candidatesAt(record.cellX, record.cellY);
     const target = targetOverride ?? pickTarget(list);
     const path = target ? pathOuterToInner(list, target) : [];
     const ev = buildPointerEvent(type, path, record);
     dispatchWithPhases(type, path, target, ev);
+    return ev.defaultPrevented;
   }
 
   function dispatchToFocused(
@@ -610,7 +613,7 @@ export function createCliEventManager(
             if (target?.focusable) setFocus(target.id);
             capturedId = target?.id ?? null;
             updateHover(target, event);
-            dispatchPointerEvent("pointerdown", event, target);
+            prevented = dispatchPointerEvent("pointerdown", event, target);
             return prevented;
           }
 
@@ -629,7 +632,7 @@ export function createCliEventManager(
             const list = candidatesAt(event.cellX, event.cellY);
             const target = pickTarget(list);
             updateHover(target, event);
-            dispatchPointerEvent("pointermove", event, target);
+            prevented = dispatchPointerEvent("pointermove", event, target);
             return prevented;
           }
 
@@ -644,12 +647,12 @@ export function createCliEventManager(
           }
 
           if (event.type === "pointerup") {
-            dispatchPointerEvent("pointerup", event);
+            prevented = dispatchPointerEvent("pointerup", event);
             capturedId = null;
             return prevented;
           }
 
-          dispatchPointerEvent(event.type as TerminalEventType, event);
+          prevented = dispatchPointerEvent(event.type as TerminalEventType, event);
           return prevented;
         }
 

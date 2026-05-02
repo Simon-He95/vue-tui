@@ -12,6 +12,7 @@ const components = [
   "TInput",
   "TInputBox",
   "TList",
+  "TVirtualList",
   "TSelect",
   "TPathPicker",
   "TDialog",

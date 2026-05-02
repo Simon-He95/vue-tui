@@ -22,6 +22,7 @@ import { createCliEventManager } from "./events/index.js";
 import { getCliLatencyProfiler } from "./observability/cli-latency.js";
 import { createTraceStore } from "./observability/trace.js";
 import { createTuiProfiler } from "./observability/tui-profiler.js";
+import { HEADLESS_RENDERER_CAPABILITIES } from "./renderer/index.js";
 import { defaultTInputHostPlugin } from "./vue/components/input/plugins/hostPlugin.js";
 import { TRenderPlane } from "./vue/components/TRenderPlane.js";
 import {
@@ -83,6 +84,10 @@ export type TerminalApp = Readonly<{
   scheduler: {
     invalidate: (options?: TerminalSchedulerInvalidateOptions) => void;
     flush: () => void;
+    /**
+     * Flushes render-manager work and requests a sync terminal commit immediately.
+     * Renderer backends may still defer expensive output work to their frame budget.
+     */
     flushNow: () => void;
   };
   defaultStyle: Ref<Style>;
@@ -131,6 +136,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       at: Date.now(),
       dirtyRows,
       planes,
+      sync,
       focusedId: events.getFocused(),
     });
   });
@@ -362,6 +368,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   const ctx: TerminalContext = {
     terminal,
     renderer: shallowRef(null as any),
+    rendererCapabilities: shallowRef(HEADLESS_RENDERER_CAPABILITIES),
     events: shallowRef(events as any),
     scheduler: { invalidate, flush, flushNow },
     runtime,

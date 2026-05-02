@@ -3,7 +3,7 @@ import type { PathPickerProvider } from "../../cli/path-provider.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../../core/render-plane.js";
 import type { Style, Terminal } from "../../core/types.js";
 import type { EventManager, TerminalEventRecord } from "../../events/index.js";
-import type { DomRenderer } from "../../renderer/index.js";
+import type { DomRenderer, DomRendererOptions } from "../../renderer/index.js";
 import type {
   ImeAnchor,
   LayoutContext,
@@ -33,7 +33,7 @@ import { createTerminal } from "../../core/index.js";
 import { createEventManager } from "../../events/index.js";
 import { createTraceStore } from "../../observability/trace.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
-import { createDomRenderer } from "../../renderer/index.js";
+import { createDomRenderer, DOM_RENDERER_CAPABILITIES } from "../../renderer/index.js";
 import {
   EventZIndexContextKey,
   ImeAnchorContextKey,
@@ -112,6 +112,10 @@ export const TerminalProvider = defineComponent({
     },
     debugIme: { type: Boolean, default: false },
     debugTrace: { type: Boolean, default: false },
+    domRendererOptions: {
+      type: Object as PropType<DomRendererOptions>,
+      default: undefined,
+    },
   },
   setup(props, { slots }) {
     const terminal: Terminal = createTerminal({
@@ -125,6 +129,7 @@ export const TerminalProvider = defineComponent({
     const copyToastVisible = ref(false);
     const copyToastText = ref("Copied to clipboard");
     const renderer = shallowRef<DomRenderer | null>(null);
+    const rendererCapabilities = shallowRef(DOM_RENDERER_CAPABILITIES);
     const events = shallowRef<EventManager | null>(null);
     const imeTimeline = shallowReactive<
       Array<{ at: number; msg: string; extra: Record<string, unknown> }>
@@ -132,9 +137,8 @@ export const TerminalProvider = defineComponent({
     const trace = createTraceStore({
       enabled: props.debugTrace || Boolean((globalThis as any).__VT_DEBUG_TRACE__),
     });
-    const offCommit = terminal.on("commit", ({ dirtyRows, planes }) => {
+    const offCommit = terminal.on("commit", ({ dirtyRows, planes, sync }) => {
       if (!trace.enabled.value) return;
-      const focusedId = events.value?.getFocused() ?? null;
       // Avoid mutating Vue reactive state during the render/flush call stack.
       // In tests we often stub rAF to be synchronous, and a synchronous trace push
       // can cause recursive Vue updates.
@@ -144,7 +148,9 @@ export const TerminalProvider = defineComponent({
           at: Date.now(),
           dirtyRows,
           planes,
-          focusedId,
+          sync,
+          rendererSyncFlush: renderer.value?.debugStats?.syncFlush.last ?? null,
+          focusedId: events.value?.getFocused() ?? null,
         });
       });
     });
@@ -349,6 +355,7 @@ export const TerminalProvider = defineComponent({
     const ctx: TerminalContext = {
       terminal,
       renderer,
+      rendererCapabilities,
       events,
       scheduler: { invalidate, flush, flushNow },
       runtime,
@@ -373,8 +380,9 @@ export const TerminalProvider = defineComponent({
         const el = containerRef.value;
         if (!el) return;
 
-        const r = createDomRenderer(terminal, el);
+        const r = createDomRenderer(terminal, el, props.domRendererOptions ?? {});
         renderer.value = r;
+        rendererCapabilities.value = r.capabilities;
 
         let lastPointerImeAt = 0;
         let focusImeFn: ((e?: PointerEvent | MouseEvent) => void) | null = null;
@@ -420,6 +428,7 @@ export const TerminalProvider = defineComponent({
           events.value = null;
           renderer.value?.dispose();
           renderer.value = null;
+          rendererCapabilities.value = DOM_RENDERER_CAPABILITIES;
         });
 
         if (props.autoResize) {

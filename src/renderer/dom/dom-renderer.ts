@@ -1,13 +1,38 @@
 import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { Cell, Style, Terminal } from "../../core/types.js";
+import type { RendererCapabilities } from "../capabilities.js";
 import { ansiColorHex, ansiCssVar, installAnsiPaletteCssVars } from "../../core/ansi-palette.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
+import { DOM_RENDERER_CAPABILITIES } from "../capabilities.js";
 
 export type CellMetrics = Readonly<{ cellWidth: number; cellHeight: number }>;
 
+export type DomRendererSyncFlushDecision = Readonly<{
+  performed: boolean;
+  deferredReason?: "budget";
+  rows: number;
+  planes: number;
+  cells: number;
+  maxRows: number;
+  maxCells: number;
+}>;
+
+export type DomRendererSyncFlushStats = Readonly<{
+  requested: number;
+  performed: number;
+  deferred: number;
+  last: DomRendererSyncFlushDecision | null;
+}>;
+
+export type DomRendererDebugStats = Readonly<{
+  syncFlush: DomRendererSyncFlushStats;
+}>;
+
 export interface DomRenderer {
   readonly container: HTMLElement;
+  readonly capabilities: RendererCapabilities;
+  readonly debugStats: DomRendererDebugStats;
   readonly metrics: CellMetrics;
   dispose: () => void;
   refresh: () => void;
@@ -16,6 +41,18 @@ export interface DomRenderer {
     plane: TerminalRenderPlane,
     viewport: Readonly<{ topPx: number; heightPx: number }> | null,
   ) => void;
+}
+
+export interface DomRendererOptions {
+  /**
+   * Maximum dirty row count allowed for same-call DOM flush when commit({ sync: true }).
+   * Larger updates are rAF-batched to avoid blocking the main thread.
+   */
+  syncFlushMaxRows?: number;
+  /**
+   * Maximum estimated cell work for sync DOM flush: dirtyRows * cols * activePlanes.
+   */
+  syncFlushCellBudget?: number;
 }
 
 interface PlaneLayer {
@@ -41,6 +78,8 @@ const DEFAULT_FONT_FAMILY = [
   '"Courier New"',
   "monospace",
 ].join(", ");
+const DEFAULT_SYNC_FLUSH_MAX_ROWS = 32;
+const DEFAULT_SYNC_FLUSH_CELL_BUDGET = 4096;
 
 const styleKeyCache = new WeakMap<object, string>();
 
@@ -304,7 +343,11 @@ function renderRow(
   lineEl.replaceChildren(fragment);
 }
 
-export function createDomRenderer(terminal: Terminal, container: HTMLElement): DomRenderer {
+export function createDomRenderer(
+  terminal: Terminal,
+  container: HTMLElement,
+  options: DomRendererOptions = {},
+): DomRenderer {
   container.style.fontFamily = DEFAULT_FONT_FAMILY;
   container.style.whiteSpace = "pre";
   container.style.display = "inline-block";
@@ -325,6 +368,29 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
   let raf = 0;
   const pending = new Map<TerminalRenderPlane, Set<number>>();
   let disposed = false;
+  const syncFlushMaxRows = Math.max(
+    0,
+    Math.floor(options.syncFlushMaxRows ?? DEFAULT_SYNC_FLUSH_MAX_ROWS),
+  );
+  const syncFlushCellBudget = Math.max(
+    0,
+    Math.floor(options.syncFlushCellBudget ?? DEFAULT_SYNC_FLUSH_CELL_BUDGET),
+  );
+  const capabilities: RendererCapabilities = DOM_RENDERER_CAPABILITIES;
+  let syncFlushRequested = 0;
+  let syncFlushPerformed = 0;
+  let syncFlushDeferred = 0;
+  let lastSyncFlushDecision: DomRendererSyncFlushDecision | null = null;
+  const debugStats: DomRendererDebugStats = {
+    get syncFlush() {
+      return {
+        requested: syncFlushRequested,
+        performed: syncFlushPerformed,
+        deferred: syncFlushDeferred,
+        last: lastSyncFlushDecision,
+      };
+    },
+  };
 
   function applyPlaneOffset(plane: TerminalRenderPlane, offsetPx: number): void {
     const layer = planeLayers.get(plane);
@@ -429,6 +495,8 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
   }
 
   function refresh(): void {
+    cancelPendingRaf();
+    clearPendingRows();
     metrics = measureCell(container);
     const wideW = measureCharWidth(container, "中");
     wideScaleX = wideW > 0 ? Math.max(1, Math.min(2, (metrics.cellWidth * 2) / wideW)) : 1;
@@ -442,23 +510,159 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
     }
   }
 
-  function flushPending(): void {
+  interface FlushScope {
+    planes: readonly TerminalRenderPlane[];
+    rows: readonly number[] | null;
+  }
+
+  type SyncFlushWork = Readonly<{
+    rowCount: number;
+    planeCount: number;
+    cellWork: number;
+  }>;
+
+  const pendingRowCountsByPlane = new Map<TerminalRenderPlane, number>();
+  let pendingTotalRowCount = 0;
+  let lastSyncFlushWarnAt = 0;
+
+  function cancelPendingRaf(): void {
+    if (raf > 0) cancelAnimationFrame(raf);
     raf = 0;
+  }
+
+  function clearPendingRows(): void {
+    pending.clear();
+    pendingRowCountsByPlane.clear();
+    pendingTotalRowCount = 0;
+  }
+
+  function addPendingRow(plane: TerminalRenderPlane, rows: Set<number>, y: number): void {
+    if (rows.has(y)) return;
+    rows.add(y);
+    pendingTotalRowCount++;
+    pendingRowCountsByPlane.set(plane, (pendingRowCountsByPlane.get(plane) ?? 0) + 1);
+  }
+
+  function deletePendingRow(plane: TerminalRenderPlane, rows: Set<number>, y: number): void {
+    if (!rows.delete(y)) return;
+    pendingTotalRowCount--;
+    const nextCount = (pendingRowCountsByPlane.get(plane) ?? 1) - 1;
+    if (nextCount > 0) pendingRowCountsByPlane.set(plane, nextCount);
+    else pendingRowCountsByPlane.delete(plane);
+  }
+
+  function estimateSyncFlushWork(scope: Readonly<FlushScope>): SyncFlushWork {
+    const size = terminal.size();
+    const rowCount = scope.rows == null ? size.rows : scope.rows.length;
+    const planeCount = scope.planes.length || TERMINAL_RENDER_PLANES.length;
+    const cellWork = rowCount * size.cols * planeCount;
+    return { rowCount, planeCount, cellWork };
+  }
+
+  function recordSyncFlushDecision(
+    work: SyncFlushWork,
+    performed: boolean,
+    deferredReason?: "budget",
+  ): void {
+    syncFlushRequested++;
+    if (performed) syncFlushPerformed++;
+    else syncFlushDeferred++;
+    lastSyncFlushDecision = {
+      performed,
+      deferredReason,
+      rows: work.rowCount,
+      planes: work.planeCount,
+      cells: work.cellWork,
+      maxRows: syncFlushMaxRows,
+      maxCells: syncFlushCellBudget,
+    };
+  }
+
+  function recordLargeSyncFlush(work: SyncFlushWork): void {
+    if (!(globalThis as any).__VT_DEBUG_PERF__) return;
+    if (work.rowCount <= syncFlushMaxRows && work.cellWork <= syncFlushCellBudget) return;
+    const size = terminal.size();
+    const now = Date.now();
+    if (now - lastSyncFlushWarnAt < 1_000) return;
+    lastSyncFlushWarnAt = now;
+    console.warn(
+      `[vue-tui] sync DOM flush request deferred to rAF: rows=${work.rowCount} maxRows=${syncFlushMaxRows} cols=${size.cols} planes=${work.planeCount} cells=${work.cellWork} maxCells=${syncFlushCellBudget}`,
+    );
+  }
+
+  function shouldSyncFlush(work: SyncFlushWork): boolean {
+    return work.rowCount <= syncFlushMaxRows && work.cellWork <= syncFlushCellBudget;
+  }
+
+  function scopeWillDrainAllPending(scope: Readonly<FlushScope>): boolean {
+    if (pendingTotalRowCount === 0) return true;
+    if (scope.rows !== null && pendingTotalRowCount > scope.rows.length * scope.planes.length)
+      return false;
+    const scopePlanes = new Set(scope.planes);
+    for (const plane of pendingRowCountsByPlane.keys()) {
+      if (!scopePlanes.has(plane)) return false;
+    }
+    if (scope.rows === null) return true;
+    const scopeRows = new Set(scope.rows);
+    for (const [plane, rows] of pending) {
+      if (!scopePlanes.has(plane)) return false;
+      if (rows.size > scopeRows.size) return false;
+      for (const y of rows) {
+        if (!scopeRows.has(y)) return false;
+      }
+    }
+    return true;
+  }
+
+  function flushPending(
+    scope?: Readonly<FlushScope>,
+    options?: Readonly<{ clearRaf?: boolean }>,
+  ): void {
+    if (options?.clearRaf !== false) raf = 0;
     if (disposed) return;
-    for (const plane of TERMINAL_RENDER_PLANES) {
+    const planesToFlush = scope?.planes ?? TERMINAL_RENDER_PLANES;
+
+    for (const plane of planesToFlush) {
       const layer = planeLayers.get(plane);
       const rows = pending.get(plane);
       if (!layer || !rows?.size) continue;
-      for (const y of rows) {
+
+      const flushRow = (y: number): void => {
+        if (!rows.has(y)) return;
         const line = layer.lines[y];
         if (line) renderRow(layer.terminal, metrics, wideScaleX, y, line);
+        deletePendingRow(plane, rows, y);
+      };
+
+      if (scope?.rows == null) {
+        for (const y of rows) flushRow(y);
+      } else {
+        for (const y of scope.rows) flushRow(y);
       }
-      rows.clear();
+
+      if (rows.size === 0) pending.delete(plane);
     }
+
+    if (pending.size > 0) scheduleRafIfNeeded();
   }
 
-  const offCommit = terminal.on("commit", ({ dirtyRows, planes }) => {
+  function scheduleRafIfNeeded(): void {
+    if (raf || disposed) return;
+    // Support test environments that stub rAF synchronously by avoiding the
+    // `raf = requestAnimationFrame(...)` assignment trap (cb runs before the assignment).
+    raf = -1;
+    const id = requestAnimationFrame(() => {
+      flushPending();
+    });
+    if (raf === -1) raf = id;
+  }
+
+  const offCommit = terminal.on("commit", ({ dirtyRows, planes, sync }) => {
     const activePlanes = planes?.length ? planes : TERMINAL_RENDER_PLANES;
+    // Track which rows this specific commit adds to pending, so scoped sync
+    // flush can limit DOM work to just the high-priority update.
+    const commitRows: number[] | null = dirtyRows === null ? null : [...dirtyRows];
+
     if (dirtyRows === null) {
       const size = terminal.size();
       for (const plane of activePlanes) {
@@ -467,7 +671,7 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
           rows = new Set<number>();
           pending.set(plane, rows);
         }
-        for (let y = 0; y < size.rows; y++) rows.add(y);
+        for (let y = 0; y < size.rows; y++) addPendingRow(plane, rows, y);
       }
     } else {
       for (const plane of activePlanes) {
@@ -476,17 +680,28 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
           rows = new Set<number>();
           pending.set(plane, rows);
         }
-        for (const y of dirtyRows) rows.add(y);
+        for (const y of dirtyRows) addPendingRow(plane, rows, y);
       }
     }
-    if (!raf) {
-      // Support test environments that stub rAF synchronously by avoiding the
-      // `raf = requestAnimationFrame(...)` assignment trap (cb runs before the assignment).
-      raf = -1;
-      const id = requestAnimationFrame(() => {
-        flushPending();
-      });
-      if (raf === -1) raf = id;
+    if (sync) {
+      const scope = { planes: activePlanes, rows: commitRows };
+      const syncWork = estimateSyncFlushWork(scope);
+      recordLargeSyncFlush(syncWork);
+      if (!shouldSyncFlush(syncWork)) {
+        recordSyncFlushDecision(syncWork, false, "budget");
+        scheduleRafIfNeeded();
+        return;
+      }
+      recordSyncFlushDecision(syncWork, true);
+      const drainedAll = scopeWillDrainAllPending(scope);
+      if (raf > 0 && drainedAll) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      flushPending(scope, { clearRaf: drainedAll });
+      if (!drainedAll) scheduleRafIfNeeded();
+    } else if (!raf) {
+      scheduleRafIfNeeded();
     }
   });
 
@@ -500,6 +715,8 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
 
   return {
     container,
+    capabilities,
+    debugStats,
     get metrics() {
       return metrics;
     },
@@ -508,8 +725,8 @@ export function createDomRenderer(terminal: Terminal, container: HTMLElement): D
       disposed = true;
       offCommit();
       offResize();
-      if (raf > 0) cancelAnimationFrame(raf);
-      pending.clear();
+      cancelPendingRaf();
+      clearPendingRows();
       planeLayers.clear();
       container.replaceChildren();
     },

@@ -23,6 +23,7 @@
 - [TText](#ttext)
 - [TTransition](#ttransition)
 - [TView](#tview)
+- [TVirtualList](#tvirtuallist)
 
 ## TAnchor
 
@@ -73,20 +74,21 @@
 
 ### Props
 
-| 名称                 | 类型                 | 默认值                  | 必填 | 说明 |
-| -------------------- | -------------------- | ----------------------- | ---- | ---- |
-| <code>x</code>       | <code>number</code>  | —                       | 是   | —    |
-| <code>y</code>       | <code>number</code>  | —                       | 是   | —    |
-| <code>w</code>       | <code>number</code>  | —                       | 是   | —    |
-| <code>h</code>       | <code>number</code>  | —                       | 是   | —    |
-| <code>zIndex</code>  | <code>number</code>  | <code>0</code>          | 否   | —    |
-| <code>border</code>  | <code>boolean</code> | <code>true</code>       | 否   | —    |
-| <code>title</code>   | <code>string</code>  | <code>&#39;&#39;</code> | 否   | —    |
-| <code>padding</code> | <code>number</code>  | <code>0</code>          | 否   | —    |
-| <code>scrollX</code> | <code>number</code>  | <code>0</code>          | 否   | —    |
-| <code>scrollY</code> | <code>number</code>  | <code>0</code>          | 否   | —    |
-| <code>style</code>   | <code>Style</code>   | <code>undefined</code>  | 否   | —    |
-| <code>clear</code>   | <code>boolean</code> | <code>true</code>       | 否   | —    |
+| 名称                    | 类型                 | 默认值                    | 必填 | 说明 |
+| ----------------------- | -------------------- | ------------------------- | ---- | ---- |
+| <code>x</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>y</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>w</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>h</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>zIndex</code>     | <code>number</code>  | <code>0</code>            | 否   | —    |
+| <code>border</code>     | <code>boolean</code> | <code>true</code>         | 否   | —    |
+| <code>title</code>      | <code>string</code>  | <code>&quot;&quot;</code> | 否   | —    |
+| <code>padding</code>    | <code>number</code>  | <code>0</code>            | 否   | —    |
+| <code>scrollX</code>    | <code>number</code>  | <code>0</code>            | 否   | —    |
+| <code>scrollY</code>    | <code>number</code>  | <code>0</code>            | 否   | —    |
+| <code>style</code>      | <code>Style</code>   | <code>undefined</code>    | 否   | —    |
+| <code>titleStyle</code> | <code>Style</code>   | <code>undefined</code>    | 否   | —    |
+| <code>clear</code>      | <code>boolean</code> | <code>true</code>         | 否   | —    |
 
 ### Events
 
@@ -103,12 +105,12 @@
 
 ### Props
 
-| 名称                  | 类型                                              | 默认值                       | 必填 | 说明 |
-| --------------------- | ------------------------------------------------- | ---------------------------- | ---- | ---- |
-| <code>mode</code>     | <code>&#39;focus&#39; &#124; &#39;all&#39;</code> | <code>&#39;focus&#39;</code> | 否   | —    |
-| <code>panel</code>    | <code>boolean</code>                              | <code>true</code>            | 否   | —    |
-| <code>maxRects</code> | <code>number</code>                               | <code>40</code>              | 否   | —    |
-| <code>zIndex</code>   | <code>number</code>                               | <code>90</code>              | 否   | —    |
+| 名称                  | 类型                                                  | 默认值                         | 必填 | 说明 |
+| --------------------- | ----------------------------------------------------- | ------------------------------ | ---- | ---- |
+| <code>mode</code>     | <code>&quot;focus&quot; &#124; &quot;all&quot;</code> | <code>&quot;focus&quot;</code> | 否   | —    |
+| <code>panel</code>    | <code>boolean</code>                                  | <code>true</code>              | 否   | —    |
+| <code>maxRects</code> | <code>number</code>                                   | <code>40</code>                | 否   | —    |
+| <code>zIndex</code>   | <code>number</code>                                   | <code>90</code>                | 否   | —    |
 
 ### Events
 
@@ -120,26 +122,29 @@
 
 ### Props
 
-| 名称                         | 类型                                                          | 默认值                        | 必填 | 说明 |
-| ---------------------------- | ------------------------------------------------------------- | ----------------------------- | ---- | ---- |
-| <code>modelValue</code>      | <code>boolean</code>                                          | —                             | 是   | —    |
-| <code>w</code>               | <code>number</code>                                           | —                             | 是   | —    |
-| <code>h</code>               | <code>number</code>                                           | —                             | 是   | —    |
-| <code>title</code>           | <code>string</code>                                           | <code>&#39;&#39;</code>       | 否   | —    |
-| <code>padding</code>         | <code>number</code>                                           | <code>1</code>                | 否   | —    |
-| <code>zIndex</code>          | <code>number</code>                                           | <code>1000</code>             | 否   | —    |
-| <code>style</code>           | <code>Style</code>                                            | <code>undefined</code>        | 否   | —    |
-| <code>placement</code>       | <code>Placement</code>                                        | <code>&#39;center&#39;</code> | 否   | —    |
-| <code>offsetX</code>         | <code>number</code>                                           | <code>0</code>                | 否   | —    |
-| <code>offsetY</code>         | <code>number</code>                                           | <code>0</code>                | 否   | —    |
-| <code>backdrop</code>        | <code>boolean</code>                                          | <code>true</code>             | 否   | —    |
-| <code>closeOnBackdrop</code> | <code>boolean</code>                                          | <code>true</code>             | 否   | —    |
-| <code>closeOnEsc</code>      | <code>boolean</code>                                          | <code>true</code>             | 否   | —    |
-| <code>closeOnBlur</code>     | <code>boolean</code>                                          | <code>false</code>            | 否   | —    |
-| <code>teleport</code>        | <code>boolean</code>                                          | <code>false</code>            | 否   | —    |
-| <code>tabMode</code>         | <code>&#39;cycle&#39; &#124; &#39;wrapFromButtons&#39;</code> | <code>&#39;cycle&#39;</code>  | 否   | —    |
-| <code>buttons</code>         | <code>DialogButton[]</code>                                   | <code>() =&gt; []</code>      | 否   | —    |
-| <code>closeOnConfirm</code>  | <code>boolean</code>                                          | <code>true</code>             | 否   | —    |
+| 名称                         | 类型                                                              | 默认值                          | 必填 | 说明 |
+| ---------------------------- | ----------------------------------------------------------------- | ------------------------------- | ---- | ---- |
+| <code>modelValue</code>      | <code>boolean</code>                                              | —                               | 是   | —    |
+| <code>w</code>               | <code>number</code>                                               | —                               | 是   | —    |
+| <code>h</code>               | <code>number</code>                                               | —                               | 是   | —    |
+| <code>title</code>           | <code>string</code>                                               | <code>&quot;&quot;</code>       | 否   | —    |
+| <code>padding</code>         | <code>number</code>                                               | <code>1</code>                  | 否   | —    |
+| <code>zIndex</code>          | <code>number</code>                                               | <code>1000</code>               | 否   | —    |
+| <code>style</code>           | <code>Style</code>                                                | <code>undefined</code>          | 否   | —    |
+| <code>titleStyle</code>      | <code>Style</code>                                                | <code>undefined</code>          | 否   | —    |
+| <code>contentStyle</code>    | <code>Style</code>                                                | <code>undefined</code>          | 否   | —    |
+| <code>backdropStyle</code>   | <code>Style</code>                                                | <code>undefined</code>          | 否   | —    |
+| <code>placement</code>       | <code>Placement</code>                                            | <code>&quot;center&quot;</code> | 否   | —    |
+| <code>offsetX</code>         | <code>number</code>                                               | <code>0</code>                  | 否   | —    |
+| <code>offsetY</code>         | <code>number</code>                                               | <code>0</code>                  | 否   | —    |
+| <code>backdrop</code>        | <code>boolean</code>                                              | <code>true</code>               | 否   | —    |
+| <code>closeOnBackdrop</code> | <code>boolean</code>                                              | <code>true</code>               | 否   | —    |
+| <code>closeOnEsc</code>      | <code>boolean</code>                                              | <code>true</code>               | 否   | —    |
+| <code>closeOnBlur</code>     | <code>boolean</code>                                              | <code>false</code>              | 否   | —    |
+| <code>teleport</code>        | <code>boolean</code>                                              | <code>false</code>              | 否   | —    |
+| <code>tabMode</code>         | <code>&quot;cycle&quot; &#124; &quot;wrapFromButtons&quot;</code> | <code>&quot;cycle&quot;</code>  | 否   | —    |
+| <code>buttons</code>         | <code>DialogButton[]</code>                                       | <code>() =&gt; []</code>        | 否   | —    |
+| <code>closeOnConfirm</code>  | <code>boolean</code>                                              | <code>true</code>               | 否   | —    |
 
 ### Events
 
@@ -171,6 +176,7 @@
 | <code>pathPickerProvider</code> | <code>PathPickerProvider</code>                                     | <code>undefined</code>                          | 否   | —    |
 | <code>debugIme</code>           | <code>boolean</code>                                                | <code>false</code>                              | 否   | —    |
 | <code>debugTrace</code>         | <code>boolean</code>                                                | <code>false</code>                              | 否   | —    |
+| <code>domRendererOptions</code> | <code>DomRendererOptions</code>                                     | <code>undefined</code>                          | 否   | —    |
 
 ### Events
 
@@ -182,17 +188,17 @@
 
 ### Props
 
-| 名称                   | 类型                   | 默认值                          | 必填 | 说明 |
-| ---------------------- | ---------------------- | ------------------------------- | ---- | ---- |
-| <code>x</code>         | <code>number</code>    | —                               | 是   | —    |
-| <code>y</code>         | <code>number</code>    | —                               | 是   | —    |
-| <code>w</code>         | <code>number</code>    | —                               | 是   | —    |
-| <code>h</code>         | <code>number</code>    | —                               | 是   | —    |
-| <code>items</code>     | <code>unknown[]</code> | —                               | 是   | —    |
-| <code>direction</code> | <code>Direction</code> | <code>&#39;vertical&#39;</code> | 否   | —    |
-| <code>gap</code>       | <code>number</code>    | <code>0</code>                  | 否   | —    |
-| <code>itemSize</code>  | <code>number</code>    | <code>1</code>                  | 否   | —    |
-| <code>zIndex</code>    | <code>number</code>    | <code>0</code>                  | 否   | —    |
+| 名称                   | 类型                   | 默认值                            | 必填 | 说明 |
+| ---------------------- | ---------------------- | --------------------------------- | ---- | ---- |
+| <code>x</code>         | <code>number</code>    | —                                 | 是   | —    |
+| <code>y</code>         | <code>number</code>    | —                                 | 是   | —    |
+| <code>w</code>         | <code>number</code>    | —                                 | 是   | —    |
+| <code>h</code>         | <code>number</code>    | —                                 | 是   | —    |
+| <code>items</code>     | <code>unknown[]</code> | —                                 | 是   | —    |
+| <code>direction</code> | <code>Direction</code> | <code>&quot;vertical&quot;</code> | 否   | —    |
+| <code>gap</code>       | <code>number</code>    | <code>0</code>                    | 否   | —    |
+| <code>itemSize</code>  | <code>number</code>    | <code>1</code>                    | 否   | —    |
+| <code>zIndex</code>    | <code>number</code>    | <code>0</code>                    | 否   | —    |
 
 ### Events
 
@@ -204,46 +210,55 @@
 
 ### Props
 
-| 名称                                     | 类型                                                                                             | 默认值                       | 必填 | 说明 |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------- | ---- | ---- |
-| <code>x</code>                           | <code>number</code>                                                                              | —                            | 是   | —    |
-| <code>y</code>                           | <code>number</code>                                                                              | —                            | 是   | —    |
-| <code>w</code>                           | <code>number</code>                                                                              | —                            | 是   | —    |
-| <code>h</code>                           | <code>number</code>                                                                              | <code>1</code>               | 否   | —    |
-| <code>zIndex</code>                      | <code>number</code>                                                                              | <code>0</code>               | 否   | —    |
-| <code>modelValue</code>                  | <code>string</code>                                                                              | —                            | 是   | —    |
-| <code>cursorToEndOnExternalUpdate</code> | <code>boolean</code>                                                                             | <code>false</code>           | 否   | —    |
-| <code>cursorToEndOnFirstFocus</code>     | <code>boolean</code>                                                                             | <code>false</code>           | 否   | —    |
-| <code>placeholder</code>                 | <code>string</code>                                                                              | <code>&#39;&#39;</code>      | 否   | —    |
-| <code>placeholderWhenFocused</code>      | <code>boolean</code>                                                                             | <code>false</code>           | 否   | —    |
-| <code>style</code>                       | <code>Style</code>                                                                               | <code>undefined</code>       | 否   | —    |
-| <code>autoFocus</code>                   | <code>boolean</code>                                                                             | <code>false</code>           | 否   | —    |
-| <code>cursorBlink</code>                 | <code>boolean</code>                                                                             | <code>true</code>            | 否   | —    |
-| <code>cursorShape</code>                 | <code>&#39;block&#39; &#124; &#39;underline&#39; &#124; &#39;bar&#39;</code>                     | <code>&#39;block&#39;</code> | 否   | —    |
-| <code>blinkInterval</code>               | <code>number</code>                                                                              | <code>500</code>             | 否   | —    |
-| <code>promptSuggestions</code>           | <code>readonly PromptSuggestion[]</code>                                                         | <code>() =&gt; []</code>     | 否   | —    |
-| <code>promptTrigger</code>               | <code>string</code>                                                                              | <code>&#39;/&#39;</code>     | 否   | —    |
-| <code>promptMaxItems</code>              | <code>number</code>                                                                              | <code>6</code>               | 否   | —    |
-| <code>promptAlign</code>                 | <code>&#39;input&#39; &#124; &#39;center&#39;</code>                                             | <code>&#39;input&#39;</code> | 否   | —    |
-| <code>promptSelectedStyle</code>         | <code>Style</code>                                                                               | <code>undefined</code>       | 否   | —    |
-| <code>mentionTrigger</code>              | <code>string</code>                                                                              | <code>&#39;@&#39;</code>     | 否   | —    |
-| <code>mentionWorkspace</code>            | <code>string</code>                                                                              | <code>&#39;&#39;</code>      | 否   | —    |
-| <code>mentionMode</code>                 | <code>PathPickMode</code>                                                                        | <code>&#39;file&#39;</code>  | 否   | —    |
-| <code>mentionShowHidden</code>           | <code>boolean</code>                                                                             | <code>false</code>           | 否   | —    |
-| <code>mentionSuggestions</code>          | <code>readonly PromptSuggestion[]</code>                                                         | <code>() =&gt; []</code>     | 否   | —    |
-| <code>mentionMaxItems</code>             | <code>number</code>                                                                              | <code>8</code>               | 否   | —    |
-| <code>dedupeMentions</code>              | <code>boolean</code>                                                                             | <code>true</code>            | 否   | —    |
-| <code>collectMentions</code>             | <code>boolean</code>                                                                             | <code>false</code>           | 否   | —    |
-| <code>mentions</code>                    | <code>readonly string[]</code>                                                                   | <code>() =&gt; []</code>     | 否   | —    |
-| <code>collapseMultiline</code>           | <code>boolean</code>                                                                             | <code>false</code>           | 否   | —    |
-| <code>multilineTexts</code>              | <code>readonly string[]</code>                                                                   | <code>() =&gt; []</code>     | 否   | —    |
-| <code>secret</code>                      | <code>boolean</code>                                                                             | <code>false</code>           | 否   | —    |
-| <code>maskChar</code>                    | <code>string</code>                                                                              | <code>&#39;•&#39;</code>     | 否   | —    |
-| <code>submitOnEnter</code>               | <code>boolean</code>                                                                             | <code>true</code>            | 否   | —    |
-| <code>clearOnEscape</code>               | <code>boolean</code>                                                                             | <code>false</code>           | 否   | —    |
-| <code>plugins</code>                     | <code>readonly TInputPlugin[]</code>                                                             | <code>() =&gt; []</code>     | 否   | —    |
-| <code>pasteImageHandler</code>           | <code>() =&gt; Promise&lt;string &#124; null&gt; &#124; string &#124; null</code>                | <code>undefined</code>       | 否   | —    |
-| <code>filePasteHandler</code>            | <code>(absPath: string) =&gt; Promise&lt;string &#124; null&gt; &#124; string &#124; null</code> | <code>undefined</code>       | 否   | —    |
+| 名称                                     | 类型                                                                                             | 默认值                         | 必填 | 说明 |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------ | ---- | ---- |
+| <code>x</code>                           | <code>number</code>                                                                              | —                              | 是   | —    |
+| <code>y</code>                           | <code>number</code>                                                                              | —                              | 是   | —    |
+| <code>w</code>                           | <code>number</code>                                                                              | —                              | 是   | —    |
+| <code>h</code>                           | <code>number</code>                                                                              | <code>1</code>                 | 否   | —    |
+| <code>zIndex</code>                      | <code>number</code>                                                                              | <code>0</code>                 | 否   | —    |
+| <code>modelValue</code>                  | <code>string</code>                                                                              | —                              | 是   | —    |
+| <code>cursorToEndOnExternalUpdate</code> | <code>boolean</code>                                                                             | <code>false</code>             | 否   | —    |
+| <code>cursorToEndOnFirstFocus</code>     | <code>boolean</code>                                                                             | <code>false</code>             | 否   | —    |
+| <code>placeholder</code>                 | <code>string</code>                                                                              | <code>&quot;&quot;</code>      | 否   | —    |
+| <code>placeholderWhenFocused</code>      | <code>boolean</code>                                                                             | <code>false</code>             | 否   | —    |
+| <code>style</code>                       | <code>Style</code>                                                                               | <code>undefined</code>         | 否   | —    |
+| <code>autoFocus</code>                   | <code>boolean</code>                                                                             | <code>false</code>             | 否   | —    |
+| <code>cursorBlink</code>                 | <code>boolean</code>                                                                             | <code>true</code>              | 否   | —    |
+| <code>cursorShape</code>                 | <code>&quot;block&quot; &#124; &quot;underline&quot; &#124; &quot;bar&quot;</code>               | <code>&quot;block&quot;</code> | 否   | —    |
+| <code>blinkInterval</code>               | <code>number</code>                                                                              | <code>500</code>               | 否   | —    |
+| <code>promptSuggestions</code>           | <code>readonly PromptSuggestion[]</code>                                                         | <code>() =&gt; []</code>       | 否   | —    |
+| <code>promptTrigger</code>               | <code>string</code>                                                                              | <code>&quot;/&quot;</code>     | 否   | —    |
+| <code>promptTriggers</code>              | <code>readonly string[]</code>                                                                   | <code>undefined</code>         | 否   | —    |
+| <code>promptMaxItems</code>              | <code>number</code>                                                                              | <code>6</code>                 | 否   | —    |
+| <code>promptAlign</code>                 | <code>&quot;input&quot; &#124; &quot;center&quot;</code>                                         | <code>&quot;input&quot;</code> | 否   | —    |
+| <code>promptSelectedStyle</code>         | <code>Style</code>                                                                               | <code>undefined</code>         | 否   | —    |
+| <code>promptPopupStyle</code>            | <code>Style</code>                                                                               | <code>undefined</code>         | 否   | —    |
+| <code>promptPopupBorderStyle</code>      | <code>Style</code>                                                                               | <code>undefined</code>         | 否   | —    |
+| <code>promptPopupMatchStyle</code>       | <code>Style</code>                                                                               | <code>undefined</code>         | 否   | —    |
+| <code>skillTrigger</code>                | <code>string</code>                                                                              | <code>&quot;&quot;</code>      | 否   | —    |
+| <code>skillSuggestions</code>            | <code>readonly PromptSuggestion[]</code>                                                         | <code>undefined</code>         | 否   | —    |
+| <code>skillHighlightStyle</code>         | <code>Style</code>                                                                               | <code>undefined</code>         | 否   | —    |
+| <code>mentionTrigger</code>              | <code>string</code>                                                                              | <code>&quot;@&quot;</code>     | 否   | —    |
+| <code>mentionWorkspace</code>            | <code>string</code>                                                                              | <code>&quot;&quot;</code>      | 否   | —    |
+| <code>mentionMode</code>                 | <code>PathPickMode</code>                                                                        | <code>&quot;file&quot;</code>  | 否   | —    |
+| <code>mentionShowHidden</code>           | <code>boolean</code>                                                                             | <code>false</code>             | 否   | —    |
+| <code>mentionSuggestions</code>          | <code>readonly PromptSuggestion[]</code>                                                         | <code>() =&gt; []</code>       | 否   | —    |
+| <code>mentionMaxItems</code>             | <code>number</code>                                                                              | <code>8</code>                 | 否   | —    |
+| <code>mentionChipStyle</code>            | <code>Style</code>                                                                               | <code>undefined</code>         | 否   | —    |
+| <code>multilineChipStyle</code>          | <code>Style</code>                                                                               | <code>undefined</code>         | 否   | —    |
+| <code>dedupeMentions</code>              | <code>boolean</code>                                                                             | <code>true</code>              | 否   | —    |
+| <code>collectMentions</code>             | <code>boolean</code>                                                                             | <code>false</code>             | 否   | —    |
+| <code>mentions</code>                    | <code>readonly string[]</code>                                                                   | <code>() =&gt; []</code>       | 否   | —    |
+| <code>collapseMultiline</code>           | <code>boolean</code>                                                                             | <code>false</code>             | 否   | —    |
+| <code>multilineTexts</code>              | <code>readonly string[]</code>                                                                   | <code>() =&gt; []</code>       | 否   | —    |
+| <code>secret</code>                      | <code>boolean</code>                                                                             | <code>false</code>             | 否   | —    |
+| <code>maskChar</code>                    | <code>string</code>                                                                              | <code>&quot;•&quot;</code>     | 否   | —    |
+| <code>submitOnEnter</code>               | <code>boolean</code>                                                                             | <code>true</code>              | 否   | —    |
+| <code>clearOnEscape</code>               | <code>boolean</code>                                                                             | <code>false</code>             | 否   | —    |
+| <code>plugins</code>                     | <code>readonly TInputPlugin[]</code>                                                             | <code>() =&gt; []</code>       | 否   | —    |
+| <code>pasteImageHandler</code>           | <code>() =&gt; Promise&lt;string &#124; null&gt; &#124; string &#124; null</code>                | <code>undefined</code>         | 否   | —    |
+| <code>filePasteHandler</code>            | <code>(absPath: string) =&gt; Promise&lt;string &#124; null&gt; &#124; string &#124; null</code> | <code>undefined</code>         | 否   | —    |
 
 ### Events
 
@@ -269,23 +284,23 @@
 
 ### Props
 
-| 名称                       | 类型                                                                         | 默认值                       | 必填 | 说明 |
-| -------------------------- | ---------------------------------------------------------------------------- | ---------------------------- | ---- | ---- |
-| <code>x</code>             | <code>number</code>                                                          | —                            | 是   | —    |
-| <code>y</code>             | <code>number</code>                                                          | —                            | 是   | —    |
-| <code>w</code>             | <code>number</code>                                                          | —                            | 是   | —    |
-| <code>h</code>             | <code>number</code>                                                          | —                            | 是   | —    |
-| <code>zIndex</code>        | <code>number</code>                                                          | <code>0</code>               | 否   | —    |
-| <code>title</code>         | <code>string</code>                                                          | <code>&#39;&#39;</code>      | 否   | —    |
-| <code>padding</code>       | <code>number</code>                                                          | <code>0</code>               | 否   | —    |
-| <code>modelValue</code>    | <code>string</code>                                                          | —                            | 是   | —    |
-| <code>placeholder</code>   | <code>string</code>                                                          | <code>&#39;&#39;</code>      | 否   | —    |
-| <code>style</code>         | <code>Style</code>                                                           | <code>undefined</code>       | 否   | —    |
-| <code>autoFocus</code>     | <code>boolean</code>                                                         | <code>false</code>           | 否   | —    |
-| <code>plugins</code>       | <code>readonly TInputPlugin[]</code>                                         | <code>() =&gt; []</code>     | 否   | —    |
-| <code>cursorBlink</code>   | <code>boolean</code>                                                         | <code>true</code>            | 否   | —    |
-| <code>cursorShape</code>   | <code>&#39;block&#39; &#124; &#39;underline&#39; &#124; &#39;bar&#39;</code> | <code>&#39;block&#39;</code> | 否   | —    |
-| <code>blinkInterval</code> | <code>number</code>                                                          | <code>500</code>             | 否   | —    |
+| 名称                       | 类型                                                                               | 默认值                         | 必填 | 说明 |
+| -------------------------- | ---------------------------------------------------------------------------------- | ------------------------------ | ---- | ---- |
+| <code>x</code>             | <code>number</code>                                                                | —                              | 是   | —    |
+| <code>y</code>             | <code>number</code>                                                                | —                              | 是   | —    |
+| <code>w</code>             | <code>number</code>                                                                | —                              | 是   | —    |
+| <code>h</code>             | <code>number</code>                                                                | —                              | 是   | —    |
+| <code>zIndex</code>        | <code>number</code>                                                                | <code>0</code>                 | 否   | —    |
+| <code>title</code>         | <code>string</code>                                                                | <code>&quot;&quot;</code>      | 否   | —    |
+| <code>padding</code>       | <code>number</code>                                                                | <code>0</code>                 | 否   | —    |
+| <code>modelValue</code>    | <code>string</code>                                                                | —                              | 是   | —    |
+| <code>placeholder</code>   | <code>string</code>                                                                | <code>&quot;&quot;</code>      | 否   | —    |
+| <code>style</code>         | <code>Style</code>                                                                 | <code>undefined</code>         | 否   | —    |
+| <code>autoFocus</code>     | <code>boolean</code>                                                               | <code>false</code>             | 否   | —    |
+| <code>plugins</code>       | <code>readonly TInputPlugin[]</code>                                               | <code>() =&gt; []</code>       | 否   | —    |
+| <code>cursorBlink</code>   | <code>boolean</code>                                                               | <code>true</code>              | 否   | —    |
+| <code>cursorShape</code>   | <code>&quot;block&quot; &#124; &quot;underline&quot; &#124; &quot;bar&quot;</code> | <code>&quot;block&quot;</code> | 否   | —    |
+| <code>blinkInterval</code> | <code>number</code>                                                                | <code>500</code>               | 否   | —    |
 
 ### Events
 
@@ -312,7 +327,7 @@
 | <code>h</code>                           | <code>number</code>                   | <code>8</code>                                  | 否   | —    |
 | <code>zIndex</code>                      | <code>number</code>                   | <code>0</code>                                  | 否   | —    |
 | <code>modelValue</code>                  | <code>string</code>                   | —                                               | 是   | —    |
-| <code>placeholder</code>                 | <code>string</code>                   | <code>&#39;&#39;</code>                         | 否   | —    |
+| <code>placeholder</code>                 | <code>string</code>                   | <code>&quot;&quot;</code>                       | 否   | —    |
 | <code>style</code>                       | <code>Style</code>                    | <code>undefined</code>                          | 否   | —    |
 | <code>showIndentGuides</code>            | <code>boolean</code>                  | <code>true</code>                               | 否   | —    |
 | <code>indentSize</code>                  | <code>number</code>                   | <code>2</code>                                  | 否   | —    |
@@ -372,13 +387,13 @@
 
 ### Props
 
-| 名称                 | 类型                 | 默认值                                | 必填 | 说明 |
-| -------------------- | -------------------- | ------------------------------------- | ---- | ---- |
-| <code>visible</code> | <code>boolean</code> | —                                     | 是   | —    |
-| <code>content</code> | <code>string</code>  | —                                     | 是   | —    |
-| <code>title</code>   | <code>string</code>  | <code>&#39;Multiline Text&#39;</code> | 否   | —    |
-| <code>style</code>   | <code>Style</code>   | <code>undefined</code>                | 否   | —    |
-| <code>zIndex</code>  | <code>number</code>  | <code>1000</code>                     | 否   | —    |
+| 名称                 | 类型                 | 默认值                                  | 必填 | 说明 |
+| -------------------- | -------------------- | --------------------------------------- | ---- | ---- |
+| <code>visible</code> | <code>boolean</code> | —                                       | 是   | —    |
+| <code>content</code> | <code>string</code>  | —                                       | 是   | —    |
+| <code>title</code>   | <code>string</code>  | <code>&quot;Multiline Text&quot;</code> | 否   | —    |
+| <code>style</code>   | <code>Style</code>   | <code>undefined</code>                  | 否   | —    |
+| <code>zIndex</code>  | <code>number</code>  | <code>1000</code>                       | 否   | —    |
 
 ### Events
 
@@ -392,22 +407,25 @@
 
 ### Props
 
-| 名称                        | 类型                            | 默认值                     | 必填 | 说明 |
-| --------------------------- | ------------------------------- | -------------------------- | ---- | ---- |
-| <code>x</code>              | <code>number</code>             | —                          | 是   | —    |
-| <code>y</code>              | <code>number</code>             | —                          | 是   | —    |
-| <code>w</code>              | <code>number</code>             | —                          | 是   | —    |
-| <code>h</code>              | <code>number</code>             | —                          | 是   | —    |
-| <code>zIndex</code>         | <code>number</code>             | <code>0</code>             | 否   | —    |
-| <code>workspace</code>      | <code>string</code>             | —                          | 是   | —    |
-| <code>mode</code>           | <code>PathPickMode</code>       | <code>&#39;any&#39;</code> | 否   | —    |
-| <code>modelValue</code>     | <code>string</code>             | —                          | 是   | —    |
-| <code>placeholder</code>    | <code>string</code>             | <code>&#39;&#39;</code>    | 否   | —    |
-| <code>style</code>          | <code>Style</code>              | <code>undefined</code>     | 否   | —    |
-| <code>autoFocus</code>      | <code>boolean</code>            | <code>false</code>         | 否   | —    |
-| <code>showHidden</code>     | <code>boolean</code>            | <code>false</code>         | 否   | —    |
-| <code>maxSuggestions</code> | <code>number</code>             | <code>50</code>            | 否   | —    |
-| <code>provider</code>       | <code>PathPickerProvider</code> | <code>undefined</code>     | 否   | —    |
+| 名称                        | 类型                            | 默认值                       | 必填 | 说明 |
+| --------------------------- | ------------------------------- | ---------------------------- | ---- | ---- |
+| <code>x</code>              | <code>number</code>             | —                            | 是   | —    |
+| <code>y</code>              | <code>number</code>             | —                            | 是   | —    |
+| <code>w</code>              | <code>number</code>             | —                            | 是   | —    |
+| <code>h</code>              | <code>number</code>             | —                            | 是   | —    |
+| <code>zIndex</code>         | <code>number</code>             | <code>0</code>               | 否   | —    |
+| <code>workspace</code>      | <code>string</code>             | —                            | 是   | —    |
+| <code>mode</code>           | <code>PathPickMode</code>       | <code>&quot;any&quot;</code> | 否   | —    |
+| <code>modelValue</code>     | <code>string</code>             | —                            | 是   | —    |
+| <code>placeholder</code>    | <code>string</code>             | <code>&quot;&quot;</code>    | 否   | —    |
+| <code>style</code>          | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
+| <code>inputStyle</code>     | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
+| <code>activeStyle</code>    | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
+| <code>matchStyle</code>     | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
+| <code>autoFocus</code>      | <code>boolean</code>            | <code>false</code>           | 否   | —    |
+| <code>showHidden</code>     | <code>boolean</code>            | <code>false</code>           | 否   | —    |
+| <code>maxSuggestions</code> | <code>number</code>             | <code>50</code>              | 否   | —    |
+| <code>provider</code>       | <code>PathPickerProvider</code> | <code>undefined</code>       | 否   | —    |
 
 ### Events
 
@@ -440,9 +458,9 @@
 
 ### Props
 
-| 名称               | 类型                             | 默认值                         | 必填 | 说明 |
-| ------------------ | -------------------------------- | ------------------------------ | ---- | ---- |
-| <code>plane</code> | <code>TerminalRenderPlane</code> | <code>&#39;default&#39;</code> | 否   | —    |
+| 名称               | 类型                             | 默认值                           | 必填 | 说明 |
+| ------------------ | -------------------------------- | -------------------------------- | ---- | ---- |
+| <code>plane</code> | <code>TerminalRenderPlane</code> | <code>&quot;default&quot;</code> | 否   | —    |
 
 ### Events
 
@@ -469,21 +487,23 @@
 
 ### Props
 
-| 名称                        | 类型                                 | 默认值                       | 必填 | 说明 |
-| --------------------------- | ------------------------------------ | ---------------------------- | ---- | ---- |
-| <code>x</code>              | <code>number</code>                  | —                            | 是   | —    |
-| <code>y</code>              | <code>number</code>                  | —                            | 是   | —    |
-| <code>w</code>              | <code>number</code>                  | —                            | 是   | —    |
-| <code>h</code>              | <code>number</code>                  | —                            | 是   | —    |
-| <code>zIndex</code>         | <code>number</code>                  | <code>0</code>               | 否   | —    |
-| <code>options</code>        | <code>SelectOption[]</code>          | —                            | 是   | —    |
-| <code>modelValue</code>     | <code>number &#124; number[]</code>  | <code>0</code>               | 否   | —    |
-| <code>multiple</code>       | <code>boolean</code>                 | <code>false</code>           | 否   | —    |
-| <code>multipleEmit</code>   | <code>TSelectMultipleEmitMode</code> | <code>&#39;value&#39;</code> | 否   | —    |
-| <code>style</code>          | <code>Style</code>                   | <code>undefined</code>       | 否   | —    |
-| <code>highlightStyle</code> | <code>Style</code>                   | <code>undefined</code>       | 否   | —    |
-| <code>autoFocus</code>      | <code>boolean</code>                 | <code>false</code>           | 否   | —    |
-| <code>closeOnBlur</code>    | <code>boolean</code>                 | <code>false</code>           | 否   | —    |
+| 名称                             | 类型                                 | 默认值                         | 必填 | 说明 |
+| -------------------------------- | ------------------------------------ | ------------------------------ | ---- | ---- |
+| <code>x</code>                   | <code>number</code>                  | —                              | 是   | —    |
+| <code>y</code>                   | <code>number</code>                  | —                              | 是   | —    |
+| <code>w</code>                   | <code>number</code>                  | —                              | 是   | —    |
+| <code>h</code>                   | <code>number</code>                  | —                              | 是   | —    |
+| <code>zIndex</code>              | <code>number</code>                  | <code>0</code>                 | 否   | —    |
+| <code>options</code>             | <code>SelectOption[]</code>          | —                              | 是   | —    |
+| <code>modelValue</code>          | <code>number &#124; number[]</code>  | <code>0</code>                 | 否   | —    |
+| <code>multiple</code>            | <code>boolean</code>                 | <code>false</code>             | 否   | —    |
+| <code>multipleEmit</code>        | <code>TSelectMultipleEmitMode</code> | <code>&quot;value&quot;</code> | 否   | —    |
+| <code>style</code>               | <code>Style</code>                   | <code>undefined</code>         | 否   | —    |
+| <code>highlightStyle</code>      | <code>Style</code>                   | <code>undefined</code>         | 否   | —    |
+| <code>matchStyle</code>          | <code>Style</code>                   | <code>undefined</code>         | 否   | —    |
+| <code>highlightMatchStyle</code> | <code>Style</code>                   | <code>undefined</code>         | 否   | —    |
+| <code>autoFocus</code>           | <code>boolean</code>                 | <code>false</code>             | 否   | —    |
+| <code>closeOnBlur</code>         | <code>boolean</code>                 | <code>false</code>             | 否   | —    |
 
 ### Events
 
@@ -588,3 +608,39 @@
 | <code>focus</code>               | —       | —    |
 | <code>blurCapture</code>         | —       | —    |
 | <code>blur</code>                | —       | —    |
+
+## TVirtualList
+
+源码：`src/vue/components/TVirtualList.ts`
+
+> Experimental import: `@simon_he/vue-tui/experimental`
+
+### Props
+
+| 名称                       | 类型                                                      | 默认值                       | 必填 | 说明 |
+| -------------------------- | --------------------------------------------------------- | ---------------------------- | ---- | ---- |
+| <code>x</code>             | <code>number</code>                                       | —                            | 是   | —    |
+| <code>y</code>             | <code>number</code>                                       | —                            | 是   | —    |
+| <code>w</code>             | <code>number</code>                                       | —                            | 是   | —    |
+| <code>h</code>             | <code>number</code>                                       | —                            | 是   | —    |
+| <code>zIndex</code>        | <code>number</code>                                       | <code>0</code>               | 否   | —    |
+| <code>itemCount</code>     | <code>number</code>                                       | —                            | 是   | —    |
+| <code>itemVersion</code>   | <code>number</code>                                       | —                            | 是   | —    |
+| <code>getItem</code>       | <code>(index: number) =&gt; unknown</code>                | —                            | 是   | —    |
+| <code>renderItem</code>    | <code>(item: unknown, index: number) =&gt; unknown</code> | <code>undefined</code>       | 否   | —    |
+| <code>modelValue</code>    | <code>number</code>                                       | <code>0</code>               | 否   | —    |
+| <code>style</code>         | <code>Style</code>                                        | <code>undefined</code>       | 否   | —    |
+| <code>activeStyle</code>   | <code>Style</code>                                        | <code>undefined</code>       | 否   | —    |
+| <code>autoFocus</code>     | <code>boolean</code>                                      | <code>false</code>           | 否   | —    |
+| <code>rowScrollMode</code> | <code>RowScrollMode</code>                                | <code>&quot;off&quot;</code> | 否   | —    |
+
+### Events
+
+| 名称                           | Payload | 说明 |
+| ------------------------------ | ------- | ---- |
+| <code>update:modelValue</code> | —       | —    |
+| <code>change</code>            | —       | —    |
+| <code>scroll</code>            | —       | —    |
+| <code>focus</code>             | —       | —    |
+| <code>blur</code>              | —       | —    |
+| <code>keydown</code>           | —       | —    |

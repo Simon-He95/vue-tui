@@ -1,6 +1,7 @@
 import type { Ref } from "vue";
 import type { TerminalRenderPlanes } from "../core/render-plane.js";
 import type { TerminalEventRecord } from "../events/recording.js";
+import type { DomRendererSyncFlushDecision } from "../renderer/index.js";
 import { ref, shallowReactive } from "vue";
 
 export type TraceRecord =
@@ -20,6 +21,8 @@ export type TraceRecord =
       at: number;
       dirtyRows: readonly number[] | null;
       planes: TerminalRenderPlanes | null;
+      sync?: boolean;
+      rendererSyncFlush?: DomRendererSyncFlushDecision | null;
       focusedId: string | null;
     }>;
 

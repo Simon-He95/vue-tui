@@ -475,6 +475,7 @@ export function createEventManager(
       altKey: native.altKey,
       metaKey: native.metaKey,
       deltaY: "deltaY" in native ? native.deltaY : undefined,
+      deltaMode: "deltaMode" in native ? native.deltaMode : undefined,
     });
   }
 
@@ -800,6 +801,7 @@ export function createEventManager(
       shiftKey: e.shiftKey,
       altKey: e.altKey,
       metaKey: e.metaKey,
+      deltaMode: e.deltaMode,
     });
     dispatchPointer("wheel", e);
   }

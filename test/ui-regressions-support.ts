@@ -56,6 +56,7 @@ const {
   createEventManager,
 } = await import("../src/index.js");
 
+const { TVirtualList } = await import("../src/experimental.js");
 const { useRenderNode } = await import("../src/vue/composables/use-render-node.js");
 
 const spawnOutputsByCmd = new Map<string, string | null>();
@@ -119,7 +120,12 @@ function expectBoxBorder(
   for (let xx = x + 1; xx < x + w - 1; xx++) expect(lines[y + h - 1]?.[xx]).toBe("─");
 }
 
-async function mountTerminal(children: () => any, cols = 40, rows = 8): Promise<Mounted> {
+async function mountTerminal(
+  children: () => any,
+  cols = 40,
+  rows = 8,
+  providerProps: Record<string, unknown> = {},
+): Promise<Mounted> {
   const root = document.createElement("div");
   document.body.appendChild(root);
 
@@ -150,7 +156,7 @@ async function mountTerminal(children: () => any, cols = 40, rows = 8): Promise<
       return () =>
         h(
           TerminalProvider,
-          { cols, rows },
+          { cols, rows, ...providerProps },
           {
             default: () => [h(Expose), children()],
           },
@@ -207,6 +213,7 @@ export {
   TRenderPlane,
   TSelect,
   TText,
+  TVirtualList,
   TView,
   useLayout,
   useRenderNode,

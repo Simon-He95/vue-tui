@@ -636,6 +636,31 @@ export function createTerminal(opts: { cols: number; rows: number }): Terminal {
     };
   }
 
+  function dirtyRowsCoverRange(
+    rows: readonly number[] | null,
+    startY: number,
+    endY: number,
+  ): boolean {
+    if (rows === null) return true;
+    if (!rows.length) return false;
+    let idx = 0;
+    while (idx < rows.length && (rows[idx] ?? -1) < startY) idx++;
+    for (let y = startY; y < endY; y++) {
+      if (rows[idx] !== y) return false;
+      idx++;
+    }
+    return true;
+  }
+
+  function dropScrollOpsCoveredByDirtyRows(
+    ops: readonly TerminalScrollOperation[] | null,
+    dirtyRows: readonly number[] | null,
+  ): readonly TerminalScrollOperation[] | null {
+    if (!ops?.length) return null;
+    const next = ops.filter((op) => !dirtyRowsCoverRange(dirtyRows, op.startY, op.endY));
+    return next.length ? next : null;
+  }
+
   function scrollRowsForPlane(
     plane: TerminalRenderPlane,
     startY: number,
@@ -839,7 +864,7 @@ export function createTerminal(opts: { cols: number; rows: number }): Terminal {
       },
       commit(meta) {
         assertNotDisposed();
-        return base.commit({ planes: meta?.planes ?? [plane] });
+        return base.commit({ planes: meta?.planes ?? [plane], sync: meta?.sync });
       },
       on(event, cb) {
         assertNotDisposed();
@@ -986,7 +1011,7 @@ export function createTerminal(opts: { cols: number; rows: number }): Terminal {
       const planesToCompose = meta?.planes?.length ? meta.planes : TERMINAL_RENDER_PLANES;
       const pendingScrollOps = takePendingScrollOps(planesToCompose);
       const preparedScroll = prepareCompositeScrollOps(pendingScrollOps);
-      const scrollOperations = preparedScroll.scrollOperations;
+      let scrollOperations = preparedScroll.scrollOperations;
       let composeAllRows = false;
       const dirtyRows = new Set<number>();
       for (const plane of planesToCompose) {
@@ -1004,6 +1029,7 @@ export function createTerminal(opts: { cols: number; rows: number }): Terminal {
       const normalizedDirtyRows = composeAllRows
         ? null
         : Array.from(dirtyRows).sort((a, b) => a - b);
+      scrollOperations = dropScrollOpsCoveredByDirtyRows(scrollOperations, normalizedDirtyRows);
 
       if (scrollOperations) {
         for (const op of scrollOperations)

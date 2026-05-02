@@ -137,6 +137,261 @@ describe("ui regressions", () => {
     mounted.unmount();
   });
 
+  it("useRenderNode invalidates old and new planes when plane changes", async () => {
+    const plane = ref<"default" | "overlay">("default");
+    const invalidatePlanes: Array<string | null> = [];
+
+    const Probe = defineComponent({
+      name: "PlaneMigrationProbe",
+      setup() {
+        const { scheduler } = useTerminal();
+        const original = scheduler.invalidate.bind(scheduler);
+        (scheduler as any).invalidate = (options?: any) => {
+          invalidatePlanes.push(options?.plane ?? null);
+          return original(options);
+        };
+        onUnmounted(() => {
+          (scheduler as any).invalidate = original;
+        });
+        return () => null;
+      },
+    });
+
+    const Node = defineComponent({
+      name: "MigratingPlaneNode",
+      setup() {
+        useRenderNode(() => ({
+          rect: { x: 0, y: 0, w: 1, h: 1 },
+          paint: () => {},
+        }));
+        return () => null;
+      },
+    });
+
+    const mounted = await mountTerminal(() => [
+      h(Probe),
+      h(TRenderPlane, { plane: plane.value }, () => [h(Node)]),
+    ]);
+
+    await nextTick();
+    await Promise.resolve();
+    invalidatePlanes.length = 0;
+
+    plane.value = "overlay";
+    await nextTick();
+    await Promise.resolve();
+
+    expect(invalidatePlanes).toContain(null);
+    mounted.unmount();
+  });
+
+  it("TerminalProvider high priority flush updates DOM without waiting for renderer rAF", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const runNextRaf = async (): Promise<boolean> => {
+      const entry = callbacks.entries().next().value as [number, FrameRequestCallback] | undefined;
+      if (!entry) return false;
+      callbacks.delete(entry[0]);
+      entry[1](0);
+      await nextTick();
+      await Promise.resolve();
+      return true;
+    };
+
+    const drainRaf = async (): Promise<void> => {
+      for (let i = 0; i < 10 && callbacks.size; i++) await runNextRaf();
+    };
+
+    const value = ref("A");
+    let scheduler: ReturnType<typeof useTerminal>["scheduler"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TerminalProviderSchedulerProbe",
+      setup() {
+        scheduler = useTerminal().scheduler;
+        return () => null;
+      },
+    });
+
+    let mounted: Awaited<ReturnType<typeof mountTerminal>> | null = null;
+    try {
+      mounted = await mountTerminal(
+        () => [h(Probe), h(TText, { x: 0, y: 0, w: 4, value: value.value })],
+        8,
+        2,
+      );
+      await nextTick();
+      await Promise.resolve();
+      await drainRaf();
+      const container = mounted.container()!;
+      expect(container.textContent).toContain("A");
+
+      value.value = "B";
+      await nextTick();
+      await Promise.resolve();
+      expect(container.textContent).not.toContain("B");
+      scheduler!.flushNow();
+      expect(container.textContent).toContain("B");
+
+      callbacks.clear();
+      value.value = "C";
+      await nextTick();
+      await Promise.resolve();
+      expect(container.textContent).not.toContain("C");
+      await drainRaf();
+      expect(container.textContent).toContain("C");
+    } finally {
+      mounted?.unmount();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("TerminalProvider flushNow may defer large DOM updates past the current tick", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const runNextRaf = async (): Promise<void> => {
+      const entry = callbacks.entries().next().value as [number, FrameRequestCallback] | undefined;
+      if (!entry) return;
+      callbacks.delete(entry[0]);
+      entry[1](0);
+      await nextTick();
+      await Promise.resolve();
+    };
+
+    const value = ref("A");
+    let scheduler: ReturnType<typeof useTerminal>["scheduler"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TerminalProviderLargeFlushProbe",
+      setup() {
+        scheduler = useTerminal().scheduler;
+        return () => null;
+      },
+    });
+
+    let mounted: Awaited<ReturnType<typeof mountTerminal>> | null = null;
+    try {
+      mounted = await mountTerminal(
+        () => [
+          h(Probe),
+          ...Array.from({ length: 30 }, (_, y) =>
+            h(TText, { key: y, x: 0, y, w: 200, value: `${value.value}${y}` }),
+          ),
+        ],
+        200,
+        30,
+      );
+      await nextTick();
+      await Promise.resolve();
+      while (callbacks.size) await runNextRaf();
+      const container = mounted.container()!;
+      expect(container.textContent).toContain("A29");
+
+      value.value = "B";
+      await nextTick();
+      await Promise.resolve();
+      scheduler!.flushNow();
+
+      expect(container.textContent).not.toContain("B29");
+      await runNextRaf();
+      expect(container.textContent).toContain("B29");
+    } finally {
+      mounted?.unmount();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("TerminalProvider passes domRendererOptions to the DOM sync budget", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const runNextRaf = async (): Promise<void> => {
+      const entry = callbacks.entries().next().value as [number, FrameRequestCallback] | undefined;
+      if (!entry) return;
+      callbacks.delete(entry[0]);
+      entry[1](0);
+      await nextTick();
+      await Promise.resolve();
+    };
+
+    const value = ref("A");
+    let scheduler: ReturnType<typeof useTerminal>["scheduler"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TerminalProviderDomOptionsProbe",
+      setup() {
+        scheduler = useTerminal().scheduler;
+        return () => null;
+      },
+    });
+
+    let mounted: Awaited<ReturnType<typeof mountTerminal>> | null = null;
+    try {
+      mounted = await mountTerminal(
+        () => [
+          h(Probe),
+          h(TText, { x: 0, y: 0, w: 4, value: `${value.value}0` }),
+          h(TText, { x: 0, y: 1, w: 4, value: `${value.value}1` }),
+        ],
+        8,
+        2,
+        { domRendererOptions: { syncFlushMaxRows: 1, syncFlushCellBudget: 64 } },
+      );
+      await nextTick();
+      await Promise.resolve();
+      while (callbacks.size) await runNextRaf();
+      const container = mounted.container()!;
+      expect(container.textContent).toContain("A1");
+
+      value.value = "B";
+      await nextTick();
+      await Promise.resolve();
+      scheduler!.flushNow();
+
+      expect(container.textContent).not.toContain("B1");
+      await runNextRaf();
+      expect(container.textContent).toContain("B1");
+    } finally {
+      mounted?.unmount();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
   it("useRenderNode can consume a one-shot dirtyRowsHint without other dep changes", async () => {
     const dirtyRowsHint = ref<readonly number[] | null>(null);
     const paints: string[] = [];
@@ -192,7 +447,47 @@ describe("ui regressions", () => {
     mounted.unmount();
   });
 
-  it("useRenderNode can apply a dirtyRowsHint during the same render as another dep update", async () => {
+  it("useRenderNode preserves previous rect when rect option is omitted on update", async () => {
+    const version = ref(0);
+    const omitRect = ref(false);
+    const paints: string[] = [];
+
+    const Node = defineComponent({
+      name: "OmittedRectDirtyRowsHintNode",
+      setup() {
+        useRenderNode(() => {
+          const options: any = {
+            deps: version.value,
+            dirtyRowsHint: version.value > 0 ? [2] : undefined,
+            paint: (rows?: readonly number[]) => {
+              paints.push((rows ?? []).join(","));
+            },
+          };
+          if (!omitRect.value) options.rect = { x: 0, y: 2, w: 4, h: 1 };
+          return options;
+        });
+        return () => null;
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(Node));
+
+    await nextTick();
+    await Promise.resolve();
+    paints.length = 0;
+
+    omitRect.value = true;
+    version.value++;
+    await nextTick();
+    await Promise.resolve();
+    await nextTick();
+    await Promise.resolve();
+
+    expect(paints).toEqual(["2"]);
+    mounted.unmount();
+  });
+
+  it("useRenderNode ignores dirtyRowsHint when rect changes during the same render", async () => {
     const dirtyRowsHint = ref<readonly number[] | null>(null);
     const row = ref(0);
     const paints: string[] = [];
@@ -221,7 +516,7 @@ describe("ui regressions", () => {
         );
 
         useRenderNode(() => ({
-          rect: { x: 0, y: props.row, w: 4, h: 6 },
+          rect: { x: 0, y: props.row, w: 4, h: 2 },
           dirtyRowsHint: props.dirtyRowsHint?.length ? props.dirtyRowsHint : pendingDirtyRowsHint,
           deps: [props.row, dirtyRowsHintVersion.value],
           paint: (rows) => {
@@ -248,7 +543,7 @@ describe("ui regressions", () => {
     await nextTick();
     await Promise.resolve();
 
-    expect(paints).toEqual(["4,5"]);
+    expect(paints).toEqual(["0,1,2"]);
     mounted.unmount();
   });
 
@@ -279,6 +574,46 @@ describe("ui regressions", () => {
     await Promise.resolve();
 
     expect(invalidatePlanes).toContain("transcript");
+
+    mounted.unmount();
+  });
+
+  it("TRenderPlane preserves explicit all-plane invalidation", async () => {
+    const parentInvalidates: string[] = [];
+
+    const Spy = defineComponent({
+      name: "ParentSchedulerSpy",
+      setup() {
+        const { scheduler } = useTerminal();
+        const original = scheduler.invalidate.bind(scheduler);
+        (scheduler as any).invalidate = (options?: any) => {
+          const hasPlane = options && Object.prototype.hasOwnProperty.call(options, "plane");
+          parentInvalidates.push(hasPlane ? String(options.plane) : "missing");
+          return original(options);
+        };
+        return () => null;
+      },
+    });
+
+    const Node = defineComponent({
+      name: "ExplicitAllPlaneInvalidateNode",
+      setup() {
+        const { scheduler } = useTerminal();
+        onMounted(() => {
+          scheduler.invalidate({ plane: undefined as any });
+        });
+        return () => h(TText, { x: 0, y: 0, value: "plane" });
+      },
+    });
+
+    const mounted = await mountTerminal(() =>
+      h("div", null, [h(Spy), h(TRenderPlane, { plane: "transcript" }, () => [h(Node)])]),
+    );
+
+    await nextTick();
+    await Promise.resolve();
+
+    expect(parentInvalidates).toContain("undefined");
 
     mounted.unmount();
   });

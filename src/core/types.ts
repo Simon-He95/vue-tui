@@ -72,6 +72,7 @@ export type TerminalScrollOperation = Readonly<{
 export type TerminalCommitEvent = Readonly<{
   dirtyRows: readonly number[] | null;
   planes: TerminalRenderPlanes | null;
+  /** Renderer hint: try same-frame flush within backend budget; large DOM work may defer. */
   sync?: boolean;
   scrollOperations?: readonly TerminalScrollOperation[] | null;
 }>;

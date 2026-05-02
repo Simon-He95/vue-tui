@@ -64,6 +64,7 @@ export default defineConfig({
           { text: "Planes 与 Compositor", link: "/planes-and-compositor" },
           { text: "Terminal Compatibility", link: "/terminal-compatibility" },
           { text: "Performance", link: "/performance" },
+          { text: "高吞吐渲染", link: "/high-throughput-rendering" },
           { text: "Observability", link: "/observability" },
         ],
       },

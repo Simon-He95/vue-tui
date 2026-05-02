@@ -3,8 +3,8 @@ import type { PathPickerProvider } from "../cli/path-provider.js";
 import type { TerminalRenderPlane } from "../core/render-plane.js";
 import type { Style, Terminal } from "../core/types.js";
 import type { EventManager, Rect } from "../events/index.js";
+import type { RendererCapabilities, TerminalRendererLike } from "../renderer/index.js";
 import type { TraceStore } from "../observability/trace.js";
-import type { DomRenderer } from "../renderer/index.js";
 import type { TInputPlugin } from "./components/input/plugins/types.js";
 import type { RenderManager } from "./render/render-manager.js";
 
@@ -24,6 +24,10 @@ export type TerminalSchedulerInvalidateOptions = Readonly<{
 export type TerminalScheduler = Readonly<{
   invalidate: (options?: TerminalSchedulerInvalidateOptions) => void;
   flush: () => void;
+  /**
+   * Flushes render-manager work and requests a sync terminal commit immediately.
+   * DOM row updates may still defer to rAF when they exceed the renderer sync budget.
+   */
   flushNow: () => void;
 }>;
 
@@ -49,7 +53,8 @@ export type ImeAnchor = Readonly<{
 
 export type TerminalContext = Readonly<{
   terminal: Terminal;
-  renderer: Ref<DomRenderer | null>;
+  renderer: Ref<TerminalRendererLike | null>;
+  rendererCapabilities: Ref<RendererCapabilities>;
   events: Ref<EventManager | null>;
   scheduler: TerminalScheduler;
   runtime: TerminalRuntime;

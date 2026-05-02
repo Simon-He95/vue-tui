@@ -77,8 +77,23 @@ export { createTraceStore } from "./observability/trace.js";
 
 export type { StdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export { getStdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
-export type { CellMetrics, DomRenderer, StdoutRenderer } from "./renderer/index.js";
-export { createDomRenderer, createStdoutRenderer } from "./renderer/index.js";
+export type {
+  CellMetrics,
+  DomRenderer,
+  DomRendererDebugStats,
+  DomRendererOptions,
+  DomRendererSyncFlushDecision,
+  DomRendererSyncFlushStats,
+  TerminalRendererLike,
+  RendererCapabilities,
+  StdoutRenderer,
+} from "./renderer/index.js";
+export {
+  createDomRenderer,
+  createStdoutRenderer,
+  DOM_RENDERER_CAPABILITIES,
+  HEADLESS_RENDERER_CAPABILITIES,
+} from "./renderer/index.js";
 
 export type { ClipboardApi, RafApi, Runtime, RuntimeEnv, TimerApi } from "./runtime/index.js";
 export { createRuntime } from "./runtime/index.js";

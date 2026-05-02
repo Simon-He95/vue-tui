@@ -14,7 +14,7 @@
 | Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane` | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
 | Text / Motion | `TText` `TTransition`                                          | 文本渲染、状态切换、动画插值                    | 通用                                               |
 | Input         | `TInput` `TInputBox` `TJsonEditor`                             | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
-| Pickers       | `TList` `TSelect` `TPathPicker`                                | palette、列表、路径选择                         | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Pickers       | `TList` `TVirtualList` `TSelect` `TPathPicker`                 | palette、列表、路径选择                         | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
 | Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                    | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
 | Navigation    | `TRouterView` + `createTerminalRouter()`                       | 多页面 TUI / shell                              | 通用                                               |
 
@@ -61,6 +61,7 @@
 - `pathPickerProvider` `(PathPickerProvider?)`: 给子树里的 `TPathPicker` 注入宿主路径 provider
 - `debugIme` `(boolean)`: 输出 IME 调试信息
 - `debugTrace` `(boolean)`: 开启 trace（commit/event/focus）
+- `domRendererOptions` `(DomRendererOptions?)`: DOM renderer 挂载时配置，例如 `syncFlushMaxRows` / `syncFlushCellBudget`；该选项按 mount-time 使用，修改后需重新挂载 provider
 
 ### Slots
 
@@ -292,6 +293,8 @@ const app = createTerminalApp({
 
 可滚动列表（单选）：支持点击/双击、键盘导航、滚轮滚动，`v-model` 维护选中 index。
 
+`TList` 适合小数据选择器。大数据选择/浏览场景请使用 `TVirtualList`，日志、streaming transcript、append-only output 场景应使用后续专用日志组件，避免把大数组直接传进 Vue deep reactivity。
+
 ### Props
 
 - `x`/`y`/`w`/`h` `(number, required)`
@@ -306,6 +309,55 @@ const app = createTerminalApp({
 - `change`: `{ index, value }`
 - `scroll`: `scrollTop`（number）
 - `close` / `focus` / `blur` / `keydown`
+
+## TVirtualList
+
+大数据选择/浏览列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。它不是完整日志/streaming 组件；当前没有 bottom stickiness、append chunk 增量解析或 scroll anchor API。
+
+> Phase 1 experimental API：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。API 仍可能在 scheduler frame task、controlled scrollTop、overscan、TLogView 等后续能力落地前调整。
+
+### Props
+
+- `x`/`y`/`w`/`h` `(number, required)`
+- `itemCount` `(number, required)`
+- `itemVersion` `(number, required)`：数据变更版本号
+- `getItem` `((index: number) => unknown, required)`
+- `renderItem` `((item, index) => unknown)`
+- `modelValue` `(number)` + `update:modelValue`
+- `style` / `activeStyle` `(Style?)`
+- `autoFocus` `(boolean)`
+- `rowScrollMode` `("off" | "unsafe-full-row")`：headless/CLI full-row 场景的 opt-in unsafe row-scroll 优化
+
+### Data source
+
+`getItem` 和 `renderItem` 应保持稳定引用，数据变化用 `itemVersion` 通知组件。`style` / `activeStyle` 对象也应按 immutable 方式使用；样式变化时替换对象 identity。
+
+```ts
+const items = markRaw(bigArray);
+const itemVersion = ref(0);
+const getItem = (index: number) => items[index];
+const renderItem = (item: Row) => item.title;
+```
+
+避免在模板里传 inline function：
+
+```vue
+<TVirtualList :get-item="(index) => items[index]" />
+```
+
+### Row scroll
+
+`rowScrollMode` 是危险优化开关，不是列表内部局部滚动。它会 shift 当前 render plane 的整行区域，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占且列表没有被裁剪的场景；同 plane 其它内容会被一起移动。它是 headless/CLI 优化：当 DOM renderer 已挂载、列表没有占满终端整行、列表 rect 被裁剪或 rows 超出 terminal bounds 时，会退回 viewport repaint；debug perf 模式会对这些被忽略的场景发出一次 warning。DOM renderer 当前不消费 terminal `scrollOperations`，所以 DOM 慢滚即使设置 `rowScrollMode: "unsafe-full-row"` 仍会重绘可见窗口。
+
+### Selection model
+
+`modelValue` 使用 optimistic controlled 语义：键盘和点击会先更新组件内部 active row 并 emit `update:modelValue`。如果父组件稍后接受、延迟应用或改成其它 `modelValue`，组件会在 prop 同步时跟随；如果父组件完全忽略 update，组件会保留本地 optimistic active state。
+
+### Events
+
+- `change`: `{ index, value }`
+- `scroll`: `scrollTop`（number）
+- `focus` / `blur` / `keydown`
 
 ## TSelect
 
