@@ -79,9 +79,15 @@ DIMCODE_PROFILE_TUI=1
 - `scannedNodes` / `paintedNodes`
 - `rowBucketFallbacks`
 - `coalescedInvalidates`
+- `frameTaskCount`
+- `coalescedFrameTasks`
+- `remainingFrameTasks`
+- `liveReasons`
 - `queueDepth`
 
-Phase 2.0 里 `droppedUpdates` 保留为后续 scheduler backpressure 指标，当前恒为 `0`。`coalescedInvalidates` 只统计 scheduler invalidate coalescing，不包含组件本地 wheel/input coalescer。`domFlushMs` 只记录与本 scheduler frame 同调用栈完成的 DOM flush；普通 rAF-deferred DOM flush 会体现在 `renderer.debugStats.flush.last`，不会 retroactively 更新已经 push 的 frame sample。DOM renderer flush stats 里的 `planeRows` 是 flushed plane-row line elements，不是去重后的 terminal rows。
+Phase 2.0 里 `droppedUpdates` 保留为后续 scheduler backpressure 指标，当前恒为 `0`。`coalescedInvalidates` 只统计 scheduler invalidate coalescing；Phase 2.1 起 frame task coalescing 单独记录在 `coalescedFrameTasks`，`frameTaskCount` 是本帧实际执行的 scheduler-owned tasks。`domFlushMs` 只记录与本 scheduler frame 同调用栈完成的 DOM flush；普通 rAF-deferred DOM flush 会体现在 `renderer.debugStats.flush.last`，不会 retroactively 更新已经 push 的 frame sample。DOM renderer flush stats 里的 `planeRows` 是 flushed plane-row line elements，不是去重后的 terminal rows。
+
+FramePerf samples 只记录发生 render/commit 的 terminal frame；如果 frame task 只做预取或计算、没有调用 `ctx.invalidate()`，它可能被 drain 掉但不会产生 sample。
 
 这让高频输入、滚动和 streaming 输出可以用同一组指标比较，而不是只看体感。
 

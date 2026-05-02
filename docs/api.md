@@ -98,6 +98,8 @@ type Style = {
 补充说明：
 
 - `scheduler.invalidate()` 现在支持 `plane`
+- `scheduler.queueFrameTask()` 用于把同一帧内的 wheel/input/stream 高频任务按 `id` 合并后再执行
+- `scheduler.requestLive(reason)` 返回 release 函数；也可以用 `dropLive(reason)` 释放 live lease
 - `runtime.mount()` 现在支持 `{ plane }`
 - `debugTrace` 打开后，trace 中的 `commit` 记录会带 `planes`
 
@@ -125,6 +127,8 @@ t.mount();
 plane 相关：
 
 - `scheduler.invalidate({ plane })`：把本轮刷新归到指定 plane
+- `scheduler.queueFrameTask(task)`：下一帧先执行 task，再根据 task 内的 `ctx.invalidate()` render/commit；`flushNow()` 会先 drain pending frame tasks
+- `queueFrameTask()` 的 `task.id` 是整个 `TerminalProvider` / `createTerminalApp` scheduler 级别的全局 coalescing key，不会因为 `TRenderPlane` 自动加 namespace。跨 plane 使用相同 id 会互相覆盖；如需 plane-local coalescing，请自行把 plane 写入 id。
 - `runtime.mount(Component, props, { plane })`：命令式挂载到指定 plane
 - `terminal.commit({ planes })`：只提交某些 plane 的变化
 
@@ -133,7 +137,7 @@ plane 相关：
 为一整棵子树切换 render plane，并自动把下列能力绑定到该 plane：
 
 - `terminal`
-- `scheduler.invalidate()`
+- `scheduler.invalidate()` / frame task 中的 `ctx.invalidate()`
 - `runtime.mount()`
 
 最常见的用法是把正文、状态栏和弹层分开：

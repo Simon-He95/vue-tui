@@ -20,7 +20,6 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
-import { createFrameCoalescer } from "../utils/frame-task.js";
 import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
 import {
   applyWheelScroll,
@@ -119,10 +118,9 @@ export const TVirtualList = defineComponent({
     let warnedEnabledRowScroll = false;
     let warnedGetItemIdentity = false;
     let warnedRenderItemIdentity = false;
+    let alive = true;
+    let pendingWheelTop: number | null = null;
     const wheelState = createWheelScrollState();
-    const wheelFrame = createFrameCoalescer<number>((top) => {
-      applyScrollTop(top, "auto", { emitScroll: true, priority: "high", reason: "scroll" });
-    });
 
     const itemCount = computed(() => {
       const n = Math.floor(Number(props.itemCount));
@@ -294,12 +292,27 @@ export const TVirtualList = defineComponent({
     }
 
     function cancelWheelScrollFrame(): void {
-      wheelFrame.cancel();
+      pendingWheelTop = null;
       resetWheelScrollState(wheelState);
     }
 
     function requestWheelScroll(nextTop: number): void {
-      wheelFrame.request(nextTop);
+      pendingWheelTop = nextTop;
+      scheduler.queueFrameTask({
+        id: `TVirtualList:${renderNodeId ?? "pending"}:wheel`,
+        reason: "scroll",
+        priority: "high",
+        sync: true,
+        run(ctx) {
+          if (!alive) return;
+          const top = pendingWheelTop;
+          pendingWheelTop = null;
+          if (top == null) return;
+          const changed = applyScrollTop(top, "auto", { emitScroll: true });
+          if (!changed) return;
+          ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
+        },
+      });
     }
 
     function invalidateSelf(
@@ -402,7 +415,7 @@ export const TVirtualList = defineComponent({
           const { deltaY, mode } = getWheelScrollInput(e);
           if (!deltaY) return;
           const maxTop = maxScrollTop();
-          const baseTop = wheelFrame.latest() ?? scrollTop.value;
+          const baseTop = pendingWheelTop ?? scrollTop.value;
           const now =
             typeof e.time === "number"
               ? e.time
@@ -450,6 +463,7 @@ export const TVirtualList = defineComponent({
     });
 
     onBeforeUnmount(() => {
+      alive = false;
       cancelWheelScrollFrame();
     });
 

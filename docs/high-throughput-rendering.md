@@ -95,8 +95,9 @@ interface TerminalScheduler {
   invalidate(options?: TerminalSchedulerInvalidateOptions): void;
   flush(): void;
   flushNow(): void;
+  queueFrameTask(task: TerminalFrameTask): void;
   configure(options: { targetFps?: number; maxFps?: number; frameBudgetMs?: number }): void;
-  requestLive(reason: string): void;
+  requestLive(reason: string): () => void;
   dropLive(reason: string): void;
   isInsideFrame(): boolean;
 }
@@ -105,15 +106,17 @@ interface TerminalScheduler {
 行为：
 
 - 默认 `on-demand`，只有 invalidate 才 render。
+- `queueFrameTask()` 把 wheel/input/stream 这类高频任务排到下一帧；同 `id` 任务只保留最新 `run`，priority 取更高值，reason 合并，`sync` 只要任一任务为 `true` 就保留。
 - `requestLive(reason)` 使用引用计数进入 live mode，直到对应 `dropLive(reason)` 后退出。
 - live mode 按 `targetFps` 运行，但不超过 `maxFps`。
 - 高优先级 invalidation 可同帧 flush，普通 invalidation 继续 rAF 合并。
+- frame task 内部的 `invalidate()` 不递归 flush；任务 drain 完成本帧才 render/commit。`flushNow()` 会先 drain 当前 pending frame tasks，再同步 commit。
 - frame 内暴露 `frameBudgetMs`，供 stream coalescer 或虚拟组件决定本帧处理量。
 
 验收测试：
 
 - `test/scheduler-priority.test.ts` 覆盖 high priority 仍立即 flush。
-- 新增 scheduler live mode 测试：多次 `requestLive()` 只启动一个 loop，全部 `dropLive()` 后停止。
+- `test/scheduler-frame-tasks.test.ts` 覆盖同 id coalesce、priority 顺序、reason merge、frame 内 invalidate、`flushNow()` drain、live lease 和 frame budget。
 - 覆盖同一 frame 内多个 invalidate 合并成一次 render。
 
 ### 3. DOM renderer same-frame flush
@@ -334,6 +337,7 @@ type FramePerf = {
 | DOM sync flush scoped to current commit rows/planes                 | ✅ done      |
 | Row bucket degradation threshold (50%/60%)                          | ✅ done      |
 | `TVirtualList.rowScrollMode` opt-in for unsafe row-scroll fast path | ✅ done      |
+| Scheduler-owned frame tasks / live mode                             | ✅ Phase 2.1 |
 | `TList` wheel 行为修改（不再同步更新 active/modelValue）            | 🔲 planned   |
 | Debug overlay 展示 `scannedNodes/paintedNodes/dirtyRows/frameMs`    | ✅ Phase 2.0 |
 
@@ -351,7 +355,7 @@ pnpm run lint
 
 目标是让大数据追加和 streaming 输出可控。
 
-1. scheduler 增加 `requestLive/dropLive/configure/isInsideFrame`。
+1. scheduler 增加 `queueFrameTask/requestLive/dropLive/configure/isInsideFrame`，`TVirtualList` wheel 已迁移到 scheduler frame task。
 2. 新增 stream coalescer，按 `frameBudgetMs` drain。
 3. 新增 `TLogView`，只对 tail rows 和 visible window 做增量处理。
 4. 文本 wrap/width cache 拆到 line-level。

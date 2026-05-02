@@ -617,6 +617,95 @@ describe("TVirtualList", () => {
     }
   });
 
+  it("coalesces burst wheel ticks through scheduler frame tasks", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const items = Array.from({ length: 1_000 }, (_, index) => `item-${index}`);
+    const onScroll = vi.fn();
+    const onUpdateModelValue = vi.fn();
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "VirtualListSchedulerFrameTaskProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
+
+    const App = defineComponent({
+      name: "VirtualListBurstWheelSchedulerApp",
+      setup() {
+        return () => [
+          h(Probe),
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: items.length,
+            itemVersion: 1,
+            getItem: (index: number) => items[index],
+            autoFocus: true,
+            onScroll,
+            "onUpdate:modelValue": onUpdateModelValue,
+          }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+    const dateNow = vi.spyOn(Date, "now");
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+      dateNow.mockReturnValue(1_000);
+
+      for (let i = 0; i < 100; i++) {
+        app.events.dispatch({
+          type: "wheel",
+          cellX: 0,
+          cellY: 0,
+          deltaY: 100,
+          time: 1_000 + i * 10,
+        });
+      }
+
+      expect(callbacks.size).toBe(1);
+      Array.from(callbacks.values())[0]?.(0);
+      await nextTick();
+
+      expect(onScroll).toHaveBeenCalledTimes(1);
+      expect(onScroll.mock.calls[0]![0]).toBeGreaterThan(0);
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
+      expect(framePerf!.latest()).toMatchObject({
+        reason: "scroll",
+        frameTaskCount: 1,
+        coalescedFrameTasks: 99,
+        remainingFrameTasks: 0,
+      });
+    } finally {
+      dateNow.mockRestore();
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
   it("clamps pending wheel scroll when itemCount shrinks before the frame", async () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;

@@ -40,8 +40,12 @@ export type FramePerfSample = Readonly<{
   paintedNodes: number;
   rowBucketFallbacks?: readonly FramePerfRowBucketFallback[];
   coalescedInvalidates: number;
+  frameTaskCount: number;
+  coalescedFrameTasks: number;
+  remainingFrameTasks: number;
   droppedUpdates: number;
   queueDepth: number;
+  liveReasons?: readonly string[];
 }>;
 
 export function framePerfNow(): number {

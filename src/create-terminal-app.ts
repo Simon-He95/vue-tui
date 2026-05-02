@@ -11,6 +11,7 @@ import type {
   TerminalContext,
   TerminalRuntime,
   TerminalRuntimeHandle,
+  TerminalScheduler,
   TerminalSchedulerInvalidateOptions,
 } from "./vue/context.js";
 import process from "node:process";
@@ -38,6 +39,11 @@ import {
 } from "./vue/context.js";
 import { RenderStackKey } from "./vue/render/context.js";
 import { createRenderManager } from "./vue/render/render-manager.js";
+import {
+  EMPTY_FRAME_TASK_RUN_STATS,
+  type SchedulerFrameTaskRunStats,
+  createSchedulerFrameTasks,
+} from "./vue/scheduler/frame-scheduler.js";
 
 interface Portal {
   id: string;
@@ -83,15 +89,7 @@ export type TerminalApp = Readonly<{
   app: App;
   terminal: Terminal;
   events: CliEventManager;
-  scheduler: {
-    invalidate: (options?: TerminalSchedulerInvalidateOptions) => void;
-    flush: () => void;
-    /**
-     * Flushes render-manager work and requests a sync terminal commit immediately.
-     * Renderer backends may still defer expensive output work to their frame budget.
-     */
-    flushNow: () => void;
-  };
+  scheduler: TerminalScheduler;
   defaultStyle: Ref<Style>;
   /** Returns the current IME anchor position (cursor position in cell coordinates), or null if no input is focused */
   getImeAnchor: () => ImeAnchor | null;
@@ -154,11 +152,13 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   let scheduledAtMs = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let pendingInvalidateAfterFlush = false;
+  let pendingInvalidateDuringFrame = false;
   let pendingInvalidateAllPlanes = false;
   const pendingInvalidatePlanes = new Set<TerminalRenderPlane>();
   let frameId = 0;
   let pendingFrameReason: TerminalSchedulerInvalidateOptions["reason"] = "unknown";
   let pendingCoalescedInvalidates = 0;
+  let schedulerApi: TerminalScheduler;
   const env = (process?.env ?? {}) as Record<string, unknown>;
   const throttleMs = (() => {
     const raw = env.DIMCODE_TUI_THROTTLE_MS;
@@ -194,7 +194,12 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   }
 
   function queueDepth(): number {
-    return (scheduled ? 1 : 0) + (timer ? 1 : 0) + (pendingInvalidateAfterFlush ? 1 : 0);
+    return (
+      (scheduled ? 1 : 0) +
+      (timer ? 1 : 0) +
+      (pendingInvalidateAfterFlush ? 1 : 0) +
+      frameScheduler.queueDepth()
+    );
   }
 
   function noteFrameReason(reason: TerminalSchedulerInvalidateOptions["reason"]): void {
@@ -202,7 +207,25 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     pendingFrameReason = mergeFramePerfReason(pendingFrameReason, reason);
   }
 
-  function flush(sync?: boolean): void {
+  function resetPendingFramePerfState(): void {
+    pendingFrameReason = "unknown";
+    pendingCoalescedInvalidates = 0;
+  }
+
+  const frameScheduler = createSchedulerFrameTasks({
+    isActive: () => !disposed,
+    invalidate: (options) => schedulerApi.invalidate(options),
+    flushFrame: (stats) => {
+      if (!pendingInvalidateDuringFrame) return;
+      pendingInvalidateDuringFrame = false;
+      flush(stats.sync, stats);
+    },
+  });
+
+  function flush(
+    sync?: boolean,
+    frameTasks: SchedulerFrameTaskRunStats = EMPTY_FRAME_TASK_RUN_STATS,
+  ): void {
     if (disposed) return;
 
     scheduled = false;
@@ -220,6 +243,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
         lastFlushAtMs = Date.now();
         scheduledAtMs = 0;
       }
+      resetPendingFramePerfState();
 
       if (pendingInvalidateAfterFlush) {
         pendingInvalidateAfterFlush = false;
@@ -230,10 +254,9 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
 
     const startedAt = framePerfNow();
     const currentFrameId = ++frameId;
-    const reason = pendingFrameReason ?? "unknown";
+    const reason = mergeFramePerfReason(pendingFrameReason, frameTasks.reason);
     const coalescedInvalidates = pendingCoalescedInvalidates;
-    pendingFrameReason = "unknown";
-    pendingCoalescedInvalidates = 0;
+    resetPendingFramePerfState();
     let stats: ReturnType<typeof render.render> = null;
     let dirtyRows: readonly number[] | null = [];
     let renderManagerMs = 0;
@@ -264,8 +287,15 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       paintedNodes: stats?.paintedNodes ?? 0,
       rowBucketFallbacks: stats?.rowBucketFallbacks,
       coalescedInvalidates,
+      frameTaskCount: frameTasks.frameTaskCount,
+      coalescedFrameTasks: frameTasks.coalescedFrameTasks,
+      remainingFrameTasks: frameTasks.remainingFrameTasks,
       droppedUpdates: 0,
       queueDepth: queueDepth(),
+      liveReasons: (() => {
+        const reasons = frameScheduler.liveReasonList();
+        return reasons.length ? reasons : undefined;
+      })(),
     });
 
     if (pendingInvalidateAfterFlush) {
@@ -317,9 +347,14 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   function flushNow(): void {
     if (disposed) return;
     if (flushing) return;
+    if (frameScheduler.isInsideFrame()) return;
     clearScheduledTimer();
+    frameScheduler.cancelScheduledFrame();
+    const frameTasks = frameScheduler.runPendingFrameTasks({ force: true });
+    pendingInvalidateDuringFrame = false;
     scheduled = false;
-    flush(true);
+    flush(true, frameTasks);
+    frameScheduler.scheduleIfNeeded(frameTasks.requestMore);
   }
 
   function invalidate(options?: TerminalSchedulerInvalidateOptions): void {
@@ -330,13 +365,16 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       priority,
       plane: options?.plane ?? null,
     });
+    queueInvalidatePlane(options?.plane);
+    if (frameScheduler.isInsideFrame()) {
+      pendingInvalidateDuringFrame = true;
+      profiler?.recordInvalidate({ plane: options?.plane ?? null });
+      return;
+    }
     if (flushing) {
-      queueInvalidatePlane(options?.plane);
       pendingInvalidateAfterFlush = true;
       return;
     }
-
-    queueInvalidatePlane(options?.plane);
 
     profiler?.recordInvalidate({ plane: options?.plane ?? null });
 
@@ -433,12 +471,23 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     invalidate({ reason: "resize" });
   });
 
+  schedulerApi = {
+    invalidate,
+    flush,
+    flushNow,
+    configure: frameScheduler.configure,
+    queueFrameTask: frameScheduler.queueFrameTask,
+    requestLive: frameScheduler.requestLive,
+    dropLive: frameScheduler.dropLive,
+    isInsideFrame: frameScheduler.isInsideFrame,
+  };
+
   const ctx: TerminalContext = {
     terminal,
     renderer: shallowRef(null as any),
     rendererCapabilities: shallowRef(HEADLESS_RENDERER_CAPABILITIES),
     events: shallowRef(events as any),
-    scheduler: { invalidate, flush, flushNow },
+    scheduler: schedulerApi,
     runtime,
     observability: { trace, framePerf },
     defaultStyle: ref(options.defaultStyle ?? {}),
@@ -498,6 +547,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       if (disposed) return;
       disposed = true;
       clearScheduledTimer();
+      frameScheduler.cancelScheduledFrame();
       if (mounted) app.unmount();
       offResize?.();
       offCommit?.();

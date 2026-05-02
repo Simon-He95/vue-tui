@@ -69,7 +69,7 @@ pnpm run bench:phase2
 
 - 1000 render nodes / dirty 1 row
 - `TVirtualList` 10k / 100k rows spaced wheel 100 ticks
-- `TVirtualList` 10k / 100k rows burst wheel 100 ticks with manual rAF flush
+- `TVirtualList` 10k / 100k rows burst wheel 100 ticks through scheduler frame-task coalescing
 - DOM sync flush 1 / 5 / 20 / 40 dirty rows
 - append-only 1000 lines simulated path
 

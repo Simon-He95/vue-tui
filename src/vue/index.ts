@@ -50,10 +50,14 @@ export { useVisibility } from "./composables/use-visibility.js";
 
 export type {
   LayoutContext,
+  TerminalFrameContext,
+  TerminalFrameTask,
+  TerminalFrameTaskPriority,
   TerminalContext,
   TerminalRuntime,
   TerminalRuntimeHandle,
   TerminalScheduler,
+  TerminalSchedulerConfig,
   TerminalSchedulerInvalidateOptions,
 } from "./context.js";
 export { TInputPluginsContextKey } from "./context.js";
