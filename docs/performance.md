@@ -50,6 +50,7 @@ DOM renderer 的 `scrollOperations` 是输出层优化：terminal/compositor 先
 - 长列表用“视口”思路渲染（只渲染可见行），避免一次性生成上千 `TText`。
 - append-only / streaming 日志用 experimental `TLogView` + `createAppendOnlyLogStore()`，不要把大数组传进组件，也不要每次 chunk 都重建全文字符串。
 - 自定义 `TLogView` source 建议提供 `getLineKey(index)`；completed lines 的 key 保持稳定，mutable tail 或变更行的 key 随文本变化，才能复用 line-level render cache。
+- `TLogView wrap=true` 会按 visual row 滚动，并按 `getLineKey(index) + width` 缓存 plain-text wrap 结果；大日志的优化路径是 append-only bottom streaming，不支持 ANSI/highlight/rich span wrap。scroll payload 暴露的是 `estimatedVisualRowCount`，不是精确全量 wrap 后总行数。
 - `TVirtualList rowScrollMode="unsafe-full-row"` 只用于 unclipped full-row 且独占 plane rows 的场景；DOM renderer 会只 repaint exposed dirty rows，pending rows 或不安全条件会回退到 viewport repaint。
 - `TLogView` 用户离底后 append 不会抢 `scrollTop`；如果需要实时 tail，按 End 回到底部后会恢复 stick-to-bottom。
 - `style`/`highlightStyle` 这类对象尽量复用（避免每次都创建新对象导致 watchEffect 触发）。
@@ -85,5 +86,6 @@ pnpm run bench:phase2
 - append-only 1000 lines simulated path
 - `TLogView` append 1000 lines at bottom / while detached from bottom / burst append
 - `TLogView` long-line append 1000 lines at bottom / while detached from bottom / burst append
+- `TLogView wrap=true` long-line append at bottom / detached / burst append
 
 `bench:phase2` 使用 happy-dom synthetic baseline，适合做相同环境下的回归对比，不代表真实浏览器 FPS。

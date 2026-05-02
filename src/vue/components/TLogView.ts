@@ -21,7 +21,14 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
-import { formatInlineCellLine, padEndByCells, sliceByCellsRange, spaces } from "../utils/text.js";
+import {
+  formatInlineCellLine,
+  padEndByCells,
+  sanitizeInlineText,
+  sliceByCellsRange,
+  spaces,
+  wrapByCells,
+} from "../utils/text.js";
 import {
   applyWheelScroll,
   createWheelScrollState,
@@ -37,12 +44,30 @@ type TLogRenderCacheEntry = {
   value: string;
   touchedAt: number;
 };
+type TLogWrapCacheEntry = {
+  key: TLogRenderCacheKey;
+  visualRows: readonly string[];
+  touchedAt: number;
+};
+type LocatedVisualRow = {
+  lineIndex: number;
+  partIndex: number;
+};
 
 let nextTLogViewTaskId = 0;
 const DEFAULT_LOG_RENDER_CACHE_SIZE = 2_000;
+const DEFAULT_LOG_WRAP_CACHE_SIZE = 2_000;
+const DEFAULT_VISUAL_INDEX_CAPACITY = 1_024;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
+}
+
+function nextPowerOfTwo(n: number): number {
+  n = Math.max(1, Math.floor(n));
+  let power = 1;
+  while (power < n) power <<= 1;
+  return power;
 }
 
 function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
@@ -88,6 +113,7 @@ export const TLogView = defineComponent({
     autoFocus: { type: Boolean, default: false },
     autoStickToBottom: { type: Boolean, default: true },
     overscan: { type: Number, default: 2 },
+    wrap: { type: Boolean, default: false },
     rowScrollMode: {
       type: String as PropType<RowScrollMode>,
       default: "off",
@@ -118,7 +144,15 @@ export const TLogView = defineComponent({
     }> | null = null;
     let cacheClock = 0;
     const renderLineCache = new Map<TLogRenderCacheKey, TLogRenderCacheEntry>();
+    const wrapLineCache = new Map<TLogRenderCacheKey, TLogWrapCacheEntry>();
     const wheelState = createWheelScrollState();
+    // Unknown wrapped lines count as one row until measured, so large bottom mounts avoid full-source wrapping.
+    let visualIndexWidth = 0;
+    let visualIndexLineCount = 0;
+    let visualIndexCapacity = 0;
+    let visualCounts: number[] = [];
+    let visualKeys: Array<TLogLineKey | undefined> = [];
+    let visualTree: number[] = [0];
 
     const fullRect = computed<Rect>(() => {
       const raw = { x: props.x, y: props.y, w: props.w, h: props.h };
@@ -178,7 +212,15 @@ export const TLogView = defineComponent({
       clipX: number,
       visibleW: number,
     ): TLogRenderCacheKey {
-      return `${typeof key}:${String(key)}|fw:${fullW}|cx:${clipX}|vw:${visibleW}`;
+      return JSON.stringify([key, fullW, clipX, visibleW]);
+    }
+
+    function wrapCacheKey(key: TLogLineKey, width: number): TLogRenderCacheKey {
+      return JSON.stringify([key, width]);
+    }
+
+    function visualLineKey(key: TLogLineKey, partIndex: number): TLogRenderCacheKey {
+      return JSON.stringify([key, "part", partIndex]);
     }
 
     function trimRenderCache(): void {
@@ -191,6 +233,21 @@ export const TLogView = defineComponent({
       for (const entry of entries.slice(0, renderLineCache.size - max)) {
         renderLineCache.delete(entry.key);
       }
+    }
+
+    function trimWrapCache(): void {
+      const max = DEFAULT_LOG_WRAP_CACHE_SIZE;
+      if (wrapLineCache.size <= max) return;
+
+      const entries = Array.from(wrapLineCache.values()).sort((a, b) => a.touchedAt - b.touchedAt);
+      for (const entry of entries.slice(0, wrapLineCache.size - max)) {
+        wrapLineCache.delete(entry.key);
+      }
+    }
+
+    function clearLineCaches(): void {
+      renderLineCache.clear();
+      wrapLineCache.clear();
     }
 
     function renderLine(
@@ -221,10 +278,229 @@ export const TLogView = defineComponent({
       return line;
     }
 
+    function wrappedRowsForLine(index: number, count: number, width: number): readonly string[] {
+      if (index < 0 || index >= count) return [""];
+
+      width = Math.max(1, Math.floor(width));
+      const rawKey = lineKey(index);
+      const key = wrapCacheKey(rawKey, width);
+      const cached = wrapLineCache.get(key);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.visualRows;
+      }
+
+      const wrapped = wrapByCells(sanitizeInlineText(props.source.getLine(index)), width);
+      const rows = wrapped.length ? wrapped : [""];
+      wrapLineCache.set(key, {
+        key,
+        visualRows: rows,
+        touchedAt: ++cacheClock,
+      });
+      return rows;
+    }
+
+    function renderVisualLine(
+      key: TLogLineKey,
+      rawVisual: string,
+      fullW: number,
+      clipX: number,
+      visibleW: number,
+    ): string {
+      const cacheKey = renderCacheKey(key, fullW, clipX, visibleW);
+      const cached = renderLineCache.get(cacheKey);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.value;
+      }
+
+      const line = padEndByCells(sliceByCellsRange(rawVisual, clipX, clipX + visibleW), visibleW);
+      renderLineCache.set(cacheKey, {
+        key: cacheKey,
+        value: line,
+        touchedAt: ++cacheClock,
+      });
+      return line;
+    }
+
+    function currentWrapWidth(): number {
+      return Math.max(1, normalizedFullRect().w);
+    }
+
+    function fenwickAdd(index: number, delta: number): void {
+      for (let i = index + 1; i <= visualIndexCapacity; i += i & -i) {
+        visualTree[i] = (visualTree[i] ?? 0) + delta;
+      }
+    }
+
+    function fenwickSum(lineEnd: number): number {
+      let sum = 0;
+      for (let i = clamp(lineEnd, 0, visualIndexLineCount); i > 0; i -= i & -i) {
+        sum += visualTree[i] ?? 0;
+      }
+      return sum;
+    }
+
+    function rebuildFenwick(): void {
+      visualTree = Array.from({ length: visualIndexCapacity + 1 }, (_, index) =>
+        index > 0 && index <= visualIndexLineCount ? (visualCounts[index - 1] ?? 1) : 0,
+      );
+      for (let i = 1; i <= visualIndexCapacity; i++) {
+        const next = i + (i & -i);
+        if (next <= visualIndexCapacity) visualTree[next] += visualTree[i] ?? 0;
+      }
+    }
+
+    function resetVisualIndex(count = lineCount(), width = currentWrapWidth()): void {
+      visualIndexWidth = width;
+      visualIndexLineCount = count;
+      visualIndexCapacity = nextPowerOfTwo(Math.max(DEFAULT_VISUAL_INDEX_CAPACITY, count));
+      visualCounts = Array.from({ length: count }, () => 1);
+      visualKeys = Array.from({ length: count }, () => undefined);
+      rebuildFenwick();
+    }
+
+    function ensureVisualCapacity(count: number): void {
+      if (count <= visualIndexCapacity) return;
+      visualIndexCapacity = nextPowerOfTwo(Math.max(count, visualIndexCapacity * 2));
+      rebuildFenwick();
+    }
+
+    function appendEstimatedVisualLines(prevCount: number, nextCount: number): void {
+      if (nextCount <= prevCount) return;
+      ensureVisualCapacity(nextCount);
+      visualCounts.length = nextCount;
+      visualKeys.length = nextCount;
+      for (let i = prevCount; i < nextCount; i++) {
+        visualCounts[i] = 1;
+        visualKeys[i] = undefined;
+        fenwickAdd(i, 1);
+      }
+      visualIndexLineCount = nextCount;
+    }
+
+    function ensureVisualIndex(): void {
+      if (!props.wrap) return;
+      const count = lineCount();
+      const width = currentWrapWidth();
+      if (visualIndexCapacity <= 0 || visualIndexWidth !== width || count < visualIndexLineCount) {
+        resetVisualIndex(count, width);
+        return;
+      }
+      if (count > visualIndexLineCount) appendEstimatedVisualLines(visualIndexLineCount, count);
+    }
+
+    function measureVisualLine(index: number): void {
+      ensureVisualIndex();
+      if (index < 0 || index >= visualIndexLineCount) return;
+
+      const key = lineKey(index);
+      if (visualKeys[index] === key) return;
+
+      const rows = wrappedRowsForLine(index, visualIndexLineCount, visualIndexWidth);
+      const nextCount = Math.max(1, rows.length);
+      const prevCount = visualCounts[index] ?? 1;
+      if (nextCount !== prevCount) {
+        visualCounts[index] = nextCount;
+        fenwickAdd(index, nextCount - prevCount);
+      }
+      visualKeys[index] = key;
+    }
+
+    function ensureBottomMeasured(): void {
+      if (!props.wrap) return;
+      ensureVisualIndex();
+      const count = visualIndexLineCount;
+      const r = normalizedRect();
+      const { y: clipY } = clipOffsets();
+      const needed = Math.max(0, clipY + r.h + Math.max(0, Math.floor(props.overscan)));
+      let rows = 0;
+      for (let i = count - 1; i >= 0 && rows < needed; i--) {
+        measureVisualLine(i);
+        rows += visualCounts[i] ?? 1;
+      }
+    }
+
+    function estimatedVisualRowCount(): number {
+      if (!props.wrap) return lineCount();
+      ensureVisualIndex();
+      return fenwickSum(visualIndexLineCount);
+    }
+
+    function bottomScrollTop(): number {
+      if (props.wrap) ensureBottomMeasured();
+      return maxScrollTop();
+    }
+
+    function visualStartForLine(index: number): number {
+      ensureVisualIndex();
+      return fenwickSum(index);
+    }
+
+    function findLineForVisualRow(visualRow: number): number {
+      let index = 0;
+      let bit = 1;
+      while (bit << 1 <= visualIndexCapacity) bit <<= 1;
+
+      let target = visualRow + 1;
+      for (; bit > 0; bit >>= 1) {
+        const next = index + bit;
+        if (next <= visualIndexCapacity && (visualTree[next] ?? 0) < target) {
+          index = next;
+          target -= visualTree[next] ?? 0;
+        }
+      }
+      return clamp(index, 0, Math.max(0, visualIndexLineCount - 1));
+    }
+
+    function locateVisualRow(visualRow: number): LocatedVisualRow | null {
+      ensureVisualIndex();
+      if (visualRow < 0 || visualRow >= estimatedVisualRowCount()) return null;
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const lineIndex = findLineForVisualRow(visualRow);
+        measureVisualLine(lineIndex);
+        const start = visualStartForLine(lineIndex);
+        const count = visualCounts[lineIndex] ?? 1;
+        if (visualRow >= start && visualRow < start + count) {
+          return { lineIndex, partIndex: visualRow - start };
+        }
+      }
+
+      const lineIndex = findLineForVisualRow(visualRow);
+      const start = visualStartForLine(lineIndex);
+      return { lineIndex, partIndex: Math.max(0, visualRow - start) };
+    }
+
+    function prepareWrapIndexForSourceChange(prevCount: number, nextCount: number): boolean {
+      if (!props.wrap) return false;
+
+      ensureVisualIndex();
+      if (nextCount < prevCount) {
+        resetVisualIndex(nextCount, currentWrapWidth());
+        return false;
+      }
+
+      if (nextCount > visualIndexLineCount) {
+        appendEstimatedVisualLines(visualIndexLineCount, nextCount);
+      }
+
+      const maybeChanged = nextCount > prevCount ? prevCount - 1 : nextCount - 1;
+      if (maybeChanged < 0) return false;
+
+      const oldKey = visualKeys[maybeChanged];
+      const nextKey = lineKey(maybeChanged);
+      if (oldKey === undefined || oldKey === nextKey) return false;
+
+      visualKeys[maybeChanged] = undefined;
+      measureVisualLine(maybeChanged);
+      return true;
+    }
+
     function maxScrollTop(): number {
       const clip = normalizedRect();
       const { y: clipY } = clipOffsets();
-      return Math.max(0, lineCount() - (clipY + clip.h));
+      return Math.max(0, estimatedVisualRowCount() - (clipY + clip.h));
     }
 
     function viewportHeight(): number {
@@ -240,6 +516,7 @@ export const TLogView = defineComponent({
         scrollTop: scrollTop.value,
         atBottom: isAtBottom(),
         lineCount: lineCount(),
+        estimatedVisualRowCount: estimatedVisualRowCount(),
       };
     }
 
@@ -298,6 +575,7 @@ export const TLogView = defineComponent({
       delta: number,
       r: Rect,
     ): number | null {
+      if (props.wrap) return null;
       if (delta <= 0 || delta >= r.h) return null;
       if (prevCount <= 0 || nextCount <= prevCount) return null;
       if (lastPaintedBottom?.index !== prevCount - 1) return null;
@@ -318,6 +596,7 @@ export const TLogView = defineComponent({
       const full = normalizedFullRect();
       const h = r.h;
       if (h <= 0 || full.h <= 0) return false;
+      if (options?.stickToBottom === true && props.wrap) ensureBottomMeasured();
       const clampedTop = clamp(nextTop, 0, maxScrollTop());
       const delta = clampedTop - scrollTop.value;
       if (!delta) {
@@ -365,6 +644,15 @@ export const TLogView = defineComponent({
     }
 
     function viewportIntersectsLines(startIndex: number, endIndex: number): boolean {
+      if (props.wrap) {
+        if (startIndex >= endIndex) return false;
+        const visible = visibleLineRange();
+        const start = visualStartForLine(startIndex);
+        const end =
+          endIndex >= lineCount() ? estimatedVisualRowCount() : visualStartForLine(endIndex);
+        return start < visible.end && end > visible.start;
+      }
+
       const visible = visibleLineRange();
       return startIndex < visible.end && endIndex > visible.start;
     }
@@ -372,11 +660,12 @@ export const TLogView = defineComponent({
     function handleSourceVersionChanged(): boolean {
       const prevCount = lastLineCount;
       const nextCount = lineCount();
+      const wrapExistingMutation = prepareWrapIndexForSourceChange(prevCount, nextCount);
       lastLineCount = nextCount;
 
       if (nextCount < prevCount) {
         const nextTop = stickToBottom.value
-          ? maxScrollTop()
+          ? bottomScrollTop()
           : clamp(scrollTop.value, 0, maxScrollTop());
         const changed = applyScrollTop(nextTop, "viewport-repaint", {
           emitScroll: true,
@@ -389,14 +678,18 @@ export const TLogView = defineComponent({
       if (props.autoStickToBottom && stickToBottom.value) {
         const r = normalizedRect();
         const prevTop = scrollTop.value;
-        const nextTop = maxScrollTop();
+        const nextTop = bottomScrollTop();
         const delta = nextTop - prevTop;
         const extraDirtyRow = tailMutationDirtyRow(prevCount, nextCount, delta, r);
-        const changed = applyScrollTop(nextTop, "auto", {
-          emitScroll: true,
-          stickToBottom: true,
-          extraDirtyRows: extraDirtyRow == null ? undefined : [extraDirtyRow],
-        });
+        const changed = applyScrollTop(
+          nextTop,
+          wrapExistingMutation ? "viewport-repaint" : "auto",
+          {
+            emitScroll: true,
+            stickToBottom: true,
+            extraDirtyRows: extraDirtyRow == null ? undefined : [extraDirtyRow],
+          },
+        );
         if (!changed) markViewportDirty();
         return true;
       }
@@ -507,7 +800,7 @@ export const TLogView = defineComponent({
       }
       if (e.key === "End") {
         e.preventDefault();
-        keyboardScroll(maxScrollTop(), true);
+        keyboardScroll(bottomScrollTop(), true);
       }
     }
 
@@ -576,16 +869,15 @@ export const TLogView = defineComponent({
       },
     );
 
-    watch(
-      () => props.source,
-      () => {
-        renderLineCache.clear();
-      },
-    );
+    watch([() => props.source, () => props.wrap, () => fullRect.value.w], () => {
+      clearLineCaches();
+    });
 
     watch(
       [
         () => props.source,
+        () => props.wrap,
+        () => fullRect.value.w,
         () => fullRect.value.y,
         () => fullRect.value.h,
         () => absRect.value.y,
@@ -593,9 +885,10 @@ export const TLogView = defineComponent({
       ],
       () => {
         resetWheelScrollState(wheelState);
+        if (props.wrap) resetVisualIndex(lineCount(), currentWrapWidth());
         lastLineCount = lineCount();
         const nextTop = stickToBottom.value
-          ? maxScrollTop()
+          ? bottomScrollTop()
           : clamp(scrollTop.value, 0, maxScrollTop());
         const changed = applyScrollTop(nextTop, "viewport-repaint", {
           stickToBottom: stickToBottom.value && nextTop >= maxScrollTop(),
@@ -619,6 +912,7 @@ export const TLogView = defineComponent({
         absRect.value,
         fullRect.value,
         props.source,
+        props.wrap,
         focused.value,
         props.style,
         defaultStyle.value,
@@ -637,7 +931,35 @@ export const TLogView = defineComponent({
 
         const paintRow = (y: number): void => {
           if (y < r.y || y >= r.y + r.h) return;
-          const idx = top + clipY + (y - r.y);
+          const visualIndex = top + clipY + (y - r.y);
+          if (props.wrap) {
+            const located = locateVisualRow(visualIndex);
+            if (!located) {
+              terminal.write(spaces(r.w), { x: r.x, y, style: base });
+              return;
+            }
+
+            const rawKey = lineKey(located.lineIndex);
+            const wrappedRows = wrappedRowsForLine(located.lineIndex, count, full.w);
+            if (
+              located.lineIndex === count - 1 &&
+              located.partIndex === wrappedRows.length - 1 &&
+              y === r.y + r.h - 1
+            ) {
+              lastPaintedBottom = { index: located.lineIndex, lineKey: rawKey };
+            }
+            const line = renderVisualLine(
+              visualLineKey(rawKey, located.partIndex),
+              wrappedRows[located.partIndex] ?? "",
+              full.w,
+              clipX,
+              r.w,
+            );
+            terminal.write(line, { x: r.x, y, style: base });
+            return;
+          }
+
+          const idx = visualIndex;
           if (idx === count - 1 && y === r.y + r.h - 1) {
             lastPaintedBottom = { index: idx, lineKey: lineKey(idx) };
           }
@@ -649,10 +971,12 @@ export const TLogView = defineComponent({
         if (rows?.length) {
           for (const y of rows) paintRow(y);
           trimRenderCache();
+          trimWrapCache();
           return;
         }
         for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
         trimRenderCache();
+        trimWrapCache();
       },
     }));
 

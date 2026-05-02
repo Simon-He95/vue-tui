@@ -456,6 +456,7 @@ async function benchAppendOnly(): Promise<Record<string, unknown>> {
 async function benchDomTLogView(
   mode: "stick-bottom" | "not-bottom" | "burst",
   lineKind: "short" | "long" = "short",
+  wrap = false,
 ): Promise<Record<string, unknown>> {
   let framePerf: any = null;
   let rendererRef: any = null;
@@ -502,6 +503,7 @@ async function benchDomTLogView(
           version: log.version.value,
           autoFocus: true,
           rowScrollMode: "unsafe-full-row",
+          wrap,
           onScroll: (payload: { scrollTop: number; atBottom: boolean }) => {
             finalTop = payload.scrollTop;
             atBottom = payload.atBottom;
@@ -578,11 +580,14 @@ async function benchDomTLogView(
 
     return {
       name:
-        lineKind === "long"
-          ? `tlog-view-long-line-1000-lines-${mode}`
-          : `tlog-view-1000-lines-${mode}`,
+        wrap && lineKind === "long"
+          ? `tlog-view-wrap-long-lines-${mode === "not-bottom" ? "detached" : mode}`
+          : lineKind === "long"
+            ? `tlog-view-long-line-1000-lines-${mode}`
+            : `tlog-view-1000-lines-${mode}`,
       appendCount,
       lineKind,
+      wrap,
       longPayloadCells: longPayload.length,
       scheduledRafFrames: raf.scheduledRafFrames(),
       pendingRafFramesBeforeFlush,
@@ -626,6 +631,9 @@ async function main(): Promise<void> {
     await benchDomTLogView("stick-bottom", "long"),
     await benchDomTLogView("not-bottom", "long"),
     await benchDomTLogView("burst", "long"),
+    await benchDomTLogView("stick-bottom", "long", true),
+    await benchDomTLogView("not-bottom", "long", true),
+    await benchDomTLogView("burst", "long", true),
   ];
 
   // eslint-disable-next-line no-console

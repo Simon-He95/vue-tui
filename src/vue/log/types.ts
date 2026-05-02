@@ -20,4 +20,5 @@ export type TLogViewScrollPayload = Readonly<{
   scrollTop: number;
   atBottom: boolean;
   lineCount: number;
+  estimatedVisualRowCount: number;
 }>;

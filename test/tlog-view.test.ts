@@ -824,6 +824,491 @@ describe("TLogView", () => {
     }
   });
 
+  it("wraps a long logical line into visual rows", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "abcdefghij",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 4,
+          h: 3,
+          source,
+          version: 1,
+          wrap: true,
+        }),
+      4,
+      4,
+    );
+
+    expect([0, 1, 2].map((y) => rowText(mounted, y))).toEqual(["abcd", "efgh", "ij"]);
+    mounted.unmount();
+  });
+
+  it("initial wrap mount shows bottom visual rows", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 2,
+      getLine: (index) => (index === 0 ? "abcdefghij" : "klmnopqrst"),
+      getLineKey: (index) => index,
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 4,
+          h: 4,
+          source,
+          version: 1,
+          wrap: true,
+        }),
+      4,
+      4,
+    );
+
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual(["ij", "klmn", "opqr", "st"]);
+    mounted.unmount();
+  });
+
+  it("scrolls by wrapped visual rows when appending at bottom", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(["line-0", "line-1", "line-2", "line-3"]);
+
+    const App = defineComponent({
+      name: "TLogViewWrapAppendBottomApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            rowScrollMode: "unsafe-full-row",
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      log.appendLine("abcdefghij");
+      await nextTick();
+      await nextTick();
+
+      off();
+      expect(commits).toContainEqual({
+        dirtyRows: [2, 3],
+        scrollOperations: [{ startY: 0, endY: 4, delta: 2 }],
+      });
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
+        "line-2",
+        "line-3",
+        "abcdefgh",
+        "ij",
+      ]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints the wrapped viewport when append delta reaches viewport height", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(["line-0", "line-1", "line-2", "line-3"]);
+
+    const App = defineComponent({
+      name: "TLogViewWrapHugeAppendApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            rowScrollMode: "unsafe-full-row",
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      log.appendLine("x".repeat(20));
+      await nextTick();
+      await nextTick();
+
+      off();
+      expect(commits).toContainEqual({ dirtyRows: [0, 1, 2, 3], scrollOperations: null });
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual(["xxxx", "xxxx", "xxxx", "xxxx"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not scroll wrapped rows when appending while detached from bottom", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 10 }, (_, index) => `line-${index}`));
+
+    const App = defineComponent({
+      name: "TLogViewWrapDetachedAppendApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            autoFocus: true,
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "keydown", key: "PageUp", code: "PageUp", time: Date.now() });
+      await nextTick();
+      app.scheduler.flushNow();
+      const before = [0, 1, 2, 3].map((y) => rowText(app, y));
+
+      log.appendLine("abcdefghij");
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual(before);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("updates wrapped rows when tail mutation changes visual row count", async () => {
+    const log = createAppendOnlyLogStore();
+
+    const App = defineComponent({
+      name: "TLogViewWrapTailMutationApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 5, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      log.appendChunk("abc");
+      await nextTick();
+      await nextTick();
+      expect(rowText(app, 0)).toBe("abc");
+
+      log.appendChunk("de");
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1].map((y) => rowText(app, y))).toEqual(["abcd", "e"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("wraps completed tail and new tail when chunk contains newline", async () => {
+    const log = createAppendOnlyLogStore();
+
+    const App = defineComponent({
+      name: "TLogViewWrapChunkNewlineApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 5, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      log.appendChunk("abcd");
+      await nextTick();
+      await nextTick();
+
+      log.appendChunk("ef\n12345");
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual(["abcd", "ef", "1234", "5"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("rebuilds wrapped rows when width changes", async () => {
+    const w = ref(10);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "abcdefghij",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWrapWidthApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: w.value,
+            h: 3,
+            source,
+            version: 1,
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 10, rows: 4, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("abcdefghij");
+
+      w.value = 5;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect([0, 1].map((y) => rowText(app, y))).toEqual(["abcde", "fghij"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keeps non-keyed wrapped sources correct across version changes", async () => {
+    const sourceLines = ref(["abc"]);
+    const version = ref(1);
+    const source: TLogDataSource = {
+      lineCount: () => sourceLines.value.length,
+      getLine: (index) => sourceLines.value[index] ?? "",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWrapNoLineKeyApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 2,
+            h: 3,
+            source,
+            version: version.value,
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 2, rows: 4, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect([0, 1].map((y) => rowText(app, y))).toEqual(["ab", "c"]);
+
+      sourceLines.value = ["abcd"];
+      version.value++;
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1].map((y) => rowText(app, y))).toEqual(["ab", "cd"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not wrap all lines on initial large wrapped mount", async () => {
+    const getLine = vi.fn((index: number) => `line-${index}-xxxxxxxxxxxxxxxxxxxx`);
+    const source: TLogDataSource = {
+      lineCount: () => 100_000,
+      getLine,
+      getLineKey: (index) => index,
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 4,
+          source,
+          version: 1,
+          wrap: true,
+        }),
+      10,
+      6,
+    );
+
+    expect(getLine.mock.calls.length).toBeLessThan(100);
+    expect(rowText(mounted, 0)).toBe("line-99999");
+    mounted.unmount();
+  });
+
+  it("reports estimated visual row count for large lazy wrapped sources", async () => {
+    const onScroll = vi.fn();
+    const getLine = vi.fn((index: number) => `line-${index}-${"x".repeat(100)}`);
+    const source: TLogDataSource = {
+      lineCount: () => 100_000,
+      getLine,
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWrapEstimatedPayloadApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            wrap: true,
+            onScroll,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 10, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "keydown", key: "PageUp", code: "PageUp", time: Date.now() });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const payload = onScroll.mock.calls.at(-1)?.[0];
+      expect(payload).toMatchObject({
+        lineCount: 100_000,
+        atBottom: false,
+      });
+      expect(payload).toHaveProperty("estimatedVisualRowCount");
+      expect(payload).not.toHaveProperty("visualRowCount");
+      expect(payload.estimatedVisualRowCount).toBeLessThan(200_000);
+      expect(getLine.mock.calls.length).toBeLessThan(100);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("scrolls upward through unmeasured wrapped lines without full-source wrapping", async () => {
+    const getLine = vi.fn((index: number) => `line-${index}-${"x".repeat(40)}`);
+    const source: TLogDataSource = {
+      lineCount: () => 100_000,
+      getLine,
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWrapLazyPageUpApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 10, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      const before = [0, 1, 2, 3].map((y) => rowText(app, y));
+
+      for (let i = 0; i < 3; i++) {
+        app.events.dispatch({ type: "keydown", key: "PageUp", code: "PageUp", time: Date.now() });
+        await nextTick();
+        app.scheduler.flushNow();
+      }
+
+      const after = [0, 1, 2, 3].map((y) => rowText(app, y));
+      expect(after).not.toEqual(before);
+      expect(after.every((row) => row.length > 0)).toBe(true);
+      expect(after.join("")).toContain("line-");
+      expect(getLine.mock.calls.length).toBeLessThan(200);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("uses DOM exposed row flush for full-row append", async () => {
     const log = createAppendOnlyLogStore();
     log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
