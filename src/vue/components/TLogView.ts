@@ -605,6 +605,10 @@ export const TLogView = defineComponent({
       return top >= maxScrollTop();
     }
 
+    function shouldStickForAppend(): boolean {
+      return props.autoStickToBottom && stickToBottom.value;
+    }
+
     function syncStickFromCurrentScrollTop(): void {
       stickToBottom.value = isAtBottom();
     }
@@ -775,6 +779,7 @@ export const TLogView = defineComponent({
       const nextFirst = firstLineIndex();
       const droppedHeadLines = Math.max(0, nextFirst - prevFirst);
       const droppedVisualRows = visualRowsForTrimmedHead(droppedHeadLines);
+      const shouldStick = shouldStickForAppend();
       let wrapExistingMutation = false;
 
       if (props.wrap && droppedHeadLines > 0) {
@@ -786,7 +791,7 @@ export const TLogView = defineComponent({
       lastLineCount = nextCount;
       lastFirstLineIndex = nextFirst;
 
-      if (droppedHeadLines > 0 && !stickToBottom.value) {
+      if (droppedHeadLines > 0 && !shouldStick) {
         const nextTop = Math.max(0, currentScrollTop() - droppedVisualRows);
 
         if (isScrollControlled()) {
@@ -819,7 +824,7 @@ export const TLogView = defineComponent({
         return true;
       }
 
-      if (props.autoStickToBottom && stickToBottom.value) {
+      if (shouldStick) {
         const r = normalizedRect();
         const prevTop = currentScrollTop();
         const nextTop = bottomScrollTop();
@@ -868,17 +873,19 @@ export const TLogView = defineComponent({
     }
 
     function requestStreamFrame(): void {
+      const shouldStick = shouldStickForAppend();
       scheduler.queueFrameTask({
         id: `${frameTaskId}:stream`,
         reason: "stream",
-        priority: stickToBottom.value ? "high" : "normal",
-        sync: stickToBottom.value,
+        priority: shouldStick ? "high" : "normal",
+        sync: shouldStick,
         run(ctx) {
           if (!alive) return;
           const invalidated = handleSourceVersionChanged();
           if (!invalidated) return;
+          const nextShouldStick = shouldStickForAppend();
           ctx.invalidate({
-            priority: stickToBottom.value ? "high" : "normal",
+            priority: nextShouldStick ? "high" : "normal",
             plane: plane.value,
             reason: "stream",
           });

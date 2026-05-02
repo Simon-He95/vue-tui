@@ -1009,6 +1009,44 @@ describe("TLogView", () => {
     }
   });
 
+  it("preserves anchor on retention trim when autoStickToBottom is false", async () => {
+    const log = createAppendOnlyLogStore({ maxLines: 5 });
+    log.appendLines(["line-0", "line-1", "line-2", "line-3", "line-4"]);
+
+    const App = defineComponent({
+      name: "TLogViewNoStickRetentionAnchorApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            source: log.source,
+            version: log.version.value,
+            autoStickToBottom: false,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect([0, 1, 2].map((y) => rowText(app, y))).toEqual(["line-2", "line-3", "line-4"]);
+
+      log.appendLine("line-5");
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1, 2].map((y) => rowText(app, y))).toEqual(["line-2", "line-3", "line-4"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("repaints visible appended lines when autoStickToBottom is false and viewport is not full", async () => {
     const log = createAppendOnlyLogStore();
 
