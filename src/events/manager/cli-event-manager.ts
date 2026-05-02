@@ -248,6 +248,7 @@ export function createCliEventManager(
   function makeBaseEvent(
     type: TerminalEventType,
     path: TerminalNode[],
+    time?: number,
   ): TerminalBaseEvent & { __stopped: boolean } {
     return {
       type,
@@ -257,7 +258,7 @@ export function createCliEventManager(
       bubbles: true,
       cancelable: true,
       defaultPrevented: false,
-      timeStamp: now(),
+      timeStamp: typeof time === "number" ? time : now(),
       __stopped: false,
       stopPropagation() {
         this.__stopped = true;
@@ -417,7 +418,7 @@ export function createCliEventManager(
     path: TerminalNode[],
     record: PointerLikeRecord,
   ): TerminalPointerEvent & { __stopped: boolean } {
-    const base = makeBaseEvent(type, path);
+    const base = makeBaseEvent(type, path, record.time);
     return Object.assign(base, {
       clientX: record.clientX ?? record.cellX,
       clientY: record.clientY ?? record.cellY,
@@ -448,7 +449,7 @@ export function createCliEventManager(
     path: TerminalNode[],
     record: Extract<TerminalEventRecord, { type: "keydown" | "keyup" }>,
   ): TerminalKeyboardEvent & { __stopped: boolean } {
-    const base = makeBaseEvent(type, path);
+    const base = makeBaseEvent(type, path, record.time);
     return Object.assign(base, {
       key: record.key,
       code: record.code ?? "",
@@ -477,7 +478,7 @@ export function createCliEventManager(
       }
     >,
   ): TerminalInputEvent & { __stopped: boolean } {
-    const base = makeBaseEvent(type, path);
+    const base = makeBaseEvent(type, path, record.time);
     return Object.assign(base, {
       data: record.data,
       inputType: record.inputType,

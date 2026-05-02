@@ -325,6 +325,73 @@ describe("ui regressions", () => {
     }
   });
 
+  it("TerminalProvider passes domRendererOptions to the DOM sync budget", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const runNextRaf = async (): Promise<void> => {
+      const entry = callbacks.entries().next().value as [number, FrameRequestCallback] | undefined;
+      if (!entry) return;
+      callbacks.delete(entry[0]);
+      entry[1](0);
+      await nextTick();
+      await Promise.resolve();
+    };
+
+    const value = ref("A");
+    let scheduler: ReturnType<typeof useTerminal>["scheduler"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TerminalProviderDomOptionsProbe",
+      setup() {
+        scheduler = useTerminal().scheduler;
+        return () => null;
+      },
+    });
+
+    let mounted: Awaited<ReturnType<typeof mountTerminal>> | null = null;
+    try {
+      mounted = await mountTerminal(
+        () => [
+          h(Probe),
+          h(TText, { x: 0, y: 0, w: 4, value: `${value.value}0` }),
+          h(TText, { x: 0, y: 1, w: 4, value: `${value.value}1` }),
+        ],
+        8,
+        2,
+        { domRendererOptions: { syncFlushMaxRows: 1, syncFlushCellBudget: 64 } },
+      );
+      await nextTick();
+      await Promise.resolve();
+      while (callbacks.size) await runNextRaf();
+      const container = mounted.container()!;
+      expect(container.textContent).toContain("A1");
+
+      value.value = "B";
+      await nextTick();
+      await Promise.resolve();
+      scheduler!.flushNow();
+
+      expect(container.textContent).not.toContain("B1");
+      await runNextRaf();
+      expect(container.textContent).toContain("B1");
+    } finally {
+      mounted?.unmount();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
   it("useRenderNode can consume a one-shot dirtyRowsHint without other dep changes", async () => {
     const dirtyRowsHint = ref<readonly number[] | null>(null);
     const paints: string[] = [];

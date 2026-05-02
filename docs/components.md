@@ -61,6 +61,7 @@
 - `pathPickerProvider` `(PathPickerProvider?)`: 给子树里的 `TPathPicker` 注入宿主路径 provider
 - `debugIme` `(boolean)`: 输出 IME 调试信息
 - `debugTrace` `(boolean)`: 开启 trace（commit/event/focus）
+- `domRendererOptions` `(DomRendererOptions?)`: DOM renderer 挂载时配置，例如 `syncFlushMaxRows` / `syncFlushCellBudget`；该选项按 mount-time 使用，修改后需重新挂载 provider
 
 ### Slots
 
@@ -325,7 +326,7 @@ const app = createTerminalApp({
 - `modelValue` `(number)` + `update:modelValue`
 - `style` / `activeStyle` `(Style?)`
 - `autoFocus` `(boolean)`
-- `useRowScroll` `(boolean)`：headless/CLI full-row 场景的 opt-in unsafe row-scroll 优化
+- `rowScrollMode` `("off" | "unsafe-full-row")`：headless/CLI full-row 场景的 opt-in unsafe row-scroll 优化
 
 ### Data source
 
@@ -346,7 +347,7 @@ const renderItem = (item: Row) => item.title;
 
 ### Row scroll
 
-`useRowScroll` 是危险优化开关，不是列表内部局部滚动。它会 shift 当前 render plane 的整行区域，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占且列表没有被裁剪的场景；同 plane 其它内容会被一起移动。它是 headless/CLI 优化：当 DOM renderer 已挂载、列表没有占满终端整行、列表 rect 被裁剪或 rows 超出 terminal bounds 时，会退回 viewport repaint；debug perf 模式会对这些被忽略的场景发出一次 warning。DOM renderer 当前不消费 terminal `scrollOperations`，所以 DOM 慢滚即使设置 `useRowScroll: true` 仍会重绘可见窗口。
+`rowScrollMode` 是危险优化开关，不是列表内部局部滚动。它会 shift 当前 render plane 的整行区域，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占且列表没有被裁剪的场景；同 plane 其它内容会被一起移动。它是 headless/CLI 优化：当 DOM renderer 已挂载、列表没有占满终端整行、列表 rect 被裁剪或 rows 超出 terminal bounds 时，会退回 viewport repaint；debug perf 模式会对这些被忽略的场景发出一次 warning。DOM renderer 当前不消费 terminal `scrollOperations`，所以 DOM 慢滚即使设置 `rowScrollMode: "unsafe-full-row"` 仍会重绘可见窗口。
 
 ### Events
 

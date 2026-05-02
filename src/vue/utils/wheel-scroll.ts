@@ -63,6 +63,13 @@ export function createWheelScrollState(): WheelScrollState {
   };
 }
 
+export function resetWheelScrollState(state: WheelScrollState): void {
+  state.accumulator = 0;
+  state.lastAt = 0;
+  state.lastEdgeDir = 0;
+  state.lastEdgeAt = 0;
+}
+
 export function applyWheelScroll(
   state: WheelScrollState,
   deltaY: number,

@@ -120,7 +120,12 @@ function expectBoxBorder(
   for (let xx = x + 1; xx < x + w - 1; xx++) expect(lines[y + h - 1]?.[xx]).toBe("─");
 }
 
-async function mountTerminal(children: () => any, cols = 40, rows = 8): Promise<Mounted> {
+async function mountTerminal(
+  children: () => any,
+  cols = 40,
+  rows = 8,
+  providerProps: Record<string, unknown> = {},
+): Promise<Mounted> {
   const root = document.createElement("div");
   document.body.appendChild(root);
 
@@ -151,7 +156,7 @@ async function mountTerminal(children: () => any, cols = 40, rows = 8): Promise<
       return () =>
         h(
           TerminalProvider,
-          { cols, rows },
+          { cols, rows, ...providerProps },
           {
             default: () => [h(Expose), children()],
           },

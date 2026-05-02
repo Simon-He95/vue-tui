@@ -72,7 +72,7 @@ describe("TVirtualList", () => {
     mounted.unmount();
   });
 
-  it("repaints the DOM viewport even when useRowScroll is enabled", async () => {
+  it("repaints the DOM viewport even when rowScrollMode is enabled", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const mounted = await mountTerminal(
       () =>
@@ -85,7 +85,7 @@ describe("TVirtualList", () => {
           itemVersion: 1,
           getItem: (index: number) => items[index],
           autoFocus: true,
-          useRowScroll: true,
+          rowScrollMode: "unsafe-full-row",
         }),
       20,
       8,
@@ -133,10 +133,10 @@ describe("TVirtualList", () => {
     );
 
     const container = mounted.container()!;
-    const dateNow = vi.spyOn(Date, "now");
+    const performanceNow = vi.spyOn(performance, "now");
     try {
       let now = 1_000;
-      dateNow.mockImplementation(() => now);
+      performanceNow.mockImplementation(() => now);
       dispatchWheel(container);
       await nextTick();
       now += 10;
@@ -144,7 +144,7 @@ describe("TVirtualList", () => {
       await nextTick();
       await nextTick();
     } finally {
-      dateNow.mockRestore();
+      performanceNow.mockRestore();
     }
 
     expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
@@ -194,6 +194,78 @@ describe("TVirtualList", () => {
     mounted.unmount();
   });
 
+  it("uses event time for wheel tick coalescing", async () => {
+    const dateNow = vi.spyOn(Date, "now");
+    dateNow.mockReturnValue(10_000);
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: 20,
+        itemVersion: 1,
+        getItem: (index: number) => `item-${index}`,
+        autoFocus: true,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 100 });
+      await nextTick();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 101 });
+      await nextTick();
+
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-1");
+    } finally {
+      app.dispose();
+      dateNow.mockRestore();
+    }
+  });
+
+  it("resets wheel timing after keyboard navigation", async () => {
+    const dateNow = vi.spyOn(Date, "now");
+    dateNow.mockReturnValue(10_000);
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: 20,
+        itemVersion: 1,
+        getItem: (index: number) => `item-${index}`,
+        autoFocus: true,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 100 });
+      await nextTick();
+      app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: 101 });
+      await nextTick();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 102 });
+      await nextTick();
+
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-2");
+    } finally {
+      app.dispose();
+      dateNow.mockRestore();
+    }
+  });
+
   it("keeps unsafe row-scroll fast path to exposed rows when no DOM renderer is attached", () => {
     const terminal = createTerminal({ cols: 12, rows: 6 });
     const render = createRenderManager(terminal);
@@ -238,7 +310,7 @@ describe("TVirtualList", () => {
         itemVersion: 1,
         getItem: (index: number) => items[index],
         autoFocus: true,
-        useRowScroll: true,
+        rowScrollMode: "unsafe-full-row",
       },
     });
     app.mount();
@@ -268,7 +340,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it("warns in debug perf mode when useRowScroll shifts plane rows", async () => {
+  it('warns in debug perf mode when rowScrollMode="unsafe-full-row" shifts plane rows', async () => {
     const previousDebugPerf = (globalThis as any).__VT_DEBUG_PERF__;
     (globalThis as any).__VT_DEBUG_PERF__ = true;
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -286,7 +358,7 @@ describe("TVirtualList", () => {
         itemVersion: 1,
         getItem: (index: number) => items[index],
         autoFocus: true,
-        useRowScroll: true,
+        rowScrollMode: "unsafe-full-row",
       },
     });
 
@@ -299,7 +371,7 @@ describe("TVirtualList", () => {
       await nextTick();
 
       expect(warn).toHaveBeenCalledWith(
-        "[vue-tui] TVirtualList.useRowScroll shifts whole plane rows. Use only when these rows are exclusively owned by this component.",
+        '[vue-tui] TVirtualList.rowScrollMode="unsafe-full-row" shifts whole plane rows. Use only when these rows are exclusively owned by this component.',
       );
     } finally {
       warn.mockRestore();
@@ -336,7 +408,7 @@ describe("TVirtualList", () => {
         itemVersion: 1,
         getItem: (index: number) => items[index],
         autoFocus: true,
-        useRowScroll: true,
+        rowScrollMode: "unsafe-full-row",
       },
     });
     const dateNow = vi.spyOn(Date, "now");
@@ -430,7 +502,7 @@ describe("TVirtualList", () => {
             itemVersion: itemCount.value,
             getItem,
             autoFocus: true,
-            useRowScroll: true,
+            rowScrollMode: "unsafe-full-row",
             onScroll,
           }),
         ];
@@ -519,6 +591,7 @@ describe("TVirtualList", () => {
 
   it("clamps scrollTop when itemCount shrinks without snapping back to active", async () => {
     const itemCount = ref(100);
+    const onScroll = vi.fn();
     const getItem = vi.fn((index: number) => {
       if (index >= itemCount.value) throw new Error(`out of range ${index}`);
       return `item-${index}`;
@@ -537,6 +610,7 @@ describe("TVirtualList", () => {
             getItem,
             modelValue: 0,
             autoFocus: true,
+            onScroll,
           });
       },
     });
@@ -550,6 +624,7 @@ describe("TVirtualList", () => {
     expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-96");
 
     getItem.mockClear();
+    onScroll.mockClear();
     itemCount.value = 20;
     await nextTick();
     app.scheduler.flushNow();
@@ -560,6 +635,7 @@ describe("TVirtualList", () => {
       "item-18",
       "item-19",
     ]);
+    expect(onScroll).toHaveBeenCalledWith(16);
     expect(getItem.mock.calls.every((call) => (call[0] as number) < 20)).toBe(true);
     app.dispose();
   });
@@ -688,7 +764,7 @@ describe("TVirtualList", () => {
         itemVersion: 1,
         getItem: (index: number) => items[index],
         autoFocus: true,
-        useRowScroll: true,
+        rowScrollMode: "unsafe-full-row",
       },
     });
     app.mount();
@@ -787,6 +863,7 @@ describe("TVirtualList", () => {
 
   it("repaints the viewport when keyboard navigation scrolls active state", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const onScroll = vi.fn();
     const app = createTerminalApp({
       cols: 12,
       rows: 8,
@@ -801,7 +878,8 @@ describe("TVirtualList", () => {
         getItem: (index: number) => items[index],
         modelValue: 3,
         autoFocus: true,
-        useRowScroll: true,
+        rowScrollMode: "unsafe-full-row",
+        onScroll,
       },
     });
     app.mount();
@@ -815,6 +893,7 @@ describe("TVirtualList", () => {
 
     off();
     expect(commits).toEqual([[0, 1, 2, 3]]);
+    expect(onScroll).toHaveBeenCalledWith(1);
     expect(rowText({ terminal: app.terminal } as any, 2)).toBe("item-3");
     expect(rowText({ terminal: app.terminal } as any, 3)).toBe("item-4");
     expect(app.terminal.getCell(0, 2).style.inverse).not.toBe(true);
@@ -988,6 +1067,7 @@ describe("TVirtualList", () => {
     const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
     const modelValue = ref(0);
     const onUpdateModelValue = vi.fn();
+    const onScroll = vi.fn();
     const App = defineComponent({
       name: "ExternalModelVirtualList",
       setup() {
@@ -1002,8 +1082,9 @@ describe("TVirtualList", () => {
             getItem: (index: number) => items[index],
             modelValue: modelValue.value,
             autoFocus: true,
-            useRowScroll: true,
+            rowScrollMode: "unsafe-full-row",
             "onUpdate:modelValue": onUpdateModelValue,
+            onScroll,
           });
       },
     });
@@ -1019,6 +1100,7 @@ describe("TVirtualList", () => {
 
     off();
     expect(onUpdateModelValue).not.toHaveBeenCalled();
+    expect(onScroll).toHaveBeenCalledWith(77);
     expect(commits).toEqual([[0, 1, 2, 3]]);
     expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
       "item-77",
@@ -1027,6 +1109,72 @@ describe("TVirtualList", () => {
       "item-80",
     ]);
     expect(app.terminal.getCell(0, 3).style.inverse).toBe(true);
+    app.dispose();
+  });
+
+  it("does not emit initial scroll on mount", async () => {
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: 100,
+        itemVersion: 1,
+        getItem: (index: number) => `item-${index}`,
+        modelValue: 80,
+        autoFocus: true,
+        onScroll,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+
+    expect(onScroll).not.toHaveBeenCalled();
+    expect(rowText({ terminal: app.terminal } as any, 3)).toBe("item-80");
+    app.dispose();
+  });
+
+  it("restores controlled active index when itemCount shrinks then grows", async () => {
+    const itemCount = ref(100);
+    const onChange = vi.fn();
+    const App = defineComponent({
+      name: "VirtualListControlledShrinkGrow",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: itemCount.value,
+            itemVersion: itemCount.value,
+            getItem: (index: number) => `item-${index}`,
+            modelValue: 80,
+            autoFocus: true,
+            onChange,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+
+    itemCount.value = 20;
+    await nextTick();
+    app.scheduler.flushNow();
+    itemCount.value = 100;
+    await nextTick();
+    app.scheduler.flushNow();
+
+    app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: Date.now() });
+    await nextTick();
+
+    expect(onChange).toHaveBeenCalledWith({ index: 80, value: "item-80" });
     app.dispose();
   });
 
@@ -1045,7 +1193,7 @@ describe("TVirtualList", () => {
         itemVersion: 1,
         getItem: (index: number) => items[index],
         autoFocus: true,
-        useRowScroll: true,
+        rowScrollMode: "unsafe-full-row",
       },
     });
     app.mount();
@@ -1063,7 +1211,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it("does not use unsafe row-scroll when useRowScroll is true but list does not own full rows", async () => {
+  it('does not use unsafe row-scroll when rowScrollMode="unsafe-full-row" but list does not own full rows', async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "VirtualListWithSideContent",
@@ -1078,7 +1226,7 @@ describe("TVirtualList", () => {
             itemVersion: 1,
             getItem: (index: number) => items[index],
             autoFocus: true,
-            useRowScroll: true,
+            rowScrollMode: "unsafe-full-row",
           }),
           h(TText, { x: 12, y: 1, w: 4, value: "SIDE" }),
         ];
@@ -1101,7 +1249,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it("does not use unsafe row-scroll when useRowScroll is true but the list is clipped", async () => {
+  it('does not use unsafe row-scroll when rowScrollMode="unsafe-full-row" but the list is clipped', async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "ClippedRowScrollVirtualList",
@@ -1117,7 +1265,7 @@ describe("TVirtualList", () => {
               itemVersion: 1,
               getItem: (index: number) => items[index],
               autoFocus: true,
-              useRowScroll: true,
+              rowScrollMode: "unsafe-full-row",
             }),
           );
       },
@@ -1147,7 +1295,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it("does not shift same-plane overlay when useRowScroll is false (default)", async () => {
+  it("does not shift same-plane overlay when rowScrollMode is off (default)", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "VirtualListWithOverlay",
@@ -1162,7 +1310,7 @@ describe("TVirtualList", () => {
             itemVersion: 1,
             getItem: (index: number) => items[index],
             autoFocus: true,
-            // useRowScroll defaults to false — should NOT use unsafe row-scroll
+            // rowScrollMode defaults to off, so this should not use unsafe row-scroll
           }),
           h(TText, { x: 0, y: 1, w: 6, value: "BADGE", zIndex: 999 }),
         ];
@@ -1179,14 +1327,14 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    // With useRowScroll=false, unsafe row-scroll is NOT used, so BADGE is not shifted
+    // With rowScrollMode=off, unsafe row-scroll is NOT used, so BADGE is not shifted
     expect(rowText({ terminal: app.terminal } as any, 1)).toContain("BADGE");
     // Full viewport repaint, not exposed-only
     expect(commits).toEqual([[0, 1, 2, 3]]);
     app.dispose();
   });
 
-  it("documents that useRowScroll shifts same-plane full-row overlay content", async () => {
+  it('documents that rowScrollMode="unsafe-full-row" shifts same-plane full-row overlay content', async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "VirtualListWithUnsafeOverlay",
@@ -1201,7 +1349,7 @@ describe("TVirtualList", () => {
             itemVersion: 1,
             getItem: (index: number) => items[index],
             autoFocus: true,
-            useRowScroll: true,
+            rowScrollMode: "unsafe-full-row",
           }),
           h(TText, { x: 0, y: 1, w: 6, value: "BADGE", zIndex: 999 }),
         ];
@@ -1305,7 +1453,7 @@ describe("TVirtualList", () => {
             itemVersion: version.value,
             getItem,
             autoFocus: true,
-            useRowScroll: true,
+            rowScrollMode: "unsafe-full-row",
           }),
         ];
       },
@@ -1394,7 +1542,7 @@ describe("TVirtualList", () => {
             itemVersion: 1,
             getItem: (index: number) => `item-${index}`,
             autoFocus: true,
-            useRowScroll: true,
+            rowScrollMode: "unsafe-full-row",
             style: style.value,
           }),
         ];
@@ -1532,7 +1680,7 @@ describe("TVirtualList", () => {
     }
   });
 
-  it("active style follows item after useRowScroll unsafe row-scroll shift", async () => {
+  it("active style follows item after rowScrollMode unsafe row-scroll shift", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
       cols: 12,
@@ -1548,7 +1696,7 @@ describe("TVirtualList", () => {
         getItem: (index: number) => items[index],
         modelValue: 0,
         autoFocus: true,
-        useRowScroll: true,
+        rowScrollMode: "unsafe-full-row",
       },
     });
     app.mount();

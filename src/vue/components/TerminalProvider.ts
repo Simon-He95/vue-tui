@@ -3,7 +3,7 @@ import type { PathPickerProvider } from "../../cli/path-provider.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../../core/render-plane.js";
 import type { Style, Terminal } from "../../core/types.js";
 import type { EventManager, TerminalEventRecord } from "../../events/index.js";
-import type { DomRenderer } from "../../renderer/index.js";
+import type { DomRenderer, DomRendererOptions } from "../../renderer/index.js";
 import type {
   ImeAnchor,
   LayoutContext,
@@ -112,6 +112,10 @@ export const TerminalProvider = defineComponent({
     },
     debugIme: { type: Boolean, default: false },
     debugTrace: { type: Boolean, default: false },
+    domRendererOptions: {
+      type: Object as PropType<DomRendererOptions>,
+      default: undefined,
+    },
   },
   setup(props, { slots }) {
     const terminal: Terminal = createTerminal({
@@ -373,7 +377,7 @@ export const TerminalProvider = defineComponent({
         const el = containerRef.value;
         if (!el) return;
 
-        const r = createDomRenderer(terminal, el);
+        const r = createDomRenderer(terminal, el, props.domRendererOptions ?? {});
         renderer.value = r;
 
         let lastPointerImeAt = 0;
