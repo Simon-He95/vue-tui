@@ -200,6 +200,9 @@ export const TList = defineComponent({
             maxTop,
             Date.now(),
             mode,
+            {
+              disableAcceleration: mode === "pixel",
+            },
           );
           if (!dir || nextTop === scrollTop.value) return;
           scrollTop.value = nextTop;
