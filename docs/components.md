@@ -395,6 +395,8 @@ log.appendChunk(" world\nnext line");
 
 `createAppendOnlyLogStore()` 保存 completed lines 和一个 mutable tail。`appendChunk()` 会追加到 tail，并按 `\n` 拆出 completed lines；`appendLine()` 如果存在 tail，会先完成 `tail + line`，否则追加一条 completed line；`replaceTail()` 只替换 mutable tail，不会修改最后一条 completed line。
 
+`appendLine()` / `appendLines()` 期望调用方传入单行文本；需要处理包含 newline 的 streaming 输入时，请使用 `appendChunk()`。
+
 `TLogView` 假设数据源是 append-only 或 tail-only mutation。任意可见历史行会变化的 source 不适合只靠 `version` 驱动这个组件；这类浏览/选择场景应使用 `TVirtualList`，或者等后续显式 viewport refresh API。
 
 当前 `TLogView` 只支持 fixed one-line rows。超出宽度的行会被 clip，不会 wrap。
@@ -403,6 +405,7 @@ log.appendChunk(" world\nnext line");
 
 - `appendLine` / `appendChunk` / `replaceTail` 通过 `scheduler.queueFrameTask()` 合并为 stream frame。
 - `TLogView` 每次 paint 只调用当前 visible rows 的 `source.getLine()`。
+- 初始 mount 默认显示当前底部；`autoStickToBottom=false` 只影响后续 append 是否继续贴底，不改变初始定位。
 - 用户在底部时 append 会贴底；用户滚离底部后 append 不改变当前 `scrollTop`，也不会 repaint 当前 viewport。
 - `rowScrollMode="unsafe-full-row"` 只有在组件占满整行、未被裁剪、renderer 支持 `scrollOperations` 时才会用 exposed-row repaint；其它情况回退到 viewport repaint。
 

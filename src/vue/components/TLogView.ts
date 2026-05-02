@@ -31,6 +31,8 @@ import {
 type ScrollStrategy = "auto" | "viewport-repaint";
 type RowScrollMode = "off" | "unsafe-full-row";
 
+let nextTLogViewTaskId = 0;
+
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
@@ -96,6 +98,7 @@ export const TLogView = defineComponent({
     const focused = ref(false);
     const scrollTop = ref(0);
     const stickToBottom = ref(true);
+    const frameTaskId = `TLogView:${nextTLogViewTaskId++}`;
     let dirtyRowsHint: readonly number[] | undefined;
     let renderNodeId: string | null = null;
     let alive = true;
@@ -367,7 +370,7 @@ export const TLogView = defineComponent({
 
     function requestStreamFrame(): void {
       scheduler.queueFrameTask({
-        id: `TLogView:${renderNodeId ?? "pending"}:stream`,
+        id: `${frameTaskId}:stream`,
         reason: "stream",
         priority: stickToBottom.value ? "high" : "normal",
         sync: stickToBottom.value,
@@ -387,7 +390,7 @@ export const TLogView = defineComponent({
     function requestWheelScroll(nextTop: number): void {
       pendingWheelTop = nextTop;
       scheduler.queueFrameTask({
-        id: `TLogView:${renderNodeId ?? "pending"}:wheel`,
+        id: `${frameTaskId}:wheel`,
         reason: "scroll",
         priority: "high",
         sync: true,

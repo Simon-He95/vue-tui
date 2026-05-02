@@ -313,6 +313,178 @@ describe("TLogView", () => {
     }
   });
 
+  it("repaints visible tail when appendChunk mutates the current tail", async () => {
+    const log = createAppendOnlyLogStore();
+
+    const App = defineComponent({
+      name: "TLogViewAppendChunkTailApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      log.appendChunk("hello");
+      await nextTick();
+      await nextTick();
+      expect(rowText(app, 0)).toBe("hello");
+
+      log.appendChunk(" world");
+      await nextTick();
+      await nextTick();
+      expect(rowText(app, 0)).toBe("hello world");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints visible tail when replaceTail changes the current tail", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendChunk("draft");
+
+    const App = defineComponent({
+      name: "TLogViewReplaceTailApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("draft");
+
+      log.replaceTail("final");
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("final");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("paints completed line and new tail when appendChunk contains newline", async () => {
+    const log = createAppendOnlyLogStore();
+
+    const App = defineComponent({
+      name: "TLogViewAppendChunkNewlineApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      log.appendChunk("a");
+      await nextTick();
+      await nextTick();
+
+      log.appendChunk("b\nc");
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1].map((y) => rowText(app, y))).toEqual(["ab", "c"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not coalesce stream tasks across multiple TLogView instances", async () => {
+    const raf = installManualRaf();
+    const logA = createAppendOnlyLogStore();
+    const logB = createAppendOnlyLogStore();
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const App = defineComponent({
+      name: "TLogViewMultipleStreamTasksApp",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => [
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 2,
+            source: logA.source,
+            version: logA.version.value,
+          }),
+          h(TLogView, {
+            x: 0,
+            y: 2,
+            w: 20,
+            h: 2,
+            source: logB.source,
+            version: logB.version.value,
+          }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+
+      logA.appendLine("a");
+      logB.appendLine("b");
+      await nextTick();
+
+      expect(raf.pending()).toBe(1);
+      raf.flush();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("a");
+      expect(rowText(app, 2)).toBe("b");
+      expect(framePerf!.latest()).toMatchObject({
+        reason: "stream",
+        frameTaskCount: 2,
+        remainingFrameTasks: 0,
+      });
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
   it("restores bottom stickiness with End", async () => {
     const log = createAppendOnlyLogStore();
     log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
