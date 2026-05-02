@@ -92,7 +92,8 @@ export const TVirtualList = defineComponent({
   },
   emits: ["update:modelValue", "change", "scroll", "focus", "blur", "keydown"],
   setup(props, { emit }) {
-    const { terminal, scheduler, render, renderer, defaultStyle, events } = useTerminal();
+    const { terminal, scheduler, render, rendererCapabilities, defaultStyle, events } =
+      useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const plane = inject(RenderPlaneContextKey, ref<TerminalRenderPlane>("default"));
@@ -396,6 +397,7 @@ export const TVirtualList = defineComponent({
           const { nextTop, dir } = applyWheelScroll(wheelState, deltaY, baseTop, maxTop, now, mode);
           if (!dir || nextTop === baseTop) return;
 
+          e.preventDefault?.();
           requestWheelScroll(nextTop);
         },
         focus: () => {
@@ -476,7 +478,7 @@ export const TVirtualList = defineComponent({
       const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= size.cols;
       const withinTerminalRows = r.y >= 0 && r.y + h <= size.rows;
       const wantsUnsafeRowScroll = props.rowScrollMode === "unsafe-full-row";
-      const supportsScrollOperations = renderer.value?.capabilities?.scrollOperations ?? true;
+      const supportsScrollOperations = rendererCapabilities.value.scrollOperations;
       if (strategy === "auto" && wantsUnsafeRowScroll) {
         if (!supportsScrollOperations)
           warnIgnoredRowScroll("renderer does not support scroll operations");

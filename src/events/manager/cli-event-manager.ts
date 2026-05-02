@@ -491,12 +491,13 @@ export function createCliEventManager(
     type: TerminalEventType,
     record: PointerLikeRecord,
     targetOverride?: TerminalNode | null,
-  ): void {
+  ): boolean {
     const list = candidatesAt(record.cellX, record.cellY);
     const target = targetOverride ?? pickTarget(list);
     const path = target ? pathOuterToInner(list, target) : [];
     const ev = buildPointerEvent(type, path, record);
     dispatchWithPhases(type, path, target, ev);
+    return ev.defaultPrevented;
   }
 
   function dispatchToFocused(
@@ -611,7 +612,7 @@ export function createCliEventManager(
             if (target?.focusable) setFocus(target.id);
             capturedId = target?.id ?? null;
             updateHover(target, event);
-            dispatchPointerEvent("pointerdown", event, target);
+            prevented = dispatchPointerEvent("pointerdown", event, target);
             return prevented;
           }
 
@@ -630,7 +631,7 @@ export function createCliEventManager(
             const list = candidatesAt(event.cellX, event.cellY);
             const target = pickTarget(list);
             updateHover(target, event);
-            dispatchPointerEvent("pointermove", event, target);
+            prevented = dispatchPointerEvent("pointermove", event, target);
             return prevented;
           }
 
@@ -645,12 +646,12 @@ export function createCliEventManager(
           }
 
           if (event.type === "pointerup") {
-            dispatchPointerEvent("pointerup", event);
+            prevented = dispatchPointerEvent("pointerup", event);
             capturedId = null;
             return prevented;
           }
 
-          dispatchPointerEvent(event.type as TerminalEventType, event);
+          prevented = dispatchPointerEvent(event.type as TerminalEventType, event);
           return prevented;
         }
 

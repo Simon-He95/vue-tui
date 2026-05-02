@@ -349,6 +349,10 @@ const renderItem = (item: Row) => item.title;
 
 `rowScrollMode` 是危险优化开关，不是列表内部局部滚动。它会 shift 当前 render plane 的整行区域，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占且列表没有被裁剪的场景；同 plane 其它内容会被一起移动。它是 headless/CLI 优化：当 DOM renderer 已挂载、列表没有占满终端整行、列表 rect 被裁剪或 rows 超出 terminal bounds 时，会退回 viewport repaint；debug perf 模式会对这些被忽略的场景发出一次 warning。DOM renderer 当前不消费 terminal `scrollOperations`，所以 DOM 慢滚即使设置 `rowScrollMode: "unsafe-full-row"` 仍会重绘可见窗口。
 
+### Selection model
+
+`modelValue` 使用 optimistic controlled 语义：键盘和点击会先更新组件内部 active row 并 emit `update:modelValue`。如果父组件稍后接受、延迟应用或改成其它 `modelValue`，组件会在 prop 同步时跟随；如果父组件完全忽略 update，组件会保留本地 optimistic active state。
+
 ### Events
 
 - `change`: `{ index, value }`

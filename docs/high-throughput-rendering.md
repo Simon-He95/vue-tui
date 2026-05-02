@@ -195,7 +195,7 @@ wheel 行为：
 - wheel 不同步改变 active。
 - wheel 不 emit `update:modelValue`。
 - `scroll` event 每 frame 最多 emit 一次。
-- 小 delta 且 `abs(delta) < viewportHeight` 时，**仅当 `rowScrollMode: "unsafe-full-row"`** 且 headless/CLI 且 ownsFullRows 时使用 `render.unsafeScrollPlaneRows(plane, y, y + h, delta)`，只 dirty exposed rows。
+- 小 delta 且 `abs(delta) < viewportHeight` 时，**仅当 `rowScrollMode: "unsafe-full-row"`**、当前 renderer capability 明确支持 `scrollOperations`、且 ownsFullRows 时使用 `render.unsafeScrollPlaneRows(plane, y, y + h, delta)`，只 dirty exposed rows。
 - 不满足 `rowScrollMode` 条件或 DOM 环境下，wheel 直接 repaint viewport。
 - PageUp/PageDown/Home/End 或大跳转直接 repaint viewport。
 
@@ -206,6 +206,7 @@ wheel 行为：
 - 键盘导航改变 active，并保证 active visible。
 - 点击改变 active 和 modelValue。
 - Enter 触发 change。
+- `modelValue` 是 optimistic controlled：键盘/点击会先更新内部 active 并 emit `update:modelValue`，后续如果父组件接受、延迟或覆盖 prop，组件会跟随新的 prop；父组件完全忽略 update 时会保留本地 active。
 
 验收测试：
 

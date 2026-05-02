@@ -1,5 +1,7 @@
 export type { StdoutRenderer } from "./cli/stdout-renderer.js";
 export { createStdoutRenderer } from "./cli/stdout-renderer.js";
+export type { RendererCapabilities, TerminalRendererLike } from "./capabilities.js";
+export { DOM_RENDERER_CAPABILITIES, HEADLESS_RENDERER_CAPABILITIES } from "./capabilities.js";
 
 export type {
   CellMetrics,
@@ -8,6 +10,5 @@ export type {
   DomRendererOptions,
   DomRendererSyncFlushDecision,
   DomRendererSyncFlushStats,
-  RendererCapabilities,
 } from "./dom/dom-renderer.js";
 export { createDomRenderer } from "./dom/dom-renderer.js";

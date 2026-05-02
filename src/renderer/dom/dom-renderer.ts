@@ -1,16 +1,12 @@
 import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { Cell, Style, Terminal } from "../../core/types.js";
+import type { RendererCapabilities } from "../capabilities.js";
 import { ansiColorHex, ansiCssVar, installAnsiPaletteCssVars } from "../../core/ansi-palette.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
+import { DOM_RENDERER_CAPABILITIES } from "../capabilities.js";
 
 export type CellMetrics = Readonly<{ cellWidth: number; cellHeight: number }>;
-
-export type RendererCapabilities = Readonly<{
-  syncFlush: boolean;
-  scrollOperations: boolean;
-  domRows: boolean;
-}>;
 
 export type DomRendererSyncFlushDecision = Readonly<{
   performed: boolean;
@@ -380,11 +376,7 @@ export function createDomRenderer(
     0,
     Math.floor(options.syncFlushCellBudget ?? DEFAULT_SYNC_FLUSH_CELL_BUDGET),
   );
-  const capabilities: RendererCapabilities = Object.freeze({
-    syncFlush: true,
-    scrollOperations: false,
-    domRows: true,
-  });
+  const capabilities: RendererCapabilities = DOM_RENDERER_CAPABILITIES;
   let syncFlushRequested = 0;
   let syncFlushPerformed = 0;
   let syncFlushDeferred = 0;

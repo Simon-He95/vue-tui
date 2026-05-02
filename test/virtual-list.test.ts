@@ -194,6 +194,68 @@ describe("TVirtualList", () => {
     mounted.unmount();
   });
 
+  it("prevents default when wheel scroll is consumed", async () => {
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: 20,
+        itemVersion: 1,
+        getItem: (index: number) => `item-${index}`,
+        autoFocus: true,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+
+    const prevented = app.events.dispatch({
+      type: "wheel",
+      cellX: 0,
+      cellY: 0,
+      deltaY: 100,
+      time: Date.now(),
+    });
+
+    expect(prevented).toBe(true);
+    app.dispose();
+  });
+
+  it("does not prevent default when wheel scroll is unchanged at the edge", async () => {
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: 4,
+        itemVersion: 1,
+        getItem: (index: number) => `item-${index}`,
+        autoFocus: true,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+
+    const prevented = app.events.dispatch({
+      type: "wheel",
+      cellX: 0,
+      cellY: 0,
+      deltaY: 100,
+      time: Date.now(),
+    });
+
+    expect(prevented).toBe(false);
+    app.dispose();
+  });
+
   it("uses event time for wheel tick coalescing", async () => {
     const dateNow = vi.spyOn(Date, "now");
     dateNow.mockReturnValue(10_000);
@@ -1109,6 +1171,115 @@ describe("TVirtualList", () => {
       "item-80",
     ]);
     expect(app.terminal.getCell(0, 3).style.inverse).toBe(true);
+    app.dispose();
+  });
+
+  it("keeps optimistic active state when parent ignores modelValue update", async () => {
+    const onUpdateModelValue = vi.fn();
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: 20,
+        itemVersion: 1,
+        getItem: (index: number) => `item-${index}`,
+        modelValue: 0,
+        autoFocus: true,
+        "onUpdate:modelValue": onUpdateModelValue,
+      },
+    });
+    app.mount();
+    app.scheduler.flushNow();
+
+    app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: Date.now() });
+    await nextTick();
+    app.scheduler.flushNow();
+
+    expect(onUpdateModelValue).toHaveBeenCalledWith(1);
+    expect(app.terminal.getCell(0, 0).style.inverse).not.toBe(true);
+    expect(app.terminal.getCell(0, 1).style.inverse).toBe(true);
+    app.dispose();
+  });
+
+  it("keeps optimistic active state when parent applies modelValue later", async () => {
+    const modelValue = ref(0);
+    let requested = 0;
+    const App = defineComponent({
+      name: "DelayedModelVirtualList",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 20,
+            itemVersion: 1,
+            getItem: (index: number) => `item-${index}`,
+            modelValue: modelValue.value,
+            autoFocus: true,
+            "onUpdate:modelValue": (next: number) => {
+              requested = next;
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+
+    app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: Date.now() });
+    await nextTick();
+    app.scheduler.flushNow();
+
+    expect(requested).toBe(1);
+    expect(app.terminal.getCell(0, 1).style.inverse).toBe(true);
+
+    modelValue.value = requested;
+    await nextTick();
+    app.scheduler.flushNow();
+
+    expect(app.terminal.getCell(0, 1).style.inverse).toBe(true);
+    app.dispose();
+  });
+
+  it("follows parent modelValue when parent overrides optimistic active state", async () => {
+    const modelValue = ref(1);
+    const App = defineComponent({
+      name: "RevertedModelVirtualList",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 20,
+            itemVersion: 1,
+            getItem: (index: number) => `item-${index}`,
+            modelValue: modelValue.value,
+            autoFocus: true,
+            "onUpdate:modelValue": () => {
+              modelValue.value = 0;
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+    app.mount();
+    app.scheduler.flushNow();
+
+    app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: Date.now() });
+    await nextTick();
+    app.scheduler.flushNow();
+
+    expect(app.terminal.getCell(0, 0).style.inverse).toBe(true);
+    expect(app.terminal.getCell(0, 2).style.inverse).not.toBe(true);
     app.dispose();
   });
 
