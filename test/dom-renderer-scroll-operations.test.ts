@@ -78,6 +78,76 @@ describe("DomRenderer scrollOperations", () => {
     }
   });
 
+  it("shifts DOM line nodes downward for negative scroll delta", () => {
+    const terminal = createTerminal({ cols: 8, rows: 4 });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const renderer = createDomRenderer(terminal, container);
+
+    try {
+      for (let y = 0; y < 4; y++) terminal.write(`item-${y}`, { x: 0, y });
+      terminal.commit({ planes: ["default"], sync: true });
+      const before = lineEls(container);
+
+      scrollPlaneRows(terminal, "default", 0, 4, -1);
+      terminal.write("new", { x: 0, y: 0 });
+      const dirtyRows = terminal.commit({ planes: ["default"], sync: true });
+
+      expect(dirtyRows).toEqual([0]);
+      expect(lineEls(container)[1]).toBe(before[0]);
+      expect(lineEls(container)[3]).toBe(before[2]);
+      expect([0, 1, 2, 3].map((y) => rowText(container, y))).toEqual([
+        "new",
+        "item-0",
+        "item-1",
+        "item-2",
+      ]);
+      expect(renderer.debugStats.flush.last).toMatchObject({
+        mode: "sync",
+        planeRows: 1,
+        planes: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("falls back to repainting the scroll range when scrollOperations are disabled", () => {
+    const terminal = createTerminal({ cols: 8, rows: 4 });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const renderer = createDomRenderer(terminal, container, {
+      enableScrollOperations: false,
+    });
+
+    try {
+      expect(renderer.capabilities.scrollOperations).toBe(false);
+      for (let y = 0; y < 4; y++) terminal.write(`item-${y}`, { x: 0, y });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      scrollPlaneRows(terminal, "default", 0, 4, 1);
+      terminal.write("item-4", { x: 0, y: 3 });
+      const dirtyRows = terminal.commit({ planes: ["default"], sync: true });
+
+      expect(dirtyRows).toEqual([3]);
+      expect([0, 1, 2, 3].map((y) => rowText(container, y))).toEqual([
+        "item-1",
+        "item-2",
+        "item-3",
+        "item-4",
+      ]);
+      expect(renderer.debugStats.flush.last).toMatchObject({
+        mode: "sync",
+        planeRows: 4,
+        planes: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("falls back to repainting the affected range when pending rows overlap", () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;
@@ -112,7 +182,7 @@ describe("DomRenderer scrollOperations", () => {
       terminal.write("row-4", { x: 0, y: 3 });
       terminal.commit({ planes: ["default"], sync: true });
 
-      Array.from(callbacks.values())[0]?.(0);
+      expect(callbacks.size).toBe(0);
       expect([0, 1, 2, 3].map((y) => rowText(container, y))).toEqual([
         "pend-1",
         "row-2",
@@ -120,9 +190,9 @@ describe("DomRenderer scrollOperations", () => {
         "row-4",
       ]);
       expect(renderer.debugStats.flush.last).toMatchObject({
-        mode: "deferred",
-        planeRows: 3,
-        planes: 4,
+        mode: "sync",
+        planeRows: 4,
+        planes: 1,
       });
     } finally {
       renderer.dispose();
@@ -166,6 +236,47 @@ describe("DomRenderer scrollOperations", () => {
         "ovr-3",
         "ovr-4",
       ]);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("keeps DOM output correct when commit omits planes and scrollOperations are present", () => {
+    const terminal = createTerminal({ cols: 8, rows: 4 });
+    const overlay = getPlaneTerminal(terminal, "overlay");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const renderer = createDomRenderer(terminal, container);
+
+    try {
+      for (let y = 0; y < 4; y++) {
+        terminal.write(`def-${y}`, { x: 0, y });
+        overlay.write(`ovr-${y}`, { x: 0, y });
+      }
+      terminal.commit({ sync: true });
+
+      scrollPlaneRows(terminal, "overlay", 0, 4, 1);
+      overlay.write("ovr-4", { x: 0, y: 3 });
+      terminal.commit({ sync: true });
+
+      expect([0, 1, 2, 3].map((y) => rowText(container, y, "default"))).toEqual([
+        "def-0",
+        "def-1",
+        "def-2",
+        "def-3",
+      ]);
+      expect([0, 1, 2, 3].map((y) => rowText(container, y, "overlay"))).toEqual([
+        "ovr-1",
+        "ovr-2",
+        "ovr-3",
+        "ovr-4",
+      ]);
+      expect(renderer.debugStats.flush.last).toMatchObject({
+        mode: "sync",
+        planeRows: 16,
+        planes: 4,
+      });
     } finally {
       renderer.dispose();
       container.remove();
