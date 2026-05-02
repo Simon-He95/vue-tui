@@ -201,6 +201,118 @@ describe("TLogView", () => {
     }
   });
 
+  it("repaints visible appended lines when autoStickToBottom is false and viewport is not full", async () => {
+    const log = createAppendOnlyLogStore();
+
+    const App = defineComponent({
+      name: "TLogViewNoStickShortAppendApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            autoStickToBottom: false,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      log.appendLine("line-0");
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("line-0");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints newly visible appended row when autoStickToBottom is false", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(["a", "b", "c"]);
+
+    const App = defineComponent({
+      name: "TLogViewNoStickVisibleAppendApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            autoStickToBottom: false,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      log.appendLine("d");
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual(["a", "b", "c", "d"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not scroll when autoStickToBottom is false and append grows past the viewport", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
+
+    const App = defineComponent({
+      name: "TLogViewNoStickOverflowAppendApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            autoStickToBottom: false,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      log.appendLine("line-20");
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
+        "line-16",
+        "line-17",
+        "line-18",
+        "line-19",
+      ]);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("restores bottom stickiness with End", async () => {
     const log = createAppendOnlyLogStore();
     log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));

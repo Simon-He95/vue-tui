@@ -393,7 +393,11 @@ log.appendChunk(" world\nnext line");
 
 `createAppendOnlyLogStore()` 使用普通 `string[]` 和单独的 `version` ref。不要把日志行做成 reactive array，也不要每次 append 都重建全文字符串。
 
+`createAppendOnlyLogStore()` 保存 completed lines 和一个 mutable tail。`appendChunk()` 会追加到 tail，并按 `\n` 拆出 completed lines；`appendLine()` 如果存在 tail，会先完成 `tail + line`，否则追加一条 completed line；`replaceTail()` 只替换 mutable tail，不会修改最后一条 completed line。
+
 `TLogView` 假设数据源是 append-only 或 tail-only mutation。任意可见历史行会变化的 source 不适合只靠 `version` 驱动这个组件；这类浏览/选择场景应使用 `TVirtualList`，或者等后续显式 viewport refresh API。
+
+当前 `TLogView` 只支持 fixed one-line rows。超出宽度的行会被 clip，不会 wrap。
 
 ### Scroll behavior
 

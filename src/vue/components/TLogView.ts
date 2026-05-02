@@ -291,12 +291,17 @@ export const TLogView = defineComponent({
       return true;
     }
 
-    function viewportIncludesLine(index: number): boolean {
+    function visibleLineRange(): { start: number; end: number } {
       const r = normalizedRect();
       const { y: clipY } = clipOffsets();
       const top = clamp(scrollTop.value, 0, maxScrollTop());
       const start = top + clipY;
-      return index >= start && index < start + r.h;
+      return { start, end: start + r.h };
+    }
+
+    function viewportIntersectsLines(startIndex: number, endIndex: number): boolean {
+      const visible = visibleLineRange();
+      return startIndex < visible.end && endIndex > visible.start;
     }
 
     function handleSourceVersionChanged(): boolean {
@@ -331,6 +336,14 @@ export const TLogView = defineComponent({
         return true;
       }
 
+      if (nextCount > prevCount) {
+        const changedStart = Math.max(0, prevCount - 1);
+        if (viewportIntersectsLines(changedStart, nextCount)) {
+          markViewportDirty();
+          return true;
+        }
+      }
+
       if (scrollTop.value > maxScrollTop()) {
         const changed = applyScrollTop(maxScrollTop(), "viewport-repaint", {
           emitScroll: true,
@@ -340,7 +353,11 @@ export const TLogView = defineComponent({
         return true;
       }
 
-      if (nextCount === prevCount && nextCount > 0 && viewportIncludesLine(nextCount - 1)) {
+      if (
+        nextCount === prevCount &&
+        nextCount > 0 &&
+        viewportIntersectsLines(nextCount - 1, nextCount)
+      ) {
         markViewportDirty();
         return true;
       }
