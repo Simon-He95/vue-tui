@@ -230,6 +230,7 @@ wheel 行为：
 interface TLogDataSource {
   lineCount(): number;
   getLine(index: number): string;
+  getLineKey?: (index: number) => string | number;
 }
 ```
 
@@ -255,9 +256,11 @@ log.replaceTail("next line...");
 - `appendLine` / `appendLines` / `appendChunk` / `replaceTail` 只更新普通 store 和 `version` ref，不把日志数组放进 Vue deep reactivity。
 - chunk append 不重建全文字符串。
 - `TLogView` paint 只读取 visible window；当前 fixed one-line rows 不做 wrap、ANSI parse 或 highlight。
+- `TLogView` 在 source 提供 `getLineKey(index)` 时缓存 fixed one-line 的 clipped/padded render string；`createAppendOnlyLogStore()` 为 completed lines 提供稳定 key，为 tail mutation 提供变化 key。
+- 未提供 `getLineKey` 时使用 `version + index` 作为 fallback，保证正确性但限制跨 version 复用。
 - `version` 不进入 render deps；source 变化通过 scheduler frame task 以 `reason: "stream"` 合并。
 - 用户在底部时 stick-to-bottom；离开底部后 append 不抢 scrollTop，也不 repaint 当前 viewport。
-- `TLogView` 假设 source 只做 append-only 或 tail-only mutation，不支持任意可见历史行变化的 repaint 语义。
+- `TLogView` 优先服务 append-only 或 tail-only mutation；如果自定义 source 会修改可见历史行，必须 bump `version`，并在提供 `getLineKey` 时让变更行的 key 随文本变化。
 - full-row 且 `rowScrollMode="unsafe-full-row"` 时，单行 append 可以使用 `unsafeScrollPlaneRows()` + exposed dirty rows；非 full-row、clipped 或 renderer 不支持 `scrollOperations` 时回退 viewport repaint。
 
 验收测试：
@@ -355,6 +358,7 @@ type FramePerf = {
 | `TVirtualList.rowScrollMode` opt-in for unsafe row-scroll fast path | ✅ done      |
 | Scheduler-owned frame tasks / live mode                             | ✅ Phase 2.1 |
 | Experimental `TLogView` append-only streaming path                  | ✅ Phase 2.2 |
+| `TLogView` fixed one-line line-level render cache                   | ✅ Phase 2.5 |
 | `TList` wheel 行为修改（不再同步更新 active/modelValue）            | 🔲 planned   |
 | Debug overlay 展示 `scannedNodes/paintedNodes/dirtyRows/frameMs`    | ✅ Phase 2.0 |
 
@@ -375,8 +379,8 @@ pnpm run lint
 1. scheduler 增加 `queueFrameTask/requestLive/dropLive/configure/isInsideFrame`，`TVirtualList` wheel 已迁移到 scheduler frame task。
 2. 新增 `TLogView` append-only store + visible-window streaming path。
 3. 后续 stream coalescer 再按 `frameBudgetMs` drain 更复杂输入。
-4. 文本 wrap/width cache 拆到 line-level。
-5. 补 benchmark 脚本：10k/100k rows 滚动、500 lines/s log append。
+4. `TLogView` fixed one-line render cache 已落地；wrap / ANSI / highlight / variable-height rows 仍是后续能力。
+5. 补 benchmark 脚本：10k/100k rows 滚动、短行和长行 log append。
 
 验收命令：
 

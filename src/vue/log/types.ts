@@ -3,6 +3,7 @@ import type { Ref } from "vue";
 export interface TLogDataSource {
   lineCount(): number;
   getLine(index: number): string;
+  getLineKey?: (index: number) => string | number;
 }
 
 export type AppendOnlyLogStore = Readonly<{

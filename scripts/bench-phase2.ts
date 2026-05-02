@@ -455,6 +455,7 @@ async function benchAppendOnly(): Promise<Record<string, unknown>> {
 
 async function benchDomTLogView(
   mode: "stick-bottom" | "not-bottom" | "burst",
+  lineKind: "short" | "long" = "short",
 ): Promise<Record<string, unknown>> {
   let framePerf: any = null;
   let rendererRef: any = null;
@@ -465,13 +466,19 @@ async function benchDomTLogView(
   let domFlushSamples = 0;
   let getLineCalls = 0;
   const appendCount = 1000;
+  const longPayload = lineKind === "long" ? "x".repeat(10_000) : "";
+  const makeLine = (prefix: string, index: number) =>
+    lineKind === "long" ? `${prefix} ${index} ${longPayload}` : `${prefix} ${index}`;
   const log = createAppendOnlyLogStore();
-  log.appendLines(Array.from({ length: 1000 }, (_, index) => `seed ${index}`));
+  log.appendLines(Array.from({ length: 1000 }, (_, index) => makeLine("seed", index)));
   const source = {
     lineCount: () => log.source.lineCount(),
     getLine(index: number) {
       getLineCalls++;
       return log.source.getLine(index);
+    },
+    getLineKey(index: number) {
+      return log.source.getLineKey?.(index) ?? index;
     },
   };
   const root = document.createElement("div");
@@ -552,7 +559,7 @@ async function benchDomTLogView(
 
     const startedAt = now();
     for (let i = 0; i < appendCount; i++) {
-      log.appendLine(`${mode} ${i}`);
+      log.appendLine(makeLine(mode, i));
       if (mode === "burst") {
         await nextTick();
       } else {
@@ -570,8 +577,13 @@ async function benchDomTLogView(
     const samples = framePerf.list();
 
     return {
-      name: `tlog-view-1000-lines-${mode}`,
+      name:
+        lineKind === "long"
+          ? `tlog-view-long-line-1000-lines-${mode}`
+          : `tlog-view-1000-lines-${mode}`,
       appendCount,
+      lineKind,
+      longPayloadCells: longPayload.length,
       scheduledRafFrames: raf.scheduledRafFrames(),
       pendingRafFramesBeforeFlush,
       flushedRafCallbacks,
@@ -611,6 +623,9 @@ async function main(): Promise<void> {
     await benchDomTLogView("stick-bottom"),
     await benchDomTLogView("not-bottom"),
     await benchDomTLogView("burst"),
+    await benchDomTLogView("stick-bottom", "long"),
+    await benchDomTLogView("not-bottom", "long"),
+    await benchDomTLogView("burst", "long"),
   ];
 
   // eslint-disable-next-line no-console

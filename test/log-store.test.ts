@@ -15,6 +15,50 @@ describe("createAppendOnlyLogStore", () => {
     expect(store.source.getLine(2)).toBe("");
   });
 
+  it("keeps completed line keys stable across append", () => {
+    const store = createAppendOnlyLogStore();
+
+    store.appendLines(["a", "b"]);
+    const key0 = store.source.getLineKey!(0);
+    const key1 = store.source.getLineKey!(1);
+
+    store.appendLine("c");
+
+    expect(store.source.getLineKey!(0)).toBe(key0);
+    expect(store.source.getLineKey!(1)).toBe(key1);
+    expect(store.source.getLineKey!(2)).not.toBe(key1);
+  });
+
+  it("changes tail keys when tail text changes", () => {
+    const store = createAppendOnlyLogStore();
+
+    store.appendChunk("a");
+    const key0 = store.source.getLineKey!(0);
+
+    store.appendChunk("b");
+    const key1 = store.source.getLineKey!(0);
+
+    store.replaceTail("c");
+    const key2 = store.source.getLineKey!(0);
+
+    expect(key1).not.toBe(key0);
+    expect(key2).not.toBe(key1);
+  });
+
+  it("moves a completed tail to a completed line key", () => {
+    const store = createAppendOnlyLogStore();
+
+    store.appendChunk("a");
+    const tailKey = store.source.getLineKey!(0);
+
+    store.appendChunk("b\nc");
+
+    expect(store.source.getLine(0)).toBe("ab");
+    expect(store.source.getLine(1)).toBe("c");
+    expect(store.source.getLineKey!(0)).not.toBe(tailKey);
+    expect(store.source.getLineKey!(1)).not.toBe(tailKey);
+  });
+
   it("appends multiple lines with one version bump", () => {
     const store = createAppendOnlyLogStore();
 

@@ -150,6 +150,51 @@ describe("TLogView", () => {
     }
   });
 
+  it("reuses cached completed visible rows across append", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
+    const getLineSpy = vi.spyOn(log.source, "getLine");
+
+    const App = defineComponent({
+      name: "TLogViewCompletedLineCacheApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            rowScrollMode: "unsafe-full-row",
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      getLineSpy.mockClear();
+
+      log.appendLine("line-20");
+      await nextTick();
+      await nextTick();
+
+      expect(getLineSpy.mock.calls.length).toBeLessThanOrEqual(2);
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
+        "line-17",
+        "line-18",
+        "line-19",
+        "line-20",
+      ]);
+    } finally {
+      app.dispose();
+      getLineSpy.mockRestore();
+    }
+  });
+
   it("does not repaint or scroll to bottom when appending while detached from bottom", async () => {
     const log = createAppendOnlyLogStore();
     log.appendLines(Array.from({ length: 100 }, (_, index) => `line-${index}`));
@@ -351,6 +396,45 @@ describe("TLogView", () => {
     }
   });
 
+  it("invalidates only the visible tail cache entry when appendChunk mutates tail", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendChunk("hello");
+    const getLineSpy = vi.spyOn(log.source, "getLine");
+
+    const App = defineComponent({
+      name: "TLogViewTailCacheApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      getLineSpy.mockClear();
+
+      log.appendChunk(" world");
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("hello world");
+      expect(getLineSpy.mock.calls.length).toBeLessThanOrEqual(1);
+    } finally {
+      app.dispose();
+      getLineSpy.mockRestore();
+    }
+  });
+
   it("repaints visible tail when replaceTail changes the current tail", async () => {
     const log = createAppendOnlyLogStore();
     log.appendChunk("draft");
@@ -422,6 +506,45 @@ describe("TLogView", () => {
       expect([0, 1].map((y) => rowText(app, y))).toEqual(["ab", "c"]);
     } finally {
       app.dispose();
+    }
+  });
+
+  it("does not reuse stale tail output when newline chunk completes the tail", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendChunk("hello");
+    const getLineSpy = vi.spyOn(log.source, "getLine");
+
+    const App = defineComponent({
+      name: "TLogViewTailCompletionCacheApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      getLineSpy.mockClear();
+
+      log.appendChunk(" world\nnext");
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1].map((y) => rowText(app, y))).toEqual(["hello world", "next"]);
+      expect(getLineSpy.mock.calls.length).toBeLessThanOrEqual(2);
+    } finally {
+      app.dispose();
+      getLineSpy.mockRestore();
     }
   });
 
@@ -572,6 +695,130 @@ describe("TLogView", () => {
       await nextTick();
 
       expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual(["short-0", "short-1", "", ""]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keeps non-keyed sources correct across version changes", async () => {
+    const sourceLines = ref(["a"]);
+    const version = ref(1);
+    const source: TLogDataSource = {
+      lineCount: () => sourceLines.value.length,
+      getLine: (index) => sourceLines.value[index] ?? "",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewNoLineKeyCacheApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: version.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("a");
+
+      sourceLines.value = ["b"];
+      version.value++;
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("b");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("clears cached lines when source identity changes", async () => {
+    const version = ref(1);
+    const makeSource = (text: string): TLogDataSource => ({
+      lineCount: () => 1,
+      getLine: () => text,
+      getLineKey: () => "same-key",
+    });
+    const source = ref(makeSource("first"));
+
+    const App = defineComponent({
+      name: "TLogViewSourceIdentityCacheApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: source.value,
+            version: version.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("first");
+
+      source.value = makeSource("second");
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("second");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("uses width and clip geometry in the render cache key", async () => {
+    const x = ref(0);
+    const w = ref(8);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "abcdefghij",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewClipCacheApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: x.value,
+            y: 0,
+            w: w.value,
+            h: 1,
+            source,
+            version: 1,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 2, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("abcdefgh");
+
+      x.value = -2;
+      w.value = 10;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("cdefghij");
     } finally {
       app.dispose();
     }

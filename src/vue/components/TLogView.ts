@@ -21,7 +21,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
-import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
+import { formatInlineCellLine, padEndByCells, sliceByCellsRange, spaces } from "../utils/text.js";
 import {
   applyWheelScroll,
   createWheelScrollState,
@@ -30,8 +30,16 @@ import {
 
 type ScrollStrategy = "auto" | "viewport-repaint";
 type RowScrollMode = "off" | "unsafe-full-row";
+type TLogLineKey = string | number;
+type TLogRenderCacheKey = string;
+type TLogRenderCacheEntry = {
+  key: TLogRenderCacheKey;
+  value: string;
+  touchedAt: number;
+};
 
 let nextTLogViewTaskId = 0;
+const DEFAULT_LOG_RENDER_CACHE_SIZE = 2_000;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -106,8 +114,10 @@ export const TLogView = defineComponent({
     let lastLineCount = 0;
     let lastPaintedBottom: Readonly<{
       index: number;
-      text: string;
+      lineKey: TLogLineKey;
     }> | null = null;
+    let cacheClock = 0;
+    const renderLineCache = new Map<TLogRenderCacheKey, TLogRenderCacheEntry>();
     const wheelState = createWheelScrollState();
 
     const fullRect = computed<Rect>(() => {
@@ -156,6 +166,59 @@ export const TLogView = defineComponent({
     function lineCount(): number {
       const n = Math.floor(Number(props.source.lineCount()));
       return Number.isFinite(n) ? Math.max(0, n) : 0;
+    }
+
+    function lineKey(index: number): TLogLineKey {
+      return props.source.getLineKey?.(index) ?? `v:${props.version}:i:${index}`;
+    }
+
+    function renderCacheKey(
+      key: TLogLineKey,
+      fullW: number,
+      clipX: number,
+      visibleW: number,
+    ): TLogRenderCacheKey {
+      return `${typeof key}:${String(key)}|fw:${fullW}|cx:${clipX}|vw:${visibleW}`;
+    }
+
+    function trimRenderCache(): void {
+      const max = DEFAULT_LOG_RENDER_CACHE_SIZE;
+      if (renderLineCache.size <= max) return;
+
+      const entries = Array.from(renderLineCache.values()).sort(
+        (a, b) => a.touchedAt - b.touchedAt,
+      );
+      for (const entry of entries.slice(0, renderLineCache.size - max)) {
+        renderLineCache.delete(entry.key);
+      }
+    }
+
+    function renderLine(
+      index: number,
+      count: number,
+      fullW: number,
+      clipX: number,
+      visibleW: number,
+    ): string {
+      if (index < 0 || index >= count) return spaces(visibleW);
+
+      const rawKey = lineKey(index);
+      const key = renderCacheKey(rawKey, fullW, clipX, visibleW);
+      const cached = renderLineCache.get(key);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.value;
+      }
+
+      const text = props.source.getLine(index);
+      const fullLine = formatInlineCellLine(text, fullW);
+      const line = padEndByCells(sliceByCellsRange(fullLine, clipX, clipX + visibleW), visibleW);
+      renderLineCache.set(key, {
+        key,
+        value: line,
+        touchedAt: ++cacheClock,
+      });
+      return line;
     }
 
     function maxScrollTop(): number {
@@ -238,8 +301,7 @@ export const TLogView = defineComponent({
       if (delta <= 0 || delta >= r.h) return null;
       if (prevCount <= 0 || nextCount <= prevCount) return null;
       if (lastPaintedBottom?.index !== prevCount - 1) return null;
-      const nextText = props.source.getLine(prevCount - 1);
-      if (nextText === lastPaintedBottom.text) return null;
+      if (lineKey(prevCount - 1) === lastPaintedBottom.lineKey) return null;
       return r.y + r.h - delta - 1;
     }
 
@@ -515,6 +577,13 @@ export const TLogView = defineComponent({
     );
 
     watch(
+      () => props.source,
+      () => {
+        renderLineCache.clear();
+      },
+    );
+
+    watch(
       [
         () => props.source,
         () => fullRect.value.y,
@@ -569,21 +638,21 @@ export const TLogView = defineComponent({
         const paintRow = (y: number): void => {
           if (y < r.y || y >= r.y + r.h) return;
           const idx = top + clipY + (y - r.y);
-          const text = idx >= 0 && idx < count ? props.source.getLine(idx) : "";
           if (idx === count - 1 && y === r.y + r.h - 1) {
-            lastPaintedBottom = { index: idx, text };
+            lastPaintedBottom = { index: idx, lineKey: lineKey(idx) };
           }
-          const fullLine = formatInlineCellLine(text, full.w);
-          const line = padEndByCells(sliceByCellsRange(fullLine, clipX, clipX + r.w), r.w);
+          const line = renderLine(idx, count, full.w, clipX, r.w);
           terminal.write(line, { x: r.x, y, style: base });
         };
 
         const rows = dirtyRows;
         if (rows?.length) {
           for (const y of rows) paintRow(y);
+          trimRenderCache();
           return;
         }
         for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+        trimRenderCache();
       },
     }));
 
