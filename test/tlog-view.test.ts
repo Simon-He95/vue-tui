@@ -1,4 +1,4 @@
-import type { TLogDataSource } from "../src/experimental.js";
+import type { TLogDataSource, TLogViewHandle } from "../src/experimental.js";
 import { describe, expect, it, vi } from "vitest";
 import { createTerminalApp } from "../src/index.js";
 import { createAppendOnlyLogStore, TLogView } from "../src/experimental.js";
@@ -85,6 +85,393 @@ describe("TLogView", () => {
       "line-99999",
     ]);
     mounted.unmount();
+  });
+
+  it("uses defaultScrollTop for the initial uncontrolled visual row", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          source,
+          version: 1,
+          defaultScrollTop: 10,
+        }),
+      20,
+      8,
+    );
+
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
+      "line-10",
+      "line-11",
+      "line-12",
+      "line-13",
+    ]);
+    mounted.unmount();
+  });
+
+  it("emits update:scrollTop and scroll payloads with visual-row scrollTop on wheel", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const onUpdateScrollTop = vi.fn();
+    const onScroll = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewWheelScrollEventsApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            onScroll,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: Date.now() });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onUpdateScrollTop).toHaveBeenCalledWith(95);
+      expect(onScroll).toHaveBeenCalledWith({
+        scrollTop: 95,
+        atBottom: false,
+        lineCount: 100,
+        estimatedVisualRowCount: 100,
+      });
+      expect(rowText(app, 0)).toBe("line-95");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("waits for controlled scrollTop prop updates before changing rendered rows", async () => {
+    const controlledTop = ref(96);
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const onUpdateScrollTop = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewControlledScrollApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            scrollTop: controlledTop.value,
+            autoFocus: true,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("line-96");
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: Date.now() });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onUpdateScrollTop).toHaveBeenCalledWith(95);
+      expect(rowText(app, 0)).toBe("line-96");
+
+      controlledTop.value = 95;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("line-95");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("exposes scrollToTop and scrollToBottom", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+    const onScroll = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewScrollBoundsHandleApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            onScroll,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      logView.value!.scrollToTop();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("line-0");
+
+      logView.value!.scrollToBottom();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 3)).toBe("line-99");
+      expect(onScroll.mock.calls.at(-1)?.[0]).toMatchObject({
+        scrollTop: 96,
+        atBottom: true,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("exposes scrollToLine for unwrapped logical lines", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewScrollToLineApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      logView.value!.scrollToLine(50);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("line-50");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("exposes scrollToLine for the first visual row of a wrapped logical line", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 12,
+      getLine: (index) => (index === 10 ? "abcdefghij" : `line-${index}`),
+      getLineKey: (index) => index,
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewWrapScrollToLineApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 3,
+            source,
+            version: 1,
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 5, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      logView.value!.scrollToLine(10);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("abcd");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("exposes visual-row scrollBy", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 20,
+      getLine: (index) => `line-${index}`,
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewScrollByApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      logView.value!.scrollToTop();
+      logView.value!.scrollBy(2);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("line-2");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("emits bottom updates for controlled append without rendering until parent applies them", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 100 }, (_, index) => `line-${index}`));
+    const controlledTop = ref(96);
+    const onUpdateScrollTop = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewControlledAppendBottomApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            scrollTop: controlledTop.value,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 3)).toBe("line-99");
+
+      log.appendLine("line-100");
+      await nextTick();
+      await nextTick();
+
+      expect(onUpdateScrollTop).toHaveBeenCalledWith(97);
+      expect(rowText(app, 3)).toBe("line-99");
+
+      controlledTop.value = 97;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 3)).toBe("line-100");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not emit update:scrollTop for unchanged imperative scrollTop", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+    const onUpdateScrollTop = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewNoopControlledScrollApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            scrollTop: 10,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      logView.value!.scrollToVisualRow(10);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onUpdateScrollTop).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
   });
 
   it("uses exposed dirty row when appending at bottom in full-row unsafe mode", async () => {

@@ -53,6 +53,18 @@ type LocatedVisualRow = {
   lineIndex: number;
   partIndex: number;
 };
+export type TLogViewHandle = Readonly<{
+  scrollToBottom: () => void;
+  scrollToTop: () => void;
+  scrollToVisualRow: (row: number) => void;
+  scrollBy: (delta: number) => void;
+  scrollToLine: (
+    index: number,
+    options?: Readonly<{
+      align?: "start" | "center" | "end";
+    }>,
+  ) => void;
+}>;
 
 let nextTLogViewTaskId = 0;
 const DEFAULT_LOG_RENDER_CACHE_SIZE = 2_000;
@@ -106,6 +118,14 @@ export const TLogView = defineComponent({
       type: Number,
       required: true,
     },
+    scrollTop: {
+      type: Number,
+      default: undefined,
+    },
+    defaultScrollTop: {
+      type: Number,
+      default: undefined,
+    },
     style: {
       type: Object as PropType<Style>,
       default: undefined,
@@ -119,8 +139,8 @@ export const TLogView = defineComponent({
       default: "off",
     },
   },
-  emits: ["scroll", "focus", "blur", "keydown"],
-  setup(props, { emit }) {
+  emits: ["scroll", "update:scrollTop", "focus", "blur", "keydown"],
+  setup(props, { emit, expose }) {
     const { terminal, scheduler, render, rendererCapabilities, defaultStyle, events } =
       useTerminal();
     const layout = useLayout();
@@ -130,13 +150,14 @@ export const TLogView = defineComponent({
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
 
     const focused = ref(false);
-    const scrollTop = ref(0);
+    const innerScrollTop = ref(0);
     const stickToBottom = ref(true);
     const frameTaskId = `TLogView:${nextTLogViewTaskId++}`;
     let dirtyRowsHint: readonly number[] | undefined;
     let renderNodeId: string | null = null;
     let alive = true;
     let pendingWheelTop: number | null = null;
+    let initializedScrollTop = false;
     let lastLineCount = 0;
     let lastPaintedBottom: Readonly<{
       index: number;
@@ -507,21 +528,52 @@ export const TLogView = defineComponent({
       return normalizedRect().h;
     }
 
-    function isAtBottom(): boolean {
-      return scrollTop.value >= maxScrollTop();
+    function normalizeScrollNumber(value: unknown): number {
+      const n = Math.floor(Number(value));
+      if (!Number.isFinite(n)) return 0;
+      return n;
     }
 
-    function scrollPayload(): TLogViewScrollPayload {
+    function normalizeScrollTop(value: unknown): number {
+      const n = normalizeScrollNumber(value);
+      return clamp(n, 0, maxScrollTop());
+    }
+
+    function isScrollControlled(): boolean {
+      return props.scrollTop != null;
+    }
+
+    function currentScrollTop(): number {
+      return isScrollControlled()
+        ? normalizeScrollTop(props.scrollTop)
+        : normalizeScrollTop(innerScrollTop.value);
+    }
+
+    function rawScrollTop(): number {
+      return isScrollControlled()
+        ? normalizeScrollNumber(props.scrollTop)
+        : normalizeScrollNumber(innerScrollTop.value);
+    }
+
+    function isAtBottom(top = currentScrollTop()): boolean {
+      return top >= maxScrollTop();
+    }
+
+    function syncStickFromCurrentScrollTop(): void {
+      stickToBottom.value = isAtBottom();
+    }
+
+    function scrollPayload(top = currentScrollTop()): TLogViewScrollPayload {
       return {
-        scrollTop: scrollTop.value,
-        atBottom: isAtBottom(),
+        scrollTop: top,
+        atBottom: isAtBottom(top),
         lineCount: lineCount(),
         estimatedVisualRowCount: estimatedVisualRowCount(),
       };
     }
 
-    function emitScroll(): void {
-      emit("scroll", scrollPayload());
+    function emitScroll(top = currentScrollTop()): void {
+      emit("scroll", scrollPayload(top));
     }
 
     function invalidateSelf(
@@ -588,6 +640,7 @@ export const TLogView = defineComponent({
       strategy: ScrollStrategy = "auto",
       options?: Readonly<{
         emitScroll?: boolean;
+        emitUpdate?: boolean;
         stickToBottom?: boolean;
         extraDirtyRows?: readonly number[];
       }>,
@@ -597,14 +650,23 @@ export const TLogView = defineComponent({
       const h = r.h;
       if (h <= 0 || full.h <= 0) return false;
       if (options?.stickToBottom === true && props.wrap) ensureBottomMeasured();
-      const clampedTop = clamp(nextTop, 0, maxScrollTop());
-      const delta = clampedTop - scrollTop.value;
+      const prevTop = rawScrollTop();
+      const clampedTop = normalizeScrollTop(nextTop);
+      const delta = clampedTop - prevTop;
       if (!delta) {
         if (options?.stickToBottom != null) stickToBottom.value = options.stickToBottom;
         return false;
       }
-      scrollTop.value = clampedTop;
-      stickToBottom.value = options?.stickToBottom ?? isAtBottom();
+      const uncontrolled = !isScrollControlled();
+      if (uncontrolled) innerScrollTop.value = clampedTop;
+      if (options?.emitUpdate !== false) emit("update:scrollTop", clampedTop);
+      stickToBottom.value = options?.stickToBottom ?? isAtBottom(clampedTop);
+
+      if (!uncontrolled) {
+        markViewportDirty();
+        if (options?.emitScroll) emitScroll(clampedTop);
+        return true;
+      }
 
       const size = terminal.size();
       const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= size.cols;
@@ -626,19 +688,19 @@ export const TLogView = defineComponent({
             ? [...exposedRowsForDelta(r.y, h, delta), ...options.extraDirtyRows]
             : exposedRowsForDelta(r.y, h, delta),
         );
-        if (options?.emitScroll) emitScroll();
+        if (options?.emitScroll) emitScroll(clampedTop);
         return true;
       }
 
       markViewportDirty();
-      if (options?.emitScroll) emitScroll();
+      if (options?.emitScroll) emitScroll(clampedTop);
       return true;
     }
 
     function visibleLineRange(): { start: number; end: number } {
       const r = normalizedRect();
       const { y: clipY } = clipOffsets();
-      const top = clamp(scrollTop.value, 0, maxScrollTop());
+      const top = currentScrollTop();
       const start = top + clipY;
       return { start, end: start + r.h };
     }
@@ -664,9 +726,7 @@ export const TLogView = defineComponent({
       lastLineCount = nextCount;
 
       if (nextCount < prevCount) {
-        const nextTop = stickToBottom.value
-          ? bottomScrollTop()
-          : clamp(scrollTop.value, 0, maxScrollTop());
+        const nextTop = stickToBottom.value ? bottomScrollTop() : currentScrollTop();
         const changed = applyScrollTop(nextTop, "viewport-repaint", {
           emitScroll: true,
           stickToBottom: stickToBottom.value && nextTop >= maxScrollTop(),
@@ -677,7 +737,7 @@ export const TLogView = defineComponent({
 
       if (props.autoStickToBottom && stickToBottom.value) {
         const r = normalizedRect();
-        const prevTop = scrollTop.value;
+        const prevTop = currentScrollTop();
         const nextTop = bottomScrollTop();
         const delta = nextTop - prevTop;
         const extraDirtyRow = tailMutationDirtyRow(prevCount, nextCount, delta, r);
@@ -702,7 +762,7 @@ export const TLogView = defineComponent({
         }
       }
 
-      if (scrollTop.value > maxScrollTop()) {
+      if (rawScrollTop() > maxScrollTop()) {
         const changed = applyScrollTop(maxScrollTop(), "viewport-repaint", {
           emitScroll: true,
           stickToBottom: isAtBottom(),
@@ -771,26 +831,98 @@ export const TLogView = defineComponent({
       if (changed) invalidateSelf("high", "input");
     }
 
+    function scrollToBottom(): void {
+      cancelWheelScrollFrame();
+      const changed = applyScrollTop(bottomScrollTop(), "viewport-repaint", {
+        emitScroll: true,
+        stickToBottom: true,
+      });
+      if (changed) invalidateSelf("high", "scroll");
+    }
+
+    function scrollToTop(): void {
+      cancelWheelScrollFrame();
+      const changed = applyScrollTop(0, "viewport-repaint", {
+        emitScroll: true,
+        stickToBottom: false,
+      });
+      if (changed) invalidateSelf("high", "scroll");
+    }
+
+    function scrollToVisualRow(row: number): void {
+      cancelWheelScrollFrame();
+      const target = normalizeScrollNumber(row);
+      const changed = applyScrollTop(target, "viewport-repaint", {
+        emitScroll: true,
+        stickToBottom: target >= maxScrollTop(),
+      });
+      if (changed) invalidateSelf("high", "scroll");
+    }
+
+    function scrollBy(delta: number): void {
+      const n = Math.trunc(Number(delta));
+      scrollToVisualRow(currentScrollTop() + (Number.isFinite(n) ? n : 0));
+    }
+
+    function scrollToLine(
+      index: number,
+      options?: Readonly<{
+        align?: "start" | "center" | "end";
+      }>,
+    ): void {
+      const count = lineCount();
+      if (count <= 0) return;
+
+      const lineIndex = clamp(normalizeScrollNumber(index), 0, count - 1);
+      let target = lineIndex;
+      let visualCount = 1;
+
+      if (props.wrap) {
+        ensureVisualIndex();
+        measureVisualLine(lineIndex);
+        target = visualStartForLine(lineIndex);
+        visualCount = visualCounts[lineIndex] ?? 1;
+      }
+
+      const h = viewportHeight();
+      if (options?.align === "center") {
+        target -= Math.floor((h - visualCount) / 2);
+      } else if (options?.align === "end") {
+        target += visualCount - h;
+      }
+
+      scrollToVisualRow(target);
+    }
+
+    const handle: TLogViewHandle = {
+      scrollToBottom,
+      scrollToTop,
+      scrollToVisualRow,
+      scrollBy,
+      scrollToLine,
+    };
+    expose(handle);
+
     function onKeydown(e: TerminalKeyboardEvent): void {
       emit("keydown", e);
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        keyboardScroll(scrollTop.value - 1, false);
+        keyboardScroll(currentScrollTop() - 1, false);
         return;
       }
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        keyboardScroll(scrollTop.value + 1);
+        keyboardScroll(currentScrollTop() + 1);
         return;
       }
       if (e.key === "PageUp") {
         e.preventDefault();
-        keyboardScroll(scrollTop.value - viewportHeight(), false);
+        keyboardScroll(currentScrollTop() - viewportHeight(), false);
         return;
       }
       if (e.key === "PageDown") {
         e.preventDefault();
-        keyboardScroll(scrollTop.value + viewportHeight());
+        keyboardScroll(currentScrollTop() + viewportHeight());
         return;
       }
       if (e.key === "Home") {
@@ -814,7 +946,7 @@ export const TLogView = defineComponent({
           const { deltaY, mode } = getWheelScrollInput(e);
           if (!deltaY) return;
           const maxTop = maxScrollTop();
-          const baseTop = pendingWheelTop ?? scrollTop.value;
+          const baseTop = pendingWheelTop ?? currentScrollTop();
           const now =
             typeof e.time === "number"
               ? e.time
@@ -869,6 +1001,16 @@ export const TLogView = defineComponent({
       },
     );
 
+    watch(
+      () => props.scrollTop,
+      () => {
+        resetWheelScrollState(wheelState);
+        syncStickFromCurrentScrollTop();
+        markViewportDirty();
+        invalidateSelf("high", "scroll");
+      },
+    );
+
     watch([() => props.source, () => props.wrap, () => fullRect.value.w], () => {
       clearLineCaches();
     });
@@ -884,14 +1026,30 @@ export const TLogView = defineComponent({
         () => absRect.value.h,
       ],
       () => {
+        const wasInitialized = initializedScrollTop;
+        initializedScrollTop = true;
         resetWheelScrollState(wheelState);
         if (props.wrap) resetVisualIndex(lineCount(), currentWrapWidth());
         lastLineCount = lineCount();
-        const nextTop = stickToBottom.value
-          ? bottomScrollTop()
-          : clamp(scrollTop.value, 0, maxScrollTop());
+        if (isScrollControlled()) {
+          syncStickFromCurrentScrollTop();
+          markViewportDirty();
+          invalidateSelf("normal", "data");
+          return;
+        }
+
+        const useDefaultScrollTop = !wasInitialized && props.defaultScrollTop != null;
+        const nextTop = useDefaultScrollTop
+          ? normalizeScrollTop(props.defaultScrollTop)
+          : stickToBottom.value
+            ? bottomScrollTop()
+            : currentScrollTop();
+        const nextStick = useDefaultScrollTop
+          ? nextTop >= maxScrollTop()
+          : stickToBottom.value && nextTop >= maxScrollTop();
         const changed = applyScrollTop(nextTop, "viewport-repaint", {
-          stickToBottom: stickToBottom.value && nextTop >= maxScrollTop(),
+          emitUpdate: wasInitialized,
+          stickToBottom: nextStick,
         });
         if (!changed) markViewportDirty();
         invalidateSelf("normal", "data");
@@ -926,7 +1084,7 @@ export const TLogView = defineComponent({
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
         const count = lineCount();
-        const top = clamp(scrollTop.value, 0, maxScrollTop());
+        const top = currentScrollTop();
         const { x: clipX, y: clipY } = clipOffsets();
 
         const paintRow = (y: number): void => {
