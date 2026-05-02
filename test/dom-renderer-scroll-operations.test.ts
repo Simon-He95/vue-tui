@@ -256,6 +256,60 @@ describe("DomRenderer scrollOperations", () => {
     }
   });
 
+  it("defers sync scrollOperations when the scroll region exceeds the sync budget", () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const terminal = createTerminal({ cols: 8, rows: 40 });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const renderer = createDomRenderer(terminal, container, {
+      syncFlushMaxRows: 4,
+      syncFlushCellBudget: 8 * 4,
+    });
+
+    try {
+      Array.from(callbacks.values()).forEach((cb) => cb(0));
+      callbacks.clear();
+      for (let y = 0; y < 40; y++) terminal.write(`r${y}`, { x: 0, y });
+      terminal.commit({ planes: ["default"], sync: true });
+      Array.from(callbacks.values())[0]?.(0);
+      callbacks.clear();
+      const before = [0, 1, 2, 39].map((y) => rowText(container, y));
+
+      scrollPlaneRows(terminal, "default", 0, 40, 1);
+      terminal.write("new", { x: 0, y: 39 });
+      const dirtyRows = terminal.commit({ planes: ["default"], sync: true });
+
+      expect(dirtyRows).toEqual([39]);
+      expect(renderer.debugStats.syncFlush.last).toMatchObject({
+        performed: false,
+        deferredReason: "budget",
+        rows: 40,
+        planes: 1,
+      });
+      expect([0, 1, 2, 39].map((y) => rowText(container, y))).toEqual(before);
+      expect(callbacks.size).toBe(1);
+      Array.from(callbacks.values())[0]?.(0);
+      expect([0, 1, 2, 39].map((y) => rowText(container, y))).toEqual(["r1", "r2", "r3", "new"]);
+    } finally {
+      renderer.dispose();
+      container.remove();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
   it("falls back to repainting the affected range when pending rows overlap", () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;

@@ -737,6 +737,31 @@ export function createDomRenderer(
     return { rowCount, planeCount, cellWork };
   }
 
+  function estimateScrollOperationWork(
+    planes: readonly TerminalRenderPlane[],
+    operations: readonly TerminalScrollOperation[] | null | undefined,
+  ): SyncFlushWork {
+    const size = terminal.size();
+    const planeCount = planes.length || TERMINAL_RENDER_PLANES.length;
+    let rowCount = 0;
+    for (const op of operations ?? []) {
+      const { startY, endY } = scrollOperationRange(op);
+      rowCount += Math.max(0, endY - startY);
+    }
+    return { rowCount, planeCount, cellWork: rowCount * size.cols * planeCount };
+  }
+
+  function combineSyncFlushWork(
+    repaintWork: SyncFlushWork,
+    scrollWork: SyncFlushWork,
+  ): SyncFlushWork {
+    return {
+      rowCount: Math.max(repaintWork.rowCount, scrollWork.rowCount),
+      planeCount: Math.max(repaintWork.planeCount, scrollWork.planeCount),
+      cellWork: repaintWork.cellWork + scrollWork.cellWork,
+    };
+  }
+
   function recordSyncFlushDecision(
     work: SyncFlushWork,
     performed: boolean,
@@ -856,9 +881,11 @@ export function createDomRenderer(
       planes: activePlanes,
       rows: dirtyCommitRows,
     });
+    const scrollWork = estimateScrollOperationWork(activePlanes, scrollOperations);
+    const combinedSyncWork = combineSyncFlushWork(initialSyncWork, scrollWork);
     const shouldApplyScrollOperations =
       Boolean(sync) &&
-      shouldSyncFlush(initialSyncWork) &&
+      shouldSyncFlush(combinedSyncWork) &&
       canApplyScrollOperations(activePlanes, scrollOperations);
     const fallbackRows = shouldApplyScrollOperations
       ? []
