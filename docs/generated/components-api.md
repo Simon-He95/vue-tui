@@ -399,6 +399,8 @@
 | <code>zIndex</code>            | <code>number</code>         | <code>0</code>               | 否   | —    |
 | <code>source</code>            | <code>TLogDataSource</code> | —                            | 是   | —    |
 | <code>version</code>           | <code>number</code>         | —                            | 是   | —    |
+| <code>scrollTop</code>         | <code>number</code>         | <code>undefined</code>       | 否   | —    |
+| <code>defaultScrollTop</code>  | <code>number</code>         | <code>undefined</code>       | 否   | —    |
 | <code>style</code>             | <code>Style</code>          | <code>undefined</code>       | 否   | —    |
 | <code>autoFocus</code>         | <code>boolean</code>        | <code>false</code>           | 否   | —    |
 | <code>autoStickToBottom</code> | <code>boolean</code>        | <code>true</code>            | 否   | —    |
@@ -408,12 +410,13 @@
 
 ### Events
 
-| 名称                 | Payload | 说明 |
-| -------------------- | ------- | ---- |
-| <code>scroll</code>  | —       | —    |
-| <code>focus</code>   | —       | —    |
-| <code>blur</code>    | —       | —    |
-| <code>keydown</code> | —       | —    |
+| 名称                          | Payload | 说明 |
+| ----------------------------- | ------- | ---- |
+| <code>scroll</code>           | —       | —    |
+| <code>update:scrollTop</code> | —       | —    |
+| <code>focus</code>            | —       | —    |
+| <code>blur</code>             | —       | —    |
+| <code>keydown</code>          | —       | —    |
 
 ## TMultilineModal
 
