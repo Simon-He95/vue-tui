@@ -1,4 +1,4 @@
-import type { AppendOnlyLogStore } from "./types.js";
+import type { AppendOnlyLogStore, CreateAppendOnlyLogStoreOptions } from "./types.js";
 import { ref } from "vue";
 
 type StoredLine = {
@@ -6,9 +6,21 @@ type StoredLine = {
   text: string;
 };
 
-export function createAppendOnlyLogStore(): AppendOnlyLogStore {
+function normalizeMaxLines(value: unknown): number | null {
+  if (value == null) return null;
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return null;
+  return Math.max(1, n);
+}
+
+export function createAppendOnlyLogStore(
+  options?: CreateAppendOnlyLogStoreOptions,
+): AppendOnlyLogStore {
   const lines: StoredLine[] = [];
   const version = ref(0);
+  const maxLines = normalizeMaxLines(options?.maxLines);
+  let head = 0;
+  let firstLineIndex = 0;
   let tail = "";
   let tailVersion = 0;
   let nextLineId = 0;
@@ -17,22 +29,59 @@ export function createAppendOnlyLogStore(): AppendOnlyLogStore {
     version.value++;
   }
 
+  function retainedCompletedCount(): number {
+    return lines.length - head;
+  }
+
+  function retainedLineCount(): number {
+    return retainedCompletedCount() + (tail ? 1 : 0);
+  }
+
+  function completedAt(index: number): StoredLine | undefined {
+    return lines[head + index];
+  }
+
   function pushLine(text: string): void {
     lines.push({ id: nextLineId++, text });
   }
 
+  function maybeCompact(): void {
+    if (head < 4096) return;
+    if (head * 2 < lines.length) return;
+    lines.splice(0, head);
+    head = 0;
+  }
+
+  function enforceRetention(): void {
+    if (maxLines == null) return;
+
+    const overflow = retainedLineCount() - maxLines;
+    if (overflow <= 0) return;
+
+    const dropped = Math.min(overflow, retainedCompletedCount());
+    if (dropped <= 0) return;
+
+    head += dropped;
+    firstLineIndex += dropped;
+    maybeCompact();
+  }
+
   return {
     source: {
-      lineCount: () => lines.length + (tail ? 1 : 0),
+      lineCount: () => retainedLineCount(),
+      firstLineIndex: () => firstLineIndex,
       getLine(index) {
-        if (index < lines.length) return lines[index]?.text ?? "";
-        if (index === lines.length) return tail;
+        const completedCount = retainedCompletedCount();
+        if (index >= 0 && index < completedCount) return completedAt(index)?.text ?? "";
+        if (index === completedCount && tail) return tail;
         return "";
       },
       getLineKey(index) {
-        if (index < lines.length) return lines[index]?.id ?? `missing:${index}`;
-        if (index === lines.length && tail) return `tail:${tailVersion}`;
-        return `empty:${index}`;
+        const completedCount = retainedCompletedCount();
+        if (index >= 0 && index < completedCount)
+          return completedAt(index)?.id ?? `missing:${firstLineIndex}:${index}`;
+        if (index === completedCount && tail) return `tail:${tailVersion}`;
+        return `empty:${firstLineIndex}:${index}`;
       },
     },
     version,
@@ -44,6 +93,7 @@ export function createAppendOnlyLogStore(): AppendOnlyLogStore {
       } else {
         pushLine(line);
       }
+      enforceRetention();
       bump();
     },
     appendLines(nextLines) {
@@ -56,6 +106,7 @@ export function createAppendOnlyLogStore(): AppendOnlyLogStore {
         start = 1;
       }
       for (let i = start; i < nextLines.length; i++) pushLine(nextLines[i] ?? "");
+      enforceRetention();
       bump();
     },
     appendChunk(chunk) {
@@ -67,15 +118,19 @@ export function createAppendOnlyLogStore(): AppendOnlyLogStore {
         tail = parts[i] ?? "";
       }
       tailVersion++;
+      enforceRetention();
       bump();
     },
     replaceTail(text) {
       tail = text.replace(/[\r\n]/g, "");
       tailVersion++;
+      enforceRetention();
       bump();
     },
     clear() {
       lines.length = 0;
+      head = 0;
+      firstLineIndex = 0;
       tail = "";
       tailVersion++;
       bump();

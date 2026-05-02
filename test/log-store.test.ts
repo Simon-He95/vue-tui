@@ -29,6 +29,56 @@ describe("createAppendOnlyLogStore", () => {
     expect(store.source.getLineKey!(2)).not.toBe(key1);
   });
 
+  it("retains only the last maxLines logical lines", () => {
+    const store = createAppendOnlyLogStore({ maxLines: 3 });
+
+    store.appendLines(["a", "b", "c", "d", "e"]);
+
+    expect(store.source.lineCount()).toBe(3);
+    expect(store.source.getLine(0)).toBe("c");
+    expect(store.source.getLine(1)).toBe("d");
+    expect(store.source.getLine(2)).toBe("e");
+    expect(store.source.firstLineIndex?.()).toBe(2);
+  });
+
+  it("counts tail toward maxLines retention", () => {
+    const store = createAppendOnlyLogStore({ maxLines: 3 });
+
+    store.appendLines(["a", "b", "c"]);
+    store.appendChunk("d");
+
+    expect(store.source.lineCount()).toBe(3);
+    expect(store.source.getLine(0)).toBe("b");
+    expect(store.source.getLine(1)).toBe("c");
+    expect(store.source.getLine(2)).toBe("d");
+    expect(store.source.firstLineIndex?.()).toBe(1);
+  });
+
+  it("keeps retained completed line keys stable after head trim", () => {
+    const store = createAppendOnlyLogStore({ maxLines: 3 });
+
+    store.appendLines(["a", "b", "c"]);
+    const keyB = store.source.getLineKey!(1);
+    const keyC = store.source.getLineKey!(2);
+
+    store.appendLine("d");
+
+    expect(store.source.getLine(0)).toBe("b");
+    expect(store.source.getLine(1)).toBe("c");
+    expect(store.source.getLineKey!(0)).toBe(keyB);
+    expect(store.source.getLineKey!(1)).toBe(keyC);
+  });
+
+  it("treats non-positive maxLines as one retained line", () => {
+    const store = createAppendOnlyLogStore({ maxLines: 0 });
+
+    store.appendLines(["a", "b"]);
+
+    expect(store.source.lineCount()).toBe(1);
+    expect(store.source.getLine(0)).toBe("b");
+    expect(store.source.firstLineIndex?.()).toBe(1);
+  });
+
   it("changes tail keys when tail text changes", () => {
     const store = createAppendOnlyLogStore();
 
@@ -157,5 +207,6 @@ describe("createAppendOnlyLogStore", () => {
     expect(store.version.value).toBe(3);
     expect(store.source.lineCount()).toBe(0);
     expect(store.source.getLine(0)).toBe("");
+    expect(store.source.firstLineIndex?.()).toBe(0);
   });
 });

@@ -614,6 +614,113 @@ async function benchDomTLogView(
   }
 }
 
+async function benchDomTLogViewRetention(): Promise<Record<string, unknown>> {
+  let framePerf: any = null;
+  let rendererRef: any = null;
+  let finalTop = 0;
+  let atBottom = true;
+  let lastFlushCount = 0;
+  let domFlushPlaneRows = 0;
+  let domFlushSamples = 0;
+  let getLineCalls = 0;
+  const appendCount = 100_000;
+  const maxLines = 1_000;
+  const log = createAppendOnlyLogStore({ maxLines });
+  log.appendLines(Array.from({ length: maxLines }, (_, index) => `seed ${index}`));
+  const source = {
+    lineCount: () => log.source.lineCount(),
+    firstLineIndex: () => log.source.firstLineIndex?.() ?? 0,
+    getLine(index: number) {
+      getLineCalls++;
+      return log.source.getLine(index);
+    },
+    getLineKey(index: number) {
+      return log.source.getLineKey?.(index) ?? index;
+    },
+  };
+  const root = document.createElement("div");
+  document.body.appendChild(root);
+  const raf = installCountingSyncRaf();
+
+  const Probe = defineComponent({
+    name: "BenchDomTLogViewRetention",
+    setup() {
+      const ctx = useTerminal();
+      framePerf = ctx.observability.framePerf;
+      rendererRef = ctx.renderer;
+      framePerf.enabled.value = true;
+      return () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 80,
+          h: 20,
+          source,
+          version: log.version.value,
+          rowScrollMode: "unsafe-full-row",
+          onScroll: (payload: { scrollTop: number; atBottom: boolean }) => {
+            finalTop = payload.scrollTop;
+            atBottom = payload.atBottom;
+          },
+        });
+    },
+  });
+
+  const app = createApp({
+    name: "BenchDomTLogViewRetentionRoot",
+    render() {
+      return h(TerminalProvider, { cols: 80, rows: 24 }, { default: () => h(Probe) });
+    },
+  });
+
+  function collectDomFlush(): void {
+    const flush = rendererRef?.value?.debugStats?.flush;
+    if (!flush || flush.count === lastFlushCount || !flush.last) return;
+    lastFlushCount = flush.count;
+    domFlushPlaneRows += flush.last.planeRows;
+    domFlushSamples++;
+  }
+
+  try {
+    app.mount(root);
+    await nextTick();
+    collectDomFlush();
+    finalTop = Math.max(0, log.source.lineCount() - 20);
+    framePerf.clear();
+    getLineCalls = 0;
+    lastFlushCount = rendererRef?.value?.debugStats?.flush.count ?? 0;
+    domFlushPlaneRows = 0;
+    domFlushSamples = 0;
+
+    const startedAt = now();
+    for (let i = 0; i < appendCount; i++) log.appendLine(`retained ${i}`);
+    await nextTick();
+    collectDomFlush();
+    finalTop = Math.max(finalTop, Math.max(0, log.source.lineCount() - 20));
+    const durationMs = now() - startedAt;
+    const samples = framePerf.list();
+
+    return {
+      name: "tlog-view-retention-100k-append-max-1000",
+      appendCount,
+      maxLines,
+      retainedLineCount: log.source.lineCount(),
+      firstLineIndex: log.source.firstLineIndex?.() ?? 0,
+      scheduledRafFrames: raf.scheduledRafFrames(),
+      durationMs: round(durationMs),
+      avgDomFlushPlaneRows: round(domFlushPlaneRows / Math.max(1, domFlushSamples)),
+      finalTop,
+      atBottom,
+      getLineCalls,
+      ...summarizeSamples(samples),
+    };
+  } finally {
+    app.unmount();
+    root.remove();
+    raf.restore();
+  }
+}
+
 async function main(): Promise<void> {
   const scenarios = [
     await benchRenderManagerDirtyRow(),
@@ -634,6 +741,7 @@ async function main(): Promise<void> {
     await benchDomTLogView("stick-bottom", "long", true),
     await benchDomTLogView("not-bottom", "long", true),
     await benchDomTLogView("burst", "long", true),
+    await benchDomTLogViewRetention(),
   ];
 
   // eslint-disable-next-line no-console

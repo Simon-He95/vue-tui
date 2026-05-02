@@ -159,6 +159,7 @@ export const TLogView = defineComponent({
     let pendingWheelTop: number | null = null;
     let initializedScrollTop = false;
     let lastLineCount = 0;
+    let lastFirstLineIndex = 0;
     let lastPaintedBottom: Readonly<{
       index: number;
       lineKey: TLogLineKey;
@@ -220,6 +221,11 @@ export const TLogView = defineComponent({
 
     function lineCount(): number {
       const n = Math.floor(Number(props.source.lineCount()));
+      return Number.isFinite(n) ? Math.max(0, n) : 0;
+    }
+
+    function firstLineIndex(): number {
+      const n = Math.floor(Number(props.source.firstLineIndex?.() ?? 0));
       return Number.isFinite(n) ? Math.max(0, n) : 0;
     }
 
@@ -518,6 +524,46 @@ export const TLogView = defineComponent({
       return true;
     }
 
+    function visualRowsForTrimmedHead(count: number): number {
+      if (count <= 0) return 0;
+      if (!props.wrap) return count;
+
+      let rows = 0;
+      const measuredCount = Math.min(count, visualIndexLineCount);
+      for (let i = 0; i < measuredCount; i++) rows += visualCounts[i] ?? 1;
+      return rows + Math.max(0, count - measuredCount);
+    }
+
+    function trimVisualIndexHead(droppedHeadLines: number, nextCount: number): void {
+      if (!props.wrap) return;
+
+      const width = currentWrapWidth();
+      if (visualIndexCapacity <= 0 || visualIndexWidth !== width) {
+        resetVisualIndex(nextCount, width);
+        return;
+      }
+
+      if (nextCount > visualIndexCapacity) {
+        visualIndexCapacity = nextPowerOfTwo(Math.max(nextCount, visualIndexCapacity * 2));
+      }
+
+      const drop = clamp(droppedHeadLines, 0, visualIndexLineCount);
+      const shiftedCount = Math.min(Math.max(0, visualIndexLineCount - drop), nextCount);
+      for (let i = 0; i < shiftedCount; i++) {
+        visualCounts[i] = visualCounts[i + drop] ?? 1;
+        visualKeys[i] = visualKeys[i + drop];
+      }
+      for (let i = shiftedCount; i < nextCount; i++) {
+        visualCounts[i] = 1;
+        visualKeys[i] = undefined;
+      }
+
+      visualCounts.length = nextCount;
+      visualKeys.length = nextCount;
+      visualIndexLineCount = nextCount;
+      rebuildFenwick();
+    }
+
     function maxScrollTop(): number {
       const clip = normalizedRect();
       const { y: clipY } = clipOffsets();
@@ -569,6 +615,7 @@ export const TLogView = defineComponent({
         atBottom: isAtBottom(top),
         lineCount: lineCount(),
         estimatedVisualRowCount: estimatedVisualRowCount(),
+        firstLineIndex: firstLineIndex(),
       };
     }
 
@@ -724,8 +771,43 @@ export const TLogView = defineComponent({
     function handleSourceVersionChanged(): boolean {
       const prevCount = lastLineCount;
       const nextCount = lineCount();
-      const wrapExistingMutation = prepareWrapIndexForSourceChange(prevCount, nextCount);
+      const prevFirst = lastFirstLineIndex;
+      const nextFirst = firstLineIndex();
+      const droppedHeadLines = Math.max(0, nextFirst - prevFirst);
+      const droppedVisualRows = visualRowsForTrimmedHead(droppedHeadLines);
+      let wrapExistingMutation = false;
+
+      if (props.wrap && droppedHeadLines > 0) {
+        trimVisualIndexHead(droppedHeadLines, nextCount);
+      } else {
+        wrapExistingMutation = prepareWrapIndexForSourceChange(prevCount, nextCount);
+      }
+
       lastLineCount = nextCount;
+      lastFirstLineIndex = nextFirst;
+
+      if (droppedHeadLines > 0 && !stickToBottom.value) {
+        const nextTop = Math.max(0, currentScrollTop() - droppedVisualRows);
+
+        if (isScrollControlled()) {
+          const clampedTop = normalizeScrollTop(nextTop);
+          if (clampedTop !== rawScrollTop()) {
+            emit("update:scrollTop", clampedTop);
+            emitScroll(clampedTop);
+            return false;
+          }
+
+          markViewportDirty();
+          return true;
+        }
+
+        const changed = applyScrollTop(nextTop, "viewport-repaint", {
+          emitScroll: true,
+          stickToBottom: false,
+        });
+        if (!changed) markViewportDirty();
+        return true;
+      }
 
       if (nextCount < prevCount) {
         const nextTop = stickToBottom.value ? bottomScrollTop() : currentScrollTop();
@@ -745,7 +827,7 @@ export const TLogView = defineComponent({
         const extraDirtyRow = tailMutationDirtyRow(prevCount, nextCount, delta, r);
         const changed = applyScrollTop(
           nextTop,
-          wrapExistingMutation ? "viewport-repaint" : "auto",
+          wrapExistingMutation || droppedHeadLines > 0 ? "viewport-repaint" : "auto",
           {
             emitScroll: true,
             stickToBottom: true,
@@ -1033,6 +1115,7 @@ export const TLogView = defineComponent({
         resetWheelScrollState(wheelState);
         if (props.wrap) resetVisualIndex(lineCount(), currentWrapWidth());
         lastLineCount = lineCount();
+        lastFirstLineIndex = firstLineIndex();
         if (isScrollControlled()) {
           syncStickFromCurrentScrollTop();
           markViewportDirty();
@@ -1145,6 +1228,7 @@ export const TLogView = defineComponent({
     });
 
     lastLineCount = lineCount();
+    lastFirstLineIndex = firstLineIndex();
 
     return () => h("span", rootProps);
   },
