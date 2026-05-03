@@ -5,10 +5,18 @@ export { TLogMinimap } from "./vue/components/TLogMinimap.js";
 export { TLogSearchBar } from "./vue/components/TLogSearchBar.js";
 export { TLogSearchResults } from "./vue/components/TLogSearchResults.js";
 export { TLogSearchPager } from "./vue/components/TLogSearchPager.js";
+export { TLogLinksPanel } from "./vue/components/TLogLinksPanel.js";
 export { createAppendOnlyLogStore } from "./vue/log/append-only-log-store.js";
+export { useTLogLinkController } from "./vue/log/use-tlog-link-controller.js";
 export { useTLogSearchController } from "./vue/log/use-tlog-search-controller.js";
 export { useTLogSearchResultsPage } from "./vue/log/use-tlog-search-results-page.js";
 export type { RowScrollMode } from "./vue/components/TVirtualList.js";
+export type {
+  TLogLinkPanelItem,
+  TLogLinksPanelSelectPayload,
+  TLogLinksPanelActivatePayload,
+  TLogLinksPanelActiveChangePayload,
+} from "./vue/components/TLogLinksPanel.js";
 export type {
   TLogMinimapClickPayload,
   TLogMinimapDensityBucket,
@@ -68,6 +76,11 @@ export type {
   TLogViewVisualIndexOptions,
   TLogViewVisualIndexStatus,
 } from "./vue/log/types.js";
+export type {
+  TLogLinkAction,
+  TLogLinkActionSource,
+  UseTLogLinkControllerOptions,
+} from "./vue/log/use-tlog-link-controller.js";
 export type {
   TLogSavedSearch,
   UseTLogSearchControllerOptions,

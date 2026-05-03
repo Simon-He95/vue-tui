@@ -8,15 +8,15 @@
 
 ## 组件速读
 
-| 类别          | 组件                                                                                                    | 典型用途                                        | 适配性判断                                         |
-| ------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
-| Root          | `TerminalProvider`                                                                                      | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
-| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                          | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
-| Text / Motion | `TText` `TTransition`                                                                                   | 文本渲染、状态切换、动画插值                    | 通用                                               |
-| Input         | `TInput` `TInputBox` `TJsonEditor`                                                                      | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
-| Pickers       | `TList` `TVirtualList` `TLogView` `TLogSearchBar` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、日志、路径选择                   | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
-| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                             | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
-| Navigation    | `TRouterView` + `createTerminalRouter()`                                                                | 多页面 TUI / shell                              | 通用                                               |
+| 类别          | 组件                                                                                                                                                           | 典型用途                                        | 适配性判断                                         |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| Root          | `TerminalProvider`                                                                                                                                             | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
+| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                 | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
+| Text / Motion | `TText` `TTransition`                                                                                                                                          | 文本渲染、状态切换、动画插值                    | 通用                                               |
+| Input         | `TInput` `TInputBox` `TJsonEditor`                                                                                                                             | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
+| Pickers       | `TList` `TVirtualList` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、日志、路径选择                   | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                                                                                    | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
+| Navigation    | `TRouterView` + `createTerminalRouter()`                                                                                                                       | 多页面 TUI / shell                              | 通用                                               |
 
 如果你更关心“哪些地方还应该继续做插件化”，建议配合阅读：[扩展性与插件化](./extensibility.md)。
 
@@ -985,7 +985,9 @@ function refreshSuite() {
   :y="1"
   :h="20"
   :metrics="search.metrics"
-  :markers="search.markers.map((marker) => ({ visualRow: marker.visualRow, current: marker.current }))"
+  :markers="
+    search.markers.map((marker) => ({ visualRow: marker.visualRow, current: marker.current }))
+  "
 />
 
 <TLogMinimap
@@ -994,9 +996,92 @@ function refreshSuite() {
   :w="2"
   :h="20"
   :metrics="search.metrics"
-  :markers="search.markers.map((marker) => ({ visualRow: marker.visualRow, current: marker.current }))"
+  :markers="
+    search.markers.map((marker) => ({ visualRow: marker.visualRow, current: marker.current }))
+  "
 />
 ```
+
+### TLogLinksPanel
+
+`TLogLinksPanel` 是一个 experimental visible-link panel，只渲染 **当前 viewport 内可见的 OSC8 links**。它不扫描 retained window，也不直接读取 `TLogView`；父组件负责把 `getVisibleLinks()` 或 `useTLogLinkController.visibleLinks` 回填给它。
+
+- 每行展示 `absoluteLineIndex + text + href`
+- `activeIndex` 表示 panel 当前选中行
+- `current` 用来标记 `TLogView` 当前 focused visible link
+- `Enter` 只 emit `activate`，不会自动打开浏览器
+
+### Link UX suite wiring
+
+如果你希望把 `TLogView` 的 visible OSC8 link 导航、panel 展示和应用层 action 统一起来，推荐直接使用 `useTLogLinkController`。它会集中管理：
+
+- `visibleLinks`
+- `activeIndex`
+- `focusVisibleLink` / `focusNextLink` / `focusPreviousLink`
+- `activateVisibleLink` / `activateFocusedLink`
+- `handleLinkClick` / `handleLinkActivate`
+
+`useTLogLinkController` 不会建立 global link index，也不会自动打开链接。`onAction` 只把 `{ href, text, source, absoluteLineIndex, index, startCell, endCell }` 交回应用层，由应用决定 open/copy/preview。
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue";
+import {
+  TLogLinksPanel,
+  TLogView,
+  useTLogLinkController,
+  type TLogLinksPanelActiveChangePayload,
+  type TLogViewHandle,
+} from "@simon_he/vue-tui/experimental";
+
+const logView = ref<TLogViewHandle | null>(null);
+const links = useTLogLinkController(logView, {
+  onAction(action) {
+    console.log("Link action:", action.href, action.source);
+  },
+});
+
+function refreshLinks() {
+  links.refresh();
+}
+
+function onPanelActiveChange(payload: TLogLinksPanelActiveChangePayload) {
+  if (payload.activeIndex >= 0) links.focusVisibleLink(payload.activeIndex);
+  else links.clearFocus();
+}
+</script>
+
+<TLogView
+  ref="logView"
+  :x="0"
+  :y="0"
+  :w="60"
+  :h="20"
+  :source="log.source"
+  :version="log.version"
+  ansi
+  links
+  keyboard-links
+  @scroll="refreshLinks"
+  @linkFocus="refreshLinks"
+  @linkClick="links.handleLinkClick"
+  @linkActivate="links.handleLinkActivate"
+/>
+
+<TLogLinksPanel
+  :x="61"
+  :y="0"
+  :w="19"
+  :h="20"
+  :links="links.visibleLinks"
+  :active-index="links.activeIndex"
+  @select="({ visibleIndex }) => links.focusVisibleLink(visibleIndex)"
+  @activeChange="onPanelActiveChange"
+  @activate="({ visibleIndex }) => links.activateVisibleLink(visibleIndex)"
+/>
+```
+
+启用 `keyboardLinks=true` 后，`Tab` / `Shift+Tab` / `Enter` 仍然只作用于当前 visible links；`TLogLinksPanel` 也同样只操作当前 visible 列表，不会越过 viewport 建立 retained-window 级别的历史索引。
 
 ### Events
 
@@ -1007,6 +1092,8 @@ function refreshSuite() {
 - `searchMatch`: `{ match, currentMatchIndex, matchCount }`
 - `searchMarkers`: `{ markers, visualIndexStatus, matchCount, currentMatchIndex }`
 - `linkClick`: `{ href, text, absoluteLineIndex, index, startCell, endCell, cellX, cellY }`
+- `linkFocus`: `{ link, focusedLinkIndex }`
+- `linkActivate`: `{ link, source }`
 - `focus` / `blur` / `keydown`
 
 ## TSelect
