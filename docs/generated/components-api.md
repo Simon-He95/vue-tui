@@ -390,34 +390,42 @@
 
 ### Props
 
-| 名称                           | 类型                        | 默认值                       | 必填 | 说明 |
-| ------------------------------ | --------------------------- | ---------------------------- | ---- | ---- |
-| <code>x</code>                 | <code>number</code>         | —                            | 是   | —    |
-| <code>y</code>                 | <code>number</code>         | —                            | 是   | —    |
-| <code>w</code>                 | <code>number</code>         | —                            | 是   | —    |
-| <code>h</code>                 | <code>number</code>         | —                            | 是   | —    |
-| <code>zIndex</code>            | <code>number</code>         | <code>0</code>               | 否   | —    |
-| <code>source</code>            | <code>TLogDataSource</code> | —                            | 是   | —    |
-| <code>version</code>           | <code>number</code>         | —                            | 是   | —    |
-| <code>scrollTop</code>         | <code>number</code>         | <code>undefined</code>       | 否   | —    |
-| <code>defaultScrollTop</code>  | <code>number</code>         | <code>undefined</code>       | 否   | —    |
-| <code>style</code>             | <code>Style</code>          | <code>undefined</code>       | 否   | —    |
-| <code>autoFocus</code>         | <code>boolean</code>        | <code>false</code>           | 否   | —    |
-| <code>autoStickToBottom</code> | <code>boolean</code>        | <code>true</code>            | 否   | —    |
-| <code>overscan</code>          | <code>number</code>         | <code>2</code>               | 否   | —    |
-| <code>wrap</code>              | <code>boolean</code>        | <code>false</code>           | 否   | —    |
-| <code>ansi</code>              | <code>boolean</code>        | <code>false</code>           | 否   | —    |
-| <code>rowScrollMode</code>     | <code>RowScrollMode</code>  | <code>&quot;off&quot;</code> | 否   | —    |
+| 名称                           | 类型                               | 默认值                                                | 必填 | 说明 |
+| ------------------------------ | ---------------------------------- | ----------------------------------------------------- | ---- | ---- |
+| <code>x</code>                 | <code>number</code>                | —                                                     | 是   | —    |
+| <code>y</code>                 | <code>number</code>                | —                                                     | 是   | —    |
+| <code>w</code>                 | <code>number</code>                | —                                                     | 是   | —    |
+| <code>h</code>                 | <code>number</code>                | —                                                     | 是   | —    |
+| <code>zIndex</code>            | <code>number</code>                | <code>0</code>                                        | 否   | —    |
+| <code>source</code>            | <code>TLogDataSource</code>        | —                                                     | 是   | —    |
+| <code>version</code>           | <code>number</code>                | —                                                     | 是   | —    |
+| <code>scrollTop</code>         | <code>number</code>                | <code>undefined</code>                                | 否   | —    |
+| <code>defaultScrollTop</code>  | <code>number</code>                | <code>undefined</code>                                | 否   | —    |
+| <code>style</code>             | <code>Style</code>                 | <code>undefined</code>                                | 否   | —    |
+| <code>autoFocus</code>         | <code>boolean</code>               | <code>false</code>                                    | 否   | —    |
+| <code>autoStickToBottom</code> | <code>boolean</code>               | <code>true</code>                                     | 否   | —    |
+| <code>overscan</code>          | <code>number</code>                | <code>2</code>                                        | 否   | —    |
+| <code>wrap</code>              | <code>boolean</code>               | <code>false</code>                                    | 否   | —    |
+| <code>ansi</code>              | <code>boolean</code>               | <code>false</code>                                    | 否   | —    |
+| <code>searchQuery</code>       | <code>string</code>                | <code>&quot;&quot;</code>                             | 否   | —    |
+| <code>searchOptions</code>     | <code>TLogViewSearchOptions</code> | <code>undefined</code>                                | 否   | —    |
+| <code>highlightMatches</code>  | <code>boolean</code>               | <code>true</code>                                     | 否   | —    |
+| <code>matchStyle</code>        | <code>Style</code>                 | <code>() =&gt; ({ inverse: true })</code>             | 否   | —    |
+| <code>currentMatchStyle</code> | <code>Style</code>                 | <code>() =&gt; ({ inverse: true, bold: true })</code> | 否   | —    |
+| <code>rowScrollMode</code>     | <code>RowScrollMode</code>         | <code>&quot;off&quot;</code>                          | 否   | —    |
 
 ### Events
 
-| 名称                          | Payload | 说明 |
-| ----------------------------- | ------- | ---- |
-| <code>scroll</code>           | —       | —    |
-| <code>update:scrollTop</code> | —       | —    |
-| <code>focus</code>            | —       | —    |
-| <code>blur</code>             | —       | —    |
-| <code>keydown</code>          | —       | —    |
+| 名称                            | Payload | 说明 |
+| ------------------------------- | ------- | ---- |
+| <code>scroll</code>             | —       | —    |
+| <code>update:scrollTop</code>   | —       | —    |
+| <code>update:searchQuery</code> | —       | —    |
+| <code>search</code>             | —       | —    |
+| <code>searchMatch</code>        | —       | —    |
+| <code>focus</code>              | —       | —    |
+| <code>blur</code>               | —       | —    |
+| <code>keydown</code>            | —       | —    |
 
 ## TMultilineModal
 

@@ -62,6 +62,18 @@ function installManualRaf(): Readonly<{
   };
 }
 
+async function flushSearch(
+  app: ReturnType<typeof createTerminalApp>,
+  handle: TLogViewHandle,
+  maxFrames = 20,
+): Promise<void> {
+  for (let i = 0; i < maxFrames; i++) {
+    await nextTick();
+    app.scheduler.flushNow();
+    if (handle.getSearchState().status !== "scanning") return;
+  }
+}
+
 describe("TLogView", () => {
   it("reads only visible rows while painting", async () => {
     const getLine = vi.fn((index: number) => `line-${index}`);
@@ -1627,6 +1639,626 @@ describe("TLogView", () => {
       app.scheduler.flushNow();
 
       expect(rowText(app, 0)).toBe("cdefghij");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("highlights plain fixed search matches", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "foo bar foo",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewPlainSearchHighlightApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "foo",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState()).toMatchObject({
+        query: "foo",
+        status: "done",
+        matchCount: 2,
+        currentMatchIndex: -1,
+      });
+      expect(rowText(app, 0)).toBe("foo bar foo");
+      const styles = rowStyles(app, 0);
+      expect(styles[0]!.inverse).toBe(true);
+      expect(styles[2]!.inverse).toBe(true);
+      expect(styles[4]!.inverse).toBeUndefined();
+      expect(styles[8]!.inverse).toBe(true);
+      expect(styles[10]!.inverse).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("findNext and findPrevious navigate matches and emit the current match", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const onSearchMatch = vi.fn();
+    const source: TLogDataSource = {
+      lineCount: () => 6,
+      getLine: (index) => (index === 1 || index === 4 ? `error line-${index}` : `ok line-${index}`),
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewSearchNavigationApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            source,
+            version: 1,
+            defaultScrollTop: 0,
+            searchQuery: "error",
+            searchOptions: { scanBudgetMs: 1000 },
+            onSearchMatch,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      onSearchMatch.mockClear();
+
+      logView.value!.findNext();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(logView.value!.getSearchState().currentMatchIndex).toBe(0);
+      expect(onSearchMatch).toHaveBeenLastCalledWith({
+        match: {
+          absoluteLineIndex: 1,
+          index: 1,
+          startCell: 0,
+          endCell: 5,
+          text: "error",
+        },
+        currentMatchIndex: 0,
+        matchCount: 2,
+      });
+
+      logView.value!.findPrevious();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(logView.value!.getSearchState().currentMatchIndex).toBe(1);
+      expect(rowText(app, 1)).toBe("error line-4");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("searches ANSI visible text only and preserves ANSI style under highlights", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const query = ref("ERROR");
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mERROR\x1b[0m failed",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewAnsiVisibleSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 1,
+            source,
+            version: 1,
+            ansi: true,
+            searchQuery: query.value,
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState().matchCount).toBe(1);
+      expect(rowText(app, 0)).toBe("ERROR failed");
+      let styles = rowStyles(app, 0);
+      expect(styles[0]!.fg).toBe("red");
+      expect(styles[0]!.inverse).toBe(true);
+
+      query.value = "\x1b[31m";
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState().matchCount).toBe(0);
+      styles = rowStyles(app, 0);
+      expect(styles[0]!.fg).toBe("red");
+      expect(styles[0]!.inverse).toBeUndefined();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("highlights and navigates a wrapped match on the containing visual row", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "aaaabbbbcccc",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWrapSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 2,
+            source,
+            version: 1,
+            wrap: true,
+            searchQuery: "bbbb",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 3, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      logView.value!.findNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect([0, 1].map((y) => rowText(app, y))).toEqual(["aaaa", "bbbb"]);
+      expect(
+        rowStyles(app, 1)
+          .slice(0, 4)
+          .every((style) => style.inverse === true && style.bold === true),
+      ).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("findNext navigates to the actual wrapped visual row for wide-character matches", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "ab中cd",
+      getLineKey: () => "wide",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWideWrapSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 3,
+            h: 1,
+            source,
+            version: 1,
+            wrap: true,
+            searchQuery: "中",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 3, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      logView.value!.findNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("中c");
+      expect(rowStyles(app, 0)[0]!.inverse).toBe(true);
+      expect(rowStyles(app, 0)[0]!.bold).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("findNext navigates to the actual ANSI wrapped visual row for wide-character matches", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mab中cd\x1b[0m",
+      getLineKey: () => "wide-ansi",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWideAnsiWrapSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 3,
+            h: 1,
+            source,
+            version: 1,
+            wrap: true,
+            ansi: true,
+            searchQuery: "中",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 3, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      logView.value!.findNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("中c");
+      const styles = rowStyles(app, 0);
+      expect(styles[0]!.fg).toBe("red");
+      expect(styles[0]!.inverse).toBe(true);
+      expect(styles[0]!.bold).toBe(true);
+      expect(styles[2]!.fg).toBe("red");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("rescans search matches after retention drops head lines", async () => {
+    const log = createAppendOnlyLogStore({ maxLines: 3 });
+    log.appendLines(["line-0", "line-1", "line-2"]);
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewSearchRetentionApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 3,
+            source: log.source,
+            version: log.version.value,
+            searchQuery: "line-0",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 4, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      expect(logView.value!.getSearchState().matchCount).toBe(1);
+
+      log.appendLine("line-3");
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState().matchCount).toBe(0);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("rescans search matches when appending a new matching line", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLine("ok");
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewSearchAppendApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 2,
+            source: log.source,
+            version: log.version.value,
+            searchQuery: "ERROR",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 3, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      expect(logView.value!.getSearchState().matchCount).toBe(0);
+
+      log.appendLine("ERROR new");
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState().matchCount).toBe(1);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keeps search scanning chunked when the first match is far past the first frame", async () => {
+    const raf = installManualRaf();
+    const logView = ref<TLogViewHandle | null>(null);
+    const getLine = vi.fn((index: number) => `line-${index}`);
+    const source: TLogDataSource = {
+      lineCount: () => 100_000,
+      getLine,
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewChunkedSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            searchQuery: "line-99999",
+            searchOptions: { maxMatches: 1, scanBudgetMs: 0 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      getLine.mockClear();
+
+      expect(raf.pending()).toBe(1);
+      raf.flush();
+      await nextTick();
+
+      expect(getLine.mock.calls.length).toBeLessThan(100);
+      expect(logView.value!.getSearchState()).toMatchObject({
+        status: "scanning",
+        matchCount: 0,
+      });
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("clears search highlights when searchQuery becomes empty", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const query = ref("foo");
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "foo",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewSearchClearApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: query.value,
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      expect(rowStyles(app, 0)[0]!.inverse).toBe(true);
+
+      query.value = "";
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState()).toMatchObject({
+        query: "",
+        status: "idle",
+        matchCount: 0,
+      });
+      expect(rowStyles(app, 0)[0]!.inverse).toBeUndefined();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not optimistically clear controlled searchQuery before parent updates it", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const query = ref("foo");
+    const onUpdateSearchQuery = vi.fn();
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "foo",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewControlledClearSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: query.value,
+            searchOptions: { scanBudgetMs: 1000 },
+            "onUpdate:searchQuery": onUpdateSearchQuery,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      expect(logView.value!.getSearchState()).toMatchObject({
+        query: "foo",
+        status: "done",
+        matchCount: 1,
+      });
+
+      logView.value!.clearSearch();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onUpdateSearchQuery).toHaveBeenCalledWith("");
+      expect(logView.value!.getSearchState()).toMatchObject({
+        query: "foo",
+        status: "done",
+        matchCount: 1,
+      });
+      expect(rowStyles(app, 0)[0]!.inverse).toBe(true);
+
+      query.value = "";
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState()).toMatchObject({
+        query: "",
+        status: "idle",
+        matchCount: 0,
+      });
+      expect(rowStyles(app, 0)[0]!.inverse).toBeUndefined();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("respects caseSensitive search option", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const caseSensitive = ref(false);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "ERROR",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewCaseSensitiveSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "error",
+            searchOptions: { caseSensitive: caseSensitive.value, scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      expect(logView.value!.getSearchState().matchCount).toBe(1);
+
+      caseSensitive.value = true;
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState().matchCount).toBe(0);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("respects wholeWord search option with ASCII word boundaries", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "error errors _error error-1",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWholeWordSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "error",
+            searchOptions: { wholeWord: true, scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 32, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState().matchCount).toBe(2);
+      const styles = rowStyles(app, 0);
+      expect(styles[0]!.inverse).toBe(true);
+      expect(styles[6]!.inverse).toBeUndefined();
+      expect(styles[14]!.inverse).toBeUndefined();
+      expect(styles[20]!.inverse).toBe(true);
     } finally {
       app.dispose();
     }

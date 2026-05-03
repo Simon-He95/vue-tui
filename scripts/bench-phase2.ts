@@ -1,4 +1,5 @@
 import { Window } from "happy-dom";
+import type { TLogViewHandle } from "../src/experimental.js";
 
 function setGlobal(key: string, value: unknown): void {
   Object.defineProperty(globalThis, key, {
@@ -750,6 +751,118 @@ async function benchDomTLogViewRetention(ansi = false): Promise<Record<string, u
   }
 }
 
+async function benchDomTLogViewSearch(
+  scenario: "100k-retained" | "ansi-retained" | "wrap-long-lines",
+): Promise<Record<string, unknown>> {
+  let framePerf: any = null;
+  let getLineCalls = 0;
+  const lineCount = scenario === "wrap-long-lines" ? 20_000 : 100_000;
+  const ansi = scenario === "ansi-retained";
+  const wrap = scenario === "wrap-long-lines";
+  const log = createAppendOnlyLogStore({ maxLines: lineCount });
+  const payload = "x".repeat(wrap ? 240 : 40);
+  const makeLine = (index: number) => {
+    const level = index % 10 === 0 ? "ERROR" : "INFO";
+    if (ansi) {
+      const styledLevel = level === "ERROR" ? "\x1b[31mERROR\x1b[0m" : "\x1b[32mINFO\x1b[0m";
+      return `2026-05-03T08:${String(index % 60).padStart(2, "0")}:00Z ${styledLevel} line ${index} ${payload}`;
+    }
+    if (wrap) return `${payload} ${level} line ${index}`;
+    return `2026-05-03T08:${String(index % 60).padStart(2, "0")}:00Z ${level} line ${index} ${payload}`;
+  };
+  log.appendLines(Array.from({ length: lineCount }, (_, index) => makeLine(index)));
+  const source = {
+    lineCount: () => log.source.lineCount(),
+    firstLineIndex: () => log.source.firstLineIndex?.() ?? 0,
+    getLine(index: number) {
+      getLineCalls++;
+      return log.source.getLine(index);
+    },
+    getLineKey(index: number) {
+      return log.source.getLineKey?.(index) ?? index;
+    },
+  };
+  const root = document.createElement("div");
+  document.body.appendChild(root);
+  const raf = installManualRaf();
+  const logView = ref<TLogViewHandle | null>(null);
+
+  const Probe = defineComponent({
+    name: `BenchDomTLogViewSearch${scenario}`,
+    setup() {
+      const ctx = useTerminal();
+      framePerf = ctx.observability.framePerf;
+      framePerf.enabled.value = true;
+      return () =>
+        h(TLogView, {
+          ref: logView,
+          x: 0,
+          y: 0,
+          w: 80,
+          h: 20,
+          source,
+          version: log.version.value,
+          ansi,
+          wrap,
+          searchQuery: "ERROR",
+          searchOptions: { scanBudgetMs: 1 },
+        });
+    },
+  });
+
+  const app = createApp({
+    name: "BenchDomTLogViewSearchRoot",
+    render() {
+      return h(TerminalProvider, { cols: 80, rows: 24 }, { default: () => h(Probe) });
+    },
+  });
+
+  try {
+    app.mount(root);
+    await nextTick();
+    framePerf.clear();
+    getLineCalls = 0;
+
+    const startedAt = now();
+    let scanFrames = 0;
+    for (let i = 0; i < 10_000; i++) {
+      const state = logView.value?.getSearchState();
+      if (state && state.status !== "scanning") break;
+      scanFrames += raf.flushOneFrame();
+      await nextTick();
+    }
+    const durationMs = now() - startedAt;
+    const state = logView.value?.getSearchState();
+    const samples = framePerf.list();
+
+    return {
+      name:
+        scenario === "100k-retained"
+          ? "tlog-view-search-100k-retained"
+          : scenario === "ansi-retained"
+            ? "tlog-view-search-ansi-retained"
+            : "tlog-view-search-wrap-long-lines",
+      lineCount,
+      ansi,
+      wrap,
+      scanFrames,
+      matchCount: state?.matchCount ?? 0,
+      status: state?.status ?? "missing",
+      durationMs: round(durationMs),
+      getLineCalls,
+      avgFrameMs: round(
+        samples.reduce((acc: number, sample: any) => acc + sample.durationMs, 0) /
+          Math.max(1, samples.length),
+      ),
+      ...summarizeSamples(samples),
+    };
+  } finally {
+    app.unmount();
+    root.remove();
+    raf.restore();
+  }
+}
+
 async function main(): Promise<void> {
   const scenarios = [
     await benchRenderManagerDirtyRow(),
@@ -774,6 +887,9 @@ async function main(): Promise<void> {
     await benchDomTLogView("stick-bottom", "long", true, true),
     await benchDomTLogViewRetention(),
     await benchDomTLogViewRetention(true),
+    await benchDomTLogViewSearch("100k-retained"),
+    await benchDomTLogViewSearch("ansi-retained"),
+    await benchDomTLogViewSearch("wrap-long-lines"),
   ];
 
   // eslint-disable-next-line no-console
