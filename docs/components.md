@@ -8,15 +8,15 @@
 
 ## 组件速读
 
-| 类别          | 组件                                                           | 典型用途                                        | 适配性判断                                         |
-| ------------- | -------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
-| Root          | `TerminalProvider`                                             | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
-| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane` | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
-| Text / Motion | `TText` `TTransition`                                          | 文本渲染、状态切换、动画插值                    | 通用                                               |
-| Input         | `TInput` `TInputBox` `TJsonEditor`                             | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
-| Pickers       | `TList` `TVirtualList` `TLogView` `TSelect` `TPathPicker`      | palette、列表、日志、路径选择                   | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
-| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                    | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
-| Navigation    | `TRouterView` + `createTerminalRouter()`                       | 多页面 TUI / shell                              | 通用                                               |
+| 类别          | 组件                                                                      | 典型用途                                        | 适配性判断                                         |
+| ------------- | ------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| Root          | `TerminalProvider`                                                        | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
+| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`            | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
+| Text / Motion | `TText` `TTransition`                                                     | 文本渲染、状态切换、动画插值                    | 通用                                               |
+| Input         | `TInput` `TInputBox` `TJsonEditor`                                        | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
+| Pickers       | `TList` `TVirtualList` `TLogView` `TLogScrollbar` `TSelect` `TPathPicker` | palette、列表、日志、路径选择                   | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                               | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
+| Navigation    | `TRouterView` + `createTerminalRouter()`                                  | 多页面 TUI / shell                              | 通用                                               |
 
 如果你更关心“哪些地方还应该继续做插件化”，建议配合阅读：[扩展性与插件化](./extensibility.md)。
 
@@ -503,6 +503,70 @@ function measureRows() {
   :y="0"
   :w="80"
   :h="20"
+/>
+```
+
+### TLogScrollbar
+
+`TLogScrollbar` 是一个 terminal-rendered 的 experimental companion 组件，消费 `TLogViewScrollMetrics` 渲染 1-cell 宽滚动条。它不持有滚动状态，也不会直接调用 `TLogView` 内部逻辑；父组件负责把 `scrollTo` / `scrollBy` 接到 `TLogViewHandle` 上。
+
+- `metrics` 可以直接来自 `logView.value?.getScrollMetrics()`，也可以由 `@scroll` / `@visualIndex` 事件在外部维护
+- `visualIndexStatus="estimated" | "measuring" | "exact"` 会分别用不同 thumb 状态渲染，方便区分估算值、后台测量中和精确 visual-row index
+- 点击 track 会 emit 目标 visual-row `scrollTo`
+- wheel 会 emit 简单的 `scrollBy(+/-1)` delegation
+- `showArrows=true` 时首尾两行会渲染 `▲` / `▼`，点击后按一个 viewport 高度翻动
+
+```vue
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import {
+  TLogScrollbar,
+  TLogView,
+  type TLogViewHandle,
+  type TLogViewScrollMetrics,
+} from "@simon_he/vue-tui/experimental";
+
+const logView = ref<TLogViewHandle | null>(null);
+const metrics = ref<TLogViewScrollMetrics | null>(null);
+
+function refreshMetrics() {
+  metrics.value = logView.value?.getScrollMetrics() ?? null;
+}
+
+function scrollTo(top: number) {
+  logView.value?.scrollToVisualRow(top);
+  refreshMetrics();
+}
+
+function scrollBy(delta: number) {
+  logView.value?.scrollBy(delta);
+  refreshMetrics();
+}
+
+onMounted(refreshMetrics);
+</script>
+
+<TLogView
+  ref="logView"
+  :x="0"
+  :y="0"
+  :w="79"
+  :h="20"
+  :source="log.source"
+  :version="log.version"
+  wrap
+  visual-index-mode="exact"
+  @scroll="refreshMetrics"
+  @visualIndex="refreshMetrics"
+/>
+
+<TLogScrollbar
+  :x="79"
+  :y="0"
+  :h="20"
+  :metrics="metrics"
+  @scrollTo="scrollTo"
+  @scrollBy="scrollBy"
 />
 ```
 

@@ -14,6 +14,7 @@
 - [TInputBox](#tinputbox)
 - [TJsonEditor](#tjsoneditor)
 - [TList](#tlist)
+- [TLogScrollbar](#tlogscrollbar)
 - [TLogView](#tlogview)
 - [TMultilineModal](#tmultilinemodal)
 - [TPathPicker](#tpathpicker)
@@ -381,6 +382,32 @@
 | <code>focus</code>             | —       | —    |
 | <code>blur</code>              | —       | —    |
 | <code>keydown</code>           | —       | —    |
+
+## TLogScrollbar
+
+源码：`src/vue/components/TLogScrollbar.ts`
+
+### Props
+
+| 名称                        | 类型                                          | 默认值                 | 必填 | 说明 |
+| --------------------------- | --------------------------------------------- | ---------------------- | ---- | ---- |
+| <code>x</code>              | <code>number</code>                           | —                      | 是   | —    |
+| <code>y</code>              | <code>number</code>                           | —                      | 是   | —    |
+| <code>h</code>              | <code>number</code>                           | —                      | 是   | —    |
+| <code>zIndex</code>         | <code>number</code>                           | <code>0</code>         | 否   | —    |
+| <code>metrics</code>        | <code>TLogScrollbarMetrics &#124; null</code> | <code>null</code>      | 否   | —    |
+| <code>style</code>          | <code>Style</code>                            | <code>undefined</code> | 否   | —    |
+| <code>thumbStyle</code>     | <code>Style</code>                            | <code>undefined</code> | 否   | —    |
+| <code>trackStyle</code>     | <code>Style</code>                            | <code>undefined</code> | 否   | —    |
+| <code>measuringStyle</code> | <code>Style</code>                            | <code>undefined</code> | 否   | —    |
+| <code>showArrows</code>     | <code>boolean</code>                          | <code>false</code>     | 否   | —    |
+
+### Events
+
+| 名称                  | Payload | 说明 |
+| --------------------- | ------- | ---- |
+| <code>scrollTo</code> | —       | —    |
+| <code>scrollBy</code> | —       | —    |
 
 ## TLogView
 
