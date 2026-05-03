@@ -1851,6 +1851,98 @@ describe("TLogView", () => {
     }
   });
 
+  it("findNext navigates to the actual wrapped visual row for wide-character matches", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "ab中cd",
+      getLineKey: () => "wide",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWideWrapSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 3,
+            h: 1,
+            source,
+            version: 1,
+            wrap: true,
+            searchQuery: "中",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 3, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      logView.value!.findNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("中c");
+      expect(rowStyles(app, 0)[0]!.inverse).toBe(true);
+      expect(rowStyles(app, 0)[0]!.bold).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("findNext navigates to the actual ANSI wrapped visual row for wide-character matches", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mab中cd\x1b[0m",
+      getLineKey: () => "wide-ansi",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWideAnsiWrapSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 3,
+            h: 1,
+            source,
+            version: 1,
+            wrap: true,
+            ansi: true,
+            searchQuery: "中",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 3, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      logView.value!.findNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("中c");
+      const styles = rowStyles(app, 0);
+      expect(styles[0]!.fg).toBe("red");
+      expect(styles[0]!.inverse).toBe(true);
+      expect(styles[0]!.bold).toBe(true);
+      expect(styles[2]!.fg).toBe("red");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("rescans search matches after retention drops head lines", async () => {
     const log = createAppendOnlyLogStore({ maxLines: 3 });
     log.appendLines(["line-0", "line-1", "line-2"]);

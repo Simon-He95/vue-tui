@@ -1198,6 +1198,32 @@ export const TLogView = defineComponent({
       return start;
     }
 
+    function partIndexForCellInPlainWrappedRow(rows: readonly string[], cell: number): number {
+      let start = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const width = textCellWidth(rows[i] ?? "");
+        const end = start + width;
+        if (cell >= start && cell < end) return i;
+        start = end;
+      }
+      return Math.max(0, rows.length - 1);
+    }
+
+    function partIndexForCellInAnsiWrappedRow(
+      rows: readonly TLogVisualRow[],
+      cell: number,
+    ): number {
+      let start = 0;
+      for (let i = 0; i < rows.length; i++) {
+        let width = 0;
+        for (const seg of rows[i] ?? []) width += seg.cells;
+        const end = start + width;
+        if (cell >= start && cell < end) return i;
+        start = end;
+      }
+      return Math.max(0, rows.length - 1);
+    }
+
     function currentWrapWidth(): number {
       return Math.max(1, normalizedFullRect().w);
     }
@@ -1846,7 +1872,17 @@ export const TLogView = defineComponent({
       if (!props.wrap) return match.index;
       ensureVisualIndex();
       measureVisualLine(match.index);
-      return visualStartForLine(match.index) + Math.floor(match.startCell / currentWrapWidth());
+      const lineStart = visualStartForLine(match.index);
+      const count = lineCount();
+      const width = currentWrapWidth();
+      if (props.ansi) {
+        const base = props.style ?? defaultStyle.value;
+        const rows = ansiWrappedRowsForLine(match.index, count, width, base, styleCacheKey(base));
+        return lineStart + partIndexForCellInAnsiWrappedRow(rows, match.startCell);
+      }
+
+      const rows = wrappedRowsForLine(match.index, count, width);
+      return lineStart + partIndexForCellInPlainWrappedRow(rows, match.startCell);
     }
 
     function firstMatchAtOrAfterViewport(): number {
