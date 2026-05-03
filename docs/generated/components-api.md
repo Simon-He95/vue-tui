@@ -406,6 +406,7 @@
 | <code>autoStickToBottom</code> | <code>boolean</code>        | <code>true</code>            | 否   | —    |
 | <code>overscan</code>          | <code>number</code>         | <code>2</code>               | 否   | —    |
 | <code>wrap</code>              | <code>boolean</code>        | <code>false</code>           | 否   | —    |
+| <code>ansi</code>              | <code>boolean</code>        | <code>false</code>           | 否   | —    |
 | <code>rowScrollMode</code>     | <code>RowScrollMode</code>  | <code>&quot;off&quot;</code> | 否   | —    |
 
 ### Events

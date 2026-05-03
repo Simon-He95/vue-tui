@@ -4,6 +4,7 @@ import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent } from "../../events/index.js";
 import type { FramePerfReason } from "../../observability/frame-perf.js";
 import type { TLogDataSource, TLogViewScrollPayload } from "../log/types.js";
+import { parseAnsiSgr } from "../../core/ansi/sgr.js";
 import {
   computed,
   defineComponent,
@@ -27,6 +28,7 @@ import {
   sanitizeInlineText,
   sliceByCellsRange,
   spaces,
+  textCellWidth,
   wrapByCells,
 } from "../utils/text.js";
 import {
@@ -47,6 +49,31 @@ type TLogRenderCacheEntry = {
 type TLogWrapCacheEntry = {
   key: TLogRenderCacheKey;
   visualRows: readonly string[];
+  touchedAt: number;
+};
+type TLogStyledSegment = Readonly<{
+  text: string;
+  style: Style;
+}>;
+type TLogVisualSegment = Readonly<{
+  text: string;
+  cells: number;
+  style: Style;
+}>;
+type TLogVisualRow = readonly TLogVisualSegment[];
+type TLogAnsiLineCacheEntry = {
+  key: TLogRenderCacheKey;
+  segments: readonly TLogStyledSegment[];
+  touchedAt: number;
+};
+type TLogAnsiWrapCacheEntry = {
+  key: TLogRenderCacheKey;
+  visualRows: readonly TLogVisualRow[];
+  touchedAt: number;
+};
+type TLogAnsiRowCacheEntry = {
+  key: TLogRenderCacheKey;
+  visualSegments: readonly TLogVisualSegment[];
   touchedAt: number;
 };
 type LocatedVisualRow = {
@@ -102,6 +129,192 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
   return { deltaY, mode: "auto" };
 }
 
+function sanitizeAnsiInlineText(text: string): string {
+  const sanitized = sanitizeInlineText(text);
+  if (!sanitized) return "";
+  const out: string[] = [];
+
+  for (let i = 0; i < sanitized.length; i++) {
+    const code = sanitized.charCodeAt(i);
+    if (code === 0x1b) {
+      const next = sanitized[i + 1];
+      if (next === "[") {
+        let j = i + 2;
+        while (j < sanitized.length) {
+          const c = sanitized.charCodeAt(j);
+          if (c >= 0x40 && c <= 0x7e) break;
+          j++;
+        }
+        if (j >= sanitized.length) break;
+        i = j;
+        continue;
+      }
+      if (next === "]") {
+        let j = i + 2;
+        while (j < sanitized.length) {
+          const c = sanitized.charCodeAt(j);
+          if (c === 0x07) break;
+          if (c === 0x1b && sanitized[j + 1] === "\\") {
+            j++;
+            break;
+          }
+          j++;
+        }
+        if (j >= sanitized.length) break;
+        i = j;
+        continue;
+      }
+      continue;
+    }
+    if (code <= 0x1f || code === 0x7f) continue;
+    out.push(sanitized[i]!);
+  }
+
+  return out.join("");
+}
+
+function mergeAnsiStyle(baseStyle: Style, style: Style): Style {
+  return { ...baseStyle, ...style };
+}
+
+function parseAnsiLineToSegments(text: string, baseStyle: Style): readonly TLogStyledSegment[] {
+  const out: TLogStyledSegment[] = [];
+
+  for (const seg of parseAnsiSgr(text, baseStyle)) {
+    const clean = sanitizeAnsiInlineText(seg.text);
+    if (!clean) continue;
+    out.push({
+      text: clean,
+      style: mergeAnsiStyle(baseStyle, seg.style),
+    });
+  }
+
+  return out;
+}
+
+function styleCacheKey(style: Style): string {
+  return JSON.stringify([
+    style.fg ?? "",
+    style.bg ?? "",
+    style.bold ? 1 : 0,
+    style.dim ? 1 : 0,
+    style.italic ? 1 : 0,
+    style.underline ? 1 : 0,
+    style.inverse ? 1 : 0,
+    style.href ?? "",
+  ]);
+}
+
+function clipStyledSegmentsByCells(
+  segments: readonly TLogStyledSegment[],
+  startCell: number,
+  endCell: number,
+): readonly TLogVisualSegment[] {
+  const out: TLogVisualSegment[] = [];
+  let cursor = 0;
+
+  for (const seg of segments) {
+    const cells = textCellWidth(seg.text);
+    const next = cursor + cells;
+    if (next > startCell && cursor < endCell) {
+      const text = sliceByCellsRange(
+        seg.text,
+        Math.max(0, startCell - cursor),
+        Math.min(cells, endCell - cursor),
+      );
+      const visibleCells = textCellWidth(text);
+      if (text && visibleCells > 0) {
+        out.push({
+          text,
+          cells: visibleCells,
+          style: seg.style,
+        });
+      }
+    }
+    cursor = next;
+    if (cursor >= endCell) break;
+  }
+
+  return out;
+}
+
+function clipVisualSegmentsByCells(
+  segments: readonly TLogVisualSegment[],
+  startCell: number,
+  endCell: number,
+): readonly TLogVisualSegment[] {
+  const out: TLogVisualSegment[] = [];
+  let cursor = 0;
+
+  for (const seg of segments) {
+    const next = cursor + seg.cells;
+    if (next > startCell && cursor < endCell) {
+      const text = sliceByCellsRange(
+        seg.text,
+        Math.max(0, startCell - cursor),
+        Math.min(seg.cells, endCell - cursor),
+      );
+      const visibleCells = textCellWidth(text);
+      if (text && visibleCells > 0) {
+        out.push({
+          text,
+          cells: visibleCells,
+          style: seg.style,
+        });
+      }
+    }
+    cursor = next;
+    if (cursor >= endCell) break;
+  }
+
+  return out;
+}
+
+function wrapStyledSegmentsByCells(
+  segments: readonly TLogStyledSegment[],
+  width: number,
+): readonly TLogVisualRow[] {
+  width = Math.max(1, Math.floor(width));
+  if (!segments.length) return [[]];
+
+  const rows: TLogVisualSegment[][] = [[]];
+  let row = rows[0]!;
+  let rowCells = 0;
+
+  for (const seg of segments) {
+    const totalCells = textCellWidth(seg.text);
+    let offset = 0;
+    while (offset < totalCells) {
+      if (rowCells >= width) {
+        row = [];
+        rows.push(row);
+        rowCells = 0;
+      }
+
+      const remaining = totalCells - offset;
+      const available = Math.max(1, width - rowCells);
+      let text = sliceByCellsRange(seg.text, offset, offset + Math.min(available, remaining));
+      let cells = textCellWidth(text);
+
+      if (!text && available < remaining) {
+        text = sliceByCellsRange(seg.text, offset, offset + available + 1);
+        cells = textCellWidth(text);
+      }
+      if (!text || cells <= 0) break;
+
+      row.push({
+        text,
+        cells,
+        style: seg.style,
+      });
+      rowCells += cells;
+      offset += cells;
+    }
+  }
+
+  return rows;
+}
+
 export const TLogView = defineComponent({
   name: "TLogView",
   props: {
@@ -134,6 +347,7 @@ export const TLogView = defineComponent({
     autoStickToBottom: { type: Boolean, default: true },
     overscan: { type: Number, default: 2 },
     wrap: { type: Boolean, default: false },
+    ansi: { type: Boolean, default: false },
     rowScrollMode: {
       type: String as PropType<RowScrollMode>,
       default: "off",
@@ -167,6 +381,9 @@ export const TLogView = defineComponent({
     let cacheClock = 0;
     const renderLineCache = new Map<TLogRenderCacheKey, TLogRenderCacheEntry>();
     const wrapLineCache = new Map<TLogRenderCacheKey, TLogWrapCacheEntry>();
+    const ansiLineCache = new Map<TLogRenderCacheKey, TLogAnsiLineCacheEntry>();
+    const ansiWrapCache = new Map<TLogRenderCacheKey, TLogAnsiWrapCacheEntry>();
+    const ansiRowCache = new Map<TLogRenderCacheKey, TLogAnsiRowCacheEntry>();
     const wheelState = createWheelScrollState();
     // Unknown wrapped lines count as one row until measured, so large bottom mounts avoid full-source wrapping.
     let visualIndexWidth = 0;
@@ -246,6 +463,39 @@ export const TLogView = defineComponent({
       return JSON.stringify([key, width]);
     }
 
+    function ansiLineCacheKey(key: TLogLineKey, baseStyleKey: string): TLogRenderCacheKey {
+      return JSON.stringify(["ansi-line", key, baseStyleKey]);
+    }
+
+    function ansiWrapCacheKey(
+      key: TLogLineKey,
+      width: number,
+      baseStyleKey: string,
+    ): TLogRenderCacheKey {
+      return JSON.stringify(["ansi-wrap", key, width, baseStyleKey]);
+    }
+
+    function ansiRowCacheKey(
+      kind: "fixed" | "wrapped",
+      key: TLogLineKey,
+      partIndex: number,
+      fullW: number,
+      clipX: number,
+      visibleW: number,
+      baseStyleKey: string,
+    ): TLogRenderCacheKey {
+      return JSON.stringify([
+        "ansi-row",
+        kind,
+        key,
+        partIndex,
+        fullW,
+        clipX,
+        visibleW,
+        baseStyleKey,
+      ]);
+    }
+
     function visualLineKey(key: TLogLineKey, partIndex: number): TLogRenderCacheKey {
       return JSON.stringify([key, "part", partIndex]);
     }
@@ -272,9 +522,42 @@ export const TLogView = defineComponent({
       }
     }
 
+    function trimAnsiLineCache(): void {
+      const max = DEFAULT_LOG_RENDER_CACHE_SIZE;
+      if (ansiLineCache.size <= max) return;
+
+      const entries = Array.from(ansiLineCache.values()).sort((a, b) => a.touchedAt - b.touchedAt);
+      for (const entry of entries.slice(0, ansiLineCache.size - max)) {
+        ansiLineCache.delete(entry.key);
+      }
+    }
+
+    function trimAnsiWrapCache(): void {
+      const max = DEFAULT_LOG_WRAP_CACHE_SIZE;
+      if (ansiWrapCache.size <= max) return;
+
+      const entries = Array.from(ansiWrapCache.values()).sort((a, b) => a.touchedAt - b.touchedAt);
+      for (const entry of entries.slice(0, ansiWrapCache.size - max)) {
+        ansiWrapCache.delete(entry.key);
+      }
+    }
+
+    function trimAnsiRowCache(): void {
+      const max = DEFAULT_LOG_RENDER_CACHE_SIZE;
+      if (ansiRowCache.size <= max) return;
+
+      const entries = Array.from(ansiRowCache.values()).sort((a, b) => a.touchedAt - b.touchedAt);
+      for (const entry of entries.slice(0, ansiRowCache.size - max)) {
+        ansiRowCache.delete(entry.key);
+      }
+    }
+
     function clearLineCaches(): void {
       renderLineCache.clear();
       wrapLineCache.clear();
+      ansiLineCache.clear();
+      ansiWrapCache.clear();
+      ansiRowCache.clear();
     }
 
     function renderLine(
@@ -348,6 +631,121 @@ export const TLogView = defineComponent({
         touchedAt: ++cacheClock,
       });
       return line;
+    }
+
+    function ansiSegmentsForLine(
+      index: number,
+      count: number,
+      baseStyle: Style,
+      baseStyleKey: string,
+    ): readonly TLogStyledSegment[] {
+      if (index < 0 || index >= count) return [];
+
+      const rawKey = lineKey(index);
+      const key = ansiLineCacheKey(rawKey, baseStyleKey);
+      const cached = ansiLineCache.get(key);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.segments;
+      }
+
+      const segments = parseAnsiLineToSegments(props.source.getLine(index), baseStyle);
+      ansiLineCache.set(key, {
+        key,
+        segments,
+        touchedAt: ++cacheClock,
+      });
+      return segments;
+    }
+
+    function ansiWrappedRowsForLine(
+      index: number,
+      count: number,
+      width: number,
+      baseStyle: Style,
+      baseStyleKey: string,
+    ): readonly TLogVisualRow[] {
+      if (index < 0 || index >= count) return [[]];
+
+      width = Math.max(1, Math.floor(width));
+      const rawKey = lineKey(index);
+      const key = ansiWrapCacheKey(rawKey, width, baseStyleKey);
+      const cached = ansiWrapCache.get(key);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.visualRows;
+      }
+
+      const segments = ansiSegmentsForLine(index, count, baseStyle, baseStyleKey);
+      const rows = wrapStyledSegmentsByCells(segments, width);
+      ansiWrapCache.set(key, {
+        key,
+        visualRows: rows,
+        touchedAt: ++cacheClock,
+      });
+      return rows;
+    }
+
+    function ansiFixedRowForLine(
+      index: number,
+      count: number,
+      fullW: number,
+      clipX: number,
+      visibleW: number,
+      baseStyle: Style,
+      baseStyleKey: string,
+    ): readonly TLogVisualSegment[] {
+      if (index < 0 || index >= count) return [];
+
+      const rawKey = lineKey(index);
+      const key = ansiRowCacheKey("fixed", rawKey, 0, fullW, clipX, visibleW, baseStyleKey);
+      const cached = ansiRowCache.get(key);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.visualSegments;
+      }
+
+      const segments = ansiSegmentsForLine(index, count, baseStyle, baseStyleKey);
+      const visualSegments = clipStyledSegmentsByCells(segments, clipX, clipX + visibleW);
+      ansiRowCache.set(key, {
+        key,
+        visualSegments,
+        touchedAt: ++cacheClock,
+      });
+      return visualSegments;
+    }
+
+    function ansiClippedVisualRow(
+      rawKey: TLogLineKey,
+      partIndex: number,
+      rawRow: TLogVisualRow,
+      fullW: number,
+      clipX: number,
+      visibleW: number,
+      baseStyleKey: string,
+    ): readonly TLogVisualSegment[] {
+      const key = ansiRowCacheKey(
+        "wrapped",
+        rawKey,
+        partIndex,
+        fullW,
+        clipX,
+        visibleW,
+        baseStyleKey,
+      );
+      const cached = ansiRowCache.get(key);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.visualSegments;
+      }
+
+      const visualSegments = clipVisualSegmentsByCells(rawRow, clipX, clipX + visibleW);
+      ansiRowCache.set(key, {
+        key,
+        visualSegments,
+        touchedAt: ++cacheClock,
+      });
+      return visualSegments;
     }
 
     function currentWrapWidth(): number {
@@ -424,7 +822,16 @@ export const TLogView = defineComponent({
       const key = lineKey(index);
       if (visualKeys[index] === key) return;
 
-      const rows = wrappedRowsForLine(index, visualIndexLineCount, visualIndexWidth);
+      const base = props.style ?? defaultStyle.value;
+      const rows = props.ansi
+        ? ansiWrappedRowsForLine(
+            index,
+            visualIndexLineCount,
+            visualIndexWidth,
+            base,
+            styleCacheKey(base),
+          )
+        : wrappedRowsForLine(index, visualIndexLineCount, visualIndexWidth);
       const nextCount = Math.max(1, rows.length);
       const prevCount = visualCounts[index] ?? 1;
       if (nextCount !== prevCount) {
@@ -1102,7 +1509,7 @@ export const TLogView = defineComponent({
       },
     );
 
-    watch([() => props.source, () => props.wrap, () => fullRect.value.w], () => {
+    watch([() => props.source, () => props.wrap, () => props.ansi, () => fullRect.value.w], () => {
       clearLineCaches();
     });
 
@@ -1110,6 +1517,7 @@ export const TLogView = defineComponent({
       [
         () => props.source,
         () => props.wrap,
+        () => props.ansi,
         () => fullRect.value.w,
         () => fullRect.value.y,
         () => fullRect.value.h,
@@ -1163,6 +1571,7 @@ export const TLogView = defineComponent({
         fullRect.value,
         props.source,
         props.wrap,
+        props.ansi,
         focused.value,
         props.style,
         defaultStyle.value,
@@ -1175,9 +1584,22 @@ export const TLogView = defineComponent({
         const full = normalizedFullRect();
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
+        const baseStyleKey = styleCacheKey(base);
         const count = lineCount();
         const top = currentScrollTop();
         const { x: clipX, y: clipY } = clipOffsets();
+
+        const writeStyledRow = (segments: readonly TLogVisualSegment[], y: number): void => {
+          let cx = r.x;
+          let used = 0;
+          for (const seg of segments) {
+            if (!seg.text) continue;
+            terminal.write(seg.text, { x: cx, y, style: seg.style });
+            cx += seg.cells;
+            used += seg.cells;
+          }
+          if (used < r.w) terminal.write(spaces(r.w - used), { x: cx, y, style: base });
+        };
 
         const paintRow = (y: number): void => {
           if (y < r.y || y >= r.y + r.h) return;
@@ -1190,6 +1612,34 @@ export const TLogView = defineComponent({
             }
 
             const rawKey = lineKey(located.lineIndex);
+            if (props.ansi) {
+              const wrappedRows = ansiWrappedRowsForLine(
+                located.lineIndex,
+                count,
+                full.w,
+                base,
+                baseStyleKey,
+              );
+              if (
+                located.lineIndex === count - 1 &&
+                located.partIndex === wrappedRows.length - 1 &&
+                y === r.y + r.h - 1
+              ) {
+                lastPaintedBottom = { index: located.lineIndex, lineKey: rawKey };
+              }
+              const visualSegments = ansiClippedVisualRow(
+                rawKey,
+                located.partIndex,
+                wrappedRows[located.partIndex] ?? [],
+                full.w,
+                clipX,
+                r.w,
+                baseStyleKey,
+              );
+              writeStyledRow(visualSegments, y);
+              return;
+            }
+
             const wrappedRows = wrappedRowsForLine(located.lineIndex, count, full.w);
             if (
               located.lineIndex === count - 1 &&
@@ -1213,6 +1663,19 @@ export const TLogView = defineComponent({
           if (idx === count - 1 && y === r.y + r.h - 1) {
             lastPaintedBottom = { index: idx, lineKey: lineKey(idx) };
           }
+          if (props.ansi) {
+            const visualSegments = ansiFixedRowForLine(
+              idx,
+              count,
+              full.w,
+              clipX,
+              r.w,
+              base,
+              baseStyleKey,
+            );
+            writeStyledRow(visualSegments, y);
+            return;
+          }
           const line = renderLine(idx, count, full.w, clipX, r.w);
           terminal.write(line, { x: r.x, y, style: base });
         };
@@ -1222,11 +1685,17 @@ export const TLogView = defineComponent({
           for (const y of rows) paintRow(y);
           trimRenderCache();
           trimWrapCache();
+          trimAnsiLineCache();
+          trimAnsiWrapCache();
+          trimAnsiRowCache();
           return;
         }
         for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
         trimRenderCache();
         trimWrapCache();
+        trimAnsiLineCache();
+        trimAnsiWrapCache();
+        trimAnsiRowCache();
       },
     }));
 
