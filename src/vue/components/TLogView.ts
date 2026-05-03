@@ -92,7 +92,7 @@ type TLogVisibleLinkSegment = Readonly<{
   startCell: number;
   endCell: number;
 }>;
-type TLogSearchStatus = "idle" | "scanning" | "done";
+type TLogSearchStatus = "idle" | "scanning" | "done" | "error";
 type TLogSearchLineMatch = Readonly<{
   startCell: number;
   endCell: number;
@@ -107,11 +107,28 @@ type LocatedVisualRow = {
   lineIndex: number;
   partIndex: number;
 };
+export type TLogViewSearchMode = "text" | "regex";
+export type TLogViewSearchError = Readonly<{
+  kind: "invalid-regex";
+  query: string;
+  flags: string;
+  message: string;
+}>;
+type CompiledSearch = Readonly<{
+  key: string;
+  query: string;
+  mode: TLogViewSearchMode;
+  error: TLogViewSearchError | null;
+  findLineMatches: (text: string) => readonly TLogSearchLineMatch[];
+}>;
 export type TLogViewSearchOptions = Readonly<{
+  mode?: TLogViewSearchMode;
   caseSensitive?: boolean;
   wholeWord?: boolean;
   maxMatches?: number;
   scanBudgetMs?: number;
+  regexFlags?: string;
+  maxMatchesPerLine?: number;
 }>;
 export type TLogViewSearchMatch = Readonly<{
   absoluteLineIndex: number;
@@ -146,11 +163,13 @@ export type TLogViewSearchState = Readonly<{
   status: TLogSearchStatus;
   matchCount: number;
   currentMatchIndex: number;
+  error?: TLogViewSearchError | null;
 }>;
 export type TLogViewSearchPayload = Readonly<{
   query: string;
   status: TLogSearchStatus;
   matchCount: number;
+  error?: TLogViewSearchError | null;
 }>;
 export type TLogViewSearchMatchPayload = Readonly<{
   match: TLogViewSearchMatch | null;
@@ -257,6 +276,7 @@ const DEFAULT_LOG_WRAP_CACHE_SIZE = 2_000;
 const DEFAULT_VISUAL_INDEX_CAPACITY = 1_024;
 const DEFAULT_SEARCH_MAX_MATCHES = 10_000;
 const DEFAULT_SEARCH_SCAN_BUDGET_MS = 4;
+const DEFAULT_SEARCH_MAX_MATCHES_PER_LINE = 1_000;
 const DEFAULT_VISUAL_INDEX_MEASURE_BUDGET_MS = 4;
 const DEFAULT_SEARCH_RESULTS_PREVIEW_WIDTH = 80;
 const DEFAULT_SEARCH_RESULTS_CONTEXT_CELLS = 24;
@@ -489,6 +509,57 @@ function isAsciiWordChar(ch: string | undefined): boolean {
     (code >= 97 && code <= 122) ||
     code === 95
   );
+}
+
+function advanceRegexLastIndex(text: string, lastIndex: number, unicode: boolean): number {
+  if (lastIndex >= text.length) return lastIndex + 1;
+  if (!unicode) return lastIndex + 1;
+
+  const first = text.charCodeAt(lastIndex);
+  if (first >= 0xd800 && first <= 0xdbff && lastIndex + 1 < text.length) {
+    const second = text.charCodeAt(lastIndex + 1);
+    if (second >= 0xdc00 && second <= 0xdfff) return lastIndex + 2;
+  }
+
+  return lastIndex + 1;
+}
+
+function findRegexLineMatches(
+  text: string,
+  regex: RegExp,
+  maxMatchesPerLine: number,
+): readonly TLogSearchLineMatch[] {
+  if (maxMatchesPerLine <= 0) return [];
+
+  regex.lastIndex = 0;
+  const out: TLogSearchLineMatch[] = [];
+
+  while (out.length < maxMatchesPerLine) {
+    const match = regex.exec(text);
+    if (!match) break;
+
+    const matchedText = match[0] ?? "";
+    const startIndex = match.index;
+    const endIndex = startIndex + matchedText.length;
+
+    if (matchedText.length > 0) {
+      const startCell = stringIndexToCell(text, startIndex);
+      const endCell = stringIndexToCell(text, endIndex);
+      if (endCell > startCell) {
+        out.push({
+          startCell,
+          endCell,
+          text: matchedText,
+        });
+      }
+    }
+
+    if (matchedText.length === 0) {
+      regex.lastIndex = advanceRegexLastIndex(text, regex.lastIndex, regex.unicode);
+    }
+  }
+
+  return out;
 }
 
 function clipStyledSegmentsByCells(
@@ -736,6 +807,14 @@ export const TLogView = defineComponent({
     let searchGeneration = 0;
     let searchCursor = 0;
     let searchStatus: TLogSearchStatus = "idle";
+    let searchError: TLogViewSearchError | null = null;
+    let compiledSearch: CompiledSearch = {
+      key: '["text","",""]',
+      query: "",
+      mode: "text",
+      error: null,
+      findLineMatches: () => [],
+    };
     let currentMatchIndex = -1;
     let searchMatches: TLogViewSearchMatch[] = [];
     let searchMarkersGeneration = 0;
@@ -1186,15 +1265,111 @@ export const TLogView = defineComponent({
       return Math.max(0, n);
     }
 
-    function searchLineCacheKey(rawKey: TLogLineKey, query: string): TLogRenderCacheKey {
-      return JSON.stringify([
-        "search-line",
-        rawKey,
-        props.ansi ? 1 : 0,
-        props.searchOptions?.caseSensitive ? 1 : 0,
-        props.searchOptions?.wholeWord ? 1 : 0,
+    function searchMode(): TLogViewSearchMode {
+      return props.searchOptions?.mode === "regex" ? "regex" : "text";
+    }
+
+    function normalizedMaxMatchesPerLine(): number {
+      const n = Math.floor(
+        Number(props.searchOptions?.maxMatchesPerLine ?? DEFAULT_SEARCH_MAX_MATCHES_PER_LINE),
+      );
+      if (!Number.isFinite(n)) return DEFAULT_SEARCH_MAX_MATCHES_PER_LINE;
+      return Math.max(0, n);
+    }
+
+    function normalizeRegexFlags(): string {
+      const flags = new Set<string>();
+      for (const ch of props.searchOptions?.regexFlags ?? "") {
+        if (ch === "g" || ch === "y") continue;
+        flags.add(ch);
+      }
+      if (props.searchOptions?.caseSensitive !== true) flags.add("i");
+      flags.add("g");
+      return Array.from(flags).join("");
+    }
+
+    function compileTextSearch(query: string): CompiledSearch {
+      const caseSensitive = props.searchOptions?.caseSensitive === true;
+      const wholeWord = props.searchOptions?.wholeWord === true;
+      const haystackQuery = caseSensitive ? query : query.toLowerCase();
+      return {
+        key: JSON.stringify(["text", query, caseSensitive ? 1 : 0, wholeWord ? 1 : 0]),
         query,
-      ]);
+        mode: "text",
+        error: null,
+        findLineMatches: (text) => {
+          if (!haystackQuery) return [];
+          const haystack = caseSensitive ? text : text.toLowerCase();
+          const out: TLogSearchLineMatch[] = [];
+          let from = 0;
+          while (from <= haystack.length) {
+            const index = haystack.indexOf(haystackQuery, from);
+            if (index < 0) break;
+            const endIndex = index + haystackQuery.length;
+            if (
+              !wholeWord ||
+              (!isAsciiWordChar(text[index - 1]) && !isAsciiWordChar(text[endIndex]))
+            ) {
+              const startCell = stringIndexToCell(text, index);
+              const endCell = stringIndexToCell(text, endIndex);
+              if (endCell > startCell) {
+                out.push({
+                  startCell,
+                  endCell,
+                  text: text.slice(index, endIndex),
+                });
+              }
+            }
+            from = index + Math.max(1, haystackQuery.length);
+          }
+          return out;
+        },
+      };
+    }
+
+    function compileRegexSearch(query: string): CompiledSearch {
+      const flags = normalizeRegexFlags();
+      try {
+        const regex = new RegExp(query, flags);
+        const maxMatchesPerLine = normalizedMaxMatchesPerLine();
+        return {
+          key: JSON.stringify(["regex", query, flags, maxMatchesPerLine]),
+          query,
+          mode: "regex",
+          error: null,
+          findLineMatches: (text) => findRegexLineMatches(text, regex, maxMatchesPerLine),
+        };
+      } catch (error) {
+        return {
+          key: JSON.stringify(["regex-error", query, flags]),
+          query,
+          mode: "regex",
+          error: {
+            kind: "invalid-regex",
+            query,
+            flags,
+            message: error instanceof Error ? error.message : String(error),
+          },
+          findLineMatches: () => [],
+        };
+      }
+    }
+
+    function compileSearch(query: string): CompiledSearch {
+      if (!query) {
+        return {
+          key: `["${searchMode()}","",""]`,
+          query: "",
+          mode: searchMode(),
+          error: null,
+          findLineMatches: () => [],
+        };
+      }
+      return searchMode() === "regex" ? compileRegexSearch(query) : compileTextSearch(query);
+    }
+
+    function searchLineCacheKey(rawKey: TLogLineKey, searchKey: string): TLogRenderCacheKey {
+      return JSON.stringify(["search-line", rawKey, props.ansi ? 1 : 0, searchKey]);
     }
 
     function searchPayload(query = normalizedSearchQuery()): TLogViewSearchPayload {
@@ -1202,6 +1377,7 @@ export const TLogView = defineComponent({
         query,
         status: searchStatus,
         matchCount: searchMatches.length,
+        error: searchError,
       };
     }
 
@@ -1420,54 +1596,23 @@ export const TLogView = defineComponent({
       };
     }
 
-    function findLineSearchMatches(text: string, query: string): readonly TLogSearchLineMatch[] {
-      if (!query) return [];
-      const caseSensitive = props.searchOptions?.caseSensitive === true;
-      const wholeWord = props.searchOptions?.wholeWord === true;
-      const haystack = caseSensitive ? text : text.toLowerCase();
-      const needle = caseSensitive ? query : query.toLowerCase();
-      if (!needle) return [];
-
-      const out: TLogSearchLineMatch[] = [];
-      let from = 0;
-      while (from <= haystack.length) {
-        const index = haystack.indexOf(needle, from);
-        if (index < 0) break;
-        const endIndex = index + needle.length;
-        if (!wholeWord || (!isAsciiWordChar(text[index - 1]) && !isAsciiWordChar(text[endIndex]))) {
-          const startCell = stringIndexToCell(text, index);
-          const endCell = stringIndexToCell(text, endIndex);
-          if (endCell > startCell) {
-            out.push({
-              startCell,
-              endCell,
-              text: text.slice(index, endIndex),
-            });
-          }
-        }
-        from = index + Math.max(1, needle.length);
-      }
-      return out;
-    }
-
     function cachedLineSearchMatches(
       index: number,
       count: number,
-      query: string,
+      search: CompiledSearch,
       baseStyle: Style,
       baseStyleKey: string,
     ): readonly TLogSearchLineMatch[] {
       const rawKey = lineKey(index);
-      const key = searchLineCacheKey(rawKey, query);
+      const key = searchLineCacheKey(rawKey, search.key);
       const cached = searchLineCache.get(key);
       if (cached) {
         cached.touchedAt = ++cacheClock;
         return cached.matches;
       }
 
-      const matches = findLineSearchMatches(
+      const matches = search.findLineMatches(
         searchableTextForLine(index, count, baseStyle, baseStyleKey),
-        query,
       );
       searchLineCache.set(key, {
         key,
@@ -1480,14 +1625,14 @@ export const TLogView = defineComponent({
     function scanSearchLine(
       index: number,
       count: number,
-      query: string,
+      search: CompiledSearch,
       baseStyle: Style,
       baseStyleKey: string,
       maxMatches: number,
       absoluteBase: number,
     ): void {
       if (searchMatches.length >= maxMatches) return;
-      const lineMatches = cachedLineSearchMatches(index, count, query, baseStyle, baseStyleKey);
+      const lineMatches = cachedLineSearchMatches(index, count, search, baseStyle, baseStyleKey);
       for (const match of lineMatches) {
         if (searchMatches.length >= maxMatches) return;
         addSearchMatch({
@@ -1503,9 +1648,9 @@ export const TLogView = defineComponent({
     function scanSearchChunk(generation: number, ctx: TerminalFrameContext): void {
       if (generation !== searchGeneration || !alive) return;
 
-      const query = normalizedSearchQuery();
-      if (!query) {
+      if (!compiledSearch.query) {
         searchStatus = "idle";
+        searchError = null;
         clearSearchMatches();
         emitSearch("");
         emitSearchMatch();
@@ -1527,7 +1672,15 @@ export const TLogView = defineComponent({
         searchMatches.length < maxMatches &&
         (scanned === 0 || ctx.now() - started < budget)
       ) {
-        scanSearchLine(searchCursor, count, query, base, baseStyleKey, maxMatches, absoluteBase);
+        scanSearchLine(
+          searchCursor,
+          count,
+          compiledSearch,
+          base,
+          baseStyleKey,
+          maxMatches,
+          absoluteBase,
+        );
         searchCursor++;
         scanned++;
       }
@@ -1545,7 +1698,8 @@ export const TLogView = defineComponent({
       }
 
       searchStatus = "done";
-      emitSearch(query);
+      searchError = null;
+      emitSearch(compiledSearch.query);
       emitSearchMarkers(true);
       markViewportDirty();
       ctx.invalidate({ priority: "low", plane: plane.value, reason: "data" });
@@ -1560,7 +1714,9 @@ export const TLogView = defineComponent({
       searchCursor = 0;
 
       if (!query) {
+        compiledSearch = compileSearch("");
         searchStatus = "idle";
+        searchError = null;
         if (hadSearchState) {
           clearSearchMatches();
           emitSearch("");
@@ -1572,7 +1728,19 @@ export const TLogView = defineComponent({
         return;
       }
 
+      compiledSearch = compileSearch(query);
       clearSearchMatches();
+      searchError = compiledSearch.error;
+      if (compiledSearch.error) {
+        searchStatus = "error";
+        emitSearch(query);
+        emitSearchMatch();
+        emitSearchMarkers(true);
+        markViewportDirty();
+        invalidateSelf("normal", "data");
+        return;
+      }
+
       searchStatus = "scanning";
       emitSearch(query);
       emitSearchMatch();
@@ -3013,7 +3181,9 @@ export const TLogView = defineComponent({
 
       searchGeneration++;
       searchCursor = 0;
+      compiledSearch = compileSearch("");
       searchStatus = "idle";
+      searchError = null;
       clearSearchMatches();
       emitSearch("");
       emitSearchMatch();
@@ -3028,6 +3198,7 @@ export const TLogView = defineComponent({
         status: searchStatus,
         matchCount: searchMatches.length,
         currentMatchIndex,
+        error: searchError,
       };
     }
 
@@ -3220,8 +3391,11 @@ export const TLogView = defineComponent({
     watch(
       [
         () => props.searchQuery,
+        () => props.searchOptions?.mode,
         () => props.searchOptions?.caseSensitive,
         () => props.searchOptions?.wholeWord,
+        () => props.searchOptions?.regexFlags,
+        () => props.searchOptions?.maxMatchesPerLine,
         () => props.searchOptions?.maxMatches,
         () => props.ansi,
         () => props.links,

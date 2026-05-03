@@ -576,4 +576,82 @@ describe("TLogScrollbar", () => {
       app.dispose();
     }
   });
+
+  it("integrates regex search markers from TLogView", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const metrics = ref<TLogViewScrollMetrics | null>(null);
+    const markers = ref<readonly TLogScrollbarMarker[]>([]);
+    const source: TLogDataSource = {
+      lineCount: () => 8,
+      getLine: (index) =>
+        [
+          "ok line-0",
+          "ok line-1",
+          "error line-2",
+          "ok line-3",
+          "ok line-4",
+          "ok line-5",
+          "error line-6",
+          "ok line-7",
+        ][index] ?? "",
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogScrollbarRegexMarkersIntegrationApp",
+      setup() {
+        const refresh = () => {
+          metrics.value = logView.value?.getScrollMetrics() ?? null;
+          markers.value =
+            logView.value?.getSearchMarkers().map((marker) => ({
+              id: marker.matchIndex,
+              visualRow: marker.visualRow,
+              current: marker.current,
+              estimated: marker.estimated,
+              payload: marker,
+            })) ?? [];
+        };
+
+        onMounted(refresh);
+
+        return () => [
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 19,
+            h: 4,
+            source,
+            version: 1,
+            defaultScrollTop: 0,
+            searchQuery: "error\\s+line-\\d",
+            searchOptions: { mode: "regex", scanBudgetMs: 1000 },
+            onScroll: refresh,
+            onVisualIndex: refresh,
+            onSearchMarkers: refresh,
+          }),
+          h(TLogScrollbar, {
+            x: 19,
+            y: 0,
+            h: 4,
+            metrics: metrics.value,
+            markers: markers.value,
+          }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(markers.value).toHaveLength(2);
+      expect(columnChars(app, 19, 4)).toContain("•");
+    } finally {
+      app.dispose();
+    }
+  });
 });

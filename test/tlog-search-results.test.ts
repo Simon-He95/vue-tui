@@ -357,4 +357,97 @@ describe("TLogSearchResults", () => {
       app.dispose();
     }
   });
+
+  it("integrates with regex search results from TLogView", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const results = ref<readonly TLogSearchResultItem[]>([]);
+    const activeIndex = ref(-1);
+    const query = ref("error\\s+line-\\d");
+    const source: TLogDataSource = {
+      lineCount: () => 6,
+      getLine: (index) =>
+        ["line-0", "line-1", "error line-2", "line-3", "error line-4", "line-5"][index] ?? "",
+      getLineKey: (index) => `line-${index}`,
+    };
+
+    const App = defineComponent({
+      name: "TLogSearchResultsRegexIntegrationApp",
+      setup() {
+        function refreshResults(): void {
+          const raw =
+            logView.value?.getSearchResults({
+              offset: 0,
+              limit: 10,
+              includePreview: true,
+              previewWidth: 18,
+            }) ?? [];
+          const state = logView.value?.getSearchState();
+          results.value = raw.map((entry) => ({
+            matchIndex: entry.matchIndex,
+            absoluteLineIndex: entry.match.absoluteLineIndex,
+            lineIndex: entry.match.index,
+            text: entry.preview?.text ?? "",
+            matchStartCell: entry.preview?.matchStartCell ?? 0,
+            matchEndCell: entry.preview?.matchEndCell ?? 0,
+            current: entry.matchIndex === state?.currentMatchIndex,
+          }));
+          activeIndex.value = raw.findIndex(
+            (entry) => entry.matchIndex === state?.currentMatchIndex,
+          );
+        }
+
+        function onSelect(payload: { matchIndex: number }): void {
+          logView.value?.selectSearchMatch(payload.matchIndex);
+          refreshResults();
+        }
+
+        onMounted(() => {
+          refreshResults();
+        });
+
+        return () =>
+          h("span", [
+            h(TLogView, {
+              ref: logView,
+              x: 0,
+              y: 0,
+              w: 20,
+              h: 4,
+              source,
+              version: 1,
+              searchQuery: query.value,
+              searchOptions: { mode: "regex", scanBudgetMs: 1000 },
+              onSearch: refreshResults,
+              onSearchMatch: refreshResults,
+            }),
+            h(TLogSearchResults, {
+              x: 21,
+              y: 0,
+              w: 19,
+              h: 4,
+              results: results.value,
+              activeIndex: activeIndex.value,
+              onSelect,
+            }),
+          ]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 40, rows: 4, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(results.value).toHaveLength(2);
+      expect(results.value[0]?.text).toContain("error line-2");
+      app.events.dispatch({ type: "click", cellX: 21, cellY: 1, time: Date.now() } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value!.getSearchState().currentMatchIndex).toBe(1);
+      expect(results.value[1]).toMatchObject({ current: true });
+    } finally {
+      app.dispose();
+    }
+  });
 });
