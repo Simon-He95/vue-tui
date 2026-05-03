@@ -1,16 +1,20 @@
 import type {
   TLogDataSource,
+  TLogScrollbarMarker,
   TLogViewHandle,
   TLogViewLinkClickPayload,
+  TLogViewScrollMetrics,
+  TLogViewSearchMarker,
 } from "../src/experimental.js";
 import { describe, expect, it, vi } from "vitest";
 import { createTerminalApp } from "../src/index.js";
-import { createAppendOnlyLogStore, TLogView } from "../src/experimental.js";
+import { createAppendOnlyLogStore, TLogScrollbar, TLogView } from "../src/experimental.js";
 import {
   defineComponent,
   h,
   mountTerminal,
   nextTick,
+  onMounted,
   ref,
   TText,
   useTerminal,
@@ -1768,7 +1772,152 @@ describe("TLogView", () => {
       await nextTick();
       app.scheduler.flushNow();
       expect(logView.value!.getSearchState().currentMatchIndex).toBe(1);
-      expect(rowText(app, 1)).toBe("error line-4");
+      expect(rowText(app, 1).startsWith("error line-4")).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("selectSearchMatch updates the current match and emits the selected payload", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const onSearchMatch = vi.fn();
+    const source: TLogDataSource = {
+      lineCount: () => 6,
+      getLine: (index) => (index === 1 || index === 4 ? `error line-${index}` : `ok line-${index}`),
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewSelectSearchMatchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            source,
+            version: 1,
+            defaultScrollTop: 0,
+            searchQuery: "error",
+            searchOptions: { scanBudgetMs: 1000 },
+            onSearchMatch,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      onSearchMatch.mockClear();
+
+      expect(logView.value!.selectSearchMatch(1)).toBe(true);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value!.getSearchState().currentMatchIndex).toBe(1);
+      expect(onSearchMatch).toHaveBeenLastCalledWith({
+        match: {
+          absoluteLineIndex: 4,
+          index: 4,
+          startCell: 0,
+          endCell: 5,
+          text: "error",
+        },
+        currentMatchIndex: 1,
+        matchCount: 2,
+      });
+      expect(rowText(app, 1).startsWith("error line-4")).toBe(true);
+      expect(rowStyles(app, 1)[0]).toMatchObject({
+        inverse: true,
+        bold: true,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("selectSearchMatch supports align and scroll=false without mutating getters", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const onScroll = vi.fn();
+    const onSearchMatch = vi.fn();
+    const getLine = vi.fn((index: number) => `line-${index}${index === 20 ? " error" : ""}`);
+    const source: TLogDataSource = {
+      lineCount: () => 30,
+      getLine,
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewSelectSearchMatchScrollOptionsApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            source,
+            version: 1,
+            defaultScrollTop: 0,
+            searchQuery: "error",
+            searchOptions: { scanBudgetMs: 1000 },
+            onScroll,
+            onSearchMatch,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.selectSearchMatch(0, { align: "start" })).toBe(true);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("line-20 error");
+      expect(logView.value!.getScrollMetrics().scrollTop).toBe(20);
+
+      onScroll.mockClear();
+      onSearchMatch.mockClear();
+      getLine.mockClear();
+      expect(logView.value!.selectSearchMatch(0, { scroll: false })).toBe(true);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value!.getSearchState().currentMatchIndex).toBe(0);
+      expect(rowText(app, 0)).toBe("line-20 error");
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(onSearchMatch).toHaveBeenCalledTimes(1);
+
+      const beforeState = logView.value!.getSearchState();
+      const beforeMetrics = logView.value!.getScrollMetrics();
+      onSearchMatch.mockClear();
+      getLine.mockClear();
+
+      expect(logView.value!.getSearchMatch(0)).toMatchObject({
+        index: 20,
+        text: "error",
+      });
+      expect(logView.value!.getSearchResults()).toEqual([
+        {
+          matchIndex: 0,
+          match: expect.objectContaining({
+            index: 20,
+            text: "error",
+          }),
+        },
+      ]);
+      expect(logView.value!.getSearchResults({ offset: 1, limit: 1 })).toEqual([]);
+      expect(logView.value!.getSearchState()).toEqual(beforeState);
+      expect(logView.value!.getScrollMetrics()).toEqual(beforeMetrics);
+      expect(onSearchMatch).not.toHaveBeenCalled();
+      expect(getLine).not.toHaveBeenCalled();
     } finally {
       app.dispose();
     }
@@ -1915,6 +2064,52 @@ describe("TLogView", () => {
     }
   });
 
+  it("selectSearchMatch navigates to the actual wrapped visual row for wide-character matches", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "ab中cd",
+      getLineKey: () => "wide-select",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWideWrapSelectSearchMatchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 3,
+            h: 1,
+            source,
+            version: 1,
+            wrap: true,
+            searchQuery: "中",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 3, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.selectSearchMatch(0)).toBe(true);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("中c");
+      expect(rowStyles(app, 0)[0]!).toMatchObject({
+        inverse: true,
+        bold: true,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("findNext navigates to the actual ANSI wrapped visual row for wide-character matches", async () => {
     const logView = ref<TLogViewHandle | null>(null);
     const source: TLogDataSource = {
@@ -1960,6 +2155,115 @@ describe("TLogView", () => {
       expect(styles[2]!.fg).toBe("red");
     } finally {
       app.dispose();
+    }
+  });
+
+  it("selectSearchMatch navigates to the actual ANSI wrapped visual row and preserves ANSI style", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mab中cd\x1b[0m",
+      getLineKey: () => "wide-ansi-select",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWideAnsiWrapSelectSearchMatchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 3,
+            h: 1,
+            source,
+            version: 1,
+            wrap: true,
+            ansi: true,
+            searchQuery: "中",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 3, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.selectSearchMatch(0)).toBe(true);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("中c");
+      const styles = rowStyles(app, 0);
+      expect(styles[0]!).toMatchObject({
+        fg: "red",
+        inverse: true,
+        bold: true,
+      });
+      expect(styles[2]!.fg).toBe("red");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("selectSearchMatch works after exact visual index measurement completes", async () => {
+    const raf = installManualRaf();
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 2,
+      getLine: (index) => (index === 0 ? "aaaa" : "bbbbcccc"),
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewExactSelectSearchMatchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 2,
+            source,
+            version: 1,
+            wrap: true,
+            visualIndexMode: "exact",
+            visualIndexOptions: { measureBudgetMs: 0 },
+            searchQuery: "cccc",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 3, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      await flushVisualIndex(logView.value!, raf);
+
+      expect(logView.value!.getSearchMarkers()[0]).toMatchObject({
+        visualRow: 2,
+        estimated: false,
+        current: false,
+      });
+
+      expect(logView.value!.selectSearchMatch(0)).toBe(true);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value!.getSearchState().currentMatchIndex).toBe(0);
+      expect(logView.value!.getSearchMarkers()[0]).toMatchObject({
+        visualRow: 2,
+        estimated: false,
+        current: true,
+      });
+      expect(rowText(app, 1)).toBe("cccc");
+    } finally {
+      app.dispose();
+      raf.restore();
     }
   });
 
@@ -2015,6 +2319,182 @@ describe("TLogView", () => {
         estimated: true,
         current: true,
       });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("selectSearchMatch returns false for invalid match indexes", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const onSearchMatch = vi.fn();
+    const onSearchMarkers = vi.fn();
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "error",
+      getLineKey: () => "invalid-index",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewInvalidSelectSearchMatchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "error",
+            searchOptions: { scanBudgetMs: 1000 },
+            onSearchMatch,
+            onSearchMarkers,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      onSearchMatch.mockClear();
+      onSearchMarkers.mockClear();
+
+      expect(logView.value!.selectSearchMatch(-1)).toBe(false);
+      expect(logView.value!.selectSearchMatch(999)).toBe(false);
+      expect(logView.value!.selectSearchMatch(Number.NaN)).toBe(false);
+      expect(logView.value!.getSearchMatch(Number.NaN)).toBeNull();
+      expect(logView.value!.getSearchMatch(999)).toBeNull();
+      expect(onSearchMatch).not.toHaveBeenCalled();
+      expect(onSearchMarkers).not.toHaveBeenCalled();
+      expect(logView.value!.getSearchState().currentMatchIndex).toBe(-1);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("updates current marker and current match style when a scrollbar marker selects a match", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const metrics = ref<TLogViewScrollMetrics | null>(null);
+    const markers = ref<readonly TLogScrollbarMarker[]>([]);
+    const onSearchMatch = vi.fn();
+    const source: TLogDataSource = {
+      lineCount: () => 6,
+      getLine: (index) => (index === 1 || index === 4 ? `error line-${index}` : `ok line-${index}`),
+      getLineKey: (index) => index,
+    };
+
+    function toScrollbarMarkers(
+      searchMarkers: readonly TLogViewSearchMarker[],
+    ): readonly TLogScrollbarMarker[] {
+      return searchMarkers.map((marker) => ({
+        id: marker.matchIndex,
+        visualRow: marker.visualRow,
+        current: marker.current,
+        estimated: marker.estimated,
+        payload: marker,
+      }));
+    }
+
+    const App = defineComponent({
+      name: "TLogViewScrollbarMarkerSelectionApp",
+      setup() {
+        function refreshMetrics() {
+          metrics.value = logView.value?.getScrollMetrics() ?? null;
+          markers.value = toScrollbarMarkers(logView.value?.getSearchMarkers() ?? []);
+        }
+
+        function onMarkerClick(payload: {
+          marker: TLogScrollbarMarker & { payload?: TLogViewSearchMarker };
+        }) {
+          const marker = payload.marker.payload;
+          if (!marker) return;
+          logView.value?.selectSearchMatch(marker.matchIndex, { align: "center" });
+          refreshMetrics();
+        }
+
+        onMounted(refreshMetrics);
+
+        return () =>
+          h("div", [
+            h(TLogView, {
+              ref: logView,
+              x: 0,
+              y: 0,
+              w: 11,
+              h: 3,
+              source,
+              version: 1,
+              defaultScrollTop: 0,
+              searchQuery: "error",
+              searchOptions: { scanBudgetMs: 1000 },
+              onSearchMatch,
+              onScroll: refreshMetrics,
+              onVisualIndex: refreshMetrics,
+              onSearchMarkers: refreshMetrics,
+            }),
+            h(TLogScrollbar, {
+              x: 11,
+              y: 0,
+              h: 6,
+              metrics: metrics.value,
+              markers: markers.value,
+              onMarkerClick,
+            }),
+          ]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 6, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(markers.value).toHaveLength(2);
+      expect(markers.value[1]).toMatchObject({
+        visualRow: 4,
+        current: false,
+      });
+
+      onSearchMatch.mockClear();
+      app.events.dispatch({
+        type: "click",
+        cellX: 11,
+        cellY: 4,
+      } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value!.getSearchState().currentMatchIndex).toBe(1);
+      expect(onSearchMatch).toHaveBeenLastCalledWith({
+        match: expect.objectContaining({
+          absoluteLineIndex: 4,
+          index: 4,
+          text: "error",
+        }),
+        currentMatchIndex: 1,
+        matchCount: 2,
+      });
+      expect(markers.value[1]).toMatchObject({
+        visualRow: 4,
+        current: true,
+      });
+      const visibleRows = [0, 1, 2].map((row) => rowText(app, row));
+      const matchRow = visibleRows.findIndex((text) => text.startsWith("error line-"));
+      expect(matchRow >= 0).toBe(true);
+      expect(rowStyles(app, matchRow)[0]).toMatchObject({
+        inverse: true,
+        bold: true,
+      });
+
+      logView.value!.findNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value!.getSearchState().currentMatchIndex).toBe(0);
     } finally {
       app.dispose();
     }
