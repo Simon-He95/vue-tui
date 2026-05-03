@@ -1035,19 +1035,29 @@ import {
 } from "@simon_he/vue-tui/experimental";
 
 const logView = ref<TLogViewHandle | null>(null);
-const links = useTLogLinkController(logView, {
+const linkController = useTLogLinkController(logView, {
   onAction(action) {
     console.log("Link action:", action.href, action.source);
   },
 });
+const {
+  visibleLinks,
+  activeIndex,
+  refresh,
+  focusVisibleLink,
+  clearFocus,
+  activateVisibleLink,
+  handleLinkClick,
+  handleLinkActivate,
+} = linkController;
 
 function refreshLinks() {
-  links.refresh();
+  refresh();
 }
 
 function onPanelActiveChange(payload: TLogLinksPanelActiveChangePayload) {
-  if (payload.activeIndex >= 0) links.focusVisibleLink(payload.activeIndex);
-  else links.clearFocus();
+  if (payload.item) focusVisibleLink(payload.item.visibleIndex);
+  else clearFocus();
 }
 </script>
 
@@ -1064,8 +1074,8 @@ function onPanelActiveChange(payload: TLogLinksPanelActiveChangePayload) {
   keyboard-links
   @scroll="refreshLinks"
   @linkFocus="refreshLinks"
-  @linkClick="links.handleLinkClick"
-  @linkActivate="links.handleLinkActivate"
+  @linkClick="handleLinkClick"
+  @linkActivate="handleLinkActivate"
 />
 
 <TLogLinksPanel
@@ -1073,11 +1083,11 @@ function onPanelActiveChange(payload: TLogLinksPanelActiveChangePayload) {
   :y="0"
   :w="19"
   :h="20"
-  :links="links.visibleLinks"
-  :active-index="links.activeIndex"
-  @select="({ visibleIndex }) => links.focusVisibleLink(visibleIndex)"
+  :links="visibleLinks"
+  :active-index="activeIndex"
+  @select="({ visibleIndex }) => focusVisibleLink(visibleIndex)"
   @activeChange="onPanelActiveChange"
-  @activate="({ visibleIndex }) => links.activateVisibleLink(visibleIndex)"
+  @activate="({ visibleIndex }) => activateVisibleLink(visibleIndex)"
 />
 ```
 

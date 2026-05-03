@@ -392,7 +392,7 @@ describe("TLogLinksPanel integration", () => {
         }
 
         function onActiveChange(payload: TLogLinksPanelActiveChangePayload): void {
-          if (payload.activeIndex >= 0) links.focusVisibleLink(payload.activeIndex);
+          if (payload.item) links.focusVisibleLink(payload.item.visibleIndex);
           else links.clearFocus();
         }
 
