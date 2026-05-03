@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -27,6 +27,13 @@ describe("package exports", () => {
     expect(experimental.TLogScrollbar).toBeTruthy();
     expect(experimental.TLogSearchResults).toBeTruthy();
     expect(experimental.createAppendOnlyLogStore).toBeTruthy();
+  });
+
+  it("re-exports TLogView link navigation types from the experimental entrypoint", () => {
+    const experimentalSource = readFileSync(resolve("src/experimental.ts"), "utf8");
+    expect(experimentalSource).toContain("TLogViewVisibleLink");
+    expect(experimentalSource).toContain("TLogViewLinkFocusPayload");
+    expect(experimentalSource).toContain("TLogViewLinkActivatePayload");
   });
 
   it.skipIf(!requireDistExports)("keeps built ESM/CJS experimental exports usable", async () => {
