@@ -96,13 +96,17 @@ export function useTLogLinkController(
   }
 
   function suppressProgrammaticActivation(link: TLogLinkPanelItem): void {
-    suppressedActivateKey = actionKey({
+    const key = actionKey({
       href: link.href,
       absoluteLineIndex: link.absoluteLineIndex,
       index: link.index,
       startCell: link.startCell,
       endCell: link.endCell,
       source: "programmatic",
+    });
+    suppressedActivateKey = key;
+    queueMicrotask(() => {
+      if (suppressedActivateKey === key) suppressedActivateKey = null;
     });
   }
 

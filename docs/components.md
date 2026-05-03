@@ -541,9 +541,10 @@ function measureRows() {
 - `visualIndexStatus="estimated" | "measuring" | "exact"` 会分别用不同 thumb 状态渲染，方便区分估算值、后台测量中和精确 visual-row index
 - `markers` 可以直接来自 `logView.value?.getSearchMarkers()`；scrollbar 只根据 marker 的 `visualRow` / `current` / `estimated` 渲染，不依赖 `TLogView` 私有状态
 - `markerClick` 只把当前可见的 marker row 回传给父组件；如果 marker 与 thumb 落在同一 row，thumb 仍然保持视觉和交互优先级
-- 点击 track 会 emit 目标 visual-row `scrollTo`
+- 点击 thumb 当前所在 row 仍然走 track click 语义：emit 目标 visual-row `scrollTo`，不是 drag handle
 - wheel 会 emit 简单的 `scrollBy(+/-1)` delegation
-- `showArrows=true` 时首尾两行会渲染 `▲` / `▼`，点击后按一个 viewport 高度翻动
+- `showArrows=true` 时首尾两行会渲染 `▲` / `▼`，点击后按一个 viewport 高度翻动；当 `h < 2` 时 arrows 会自动禁用
+- `metrics` 建议总是替换 fresh object，而不是原地 mutate 旧对象，方便 renderer 和父组件同步
 
 ```vue
 <script setup lang="ts">
@@ -633,8 +634,11 @@ onMounted(refreshMetrics);
 - `metrics` 通常来自 `logView.value?.getScrollMetrics()`
 - `markers` 通常来自 `logView.value?.getSearchMarkers()`；minimap 只根据 `visualRow` / `current` / `estimated` 渲染
 - `density` 是应用层聚合结果，例如日志密度、错误密度或搜索结果密度；`TLogView` 不会自动生成
+- `density.endVisualRow` 按 inclusive end 处理
 - 点击空白 row 会 emit `{ visualRow, cellX, cellY }` 的 `scrollTo`
-- 点击 marker row 会 emit `markerClick`，且不会额外触发 `scrollTo`
+- 点击 marker row 任意列都会 emit `markerClick`，且不会额外触发 `scrollTo`
+- `scrollTo.visualRow` 建议直接交给 `TLogView.scrollToVisualRow()` 做 clamp
+- 多列 minimap 中 density char 可以和 viewport style 叠加
 - 第一版只做 overview，不做 hover tooltip、拖拽 viewport 或 content minimap
 
 ```vue
@@ -815,6 +819,8 @@ const barState = computed<TLogSearchBarState>(() => ({
 - preview 基于 visible text 生成；`ansi=true` 时不会把 ANSI escape sequences 带进结果面板
 - preview 和高亮 offset 都按 cell 计算，因此宽字符场景可以保持匹配位置正确
 - 组件只负责渲染和交互：`ArrowUp` / `ArrowDown` / `Home` / `End` 更新 active row，`Enter` 和 click emit `select`
+- `activeIndex` 是 external sync hint：click / keyboard 会先更新内部 active row，再 emit `activeChange`；父组件可在下一拍重新同步
+- `results` 应该是当前 page/window，通常长度不超过组件高度；组件不会自己 virtualize 整个结果集
 - 不要每一帧都对全部 10k matches 调 `includePreview: true`；应当只给当前页或当前窗口取 preview
 
 ```vue
@@ -885,8 +891,9 @@ function onSelect(payload: TLogSearchResultsSelectPayload) {
 - `error` 显示 `Invalid regex`
 - `done` 显示单行 pager，例如 `◀ 2/13 245 matches ▶`
 - click `◀` / `▶` 和 `ArrowLeft` / `ArrowRight` / `PageUp` / `PageDown` 都只 emit，父组件负责接到 composable 或 handle
+- `previousPage` / `nextPage` 和 `pageChange` 是两套等价事件；通常只处理其中一套，避免重复翻页
 
-`useTLogSearchResultsPage` 负责从 `TLogViewHandle` 拉取当前页结果、同步 page-local `activeIndex`、clamp 页码，并在 `selectResult(matchIndex)` 时调用 `selectSearchMatch(matchIndex)` 后刷新当前页状态。推荐把它和 `TLogSearchResults` / `TLogSearchPager` 一起使用，而不是在父组件里重复手写 `offset`、`pageSize`、`currentMatchIndex` 同步逻辑。
+`useTLogSearchResultsPage` 负责从 `TLogViewHandle` 拉取当前页结果、同步 page-local `activeIndex`、clamp 页码，并在 `selectResult(matchIndex)` 时调用 `selectSearchMatch(matchIndex)` 后刷新当前页状态。推荐把它和 `TLogSearchResults` / `TLogSearchPager` 一起使用，而不是在父组件里重复手写 `offset`、`pageSize`、`currentMatchIndex` 同步逻辑。它的 `pageSize` / `includePreview` / `previewWidth` / `contextCells` 都是 setup-time configuration；如果这些值需要动态变化，请重新创建 controller/composable。
 
 ### Search UX suite wiring
 
@@ -898,6 +905,8 @@ function onSelect(payload: TLogSearchResultsSelectPayload) {
 - `markers`
 - `metrics`
 - `searchHistory` / `savedSearches`
+
+`useTLogSearchController` 的 `pageSize` / `includePreview` / `previewWidth` / `contextCells` / `maxHistory` / `initialSavedSearches` 都按 setup-time configuration 处理；如果这些值要动态变化，建议重建 controller。
 
 ```vue
 <script setup lang="ts">
@@ -919,9 +928,25 @@ const search = useTLogSearchController(logView, {
   includePreview: true,
   previewWidth: 64,
 });
+const {
+  query,
+  mode,
+  caseSensitive,
+  wholeWord,
+  regexFlags,
+  searchBarState,
+  resultsPage,
+  markers,
+  metrics,
+  refresh,
+  previousMatch,
+  nextMatch,
+  clearSearch,
+  selectMatch,
+} = search;
 
 function refreshSuite() {
-  search.refresh();
+  refresh();
 }
 </script>
 
@@ -929,14 +954,14 @@ function refreshSuite() {
   :x="0"
   :y="0"
   :w="80"
-  :state="search.searchBarState"
+  :state="searchBarState"
   @update:query="search.updateQuery"
   @update:mode="search.updateMode"
   @update:caseSensitive="search.updateCaseSensitive"
   @update:wholeWord="search.updateWholeWord"
-  @previous="search.previousMatch"
-  @next="search.nextMatch"
-  @clear="search.clearSearch"
+  @previous="previousMatch"
+  @next="nextMatch"
+  @clear="clearSearch"
 />
 
 <TLogView
@@ -947,12 +972,12 @@ function refreshSuite() {
   :h="20"
   :source="log.source"
   :version="log.version"
-  :search-query="search.query"
+  :search-query="query"
   :search-options="{
-    mode: search.mode,
-    caseSensitive: search.caseSensitive,
-    wholeWord: search.wholeWord,
-    regexFlags: search.regexFlags,
+    mode,
+    caseSensitive,
+    wholeWord,
+    regexFlags,
   }"
   @scroll="refreshSuite"
   @visualIndex="refreshSuite"
@@ -966,28 +991,26 @@ function refreshSuite() {
   :y="1"
   :w="19"
   :h="17"
-  :results="search.resultsPage.state.results"
-  :active-index="search.resultsPage.state.activeIndex"
-  @select="({ matchIndex }) => search.selectMatch(matchIndex)"
+  :results="resultsPage.state.results"
+  :active-index="resultsPage.state.activeIndex"
+  @select="({ matchIndex }) => selectMatch(matchIndex)"
 />
 
 <TLogSearchPager
   :x="61"
   :y="18"
   :w="19"
-  :state="search.resultsPage.state"
-  @previousPage="search.resultsPage.previousPage"
-  @nextPage="search.resultsPage.nextPage"
+  :state="resultsPage.state"
+  @previousPage="resultsPage.previousPage"
+  @nextPage="resultsPage.nextPage"
 />
 
 <TLogScrollbar
   :x="80"
   :y="1"
   :h="20"
-  :metrics="search.metrics"
-  :markers="
-    search.markers.map((marker) => ({ visualRow: marker.visualRow, current: marker.current }))
-  "
+  :metrics="metrics"
+  :markers="markers.map((marker) => ({ visualRow: marker.visualRow, current: marker.current }))"
 />
 
 <TLogMinimap
@@ -995,10 +1018,8 @@ function refreshSuite() {
   :y="1"
   :w="2"
   :h="20"
-  :metrics="search.metrics"
-  :markers="
-    search.markers.map((marker) => ({ visualRow: marker.visualRow, current: marker.current }))
-  "
+  :metrics="metrics"
+  :markers="markers.map((marker) => ({ visualRow: marker.visualRow, current: marker.current }))"
 />
 ```
 
@@ -1007,9 +1028,10 @@ function refreshSuite() {
 `TLogLinksPanel` 是一个 experimental visible-link panel，只渲染 **当前 viewport 内可见的 OSC8 links**。它不扫描 retained window，也不直接读取 `TLogView`；父组件负责把 `getVisibleLinks()` 或 `useTLogLinkController.visibleLinks` 回填给它。
 
 - 每行展示 `absoluteLineIndex + text + href`
-- `activeIndex` 表示 panel 当前选中行
+- `activeIndex` 是 external sync hint；panel 会先更新内部 active row，再通过 `activeChange` 把当前行交回父组件
 - `current` 用来标记 `TLogView` 当前 focused visible link
 - `Enter` 只 emit `activate`，不会自动打开浏览器
+- `links` 应该是当前 viewport/window 内的 visible links；组件不会自己维护完整 retained-window 历史
 
 ### Link UX suite wiring
 
@@ -1021,7 +1043,7 @@ function refreshSuite() {
 - `activateVisibleLink` / `activateFocusedLink`
 - `handleLinkClick` / `handleLinkActivate`
 
-`useTLogLinkController` 不会建立 global link index，也不会自动打开链接。`onAction` 只把 `{ href, text, source, absoluteLineIndex, index, startCell, endCell }` 交回应用层，由应用决定 open/copy/preview。
+`useTLogLinkController` 不会建立 global link index，也不会自动打开链接。`onAction` 只把 `{ href, text, source, absoluteLineIndex, index, startCell, endCell }` 交回应用层，由应用决定 open/copy/preview。`refresh()` 需要由父组件在 `scroll` / `linkFocus` / `linkClick` / `linkActivate` 以及 source/version 变化后显式调用，因为 visible links 会跟着 viewport 变化。它的 options 也是 setup-time configuration。
 
 ```vue
 <script setup lang="ts">

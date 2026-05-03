@@ -1984,6 +1984,56 @@ describe("TLogView", () => {
     }
   });
 
+  it("returns shallow copies from getSearchMatch and getSearchResults", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 2,
+      getLine: (index) => (index === 0 ? "error line-0" : "ok"),
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewSearchGetterCopiesApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 2,
+            source,
+            version: 1,
+            searchQuery: "error",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 3, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      const match = logView.value!.getSearchMatch(0)!;
+      Object.assign(match, { text: "mutated", startCell: 99 });
+
+      const results = logView.value!.getSearchResults();
+      Object.assign(results[0]!.match, { text: "also mutated", startCell: 42 });
+
+      expect(logView.value!.getSearchMatch(0)).toMatchObject({
+        text: "error",
+        startCell: 0,
+      });
+      expect(logView.value!.getSearchResults()[0]!.match).toMatchObject({
+        text: "error",
+        startCell: 0,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("getSearchResults can include preview text for the requested page only", async () => {
     const logView = ref<TLogViewHandle | null>(null);
     const getLine = vi.fn((index: number) => `line-${index} ERROR tail`);
@@ -3365,6 +3415,51 @@ describe("TLogView", () => {
 
       expect(logView.value!.getSearchState().matchCount).toBe(2);
       expect(logView.value!.getSearchResults()).toHaveLength(2);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("caps zero-width regex exec attempts per line", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "x".repeat(20_000),
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewZeroWidthRegexGuardApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "(?=.)",
+            searchOptions: {
+              mode: "regex",
+              maxMatchesPerLine: 2,
+              scanBudgetMs: 1000,
+            },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState()).toMatchObject({
+        status: "done",
+        matchCount: 0,
+      });
+      expect(logView.value!.getSearchResults()).toEqual([]);
     } finally {
       app.dispose();
     }

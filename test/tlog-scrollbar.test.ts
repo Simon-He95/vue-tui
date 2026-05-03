@@ -169,6 +169,48 @@ describe("TLogScrollbar", () => {
     }
   });
 
+  it("renders arrows when showArrows is enabled and height permits", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogScrollbar, {
+          x: 0,
+          y: 0,
+          h: 4,
+          showArrows: true,
+          metrics: null,
+        }),
+      1,
+      4,
+    );
+
+    try {
+      expect(columnChars(mounted, 0, 4)).toBe("▲││▼");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("disables arrows when height is less than two rows", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogScrollbar, {
+          x: 0,
+          y: 0,
+          h: 1,
+          showArrows: true,
+          metrics: null,
+        }),
+      1,
+      1,
+    );
+
+    try {
+      expect(columnChars(mounted, 0, 1)).toBe("│");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("emits scrollTo when clicking the track", async () => {
     const onScrollTo = vi.fn();
     const App = defineComponent({
@@ -207,6 +249,43 @@ describe("TLogScrollbar", () => {
       app.scheduler.flushNow();
 
       expect(onScrollTo).toHaveBeenCalledWith(56);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("emits viewport-sized scrollBy when clicking the arrow rows", async () => {
+    const onScrollBy = vi.fn();
+    const App = defineComponent({
+      name: "TLogScrollbarArrowClickApp",
+      setup() {
+        return () =>
+          h(TLogScrollbar, {
+            x: 0,
+            y: 0,
+            h: 4,
+            showArrows: true,
+            metrics: createMetrics({
+              viewportRows: 3,
+              maxScrollTop: 20,
+            }),
+            onScrollBy,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 1, rows: 4, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 0 } as any);
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 3 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScrollBy).toHaveBeenNthCalledWith(1, -3);
+      expect(onScrollBy).toHaveBeenNthCalledWith(2, 3);
     } finally {
       app.dispose();
     }

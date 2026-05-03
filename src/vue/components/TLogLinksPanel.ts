@@ -289,11 +289,19 @@ export const TLogLinksPanel = defineComponent({
             style: Style;
           }>[],
         ): void => {
+          const clipStart = Math.max(0, r.x - full.x);
+          const clipEnd = clipStart + r.w;
+          let logicalX = 0;
           let x = r.x;
           let used = 0;
           for (const segment of segments) {
             if (used >= r.w || !segment.text) continue;
-            const text = sliceByCellsRange(segment.text, 0, r.w - used);
+            const segmentCells = textCellWidth(segment.text);
+            const clippedStart = Math.max(0, clipStart - logicalX);
+            const clippedEnd = Math.min(segmentCells, clipEnd - logicalX);
+            logicalX += segmentCells;
+            if (clippedEnd <= clippedStart) continue;
+            const text = sliceByCellsRange(segment.text, clippedStart, clippedEnd);
             const cells = textCellWidth(text);
             if (!text || cells <= 0) continue;
             terminal.write(text, { x, y, style: segment.style });

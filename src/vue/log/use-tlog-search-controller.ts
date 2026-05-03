@@ -103,6 +103,14 @@ export function useTLogSearchController(
   const resultsPage = useTLogSearchResultsPage(logView, options);
   let nextSavedSearchId = 0;
 
+  function nextSavedSearchIdValue(): string {
+    let id = "";
+    do {
+      id = `saved-search-${nextSavedSearchId++}`;
+    } while (savedSearches.value.some((entry) => entry.id === id));
+    return id;
+  }
+
   const searchBarState = computed<TLogSearchBarState>(() => ({
     query: query.value,
     mode: mode.value,
@@ -184,7 +192,8 @@ export function useTLogSearchController(
     query.value = "";
     searchState.value = normalizeSearchState("");
     markers.value = [];
-    resultsPage.refresh();
+    metrics.value = null;
+    resultsPage.clear();
   }
 
   function selectMatch(matchIndex: number): boolean {
@@ -221,7 +230,7 @@ export function useTLogSearchController(
     }
 
     const savedSearch: TLogSavedSearch = {
-      id: `saved-search-${nextSavedSearchId++}`,
+      id: nextSavedSearchIdValue(),
       ...candidate,
     };
     savedSearches.value = [savedSearch, ...savedSearches.value];
