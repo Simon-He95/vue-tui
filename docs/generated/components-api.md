@@ -510,6 +510,8 @@
 | <code>ansi</code>               | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
 | <code>links</code>              | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
 | <code>linkStyle</code>          | <code>Style</code>                                          | <code>() =&gt; ({ underline: true })</code>           | 否   | —    |
+| <code>keyboardLinks</code>      | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
+| <code>linkFocusStyle</code>     | <code>Style</code>                                          | <code>() =&gt; ({ inverse: true })</code>             | 否   | —    |
 | <code>searchQuery</code>        | <code>string</code>                                         | <code>&quot;&quot;</code>                             | 否   | —    |
 | <code>searchOptions</code>      | <code>TLogViewSearchOptions</code>                          | <code>undefined</code>                                | 否   | —    |
 | <code>highlightMatches</code>   | <code>boolean</code>                                        | <code>true</code>                                     | 否   | —    |
@@ -528,6 +530,8 @@
 | <code>searchMatch</code>        | —       | —    |
 | <code>searchMarkers</code>      | —       | —    |
 | <code>linkClick</code>          | —       | —    |
+| <code>linkFocus</code>          | —       | —    |
+| <code>linkActivate</code>       | —       | —    |
 | <code>visualIndex</code>        | —       | —    |
 | <code>focus</code>              | —       | —    |
 | <code>blur</code>               | —       | —    |

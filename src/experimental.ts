@@ -26,7 +26,9 @@ export type {
 } from "./vue/components/TLogSearchResults.js";
 export type {
   TLogViewHandle,
+  TLogViewLinkActivatePayload,
   TLogViewLinkClickPayload,
+  TLogViewLinkFocusPayload,
   TLogViewScrollMetrics,
   TLogViewSearchMatch,
   TLogViewSearchResult,
@@ -39,6 +41,7 @@ export type {
   TLogViewSearchPayload,
   TLogViewSelectSearchMatchOptions,
   TLogViewSearchState,
+  TLogViewVisibleLink,
   TLogViewVisualIndexPayload,
 } from "./vue/components/TLogView.js";
 export type {

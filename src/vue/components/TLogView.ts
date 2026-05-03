@@ -181,6 +181,26 @@ export type TLogViewLinkClickPayload = Readonly<{
   cellX: number;
   cellY: number;
 }>;
+export type TLogViewVisibleLink = Readonly<{
+  visibleIndex: number;
+  href: string;
+  text: string;
+  absoluteLineIndex: number;
+  index: number;
+  startCell: number;
+  endCell: number;
+  startX: number;
+  endX: number;
+  y: number;
+}>;
+export type TLogViewLinkFocusPayload = Readonly<{
+  link: TLogViewVisibleLink | null;
+  focusedLinkIndex: number;
+}>;
+export type TLogViewLinkActivatePayload = Readonly<{
+  link: TLogViewVisibleLink;
+  source: "keyboard" | "programmatic";
+}>;
 export type TLogViewVisualIndexPayload = Readonly<{
   status: TLogViewVisualIndexStatus;
   lineCount: number;
@@ -223,6 +243,12 @@ export type TLogViewHandle = Readonly<{
   measureVisualIndex: () => void;
   getScrollMetrics: () => TLogViewScrollMetrics;
   getSearchMarkers: () => readonly TLogViewSearchMarker[];
+  getVisibleLinks: () => readonly TLogViewVisibleLink[];
+  focusVisibleLink: (visibleIndex: number) => boolean;
+  focusNextLink: () => boolean;
+  focusPreviousLink: () => boolean;
+  clearLinkFocus: () => void;
+  activateFocusedLink: () => boolean;
 }>;
 
 let nextTLogViewTaskId = 0;
@@ -445,6 +471,11 @@ function mergeHighlightStyle(baseStyle: Style, highlightStyle: Style): Style {
   return { ...baseStyle, ...highlightStyle };
 }
 
+function mergeLinkOverlayStyle(baseStyle: Style, overlayStyle: Style): Style {
+  const next = { ...baseStyle, ...overlayStyle };
+  return baseStyle.href !== undefined ? { ...next, href: baseStyle.href } : next;
+}
+
 function stringIndexToCell(text: string, index: number): number {
   return textCellWidth(text.slice(0, index));
 }
@@ -623,6 +654,11 @@ export const TLogView = defineComponent({
       type: Object as PropType<Style>,
       default: () => ({ underline: true }),
     },
+    keyboardLinks: { type: Boolean, default: false },
+    linkFocusStyle: {
+      type: Object as PropType<Style>,
+      default: () => ({ inverse: true }),
+    },
     searchQuery: {
       type: String,
       default: "",
@@ -656,6 +692,8 @@ export const TLogView = defineComponent({
     "searchMatch",
     "searchMarkers",
     "linkClick",
+    "linkFocus",
+    "linkActivate",
     "visualIndex",
     "focus",
     "blur",
@@ -693,6 +731,8 @@ export const TLogView = defineComponent({
     const ansiRowCache = new Map<TLogRenderCacheKey, TLogAnsiRowCacheEntry>();
     const searchLineCache = new Map<TLogRenderCacheKey, TLogSearchLineCacheEntry>();
     const visibleLinksByRow = new Map<number, TLogVisibleLinkSegment[]>();
+    const focusedVisibleLinkIndex = ref(-1);
+    let focusedLinkTarget: Omit<TLogViewVisibleLink, "visibleIndex" | "y"> | null = null;
     let searchGeneration = 0;
     let searchCursor = 0;
     let searchStatus: TLogSearchStatus = "idle";
@@ -2213,6 +2253,140 @@ export const TLogView = defineComponent({
       if (rowLinks.length) visibleLinksByRow.set(y, rowLinks);
     }
 
+    function getVisibleLinks(): readonly TLogViewVisibleLink[] {
+      const rows = Array.from(visibleLinksByRow.keys()).sort((a, b) => a - b);
+      const out: TLogViewVisibleLink[] = [];
+      for (const y of rows) {
+        const rowLinks = (visibleLinksByRow.get(y) ?? [])
+          .slice()
+          .sort((a, b) => a.startX - b.startX);
+        for (const link of rowLinks) {
+          out.push({
+            visibleIndex: out.length,
+            href: link.href,
+            text: link.text,
+            absoluteLineIndex: link.absoluteLineIndex,
+            index: link.index,
+            startCell: link.startCell,
+            endCell: link.endCell,
+            startX: link.startX,
+            endX: link.endX,
+            y,
+          });
+        }
+      }
+      return out;
+    }
+
+    function focusedLinkMatches(
+      link: Pick<TLogViewVisibleLink, "href" | "index" | "startCell" | "endCell">,
+    ): boolean {
+      return (
+        focusedLinkTarget?.href === link.href &&
+        focusedLinkTarget.index === link.index &&
+        focusedLinkTarget.startCell === link.startCell &&
+        focusedLinkTarget.endCell === link.endCell
+      );
+    }
+
+    function emitLinkFocusPayload(
+      link: TLogViewVisibleLink | null,
+      focusedLinkIndex: number,
+    ): void {
+      emit("linkFocus", {
+        link,
+        focusedLinkIndex,
+      } satisfies TLogViewLinkFocusPayload);
+    }
+
+    function setFocusedLink(link: TLogViewVisibleLink, emitEvent = true): void {
+      focusedVisibleLinkIndex.value = link.visibleIndex;
+      focusedLinkTarget = {
+        href: link.href,
+        text: link.text,
+        absoluteLineIndex: link.absoluteLineIndex,
+        index: link.index,
+        startCell: link.startCell,
+        endCell: link.endCell,
+        startX: link.startX,
+        endX: link.endX,
+      };
+      if (emitEvent) emitLinkFocusPayload(link, link.visibleIndex);
+    }
+
+    function focusVisibleLink(visibleIndex: number): boolean {
+      const links = getVisibleLinks();
+      const index = Math.floor(Number(visibleIndex));
+      if (!Number.isFinite(index) || index < 0 || index >= links.length) return false;
+      const link = links[index]!;
+      setFocusedLink(link);
+      markViewportDirty();
+      invalidateSelf("normal", "data");
+      return true;
+    }
+
+    function focusNextLink(): boolean {
+      const links = getVisibleLinks();
+      if (!links.length) return false;
+      const next =
+        focusedVisibleLinkIndex.value < 0 ? 0 : (focusedVisibleLinkIndex.value + 1) % links.length;
+      return focusVisibleLink(next);
+    }
+
+    function focusPreviousLink(): boolean {
+      const links = getVisibleLinks();
+      if (!links.length) return false;
+      const previous =
+        focusedVisibleLinkIndex.value < 0
+          ? links.length - 1
+          : (focusedVisibleLinkIndex.value - 1 + links.length) % links.length;
+      return focusVisibleLink(previous);
+    }
+
+    function clearLinkFocus(emitEvent = true): void {
+      if (focusedVisibleLinkIndex.value < 0 && !focusedLinkTarget) return;
+      focusedVisibleLinkIndex.value = -1;
+      focusedLinkTarget = null;
+      if (emitEvent) emitLinkFocusPayload(null, -1);
+      markViewportDirty();
+      invalidateSelf("normal", "data");
+    }
+
+    function activateFocusedLink(source: "keyboard" | "programmatic" = "programmatic"): boolean {
+      const links = getVisibleLinks();
+      const link = links[focusedVisibleLinkIndex.value];
+      if (!link) return false;
+      emit("linkActivate", {
+        link,
+        source,
+      } satisfies TLogViewLinkActivatePayload);
+      return true;
+    }
+
+    function syncFocusedVisibleLinkFromViewport(): void {
+      if (!focusedLinkTarget) {
+        focusedVisibleLinkIndex.value = -1;
+        return;
+      }
+      const links = getVisibleLinks();
+      const index = links.findIndex((link) => focusedLinkMatches(link));
+      if (index >= 0) {
+        focusedVisibleLinkIndex.value = index;
+        focusedLinkTarget = {
+          href: links[index]!.href,
+          text: links[index]!.text,
+          absoluteLineIndex: links[index]!.absoluteLineIndex,
+          index: links[index]!.index,
+          startCell: links[index]!.startCell,
+          endCell: links[index]!.endCell,
+          startX: links[index]!.startX,
+          endX: links[index]!.endX,
+        };
+        return;
+      }
+      clearLinkFocus();
+    }
+
     function emitLinkClick(e: TerminalPointerEvent): void {
       const link = visibleLinksByRow
         .get(e.cellY)
@@ -2307,6 +2481,51 @@ export const TLogView = defineComponent({
 
     function markViewportDirty(): void {
       markRowsDirty(viewportRows());
+    }
+
+    function applyLinkFocusToSegments(
+      segments: readonly TLogVisualSegment[],
+      lineIndex: number,
+      visibleStartCell: number,
+    ): readonly TLogVisualSegment[] {
+      const target = focusedLinkTarget;
+      if (!target || target.index !== lineIndex) return segments;
+      if (target.endCell <= visibleStartCell) return segments;
+
+      const visibleEndCell = visibleStartCell + segments.reduce((sum, seg) => sum + seg.cells, 0);
+      if (target.startCell >= visibleEndCell) return segments;
+
+      const out: TLogVisualSegment[] = [];
+      let cursor = visibleStartCell;
+      for (const seg of segments) {
+        let localStart = 0;
+        while (localStart < seg.cells) {
+          const absoluteCell = cursor + localStart;
+          let nextLocalEnd = seg.cells;
+          const withinFocus = absoluteCell >= target.startCell && absoluteCell < target.endCell;
+          if (!withinFocus && target.startCell > absoluteCell) {
+            nextLocalEnd = Math.min(nextLocalEnd, target.startCell - cursor);
+          } else if (withinFocus) {
+            nextLocalEnd = Math.min(nextLocalEnd, target.endCell - cursor);
+          }
+
+          nextLocalEnd = clamp(nextLocalEnd, localStart + 1, seg.cells);
+          const text = sliceByCellsRange(seg.text, localStart, nextLocalEnd);
+          const cells = textCellWidth(text);
+          if (text && cells > 0) {
+            out.push({
+              text,
+              cells,
+              style: withinFocus
+                ? mergeLinkOverlayStyle(seg.style, props.linkFocusStyle)
+                : seg.style,
+            });
+          }
+          localStart = nextLocalEnd;
+        }
+        cursor += seg.cells;
+      }
+      return out;
     }
 
     function tailMutationDirtyRow(
@@ -2832,11 +3051,32 @@ export const TLogView = defineComponent({
       measureVisualIndex,
       getScrollMetrics,
       getSearchMarkers,
+      getVisibleLinks,
+      focusVisibleLink,
+      focusNextLink,
+      focusPreviousLink,
+      clearLinkFocus: () => clearLinkFocus(),
+      activateFocusedLink: () => activateFocusedLink("programmatic"),
     };
     expose(handle);
 
     function onKeydown(e: TerminalKeyboardEvent): void {
       emit("keydown", e);
+      if (props.keyboardLinks && e.key === "Tab") {
+        const handled = e.shiftKey ? focusPreviousLink() : focusNextLink();
+        if (handled) e.preventDefault();
+        if (handled) return;
+      }
+      if (props.keyboardLinks && e.key === "Enter" && focusedVisibleLinkIndex.value >= 0) {
+        e.preventDefault();
+        activateFocusedLink("keyboard");
+        return;
+      }
+      if (props.keyboardLinks && e.key === "Escape" && focusedVisibleLinkIndex.value >= 0) {
+        e.preventDefault();
+        clearLinkFocus();
+        return;
+      }
       if (e.key === "ArrowUp") {
         e.preventDefault();
         keyboardScroll(currentScrollTop() - 1, false);
@@ -2932,6 +3172,14 @@ export const TLogView = defineComponent({
         resetWheelScrollState(wheelState);
         requestStreamFrame();
         requestSearchScan();
+      },
+    );
+
+    watch(
+      () => [props.ansi, props.links],
+      ([ansi, links]) => {
+        if (ansi && links) return;
+        clearLinkFocus(false);
       },
     );
 
@@ -3057,6 +3305,8 @@ export const TLogView = defineComponent({
         props.ansi,
         props.links,
         props.linkStyle,
+        props.keyboardLinks,
+        props.linkFocusStyle,
         props.highlightMatches,
         props.matchStyle,
         props.currentMatchStyle,
@@ -3133,7 +3383,10 @@ export const TLogView = defineComponent({
                 visibleStartCell,
               );
               recordVisibleLinks(y, highlighted, located.lineIndex, visibleStartCell);
-              writeStyledRow(highlighted, y);
+              writeStyledRow(
+                applyLinkFocusToSegments(highlighted, located.lineIndex, visibleStartCell),
+                y,
+              );
               return;
             }
 
@@ -3185,7 +3438,7 @@ export const TLogView = defineComponent({
             );
             const highlighted = applySearchHighlightsToSegments(visualSegments, idx, clipX);
             recordVisibleLinks(y, highlighted, idx, clipX);
-            writeStyledRow(highlighted, y);
+            writeStyledRow(applyLinkFocusToSegments(highlighted, idx, clipX), y);
             return;
           }
           if (props.highlightMatches && matchesByLine.has(idx)) {
@@ -3204,6 +3457,7 @@ export const TLogView = defineComponent({
         const rows = dirtyRows;
         if (rows?.length) {
           for (const y of rows) paintRow(y);
+          syncFocusedVisibleLinkFromViewport();
           trimRenderCache();
           trimWrapCache();
           trimAnsiLineCache();
@@ -3212,6 +3466,7 @@ export const TLogView = defineComponent({
           return;
         }
         for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+        syncFocusedVisibleLinkFromViewport();
         trimRenderCache();
         trimWrapCache();
         trimAnsiLineCache();
