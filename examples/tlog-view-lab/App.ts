@@ -2,6 +2,8 @@ import type {
   AppendOnlyLogStore,
   TLogLinkAction,
   TLogLinkPanelItem,
+  TLogIndexedLink,
+  TLogIndexStatus,
   TLogMinimapDensityBucket,
   TLogMinimapMarker,
   TLogScrollbarMarker,
@@ -9,21 +11,42 @@ import type {
   TLogViewScrollMetrics,
   TLogViewSearchMarker,
   TLogViewSearchMode,
+  TLogUiPreset,
 } from "../../src/experimental.js";
 import type { PropType, Ref } from "vue";
 import { computed, defineComponent, h, nextTick, ref, watch, watchEffect } from "vue";
 import { TText, TView } from "../../src/index.js";
 import {
+  TLogVirtualLinksPanel,
+  TLogVirtualSearchResults,
   TLogLinksPanel,
   TLogMinimap,
   TLogScrollbar,
   TLogSearchBar,
   TLogSearchPager,
-  TLogSearchResults,
   TLogView,
+  captureTLogViewSessionState,
+  createTLogLineMatcherPlugin,
+  createTLogLinkActionPlugin,
   createAppendOnlyLogStore,
+  createTLogViewSessionStore,
+  dispatchTLogPluginLinkAction,
+  handleTLogKeymapEvent,
+  resolveTLogLinksPanelTheme,
+  resolveTLogMinimapTheme,
+  resolveTLogScrollbarTheme,
+  resolveTLogSearchBarTheme,
+  resolveTLogSearchPagerTheme,
+  resolveTLogSearchResultsTheme,
+  resolveTLogViewTheme,
+  restoreTLogViewSessionState,
+  tlogDarkPreset,
+  tlogDefaultPreset,
+  tlogHighContrastPreset,
   useTLogLinkController,
+  useTLogRetainedIndex,
   useTLogSearchController,
+  useTLogVirtualSearchResults,
 } from "../../src/experimental.js";
 
 export const TLOG_VIEW_LAB_LAYOUT = Object.freeze({
@@ -56,8 +79,15 @@ export type TLogViewLabApi = Readonly<{
   links: Ref<boolean>;
   keyboardLinks: Ref<boolean>;
   visualIndexMode: Ref<"estimated" | "exact">;
+  preset: Ref<TLogUiPreset>;
   search: ReturnType<typeof useTLogSearchController>;
+  virtualResults: ReturnType<typeof useTLogVirtualSearchResults>;
   linkController: ReturnType<typeof useTLogLinkController>;
+  retainedIndex: Readonly<{
+    status: Ref<TLogIndexStatus>;
+    links: Ref<readonly TLogIndexedLink[]>;
+    density: Ref<readonly TLogMinimapDensityBucket[]>;
+  }>;
   recentEvents: Ref<readonly string[]>;
   lastLinkAction: Ref<TLogLinkAction | null>;
   lastSearchSelection: Ref<number | null>;
@@ -72,6 +102,9 @@ export type TLogViewLabApi = Readonly<{
     replaceTail: () => void;
     appendChunk: () => void;
     toggleVisualIndexMode: () => void;
+    cyclePreset: () => void;
+    saveSession: () => void;
+    restoreSession: () => void;
   }>;
   getSearchResultCell: (row?: number) => LabPointerCell;
   getLinksPanelCell: (row?: number) => LabPointerCell;
@@ -86,6 +119,21 @@ function clamp(n: number, min: number, max: number): number {
 function formatRecentEvent(message: string): string {
   return `${new Date().toISOString().slice(11, 19)} ${message}`;
 }
+
+const LAB_SESSION_STORAGE = (() => {
+  const map = new Map<string, string>();
+  return {
+    getItem(key: string) {
+      return map.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      map.set(key, value);
+    },
+    removeItem(key: string) {
+      map.delete(key);
+    },
+  };
+})();
 
 function osc8(href: string, text: string): string {
   return `\x1b]8;;${href}\x07${text}\x1b]8;;\x07`;
@@ -124,8 +172,9 @@ function makeBaseLine(index: number, prefix: string): string {
   const target = useLink ? osc8(href, `job-${index}`) : `plain-log-${index}`;
   const wide = index % 7 === 0 ? " 宽字符中🙂" : "";
   const payload = index % 11 === 0 ? ` payload=${makePayload(index)}` : "";
+  const docs = index % 17 === 0 ? ` docs=https://docs.example.com/log/${index}` : "";
   const wrap = index % 13 === 0 ? ` ${makeLongWrap(index)}` : "";
-  return `${stamp} ${level} ${target}${wide} ${prefix} line-${index}${payload}${wrap}`.trim();
+  return `${stamp} ${level} ${target}${wide} ${prefix} line-${index}${payload}${docs}${wrap}`.trim();
 }
 
 function makeTailLine(index: number, state: "draft" | "final"): string {
@@ -194,14 +243,36 @@ export const TLogViewLabApp = defineComponent({
     const links = ref(true);
     const keyboardLinks = ref(true);
     const visualIndexMode = ref<"estimated" | "exact">("exact");
+    const preset = ref<TLogUiPreset>(tlogDarkPreset);
     const store = createAppendOnlyLogStore({ maxLines: 2_000 });
+    const sessionStore = createTLogViewSessionStore({
+      storageKey: "@simon_he/vue-tui:tlog-view-lab",
+      storage: LAB_SESSION_STORAGE,
+    });
     const recentEvents = ref<readonly string[]>([]);
     const lastLinkAction = ref<TLogLinkAction | null>(null);
     const lastSearchSelection = ref<number | null>(null);
     const lastMarkerSelection = ref<number | null>(null);
     const metricsSummary = ref<TLogViewScrollMetrics | null>(null);
+    const retainedLinkActiveIndex = ref(-1);
     let nextLineIndex = 0;
     let tailState: "none" | "draft" | "final" = "none";
+    const presets = [tlogDefaultPreset, tlogDarkPreset, tlogHighContrastPreset] as const;
+
+    const linkPlugins = [
+      createTLogLinkActionPlugin({
+        name: "lab-link-audit",
+        onAction(action) {
+          pushEvent(`plugin link ${action.source} ${action.href}`);
+        },
+      }),
+      createTLogLineMatcherPlugin({
+        name: "lab-draft-tail",
+        pattern: /\btail-draft\b/u,
+        severity: "warning",
+        label: "DRAFT",
+      }),
+    ] as const;
 
     function pushEvent(message: string): void {
       recentEvents.value = [formatRecentEvent(message), ...recentEvents.value].slice(0, 6);
@@ -270,13 +341,52 @@ export const TLogViewLabApp = defineComponent({
       previewWidth: 48,
       contextCells: 18,
     });
+    const virtualResults = useTLogVirtualSearchResults(logView, {
+      includePreview: true,
+      previewWidth: 48,
+      contextCells: 18,
+    });
 
     const linkController = useTLogLinkController(logView, {
+      plugins: linkPlugins,
       onAction(action) {
         lastLinkAction.value = action;
         pushEvent(`link:${action.source} ${action.text} -> ${action.href}`);
       },
     });
+    const retainedIndex = useTLogRetainedIndex(
+      logView,
+      computed(() => store.source),
+      store.version,
+      {
+        links: true,
+        levels: true,
+        urls: true,
+        plugins: linkPlugins,
+      },
+    );
+
+    const theme = computed(() => preset.value.theme);
+    const searchBarTheme = computed(() => resolveTLogSearchBarTheme(theme.value));
+    const searchResultsTheme = computed(() => resolveTLogSearchResultsTheme(theme.value));
+    const searchPagerTheme = computed(() => resolveTLogSearchPagerTheme(theme.value));
+    const linksPanelTheme = computed(() => resolveTLogLinksPanelTheme(theme.value));
+    const scrollbarTheme = computed(() => resolveTLogScrollbarTheme(theme.value));
+    const minimapTheme = computed(() => resolveTLogMinimapTheme(theme.value));
+    const logViewTheme = computed(() => resolveTLogViewTheme(theme.value));
+
+    const retainedLinkItems = computed<readonly TLogLinkPanelItem[]>(() =>
+      retainedIndex.links.value.map((link, index) => ({
+        visibleIndex: index,
+        href: link.href,
+        text: link.text,
+        absoluteLineIndex: link.absoluteLineIndex,
+        index: link.lineIndex,
+        startCell: link.startCell,
+        endCell: link.endCell,
+        current: index === retainedLinkActiveIndex.value || undefined,
+      })),
+    );
 
     const scrollbarMarkers = computed<readonly TLogScrollbarMarker[]>(() =>
       search.markers.value.map((marker) => ({
@@ -299,7 +409,9 @@ export const TLogViewLabApp = defineComponent({
     );
 
     const minimapDensity = computed<readonly TLogMinimapDensityBucket[]>(() =>
-      createMarkerDensity(search.markers.value, search.metrics.value),
+      retainedIndex.density.value.length
+        ? retainedIndex.density.value
+        : createMarkerDensity(search.markers.value, search.metrics.value),
     );
 
     const footerLines = computed(() => {
@@ -310,14 +422,15 @@ export const TLogViewLabApp = defineComponent({
       const currentMatch =
         searchState.currentMatchIndex >= 0 ? searchState.currentMatchIndex + 1 : 0;
       const visibleLinks = linkController.visibleLinks.value.length;
+      const retainedLinks = retainedIndex.links.value.length;
       const lastAction = lastLinkAction.value
         ? `${lastLinkAction.value.source}:${lastLinkAction.value.text}`
         : "none";
       return [
-        `Ctrl+1 append200  Ctrl+2 append1000  Ctrl+3 clear  Ctrl+4 replaceTail  Ctrl+5 appendChunk  Ctrl+R reseed  Ctrl+V exact/estimated`,
-        `Search ${searchState.status}  mode=${search.mode.value}  query="${search.query.value}"  match=${currentMatch}/${searchState.matchCount}  page=${pagerState.page + 1}/${Math.max(1, pagerState.pageCount)}`,
-        `View wrap=${wrap.value} ansi=${ansi.value} links=${links.value} keyboardLinks=${keyboardLinks.value} visualIndex=${visualIndexMode.value} status=${visualStatus}`,
-        `Metrics lines=${metrics?.lineCount ?? 0} firstLine=${metrics?.firstLineIndex ?? 0} visualRows=${metrics?.visualRowCount ?? 0} scrollTop=${metrics?.scrollTop ?? 0} visibleLinks=${visibleLinks}`,
+        `Ctrl+1 append200  Ctrl+2 append1000  Ctrl+3 clear  Ctrl+4 replaceTail  Ctrl+5 appendChunk  Ctrl+R reseed  Ctrl+V exact/estimated  Ctrl+T theme  Ctrl+S save  Ctrl+O restore`,
+        `Search ${searchState.status}  mode=${search.mode.value}  query="${search.query.value}"  match=${currentMatch}/${searchState.matchCount}  pager=${pagerState.page + 1}/${Math.max(1, pagerState.pageCount)}  keymap=${preset.value.keymap.searchNext?.[0] ?? "-"}`,
+        `View wrap=${wrap.value} ansi=${ansi.value} links=${links.value} keyboardLinks=${keyboardLinks.value} visualIndex=${visualIndexMode.value} status=${visualStatus} preset=${presets.indexOf(preset.value) + 1}/${presets.length}`,
+        `Metrics lines=${metrics?.lineCount ?? 0} firstLine=${metrics?.firstLineIndex ?? 0} visualRows=${metrics?.visualRowCount ?? 0} scrollTop=${metrics?.scrollTop ?? 0} visibleLinks=${visibleLinks} retainedLinks=${retainedLinks} retainedStatus=${retainedIndex.status.value}`,
         `Last select=${lastSearchSelection.value ?? "-"}  last marker=${lastMarkerSelection.value ?? "-"}  last link=${lastAction}`,
         ...(recentEvents.value.length > 0 ? recentEvents.value : ["No recent lab events yet."]),
       ];
@@ -325,6 +438,7 @@ export const TLogViewLabApp = defineComponent({
 
     function refreshSearch(): void {
       search.refresh();
+      virtualResults.refresh();
       metricsSummary.value = search.metrics.value;
     }
 
@@ -341,6 +455,99 @@ export const TLogViewLabApp = defineComponent({
       void nextTick(() => {
         refreshAll();
       });
+    }
+
+    function focusRetainedLink(visibleIndex: number): boolean {
+      const item = retainedLinkItems.value[visibleIndex];
+      if (!item) return false;
+      retainedLinkActiveIndex.value = visibleIndex;
+      logView.value?.scrollToLine(item.index, { align: "center" });
+      void nextTick(() => {
+        const visible = logView.value
+          ?.getVisibleLinks()
+          .find(
+            (entry) =>
+              entry.absoluteLineIndex === item.absoluteLineIndex &&
+              entry.href === item.href &&
+              entry.startCell === item.startCell &&
+              entry.endCell === item.endCell,
+          );
+        if (visible) linkController.focusVisibleLink(visible.visibleIndex);
+        refreshAll();
+      });
+      return true;
+    }
+
+    function activateRetainedLink(visibleIndex: number): boolean {
+      const item = retainedLinkItems.value[visibleIndex];
+      if (!item) return false;
+      focusRetainedLink(visibleIndex);
+      const action: TLogLinkAction = {
+        href: item.href,
+        text: item.text,
+        source: "panel",
+        absoluteLineIndex: item.absoluteLineIndex,
+        index: item.index,
+        startCell: item.startCell,
+        endCell: item.endCell,
+      };
+      lastLinkAction.value = action;
+      dispatchTLogPluginLinkAction(linkPlugins, action);
+      pushEvent(`retained panel activate ${item.text}`);
+      return true;
+    }
+
+    function cyclePreset(): void {
+      const currentIndex = presets.findIndex((entry) => entry === preset.value);
+      preset.value = presets[(currentIndex + 1) % presets.length]!;
+      pushEvent(`preset=${currentIndex + 2 > presets.length ? 1 : currentIndex + 2}`);
+    }
+
+    function saveSession(): void {
+      const snapshot = captureTLogViewSessionState({
+        logView,
+        visualIndexMode,
+        wrap,
+        ansi,
+        links,
+        keyboardLinks,
+        search,
+        linkController: {
+          activeIndex: retainedLinkActiveIndex,
+          focusVisibleLink: focusRetainedLink,
+          clearFocus: () => {
+            retainedLinkActiveIndex.value = -1;
+          },
+        },
+      });
+      if (!snapshot) return;
+      sessionStore.save(snapshot);
+      pushEvent("session saved");
+    }
+
+    function restoreSession(): void {
+      const snapshot = sessionStore.load();
+      const restored = restoreTLogViewSessionState(
+        {
+          logView,
+          visualIndexMode,
+          wrap,
+          ansi,
+          links,
+          keyboardLinks,
+          search,
+          linkController: {
+            activeIndex: retainedLinkActiveIndex,
+            focusVisibleLink: focusRetainedLink,
+            clearFocus: () => {
+              retainedLinkActiveIndex.value = -1;
+            },
+          },
+        },
+        snapshot,
+      );
+      if (restored) pushEvent("session restored");
+      scheduleRefreshAll();
     }
 
     function selectMatch(matchIndex: number, source: string): void {
@@ -381,11 +588,22 @@ export const TLogViewLabApp = defineComponent({
       else if (key === "3") clearLogs();
       else if (key === "4") replaceTail();
       else if (key === "5") appendChunk();
+      else if (key === "s") saveSession();
+      else if (key === "o") restoreSession();
       else if (key === "r") reseed();
+      else if (key === "t") cyclePreset();
       else if (key === "v") {
         visualIndexMode.value = visualIndexMode.value === "exact" ? "estimated" : "exact";
         pushEvent(`visualIndexMode=${visualIndexMode.value}`);
       } else {
+        handleTLogKeymapEvent(e, preset.value.keymap, {
+          searchNext: search.nextMatch,
+          searchPrevious: search.previousMatch,
+          clearSearch: search.clearSearch,
+          nextLink: linkController.focusNextLink,
+          previousLink: linkController.focusPreviousLink,
+          activateLink: linkController.activateFocusedLink,
+        });
         return;
       }
       e.preventDefault?.();
@@ -400,8 +618,15 @@ export const TLogViewLabApp = defineComponent({
       links,
       keyboardLinks,
       visualIndexMode,
+      preset,
       search,
+      virtualResults,
       linkController,
+      retainedIndex: {
+        status: retainedIndex.status,
+        links: retainedIndex.links,
+        density: retainedIndex.density,
+      },
       recentEvents,
       lastLinkAction,
       lastSearchSelection,
@@ -438,6 +663,12 @@ export const TLogViewLabApp = defineComponent({
           pushEvent(`visualIndexMode=${visualIndexMode.value}`);
           scheduleRefreshAll();
         },
+        cyclePreset: () => {
+          cyclePreset();
+          scheduleRefreshAll();
+        },
+        saveSession: saveSession,
+        restoreSession: restoreSession,
       },
       getSearchResultCell(row = 0) {
         return {
@@ -483,7 +714,7 @@ export const TLogViewLabApp = defineComponent({
       },
     );
 
-    watch([wrap, ansi, links, keyboardLinks, visualIndexMode], () => {
+    watch([wrap, ansi, links, keyboardLinks, visualIndexMode, preset], () => {
       scheduleRefreshAll();
     });
 
@@ -509,6 +740,7 @@ export const TLogViewLabApp = defineComponent({
             h(TLogSearchBar, {
               ...TLOG_VIEW_LAB_LAYOUT.searchBar,
               state: search.searchBarState.value,
+              ...searchBarTheme.value,
               "onUpdate:query": search.updateQuery,
               "onUpdate:mode": search.updateMode,
               "onUpdate:caseSensitive": search.updateCaseSensitive,
@@ -522,6 +754,7 @@ export const TLogViewLabApp = defineComponent({
               ...TLOG_VIEW_LAB_LAYOUT.logView,
               source: store.source,
               version: store.version.value,
+              ...logViewTheme.value,
               wrap: wrap.value,
               ansi: ansi.value,
               links: links.value,
@@ -546,13 +779,16 @@ export const TLogViewLabApp = defineComponent({
             }),
             h(TText, {
               ...TLOG_VIEW_LAB_LAYOUT.resultsLabel,
-              value: "Results",
+              value: "Virtual results",
               style: { bold: true },
             }),
-            h(TLogSearchResults, {
+            h(TLogVirtualSearchResults, {
               ...TLOG_VIEW_LAB_LAYOUT.results,
-              results: search.resultsPage.state.value.results,
-              activeIndex: search.resultsPage.state.value.activeIndex,
+              ...searchResultsTheme.value,
+              itemCount: virtualResults.state.value.itemCount,
+              itemVersion: virtualResults.state.value.itemVersion,
+              getItem: virtualResults.getItem,
+              modelValue: virtualResults.state.value.activeIndex,
               onSelect: ({ matchIndex }: { matchIndex: number }) =>
                 selectMatch(matchIndex, "results"),
             }),
@@ -563,6 +799,7 @@ export const TLogViewLabApp = defineComponent({
             }),
             h(TLogSearchPager, {
               ...TLOG_VIEW_LAB_LAYOUT.pager,
+              ...searchPagerTheme.value,
               state: search.resultsPage.state.value,
               onPreviousPage: search.resultsPage.previousPage,
               onNextPage: search.resultsPage.nextPage,
@@ -570,20 +807,20 @@ export const TLogViewLabApp = defineComponent({
             }),
             h(TText, {
               ...TLOG_VIEW_LAB_LAYOUT.linksLabel,
-              value: "Visible links",
+              value: "Retained links",
               style: { bold: true },
             }),
-            h(TLogLinksPanel, {
+            h(TLogVirtualLinksPanel, {
               ...TLOG_VIEW_LAB_LAYOUT.links,
-              links: linkController.visibleLinks.value,
-              activeIndex: linkController.activeIndex.value,
+              ...linksPanelTheme.value,
+              links: retainedLinkItems.value,
+              modelValue: retainedLinkActiveIndex.value,
               onSelect: ({ visibleIndex }: { visibleIndex: number }) => {
-                linkController.focusVisibleLink(visibleIndex);
-                pushEvent(`panel select link ${visibleIndex}`);
+                focusRetainedLink(visibleIndex);
+                pushEvent(`retained panel select ${visibleIndex}`);
               },
-              onActiveChange: handleLinksPanelActiveChange,
               onActivate: ({ visibleIndex }: { visibleIndex: number }) => {
-                linkController.activateVisibleLink(visibleIndex);
+                activateRetainedLink(visibleIndex);
               },
             }),
             h(TText, {
@@ -593,6 +830,7 @@ export const TLogViewLabApp = defineComponent({
             }),
             h(TLogScrollbar, {
               ...TLOG_VIEW_LAB_LAYOUT.scrollbar,
+              ...scrollbarTheme.value,
               metrics: search.metrics.value,
               markers: scrollbarMarkers.value,
               showArrows: true,
@@ -616,6 +854,7 @@ export const TLogViewLabApp = defineComponent({
             }),
             h(TLogMinimap, {
               ...TLOG_VIEW_LAB_LAYOUT.minimap,
+              ...minimapTheme.value,
               metrics: search.metrics.value,
               markers: minimapMarkers.value,
               density: minimapDensity.value,

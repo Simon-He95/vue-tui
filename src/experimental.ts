@@ -6,10 +6,55 @@ export { TLogSearchBar } from "./vue/components/TLogSearchBar.js";
 export { TLogSearchResults } from "./vue/components/TLogSearchResults.js";
 export { TLogSearchPager } from "./vue/components/TLogSearchPager.js";
 export { TLogLinksPanel } from "./vue/components/TLogLinksPanel.js";
+export { TLogVirtualSearchResults } from "./vue/components/TLogVirtualSearchResults.js";
+export { TLogVirtualLinksPanel } from "./vue/components/TLogVirtualLinksPanel.js";
 export { createAppendOnlyLogStore } from "./vue/log/append-only-log-store.js";
 export { useTLogLinkController } from "./vue/log/use-tlog-link-controller.js";
 export { useTLogSearchController } from "./vue/log/use-tlog-search-controller.js";
 export { useTLogSearchResultsPage } from "./vue/log/use-tlog-search-results-page.js";
+export { useTLogVirtualSearchResults } from "./vue/log/use-tlog-virtual-search-results.js";
+export { useTLogRetainedIndex } from "./vue/log/use-tlog-retained-index.js";
+export {
+  captureTLogViewSessionState,
+  createTLogViewSessionStore,
+  deserializeTLogViewSessionState,
+  restoreTLogViewSessionState,
+  serializeTLogViewSessionState,
+} from "./vue/log/tlog-session.js";
+export {
+  createTLogDensityBucketsFromMarkers,
+  createTLogLevelPlugin,
+  createTLogLineMatcherPlugin,
+  createTLogLinkActionPlugin,
+  createTLogOsc8LinkPlugin,
+  createTLogUrlPlugin,
+  dispatchTLogPluginLinkAction,
+  getTLogPluginMetadata,
+  parseTLogAnnotatedText,
+  stripTLogAnsiText,
+  toTLogExternalLinkFromVisibleLink,
+} from "./vue/log/tlog-plugins.js";
+export {
+  handleTLogKeymapEvent,
+  matchesTLogKeyBinding,
+  tlogDefaultKeymap,
+  tlogHighContrastKeymap,
+} from "./vue/log/tlog-keymap.js";
+export {
+  resolveTLogLinksPanelTheme,
+  resolveTLogMinimapTheme,
+  resolveTLogScrollbarTheme,
+  resolveTLogSearchBarTheme,
+  resolveTLogSearchPagerTheme,
+  resolveTLogSearchResultsTheme,
+  resolveTLogViewTheme,
+  tlogDarkPreset,
+  tlogDarkTheme,
+  tlogDefaultPreset,
+  tlogDefaultTheme,
+  tlogHighContrastPreset,
+  tlogHighContrastTheme,
+} from "./vue/log/tlog-theme.js";
 export type { RowScrollMode } from "./vue/components/TVirtualList.js";
 export type {
   TLogLinkPanelItem,
@@ -89,3 +134,37 @@ export type {
   TLogSearchResultsPageState,
   UseTLogSearchResultsPageOptions,
 } from "./vue/log/use-tlog-search-results-page.js";
+export type {
+  TLogIndexedLink,
+  TLogDiagnosticMarker,
+  TLogIndexStatus,
+  TLogRetainedIndexOptions,
+} from "./vue/log/use-tlog-retained-index.js";
+export type {
+  StorageLike,
+  TLogViewSessionBindings,
+  TLogViewSessionState,
+} from "./vue/log/tlog-session.js";
+export type {
+  TLogPluginLinkSource,
+  TLogPluginSeverity,
+  TLogPluginVisualSegment,
+  TLogParsedOsc8Link,
+  TLogViewExternalLink,
+  TLogViewExternalMarker,
+  TLogViewPlugin,
+  TLogViewPluginDensityContext,
+  TLogViewPluginDecorateSegmentsContext,
+  TLogViewPluginIndexedLine,
+  TLogViewPluginLineLink,
+  TLogViewPluginLineMarker,
+  TLogViewPluginLineMetadata,
+  TLogViewPluginMarkerContext,
+  TLogViewPluginParseLineContext,
+} from "./vue/log/tlog-plugins.js";
+export type { TLogKeymap } from "./vue/log/tlog-keymap.js";
+export type { TLogTheme, TLogUiPreset } from "./vue/log/tlog-theme.js";
+export type {
+  TLogVirtualSearchResultsState,
+  UseTLogVirtualSearchResultsOptions,
+} from "./vue/log/use-tlog-virtual-search-results.js";

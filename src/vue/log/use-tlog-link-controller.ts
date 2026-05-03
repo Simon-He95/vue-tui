@@ -6,7 +6,9 @@ import type {
   TLogViewVisibleLink,
 } from "../components/TLogView.js";
 import type { TLogLinkPanelItem } from "../components/TLogLinksPanel.js";
+import type { TLogViewPlugin } from "./tlog-plugins.js";
 import { ref, watch } from "vue";
+import { dispatchTLogPluginLinkAction } from "./tlog-plugins.js";
 
 export type TLogLinkActionSource = "click" | "keyboard" | "programmatic" | "panel";
 
@@ -22,6 +24,7 @@ export type TLogLinkAction = Readonly<{
 
 export type UseTLogLinkControllerOptions = Readonly<{
   onAction?: (action: TLogLinkAction) => void;
+  plugins?: readonly TLogViewPlugin[];
 }>;
 
 function toPanelItem(link: TLogViewVisibleLink): TLogLinkPanelItem {
@@ -93,6 +96,7 @@ export function useTLogLinkController(
 
   function emitAction(action: TLogLinkAction): void {
     options.onAction?.(action);
+    dispatchTLogPluginLinkAction(options.plugins, action);
   }
 
   function suppressProgrammaticActivation(link: TLogLinkPanelItem): void {

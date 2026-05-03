@@ -35,12 +35,19 @@ describe("package exports", () => {
     expect(experimental.TLogMinimap).toBeTruthy();
     expect(experimental.TLogSearchBar).toBeTruthy();
     expect(experimental.TLogSearchResults).toBeTruthy();
+    expect(experimental.TLogVirtualSearchResults).toBeTruthy();
     expect(experimental.TLogSearchPager).toBeTruthy();
     expect(experimental.TLogLinksPanel).toBeTruthy();
+    expect(experimental.TLogVirtualLinksPanel).toBeTruthy();
     expect(experimental.useTLogSearchController).toBeTruthy();
     expect(experimental.useTLogSearchResultsPage).toBeTruthy();
+    expect(experimental.useTLogVirtualSearchResults).toBeTruthy();
     expect(experimental.useTLogLinkController).toBeTruthy();
+    expect(experimental.useTLogRetainedIndex).toBeTruthy();
     expect(experimental.createAppendOnlyLogStore).toBeTruthy();
+    expect(experimental.createTLogViewSessionStore).toBeTruthy();
+    expect(experimental.createTLogLevelPlugin).toBeTruthy();
+    expect(experimental.tlogDefaultPreset).toBeTruthy();
   });
 
   it("re-exports TLogView link navigation types from the experimental entrypoint", () => {
@@ -58,6 +65,12 @@ describe("package exports", () => {
     expect(experimentalSource).toContain("TLogSearchBarMode");
     expect(experimentalSource).toContain("TLogSavedSearch");
     expect(experimentalSource).toContain("useTLogSearchController");
+    expect(experimentalSource).toContain("TLogVirtualSearchResults");
+    expect(experimentalSource).toContain("TLogVirtualLinksPanel");
+    expect(experimentalSource).toContain("useTLogRetainedIndex");
+    expect(experimentalSource).toContain("createTLogViewSessionStore");
+    expect(experimentalSource).toContain("createTLogLevelPlugin");
+    expect(experimentalSource).toContain("tlogDefaultPreset");
   });
 
   it("keeps the runnable tlog lab symbol set importable from the experimental entrypoint", async () => {
@@ -65,25 +78,39 @@ describe("package exports", () => {
       TLogView,
       TLogSearchBar,
       TLogSearchResults,
+      TLogVirtualSearchResults,
       TLogSearchPager,
       TLogScrollbar,
       TLogMinimap,
       TLogLinksPanel,
+      TLogVirtualLinksPanel,
       createAppendOnlyLogStore,
+      createTLogViewSessionStore,
+      createTLogLevelPlugin,
+      tlogDefaultPreset,
       useTLogSearchController,
       useTLogLinkController,
+      useTLogRetainedIndex,
+      useTLogVirtualSearchResults,
     } = await import("../src/experimental.js");
 
     expect(TLogView).toBeTruthy();
     expect(TLogSearchBar).toBeTruthy();
     expect(TLogSearchResults).toBeTruthy();
+    expect(TLogVirtualSearchResults).toBeTruthy();
     expect(TLogSearchPager).toBeTruthy();
     expect(TLogScrollbar).toBeTruthy();
     expect(TLogMinimap).toBeTruthy();
     expect(TLogLinksPanel).toBeTruthy();
+    expect(TLogVirtualLinksPanel).toBeTruthy();
     expect(createAppendOnlyLogStore).toBeTruthy();
+    expect(createTLogViewSessionStore).toBeTruthy();
+    expect(createTLogLevelPlugin).toBeTruthy();
+    expect(tlogDefaultPreset).toBeTruthy();
     expect(useTLogSearchController).toBeTruthy();
     expect(useTLogLinkController).toBeTruthy();
+    expect(useTLogRetainedIndex).toBeTruthy();
+    expect(useTLogVirtualSearchResults).toBeTruthy();
   });
 
   it.skipIf(!requireDistExports)("keeps built ESM/CJS experimental exports usable", async () => {
@@ -111,23 +138,37 @@ describe("package exports", () => {
     expect(experimental.TLogMinimap).toBeTruthy();
     expect(experimental.TLogSearchBar).toBeTruthy();
     expect(experimental.TLogSearchResults).toBeTruthy();
+    expect(experimental.TLogVirtualSearchResults).toBeTruthy();
     expect(experimental.TLogSearchPager).toBeTruthy();
     expect(experimental.TLogLinksPanel).toBeTruthy();
+    expect(experimental.TLogVirtualLinksPanel).toBeTruthy();
     expect(experimental.useTLogSearchController).toBeTruthy();
     expect(experimental.useTLogSearchResultsPage).toBeTruthy();
+    expect(experimental.useTLogVirtualSearchResults).toBeTruthy();
     expect(experimental.useTLogLinkController).toBeTruthy();
+    expect(experimental.useTLogRetainedIndex).toBeTruthy();
     expect(experimental.createAppendOnlyLogStore).toBeTruthy();
+    expect(experimental.createTLogViewSessionStore).toBeTruthy();
+    expect(experimental.createTLogLevelPlugin).toBeTruthy();
+    expect(experimental.tlogDefaultPreset).toBeTruthy();
     expect(experimentalCjs.TVirtualList).toBeTruthy();
     expect(experimentalCjs.TLogView).toBeTruthy();
     expect(experimentalCjs.TLogScrollbar).toBeTruthy();
     expect(experimentalCjs.TLogMinimap).toBeTruthy();
     expect(experimentalCjs.TLogSearchBar).toBeTruthy();
     expect(experimentalCjs.TLogSearchResults).toBeTruthy();
+    expect(experimentalCjs.TLogVirtualSearchResults).toBeTruthy();
     expect(experimentalCjs.TLogSearchPager).toBeTruthy();
     expect(experimentalCjs.TLogLinksPanel).toBeTruthy();
+    expect(experimentalCjs.TLogVirtualLinksPanel).toBeTruthy();
     expect(experimentalCjs.useTLogSearchController).toBeTruthy();
     expect(experimentalCjs.useTLogSearchResultsPage).toBeTruthy();
+    expect(experimentalCjs.useTLogVirtualSearchResults).toBeTruthy();
     expect(experimentalCjs.useTLogLinkController).toBeTruthy();
+    expect(experimentalCjs.useTLogRetainedIndex).toBeTruthy();
     expect(experimentalCjs.createAppendOnlyLogStore).toBeTruthy();
+    expect(experimentalCjs.createTLogViewSessionStore).toBeTruthy();
+    expect(experimentalCjs.createTLogLevelPlugin).toBeTruthy();
+    expect(experimentalCjs.tlogDefaultPreset).toBeTruthy();
   });
 });
