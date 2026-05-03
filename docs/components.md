@@ -8,15 +8,15 @@
 
 ## 组件速读
 
-| 类别          | 组件                                                                                    | 典型用途                                        | 适配性判断                                         |
-| ------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
-| Root          | `TerminalProvider`                                                                      | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
-| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                          | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
-| Text / Motion | `TText` `TTransition`                                                                   | 文本渲染、状态切换、动画插值                    | 通用                                               |
-| Input         | `TInput` `TInputBox` `TJsonEditor`                                                      | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
-| Pickers       | `TList` `TVirtualList` `TLogView` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、日志、路径选择                   | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
-| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                             | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
-| Navigation    | `TRouterView` + `createTerminalRouter()`                                                | 多页面 TUI / shell                              | 通用                                               |
+| 类别          | 组件                                                                                                    | 典型用途                                        | 适配性判断                                         |
+| ------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| Root          | `TerminalProvider`                                                                                      | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
+| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                          | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
+| Text / Motion | `TText` `TTransition`                                                                                   | 文本渲染、状态切换、动画插值                    | 通用                                               |
+| Input         | `TInput` `TInputBox` `TJsonEditor`                                                                      | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
+| Pickers       | `TList` `TVirtualList` `TLogView` `TLogSearchBar` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、日志、路径选择                   | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                             | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
+| Navigation    | `TRouterView` + `createTerminalRouter()`                                                                | 多页面 TUI / shell                              | 通用                                               |
 
 如果你更关心“哪些地方还应该继续做插件化”，建议配合阅读：[扩展性与插件化](./extensibility.md)。
 
@@ -717,6 +717,93 @@ onMounted(refreshOverview);
 />
 ```
 
+### TLogSearchBar
+
+`TLogSearchBar` 是一个 experimental controlled search input companion。它只负责搜索 query / mode / toggle / navigation 的输入与展示，不会直接读取 `TLogView`，也不会自己执行搜索；父组件负责把 query/options 传给 `TLogView`，再把 `TLogViewHandle.getSearchState()` 回填给 search bar。
+
+- query 是受控值，组件内部只维护 cursor / focus / scroll offset
+- `Enter` emit `next`，`Shift+Enter` emit `previous`，`Esc` emit `clear`
+- click `[T]` / `[R]`、`[Aa]`、`[W]` 只 emit update events，不直接触发搜索
+- `mode="regex"` 时 `wholeWord` toggle 会渲染为 disabled，并且 click 不会 emit `update:wholeWord`
+- `state.status` 可以驱动 `Scanning…`、`current/matchCount`、`Invalid regex` 等展示
+
+```vue
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import {
+  TLogSearchBar,
+  TLogView,
+  type TLogSearchBarState,
+  type TLogViewHandle,
+} from "@simon_he/vue-tui/experimental";
+
+const logView = ref<TLogViewHandle | null>(null);
+const query = ref("");
+const mode = ref<"text" | "regex">("text");
+const caseSensitive = ref(false);
+const wholeWord = ref(false);
+const searchState = ref({
+  status: "idle",
+  matchCount: 0,
+  currentMatchIndex: -1,
+  error: null,
+});
+
+function refreshSearchUi() {
+  const next = logView.value?.getSearchState();
+  searchState.value = {
+    status: next?.status ?? "idle",
+    matchCount: next?.matchCount ?? 0,
+    currentMatchIndex: next?.currentMatchIndex ?? -1,
+    error: next?.error ?? null,
+  };
+}
+
+const barState = computed<TLogSearchBarState>(() => ({
+  query: query.value,
+  mode: mode.value,
+  caseSensitive: caseSensitive.value,
+  wholeWord: wholeWord.value,
+  status: searchState.value.status,
+  matchCount: searchState.value.matchCount,
+  currentMatchIndex: searchState.value.currentMatchIndex,
+  error: searchState.value.error,
+}));
+</script>
+
+<TLogSearchBar
+  :x="0"
+  :y="0"
+  :w="80"
+  :state="barState"
+  @update:query="query = $event"
+  @update:mode="mode = $event"
+  @update:caseSensitive="caseSensitive = $event"
+  @update:wholeWord="wholeWord = $event"
+  @previous="logView?.findPrevious()"
+  @next="logView?.findNext()"
+  @clear="query = ''"
+/>
+
+<TLogView
+  ref="logView"
+  :x="0"
+  :y="1"
+  :w="80"
+  :h="20"
+  :source="log.source"
+  :version="log.version"
+  :search-query="query"
+  :search-options="{
+    mode,
+    caseSensitive,
+    wholeWord,
+  }"
+  @search="refreshSearchUi"
+  @searchMatch="refreshSearchUi"
+/>
+```
+
 ### TLogSearchResults
 
 `TLogSearchResults` 是一个 experimental search result panel，用来渲染当前页搜索结果预览。它只消费外部准备好的 result items，不持有 search state，也不会直接读取 `TLogView` 或 log source。
@@ -800,6 +887,116 @@ function onSelect(payload: TLogSearchResultsSelectPayload) {
 - click `◀` / `▶` 和 `ArrowLeft` / `ArrowRight` / `PageUp` / `PageDown` 都只 emit，父组件负责接到 composable 或 handle
 
 `useTLogSearchResultsPage` 负责从 `TLogViewHandle` 拉取当前页结果、同步 page-local `activeIndex`、clamp 页码，并在 `selectResult(matchIndex)` 时调用 `selectSearchMatch(matchIndex)` 后刷新当前页状态。推荐把它和 `TLogSearchResults` / `TLogSearchPager` 一起使用，而不是在父组件里重复手写 `offset`、`pageSize`、`currentMatchIndex` 同步逻辑。
+
+### Search UX suite wiring
+
+如果你希望把 `TLogSearchBar`、`TLogSearchResults`、`TLogSearchPager`、`TLogScrollbar` 和 `TLogMinimap` 一起接成完整搜索体验，推荐直接使用 `useTLogSearchController`。它会集中管理：
+
+- `query` / `mode` / `caseSensitive` / `wholeWord`
+- `searchBarState`
+- `resultsPage`
+- `markers`
+- `metrics`
+- `searchHistory` / `savedSearches`
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue";
+import {
+  TLogMinimap,
+  TLogScrollbar,
+  TLogSearchBar,
+  TLogSearchPager,
+  TLogSearchResults,
+  TLogView,
+  useTLogSearchController,
+  type TLogViewHandle,
+} from "@simon_he/vue-tui/experimental";
+
+const logView = ref<TLogViewHandle | null>(null);
+const search = useTLogSearchController(logView, {
+  pageSize: 20,
+  includePreview: true,
+  previewWidth: 64,
+});
+
+function refreshSuite() {
+  search.refresh();
+}
+</script>
+
+<TLogSearchBar
+  :x="0"
+  :y="0"
+  :w="80"
+  :state="search.searchBarState"
+  @update:query="search.updateQuery"
+  @update:mode="search.updateMode"
+  @update:caseSensitive="search.updateCaseSensitive"
+  @update:wholeWord="search.updateWholeWord"
+  @previous="search.previousMatch"
+  @next="search.nextMatch"
+  @clear="search.clearSearch"
+/>
+
+<TLogView
+  ref="logView"
+  :x="0"
+  :y="1"
+  :w="60"
+  :h="20"
+  :source="log.source"
+  :version="log.version"
+  :search-query="search.query"
+  :search-options="{
+    mode: search.mode,
+    caseSensitive: search.caseSensitive,
+    wholeWord: search.wholeWord,
+    regexFlags: search.regexFlags,
+  }"
+  @scroll="refreshSuite"
+  @visualIndex="refreshSuite"
+  @search="refreshSuite"
+  @searchMatch="refreshSuite"
+  @searchMarkers="refreshSuite"
+/>
+
+<TLogSearchResults
+  :x="61"
+  :y="1"
+  :w="19"
+  :h="17"
+  :results="search.resultsPage.state.results"
+  :active-index="search.resultsPage.state.activeIndex"
+  @select="({ matchIndex }) => search.selectMatch(matchIndex)"
+/>
+
+<TLogSearchPager
+  :x="61"
+  :y="18"
+  :w="19"
+  :state="search.resultsPage.state"
+  @previousPage="search.resultsPage.previousPage"
+  @nextPage="search.resultsPage.nextPage"
+/>
+
+<TLogScrollbar
+  :x="80"
+  :y="1"
+  :h="20"
+  :metrics="search.metrics"
+  :markers="search.markers.map((marker) => ({ visualRow: marker.visualRow, current: marker.current }))"
+/>
+
+<TLogMinimap
+  :x="81"
+  :y="1"
+  :w="2"
+  :h="20"
+  :metrics="search.metrics"
+  :markers="search.markers.map((marker) => ({ visualRow: marker.visualRow, current: marker.current }))"
+/>
+```
 
 ### Events
 

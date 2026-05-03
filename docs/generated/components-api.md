@@ -16,6 +16,7 @@
 - [TList](#tlist)
 - [TLogMinimap](#tlogminimap)
 - [TLogScrollbar](#tlogscrollbar)
+- [TLogSearchBar](#tlogsearchbar)
 - [TLogSearchPager](#tlogsearchpager)
 - [TLogSearchResults](#tlogsearchresults)
 - [TLogView](#tlogview)
@@ -449,6 +450,49 @@
 | <code>scrollTo</code>    | —       | —    |
 | <code>scrollBy</code>    | —       | —    |
 | <code>markerClick</code> | —       | —    |
+
+## TLogSearchBar
+
+源码：`src/vue/components/TLogSearchBar.ts`
+
+### Props
+
+| 名称                             | 类型                            | 默认值                                                            | 必填 | 说明 |
+| -------------------------------- | ------------------------------- | ----------------------------------------------------------------- | ---- | ---- |
+| <code>x</code>                   | <code>number</code>             | —                                                                 | 是   | —    |
+| <code>y</code>                   | <code>number</code>             | —                                                                 | 是   | —    |
+| <code>w</code>                   | <code>number</code>             | —                                                                 | 是   | —    |
+| <code>zIndex</code>              | <code>number</code>             | <code>0</code>                                                    | 否   | —    |
+| <code>state</code>               | <code>TLogSearchBarState</code> | —                                                                 | 是   | —    |
+| <code>placeholder</code>         | <code>string</code>             | <code>&quot;Search…&quot;</code>                                  | 否   | —    |
+| <code>style</code>               | <code>Style</code>              | <code>undefined</code>                                            | 否   | —    |
+| <code>inputStyle</code>          | <code>Style</code>              | <code>undefined</code>                                            | 否   | —    |
+| <code>activeStyle</code>         | <code>Style</code>              | <code>() =&gt; ({ inverse: true })</code>                         | 否   | —    |
+| <code>errorStyle</code>          | <code>Style</code>              | <code>() =&gt; ({ fg: &quot;redBright&quot;, bold: true })</code> | 否   | —    |
+| <code>disabledStyle</code>       | <code>Style</code>              | <code>() =&gt; ({ dim: true })</code>                             | 否   | —    |
+| <code>toggleStyle</code>         | <code>Style</code>              | <code>undefined</code>                                            | 否   | —    |
+| <code>focusable</code>           | <code>boolean</code>            | <code>true</code>                                                 | 否   | —    |
+| <code>showModeToggle</code>      | <code>boolean</code>            | <code>true</code>                                                 | 否   | —    |
+| <code>showCaseToggle</code>      | <code>boolean</code>            | <code>true</code>                                                 | 否   | —    |
+| <code>showWholeWordToggle</code> | <code>boolean</code>            | <code>true</code>                                                 | 否   | —    |
+| <code>showCount</code>           | <code>boolean</code>            | <code>true</code>                                                 | 否   | —    |
+| <code>showNavigation</code>      | <code>boolean</code>            | <code>true</code>                                                 | 否   | —    |
+
+### Events
+
+| 名称                              | Payload | 说明 |
+| --------------------------------- | ------- | ---- |
+| <code>update</code>               | —       | —    |
+| <code>update:query</code>         | —       | —    |
+| <code>update:mode</code>          | —       | —    |
+| <code>update:caseSensitive</code> | —       | —    |
+| <code>update:wholeWord</code>     | —       | —    |
+| <code>previous</code>             | —       | —    |
+| <code>next</code>                 | —       | —    |
+| <code>clear</code>                | —       | —    |
+| <code>focus</code>                | —       | —    |
+| <code>blur</code>                 | —       | —    |
+| <code>keydown</code>              | —       | —    |
 
 ## TLogSearchPager
 
