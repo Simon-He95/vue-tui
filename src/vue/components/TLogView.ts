@@ -1,11 +1,11 @@
 import type { PropType } from "vue";
 import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { Style } from "../../core/types.js";
-import type { Rect, TerminalKeyboardEvent } from "../../events/index.js";
+import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
 import type { FramePerfReason } from "../../observability/frame-perf.js";
 import type { TerminalFrameContext } from "../context.js";
 import type { TLogDataSource, TLogViewScrollPayload } from "../log/types.js";
-import { parseAnsiSgr } from "../../core/ansi/sgr.js";
+import { applyAnsiSgrStyle, parseAnsiSgr } from "../../core/ansi/sgr.js";
 import {
   computed,
   defineComponent,
@@ -77,6 +77,16 @@ type TLogAnsiRowCacheEntry = {
   visualSegments: readonly TLogVisualSegment[];
   touchedAt: number;
 };
+type TLogVisibleLinkSegment = Readonly<{
+  startX: number;
+  endX: number;
+  href: string;
+  text: string;
+  index: number;
+  absoluteLineIndex: number;
+  startCell: number;
+  endCell: number;
+}>;
 type TLogSearchStatus = "idle" | "scanning" | "done";
 type TLogSearchLineMatch = Readonly<{
   startCell: number;
@@ -120,6 +130,16 @@ export type TLogViewSearchMatchPayload = Readonly<{
   match: TLogViewSearchMatch | null;
   currentMatchIndex: number;
   matchCount: number;
+}>;
+export type TLogViewLinkClickPayload = Readonly<{
+  href: string;
+  text: string;
+  absoluteLineIndex: number;
+  index: number;
+  startCell: number;
+  endCell: number;
+  cellX: number;
+  cellY: number;
 }>;
 export type TLogViewHandle = Readonly<{
   scrollToBottom: () => void;
@@ -233,18 +253,108 @@ function mergeAnsiStyle(baseStyle: Style, style: Style): Style {
   return next;
 }
 
-function parseAnsiLineToSegments(text: string, baseStyle: Style): readonly TLogStyledSegment[] {
-  const out: TLogStyledSegment[] = [];
+function parseSgrCodes(body: string): number[] {
+  const codes = body
+    .split(";")
+    .filter(Boolean)
+    .map((n) => Number.parseInt(n, 10))
+    .filter((n) => Number.isFinite(n));
+  return codes.length ? codes : [0];
+}
 
-  for (const seg of parseAnsiSgr(text, baseStyle)) {
-    const clean = sanitizeAnsiInlineText(seg.text);
-    if (!clean) continue;
-    out.push({
-      text: clean,
-      style: mergeAnsiStyle(baseStyle, seg.style),
-    });
+function parseOscEnd(input: string, start: number): { body: string; end: number } | null {
+  let j = start;
+  while (j < input.length) {
+    const code = input.charCodeAt(j);
+    if (code === 0x07) return { body: input.slice(start, j), end: j };
+    if (code === 0x1b && input[j + 1] === "\\") {
+      return { body: input.slice(start, j), end: j + 1 };
+    }
+    j++;
+  }
+  return null;
+}
+
+function parseAnsiLineToSegments(
+  text: string,
+  baseStyle: Style,
+  links: boolean,
+  linkStyle: Style,
+): readonly TLogStyledSegment[] {
+  if (!links) {
+    const out: TLogStyledSegment[] = [];
+
+    for (const seg of parseAnsiSgr(text, baseStyle)) {
+      const clean = sanitizeAnsiInlineText(seg.text);
+      if (!clean) continue;
+      out.push({
+        text: clean,
+        style: mergeAnsiStyle(baseStyle, seg.style),
+      });
+    }
+
+    return out;
   }
 
+  const out: TLogStyledSegment[] = [];
+  let style: Style = {};
+  let href: string | undefined;
+  let textStart = 0;
+
+  const flush = (until: number): void => {
+    if (until <= textStart) return;
+    const clean = sanitizeAnsiInlineText(text.slice(textStart, until));
+    if (!clean) return;
+    const merged = mergeAnsiStyle(baseStyle, style);
+    out.push({
+      text: clean,
+      style: href ? { ...merged, ...linkStyle, href } : merged,
+    });
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) !== 0x1b) continue;
+    const next = text[i + 1];
+
+    if (next === "[") {
+      let j = i + 2;
+      while (j < text.length) {
+        const c = text.charCodeAt(j);
+        if ((c >= 48 && c <= 57) || c === 59) {
+          j++;
+          continue;
+        }
+        break;
+      }
+      if (j >= text.length || text[j] !== "m") continue;
+
+      flush(i);
+      style = applyAnsiSgrStyle(style, parseSgrCodes(text.slice(i + 2, j)));
+      i = j;
+      textStart = j + 1;
+      continue;
+    }
+
+    if (next === "]") {
+      const osc = parseOscEnd(text, i + 2);
+      if (!osc) continue;
+
+      flush(i);
+      const parts = osc.body.split(";");
+      if (parts[0] === "8" && parts.length >= 3) {
+        href = parts.slice(2).join(";") || undefined;
+      }
+      i = osc.end;
+      textStart = osc.end + 1;
+      continue;
+    }
+
+    flush(i);
+    i += 1;
+    textStart = i + 1;
+  }
+
+  flush(text.length);
   return out;
 }
 
@@ -430,6 +540,11 @@ export const TLogView = defineComponent({
     overscan: { type: Number, default: 2 },
     wrap: { type: Boolean, default: false },
     ansi: { type: Boolean, default: false },
+    links: { type: Boolean, default: false },
+    linkStyle: {
+      type: Object as PropType<Style>,
+      default: () => ({ underline: true }),
+    },
     searchQuery: {
       type: String,
       default: "",
@@ -461,6 +576,7 @@ export const TLogView = defineComponent({
     "update:searchQuery",
     "search",
     "searchMatch",
+    "linkClick",
     "focus",
     "blur",
     "keydown",
@@ -496,6 +612,7 @@ export const TLogView = defineComponent({
     const ansiWrapCache = new Map<TLogRenderCacheKey, TLogAnsiWrapCacheEntry>();
     const ansiRowCache = new Map<TLogRenderCacheKey, TLogAnsiRowCacheEntry>();
     const searchLineCache = new Map<TLogRenderCacheKey, TLogSearchLineCacheEntry>();
+    const visibleLinksByRow = new Map<number, TLogVisibleLinkSegment[]>();
     let searchGeneration = 0;
     let searchCursor = 0;
     let searchStatus: TLogSearchStatus = "idle";
@@ -581,16 +698,36 @@ export const TLogView = defineComponent({
       return JSON.stringify([key, width]);
     }
 
-    function ansiLineCacheKey(key: TLogLineKey, baseStyleKey: string): TLogRenderCacheKey {
-      return JSON.stringify(["ansi-line", key, baseStyleKey]);
+    function linksEnabled(): boolean {
+      return props.ansi && props.links;
+    }
+
+    function linkStyleCacheKey(): string {
+      return linksEnabled() ? styleCacheKey(props.linkStyle) : "";
+    }
+
+    function ansiLineCacheKey(
+      key: TLogLineKey,
+      baseStyleKey: string,
+      linkKey: string,
+    ): TLogRenderCacheKey {
+      return JSON.stringify(["ansi-line", key, baseStyleKey, linksEnabled() ? 1 : 0, linkKey]);
     }
 
     function ansiWrapCacheKey(
       key: TLogLineKey,
       width: number,
       baseStyleKey: string,
+      linkKey: string,
     ): TLogRenderCacheKey {
-      return JSON.stringify(["ansi-wrap", key, width, baseStyleKey]);
+      return JSON.stringify([
+        "ansi-wrap",
+        key,
+        width,
+        baseStyleKey,
+        linksEnabled() ? 1 : 0,
+        linkKey,
+      ]);
     }
 
     function ansiRowCacheKey(
@@ -601,6 +738,7 @@ export const TLogView = defineComponent({
       clipX: number,
       visibleW: number,
       baseStyleKey: string,
+      linkKey: string,
     ): TLogRenderCacheKey {
       return JSON.stringify([
         "ansi-row",
@@ -611,6 +749,8 @@ export const TLogView = defineComponent({
         clipX,
         visibleW,
         baseStyleKey,
+        linksEnabled() ? 1 : 0,
+        linkKey,
       ]);
     }
 
@@ -689,6 +829,7 @@ export const TLogView = defineComponent({
       ansiWrapCache.clear();
       ansiRowCache.clear();
       searchLineCache.clear();
+      visibleLinksByRow.clear();
     }
 
     function renderLine(
@@ -769,18 +910,24 @@ export const TLogView = defineComponent({
       count: number,
       baseStyle: Style,
       baseStyleKey: string,
+      linkKey = linkStyleCacheKey(),
     ): readonly TLogStyledSegment[] {
       if (index < 0 || index >= count) return [];
 
       const rawKey = lineKey(index);
-      const key = ansiLineCacheKey(rawKey, baseStyleKey);
+      const key = ansiLineCacheKey(rawKey, baseStyleKey, linkKey);
       const cached = ansiLineCache.get(key);
       if (cached) {
         cached.touchedAt = ++cacheClock;
         return cached.segments;
       }
 
-      const segments = parseAnsiLineToSegments(props.source.getLine(index), baseStyle);
+      const segments = parseAnsiLineToSegments(
+        props.source.getLine(index),
+        baseStyle,
+        linksEnabled(),
+        props.linkStyle,
+      );
       ansiLineCache.set(key, {
         key,
         segments,
@@ -795,19 +942,20 @@ export const TLogView = defineComponent({
       width: number,
       baseStyle: Style,
       baseStyleKey: string,
+      linkKey = linkStyleCacheKey(),
     ): readonly TLogVisualRow[] {
       if (index < 0 || index >= count) return [[]];
 
       width = Math.max(1, Math.floor(width));
       const rawKey = lineKey(index);
-      const key = ansiWrapCacheKey(rawKey, width, baseStyleKey);
+      const key = ansiWrapCacheKey(rawKey, width, baseStyleKey, linkKey);
       const cached = ansiWrapCache.get(key);
       if (cached) {
         cached.touchedAt = ++cacheClock;
         return cached.visualRows;
       }
 
-      const segments = ansiSegmentsForLine(index, count, baseStyle, baseStyleKey);
+      const segments = ansiSegmentsForLine(index, count, baseStyle, baseStyleKey, linkKey);
       const rows = wrapStyledSegmentsByCells(segments, width);
       ansiWrapCache.set(key, {
         key,
@@ -825,18 +973,28 @@ export const TLogView = defineComponent({
       visibleW: number,
       baseStyle: Style,
       baseStyleKey: string,
+      linkKey = linkStyleCacheKey(),
     ): readonly TLogVisualSegment[] {
       if (index < 0 || index >= count) return [];
 
       const rawKey = lineKey(index);
-      const key = ansiRowCacheKey("fixed", rawKey, 0, fullW, clipX, visibleW, baseStyleKey);
+      const key = ansiRowCacheKey(
+        "fixed",
+        rawKey,
+        0,
+        fullW,
+        clipX,
+        visibleW,
+        baseStyleKey,
+        linkKey,
+      );
       const cached = ansiRowCache.get(key);
       if (cached) {
         cached.touchedAt = ++cacheClock;
         return cached.visualSegments;
       }
 
-      const segments = ansiSegmentsForLine(index, count, baseStyle, baseStyleKey);
+      const segments = ansiSegmentsForLine(index, count, baseStyle, baseStyleKey, linkKey);
       const visualSegments = clipStyledSegmentsByCells(segments, clipX, clipX + visibleW);
       ansiRowCache.set(key, {
         key,
@@ -854,6 +1012,7 @@ export const TLogView = defineComponent({
       clipX: number,
       visibleW: number,
       baseStyleKey: string,
+      linkKey = linkStyleCacheKey(),
     ): readonly TLogVisualSegment[] {
       const key = ansiRowCacheKey(
         "wrapped",
@@ -863,6 +1022,7 @@ export const TLogView = defineComponent({
         clipX,
         visibleW,
         baseStyleKey,
+        linkKey,
       );
       const cached = ansiRowCache.get(key);
       if (cached) {
@@ -1511,6 +1671,73 @@ export const TLogView = defineComponent({
       emit("scroll", scrollPayload(top));
     }
 
+    function recordVisibleLinks(
+      y: number,
+      segments: readonly TLogVisualSegment[],
+      lineIndex: number,
+      visibleStartCell: number,
+    ): void {
+      visibleLinksByRow.delete(y);
+      if (!linksEnabled()) return;
+
+      const rowLinks: TLogVisibleLinkSegment[] = [];
+      let x = normalizedRect().x;
+      let cell = visibleStartCell;
+      for (const seg of segments) {
+        const href = seg.style.href;
+        if (href) {
+          const previous = rowLinks[rowLinks.length - 1];
+          if (
+            previous?.href === href &&
+            previous.endX === x &&
+            previous.endCell === cell &&
+            previous.index === lineIndex
+          ) {
+            rowLinks[rowLinks.length - 1] = {
+              ...previous,
+              endX: x + seg.cells,
+              text: previous.text + seg.text,
+              endCell: cell + seg.cells,
+            };
+          } else {
+            rowLinks.push({
+              startX: x,
+              endX: x + seg.cells,
+              href,
+              text: seg.text,
+              index: lineIndex,
+              absoluteLineIndex: firstLineIndex() + lineIndex,
+              startCell: cell,
+              endCell: cell + seg.cells,
+            });
+          }
+        }
+        x += seg.cells;
+        cell += seg.cells;
+      }
+
+      if (rowLinks.length) visibleLinksByRow.set(y, rowLinks);
+    }
+
+    function emitLinkClick(e: TerminalPointerEvent): void {
+      const link = visibleLinksByRow
+        .get(e.cellY)
+        ?.find((candidate) => e.cellX >= candidate.startX && e.cellX < candidate.endX);
+      if (!link) return;
+
+      e.preventDefault?.();
+      emit("linkClick", {
+        href: link.href,
+        text: link.text,
+        absoluteLineIndex: link.absoluteLineIndex,
+        index: link.index,
+        startCell: link.startCell,
+        endCell: link.endCell,
+        cellX: e.cellX,
+        cellY: e.cellY,
+      } satisfies TLogViewLinkClickPayload);
+    }
+
     function invalidateSelf(
       priority: "low" | "normal" | "high" = "normal",
       reason?: FramePerfReason,
@@ -1531,6 +1758,38 @@ export const TLogView = defineComponent({
         for (let i = 0; i < -delta; i++) rows.push(y0 + i);
       }
       return rows;
+    }
+
+    function shiftVisibleLinksForScrollRegion(y0: number, y1: number, delta: number): void {
+      if (!visibleLinksByRow.size || delta === 0) return;
+
+      const h = y1 - y0;
+      if (h <= 0) return;
+      if (Math.abs(delta) >= h) {
+        for (let y = y0; y < y1; y++) visibleLinksByRow.delete(y);
+        return;
+      }
+
+      const next = new Map<number, TLogVisibleLinkSegment[]>();
+      for (const [y, links] of visibleLinksByRow) {
+        if (y < y0 || y >= y1) next.set(y, links);
+      }
+
+      if (delta > 0) {
+        for (let y = y0; y < y1 - delta; y++) {
+          const links = visibleLinksByRow.get(y + delta);
+          if (links?.length) next.set(y, links);
+        }
+      } else {
+        const n = -delta;
+        for (let y = y0 + n; y < y1; y++) {
+          const links = visibleLinksByRow.get(y + delta);
+          if (links?.length) next.set(y, links);
+        }
+      }
+
+      visibleLinksByRow.clear();
+      for (const [y, links] of next) visibleLinksByRow.set(y, links);
     }
 
     function viewportRows(): number[] {
@@ -1620,6 +1879,7 @@ export const TLogView = defineComponent({
 
       if (canUseScrollPlane) {
         render.unsafeScrollPlaneRows(plane.value, r.y, r.y + h, delta);
+        shiftVisibleLinksForScrollRegion(r.y, r.y + h, delta);
         markRowsDirty(
           options?.extraDirtyRows?.length
             ? [...exposedRowsForDelta(r.y, h, delta), ...options.extraDirtyRows]
@@ -2067,6 +2327,7 @@ export const TLogView = defineComponent({
           emit("blur");
           invalidateSelf();
         },
+        click: emitLinkClick,
         keydown: onKeydown,
       },
     }));
@@ -2100,9 +2361,19 @@ export const TLogView = defineComponent({
       },
     );
 
-    watch([() => props.source, () => props.wrap, () => props.ansi, () => fullRect.value.w], () => {
-      clearLineCaches();
-    });
+    watch(
+      [
+        () => props.source,
+        () => props.wrap,
+        () => props.ansi,
+        () => props.links,
+        () => props.linkStyle,
+        () => fullRect.value.w,
+      ],
+      () => {
+        clearLineCaches();
+      },
+    );
 
     watch(
       [
@@ -2111,6 +2382,7 @@ export const TLogView = defineComponent({
         () => props.searchOptions?.wholeWord,
         () => props.searchOptions?.maxMatches,
         () => props.ansi,
+        () => props.links,
         () => props.source,
       ],
       () => {
@@ -2132,6 +2404,8 @@ export const TLogView = defineComponent({
         () => props.source,
         () => props.wrap,
         () => props.ansi,
+        () => props.links,
+        () => props.linkStyle,
         () => fullRect.value.w,
         () => fullRect.value.y,
         () => fullRect.value.h,
@@ -2187,6 +2461,8 @@ export const TLogView = defineComponent({
         props.source,
         props.wrap,
         props.ansi,
+        props.links,
+        props.linkStyle,
         props.highlightMatches,
         props.matchStyle,
         props.currentMatchStyle,
@@ -2221,6 +2497,7 @@ export const TLogView = defineComponent({
 
         const paintRow = (y: number): void => {
           if (y < r.y || y >= r.y + r.h) return;
+          visibleLinksByRow.delete(y);
           const visualIndex = top + clipY + (y - r.y);
           if (props.wrap) {
             const located = locateVisualRow(visualIndex);
@@ -2254,14 +2531,15 @@ export const TLogView = defineComponent({
                 r.w,
                 baseStyleKey,
               );
-              writeStyledRow(
-                applySearchHighlightsToSegments(
-                  visualSegments,
-                  located.lineIndex,
-                  wrappedAnsiRowStartCell(wrappedRows, located.partIndex) + clipX,
-                ),
-                y,
+              const visibleStartCell =
+                wrappedAnsiRowStartCell(wrappedRows, located.partIndex) + clipX;
+              const highlighted = applySearchHighlightsToSegments(
+                visualSegments,
+                located.lineIndex,
+                visibleStartCell,
               );
+              recordVisibleLinks(y, highlighted, located.lineIndex, visibleStartCell);
+              writeStyledRow(highlighted, y);
               return;
             }
 
@@ -2311,7 +2589,9 @@ export const TLogView = defineComponent({
               base,
               baseStyleKey,
             );
-            writeStyledRow(applySearchHighlightsToSegments(visualSegments, idx, clipX), y);
+            const highlighted = applySearchHighlightsToSegments(visualSegments, idx, clipX);
+            recordVisibleLinks(y, highlighted, idx, clipX);
+            writeStyledRow(highlighted, y);
             return;
           }
           if (props.highlightMatches && matchesByLine.has(idx)) {

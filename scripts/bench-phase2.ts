@@ -459,6 +459,7 @@ async function benchDomTLogView(
   lineKind: "short" | "long" = "short",
   wrap = false,
   ansi = false,
+  links = false,
 ): Promise<Record<string, unknown>> {
   let framePerf: any = null;
   let rendererRef: any = null;
@@ -475,7 +476,10 @@ async function benchDomTLogView(
       return lineKind === "long" ? `${prefix} ${index} ${longPayload}` : `${prefix} ${index}`;
     const dim = `\x1b[2m2026-05-03T08:${String(index % 60).padStart(2, "0")}:00Z\x1b[0m`;
     const red = "\x1b[31mERROR\x1b[0m";
-    return `${dim} ${red} ${prefix} ${index} ${longPayload}`;
+    const link = links
+      ? `\x1b]8;;https://example.com/${index}\x07${prefix}-${index}\x1b]8;;\x07`
+      : `${prefix} ${index}`;
+    return `${dim} ${red} ${link} ${longPayload}`;
   };
   const log = createAppendOnlyLogStore();
   log.appendLines(Array.from({ length: 1000 }, (_, index) => makeLine("seed", index)));
@@ -512,6 +516,7 @@ async function benchDomTLogView(
           rowScrollMode: "unsafe-full-row",
           wrap,
           ansi,
+          links,
           onScroll: (payload: { scrollTop: number; atBottom: boolean }) => {
             finalTop = payload.scrollTop;
             atBottom = payload.atBottom;
@@ -590,9 +595,13 @@ async function benchDomTLogView(
     return {
       name:
         ansi && wrap && lineKind === "long"
-          ? "tlog-view-ansi-long-lines-wrap"
+          ? links
+            ? "tlog-view-osc8-links-wrap"
+            : "tlog-view-ansi-long-lines-wrap"
           : ansi
-            ? `tlog-view-ansi-${lineKind}-lines-${modeName}`
+            ? links
+              ? `tlog-view-osc8-links-${lineKind}-lines-${modeName}`
+              : `tlog-view-ansi-${lineKind}-lines-${modeName}`
             : wrap && lineKind === "long"
               ? `tlog-view-wrap-long-lines-${modeName}`
               : lineKind === "long"
@@ -602,6 +611,7 @@ async function benchDomTLogView(
       lineKind,
       wrap,
       ansi,
+      links,
       longPayloadCells: longPayload.length,
       scheduledRafFrames: raf.scheduledRafFrames(),
       pendingRafFramesBeforeFlush,
@@ -628,7 +638,10 @@ async function benchDomTLogView(
   }
 }
 
-async function benchDomTLogViewRetention(ansi = false): Promise<Record<string, unknown>> {
+async function benchDomTLogViewRetention(
+  ansi = false,
+  links = false,
+): Promise<Record<string, unknown>> {
   let framePerf: any = null;
   let rendererRef: any = null;
   let finalTop = 0;
@@ -644,7 +657,10 @@ async function benchDomTLogViewRetention(ansi = false): Promise<Record<string, u
     if (!ansi) return `${prefix} ${index}`;
     const dim = `\x1b[2m2026-05-03T08:${String(index % 60).padStart(2, "0")}:00Z\x1b[0m`;
     const red = "\x1b[31mERROR\x1b[0m";
-    return `${dim} ${red} ${prefix} ${index} ${"x".repeat(200)}`;
+    const link = links
+      ? `\x1b]8;;https://example.com/${index}\x07${prefix}-${index}\x1b]8;;\x07`
+      : `${prefix} ${index}`;
+    return `${dim} ${red} ${link} ${"x".repeat(200)}`;
   };
   log.appendLines(Array.from({ length: maxLines }, (_, index) => makeLine("seed", index)));
   const source = {
@@ -679,6 +695,7 @@ async function benchDomTLogViewRetention(ansi = false): Promise<Record<string, u
           version: log.version.value,
           rowScrollMode: "unsafe-full-row",
           ansi,
+          links,
           onScroll: (payload: { scrollTop: number; atBottom: boolean }) => {
             finalTop = payload.scrollTop;
             atBottom = payload.atBottom;
@@ -722,10 +739,15 @@ async function benchDomTLogViewRetention(ansi = false): Promise<Record<string, u
     const samples = framePerf.list();
 
     return {
-      name: ansi ? "tlog-view-ansi-retention-max-1000" : "tlog-view-retention-100k-append-max-1000",
+      name: links
+        ? "tlog-view-osc8-links-retained"
+        : ansi
+          ? "tlog-view-ansi-retention-max-1000"
+          : "tlog-view-retention-100k-append-max-1000",
       appendCount,
       maxLines,
       ansi,
+      links,
       retainedLineCount: log.source.lineCount(),
       firstLineIndex: log.source.firstLineIndex?.() ?? 0,
       scheduledRafFrames: raf.scheduledRafFrames(),
@@ -885,8 +907,10 @@ async function main(): Promise<void> {
     await benchDomTLogView("burst", "long", true),
     await benchDomTLogView("stick-bottom", "short", false, true),
     await benchDomTLogView("stick-bottom", "long", true, true),
+    await benchDomTLogView("stick-bottom", "long", true, true, true),
     await benchDomTLogViewRetention(),
     await benchDomTLogViewRetention(true),
+    await benchDomTLogViewRetention(true, true),
     await benchDomTLogViewSearch("100k-retained"),
     await benchDomTLogViewSearch("ansi-retained"),
     await benchDomTLogViewSearch("wrap-long-lines"),

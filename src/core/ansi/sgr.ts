@@ -122,7 +122,7 @@ function ansi256ToRgb(index: number): { r: number; g: number; b: number } {
   return { r: toComponent(rr), g: toComponent(gg), b: toComponent(bb) };
 }
 
-function applySgr(current: Style, codes: number[]): Style {
+export function applyAnsiSgrStyle(current: Style, codes: number[]): Style {
   let next: Style = { ...current };
   for (let i = 0; i < codes.length; i++) {
     const code = codes[i]!;
@@ -218,7 +218,7 @@ export function parseAnsiSgr(input: string, baseStyle: Style = {}): AnsiSegment[
       .map((n) => Number.parseInt(n, 10))
       .filter((n) => Number.isFinite(n));
 
-    style = applySgr(style, codes.length ? codes : [0]);
+    style = applyAnsiSgrStyle(style, codes.length ? codes : [0]);
     lastIndex = j + 1;
     i = j;
   }
