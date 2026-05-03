@@ -1715,6 +1715,69 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
+   it("resets SGR foreground and background to the TLogView base style", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mred\x1b[39mbase \x1b[41mbg\x1b[49mnormal",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 32,
+          h: 1,
+          source,
+          version: 1,
+          style: { fg: "whiteBright", bg: "black" },
+          ansi: true,
+        }),
+      32,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe("redbase bgnormal");
+    const styles = rowStyles(mounted, 0);
+    expect(styles[0]!.fg).toBe("red");
+    expect(styles[3]!.fg).toBe("whiteBright");
+    expect(styles[8]!.bg).toBe("red");
+    expect(styles[10]!.bg).toBe("black");
+    mounted.unmount();
+  });
+
+  it("renders ANSI SGR style flags", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[1;2;3;4;7mstyled\x1b[0m",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+        }),
+      12,
+      2,
+    );
+
+    const style = rowStyles(mounted, 0)[0]!;
+    expect(style.bold).toBe(true);
+    expect(style.dim).toBe(true);
+    expect(style.italic).toBe(true);
+    expect(style.underline).toBe(true);
+    expect(style.inverse).toBe(true);
+    mounted.unmount();
+  });
+
   it("preserves ANSI style when fixed rows are clipped into a styled segment", async () => {
     const source: TLogDataSource = {
       lineCount: () => 1,

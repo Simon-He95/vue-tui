@@ -174,7 +174,16 @@ function sanitizeAnsiInlineText(text: string): string {
 }
 
 function mergeAnsiStyle(baseStyle: Style, style: Style): Style {
-  return { ...baseStyle, ...style };
+  let next: Style = { ...baseStyle };
+  if (style.fg !== undefined) next = { ...next, fg: style.fg };
+  if (style.bg !== undefined) next = { ...next, bg: style.bg };
+  if (style.bold !== undefined) next = { ...next, bold: style.bold };
+  if (style.dim !== undefined) next = { ...next, dim: style.dim };
+  if (style.italic !== undefined) next = { ...next, italic: style.italic };
+  if (style.underline !== undefined) next = { ...next, underline: style.underline };
+  if (style.inverse !== undefined) next = { ...next, inverse: style.inverse };
+  if (style.href !== undefined) next = { ...next, href: style.href };
+  return next;
 }
 
 function parseAnsiLineToSegments(text: string, baseStyle: Style): readonly TLogStyledSegment[] {
