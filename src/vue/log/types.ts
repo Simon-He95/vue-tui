@@ -4,7 +4,12 @@ export interface TLogDataSource {
   lineCount(): number;
   getLine(index: number): string;
   getLineKey?: (index: number) => string | number;
+  firstLineIndex?: () => number;
 }
+
+export type CreateAppendOnlyLogStoreOptions = Readonly<{
+  maxLines?: number;
+}>;
 
 export type AppendOnlyLogStore = Readonly<{
   source: TLogDataSource;
@@ -21,4 +26,5 @@ export type TLogViewScrollPayload = Readonly<{
   atBottom: boolean;
   lineCount: number;
   estimatedVisualRowCount: number;
+  firstLineIndex?: number;
 }>;

@@ -159,6 +159,7 @@ describe("TLogView", () => {
         atBottom: false,
         lineCount: 100,
         estimatedVisualRowCount: 100,
+        firstLineIndex: 0,
       });
       expect(rowText(app, 0)).toBe("line-95");
     } finally {
@@ -829,6 +830,218 @@ describe("TLogView", () => {
       expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual(before);
       expect(onScroll.mock.calls.length).toBe(scrollCallsBeforeAppend);
       expect(commits).toEqual([]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keeps bottom stickiness when retention trims the head", async () => {
+    const log = createAppendOnlyLogStore({ maxLines: 5 });
+    log.appendLines(Array.from({ length: 5 }, (_, index) => `line-${index}`));
+
+    const App = defineComponent({
+      name: "TLogViewRetentionBottomApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            source: log.source,
+            version: log.version.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      log.appendLine("line-5");
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1, 2].map((y) => rowText(app, y))).toEqual(["line-3", "line-4", "line-5"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("preserves a detached viewport anchor when retention trims the head", async () => {
+    const log = createAppendOnlyLogStore({ maxLines: 10 });
+    log.appendLines(Array.from({ length: 10 }, (_, index) => `line-${index}`));
+    const logView = ref<TLogViewHandle | null>(null);
+    const onScroll = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewRetentionDetachedApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            onScroll,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      logView.value!.scrollToLine(5);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("line-5");
+
+      onScroll.mockClear();
+      log.appendLine("line-10");
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("line-5");
+      expect(onScroll.mock.calls.at(-1)?.[0]).toMatchObject({
+        scrollTop: 4,
+        firstLineIndex: 1,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("clamps to the retained head when the visible anchor is trimmed", async () => {
+    const log = createAppendOnlyLogStore({ maxLines: 5 });
+    log.appendLines(Array.from({ length: 5 }, (_, index) => `line-${index}`));
+
+    const App = defineComponent({
+      name: "TLogViewRetentionTrimmedAnchorApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            source: log.source,
+            version: log.version.value,
+            defaultScrollTop: 0,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("line-0");
+
+      log.appendLine("line-5");
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("line-1");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("emits controlled retention scroll updates without repainting ahead of the prop", async () => {
+    const log = createAppendOnlyLogStore({ maxLines: 10 });
+    log.appendLines(Array.from({ length: 10 }, (_, index) => `line-${index}`));
+    const controlledTop = ref(5);
+    const onUpdateScrollTop = vi.fn();
+    const onScroll = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewControlledRetentionDetachedApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            scrollTop: controlledTop.value,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+            onScroll,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("line-5");
+
+      log.appendLine("line-10");
+      await nextTick();
+      await nextTick();
+
+      expect(onUpdateScrollTop).toHaveBeenCalledWith(4);
+      expect(onScroll.mock.calls.at(-1)?.[0]).toMatchObject({
+        scrollTop: 4,
+        firstLineIndex: 1,
+      });
+      expect(rowText(app, 0)).toBe("line-5");
+
+      controlledTop.value = 4;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("line-5");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("preserves anchor on retention trim when autoStickToBottom is false", async () => {
+    const log = createAppendOnlyLogStore({ maxLines: 5 });
+    log.appendLines(["line-0", "line-1", "line-2", "line-3", "line-4"]);
+
+    const App = defineComponent({
+      name: "TLogViewNoStickRetentionAnchorApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            source: log.source,
+            version: log.version.value,
+            autoStickToBottom: false,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect([0, 1, 2].map((y) => rowText(app, y))).toEqual(["line-2", "line-3", "line-4"]);
+
+      log.appendLine("line-5");
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1, 2].map((y) => rowText(app, y))).toEqual(["line-2", "line-3", "line-4"]);
     } finally {
       app.dispose();
     }
@@ -1603,6 +1816,52 @@ describe("TLogView", () => {
       await nextTick();
 
       expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual(before);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("preserves a detached wrapped viewport anchor when retention trims measured head rows", async () => {
+    const log = createAppendOnlyLogStore({ maxLines: 7 });
+    log.appendLines(["aa", "bbbbbbbb", "cc", "dd", "ee", "ff", "gg"]);
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewWrapRetentionDetachedApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      logView.value!.scrollToLine(2);
+      await nextTick();
+      app.scheduler.flushNow();
+      logView.value!.scrollToLine(2);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("cc");
+
+      log.appendLine("hh");
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("cc");
     } finally {
       app.dispose();
     }
