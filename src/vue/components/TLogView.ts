@@ -3,6 +3,7 @@ import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent } from "../../events/index.js";
 import type { FramePerfReason } from "../../observability/frame-perf.js";
+import type { TerminalFrameContext } from "../context.js";
 import type { TLogDataSource, TLogViewScrollPayload } from "../log/types.js";
 import { parseAnsiSgr } from "../../core/ansi/sgr.js";
 import {
@@ -76,10 +77,50 @@ type TLogAnsiRowCacheEntry = {
   visualSegments: readonly TLogVisualSegment[];
   touchedAt: number;
 };
+type TLogSearchStatus = "idle" | "scanning" | "done";
+type TLogSearchLineMatch = Readonly<{
+  startCell: number;
+  endCell: number;
+  text: string;
+}>;
+type TLogSearchLineCacheEntry = {
+  key: TLogRenderCacheKey;
+  matches: readonly TLogSearchLineMatch[];
+  touchedAt: number;
+};
 type LocatedVisualRow = {
   lineIndex: number;
   partIndex: number;
 };
+export type TLogViewSearchOptions = Readonly<{
+  caseSensitive?: boolean;
+  wholeWord?: boolean;
+  maxMatches?: number;
+  scanBudgetMs?: number;
+}>;
+export type TLogViewSearchMatch = Readonly<{
+  absoluteLineIndex: number;
+  index: number;
+  startCell: number;
+  endCell: number;
+  text: string;
+}>;
+export type TLogViewSearchState = Readonly<{
+  query: string;
+  status: TLogSearchStatus;
+  matchCount: number;
+  currentMatchIndex: number;
+}>;
+export type TLogViewSearchPayload = Readonly<{
+  query: string;
+  status: TLogSearchStatus;
+  matchCount: number;
+}>;
+export type TLogViewSearchMatchPayload = Readonly<{
+  match: TLogViewSearchMatch | null;
+  currentMatchIndex: number;
+  matchCount: number;
+}>;
 export type TLogViewHandle = Readonly<{
   scrollToBottom: () => void;
   scrollToTop: () => void;
@@ -91,12 +132,18 @@ export type TLogViewHandle = Readonly<{
       align?: "start" | "center" | "end";
     }>,
   ) => void;
+  findNext: () => void;
+  findPrevious: () => void;
+  clearSearch: () => void;
+  getSearchState: () => TLogViewSearchState;
 }>;
 
 let nextTLogViewTaskId = 0;
 const DEFAULT_LOG_RENDER_CACHE_SIZE = 2_000;
 const DEFAULT_LOG_WRAP_CACHE_SIZE = 2_000;
 const DEFAULT_VISUAL_INDEX_CAPACITY = 1_024;
+const DEFAULT_SEARCH_MAX_MATCHES = 10_000;
+const DEFAULT_SEARCH_SCAN_BUDGET_MS = 4;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -212,6 +259,25 @@ function styleCacheKey(style: Style): string {
     style.inverse ? 1 : 0,
     style.href ?? "",
   ]);
+}
+
+function mergeHighlightStyle(baseStyle: Style, highlightStyle: Style): Style {
+  return { ...baseStyle, ...highlightStyle };
+}
+
+function stringIndexToCell(text: string, index: number): number {
+  return textCellWidth(text.slice(0, index));
+}
+
+function isAsciiWordChar(ch: string | undefined): boolean {
+  if (!ch) return false;
+  const code = ch.charCodeAt(0);
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    code === 95
+  );
 }
 
 function clipStyledSegmentsByCells(
@@ -364,12 +430,41 @@ export const TLogView = defineComponent({
     overscan: { type: Number, default: 2 },
     wrap: { type: Boolean, default: false },
     ansi: { type: Boolean, default: false },
+    searchQuery: {
+      type: String,
+      default: "",
+    },
+    searchOptions: {
+      type: Object as PropType<TLogViewSearchOptions>,
+      default: undefined,
+    },
+    highlightMatches: {
+      type: Boolean,
+      default: true,
+    },
+    matchStyle: {
+      type: Object as PropType<Style>,
+      default: () => ({ inverse: true }),
+    },
+    currentMatchStyle: {
+      type: Object as PropType<Style>,
+      default: () => ({ inverse: true, bold: true }),
+    },
     rowScrollMode: {
       type: String as PropType<RowScrollMode>,
       default: "off",
     },
   },
-  emits: ["scroll", "update:scrollTop", "focus", "blur", "keydown"],
+  emits: [
+    "scroll",
+    "update:scrollTop",
+    "update:searchQuery",
+    "search",
+    "searchMatch",
+    "focus",
+    "blur",
+    "keydown",
+  ],
   setup(props, { emit, expose }) {
     const { terminal, scheduler, render, rendererCapabilities, defaultStyle, events } =
       useTerminal();
@@ -400,6 +495,13 @@ export const TLogView = defineComponent({
     const ansiLineCache = new Map<TLogRenderCacheKey, TLogAnsiLineCacheEntry>();
     const ansiWrapCache = new Map<TLogRenderCacheKey, TLogAnsiWrapCacheEntry>();
     const ansiRowCache = new Map<TLogRenderCacheKey, TLogAnsiRowCacheEntry>();
+    const searchLineCache = new Map<TLogRenderCacheKey, TLogSearchLineCacheEntry>();
+    let searchGeneration = 0;
+    let searchCursor = 0;
+    let searchStatus: TLogSearchStatus = "idle";
+    let currentMatchIndex = -1;
+    let searchMatches: TLogViewSearchMatch[] = [];
+    const matchesByLine = new Map<number, number[]>();
     const wheelState = createWheelScrollState();
     // Unknown wrapped lines count as one row until measured, so large bottom mounts avoid full-source wrapping.
     let visualIndexWidth = 0;
@@ -568,12 +670,25 @@ export const TLogView = defineComponent({
       }
     }
 
+    function trimSearchLineCache(): void {
+      const max = DEFAULT_LOG_RENDER_CACHE_SIZE;
+      if (searchLineCache.size <= max) return;
+
+      const entries = Array.from(searchLineCache.values()).sort(
+        (a, b) => a.touchedAt - b.touchedAt,
+      );
+      for (const entry of entries.slice(0, searchLineCache.size - max)) {
+        searchLineCache.delete(entry.key);
+      }
+    }
+
     function clearLineCaches(): void {
       renderLineCache.clear();
       wrapLineCache.clear();
       ansiLineCache.clear();
       ansiWrapCache.clear();
       ansiRowCache.clear();
+      searchLineCache.clear();
     }
 
     function renderLine(
@@ -762,6 +877,325 @@ export const TLogView = defineComponent({
         touchedAt: ++cacheClock,
       });
       return visualSegments;
+    }
+
+    function normalizedSearchQuery(): string {
+      const query = props.searchQuery ?? "";
+      return query.trim() ? query : "";
+    }
+
+    function maxSearchMatches(): number {
+      const n = Math.floor(Number(props.searchOptions?.maxMatches ?? DEFAULT_SEARCH_MAX_MATCHES));
+      if (!Number.isFinite(n)) return DEFAULT_SEARCH_MAX_MATCHES;
+      return Math.max(0, n);
+    }
+
+    function searchScanBudgetMs(): number {
+      const n = Number(props.searchOptions?.scanBudgetMs ?? DEFAULT_SEARCH_SCAN_BUDGET_MS);
+      if (!Number.isFinite(n)) return DEFAULT_SEARCH_SCAN_BUDGET_MS;
+      return Math.max(0, n);
+    }
+
+    function searchLineCacheKey(rawKey: TLogLineKey, query: string): TLogRenderCacheKey {
+      return JSON.stringify([
+        "search-line",
+        rawKey,
+        props.ansi ? 1 : 0,
+        props.searchOptions?.caseSensitive ? 1 : 0,
+        props.searchOptions?.wholeWord ? 1 : 0,
+        query,
+      ]);
+    }
+
+    function searchPayload(query = normalizedSearchQuery()): TLogViewSearchPayload {
+      return {
+        query,
+        status: searchStatus,
+        matchCount: searchMatches.length,
+      };
+    }
+
+    function searchMatchPayload(): TLogViewSearchMatchPayload {
+      return {
+        match: currentMatchIndex >= 0 ? (searchMatches[currentMatchIndex] ?? null) : null,
+        currentMatchIndex,
+        matchCount: searchMatches.length,
+      };
+    }
+
+    function emitSearch(query = normalizedSearchQuery()): void {
+      emit("search", searchPayload(query));
+    }
+
+    function emitSearchMatch(): void {
+      emit("searchMatch", searchMatchPayload());
+    }
+
+    function clearSearchMatches(): void {
+      searchMatches = [];
+      matchesByLine.clear();
+      currentMatchIndex = -1;
+    }
+
+    function addSearchMatch(match: TLogViewSearchMatch): void {
+      const matchIndex = searchMatches.length;
+      searchMatches.push(match);
+      let lineMatches = matchesByLine.get(match.index);
+      if (!lineMatches) {
+        lineMatches = [];
+        matchesByLine.set(match.index, lineMatches);
+      }
+      lineMatches.push(matchIndex);
+    }
+
+    function searchableTextForLine(
+      index: number,
+      count: number,
+      baseStyle: Style,
+      baseStyleKey: string,
+    ): string {
+      if (props.ansi) {
+        return ansiSegmentsForLine(index, count, baseStyle, baseStyleKey)
+          .map((seg) => seg.text)
+          .join("");
+      }
+      return sanitizeInlineText(props.source.getLine(index));
+    }
+
+    function findLineSearchMatches(text: string, query: string): readonly TLogSearchLineMatch[] {
+      if (!query) return [];
+      const caseSensitive = props.searchOptions?.caseSensitive === true;
+      const wholeWord = props.searchOptions?.wholeWord === true;
+      const haystack = caseSensitive ? text : text.toLowerCase();
+      const needle = caseSensitive ? query : query.toLowerCase();
+      if (!needle) return [];
+
+      const out: TLogSearchLineMatch[] = [];
+      let from = 0;
+      while (from <= haystack.length) {
+        const index = haystack.indexOf(needle, from);
+        if (index < 0) break;
+        const endIndex = index + needle.length;
+        if (!wholeWord || (!isAsciiWordChar(text[index - 1]) && !isAsciiWordChar(text[endIndex]))) {
+          const startCell = stringIndexToCell(text, index);
+          const endCell = stringIndexToCell(text, endIndex);
+          if (endCell > startCell) {
+            out.push({
+              startCell,
+              endCell,
+              text: text.slice(index, endIndex),
+            });
+          }
+        }
+        from = index + Math.max(1, needle.length);
+      }
+      return out;
+    }
+
+    function cachedLineSearchMatches(
+      index: number,
+      count: number,
+      query: string,
+      baseStyle: Style,
+      baseStyleKey: string,
+    ): readonly TLogSearchLineMatch[] {
+      const rawKey = lineKey(index);
+      const key = searchLineCacheKey(rawKey, query);
+      const cached = searchLineCache.get(key);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.matches;
+      }
+
+      const matches = findLineSearchMatches(
+        searchableTextForLine(index, count, baseStyle, baseStyleKey),
+        query,
+      );
+      searchLineCache.set(key, {
+        key,
+        matches,
+        touchedAt: ++cacheClock,
+      });
+      return matches;
+    }
+
+    function scanSearchLine(
+      index: number,
+      count: number,
+      query: string,
+      baseStyle: Style,
+      baseStyleKey: string,
+      maxMatches: number,
+      absoluteBase: number,
+    ): void {
+      if (searchMatches.length >= maxMatches) return;
+      const lineMatches = cachedLineSearchMatches(index, count, query, baseStyle, baseStyleKey);
+      for (const match of lineMatches) {
+        if (searchMatches.length >= maxMatches) return;
+        addSearchMatch({
+          absoluteLineIndex: absoluteBase + index,
+          index,
+          startCell: match.startCell,
+          endCell: match.endCell,
+          text: match.text,
+        });
+      }
+    }
+
+    function scanSearchChunk(generation: number, ctx: TerminalFrameContext): void {
+      if (generation !== searchGeneration || !alive) return;
+
+      const query = normalizedSearchQuery();
+      if (!query) {
+        searchStatus = "idle";
+        clearSearchMatches();
+        emitSearch("");
+        emitSearchMatch();
+        return;
+      }
+
+      const started = ctx.now();
+      const budget = searchScanBudgetMs();
+      const count = lineCount();
+      const maxMatches = maxSearchMatches();
+      const absoluteBase = firstLineIndex();
+      const base = props.style ?? defaultStyle.value;
+      const baseStyleKey = styleCacheKey(base);
+      let scanned = 0;
+
+      while (
+        searchCursor < count &&
+        searchMatches.length < maxMatches &&
+        (scanned === 0 || ctx.now() - started < budget)
+      ) {
+        scanSearchLine(searchCursor, count, query, base, baseStyleKey, maxMatches, absoluteBase);
+        searchCursor++;
+        scanned++;
+      }
+
+      if (searchCursor < count && searchMatches.length < maxMatches) {
+        ctx.requestMore();
+        scheduler.queueFrameTask({
+          id: `${frameTaskId}:search`,
+          reason: "data",
+          priority: "low",
+          sync: false,
+          run: (nextCtx) => scanSearchChunk(generation, nextCtx),
+        });
+        return;
+      }
+
+      searchStatus = "done";
+      emitSearch(query);
+      markViewportDirty();
+      ctx.invalidate({ priority: "low", plane: plane.value, reason: "data" });
+      trimSearchLineCache();
+    }
+
+    function requestSearchScan(): void {
+      const query = normalizedSearchQuery();
+      const hadSearchState =
+        searchStatus !== "idle" || searchMatches.length > 0 || currentMatchIndex >= 0;
+      const generation = ++searchGeneration;
+      searchCursor = 0;
+
+      if (!query) {
+        searchStatus = "idle";
+        if (hadSearchState) {
+          clearSearchMatches();
+          emitSearch("");
+          emitSearchMatch();
+          markViewportDirty();
+          invalidateSelf("normal", "data");
+        }
+        return;
+      }
+
+      clearSearchMatches();
+      searchStatus = "scanning";
+      emitSearch(query);
+      emitSearchMatch();
+      markViewportDirty();
+      scheduler.queueFrameTask({
+        id: `${frameTaskId}:search`,
+        reason: "data",
+        priority: "low",
+        sync: false,
+        run: (ctx) => scanSearchChunk(generation, ctx),
+      });
+    }
+
+    function searchHighlightStyle(matchIndex: number): Style {
+      return matchIndex === currentMatchIndex ? props.currentMatchStyle : props.matchStyle;
+    }
+
+    function applySearchHighlightsToSegments(
+      segments: readonly TLogVisualSegment[],
+      lineIndex: number,
+      visibleStartCell: number,
+    ): readonly TLogVisualSegment[] {
+      if (!props.highlightMatches || !searchMatches.length) return segments;
+      const lineMatches = matchesByLine.get(lineIndex);
+      if (!lineMatches?.length) return segments;
+
+      const out: TLogVisualSegment[] = [];
+      let cursor = visibleStartCell;
+      for (const seg of segments) {
+        let localStart = 0;
+        while (localStart < seg.cells) {
+          const absoluteCell = cursor + localStart;
+          let matchIndex = -1;
+          let nextLocalEnd = seg.cells;
+
+          for (const candidateIndex of lineMatches) {
+            const match = searchMatches[candidateIndex]!;
+            if (match.endCell <= absoluteCell) continue;
+            if (match.startCell > absoluteCell) {
+              nextLocalEnd = Math.min(nextLocalEnd, match.startCell - cursor);
+              break;
+            }
+            matchIndex = candidateIndex;
+            nextLocalEnd = Math.min(nextLocalEnd, match.endCell - cursor);
+            break;
+          }
+
+          nextLocalEnd = clamp(nextLocalEnd, localStart + 1, seg.cells);
+          const text = sliceByCellsRange(seg.text, localStart, nextLocalEnd);
+          const cells = textCellWidth(text);
+          if (text && cells > 0) {
+            out.push({
+              text,
+              cells,
+              style:
+                matchIndex >= 0
+                  ? mergeHighlightStyle(seg.style, searchHighlightStyle(matchIndex))
+                  : seg.style,
+            });
+          }
+          localStart = nextLocalEnd;
+        }
+        cursor += seg.cells;
+      }
+      return out;
+    }
+
+    function plainVisualSegments(text: string, style: Style): readonly TLogVisualSegment[] {
+      const cells = textCellWidth(text);
+      return text && cells > 0 ? [{ text, cells, style }] : [];
+    }
+
+    function wrappedPlainRowStartCell(rows: readonly string[], partIndex: number): number {
+      let start = 0;
+      for (let i = 0; i < partIndex; i++) start += textCellWidth(rows[i] ?? "");
+      return start;
+    }
+
+    function wrappedAnsiRowStartCell(rows: readonly TLogVisualRow[], partIndex: number): number {
+      let start = 0;
+      for (let i = 0; i < partIndex; i++) {
+        for (const seg of rows[i] ?? []) start += seg.cells;
+      }
+      return start;
     }
 
     function currentWrapWidth(): number {
@@ -1408,12 +1842,113 @@ export const TLogView = defineComponent({
       scrollToVisualRow(target);
     }
 
+    function visualRowForMatch(match: TLogViewSearchMatch): number {
+      if (!props.wrap) return match.index;
+      ensureVisualIndex();
+      measureVisualLine(match.index);
+      return visualStartForLine(match.index) + Math.floor(match.startCell / currentWrapWidth());
+    }
+
+    function firstMatchAtOrAfterViewport(): number {
+      if (!searchMatches.length) return -1;
+      if (!props.wrap) {
+        const firstVisibleLine = visibleLineRange().start;
+        const index = searchMatches.findIndex((match) => match.index >= firstVisibleLine);
+        return index >= 0 ? index : 0;
+      }
+
+      const located = locateVisualRow(visibleLineRange().start);
+      const firstVisibleLine = located?.lineIndex ?? 0;
+      const index = searchMatches.findIndex((match) => match.index >= firstVisibleLine);
+      return index >= 0 ? index : 0;
+    }
+
+    function lastMatchAtOrBeforeViewport(): number {
+      if (!searchMatches.length) return -1;
+      if (!props.wrap) {
+        const lastVisibleLine = Math.max(0, visibleLineRange().end - 1);
+        for (let i = searchMatches.length - 1; i >= 0; i--) {
+          if (searchMatches[i]!.index <= lastVisibleLine) return i;
+        }
+        return searchMatches.length - 1;
+      }
+
+      const located = locateVisualRow(Math.max(0, visibleLineRange().end - 1));
+      const lastVisibleLine = located?.lineIndex ?? lineCount() - 1;
+      for (let i = searchMatches.length - 1; i >= 0; i--) {
+        if (searchMatches[i]!.index <= lastVisibleLine) return i;
+      }
+      return searchMatches.length - 1;
+    }
+
+    function scrollToMatch(match: TLogViewSearchMatch): void {
+      if (!props.wrap) {
+        scrollToLine(match.index, { align: "center" });
+        return;
+      }
+
+      const row = visualRowForMatch(match);
+      scrollToVisualRow(row - Math.floor(viewportHeight() / 2));
+    }
+
+    function setCurrentMatch(index: number): void {
+      if (index < 0 || index >= searchMatches.length) return;
+      currentMatchIndex = index;
+      emitSearchMatch();
+      scrollToMatch(searchMatches[index]!);
+      markViewportDirty();
+      invalidateSelf("high", "data");
+    }
+
+    function findNext(): void {
+      if (!searchMatches.length) return;
+      const next =
+        currentMatchIndex < 0
+          ? firstMatchAtOrAfterViewport()
+          : (currentMatchIndex + 1) % searchMatches.length;
+      setCurrentMatch(next);
+    }
+
+    function findPrevious(): void {
+      if (!searchMatches.length) return;
+      const previous =
+        currentMatchIndex < 0
+          ? lastMatchAtOrBeforeViewport()
+          : (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+      setCurrentMatch(previous);
+    }
+
+    function clearSearch(): void {
+      emit("update:searchQuery", "");
+      searchGeneration++;
+      searchCursor = 0;
+      searchStatus = "idle";
+      clearSearchMatches();
+      emitSearch("");
+      emitSearchMatch();
+      markViewportDirty();
+      invalidateSelf("normal", "data");
+    }
+
+    function getSearchState(): TLogViewSearchState {
+      return {
+        query: normalizedSearchQuery(),
+        status: searchStatus,
+        matchCount: searchMatches.length,
+        currentMatchIndex,
+      };
+    }
+
     const handle: TLogViewHandle = {
       scrollToBottom,
       scrollToTop,
       scrollToVisualRow,
       scrollBy,
       scrollToLine,
+      findNext,
+      findPrevious,
+      clearSearch,
+      getSearchState,
     };
     expose(handle);
 
@@ -1512,6 +2047,7 @@ export const TLogView = defineComponent({
       () => {
         resetWheelScrollState(wheelState);
         requestStreamFrame();
+        requestSearchScan();
       },
     );
 
@@ -1528,6 +2064,29 @@ export const TLogView = defineComponent({
     watch([() => props.source, () => props.wrap, () => props.ansi, () => fullRect.value.w], () => {
       clearLineCaches();
     });
+
+    watch(
+      [
+        () => props.searchQuery,
+        () => props.searchOptions?.caseSensitive,
+        () => props.searchOptions?.wholeWord,
+        () => props.searchOptions?.maxMatches,
+        () => props.ansi,
+        () => props.source,
+      ],
+      () => {
+        requestSearchScan();
+      },
+      { immediate: true },
+    );
+
+    watch(
+      [() => props.highlightMatches, () => props.matchStyle, () => props.currentMatchStyle],
+      () => {
+        markViewportDirty();
+        invalidateSelf("normal", "data");
+      },
+    );
 
     watch(
       [
@@ -1575,6 +2134,7 @@ export const TLogView = defineComponent({
 
     onBeforeUnmount(() => {
       alive = false;
+      searchGeneration++;
       cancelWheelScrollFrame();
     });
 
@@ -1588,6 +2148,9 @@ export const TLogView = defineComponent({
         props.source,
         props.wrap,
         props.ansi,
+        props.highlightMatches,
+        props.matchStyle,
+        props.currentMatchStyle,
         focused.value,
         props.style,
         defaultStyle.value,
@@ -1652,7 +2215,14 @@ export const TLogView = defineComponent({
                 r.w,
                 baseStyleKey,
               );
-              writeStyledRow(visualSegments, y);
+              writeStyledRow(
+                applySearchHighlightsToSegments(
+                  visualSegments,
+                  located.lineIndex,
+                  wrappedAnsiRowStartCell(wrappedRows, located.partIndex) + clipX,
+                ),
+                y,
+              );
               return;
             }
 
@@ -1663,6 +2233,19 @@ export const TLogView = defineComponent({
               y === r.y + r.h - 1
             ) {
               lastPaintedBottom = { index: located.lineIndex, lineKey: rawKey };
+            }
+            if (props.highlightMatches && matchesByLine.has(located.lineIndex)) {
+              const rawRow = wrappedRows[located.partIndex] ?? "";
+              const clipped = sliceByCellsRange(rawRow, clipX, clipX + r.w);
+              writeStyledRow(
+                applySearchHighlightsToSegments(
+                  plainVisualSegments(clipped, base),
+                  located.lineIndex,
+                  wrappedPlainRowStartCell(wrappedRows, located.partIndex) + clipX,
+                ),
+                y,
+              );
+              return;
             }
             const line = renderVisualLine(
               visualLineKey(rawKey, located.partIndex),
@@ -1689,7 +2272,16 @@ export const TLogView = defineComponent({
               base,
               baseStyleKey,
             );
-            writeStyledRow(visualSegments, y);
+            writeStyledRow(applySearchHighlightsToSegments(visualSegments, idx, clipX), y);
+            return;
+          }
+          if (props.highlightMatches && matchesByLine.has(idx)) {
+            const text = sanitizeInlineText(props.source.getLine(idx));
+            const clipped = sliceByCellsRange(text, clipX, clipX + r.w);
+            writeStyledRow(
+              applySearchHighlightsToSegments(plainVisualSegments(clipped, base), idx, clipX),
+              y,
+            );
             return;
           }
           const line = renderLine(idx, count, full.w, clipX, r.w);

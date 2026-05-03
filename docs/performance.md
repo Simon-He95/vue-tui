@@ -90,5 +90,6 @@ pnpm run bench:phase2
 - `TLogView wrap=true` long-line append at bottom / detached / burst append
 - `TLogView ansi=true` short-line append / long-line wrap / retention scenarios
 - `TLogView` retention append 100k lines with max 1000 retained lines
+- `TLogView` retained-window search: 100k plain lines, ANSI visible text, and wrapped long lines
 
 `bench:phase2` 使用 happy-dom synthetic baseline，适合做相同环境下的回归对比，不代表真实浏览器 FPS。
