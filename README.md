@@ -71,6 +71,12 @@ pnpm build:examples
 # 打包成 terminal 产物并运行
 pnpm build:examples:terminal
 pnpm run:basic:terminal
+
+# 运行完整 experimental TLogView Lab
+pnpm run example:tlog-view-lab
+
+# 交互运行 TLogView Lab
+pnpm run run:tlog-view-lab
 ```
 
 terminal 构建产物会生成 `dist-terminal/terminal.js`，可以直接作为 `bin` 入口使用。

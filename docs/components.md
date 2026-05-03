@@ -364,6 +364,8 @@ const renderItem = (item: Row) => item.title;
 Append-only / streaming 日志视图：从 `source` / `version` 数据源读取可见窗口，不接收大数组，也不把日志内容放进 Vue deep reactivity。
 
 > Experimental API：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。`ansi=true` 支持 ANSI SGR styling，并可配合 `links=true` 解析 OSC8 hyperlinks；minimap 和 arbitrary variable-height rich rows 仍不是当前能力。
+>
+> 完整组合示例见 [TLogView Lab](./tlog-view-lab.md)。
 
 ### Props
 

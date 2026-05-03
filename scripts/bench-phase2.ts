@@ -1,5 +1,6 @@
 import { Window } from "happy-dom";
 import type { TLogViewHandle } from "../src/experimental.js";
+import type { TLogViewLabApi } from "../examples/tlog-view-lab/App.js";
 
 function setGlobal(key: string, value: unknown): void {
   Object.defineProperty(globalThis, key, {
@@ -107,6 +108,7 @@ const {
   useTerminal,
 } = await import("../src/index.js");
 const { createAppendOnlyLogStore, TLogView, TVirtualList } = await import("../src/experimental.js");
+const { TLOG_VIEW_LAB_LAYOUT, TLogViewLabApp } = await import("../examples/tlog-view-lab/App.js");
 const { createRenderManager } = await import("../src/vue/render/render-manager.js");
 
 function round(n: number): number {
@@ -172,6 +174,7 @@ function summarizeSamples(samples: any[]): Record<string, number> {
 }
 
 function inferScenarioGroup(name: string): string {
+  if (name.includes("lab")) return "ui";
   if (
     name.includes("append-only") ||
     name.includes("retention") ||
@@ -187,6 +190,13 @@ function inferScenarioGroup(name: string): string {
     return "ui";
   }
   return "render";
+}
+
+async function flushLabSearch(api: TLogViewLabApi, maxFrames = 40): Promise<void> {
+  for (let i = 0; i < maxFrames; i++) {
+    await nextTick();
+    if (api.logView.value?.getSearchState().status !== "scanning") return;
+  }
 }
 
 function normalizeScenario(entry: Record<string, unknown>): Record<string, unknown> {
@@ -1048,6 +1058,79 @@ async function benchDomTLogViewExactIndex(
   }
 }
 
+async function benchTLogViewLabSmoke(): Promise<Record<string, unknown>> {
+  let framePerf: any = null;
+  let api: TLogViewLabApi | null = null;
+  const root = document.createElement("div");
+  document.body.appendChild(root);
+
+  const Probe = defineComponent({
+    name: "BenchTLogViewLabSmoke",
+    setup() {
+      const ctx = useTerminal();
+      framePerf = ctx.observability.framePerf;
+      framePerf.enabled.value = true;
+      return () =>
+        h(TLogViewLabApp, {
+          onReady(nextApi: TLogViewLabApi) {
+            api = nextApi;
+          },
+        });
+    },
+  });
+
+  const app = createApp({
+    name: "BenchTLogViewLabRoot",
+    render() {
+      return h(
+        TerminalProvider,
+        { cols: TLOG_VIEW_LAB_LAYOUT.cols, rows: TLOG_VIEW_LAB_LAYOUT.rows },
+        { default: () => h(Probe) },
+      );
+    },
+  });
+
+  try {
+    app.mount(root);
+    await nextTick();
+    framePerf.clear();
+
+    const startedAt = now();
+    for (let i = 0; i < 40 && !api?.logView.value; i++) await nextTick();
+    if (!api?.logView.value) throw new Error("TLogView lab api not ready");
+
+    api.search.updateQuery("ERROR");
+    await flushLabSearch(api);
+    api.actions.append200();
+    await flushLabSearch(api);
+    api.actions.toggleVisualIndexMode();
+    await nextTick();
+    api.linkController.refresh();
+    const firstVisibleLink = api.linkController.visibleLinks.value[0];
+    if (firstVisibleLink) api.linkController.activateVisibleLink(firstVisibleLink.visibleIndex);
+    await nextTick();
+
+    const durationMs = now() - startedAt;
+    const metrics = api.search.metrics.value;
+    const searchState = api.search.searchState.value;
+
+    return {
+      name: "tlog-view-lab-smoke",
+      durationMs: round(durationMs),
+      lineCount: metrics?.lineCount ?? 0,
+      visualRowCount: metrics?.visualRowCount ?? 0,
+      visualIndexStatus: metrics?.visualIndexStatus ?? "missing",
+      matchCount: searchState.matchCount,
+      visibleLinks: api.linkController.visibleLinks.value.length,
+      lastLinkSource: api.lastLinkAction.value?.source ?? "none",
+      ...summarizeSamples(framePerf.list()),
+    };
+  } finally {
+    app.unmount();
+    root.remove();
+  }
+}
+
 async function main(): Promise<void> {
   const scenarios = [
     await benchRenderManagerDirtyRow(),
@@ -1080,6 +1163,7 @@ async function main(): Promise<void> {
     await benchDomTLogViewExactIndex("100k-wrap"),
     await benchDomTLogViewExactIndex("ansi-links-wrap"),
     await benchDomTLogViewExactIndex("retention-append"),
+    await benchTLogViewLabSmoke(),
   ].map((entry) => normalizeScenario(entry));
 
   // eslint-disable-next-line no-console
