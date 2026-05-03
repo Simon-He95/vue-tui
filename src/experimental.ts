@@ -4,6 +4,7 @@ export { createAppendOnlyLogStore } from "./vue/log/append-only-log-store.js";
 export type { RowScrollMode } from "./vue/components/TVirtualList.js";
 export type {
   TLogViewHandle,
+  TLogViewLinkClickPayload,
   TLogViewSearchMatch,
   TLogViewSearchMatchPayload,
   TLogViewSearchOptions,

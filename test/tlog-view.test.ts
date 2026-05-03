@@ -1,4 +1,8 @@
-import type { TLogDataSource, TLogViewHandle } from "../src/experimental.js";
+import type {
+  TLogDataSource,
+  TLogViewHandle,
+  TLogViewLinkClickPayload,
+} from "../src/experimental.js";
 import { describe, expect, it, vi } from "vitest";
 import { createTerminalApp } from "../src/index.js";
 import { createAppendOnlyLogStore, TLogView } from "../src/experimental.js";
@@ -2347,6 +2351,122 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
+  it("renders OSC8 hyperlinks when links are enabled", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b]8;;https://example.com\x07link\x1b]8;;\x07",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 8,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+        }),
+      8,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe("link");
+    const style = rowStyles(mounted, 0)[0]!;
+    expect(style.href).toBe("https://example.com");
+    expect(style.underline).toBe(true);
+    mounted.unmount();
+  });
+
+  it("strips OSC8 sequences without href metadata when links are disabled", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b]8;;https://example.com\x07link\x1b]8;;\x07",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 8,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+        }),
+      8,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe("link");
+    expect(rowStyles(mounted, 0)[0]!.href).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it("supports ST-terminated OSC8 hyperlinks", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b]8;;https://x\x1b\\link\x1b]8;;\x1b\\",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 8,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+        }),
+      8,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe("link");
+    expect(rowStyles(mounted, 0)[0]!.href).toBe("https://x");
+    mounted.unmount();
+  });
+
+  it("preserves OSC8 href metadata when fixed rows are clipped", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "before \x1b]8;;https://example.com\x07link\x1b]8;;\x07 after",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: -8,
+          y: 0,
+          w: 14,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+        }),
+      6,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe("ink af");
+    const styles = rowStyles(mounted, 0);
+    expect(styles[0]!.href).toBe("https://example.com");
+    expect(styles[2]!.href).toBe("https://example.com");
+    expect(styles[4]!.href).toBeUndefined();
+    mounted.unmount();
+  });
+
   it("resets SGR foreground and background to the TLogView base style", async () => {
     const source: TLogDataSource = {
       lineCount: () => 1,
@@ -2506,6 +2626,162 @@ describe("TLogView", () => {
         .slice(0, 2)
         .every((style) => style.fg === "red"),
     ).toBe(true);
+    mounted.unmount();
+  });
+
+  it("preserves OSC8 href metadata across wrapped visual rows", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b]8;;https://example.com\x07abcdefgh\x1b]8;;\x07",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 4,
+          h: 2,
+          source,
+          version: 1,
+          wrap: true,
+          ansi: true,
+          links: true,
+        }),
+      4,
+      3,
+    );
+
+    expect([0, 1].map((y) => rowText(mounted, y))).toEqual(["abcd", "efgh"]);
+    expect(
+      rowStyles(mounted, 0)
+        .slice(0, 4)
+        .every((style) => style.href === "https://example.com"),
+    ).toBe(true);
+    expect(
+      rowStyles(mounted, 1)
+        .slice(0, 4)
+        .every((style) => style.href === "https://example.com"),
+    ).toBe(true);
+    mounted.unmount();
+  });
+
+  it("emits linkClick for visible OSC8 link cells", async () => {
+    const payloads: TLogViewLinkClickPayload[] = [];
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "go \x1b]8;;https://example.com\x07link\x1b]8;;\x07",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+          onLinkClick: (payload: TLogViewLinkClickPayload) => payloads.push(payload),
+        }),
+      10,
+      2,
+    );
+
+    mounted
+      .container()
+      ?.dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+    mounted
+      .container()
+      ?.dispatchEvent(new MouseEvent("click", { clientX: 4, clientY: 0, bubbles: true }));
+
+    expect(payloads).toEqual([
+      {
+        href: "https://example.com",
+        text: "link",
+        absoluteLineIndex: 0,
+        index: 0,
+        startCell: 3,
+        endCell: 7,
+        cellX: 4,
+        cellY: 0,
+      },
+    ]);
+    mounted.unmount();
+  });
+
+  it("composes search highlight with OSC8 href style", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b]8;;https://example.com\x07ERROR\x1b]8;;\x07",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          ref: logView,
+          x: 0,
+          y: 0,
+          w: 8,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+          searchQuery: "ERROR",
+        }),
+      8,
+      2,
+    );
+
+    await nextTick();
+    const style = rowStyles(mounted, 0)[0]!;
+    expect(style.href).toBe("https://example.com");
+    expect(style.underline).toBe(true);
+    expect(style.inverse).toBe(true);
+    mounted.unmount();
+  });
+
+  it("emits retained absolute line indexes for linkClick", async () => {
+    const payloads: TLogViewLinkClickPayload[] = [];
+    const log = createAppendOnlyLogStore({ maxLines: 3 });
+    log.appendLines([
+      "old",
+      "\x1b]8;;https://example.com/1\x07one\x1b]8;;\x07",
+      "\x1b]8;;https://example.com/2\x07two\x1b]8;;\x07",
+      "\x1b]8;;https://example.com/3\x07three\x1b]8;;\x07",
+    ]);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 8,
+          h: 3,
+          source: log.source,
+          version: log.version.value,
+          ansi: true,
+          links: true,
+          onLinkClick: (payload: TLogViewLinkClickPayload) => payloads.push(payload),
+        }),
+      8,
+      4,
+    );
+
+    expect(rowText(mounted, 0)).toBe("one");
+    mounted
+      .container()
+      ?.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+    expect(payloads[0]?.absoluteLineIndex).toBe(1);
+    expect(payloads[0]?.index).toBe(0);
+    expect(payloads[0]?.href).toBe("https://example.com/1");
     mounted.unmount();
   });
 

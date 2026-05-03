@@ -407,6 +407,8 @@
 | <code>overscan</code>          | <code>number</code>                | <code>2</code>                                        | 否   | —    |
 | <code>wrap</code>              | <code>boolean</code>               | <code>false</code>                                    | 否   | —    |
 | <code>ansi</code>              | <code>boolean</code>               | <code>false</code>                                    | 否   | —    |
+| <code>links</code>             | <code>boolean</code>               | <code>false</code>                                    | 否   | —    |
+| <code>linkStyle</code>         | <code>Style</code>                 | <code>() =&gt; ({ underline: true })</code>           | 否   | —    |
 | <code>searchQuery</code>       | <code>string</code>                | <code>&quot;&quot;</code>                             | 否   | —    |
 | <code>searchOptions</code>     | <code>TLogViewSearchOptions</code> | <code>undefined</code>                                | 否   | —    |
 | <code>highlightMatches</code>  | <code>boolean</code>               | <code>true</code>                                     | 否   | —    |
@@ -423,6 +425,7 @@
 | <code>update:searchQuery</code> | —       | —    |
 | <code>search</code>             | —       | —    |
 | <code>searchMatch</code>        | —       | —    |
+| <code>linkClick</code>          | —       | —    |
 | <code>focus</code>              | —       | —    |
 | <code>blur</code>               | —       | —    |
 | <code>keydown</code>            | —       | —    |
