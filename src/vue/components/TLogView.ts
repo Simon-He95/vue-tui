@@ -1116,6 +1116,7 @@ export const TLogView = defineComponent({
       emitSearch(query);
       emitSearchMatch();
       markViewportDirty();
+      invalidateSelf("normal", "data");
       scheduler.queueFrameTask({
         id: `${frameTaskId}:search`,
         reason: "data",
