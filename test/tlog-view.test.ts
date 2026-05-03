@@ -1715,7 +1715,7 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
-   it("resets SGR foreground and background to the TLogView base style", async () => {
+  it("resets SGR foreground and background to the TLogView base style", async () => {
     const source: TLogDataSource = {
       lineCount: () => 1,
       getLine: () => "\x1b[31mred\x1b[39mbase \x1b[41mbg\x1b[49mnormal",
@@ -1874,6 +1874,35 @@ describe("TLogView", () => {
         .slice(0, 2)
         .every((style) => style.fg === "red"),
     ).toBe(true);
+    mounted.unmount();
+  });
+
+  it("wraps ANSI styled wide characters without dropping boundary glyphs", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mab中cd\x1b[0m",
+      getLineKey: () => "wide",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 3,
+          h: 3,
+          source,
+          version: 1,
+          wrap: true,
+          ansi: true,
+        }),
+      3,
+      4,
+    );
+
+    expect([0, 1, 2].map((y) => rowText(mounted, y))).toEqual(["ab", "中c", "d"]);
+    expect(rowStyles(mounted, 1)[0]!.fg).toBe("red");
+    expect(rowStyles(mounted, 1)[2]!.fg).toBe("red");
     mounted.unmount();
   });
 

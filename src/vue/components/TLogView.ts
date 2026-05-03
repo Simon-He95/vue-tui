@@ -305,11 +305,18 @@ function wrapStyledSegmentsByCells(
       let text = sliceByCellsRange(seg.text, offset, offset + Math.min(available, remaining));
       let cells = textCellWidth(text);
 
-      if (!text && available < remaining) {
-        text = sliceByCellsRange(seg.text, offset, offset + available + 1);
+      if (!text || cells <= 0) {
+        if (rowCells > 0) {
+          row = [];
+          rows.push(row);
+          rowCells = 0;
+          continue;
+        }
+
+        text = sliceByCellsRange(seg.text, offset, offset + Math.max(available, 2));
         cells = textCellWidth(text);
+        if (!text || cells <= 0) break;
       }
-      if (!text || cells <= 0) break;
 
       row.push({
         text,
