@@ -5,15 +5,19 @@ export type { RowScrollMode } from "./vue/components/TVirtualList.js";
 export type {
   TLogViewHandle,
   TLogViewLinkClickPayload,
+  TLogViewScrollMetrics,
   TLogViewSearchMatch,
   TLogViewSearchMatchPayload,
   TLogViewSearchOptions,
   TLogViewSearchPayload,
   TLogViewSearchState,
+  TLogViewVisualIndexPayload,
 } from "./vue/components/TLogView.js";
 export type {
   AppendOnlyLogStore,
   CreateAppendOnlyLogStoreOptions,
   TLogDataSource,
   TLogViewScrollPayload,
+  TLogViewVisualIndexOptions,
+  TLogViewVisualIndexStatus,
 } from "./vue/log/types.js";

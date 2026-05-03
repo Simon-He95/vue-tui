@@ -78,6 +78,18 @@ async function flushSearch(
   }
 }
 
+async function flushVisualIndex(
+  handle: TLogViewHandle,
+  raf: Readonly<{ flush: () => void }>,
+  maxFrames = 200,
+): Promise<void> {
+  for (let i = 0; i < maxFrames; i++) {
+    if (handle.getScrollMetrics().visualIndexStatus !== "measuring") return;
+    raf.flush();
+    await nextTick();
+  }
+}
+
 describe("TLogView", () => {
   it("reads only visible rows while painting", async () => {
     const getLine = vi.fn((index: number) => `line-${index}`);
@@ -182,6 +194,10 @@ describe("TLogView", () => {
         atBottom: false,
         lineCount: 100,
         estimatedVisualRowCount: 100,
+        visualRowCount: 100,
+        measuredVisualRowCount: 100,
+        measuredLineCount: 100,
+        visualIndexStatus: "exact",
         firstLineIndex: 0,
       });
       expect(rowText(app, 0)).toBe("line-95");
@@ -3352,13 +3368,367 @@ describe("TLogView", () => {
       expect(payload).toMatchObject({
         lineCount: 100_000,
         atBottom: false,
+        visualIndexStatus: "estimated",
       });
       expect(payload).toHaveProperty("estimatedVisualRowCount");
-      expect(payload).not.toHaveProperty("visualRowCount");
+      expect(payload).toHaveProperty("visualRowCount");
+      expect(payload).toHaveProperty("measuredVisualRowCount");
+      expect(payload).toHaveProperty("measuredLineCount");
+      expect(payload.visualRowCount).toBe(payload.estimatedVisualRowCount);
       expect(payload.estimatedVisualRowCount).toBeLessThan(200_000);
       expect(getLine.mock.calls.length).toBeLessThan(100);
     } finally {
       app.dispose();
+    }
+  });
+
+  it("measures exact visual index in scheduler frames without synchronously scanning all lines", async () => {
+    const raf = installManualRaf();
+    const getLine = vi.fn((index: number) => `line-${index}-${"x".repeat(40)}`);
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine,
+      getLineKey: (index) => index,
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewExactVisualIndexChunkedApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 4,
+            source,
+            version: 1,
+            wrap: true,
+            visualIndexMode: "exact",
+            visualIndexOptions: { measureBudgetMs: 0 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 10, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+
+      expect(logView.value).toBeTruthy();
+      expect(logView.value!.getScrollMetrics().visualIndexStatus).toBe("measuring");
+      expect(getLine.mock.calls.length).toBeLessThan(100);
+
+      raf.flush();
+      await nextTick();
+      expect(logView.value!.getScrollMetrics().visualIndexStatus).toBe("measuring");
+      expect(getLine.mock.calls.length).toBeLessThan(100);
+
+      await flushVisualIndex(logView.value!, raf, 200);
+
+      expect(logView.value!.getScrollMetrics()).toMatchObject({
+        visualIndexStatus: "exact",
+        measuredLineCount: 100,
+      });
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("computes exact wrapped visual row metrics", async () => {
+    const raf = installManualRaf();
+    const source: TLogDataSource = {
+      lineCount: () => 3,
+      getLine: (index) => ["aaaa", "aaaaaaaa", "aa"][index] ?? "",
+      getLineKey: (index) => index,
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewExactVisualMetricsApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 2,
+            source,
+            version: 1,
+            wrap: true,
+            visualIndexMode: "exact",
+            visualIndexOptions: { measureBudgetMs: 0 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 4, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      await flushVisualIndex(logView.value!, raf);
+
+      expect(logView.value!.getScrollMetrics()).toMatchObject({
+        visualIndexStatus: "exact",
+        visualRowCount: 4,
+        estimatedVisualRowCount: 4,
+        measuredVisualRowCount: 4,
+        measuredLineCount: 3,
+        maxScrollTop: 2,
+      });
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("counts wrapped ANSI OSC8 link rows by visible cells", async () => {
+    const raf = installManualRaf();
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b]8;;https://example.com\x07\x1b[31mabcdefgh\x1b[0m\x1b]8;;\x07",
+      getLineKey: () => 0,
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewAnsiLinksExactMetricsApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 2,
+            source,
+            version: 1,
+            wrap: true,
+            ansi: true,
+            links: true,
+            visualIndexMode: "exact",
+            visualIndexOptions: { measureBudgetMs: 0 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 4, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      await flushVisualIndex(logView.value!, raf);
+
+      expect(logView.value!.getScrollMetrics()).toMatchObject({
+        visualIndexStatus: "exact",
+        visualRowCount: 2,
+        measuredVisualRowCount: 2,
+      });
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("invalidates exact visual metrics on width change and remeasures", async () => {
+    const raf = installManualRaf();
+    const width = ref(8);
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "abcdefgh",
+      getLineKey: () => 0,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewExactWidthChangeApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: width.value,
+            h: 2,
+            source,
+            version: 1,
+            wrap: true,
+            visualIndexMode: "exact",
+            visualIndexOptions: { measureBudgetMs: 0 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 4, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      await flushVisualIndex(logView.value!, raf);
+      expect(logView.value!.getScrollMetrics().visualRowCount).toBe(1);
+
+      width.value = 4;
+      await nextTick();
+      expect(logView.value!.getScrollMetrics().visualIndexStatus).toBe("measuring");
+      await flushVisualIndex(logView.value!, raf);
+
+      expect(logView.value!.getScrollMetrics()).toMatchObject({
+        visualIndexStatus: "exact",
+        visualRowCount: 2,
+      });
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("remeasures only the tail region after append in exact mode", async () => {
+    const raf = installManualRaf();
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
+    const getLineSpy = vi.spyOn(log.source, "getLine");
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewExactAppendTailMeasureApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 6,
+            h: 3,
+            source: log.source,
+            version: log.version.value,
+            wrap: true,
+            visualIndexMode: "exact",
+            visualIndexOptions: { measureBudgetMs: 0 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 6, rows: 5, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      await flushVisualIndex(logView.value!, raf);
+
+      getLineSpy.mockClear();
+      log.appendLine("abcdefghijklmnopqrstuvwxyz");
+      await nextTick();
+      await nextTick();
+      raf.flush();
+      await nextTick();
+      await flushVisualIndex(logView.value!, raf);
+
+      expect(logView.value!.getScrollMetrics()).toMatchObject({
+        visualIndexStatus: "exact",
+        measuredLineCount: 21,
+      });
+      expect(getLineSpy.mock.calls.length).toBeLessThan(10);
+    } finally {
+      app.dispose();
+      getLineSpy.mockRestore();
+      raf.restore();
+    }
+  });
+
+  it("keeps exact measurement valid across retention head trim", async () => {
+    const raf = installManualRaf();
+    const log = createAppendOnlyLogStore({ maxLines: 5 });
+    log.appendLines(Array.from({ length: 5 }, (_, index) => `${index}-${"x".repeat(8)}`));
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewExactRetentionTrimApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 3,
+            source: log.source,
+            version: log.version.value,
+            wrap: true,
+            visualIndexMode: "exact",
+            visualIndexOptions: { measureBudgetMs: 0 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 5, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      await flushVisualIndex(logView.value!, raf);
+
+      log.appendLine(`5-${"x".repeat(8)}`);
+      await nextTick();
+      await nextTick();
+      raf.flush();
+      await nextTick();
+      await flushVisualIndex(logView.value!, raf);
+
+      expect(logView.value!.getScrollMetrics()).toMatchObject({
+        lineCount: 5,
+        visualIndexStatus: "exact",
+        visualRowCount: 15,
+        measuredLineCount: 5,
+      });
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("allows manual exact measurement from estimated mode", async () => {
+    const raf = installManualRaf();
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 3,
+      getLine: (index) => ["abcdefgh", "ijklmnop", "qrstuvwx"][index] ?? "",
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewManualVisualMeasureApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 2,
+            source,
+            version: 1,
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 4, component: App });
+    try {
+      app.mount();
+      await nextTick();
+
+      expect(logView.value!.getScrollMetrics().visualIndexStatus).toBe("estimated");
+      logView.value!.measureVisualIndex();
+      expect(logView.value!.getScrollMetrics().visualIndexStatus).toBe("measuring");
+      await flushVisualIndex(logView.value!, raf);
+
+      expect(logView.value!.getScrollMetrics()).toMatchObject({
+        visualIndexStatus: "exact",
+        visualRowCount: 6,
+        measuredLineCount: 3,
+      });
+    } finally {
+      app.dispose();
+      raf.restore();
     }
   });
 

@@ -885,6 +885,133 @@ async function benchDomTLogViewSearch(
   }
 }
 
+async function benchDomTLogViewExactIndex(
+  scenario: "100k-wrap" | "ansi-links-wrap" | "retention-append",
+): Promise<Record<string, unknown>> {
+  let framePerf: any = null;
+  let getLineCalls = 0;
+  const logView = ref<TLogViewHandle | null>(null);
+  const raf = installManualRaf();
+  const retention = scenario === "retention-append";
+  const ansi = scenario === "ansi-links-wrap";
+  const links = scenario === "ansi-links-wrap";
+  const seedCount = retention ? 1_000 : 100_000;
+  const appendCount = retention ? 100_000 : 0;
+  const maxLines = retention ? 1_000 : undefined;
+  const root = document.createElement("div");
+  document.body.appendChild(root);
+  const log = createAppendOnlyLogStore(maxLines == null ? undefined : { maxLines });
+  const payload = "x".repeat(ansi ? 200 : 240);
+  const makeLine = (prefix: string, index: number) => {
+    if (!ansi) return `${prefix} ${index} ${payload}`;
+    return `\x1b[2m2026-05-03T08:${String(index % 60).padStart(2, "0")}:00Z\x1b[0m \x1b[31mERROR\x1b[0m \x1b]8;;https://example.com/${index}\x07${prefix}-${index}\x1b]8;;\x07 ${payload}`;
+  };
+  log.appendLines(Array.from({ length: seedCount }, (_, index) => makeLine("seed", index)));
+  const source = {
+    lineCount: () => log.source.lineCount(),
+    firstLineIndex: () => log.source.firstLineIndex?.() ?? 0,
+    getLine(index: number) {
+      getLineCalls++;
+      return log.source.getLine(index);
+    },
+    getLineKey(index: number) {
+      return log.source.getLineKey?.(index) ?? index;
+    },
+  };
+
+  const Probe = defineComponent({
+    name: `BenchDomTLogViewExactIndex${scenario}`,
+    setup() {
+      const ctx = useTerminal();
+      framePerf = ctx.observability.framePerf;
+      framePerf.enabled.value = true;
+      return () =>
+        h(TLogView, {
+          ref: logView,
+          x: 0,
+          y: 0,
+          w: 80,
+          h: 20,
+          source,
+          version: log.version.value,
+          wrap: true,
+          ansi,
+          links,
+          visualIndexMode: "exact",
+          visualIndexOptions: { measureBudgetMs: 1 },
+        });
+    },
+  });
+
+  const app = createApp({
+    name: "BenchDomTLogViewExactIndexRoot",
+    render() {
+      return h(TerminalProvider, { cols: 80, rows: 24 }, { default: () => h(Probe) });
+    },
+  });
+
+  try {
+    app.mount(root);
+    await nextTick();
+
+    if (retention) {
+      for (let i = 0; i < 2_000; i++) {
+        const state = logView.value?.getScrollMetrics();
+        if (state?.visualIndexStatus !== "measuring") break;
+        raf.flushOneFrame();
+        await nextTick();
+      }
+      framePerf.clear();
+      getLineCalls = 0;
+      for (let i = 0; i < appendCount; i++) log.appendLine(makeLine("retained", i));
+      await nextTick();
+      raf.flushOneFrame();
+      await nextTick();
+    } else {
+      framePerf.clear();
+      getLineCalls = 0;
+    }
+
+    const startedAt = now();
+    let measureFrames = 0;
+    for (let i = 0; i < 20_000; i++) {
+      const metrics = logView.value?.getScrollMetrics();
+      if (metrics && metrics.visualIndexStatus !== "measuring") break;
+      measureFrames += raf.flushOneFrame();
+      await nextTick();
+    }
+    const durationMs = now() - startedAt;
+    const metrics = logView.value?.getScrollMetrics();
+    const samples = framePerf.list();
+
+    return {
+      name:
+        scenario === "100k-wrap"
+          ? "tlog-view-exact-index-100k-wrap"
+          : scenario === "ansi-links-wrap"
+            ? "tlog-view-exact-index-ansi-links-wrap"
+            : "tlog-view-exact-index-retention-append",
+      retainedLineCount: source.lineCount(),
+      firstLineIndex: source.firstLineIndex(),
+      appendCount,
+      measureFrames,
+      durationMs: round(durationMs),
+      getLineCalls,
+      visualRowCount: metrics?.visualRowCount ?? 0,
+      measuredLineCount: metrics?.measuredLineCount ?? 0,
+      avgFrameMs: round(
+        samples.reduce((acc: number, sample: any) => acc + sample.durationMs, 0) /
+          Math.max(1, samples.length),
+      ),
+      ...summarizeSamples(samples),
+    };
+  } finally {
+    app.unmount();
+    root.remove();
+    raf.restore();
+  }
+}
+
 async function main(): Promise<void> {
   const scenarios = [
     await benchRenderManagerDirtyRow(),
@@ -914,6 +1041,9 @@ async function main(): Promise<void> {
     await benchDomTLogViewSearch("100k-retained"),
     await benchDomTLogViewSearch("ansi-retained"),
     await benchDomTLogViewSearch("wrap-long-lines"),
+    await benchDomTLogViewExactIndex("100k-wrap"),
+    await benchDomTLogViewExactIndex("ansi-links-wrap"),
+    await benchDomTLogViewExactIndex("retention-append"),
   ];
 
   // eslint-disable-next-line no-console

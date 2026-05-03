@@ -4,7 +4,12 @@ import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
 import type { FramePerfReason } from "../../observability/frame-perf.js";
 import type { TerminalFrameContext } from "../context.js";
-import type { TLogDataSource, TLogViewScrollPayload } from "../log/types.js";
+import type {
+  TLogDataSource,
+  TLogViewScrollPayload,
+  TLogViewVisualIndexOptions,
+  TLogViewVisualIndexStatus,
+} from "../log/types.js";
 import { applyAnsiSgrStyle, parseAnsiSgr } from "../../core/ansi/sgr.js";
 import {
   computed,
@@ -141,6 +146,27 @@ export type TLogViewLinkClickPayload = Readonly<{
   cellX: number;
   cellY: number;
 }>;
+export type TLogViewVisualIndexPayload = Readonly<{
+  status: TLogViewVisualIndexStatus;
+  lineCount: number;
+  measuredLineCount: number;
+  estimatedVisualRowCount: number;
+  visualRowCount: number;
+}>;
+export type TLogViewScrollMetrics = Readonly<{
+  scrollTop: number;
+  maxScrollTop: number;
+  viewportRows: number;
+  lineCount: number;
+  firstLineIndex: number;
+  estimatedVisualRowCount: number;
+  visualRowCount: number;
+  measuredVisualRowCount: number;
+  measuredLineCount: number;
+  visualIndexStatus: TLogViewVisualIndexStatus;
+  atTop: boolean;
+  atBottom: boolean;
+}>;
 export type TLogViewHandle = Readonly<{
   scrollToBottom: () => void;
   scrollToTop: () => void;
@@ -156,6 +182,8 @@ export type TLogViewHandle = Readonly<{
   findPrevious: () => void;
   clearSearch: () => void;
   getSearchState: () => TLogViewSearchState;
+  measureVisualIndex: () => void;
+  getScrollMetrics: () => TLogViewScrollMetrics;
 }>;
 
 let nextTLogViewTaskId = 0;
@@ -164,6 +192,7 @@ const DEFAULT_LOG_WRAP_CACHE_SIZE = 2_000;
 const DEFAULT_VISUAL_INDEX_CAPACITY = 1_024;
 const DEFAULT_SEARCH_MAX_MATCHES = 10_000;
 const DEFAULT_SEARCH_SCAN_BUDGET_MS = 4;
+const DEFAULT_VISUAL_INDEX_MEASURE_BUDGET_MS = 4;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -539,6 +568,14 @@ export const TLogView = defineComponent({
     autoStickToBottom: { type: Boolean, default: true },
     overscan: { type: Number, default: 2 },
     wrap: { type: Boolean, default: false },
+    visualIndexMode: {
+      type: String as PropType<"estimated" | "exact">,
+      default: "estimated",
+    },
+    visualIndexOptions: {
+      type: Object as PropType<TLogViewVisualIndexOptions>,
+      default: undefined,
+    },
     ansi: { type: Boolean, default: false },
     links: { type: Boolean, default: false },
     linkStyle: {
@@ -577,6 +614,7 @@ export const TLogView = defineComponent({
     "search",
     "searchMatch",
     "linkClick",
+    "visualIndex",
     "focus",
     "blur",
     "keydown",
@@ -627,6 +665,12 @@ export const TLogView = defineComponent({
     let visualCounts: number[] = [];
     let visualKeys: Array<TLogLineKey | undefined> = [];
     let visualTree: number[] = [0];
+    let visualIndexStatus: TLogViewVisualIndexStatus = "exact";
+    let visualMeasureGeneration = 0;
+    let visualMeasureCursor = 0;
+    let measuredLineCount = 0;
+    let measuredVisualRows = 0;
+    let lastVisualIndexPayloadKey = "";
 
     const fullRect = computed<Rect>(() => {
       const raw = { x: props.x, y: props.y, w: props.w, h: props.h };
@@ -1389,6 +1433,73 @@ export const TLogView = defineComponent({
       return Math.max(1, normalizedFullRect().w);
     }
 
+    function visualIndexMeasureBudgetMs(): number {
+      const raw = Number(props.visualIndexOptions?.measureBudgetMs);
+      if (!Number.isFinite(raw)) return DEFAULT_VISUAL_INDEX_MEASURE_BUDGET_MS;
+      return Math.max(0, raw);
+    }
+
+    function visualIndexMaxMeasuredLines(count = lineCount()): number {
+      const raw = props.visualIndexOptions?.maxMeasuredLines;
+      if (raw == null) return count;
+      const n = Math.floor(Number(raw));
+      if (!Number.isFinite(n)) return count;
+      return clamp(n, 0, count);
+    }
+
+    function visualRowCount(): number {
+      return estimatedVisualRowCount();
+    }
+
+    function measuredVisualRowCount(): number {
+      return props.wrap ? measuredVisualRows : lineCount();
+    }
+
+    function visualMeasurementTargetLineCount(count = lineCount()): number {
+      return Math.min(count, visualIndexMaxMeasuredLines(count));
+    }
+
+    function shouldAutoMeasureVisualIndex(): boolean {
+      return props.wrap && (props.visualIndexMode === "exact" || visualIndexStatus === "measuring");
+    }
+
+    function recomputeMeasuredVisualRows(): void {
+      if (!props.wrap) {
+        measuredVisualRows = lineCount();
+        return;
+      }
+
+      let rows = 0;
+      for (let i = 0; i < measuredLineCount; i++) rows += visualCounts[i] ?? 1;
+      measuredVisualRows = rows;
+    }
+
+    function syncNonWrappedVisualIndexState(): void {
+      const count = lineCount();
+      measuredLineCount = count;
+      measuredVisualRows = count;
+      visualMeasureCursor = count;
+      visualIndexStatus = "exact";
+    }
+
+    function visualIndexPayload(): TLogViewVisualIndexPayload {
+      return {
+        status: visualIndexStatus,
+        lineCount: lineCount(),
+        measuredLineCount,
+        estimatedVisualRowCount: estimatedVisualRowCount(),
+        visualRowCount: visualRowCount(),
+      };
+    }
+
+    function emitVisualIndex(force = false): void {
+      const payload = visualIndexPayload();
+      const key = JSON.stringify(payload);
+      if (!force && key === lastVisualIndexPayloadKey) return;
+      lastVisualIndexPayloadKey = key;
+      emit("visualIndex", payload);
+    }
+
     function fenwickAdd(index: number, delta: number): void {
       for (let i = index + 1; i <= visualIndexCapacity; i += i & -i) {
         visualTree[i] = (visualTree[i] ?? 0) + delta;
@@ -1420,6 +1531,13 @@ export const TLogView = defineComponent({
       visualCounts = Array.from({ length: count }, () => 1);
       visualKeys = Array.from({ length: count }, () => undefined);
       rebuildFenwick();
+      measuredLineCount = 0;
+      measuredVisualRows = 0;
+      visualMeasureCursor = 0;
+      visualMeasureGeneration++;
+      visualIndexStatus = props.wrap ? "estimated" : "exact";
+      if (!props.wrap) syncNonWrappedVisualIndexState();
+      emitVisualIndex();
     }
 
     function ensureVisualCapacity(count: number): void {
@@ -1442,7 +1560,10 @@ export const TLogView = defineComponent({
     }
 
     function ensureVisualIndex(): void {
-      if (!props.wrap) return;
+      if (!props.wrap) {
+        syncNonWrappedVisualIndexState();
+        return;
+      }
       const count = lineCount();
       const width = currentWrapWidth();
       if (visualIndexCapacity <= 0 || visualIndexWidth !== width || count < visualIndexLineCount) {
@@ -1452,12 +1573,12 @@ export const TLogView = defineComponent({
       if (count > visualIndexLineCount) appendEstimatedVisualLines(visualIndexLineCount, count);
     }
 
-    function measureVisualLine(index: number): void {
+    function measureVisualLine(index: number): number {
       ensureVisualIndex();
-      if (index < 0 || index >= visualIndexLineCount) return;
+      if (index < 0 || index >= visualIndexLineCount) return 0;
 
       const key = lineKey(index);
-      if (visualKeys[index] === key) return;
+      if (visualKeys[index] === key) return 0;
 
       const base = props.style ?? defaultStyle.value;
       const rows = props.ansi
@@ -1476,6 +1597,128 @@ export const TLogView = defineComponent({
         fenwickAdd(index, nextCount - prevCount);
       }
       visualKeys[index] = key;
+      return nextCount - prevCount;
+    }
+
+    function syncVisualIndexStatus(): void {
+      if (!props.wrap) {
+        syncNonWrappedVisualIndexState();
+        return;
+      }
+
+      const count = lineCount();
+      const target = visualMeasurementTargetLineCount(count);
+      if (measuredLineCount >= target) {
+        visualIndexStatus = target >= count ? "exact" : "estimated";
+        return;
+      }
+      if (visualIndexStatus !== "measuring") visualIndexStatus = "estimated";
+    }
+
+    function resetMeasuredPrefixFrom(index: number): void {
+      if (!props.wrap) {
+        syncNonWrappedVisualIndexState();
+        return;
+      }
+
+      const nextMeasured = clamp(index, 0, visualIndexLineCount);
+      if (nextMeasured === measuredLineCount && visualMeasureCursor === nextMeasured) return;
+      measuredLineCount = nextMeasured;
+      visualMeasureCursor = nextMeasured;
+      recomputeMeasuredVisualRows();
+      syncVisualIndexStatus();
+      emitVisualIndex();
+    }
+
+    function measureVisualIndexChunk(generation: number, ctx: TerminalFrameContext): void {
+      if (generation !== visualMeasureGeneration || !alive || !props.wrap) return;
+
+      ensureVisualIndex();
+      const count = lineCount();
+      const target = visualMeasurementTargetLineCount(count);
+      if (visualMeasureCursor >= target) {
+        syncVisualIndexStatus();
+        emitVisualIndex();
+        return;
+      }
+
+      const started = ctx.now();
+      const budget = visualIndexMeasureBudgetMs();
+      let scanned = 0;
+      let topAdjustment = 0;
+
+      while (visualMeasureCursor < target && (scanned === 0 || ctx.now() - started < budget)) {
+        const index = visualMeasureCursor;
+        const effectiveTop = currentScrollTop() + topAdjustment;
+        const start = visualStartForLine(index);
+        const prevCount = visualCounts[index] ?? 1;
+        const delta = measureVisualLine(index);
+        if (delta !== 0 && effectiveTop >= start + prevCount) topAdjustment += delta;
+        visualMeasureCursor++;
+        measuredLineCount = visualMeasureCursor;
+        measuredVisualRows += visualCounts[index] ?? 1;
+        scanned++;
+      }
+
+      if (topAdjustment !== 0) {
+        const prevTop = rawScrollTop();
+        const nextTop = normalizeScrollTop(prevTop + topAdjustment);
+        if (nextTop !== prevTop) {
+          if (isScrollControlled()) {
+            emit("update:scrollTop", nextTop);
+            emitScroll(nextTop);
+          } else {
+            innerScrollTop.value = nextTop;
+            stickToBottom.value = stickToBottom.value && nextTop >= maxScrollTop();
+            emitScroll(nextTop);
+          }
+        }
+      }
+
+      if (visualMeasureCursor < target) {
+        emitVisualIndex();
+        ctx.requestMore();
+        scheduler.queueFrameTask({
+          id: `${frameTaskId}:visual-index`,
+          reason: "data",
+          priority: "low",
+          sync: false,
+          run: (nextCtx) => measureVisualIndexChunk(generation, nextCtx),
+        });
+        return;
+      }
+
+      syncVisualIndexStatus();
+      emitVisualIndex();
+    }
+
+    function requestVisualIndexMeasurement(restartFrom = measuredLineCount): void {
+      if (!props.wrap) {
+        syncNonWrappedVisualIndexState();
+        emitVisualIndex();
+        return;
+      }
+
+      ensureVisualIndex();
+      resetMeasuredPrefixFrom(restartFrom);
+      const target = visualMeasurementTargetLineCount();
+      if (measuredLineCount >= target) {
+        syncVisualIndexStatus();
+        emitVisualIndex();
+        return;
+      }
+
+      const generation = ++visualMeasureGeneration;
+      visualMeasureCursor = measuredLineCount;
+      visualIndexStatus = "measuring";
+      emitVisualIndex();
+      scheduler.queueFrameTask({
+        id: `${frameTaskId}:visual-index`,
+        reason: "data",
+        priority: "low",
+        sync: false,
+        run: (ctx) => measureVisualIndexChunk(generation, ctx),
+      });
     }
 
     function ensureBottomMeasured(): void {
@@ -1557,12 +1800,16 @@ export const TLogView = defineComponent({
       }
 
       const maybeChanged = nextCount > prevCount ? prevCount - 1 : nextCount - 1;
+      const restartFrom =
+        nextCount > prevCount ? Math.max(0, prevCount - 1) : Math.max(0, nextCount - 1);
+      if (nextCount > prevCount) resetMeasuredPrefixFrom(Math.min(measuredLineCount, restartFrom));
       if (maybeChanged < 0) return false;
 
       const oldKey = visualKeys[maybeChanged];
       const nextKey = lineKey(maybeChanged);
       if (oldKey === undefined || oldKey === nextKey) return false;
 
+      resetMeasuredPrefixFrom(Math.min(measuredLineCount, maybeChanged));
       visualKeys[maybeChanged] = undefined;
       measureVisualLine(maybeChanged);
       return true;
@@ -1606,6 +1853,11 @@ export const TLogView = defineComponent({
       visualKeys.length = nextCount;
       visualIndexLineCount = nextCount;
       rebuildFenwick();
+      measuredLineCount = Math.min(Math.max(0, measuredLineCount - drop), nextCount);
+      visualMeasureCursor = measuredLineCount;
+      recomputeMeasuredVisualRows();
+      syncVisualIndexStatus();
+      emitVisualIndex();
     }
 
     function maxScrollTop(): number {
@@ -1657,13 +1909,35 @@ export const TLogView = defineComponent({
       stickToBottom.value = isAtBottom();
     }
 
-    function scrollPayload(top = currentScrollTop()): TLogViewScrollPayload {
+    function getScrollMetrics(top = currentScrollTop()): TLogViewScrollMetrics {
       return {
         scrollTop: top,
-        atBottom: isAtBottom(top),
+        maxScrollTop: maxScrollTop(),
+        viewportRows: viewportHeight(),
         lineCount: lineCount(),
-        estimatedVisualRowCount: estimatedVisualRowCount(),
         firstLineIndex: firstLineIndex(),
+        estimatedVisualRowCount: estimatedVisualRowCount(),
+        visualRowCount: visualRowCount(),
+        measuredVisualRowCount: measuredVisualRowCount(),
+        measuredLineCount,
+        visualIndexStatus,
+        atTop: top <= 0,
+        atBottom: isAtBottom(top),
+      };
+    }
+
+    function scrollPayload(top = currentScrollTop()): TLogViewScrollPayload {
+      const metrics = getScrollMetrics(top);
+      return {
+        scrollTop: top,
+        atBottom: metrics.atBottom,
+        lineCount: metrics.lineCount,
+        estimatedVisualRowCount: metrics.estimatedVisualRowCount,
+        visualRowCount: metrics.visualRowCount,
+        measuredVisualRowCount: metrics.measuredVisualRowCount,
+        measuredLineCount: metrics.measuredLineCount,
+        visualIndexStatus: metrics.visualIndexStatus,
+        firstLineIndex: metrics.firstLineIndex,
       };
     }
 
@@ -1924,6 +2198,10 @@ export const TLogView = defineComponent({
       const droppedHeadLines = Math.max(0, nextFirst - prevFirst);
       const droppedVisualRows = visualRowsForTrimmedHead(droppedHeadLines);
       const shouldStick = shouldStickForAppend();
+      const resumeVisualMeasurement = (): void => {
+        if (shouldAutoMeasureVisualIndex()) requestVisualIndexMeasurement(measuredLineCount);
+        else emitVisualIndex();
+      };
       let wrapExistingMutation = false;
 
       if (props.wrap && droppedHeadLines > 0) {
@@ -1943,10 +2221,12 @@ export const TLogView = defineComponent({
           if (clampedTop !== rawScrollTop()) {
             emit("update:scrollTop", clampedTop);
             emitScroll(clampedTop);
+            resumeVisualMeasurement();
             return false;
           }
 
           markViewportDirty();
+          resumeVisualMeasurement();
           return true;
         }
 
@@ -1955,6 +2235,7 @@ export const TLogView = defineComponent({
           stickToBottom: false,
         });
         if (!changed) markViewportDirty();
+        resumeVisualMeasurement();
         return true;
       }
 
@@ -1965,6 +2246,7 @@ export const TLogView = defineComponent({
           stickToBottom: stickToBottom.value && nextTop >= maxScrollTop(),
         });
         if (!changed) markViewportDirty();
+        resumeVisualMeasurement();
         return true;
       }
 
@@ -1984,6 +2266,7 @@ export const TLogView = defineComponent({
           },
         );
         if (!changed) markViewportDirty();
+        resumeVisualMeasurement();
         return true;
       }
 
@@ -1991,6 +2274,7 @@ export const TLogView = defineComponent({
         const changedStart = Math.max(0, prevCount - 1);
         if (viewportIntersectsLines(changedStart, nextCount)) {
           markViewportDirty();
+          resumeVisualMeasurement();
           return true;
         }
       }
@@ -2001,6 +2285,7 @@ export const TLogView = defineComponent({
           stickToBottom: isAtBottom(),
         });
         if (!changed) markViewportDirty();
+        resumeVisualMeasurement();
         return true;
       }
 
@@ -2010,9 +2295,11 @@ export const TLogView = defineComponent({
         viewportIntersectsLines(nextCount - 1, nextCount)
       ) {
         markViewportDirty();
+        resumeVisualMeasurement();
         return true;
       }
 
+      resumeVisualMeasurement();
       return false;
     }
 
@@ -2238,6 +2525,10 @@ export const TLogView = defineComponent({
       };
     }
 
+    function measureVisualIndex(): void {
+      requestVisualIndexMeasurement(0);
+    }
+
     const handle: TLogViewHandle = {
       scrollToBottom,
       scrollToTop,
@@ -2248,6 +2539,8 @@ export const TLogView = defineComponent({
       findPrevious,
       clearSearch,
       getSearchState,
+      measureVisualIndex,
+      getScrollMetrics,
     };
     expose(handle);
 
@@ -2365,6 +2658,9 @@ export const TLogView = defineComponent({
       [
         () => props.source,
         () => props.wrap,
+        () => props.visualIndexMode,
+        () => props.visualIndexOptions?.measureBudgetMs,
+        () => props.visualIndexOptions?.maxMeasuredLines,
         () => props.ansi,
         () => props.links,
         () => props.linkStyle,
@@ -2372,7 +2668,14 @@ export const TLogView = defineComponent({
       ],
       () => {
         clearLineCaches();
+        resetVisualIndex(lineCount(), currentWrapWidth());
+        if (props.wrap && props.visualIndexMode === "exact") {
+          requestVisualIndexMeasurement(0);
+          return;
+        }
+        emitVisualIndex(true);
       },
+      { immediate: true },
     );
 
     watch(
@@ -2416,7 +2719,6 @@ export const TLogView = defineComponent({
         const wasInitialized = initializedScrollTop;
         initializedScrollTop = true;
         resetWheelScrollState(wheelState);
-        if (props.wrap) resetVisualIndex(lineCount(), currentWrapWidth());
         lastLineCount = lineCount();
         lastFirstLineIndex = firstLineIndex();
         if (isScrollControlled()) {
@@ -2448,6 +2750,7 @@ export const TLogView = defineComponent({
     onBeforeUnmount(() => {
       alive = false;
       searchGeneration++;
+      visualMeasureGeneration++;
       cancelWheelScrollFrame();
     });
 
