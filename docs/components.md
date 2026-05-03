@@ -8,15 +8,15 @@
 
 ## 组件速读
 
-| 类别          | 组件                                                                      | 典型用途                                        | 适配性判断                                         |
-| ------------- | ------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
-| Root          | `TerminalProvider`                                                        | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
-| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`            | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
-| Text / Motion | `TText` `TTransition`                                                     | 文本渲染、状态切换、动画插值                    | 通用                                               |
-| Input         | `TInput` `TInputBox` `TJsonEditor`                                        | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
-| Pickers       | `TList` `TVirtualList` `TLogView` `TLogScrollbar` `TSelect` `TPathPicker` | palette、列表、日志、路径选择                   | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
-| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                               | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
-| Navigation    | `TRouterView` + `createTerminalRouter()`                                  | 多页面 TUI / shell                              | 通用                                               |
+| 类别          | 组件                                                                                    | 典型用途                                        | 适配性判断                                         |
+| ------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| Root          | `TerminalProvider`                                                                      | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
+| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                          | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
+| Text / Motion | `TText` `TTransition`                                                                   | 文本渲染、状态切换、动画插值                    | 通用                                               |
+| Input         | `TInput` `TInputBox` `TJsonEditor`                                                      | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
+| Pickers       | `TList` `TVirtualList` `TLogView` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、日志、路径选择                   | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                             | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
+| Navigation    | `TRouterView` + `createTerminalRouter()`                                                | 多页面 TUI / shell                              | 通用                                               |
 
 如果你更关心“哪些地方还应该继续做插件化”，建议配合阅读：[扩展性与插件化](./extensibility.md)。
 
@@ -599,6 +599,97 @@ onMounted(refreshMetrics);
   :markers="markers"
   @scrollTo="scrollTo"
   @scrollBy="scrollBy"
+  @markerClick="onMarkerClick"
+/>
+```
+
+### TLogMinimap
+
+`TLogMinimap` 是一个 experimental compact overview companion 组件，用来把 retained visual rows 压缩成 1 列或多列 overview。它只消费父组件传入的 `metrics`、`markers` 和可选 `density` buckets，不会直接读取 `TLogView` 或 log source，也不会尝试渲染真实文本缩略图。
+
+- `metrics` 通常来自 `logView.value?.getScrollMetrics()`
+- `markers` 通常来自 `logView.value?.getSearchMarkers()`；minimap 只根据 `visualRow` / `current` / `estimated` 渲染
+- `density` 是应用层聚合结果，例如日志密度、错误密度或搜索结果密度；`TLogView` 不会自动生成
+- 点击空白 row 会 emit `{ visualRow, cellX, cellY }` 的 `scrollTo`
+- 点击 marker row 会 emit `markerClick`，且不会额外触发 `scrollTo`
+- 第一版只做 overview，不做 hover tooltip、拖拽 viewport 或 content minimap
+
+```vue
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import {
+  TLogMinimap,
+  TLogView,
+  type TLogMinimapDensityBucket,
+  type TLogMinimapMarker,
+  type TLogViewHandle,
+  type TLogViewScrollMetrics,
+  type TLogViewSearchMarker,
+} from "@simon_he/vue-tui/experimental";
+
+const logView = ref<TLogViewHandle | null>(null);
+const metrics = ref<TLogViewScrollMetrics | null>(null);
+const markers = ref<readonly TLogMinimapMarker[]>([]);
+const density = ref<readonly TLogMinimapDensityBucket[]>([]);
+const query = ref("ERROR");
+
+function refreshOverview() {
+  metrics.value = logView.value?.getScrollMetrics() ?? null;
+  markers.value =
+    logView.value?.getSearchMarkers().map((marker) => ({
+      id: marker.matchIndex,
+      visualRow: marker.visualRow,
+      current: marker.current,
+      estimated: marker.estimated,
+      payload: marker,
+    })) ?? [];
+  density.value = [
+    { startVisualRow: 0, endVisualRow: 40, value: 0.15 },
+    { startVisualRow: 41, endVisualRow: 120, value: 0.55 },
+    { startVisualRow: 121, endVisualRow: 200, value: 0.9 },
+  ];
+}
+
+function onMarkerClick(payload: {
+  marker: TLogMinimapMarker & { payload?: TLogViewSearchMarker };
+}) {
+  const marker = payload.marker.payload;
+  if (!marker) return;
+  logView.value?.selectSearchMatch(marker.matchIndex, {
+    align: "center",
+  });
+  refreshOverview();
+}
+
+onMounted(refreshOverview);
+</script>
+
+<TLogView
+  ref="logView"
+  :x="0"
+  :y="0"
+  :w="78"
+  :h="20"
+  :source="log.source"
+  :version="log.version"
+  wrap
+  visual-index-mode="exact"
+  :search-query="query"
+  @scroll="refreshOverview"
+  @visualIndex="refreshOverview"
+  @searchMarkers="refreshOverview"
+  @searchMatch="refreshOverview"
+/>
+
+<TLogMinimap
+  :x="78"
+  :y="0"
+  :w="2"
+  :h="20"
+  :metrics="metrics"
+  :markers="markers"
+  :density="density"
+  @scrollTo="({ visualRow }) => logView?.scrollToVisualRow(visualRow)"
   @markerClick="onMarkerClick"
 />
 ```

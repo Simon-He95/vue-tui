@@ -14,6 +14,7 @@
 - [TInputBox](#tinputbox)
 - [TJsonEditor](#tjsoneditor)
 - [TList](#tlist)
+- [TLogMinimap](#tlogminimap)
 - [TLogScrollbar](#tlogscrollbar)
 - [TLogSearchResults](#tlogsearchresults)
 - [TLogView](#tlogview)
@@ -383,6 +384,39 @@
 | <code>focus</code>             | —       | —    |
 | <code>blur</code>              | —       | —    |
 | <code>keydown</code>           | —       | —    |
+
+## TLogMinimap
+
+源码：`src/vue/components/TLogMinimap.ts`
+
+### Props
+
+| 名称                            | 类型                                             | 默认值                   | 必填 | 说明 |
+| ------------------------------- | ------------------------------------------------ | ------------------------ | ---- | ---- |
+| <code>x</code>                  | <code>number</code>                              | —                        | 是   | —    |
+| <code>y</code>                  | <code>number</code>                              | —                        | 是   | —    |
+| <code>w</code>                  | <code>number</code>                              | —                        | 是   | —    |
+| <code>h</code>                  | <code>number</code>                              | —                        | 是   | —    |
+| <code>zIndex</code>             | <code>number</code>                              | <code>0</code>           | 否   | —    |
+| <code>metrics</code>            | <code>TLogMinimapMetrics &#124; null</code>      | <code>null</code>        | 否   | —    |
+| <code>markers</code>            | <code>readonly TLogMinimapMarker[]</code>        | <code>() =&gt; []</code> | 否   | —    |
+| <code>density</code>            | <code>readonly TLogMinimapDensityBucket[]</code> | <code>() =&gt; []</code> | 否   | —    |
+| <code>style</code>              | <code>Style</code>                               | <code>undefined</code>   | 否   | —    |
+| <code>densityStyle</code>       | <code>Style</code>                               | <code>undefined</code>   | 否   | —    |
+| <code>markerStyle</code>        | <code>Style</code>                               | <code>undefined</code>   | 否   | —    |
+| <code>currentMarkerStyle</code> | <code>Style</code>                               | <code>undefined</code>   | 否   | —    |
+| <code>viewportStyle</code>      | <code>Style</code>                               | <code>undefined</code>   | 否   | —    |
+| <code>estimatedStyle</code>     | <code>Style</code>                               | <code>undefined</code>   | 否   | —    |
+| <code>showMarkers</code>        | <code>boolean</code>                             | <code>true</code>        | 否   | —    |
+| <code>showDensity</code>        | <code>boolean</code>                             | <code>true</code>        | 否   | —    |
+| <code>showViewport</code>       | <code>boolean</code>                             | <code>true</code>        | 否   | —    |
+
+### Events
+
+| 名称                     | Payload | 说明 |
+| ------------------------ | ------- | ---- |
+| <code>scrollTo</code>    | —       | —    |
+| <code>markerClick</code> | —       | —    |
 
 ## TLogScrollbar
 
