@@ -2714,6 +2714,59 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
+  it("keeps OSC8 link hit regions aligned after unsafe row scroll append", async () => {
+    const payloads: TLogViewLinkClickPayload[] = [];
+    const log = createAppendOnlyLogStore();
+    log.appendLines(
+      Array.from(
+        { length: 4 },
+        (_, index) => `\x1b]8;;https://example.com/${index}\x07link-${index}\x1b]8;;\x07`,
+      ),
+    );
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          source: log.source,
+          version: log.version.value,
+          rowScrollMode: "unsafe-full-row",
+          ansi: true,
+          links: true,
+          onLinkClick: (payload: TLogViewLinkClickPayload) => payloads.push(payload),
+        }),
+      16,
+      5,
+    );
+
+    expect(rowText(mounted, 0)).toBe("link-0");
+
+    log.appendLine("\x1b]8;;https://example.com/4\x07link-4\x1b]8;;\x07");
+    await nextTick();
+    await nextTick();
+
+    expect(rowText(mounted, 0)).toBe("link-1");
+    expect(rowText(mounted, 3)).toBe("link-4");
+
+    mounted
+      .container()
+      ?.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0]).toMatchObject({
+      href: "https://example.com/1",
+      text: "link-1",
+      absoluteLineIndex: 1,
+      index: 1,
+      cellX: 1,
+      cellY: 0,
+    });
+    mounted.unmount();
+  });
+
   it("composes search highlight with OSC8 href style", async () => {
     const logView = ref<TLogViewHandle | null>(null);
     const source: TLogDataSource = {

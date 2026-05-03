@@ -1760,6 +1760,38 @@ export const TLogView = defineComponent({
       return rows;
     }
 
+    function shiftVisibleLinksForScrollRegion(y0: number, y1: number, delta: number): void {
+      if (!visibleLinksByRow.size || delta === 0) return;
+
+      const h = y1 - y0;
+      if (h <= 0) return;
+      if (Math.abs(delta) >= h) {
+        for (let y = y0; y < y1; y++) visibleLinksByRow.delete(y);
+        return;
+      }
+
+      const next = new Map<number, TLogVisibleLinkSegment[]>();
+      for (const [y, links] of visibleLinksByRow) {
+        if (y < y0 || y >= y1) next.set(y, links);
+      }
+
+      if (delta > 0) {
+        for (let y = y0; y < y1 - delta; y++) {
+          const links = visibleLinksByRow.get(y + delta);
+          if (links?.length) next.set(y, links);
+        }
+      } else {
+        const n = -delta;
+        for (let y = y0 + n; y < y1; y++) {
+          const links = visibleLinksByRow.get(y + delta);
+          if (links?.length) next.set(y, links);
+        }
+      }
+
+      visibleLinksByRow.clear();
+      for (const [y, links] of next) visibleLinksByRow.set(y, links);
+    }
+
     function viewportRows(): number[] {
       const r = normalizedRect();
       const rows: number[] = [];
@@ -1847,6 +1879,7 @@ export const TLogView = defineComponent({
 
       if (canUseScrollPlane) {
         render.unsafeScrollPlaneRows(plane.value, r.y, r.y + h, delta);
+        shiftVisibleLinksForScrollRegion(r.y, r.y + h, delta);
         markRowsDirty(
           options?.extraDirtyRows?.length
             ? [...exposedRowsForDelta(r.y, h, delta), ...options.extraDirtyRows]
