@@ -457,6 +457,7 @@ async function benchDomTLogView(
   mode: "stick-bottom" | "not-bottom" | "burst",
   lineKind: "short" | "long" = "short",
   wrap = false,
+  ansi = false,
 ): Promise<Record<string, unknown>> {
   let framePerf: any = null;
   let rendererRef: any = null;
@@ -467,9 +468,14 @@ async function benchDomTLogView(
   let domFlushSamples = 0;
   let getLineCalls = 0;
   const appendCount = 1000;
-  const longPayload = lineKind === "long" ? "x".repeat(10_000) : "";
-  const makeLine = (prefix: string, index: number) =>
-    lineKind === "long" ? `${prefix} ${index} ${longPayload}` : `${prefix} ${index}`;
+  const longPayload = lineKind === "long" ? "x".repeat(ansi ? 200 : 10_000) : "";
+  const makeLine = (prefix: string, index: number) => {
+    if (!ansi)
+      return lineKind === "long" ? `${prefix} ${index} ${longPayload}` : `${prefix} ${index}`;
+    const dim = `\x1b[2m2026-05-03T08:${String(index % 60).padStart(2, "0")}:00Z\x1b[0m`;
+    const red = "\x1b[31mERROR\x1b[0m";
+    return `${dim} ${red} ${prefix} ${index} ${longPayload}`;
+  };
   const log = createAppendOnlyLogStore();
   log.appendLines(Array.from({ length: 1000 }, (_, index) => makeLine("seed", index)));
   const source = {
@@ -504,6 +510,7 @@ async function benchDomTLogView(
           autoFocus: true,
           rowScrollMode: "unsafe-full-row",
           wrap,
+          ansi,
           onScroll: (payload: { scrollTop: number; atBottom: boolean }) => {
             finalTop = payload.scrollTop;
             atBottom = payload.atBottom;
@@ -577,17 +584,23 @@ async function benchDomTLogView(
     }
     const durationMs = now() - startedAt;
     const samples = framePerf.list();
+    const modeName = mode === "not-bottom" ? "detached" : mode;
 
     return {
       name:
-        wrap && lineKind === "long"
-          ? `tlog-view-wrap-long-lines-${mode === "not-bottom" ? "detached" : mode}`
-          : lineKind === "long"
-            ? `tlog-view-long-line-1000-lines-${mode}`
-            : `tlog-view-1000-lines-${mode}`,
+        ansi && wrap && lineKind === "long"
+          ? "tlog-view-ansi-long-lines-wrap"
+          : ansi
+            ? `tlog-view-ansi-${lineKind}-lines-${modeName}`
+            : wrap && lineKind === "long"
+              ? `tlog-view-wrap-long-lines-${modeName}`
+              : lineKind === "long"
+                ? `tlog-view-long-line-1000-lines-${mode}`
+                : `tlog-view-1000-lines-${mode}`,
       appendCount,
       lineKind,
       wrap,
+      ansi,
       longPayloadCells: longPayload.length,
       scheduledRafFrames: raf.scheduledRafFrames(),
       pendingRafFramesBeforeFlush,
@@ -614,7 +627,7 @@ async function benchDomTLogView(
   }
 }
 
-async function benchDomTLogViewRetention(): Promise<Record<string, unknown>> {
+async function benchDomTLogViewRetention(ansi = false): Promise<Record<string, unknown>> {
   let framePerf: any = null;
   let rendererRef: any = null;
   let finalTop = 0;
@@ -626,7 +639,13 @@ async function benchDomTLogViewRetention(): Promise<Record<string, unknown>> {
   const appendCount = 100_000;
   const maxLines = 1_000;
   const log = createAppendOnlyLogStore({ maxLines });
-  log.appendLines(Array.from({ length: maxLines }, (_, index) => `seed ${index}`));
+  const makeLine = (prefix: string, index: number) => {
+    if (!ansi) return `${prefix} ${index}`;
+    const dim = `\x1b[2m2026-05-03T08:${String(index % 60).padStart(2, "0")}:00Z\x1b[0m`;
+    const red = "\x1b[31mERROR\x1b[0m";
+    return `${dim} ${red} ${prefix} ${index} ${"x".repeat(200)}`;
+  };
+  log.appendLines(Array.from({ length: maxLines }, (_, index) => makeLine("seed", index)));
   const source = {
     lineCount: () => log.source.lineCount(),
     firstLineIndex: () => log.source.firstLineIndex?.() ?? 0,
@@ -658,6 +677,7 @@ async function benchDomTLogViewRetention(): Promise<Record<string, unknown>> {
           source,
           version: log.version.value,
           rowScrollMode: "unsafe-full-row",
+          ansi,
           onScroll: (payload: { scrollTop: number; atBottom: boolean }) => {
             finalTop = payload.scrollTop;
             atBottom = payload.atBottom;
@@ -693,7 +713,7 @@ async function benchDomTLogViewRetention(): Promise<Record<string, unknown>> {
     domFlushSamples = 0;
 
     const startedAt = now();
-    for (let i = 0; i < appendCount; i++) log.appendLine(`retained ${i}`);
+    for (let i = 0; i < appendCount; i++) log.appendLine(makeLine("retained", i));
     await nextTick();
     collectDomFlush();
     finalTop = Math.max(finalTop, Math.max(0, log.source.lineCount() - 20));
@@ -701,14 +721,23 @@ async function benchDomTLogViewRetention(): Promise<Record<string, unknown>> {
     const samples = framePerf.list();
 
     return {
-      name: "tlog-view-retention-100k-append-max-1000",
+      name: ansi ? "tlog-view-ansi-retention-max-1000" : "tlog-view-retention-100k-append-max-1000",
       appendCount,
       maxLines,
+      ansi,
       retainedLineCount: log.source.lineCount(),
       firstLineIndex: log.source.firstLineIndex?.() ?? 0,
       scheduledRafFrames: raf.scheduledRafFrames(),
       durationMs: round(durationMs),
       avgDomFlushPlaneRows: round(domFlushPlaneRows / Math.max(1, domFlushSamples)),
+      coalescedFrameTasks: samples.reduce(
+        (acc: number, sample: any) => acc + (sample.coalescedFrameTasks ?? 0),
+        0,
+      ),
+      frameTaskCount: samples.reduce(
+        (acc: number, sample: any) => acc + (sample.frameTaskCount ?? 0),
+        0,
+      ),
       finalTop,
       atBottom,
       getLineCalls,
@@ -741,7 +770,10 @@ async function main(): Promise<void> {
     await benchDomTLogView("stick-bottom", "long", true),
     await benchDomTLogView("not-bottom", "long", true),
     await benchDomTLogView("burst", "long", true),
+    await benchDomTLogView("stick-bottom", "short", false, true),
+    await benchDomTLogView("stick-bottom", "long", true, true),
     await benchDomTLogViewRetention(),
+    await benchDomTLogViewRetention(true),
   ];
 
   // eslint-disable-next-line no-console

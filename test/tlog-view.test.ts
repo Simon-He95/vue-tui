@@ -23,6 +23,13 @@ function rowText(
     .trimEnd();
 }
 
+function rowStyles(
+  mounted: { terminal: ReturnType<typeof createTerminalApp>["terminal"] },
+  y: number,
+) {
+  return mounted.terminal.getRow(y).map((cell) => cell.style);
+}
+
 function installManualRaf(): Readonly<{
   pending: () => number;
   flush: () => void;
@@ -1625,6 +1632,183 @@ describe("TLogView", () => {
     }
   });
 
+  it("renders ANSI SGR styles in fixed one-line mode", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mred\x1b[0m plain",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+        }),
+      12,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe("red plain");
+    const styles = rowStyles(mounted, 0);
+    expect(styles[0]!.fg).toBe("red");
+    expect(styles[1]!.fg).toBe("red");
+    expect(styles[2]!.fg).toBe("red");
+    expect(styles[4]!.fg).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it("does not interpret ANSI escapes when ansi is false", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mred",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 1,
+          source,
+          version: 1,
+        }),
+      12,
+      2,
+    );
+
+    expect(rowStyles(mounted, 0).every((style) => style.fg == null)).toBe(true);
+    mounted.unmount();
+  });
+
+  it("strips unsupported ANSI control sequences in ansi mode", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[2K\x1b[31mred\x1b[0m",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 8,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+        }),
+      8,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe("red");
+    expect(rowStyles(mounted, 0)[0]!.fg).toBe("red");
+    mounted.unmount();
+  });
+
+  it("resets SGR foreground and background to the TLogView base style", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mred\x1b[39mbase \x1b[41mbg\x1b[49mnormal",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 32,
+          h: 1,
+          source,
+          version: 1,
+          style: { fg: "whiteBright", bg: "black" },
+          ansi: true,
+        }),
+      32,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe("redbase bgnormal");
+    const styles = rowStyles(mounted, 0);
+    expect(styles[0]!.fg).toBe("red");
+    expect(styles[3]!.fg).toBe("whiteBright");
+    expect(styles[8]!.bg).toBe("red");
+    expect(styles[10]!.bg).toBe("black");
+    mounted.unmount();
+  });
+
+  it("renders ANSI SGR style flags", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[1;2;3;4;7mstyled\x1b[0m",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+        }),
+      12,
+      2,
+    );
+
+    const style = rowStyles(mounted, 0)[0]!;
+    expect(style.bold).toBe(true);
+    expect(style.dim).toBe(true);
+    expect(style.italic).toBe(true);
+    expect(style.underline).toBe(true);
+    expect(style.inverse).toBe(true);
+    mounted.unmount();
+  });
+
+  it("preserves ANSI style when fixed rows are clipped into a styled segment", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "normal \x1b[31mred\x1b[0m end",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: -7,
+          y: 0,
+          w: 15,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+        }),
+      8,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe("red end");
+    const styles = rowStyles(mounted, 0);
+    expect(styles[0]!.fg).toBe("red");
+    expect(styles[1]!.fg).toBe("red");
+    expect(styles[2]!.fg).toBe("red");
+    expect(styles[4]!.fg).toBeUndefined();
+    mounted.unmount();
+  });
+
   it("wraps a long logical line into visual rows", async () => {
     const source: TLogDataSource = {
       lineCount: () => 1,
@@ -1648,6 +1832,115 @@ describe("TLogView", () => {
     );
 
     expect([0, 1, 2].map((y) => rowText(mounted, y))).toEqual(["abcd", "efgh", "ij"]);
+    mounted.unmount();
+  });
+
+  it("wraps ANSI visual rows without counting SGR escapes as cells", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mabcdefghij\x1b[0m",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 4,
+          h: 3,
+          source,
+          version: 1,
+          wrap: true,
+          ansi: true,
+        }),
+      4,
+      4,
+    );
+
+    expect([0, 1, 2].map((y) => rowText(mounted, y))).toEqual(["abcd", "efgh", "ij"]);
+    expect(
+      rowStyles(mounted, 0)
+        .slice(0, 4)
+        .every((style) => style.fg === "red"),
+    ).toBe(true);
+    expect(
+      rowStyles(mounted, 1)
+        .slice(0, 4)
+        .every((style) => style.fg === "red"),
+    ).toBe(true);
+    expect(
+      rowStyles(mounted, 2)
+        .slice(0, 2)
+        .every((style) => style.fg === "red"),
+    ).toBe(true);
+    mounted.unmount();
+  });
+
+  it("wraps ANSI styled wide characters without dropping boundary glyphs", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mab中cd\x1b[0m",
+      getLineKey: () => "wide",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 3,
+          h: 3,
+          source,
+          version: 1,
+          wrap: true,
+          ansi: true,
+        }),
+      3,
+      4,
+    );
+
+    expect([0, 1, 2].map((y) => rowText(mounted, y))).toEqual(["ab", "中c", "d"]);
+    expect(rowStyles(mounted, 1)[0]!.fg).toBe("red");
+    expect(rowStyles(mounted, 1)[2]!.fg).toBe("red");
+    mounted.unmount();
+  });
+
+  it("resets ANSI style to the TLogView base style across wrapped rows", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mabcd\x1b[0mefgh",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 4,
+          h: 2,
+          source,
+          version: 1,
+          style: { fg: "whiteBright" },
+          wrap: true,
+          ansi: true,
+        }),
+      4,
+      3,
+    );
+
+    expect([0, 1].map((y) => rowText(mounted, y))).toEqual(["abcd", "efgh"]);
+    expect(
+      rowStyles(mounted, 0)
+        .slice(0, 4)
+        .every((style) => style.fg === "red"),
+    ).toBe(true);
+    expect(
+      rowStyles(mounted, 1)
+        .slice(0, 4)
+        .every((style) => style.fg === "whiteBright"),
+    ).toBe(true);
     mounted.unmount();
   });
 
@@ -2153,6 +2446,202 @@ describe("TLogView", () => {
       expect(getLine.mock.calls.length).toBeLessThan(200);
     } finally {
       app.dispose();
+    }
+  });
+
+  it("repaints ANSI tail style when appendChunk mutates the current tail", async () => {
+    const log = createAppendOnlyLogStore();
+
+    const App = defineComponent({
+      name: "TLogViewAnsiAppendChunkTailApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 2,
+            source: log.source,
+            version: log.version.value,
+            ansi: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      log.appendChunk("\x1b[31mred");
+      await nextTick();
+      await nextTick();
+      expect(rowText(app, 0)).toBe("red");
+
+      log.appendChunk(" more\x1b[0m");
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("red more");
+      expect(
+        rowStyles(app, 0)
+          .slice(0, 8)
+          .every((style) => style.fg === "red"),
+      ).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints ANSI tail style when replaceTail changes the current tail", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendChunk("\x1b[31mdraft");
+
+    const App = defineComponent({
+      name: "TLogViewAnsiReplaceTailApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 2,
+            source: log.source,
+            version: log.version.value,
+            ansi: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      log.replaceTail("\x1b[32mfinal\x1b[0m");
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("final");
+      expect(
+        rowStyles(app, 0)
+          .slice(0, 5)
+          .every((style) => style.fg === "green"),
+      ).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keeps ANSI cache entries correct after retention drops head lines", async () => {
+    const log = createAppendOnlyLogStore({ maxLines: 3 });
+    log.appendLines(["\x1b[31mred-0\x1b[0m", "\x1b[32mgreen-1\x1b[0m", "\x1b[33myellow-2\x1b[0m"]);
+
+    const App = defineComponent({
+      name: "TLogViewAnsiRetentionApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 3,
+            source: log.source,
+            version: log.version.value,
+            ansi: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 4, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      log.appendLine("\x1b[31mred-3\x1b[0m");
+      await nextTick();
+      await nextTick();
+
+      expect([0, 1, 2].map((y) => rowText(app, y))).toEqual(["green-1", "yellow-2", "red-3"]);
+      expect(rowStyles(app, 0)[0]!.fg).toBe("green");
+      expect(rowStyles(app, 1)[0]!.fg).toBe("yellow");
+      expect(rowStyles(app, 2)[0]!.fg).toBe("red");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not wrap all lines on initial large ANSI wrapped mount", async () => {
+    const getLine = vi.fn((index: number) => `\x1b[31mline-${index}-${"x".repeat(20)}\x1b[0m`);
+    const source: TLogDataSource = {
+      lineCount: () => 100_000,
+      getLine,
+      getLineKey: (index) => index,
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 4,
+          source,
+          version: 1,
+          wrap: true,
+          ansi: true,
+        }),
+      10,
+      6,
+    );
+
+    expect(getLine.mock.calls.length).toBeLessThan(100);
+    expect(rowText(mounted, 0)).toBe("line-99999");
+    mounted.unmount();
+  });
+
+  it("reuses completed ANSI row caches when appending at bottom", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 20 }, (_, index) => `\x1b[31mERROR ${index}\x1b[0m`));
+    const getLineSpy = vi.spyOn(log.source, "getLine");
+
+    const App = defineComponent({
+      name: "TLogViewAnsiAppendCacheApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            rowScrollMode: "unsafe-full-row",
+            ansi: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      getLineSpy.mockClear();
+
+      log.appendLine("\x1b[31mERROR 20\x1b[0m");
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(app, 3)).toBe("ERROR 20");
+      expect(rowStyles(app, 3)[0]!.fg).toBe("red");
+      expect(getLineSpy.mock.calls.length).toBeLessThanOrEqual(2);
+    } finally {
+      app.dispose();
+      getLineSpy.mockRestore();
     }
   });
 
