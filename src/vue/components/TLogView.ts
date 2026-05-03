@@ -136,6 +136,20 @@ export type TLogViewSearchMatchPayload = Readonly<{
   currentMatchIndex: number;
   matchCount: number;
 }>;
+export type TLogViewSearchMarker = Readonly<{
+  matchIndex: number;
+  absoluteLineIndex: number;
+  index: number;
+  visualRow: number;
+  estimated: boolean;
+  current: boolean;
+}>;
+export type TLogViewSearchMarkersPayload = Readonly<{
+  markers: readonly TLogViewSearchMarker[];
+  visualIndexStatus: TLogViewVisualIndexStatus;
+  matchCount: number;
+  currentMatchIndex: number;
+}>;
 export type TLogViewLinkClickPayload = Readonly<{
   href: string;
   text: string;
@@ -184,6 +198,7 @@ export type TLogViewHandle = Readonly<{
   getSearchState: () => TLogViewSearchState;
   measureVisualIndex: () => void;
   getScrollMetrics: () => TLogViewScrollMetrics;
+  getSearchMarkers: () => readonly TLogViewSearchMarker[];
 }>;
 
 let nextTLogViewTaskId = 0;
@@ -613,6 +628,7 @@ export const TLogView = defineComponent({
     "update:searchQuery",
     "search",
     "searchMatch",
+    "searchMarkers",
     "linkClick",
     "visualIndex",
     "focus",
@@ -656,6 +672,10 @@ export const TLogView = defineComponent({
     let searchStatus: TLogSearchStatus = "idle";
     let currentMatchIndex = -1;
     let searchMatches: TLogViewSearchMatch[] = [];
+    let searchMarkersGeneration = 0;
+    let searchMarkersCacheGeneration = -1;
+    let searchMarkersCache: readonly TLogViewSearchMarker[] = [];
+    let lastSearchMarkersPayloadKey = "";
     const matchesByLine = new Map<number, number[]>();
     const wheelState = createWheelScrollState();
     // Unknown wrapped lines count as one row until measured, so large bottom mounts avoid full-source wrapping.
@@ -1135,10 +1155,107 @@ export const TLogView = defineComponent({
       emit("searchMatch", searchMatchPayload());
     }
 
+    function invalidateSearchMarkers(): void {
+      searchMarkersGeneration++;
+    }
+
+    function isExactVisualMarkerLine(index: number): boolean {
+      if (!props.wrap) return true;
+      return visualIndexStatus === "exact" || index < measuredLineCount;
+    }
+
+    function getSearchMarkers(): readonly TLogViewSearchMarker[] {
+      if (searchMarkersCacheGeneration === searchMarkersGeneration) return searchMarkersCache;
+      if (!searchMatches.length) {
+        searchMarkersCache = [];
+        searchMarkersCacheGeneration = searchMarkersGeneration;
+        return searchMarkersCache;
+      }
+
+      const count = lineCount();
+      const width = currentWrapWidth();
+      const base = props.style ?? defaultStyle.value;
+      const baseStyleKey = styleCacheKey(base);
+      const lineStartCache = new Map<number, number>();
+      const exactCache = new Map<number, boolean>();
+      const plainRowsCache = new Map<number, readonly string[]>();
+      const ansiRowsCache = new Map<number, ReturnType<typeof ansiWrappedRowsForLine>>();
+      const markers: TLogViewSearchMarker[] = [];
+
+      for (let matchIndex = 0; matchIndex < searchMatches.length; matchIndex++) {
+        const match = searchMatches[matchIndex]!;
+        let visualRow = match.index;
+        let exact = true;
+
+        if (props.wrap) {
+          measureVisualLine(match.index);
+          let lineStart = lineStartCache.get(match.index);
+          if (lineStart == null) {
+            lineStart = visualStartForLine(match.index);
+            lineStartCache.set(match.index, lineStart);
+          }
+
+          exact = exactCache.get(match.index) ?? isExactVisualMarkerLine(match.index);
+          exactCache.set(match.index, exact);
+          if (props.ansi) {
+            let rows = ansiRowsCache.get(match.index);
+            if (!rows) {
+              rows = ansiWrappedRowsForLine(match.index, count, width, base, baseStyleKey);
+              ansiRowsCache.set(match.index, rows);
+            }
+            visualRow = lineStart + partIndexForCellInAnsiWrappedRow(rows, match.startCell);
+          } else {
+            let rows = plainRowsCache.get(match.index);
+            if (!rows) {
+              rows = wrappedRowsForLine(match.index, count, width);
+              plainRowsCache.set(match.index, rows);
+            }
+            visualRow = lineStart + partIndexForCellInPlainWrappedRow(rows, match.startCell);
+          }
+        }
+
+        markers.push({
+          matchIndex,
+          absoluteLineIndex: match.absoluteLineIndex,
+          index: match.index,
+          visualRow,
+          estimated: !exact,
+          current: matchIndex === currentMatchIndex,
+        });
+      }
+
+      searchMarkersCache = markers;
+      searchMarkersCacheGeneration = searchMarkersGeneration;
+      return searchMarkersCache;
+    }
+
+    function searchMarkersPayload(): TLogViewSearchMarkersPayload {
+      return {
+        markers: getSearchMarkers(),
+        visualIndexStatus,
+        matchCount: searchMatches.length,
+        currentMatchIndex,
+      };
+    }
+
+    function emitSearchMarkers(force = false): void {
+      const payload = searchMarkersPayload();
+      const key = JSON.stringify([
+        searchMarkersGeneration,
+        visualIndexStatus,
+        payload.matchCount,
+        payload.currentMatchIndex,
+      ]);
+      if (!force && key === lastSearchMarkersPayloadKey) return;
+      lastSearchMarkersPayloadKey = key;
+      emit("searchMarkers", payload);
+    }
+
     function clearSearchMatches(): void {
       searchMatches = [];
       matchesByLine.clear();
       currentMatchIndex = -1;
+      invalidateSearchMarkers();
     }
 
     function addSearchMatch(match: TLogViewSearchMatch): void {
@@ -1150,6 +1267,7 @@ export const TLogView = defineComponent({
         matchesByLine.set(match.index, lineMatches);
       }
       lineMatches.push(matchIndex);
+      invalidateSearchMarkers();
     }
 
     function searchableTextForLine(
@@ -1255,6 +1373,7 @@ export const TLogView = defineComponent({
         clearSearchMatches();
         emitSearch("");
         emitSearchMatch();
+        emitSearchMarkers(true);
         return;
       }
 
@@ -1291,6 +1410,7 @@ export const TLogView = defineComponent({
 
       searchStatus = "done";
       emitSearch(query);
+      emitSearchMarkers(true);
       markViewportDirty();
       ctx.invalidate({ priority: "low", plane: plane.value, reason: "data" });
       trimSearchLineCache();
@@ -1309,6 +1429,7 @@ export const TLogView = defineComponent({
           clearSearchMatches();
           emitSearch("");
           emitSearchMatch();
+          emitSearchMarkers(true);
           markViewportDirty();
           invalidateSelf("normal", "data");
         }
@@ -1319,6 +1440,7 @@ export const TLogView = defineComponent({
       searchStatus = "scanning";
       emitSearch(query);
       emitSearchMatch();
+      emitSearchMarkers(true);
       markViewportDirty();
       invalidateSelf("normal", "data");
       scheduler.queueFrameTask({
@@ -1497,7 +1619,9 @@ export const TLogView = defineComponent({
       const key = JSON.stringify(payload);
       if (!force && key === lastVisualIndexPayloadKey) return;
       lastVisualIndexPayloadKey = key;
+      if (props.wrap) invalidateSearchMarkers();
       emit("visualIndex", payload);
+      if (!props.wrap || visualIndexStatus !== "measuring") emitSearchMarkers(true);
     }
 
     function fenwickAdd(index: number, delta: number): void {
@@ -2479,6 +2603,8 @@ export const TLogView = defineComponent({
       if (index < 0 || index >= searchMatches.length) return;
       currentMatchIndex = index;
       emitSearchMatch();
+      invalidateSearchMarkers();
+      emitSearchMarkers(true);
       scrollToMatch(searchMatches[index]!);
       markViewportDirty();
       invalidateSelf("high", "data");
@@ -2512,6 +2638,7 @@ export const TLogView = defineComponent({
       clearSearchMatches();
       emitSearch("");
       emitSearchMatch();
+      emitSearchMarkers(true);
       markViewportDirty();
       invalidateSelf("normal", "data");
     }
@@ -2541,6 +2668,7 @@ export const TLogView = defineComponent({
       getSearchState,
       measureVisualIndex,
       getScrollMetrics,
+      getSearchMarkers,
     };
     expose(handle);
 

@@ -437,6 +437,8 @@ type TLogDataSource = {
 
 `searchQuery` 只搜索 visible text。`ansi=true` 时，ANSI escape sequences 不参与搜索，也不会污染 match offset；match highlight 会叠加在 ANSI style 上。match 坐标使用 terminal cell offset，因此宽字符会按 cell width 定位。`wrap=true` 时，`findNext()` / `findPrevious()` 会滚动到 match 所在 visual row。搜索范围始终是当前 retained source window；retention trim、append、tail mutation、source 或 version 变化后会基于当前窗口重新扫描。
 
+`getSearchMarkers()` 会把当前 search matches 投影成 scrollbar-friendly marker 数据：`visualRow` 仍然是 retained window 内的 visual-row index，`absoluteLineIndex` 保留原始 logical line 编号，`estimated` 用来区分 lazy visual index 和 exact visual index，`current` 表示当前 match。这个方法只基于当前 search/visual index 状态计算 markers，不会为了 marker 数据强制做一次全量 exact measurement。
+
 `searchOptions.wholeWord` 使用 ASCII word boundary：`[A-Za-z0-9_]`。例如 `error-1` 中的 `error` 会被视为 whole-word match，而 `_error` 不会。
 
 `clearSearch()` 会 emit `update:searchQuery`，并等待父组件把 `searchQuery` 回写为空后清除 matches；如果父组件不回写，当前 search state 和 highlight 不会提前改变。
@@ -508,10 +510,12 @@ function measureRows() {
 
 ### TLogScrollbar
 
-`TLogScrollbar` 是一个 terminal-rendered 的 experimental companion 组件，消费 `TLogViewScrollMetrics` 渲染 1-cell 宽滚动条。它不持有滚动状态，也不会直接调用 `TLogView` 内部逻辑；父组件负责把 `scrollTo` / `scrollBy` 接到 `TLogViewHandle` 上。
+`TLogScrollbar` 是一个 terminal-rendered 的 experimental companion 组件，消费 `TLogViewScrollMetrics` 渲染 1-cell 宽滚动条。它不持有滚动状态，也不会直接调用 `TLogView` 内部逻辑；父组件负责把 `scrollTo` / `scrollBy` / `markerClick` 接到 `TLogViewHandle` 或应用层状态上。
 
 - `metrics` 可以直接来自 `logView.value?.getScrollMetrics()`，也可以由 `@scroll` / `@visualIndex` 事件在外部维护
 - `visualIndexStatus="estimated" | "measuring" | "exact"` 会分别用不同 thumb 状态渲染，方便区分估算值、后台测量中和精确 visual-row index
+- `markers` 可以直接来自 `logView.value?.getSearchMarkers()`；scrollbar 只根据 marker 的 `visualRow` / `current` / `estimated` 渲染，不依赖 `TLogView` 私有状态
+- `markerClick` 只把命中的 marker 回传给父组件；是否调用 `findNext()`、`scrollToVisualRow()` 或其它跳转逻辑由父组件决定
 - 点击 track 会 emit 目标 visual-row `scrollTo`
 - wheel 会 emit 简单的 `scrollBy(+/-1)` delegation
 - `showArrows=true` 时首尾两行会渲染 `▲` / `▼`，点击后按一个 viewport 高度翻动
@@ -522,15 +526,27 @@ import { onMounted, ref } from "vue";
 import {
   TLogScrollbar,
   TLogView,
+  type TLogScrollbarMarker,
   type TLogViewHandle,
+  type TLogViewSearchMarker,
   type TLogViewScrollMetrics,
 } from "@simon_he/vue-tui/experimental";
 
 const logView = ref<TLogViewHandle | null>(null);
 const metrics = ref<TLogViewScrollMetrics | null>(null);
+const markers = ref<readonly TLogScrollbarMarker[]>([]);
+const query = ref("ERROR");
 
 function refreshMetrics() {
   metrics.value = logView.value?.getScrollMetrics() ?? null;
+  markers.value =
+    logView.value?.getSearchMarkers().map((marker) => ({
+      id: marker.matchIndex,
+      visualRow: marker.visualRow,
+      current: marker.current,
+      estimated: marker.estimated,
+      payload: marker,
+    })) ?? [];
 }
 
 function scrollTo(top: number) {
@@ -540,6 +556,15 @@ function scrollTo(top: number) {
 
 function scrollBy(delta: number) {
   logView.value?.scrollBy(delta);
+  refreshMetrics();
+}
+
+function onMarkerClick(payload: {
+  marker: TLogScrollbarMarker & { payload?: TLogViewSearchMarker };
+}) {
+  const marker = payload.marker.payload;
+  if (!marker) return;
+  logView.value?.scrollToVisualRow(marker.visualRow);
   refreshMetrics();
 }
 
@@ -556,8 +581,10 @@ onMounted(refreshMetrics);
   :version="log.version"
   wrap
   visual-index-mode="exact"
+  :search-query="query"
   @scroll="refreshMetrics"
   @visualIndex="refreshMetrics"
+  @searchMarkers="refreshMetrics"
 />
 
 <TLogScrollbar
@@ -565,8 +592,10 @@ onMounted(refreshMetrics);
   :y="0"
   :h="20"
   :metrics="metrics"
+  :markers="markers"
   @scrollTo="scrollTo"
   @scrollBy="scrollBy"
+  @markerClick="onMarkerClick"
 />
 ```
 
@@ -577,6 +606,7 @@ onMounted(refreshMetrics);
 - `update:searchQuery`: `searchQuery`
 - `search`: `{ query, status, matchCount }`
 - `searchMatch`: `{ match, currentMatchIndex, matchCount }`
+- `searchMarkers`: `{ markers, visualIndexStatus, matchCount, currentMatchIndex }`
 - `linkClick`: `{ href, text, absoluteLineIndex, index, startCell, endCell, cellX, cellY }`
 - `focus` / `blur` / `keydown`
 
