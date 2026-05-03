@@ -37,6 +37,8 @@ export type {
   TLogViewSearchMarker,
   TLogViewSearchMarkersPayload,
   TLogViewSearchMatchPayload,
+  TLogViewSearchError,
+  TLogViewSearchMode,
   TLogViewSearchOptions,
   TLogViewSearchPayload,
   TLogViewSelectSearchMatchOptions,

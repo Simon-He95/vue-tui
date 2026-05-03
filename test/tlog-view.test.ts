@@ -1781,6 +1781,64 @@ describe("TLogView", () => {
     }
   });
 
+  it("supports regex mode and respects caseSensitive", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const caseSensitive = ref(false);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "ERROR error",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewRegexSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 16,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "error",
+            searchOptions: {
+              mode: "regex",
+              caseSensitive: caseSensitive.value,
+              scanBudgetMs: 1000,
+            },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 16, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState()).toMatchObject({
+        status: "done",
+        matchCount: 2,
+      });
+
+      caseSensitive.value = true;
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState()).toMatchObject({
+        status: "done",
+        matchCount: 1,
+      });
+      expect(logView.value!.getSearchMatch(0)).toMatchObject({
+        startCell: 6,
+        endCell: 11,
+        text: "error",
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("selectSearchMatch updates the current match and emits the selected payload", async () => {
     const logView = ref<TLogViewHandle | null>(null);
     const onSearchMatch = vi.fn();
@@ -2064,6 +2122,70 @@ describe("TLogView", () => {
     }
   });
 
+  it("reports invalid regex search errors without crashing and clears markers", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const onSearch = vi.fn();
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "error line",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewInvalidRegexSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 16,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "[",
+            searchOptions: {
+              mode: "regex",
+              scanBudgetMs: 1000,
+            },
+            onSearch,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 16, rows: 2, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value!.getSearchState()).toMatchObject({
+        query: "[",
+        status: "error",
+        matchCount: 0,
+        currentMatchIndex: -1,
+        error: {
+          kind: "invalid-regex",
+          query: "[",
+        },
+      });
+      expect(logView.value!.getSearchMarkers()).toEqual([]);
+      expect(onSearch).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          query: "[",
+          status: "error",
+          matchCount: 0,
+          error: expect.objectContaining({
+            kind: "invalid-regex",
+          }),
+        }),
+      );
+      expect(rowStyles(app, 0).every((style) => style.inverse !== true)).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("searches ANSI visible text only and preserves ANSI style under highlights", async () => {
     const logView = ref<TLogViewHandle | null>(null);
     const query = ref("ERROR");
@@ -2110,6 +2232,59 @@ describe("TLogView", () => {
       styles = rowStyles(app, 0);
       expect(styles[0]!.fg).toBe("red");
       expect(styles[0]!.inverse).toBeUndefined();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("supports regex search on ANSI visible text only", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mERROR\x1b[0m failed",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewAnsiRegexSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 1,
+            source,
+            version: 1,
+            ansi: true,
+            searchQuery: "ERROR\\s+failed",
+            searchOptions: {
+              mode: "regex",
+              scanBudgetMs: 1000,
+            },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState().matchCount).toBe(1);
+      expect(logView.value!.getSearchMatch(0)).toMatchObject({
+        startCell: 0,
+        endCell: textCellWidth("ERROR failed"),
+        text: "ERROR failed",
+      });
+      expect(logView.value!.getSearchResults({ includePreview: true })[0]).toMatchObject({
+        preview: {
+          text: "ERROR failed",
+          matchStartCell: 0,
+          matchEndCell: textCellWidth("ERROR failed"),
+        },
+      });
     } finally {
       app.dispose();
     }
@@ -3061,6 +3236,177 @@ describe("TLogView", () => {
       expect(styles[6]!.inverse).toBeUndefined();
       expect(styles[14]!.inverse).toBeUndefined();
       expect(styles[20]!.inverse).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("preserves wide-character cell offsets for regex matches", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "ab中ERROR",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWideRegexSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 16,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "中ERROR",
+            searchOptions: {
+              mode: "regex",
+              scanBudgetMs: 1000,
+            },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 16, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchMatch(0)).toMatchObject({
+        startCell: 2,
+        endCell: textCellWidth("ab中ERROR"),
+        text: "中ERROR",
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("ignores zero-width regex matches without getting stuck", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "abc",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewZeroWidthRegexSearchApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "(?=a)|(?=b)|(?=c)",
+            searchOptions: {
+              mode: "regex",
+              scanBudgetMs: 1000,
+            },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState()).toMatchObject({
+        status: "done",
+        matchCount: 0,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("respects maxMatchesPerLine for regex searches", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "error error error",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewRegexMaxMatchesPerLineApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "error",
+            searchOptions: {
+              mode: "regex",
+              maxMatchesPerLine: 2,
+              scanBudgetMs: 1000,
+            },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState().matchCount).toBe(2);
+      expect(logView.value!.getSearchResults()).toHaveLength(2);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("ignores wholeWord in regex mode", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "error-1",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewRegexWholeWordApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "error",
+            searchOptions: {
+              mode: "regex",
+              wholeWord: true,
+              scanBudgetMs: 1000,
+            },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchState().matchCount).toBe(1);
+      expect(logView.value!.getSearchMatch(0)?.text).toBe("error");
     } finally {
       app.dispose();
     }

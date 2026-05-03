@@ -36,6 +36,8 @@ describe("package exports", () => {
     expect(experimentalSource).toContain("TLogViewVisibleLink");
     expect(experimentalSource).toContain("TLogViewLinkFocusPayload");
     expect(experimentalSource).toContain("TLogViewLinkActivatePayload");
+    expect(experimentalSource).toContain("TLogViewSearchMode");
+    expect(experimentalSource).toContain("TLogViewSearchError");
   });
 
   it.skipIf(!requireDistExports)("keeps built ESM/CJS experimental exports usable", async () => {
