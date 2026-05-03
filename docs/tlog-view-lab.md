@@ -1,6 +1,8 @@
 # TLogView Lab
 
-这页给一个“把整套 experimental log-view stack 接起来”的完整 lab blueprint。目标不是再加功能，而是验证这些部件能在同一个屏幕里稳定协作：
+这页现在对应一个**可运行**的 lab example，而不再只是 blueprint。目标很直接：把整套 experimental log-view stack 放进同一个屏幕，证明它已经从“功能完成”进入“可交付 / 可回归验证”状态。
+
+## 覆盖范围
 
 - `TLogView`
 - `TLogSearchBar`
@@ -11,278 +13,144 @@
 - `TLogLinksPanel`
 - `useTLogSearchController`
 - `useTLogLinkController`
-- `createAppendOnlyLogStore({ maxLines })`
+- `createAppendOnlyLogStore({ maxLines: 2000 })`
 
-## 建议覆盖的开关
+## 运行入口
 
-- `wrap`
-- `ansi`
-- `links`
-- `keyboardLinks`
-- `visualIndexMode`: `"exact"` / `"estimated"`
-- `regex search`
-- `caseSensitive`
-- `wholeWord`
-- `retention maxLines`
-
-## 建议日志负载
-
-1. 普通短日志
-2. 长 JSON / stack line
-3. ANSI `ERROR` / `WARN` / dim timestamp
-4. OSC8 hyperlink
-5. 宽字符
-6. append burst
-
-## 完整 wiring 示例
-
-```vue
-<script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import {
-  TLogLinksPanel,
-  TLogMinimap,
-  TLogScrollbar,
-  TLogSearchBar,
-  TLogSearchPager,
-  TLogSearchResults,
-  TLogView,
-  createAppendOnlyLogStore,
-  useTLogLinkController,
-  useTLogSearchController,
-  type TLogMinimapDensityBucket,
-  type TLogMinimapMarker,
-  type TLogScrollbarMarker,
-  type TLogViewHandle,
-} from "@simon_he/vue-tui/experimental";
-
-const logView = ref<TLogViewHandle | null>(null);
-const wrap = ref(true);
-const ansi = ref(true);
-const links = ref(true);
-const keyboardLinks = ref(true);
-const visualIndexMode = ref<"exact" | "estimated">("exact");
-const retention = ref(2000);
-
-const store = createAppendOnlyLogStore({ maxLines: retention.value });
-
-function makeLine(index: number): string {
-  const stamp = `\x1b[2m2026-05-04T01:${String(index % 60).padStart(2, "0")}:00Z\x1b[0m`;
-  const level =
-    index % 9 === 0
-      ? "\x1b[31mERROR\x1b[0m"
-      : index % 5 === 0
-        ? "\x1b[33mWARN\x1b[0m"
-        : "\x1b[32mINFO\x1b[0m";
-  const link = `\x1b]8;;https://example.com/log/${index}\x07job-${index}\x1b]8;;\x07`;
-  const wide = index % 7 === 0 ? " 宽字符中🙂" : "";
-  const longJson =
-    index % 11 === 0
-      ? ` payload={"requestId":"req-${index}","deep":{"nested":[1,2,3],"ok":true}}`
-      : "";
-  return `${stamp} ${level} ${link}${wide}${longJson}`;
-}
-
-store.appendLines(Array.from({ length: 400 }, (_, index) => makeLine(index)));
-
-const search = useTLogSearchController(logView, {
-  pageSize: 12,
-  includePreview: true,
-  previewWidth: 52,
-  initialQuery: "ERROR",
-});
-const {
-  query,
-  mode,
-  caseSensitive,
-  wholeWord,
-  regexFlags,
-  searchBarState,
-  resultsPage,
-  markers,
-  metrics,
-  refresh: refreshSearch,
-  nextMatch,
-  previousMatch,
-  clearSearch,
-  selectMatch,
-} = search;
-const { state: resultsPageState } = resultsPage;
-
-const linkController = useTLogLinkController(logView, {
-  onAction(action) {
-    console.log("[link action]", action.source, action.href);
-  },
-});
-const {
-  visibleLinks,
-  activeIndex: activeLinkIndex,
-  refresh: refreshLinks,
-  focusVisibleLink,
-  activateVisibleLink,
-  clearFocus,
-  handleLinkClick,
-  handleLinkActivate,
-} = linkController;
-
-const scrollbarMarkers = computed<readonly TLogScrollbarMarker[]>(() =>
-  markers.value.map((marker) => ({
-    id: marker.matchIndex,
-    visualRow: marker.visualRow,
-    current: marker.current,
-    estimated: marker.estimated,
-    payload: marker,
-  })),
-);
-
-const minimapMarkers = computed<readonly TLogMinimapMarker[]>(() =>
-  markers.value.map((marker) => ({
-    id: marker.matchIndex,
-    visualRow: marker.visualRow,
-    current: marker.current,
-    estimated: marker.estimated,
-    payload: marker,
-  })),
-);
-
-const density = computed<readonly TLogMinimapDensityBucket[]>(() => {
-  const total = metrics.value?.visualRowCount ?? 0;
-  if (total <= 0) return [];
-  return [
-    { startVisualRow: 0, endVisualRow: Math.floor(total * 0.25), value: 0.2 },
-    {
-      startVisualRow: Math.floor(total * 0.25) + 1,
-      endVisualRow: Math.floor(total * 0.75),
-      value: 0.5,
-    },
-    { startVisualRow: Math.floor(total * 0.75) + 1, endVisualRow: total - 1, value: 0.9 },
-  ];
-});
-
-function refreshAll() {
-  refreshSearch();
-  refreshLinks();
-}
-
-function appendBurst() {
-  const start = store.source.lineCount();
-  store.appendLines(Array.from({ length: 200 }, (_, offset) => makeLine(start + offset)));
-  refreshAll();
-}
-
-function onPanelActiveChange(payload: { item: { visibleIndex: number } | null }) {
-  if (payload.item) focusVisibleLink(payload.item.visibleIndex);
-  else clearFocus();
-}
-
-onMounted(refreshAll);
-</script>
-
-<TLogSearchBar
-  :x="0"
-  :y="0"
-  :w="92"
-  :state="searchBarState"
-  @update:query="search.updateQuery"
-  @update:mode="search.updateMode"
-  @update:caseSensitive="search.updateCaseSensitive"
-  @update:wholeWord="search.updateWholeWord"
-  @previous="previousMatch"
-  @next="nextMatch"
-  @clear="clearSearch"
-/>
-
-<TLogView
-  ref="logView"
-  :x="0"
-  :y="1"
-  :w="60"
-  :h="20"
-  :source="store.source"
-  :version="store.version.value"
-  :wrap="wrap"
-  :ansi="ansi"
-  :links="links"
-  :keyboard-links="keyboardLinks"
-  :visual-index-mode="visualIndexMode"
-  :search-query="query"
-  :search-options="{ mode, caseSensitive, wholeWord, regexFlags }"
-  @scroll="refreshAll"
-  @visualIndex="refreshAll"
-  @search="refreshSearch"
-  @searchMatch="refreshSearch"
-  @searchMarkers="refreshSearch"
-  @linkFocus="refreshLinks"
-  @linkClick="handleLinkClick"
-  @linkActivate="handleLinkActivate"
-/>
-
-<TLogSearchResults
-  :x="61"
-  :y="1"
-  :w="20"
-  :h="16"
-  :results="resultsPageState.results"
-  :active-index="resultsPageState.activeIndex"
-  @select="({ matchIndex }) => selectMatch(matchIndex)"
-/>
-
-<TLogSearchPager
-  :x="61"
-  :y="17"
-  :w="20"
-  :state="resultsPageState"
-  @previousPage="resultsPage.previousPage"
-  @nextPage="resultsPage.nextPage"
-/>
-
-<TLogLinksPanel
-  :x="61"
-  :y="18"
-  :w="20"
-  :h="3"
-  :links="visibleLinks"
-  :active-index="activeLinkIndex"
-  @select="({ visibleIndex }) => focusVisibleLink(visibleIndex)"
-  @activeChange="onPanelActiveChange"
-  @activate="({ visibleIndex }) => activateVisibleLink(visibleIndex)"
-/>
-
-<TLogScrollbar
-  :x="82"
-  :y="1"
-  :h="20"
-  :metrics="metrics"
-  :markers="scrollbarMarkers"
-  show-arrows
-  @scrollTo="(top) => logView?.scrollToVisualRow(top)"
-  @scrollBy="(delta) => logView?.scrollBy(delta)"
-  @markerClick="({ marker }) => marker.payload && selectMatch(marker.payload.matchIndex)"
-/>
-
-<TLogMinimap
-  :x="83"
-  :y="1"
-  :w="2"
-  :h="20"
-  :metrics="metrics"
-  :markers="minimapMarkers"
-  :density="density"
-  @scrollTo="({ visualRow }) => logView?.scrollToVisualRow(visualRow)"
-  @markerClick="({ marker }) => marker.payload && selectMatch(marker.payload.matchIndex)"
-/>
+```bash
+pnpm run example:tlog-view-lab
 ```
 
-## wiring 要点
+如果要在真实终端里保持交互运行：
 
-- `useTLogSearchController()` 和 `useTLogLinkController()` 都把 options 视为 setup-time config；如果 page size / preview width / action wiring 要动态变化，直接重建 controller。
-- `refreshSearch()` / `refreshLinks()` 最好在 `scroll`、`visualIndex`、`search`、`searchMatch`、`searchMarkers`、`linkFocus`、`linkClick`、`linkActivate` 后一起维护。
-- `TLogSearchResults` / `TLogLinksPanel` 都只接当前 page/window，不自己 virtualize 全量 retained data。
-- `TLogLinksPanel.activeChange` 回来的 `activeIndex` 是 panel-local index；真正要同步回 `TLogView` 时应使用 `payload.item.visibleIndex`。
-- `TLogScrollbar` / `TLogMinimap` 都只做 external metrics/marker rendering，不持有滚动状态。
+```bash
+pnpm run run:tlog-view-lab
+```
 
-## 推荐验收方式
+相关源码：
 
-1. 开 `wrap + ansi + links + keyboardLinks + visualIndexMode="exact"`，确认滚动、搜索高亮、visible links、scrollbar、minimap 一起同步。
-2. 切到 regex 搜索并尝试无效表达式、零宽表达式和 whole-word toggle，确认状态和结果面板稳定。
-3. 持续触发 append burst，并配合 `maxLines` retention，看 exact visual index、search markers、visible links 是否保持一致。
+- `examples/tlog-view-lab/App.ts`
+- `examples/tlog-view-lab/main.ts`
+- `examples/tlog-view-lab/README.md`
+- `examples/tlog-view-lab.ts`
+
+完整 release checklist 见：[TLogView Release Readiness](./tlog-view-release-readiness.md)
+
+## Lab 里实际验证的内容
+
+### 1. Streaming / retention
+
+lab 使用：
+
+```ts
+createAppendOnlyLogStore({ maxLines: 2000 });
+```
+
+并且提供这些操作：
+
+- `Ctrl+1` append 200 lines
+- `Ctrl+2` append 1000 lines
+- `Ctrl+3` clear
+- `Ctrl+4` replace tail
+- `Ctrl+5` append chunk
+- `Ctrl+R` reseed
+
+### 2. Mixed log content
+
+示例数据会混合这些场景：
+
+- 普通日志
+- ANSI `ERROR` / `WARN` / `INFO`
+- dim timestamp
+- 长 JSON payload
+- 宽字符 / emoji
+- OSC8 hyperlink
+- wrapped long line
+
+### 3. Full search UX
+
+lab 会把 search bar、results、pager、scrollbar markers、minimap markers 和 search controller 全部接起来，重点观察：
+
+- text search
+- regex search
+- invalid regex
+- caseSensitive / wholeWord
+- next / previous
+- select result
+- marker click
+
+### 4. Full link UX
+
+lab 会同时接 visible-link panel 和 link controller，重点观察：
+
+- pointer click link
+- panel select / panel activate
+- visible link focus / activate
+- scroll 后 visible links refresh
+
+### 5. Exact visual index
+
+lab 保留 `visualIndexMode="exact" | "estimated"` 切换：
+
+```txt
+Ctrl+V
+```
+
+用来确认 retained-window metrics、scrollbar、minimap marker 和搜索结果定位在两种索引模式下都不会漂。
+
+## 布局
+
+lab 采用固定终端布局，把核心组合关系直接暴露出来：
+
+```txt
++------------------------------------------------------------------------------------------------------------+
+| [T]/[R] [Aa] [W]  query ...                                                                  SB MM        |
++---------------------------------------------------------------------------+----------------------+-------+
+|                                                                           | Results              |       |
+|                                                                           | Results              |       |
+|                                 TLogView                                  | Results              |       |
+|                                                                           | Pager                |       |
+|                                                                           | Visible links        |       |
+|                                                                           | Visible links        |       |
++---------------------------------------------------------------------------+----------------------+-------+
+| hotkeys / status / metrics / recent actions                                                                    |
++------------------------------------------------------------------------------------------------------------+
+```
+
+## Wiring 要点
+
+- `useTLogSearchController()` 和 `useTLogLinkController()` 仍然是 setup-time config；如果 page size / preview width / action wiring 要变，直接重建 controller。
+- `TLogView` 只负责 retained-window render / search / visible-link state；scrollbar、minimap、results、links panel 都只消费外部 metrics / markers / page/window 数据。
+- `refreshSearch()` / `refreshLinks()` 需要跟着 `scroll`、`visualIndex`、`search`、`searchMatch`、`searchMarkers`、`linkFocus`、`linkClick`、`linkActivate` 这些事件维持同步。
+- `TLogLinksPanel.activeChange` 给的是 panel-local row；同步回 `TLogView` 时仍然应该使用 `payload.item.visibleIndex`。
+
+## 验收步骤
+
+1. 运行 `pnpm run example:tlog-view-lab`。
+2. 保持默认 `wrap + ansi + links + keyboardLinks + visualIndexMode="exact"`，确认滚动、搜索高亮、visible links、scrollbar、minimap 一起更新。
+3. 在 search bar 里切 `regex`，输入 `ERROR\\s+job-\\d+`，再输入非法 regex `[`，确认 search state 稳定。
+4. 点 results / scrollbar markers / minimap markers / visible links / links panel，确认 current match 与 last action 会更新。
+5. 连续执行 append burst、append chunk、replace tail、clear、reseed，确认 retention 和 companion metrics 仍然同步。
+
+## Smoke coverage
+
+`test/tlog-view-lab-smoke.test.ts` 会以轻量方式验证：
+
+1. full lab mount
+2. text / regex / invalid regex
+3. search result selection
+4. scrollbar marker selection
+5. link click / visible link focus+activate / panel activate
+6. append burst 后 metrics、markers、visible rows 继续可用
+
+这个 smoke 不做 brittle 的 cell-perfect 快照，而是只断言 stack 级组合状态。
+
+## Known limitations
+
+- experimental API，暂不承诺长期稳定
+- 不做 URL auto-detect
+- 不做 global link index
+- 不做 result virtualization
+- 不做 saved search persistence
+- exact visual index 仍然是 retained-window scoped
+- regex evaluation 在单条极端长行上仍可能阻塞一次 scan slice

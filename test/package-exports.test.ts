@@ -60,6 +60,32 @@ describe("package exports", () => {
     expect(experimentalSource).toContain("useTLogSearchController");
   });
 
+  it("keeps the runnable tlog lab symbol set importable from the experimental entrypoint", async () => {
+    const {
+      TLogView,
+      TLogSearchBar,
+      TLogSearchResults,
+      TLogSearchPager,
+      TLogScrollbar,
+      TLogMinimap,
+      TLogLinksPanel,
+      createAppendOnlyLogStore,
+      useTLogSearchController,
+      useTLogLinkController,
+    } = await import("../src/experimental.js");
+
+    expect(TLogView).toBeTruthy();
+    expect(TLogSearchBar).toBeTruthy();
+    expect(TLogSearchResults).toBeTruthy();
+    expect(TLogSearchPager).toBeTruthy();
+    expect(TLogScrollbar).toBeTruthy();
+    expect(TLogMinimap).toBeTruthy();
+    expect(TLogLinksPanel).toBeTruthy();
+    expect(createAppendOnlyLogStore).toBeTruthy();
+    expect(useTLogSearchController).toBeTruthy();
+    expect(useTLogLinkController).toBeTruthy();
+  });
+
   it.skipIf(!requireDistExports)("keeps built ESM/CJS experimental exports usable", async () => {
     expect(existsSync(distIndex)).toBe(true);
     expect(existsSync(distExperimental)).toBe(true);

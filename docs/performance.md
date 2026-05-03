@@ -91,5 +91,6 @@ pnpm run bench:phase2
 - `TLogView ansi=true` short-line append / long-line wrap / retention scenarios
 - `TLogView` retention append 100k lines with max 1000 retained lines
 - `TLogView` retained-window search: 100k plain lines, ANSI visible text, and wrapped long lines
+- `TLogView Lab` smoke scenario: full companion wiring with search, links, markers and exact-index toggle
 
 `bench:phase2` 使用 happy-dom synthetic baseline，适合做相同环境下的回归对比，不代表真实浏览器 FPS。
