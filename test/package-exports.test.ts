@@ -17,11 +17,13 @@ describe("package exports", () => {
 
     expect("TVirtualList" in root).toBe(false);
     expect("TLogView" in root).toBe(false);
+    expect("TLogScrollbar" in root).toBe(false);
     expect("createAppendOnlyLogStore" in root).toBe(false);
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
     expect(experimental.TVirtualList).toBeTruthy();
     expect(experimental.TLogView).toBeTruthy();
+    expect(experimental.TLogScrollbar).toBeTruthy();
     expect(experimental.createAppendOnlyLogStore).toBeTruthy();
   });
 
@@ -46,9 +48,11 @@ describe("package exports", () => {
     expect(rootCjs.framePerfNow).toBeTruthy();
     expect(experimental.TVirtualList).toBeTruthy();
     expect(experimental.TLogView).toBeTruthy();
+    expect(experimental.TLogScrollbar).toBeTruthy();
     expect(experimental.createAppendOnlyLogStore).toBeTruthy();
     expect(experimentalCjs.TVirtualList).toBeTruthy();
     expect(experimentalCjs.TLogView).toBeTruthy();
+    expect(experimentalCjs.TLogScrollbar).toBeTruthy();
     expect(experimentalCjs.createAppendOnlyLogStore).toBeTruthy();
   });
 });

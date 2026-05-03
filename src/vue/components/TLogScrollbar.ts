@@ -1,0 +1,245 @@
+import type { PropType } from "vue";
+import type { Style } from "../../core/types.js";
+import type { Rect, TerminalPointerEvent } from "../../events/index.js";
+import type { TLogViewScrollMetrics } from "./TLogView.js";
+import { computed, defineComponent, h, inject } from "vue";
+import { useLayout } from "../composables/use-layout.js";
+import { useRenderNode } from "../composables/use-render-node.js";
+import { useTerminalNode } from "../composables/use-terminal-node.js";
+import { useTerminal } from "../composables/use-terminal.js";
+import { useVisibility } from "../composables/use-visibility.js";
+import { EventZIndexContextKey } from "../context.js";
+import { intersectRect, translateRect } from "../utils/rect.js";
+
+const EMPTY_RECT: Rect = Object.freeze({ x: 0, y: 0, w: 0, h: 0 });
+const SCROLLBAR_WIDTH = 1;
+const TRACK_CHAR = "│";
+const EXACT_THUMB_CHAR = "█";
+const MEASURING_THUMB_CHAR = "▒";
+const ESTIMATED_THUMB_CHAR = "░";
+const UP_ARROW_CHAR = "▲";
+const DOWN_ARROW_CHAR = "▼";
+
+type TLogScrollbarThumb = Readonly<{
+  top: number;
+  size: number;
+}>;
+
+export type TLogScrollbarMetrics = TLogViewScrollMetrics;
+export type TLogScrollbarScrollToPayload = number;
+export type TLogScrollbarScrollByPayload = number;
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
+}
+
+function normalizeInt(value: number): number {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function arrowInset(height: number, showArrows: boolean): number {
+  return showArrows && height >= 2 ? 1 : 0;
+}
+
+function trackGeometry(
+  height: number,
+  showArrows: boolean,
+): Readonly<{
+  arrowRows: number;
+  trackTop: number;
+  trackHeight: number;
+}> {
+  const arrowRows = arrowInset(height, showArrows);
+  return {
+    arrowRows,
+    trackTop: arrowRows,
+    trackHeight: Math.max(0, height - arrowRows * 2),
+  };
+}
+
+function computeThumb(
+  metrics: TLogScrollbarMetrics | null | undefined,
+  height: number,
+  showArrows: boolean,
+): TLogScrollbarThumb | null {
+  if (!metrics) return null;
+  const { trackTop, trackHeight } = trackGeometry(height, showArrows);
+  if (trackHeight <= 0) return null;
+
+  const viewport = Math.max(0, normalizeInt(metrics.viewportRows));
+  const total = Math.max(normalizeInt(metrics.visualRowCount), viewport, 1);
+  const maxTop = Math.max(0, normalizeInt(metrics.maxScrollTop));
+  const top = clamp(normalizeInt(metrics.scrollTop), 0, maxTop);
+  const size = clamp(Math.round((viewport / total) * trackHeight), 1, trackHeight);
+  const maxThumbTop = Math.max(0, trackHeight - size);
+  const thumbTop = maxTop <= 0 ? 0 : Math.round((top / maxTop) * maxThumbTop);
+
+  return {
+    top: trackTop + thumbTop,
+    size,
+  };
+}
+
+function mergeStyle(base: Style, overlay?: Style): Style {
+  return overlay ? { ...base, ...overlay } : base;
+}
+
+export const TLogScrollbar = defineComponent({
+  name: "TLogScrollbar",
+  props: {
+    x: { type: Number, required: true },
+    y: { type: Number, required: true },
+    h: { type: Number, required: true },
+    zIndex: { type: Number, default: 0 },
+    metrics: {
+      type: Object as PropType<TLogScrollbarMetrics | null>,
+      default: null,
+    },
+    style: { type: Object as PropType<Style>, default: undefined },
+    thumbStyle: { type: Object as PropType<Style>, default: undefined },
+    trackStyle: { type: Object as PropType<Style>, default: undefined },
+    measuringStyle: { type: Object as PropType<Style>, default: undefined },
+    showArrows: { type: Boolean, default: false },
+  },
+  emits: ["scrollTo", "scrollBy"],
+  setup(props, { emit }) {
+    const { terminal, defaultStyle } = useTerminal();
+    const parent = useLayout();
+    const { visible, rootProps } = useVisibility();
+    const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
+    const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
+
+    const fullRect = computed<Rect>(() =>
+      translateRect(
+        {
+          x: normalizeInt(props.x),
+          y: normalizeInt(props.y),
+          w: SCROLLBAR_WIDTH,
+          h: Math.max(0, normalizeInt(props.h)),
+        },
+        parent.originX,
+        parent.originY,
+      ),
+    );
+
+    const rect = computed<Rect>(() => {
+      const translated = fullRect.value;
+      if (!parent.clipRect) return translated;
+      return intersectRect(translated, parent.clipRect) ?? EMPTY_RECT;
+    });
+
+    function emitTrackScroll(e: TerminalPointerEvent): void {
+      const metrics = props.metrics;
+      if (!metrics) return;
+      const full = fullRect.value;
+      const localY = e.cellY - full.y;
+      if (localY < 0 || localY >= full.h) return;
+
+      const { arrowRows, trackTop, trackHeight } = trackGeometry(full.h, props.showArrows);
+      if (arrowRows) {
+        if (localY === 0) {
+          emit("scrollBy", -Math.max(1, normalizeInt(metrics.viewportRows)));
+          e.preventDefault?.();
+          return;
+        }
+        if (localY === full.h - 1) {
+          emit("scrollBy", Math.max(1, normalizeInt(metrics.viewportRows)));
+          e.preventDefault?.();
+          return;
+        }
+      }
+      if (trackHeight <= 0) return;
+
+      const pos = clamp(localY - trackTop, 0, trackHeight - 1);
+      const ratio = trackHeight <= 1 ? 0 : pos / (trackHeight - 1);
+      const target = Math.round(ratio * Math.max(0, normalizeInt(metrics.maxScrollTop)));
+      emit("scrollTo", target);
+      e.preventDefault?.();
+    }
+
+    useTerminalNode(() => ({
+      rect: rect.value,
+      zIndex: eventZ.value,
+      visible: visible.value,
+      focusable: false,
+      handlers: {
+        click: emitTrackScroll,
+        wheel: (e) => {
+          const dir = Math.sign(Number(e.deltaY ?? 0));
+          if (!dir) return;
+          emit("scrollBy", dir);
+          e.preventDefault?.();
+        },
+      },
+    }));
+
+    useRenderNode(() => ({
+      zIndex: props.zIndex,
+      rect: visible.value ? rect.value : EMPTY_RECT,
+      deps: [
+        visible.value,
+        rect.value,
+        fullRect.value,
+        props.metrics,
+        props.style,
+        props.trackStyle,
+        props.thumbStyle,
+        props.measuringStyle,
+        props.showArrows,
+        defaultStyle.value,
+      ],
+      paint: (dirtyRows) => {
+        if (!visible.value) return;
+        const r = rect.value;
+        if (r.w <= 0 || r.h <= 0) return;
+        const full = fullRect.value;
+        const baseStyle = props.style ?? defaultStyle.value;
+        const trackStyle = mergeStyle(baseStyle, props.trackStyle ?? { dim: true });
+        const thumbStyle = mergeStyle(baseStyle, props.thumbStyle ?? { inverse: true });
+        const estimatedThumbStyle = mergeStyle(thumbStyle, { dim: true });
+        const measuringThumbStyle = mergeStyle(
+          baseStyle,
+          props.measuringStyle ?? { ...thumbStyle, dim: true },
+        );
+        const thumb = computeThumb(props.metrics, full.h, props.showArrows);
+        const { arrowRows } = trackGeometry(full.h, props.showArrows);
+
+        const paintRow = (y: number): void => {
+          if (y < r.y || y >= r.y + r.h) return;
+          const localY = y - full.y;
+          if (localY < 0 || localY >= full.h) return;
+
+          let char = TRACK_CHAR;
+          let style = trackStyle;
+          if (arrowRows && localY === 0) {
+            char = UP_ARROW_CHAR;
+          } else if (arrowRows && localY === full.h - 1) {
+            char = DOWN_ARROW_CHAR;
+          } else if (thumb && localY >= thumb.top && localY < thumb.top + thumb.size) {
+            if (props.metrics?.visualIndexStatus === "measuring") {
+              char = MEASURING_THUMB_CHAR;
+              style = measuringThumbStyle;
+            } else if (props.metrics?.visualIndexStatus === "estimated") {
+              char = ESTIMATED_THUMB_CHAR;
+              style = estimatedThumbStyle;
+            } else {
+              char = EXACT_THUMB_CHAR;
+              style = thumbStyle;
+            }
+          }
+
+          terminal.put(r.x, y, char, style);
+        };
+
+        if (!dirtyRows) {
+          for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+          return;
+        }
+        for (const y of dirtyRows) paintRow(y);
+      },
+    }));
+
+    return () => h("span", rootProps);
+  },
+});
