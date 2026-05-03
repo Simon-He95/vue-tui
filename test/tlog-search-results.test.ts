@@ -261,6 +261,37 @@ describe("TLogSearchResults", () => {
     }
   });
 
+  it("clips horizontally from the logical row start when offset beyond the viewport", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogSearchResults, {
+          x: -2,
+          y: 0,
+          w: 6,
+          h: 1,
+          showLineNumbers: false,
+          results: [
+            {
+              matchIndex: 0,
+              absoluteLineIndex: 0,
+              lineIndex: 0,
+              text: "abcdefghi",
+              matchStartCell: 3,
+              matchEndCell: 6,
+            },
+          ] satisfies readonly TLogSearchResultItem[],
+        }),
+      6,
+      1,
+    );
+
+    try {
+      expect(rowText(mounted, 0)).toBe("cdef");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("integrates with TLogView via selectSearchMatch", async () => {
     const logView = ref<TLogViewHandle | null>(null);
     const results = ref<readonly TLogSearchResultItem[]>([]);

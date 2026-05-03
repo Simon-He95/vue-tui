@@ -534,8 +534,10 @@ function findRegexLineMatches(
 
   regex.lastIndex = 0;
   const out: TLogSearchLineMatch[] = [];
+  let attempts = 0;
 
-  while (out.length < maxMatchesPerLine) {
+  while (out.length < maxMatchesPerLine && attempts < maxMatchesPerLine) {
+    attempts++;
     const match = regex.exec(text);
     if (!match) break;
 
@@ -561,6 +563,16 @@ function findRegexLineMatches(
   }
 
   return out;
+}
+
+function copySearchMatch(match: TLogViewSearchMatch): TLogViewSearchMatch {
+  return {
+    absoluteLineIndex: match.absoluteLineIndex,
+    index: match.index,
+    startCell: match.startCell,
+    endCell: match.endCell,
+    text: match.text,
+  };
 }
 
 function clipStyledSegmentsByCells(
@@ -1895,10 +1907,7 @@ export const TLogView = defineComponent({
         measuredVisualRows = lineCount();
         return;
       }
-
-      let rows = 0;
-      for (let i = 0; i < measuredLineCount; i++) rows += visualCounts[i] ?? 1;
-      measuredVisualRows = rows;
+      measuredVisualRows = fenwickSum(measuredLineCount);
     }
 
     function syncNonWrappedVisualIndexState(): void {
@@ -3132,7 +3141,8 @@ export const TLogView = defineComponent({
     function getSearchMatch(matchIndex: number): TLogViewSearchMatch | null {
       const index = normalizeSearchMatchIndex(matchIndex);
       if (index == null) return null;
-      return searchMatches[index] ?? null;
+      const match = searchMatches[index];
+      return match ? copySearchMatch(match) : null;
     }
 
     function getSearchResults(
@@ -3149,7 +3159,7 @@ export const TLogView = defineComponent({
       if (!includePreview) {
         return searchMatches.slice(offset, offset + limit).map((match, index) => ({
           matchIndex: offset + index,
-          match,
+          match: copySearchMatch(match),
         }));
       }
 
@@ -3161,7 +3171,7 @@ export const TLogView = defineComponent({
 
       return searchMatches.slice(offset, offset + limit).map((match, index) => ({
         matchIndex: offset + index,
-        match,
+        match: copySearchMatch(match),
         preview: previewForMatch(match, count, base, baseStyleKey, {
           previewWidth,
           contextCells,

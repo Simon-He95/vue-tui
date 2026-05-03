@@ -277,4 +277,52 @@ describe("useTLogLinkController", () => {
       harness.unmount();
     }
   });
+
+  it("clears stale programmatic suppression after a microtask", async () => {
+    const actions: TLogLinkAction[] = [];
+    const logView = ref<TLogViewHandle | null>({
+      activateFocusedLink: vi.fn(() => true),
+      getVisibleLinks: () => createVisibleLinks(),
+      getScrollMetrics: () => createMetrics(),
+    } as Partial<TLogViewHandle> as TLogViewHandle);
+    const harness = await mountHarness(logView, {
+      onAction(action) {
+        actions.push(action);
+      },
+    });
+
+    try {
+      harness.api.refresh();
+      expect(harness.api.activateFocusedLink()).toBe(true);
+      await Promise.resolve();
+
+      harness.api.handleLinkActivate({
+        link: createVisibleLinks()[1]!,
+        source: "programmatic",
+      });
+
+      expect(actions).toEqual([
+        {
+          href: "https://example.com/2",
+          text: "two",
+          source: "programmatic",
+          absoluteLineIndex: 11,
+          index: 11,
+          startCell: 1,
+          endCell: 4,
+        },
+        {
+          href: "https://example.com/2",
+          text: "two",
+          source: "programmatic",
+          absoluteLineIndex: 11,
+          index: 11,
+          startCell: 1,
+          endCell: 4,
+        },
+      ]);
+    } finally {
+      harness.unmount();
+    }
+  });
 });

@@ -340,6 +340,39 @@ describe("TLogLinksPanel", () => {
     }
   });
 
+  it("clips horizontally from the logical row start when offset beyond the viewport", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogLinksPanel, {
+          x: -2,
+          y: 0,
+          w: 6,
+          h: 1,
+          showLineNumbers: false,
+          showHref: false,
+          links: [
+            {
+              visibleIndex: 0,
+              href: "https://example.com/1",
+              text: "abcdefghi",
+              absoluteLineIndex: 0,
+              index: 0,
+              startCell: 0,
+              endCell: 9,
+            },
+          ] satisfies readonly TLogLinkPanelItem[],
+        }),
+      6,
+      1,
+    );
+
+    try {
+      expect(rowText(mounted, 0)).toBe("cdef");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders a safe empty state", async () => {
     const mounted = await mountTerminal(
       () =>

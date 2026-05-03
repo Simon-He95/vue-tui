@@ -213,4 +213,100 @@ describe("useTLogSearchController", () => {
       harness.unmount();
     }
   });
+
+  it("clearSearch clears derived paged results immediately without reading stale handle state", async () => {
+    const searchState = {
+      query: "error",
+      status: "done" as const,
+      matchCount: 2,
+      currentMatchIndex: 0,
+      error: null,
+    };
+    const getSearchResults = vi.fn(() => [
+      {
+        matchIndex: 0,
+        match: {
+          absoluteLineIndex: 100,
+          index: 0,
+          startCell: 0,
+          endCell: 5,
+          text: "error",
+        },
+        preview: {
+          text: "error line",
+          matchStartCell: 0,
+          matchEndCell: 5,
+        },
+      },
+    ]);
+    const logView = ref<TLogViewHandle | null>({
+      getSearchState: () => searchState,
+      getSearchResults,
+      getSearchMarkers: () => [],
+      getScrollMetrics: () => createMetrics(),
+    } as Partial<TLogViewHandle> as TLogViewHandle);
+    const harness = await mountHarness(logView, {
+      initialQuery: "error",
+      pageSize: 10,
+      includePreview: true,
+    });
+
+    try {
+      harness.api.refresh();
+      expect(harness.api.resultsPage.state.value.results).toHaveLength(1);
+
+      getSearchResults.mockClear();
+      harness.api.clearSearch();
+
+      expect(harness.api.query.value).toBe("");
+      expect(harness.api.searchState.value).toMatchObject({
+        query: "",
+        status: "idle",
+        matchCount: 0,
+        currentMatchIndex: -1,
+      });
+      expect(harness.api.resultsPage.state.value).toMatchObject({
+        page: 0,
+        pageCount: 0,
+        matchCount: 0,
+        activeIndex: -1,
+        status: "idle",
+      });
+      expect(harness.api.resultsPage.state.value.results).toEqual([]);
+      expect(getSearchResults).not.toHaveBeenCalled();
+    } finally {
+      harness.unmount();
+    }
+  });
+
+  it("avoids saved search id collisions with initialSavedSearches", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const harness = await mountHarness(logView, {
+      initialQuery: "warn",
+      initialSavedSearches: [
+        {
+          id: "saved-search-0",
+          query: "error",
+          mode: "text",
+        },
+        {
+          id: "saved-search-1",
+          query: "fatal",
+          mode: "text",
+        },
+      ],
+    });
+
+    try {
+      const saved = harness.api.saveCurrentSearch();
+      expect(saved?.id).toBe("saved-search-2");
+      expect(harness.api.savedSearches.value.map((entry) => entry.id)).toEqual([
+        "saved-search-2",
+        "saved-search-0",
+        "saved-search-1",
+      ]);
+    } finally {
+      harness.unmount();
+    }
+  });
 });

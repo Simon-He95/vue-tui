@@ -178,6 +178,39 @@ describe("TLogMinimap", () => {
     }
   });
 
+  it("treats density endVisualRow as inclusive", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogMinimap, {
+          x: 0,
+          y: 0,
+          w: 1,
+          h: 4,
+          metrics: createMetrics({
+            maxScrollTop: 3,
+            viewportRows: 1,
+            visualRowCount: 4,
+            estimatedVisualRowCount: 4,
+            measuredVisualRowCount: 4,
+          }),
+          density: [
+            { startVisualRow: 0, endVisualRow: 0, value: 1 },
+            { startVisualRow: 3, endVisualRow: 3, value: 1 },
+          ],
+          showMarkers: false,
+          showViewport: false,
+        }),
+      1,
+      4,
+    );
+
+    try {
+      expect(columnChars(mounted, 0, 4)).toBe("▓  ▓");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("emits markerClick instead of scrollTo when a marker row is clicked", async () => {
     const onScrollTo = vi.fn();
     const onMarkerClick = vi.fn();

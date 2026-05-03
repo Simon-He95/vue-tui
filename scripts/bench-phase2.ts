@@ -171,6 +171,42 @@ function summarizeSamples(samples: any[]): Record<string, number> {
   };
 }
 
+function inferScenarioGroup(name: string): string {
+  if (
+    name.includes("append-only") ||
+    name.includes("retention") ||
+    name.includes("stick-bottom") ||
+    name.includes("detached") ||
+    name.includes("burst")
+  ) {
+    return "stream";
+  }
+  if (name.includes("search")) return "search";
+  if (name.includes("exact-index") || name.includes("visual-index")) return "index";
+  if (name.includes("scrollbar") || name.includes("minimap") || name.includes("links-panel")) {
+    return "ui";
+  }
+  return "render";
+}
+
+function normalizeScenario(entry: Record<string, unknown>): Record<string, unknown> {
+  const scenario = String(entry.name ?? "unknown");
+  return {
+    scenario,
+    group: inferScenarioGroup(scenario),
+    durationMs: entry.durationMs ?? null,
+    frames: entry.frames ?? null,
+    avgFrameMs: entry.avgFrameMs ?? null,
+    maxFrameMs: entry.maxFrameMs ?? null,
+    getLineCalls: entry.getLineCalls ?? null,
+    dirtyRows: entry.dirtyRows ?? entry.avgDirtyRows ?? null,
+    domFlushRows: entry.avgDomFlushPlaneRows ?? null,
+    visualRowCount: entry.visualRowCount ?? null,
+    matchCount: entry.matchCount ?? null,
+    ...entry,
+  };
+}
+
 async function benchRenderManagerDirtyRow(): Promise<Record<string, unknown>> {
   const rows = 1000;
   const cols = 80;
@@ -1044,7 +1080,7 @@ async function main(): Promise<void> {
     await benchDomTLogViewExactIndex("100k-wrap"),
     await benchDomTLogViewExactIndex("ansi-links-wrap"),
     await benchDomTLogViewExactIndex("retention-append"),
-  ];
+  ].map((entry) => normalizeScenario(entry));
 
   // eslint-disable-next-line no-console
   console.log(

@@ -76,6 +76,7 @@ export function useTLogSearchResultsPage(
 ): {
   state: Ref<TLogSearchResultsPageState>;
   refresh: () => void;
+  clear: (status?: TLogViewSearchState["status"], error?: TLogViewSearchError | null) => void;
   setPage: (page: number) => void;
   nextPage: () => void;
   previousPage: () => void;
@@ -87,11 +88,18 @@ export function useTLogSearchResultsPage(
   const currentPage = ref(0);
   const state = ref<TLogSearchResultsPageState>(createEmptyState(pageSize));
 
+  function clear(
+    status: TLogViewSearchState["status"] = "idle",
+    error: TLogViewSearchError | null = null,
+  ): void {
+    currentPage.value = 0;
+    state.value = createEmptyState(pageSize, status, error);
+  }
+
   function refresh(): void {
     const handle = logView.value;
     if (!handle) {
-      currentPage.value = 0;
-      state.value = createEmptyState(pageSize);
+      clear();
       return;
     }
 
@@ -163,7 +171,7 @@ export function useTLogSearchResultsPage(
   function selectResult(matchIndex: number): boolean {
     const handle = logView.value;
     if (!handle) {
-      refresh();
+      clear();
       return false;
     }
 
@@ -191,6 +199,7 @@ export function useTLogSearchResultsPage(
   return {
     state,
     refresh,
+    clear,
     setPage,
     nextPage,
     previousPage,
