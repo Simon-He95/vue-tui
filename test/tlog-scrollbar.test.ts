@@ -298,6 +298,53 @@ describe("TLogScrollbar", () => {
     }
   });
 
+  it("does not emit markerClick for marker rows covered by the thumb", async () => {
+    const onScrollTo = vi.fn();
+    const onMarkerClick = vi.fn();
+    const markers = [{ id: "top", visualRow: 0, current: true }] as const;
+    const App = defineComponent({
+      name: "TLogScrollbarThumbDominatesMarkerClickApp",
+      setup() {
+        return () =>
+          h(TLogScrollbar, {
+            x: 0,
+            y: 0,
+            h: 10,
+            metrics: createMetrics({
+              scrollTop: 0,
+              maxScrollTop: 90,
+              viewportRows: 10,
+              visualRowCount: 100,
+              estimatedVisualRowCount: 100,
+              measuredVisualRowCount: 100,
+            }),
+            markers,
+            onScrollTo,
+            onMarkerClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 1, rows: 10, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({
+        type: "click",
+        cellX: 0,
+        cellY: 0,
+      } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onMarkerClick).not.toHaveBeenCalled();
+      expect(onScrollTo).toHaveBeenCalledWith(0);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("emits scrollBy when receiving wheel input", async () => {
     const onScrollBy = vi.fn();
     const App = defineComponent({

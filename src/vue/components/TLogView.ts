@@ -1164,6 +1164,11 @@ export const TLogView = defineComponent({
       return visualIndexStatus === "exact" || index < measuredLineCount;
     }
 
+    function isMeasuredVisualMarkerLine(index: number): boolean {
+      if (!props.wrap) return true;
+      return visualKeys[index] === lineKey(index);
+    }
+
     function getSearchMarkers(): readonly TLogViewSearchMarker[] {
       if (searchMarkersCacheGeneration === searchMarkersGeneration) return searchMarkersCache;
       if (!searchMatches.length) {
@@ -1188,29 +1193,32 @@ export const TLogView = defineComponent({
         let exact = true;
 
         if (props.wrap) {
-          measureVisualLine(match.index);
           let lineStart = lineStartCache.get(match.index);
           if (lineStart == null) {
             lineStart = visualStartForLine(match.index);
             lineStartCache.set(match.index, lineStart);
           }
 
-          exact = exactCache.get(match.index) ?? isExactVisualMarkerLine(match.index);
+          const lineMeasured = isMeasuredVisualMarkerLine(match.index);
+          exact =
+            exactCache.get(match.index) ?? (lineMeasured && isExactVisualMarkerLine(match.index));
           exactCache.set(match.index, exact);
-          if (props.ansi) {
+          if (lineMeasured && props.ansi) {
             let rows = ansiRowsCache.get(match.index);
             if (!rows) {
               rows = ansiWrappedRowsForLine(match.index, count, width, base, baseStyleKey);
               ansiRowsCache.set(match.index, rows);
             }
             visualRow = lineStart + partIndexForCellInAnsiWrappedRow(rows, match.startCell);
-          } else {
+          } else if (lineMeasured) {
             let rows = plainRowsCache.get(match.index);
             if (!rows) {
               rows = wrappedRowsForLine(match.index, count, width);
               plainRowsCache.set(match.index, rows);
             }
             visualRow = lineStart + partIndexForCellInPlainWrappedRow(rows, match.startCell);
+          } else {
+            visualRow = lineStart + Math.max(0, Math.floor(match.startCell / width));
           }
         }
 

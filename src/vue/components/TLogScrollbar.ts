@@ -234,10 +234,13 @@ export const TLogScrollbar = defineComponent({
       }
       if (trackHeight <= 0) return;
 
-      const markerHit = props.showMarkers
-        ? collectMarkersByRow(props.markers, metrics, full.h, props.showArrows).get(localY)
-        : undefined;
-      if (markerHit) {
+      const thumb = computeThumb(metrics, full.h, props.showArrows);
+      const isThumbRow = thumb != null && localY >= thumb.top && localY < thumb.top + thumb.size;
+      const markerHit =
+        !isThumbRow && props.showMarkers
+          ? collectMarkersByRow(props.markers, metrics, full.h, props.showArrows).get(localY)
+          : undefined;
+      if (markerHit != null) {
         emit("markerClick", {
           marker: markerHit.marker,
           markerIndex: markerHit.index,

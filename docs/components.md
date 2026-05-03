@@ -515,7 +515,7 @@ function measureRows() {
 - `metrics` 可以直接来自 `logView.value?.getScrollMetrics()`，也可以由 `@scroll` / `@visualIndex` 事件在外部维护
 - `visualIndexStatus="estimated" | "measuring" | "exact"` 会分别用不同 thumb 状态渲染，方便区分估算值、后台测量中和精确 visual-row index
 - `markers` 可以直接来自 `logView.value?.getSearchMarkers()`；scrollbar 只根据 marker 的 `visualRow` / `current` / `estimated` 渲染，不依赖 `TLogView` 私有状态
-- `markerClick` 只把命中的 marker 回传给父组件；是否调用 `findNext()`、`scrollToVisualRow()` 或其它跳转逻辑由父组件决定
+- `markerClick` 只把当前可见的 marker row 回传给父组件；如果 marker 与 thumb 落在同一 row，thumb 仍然保持视觉和交互优先级
 - 点击 track 会 emit 目标 visual-row `scrollTo`
 - wheel 会 emit 简单的 `scrollBy(+/-1)` delegation
 - `showArrows=true` 时首尾两行会渲染 `▲` / `▼`，点击后按一个 viewport 高度翻动
