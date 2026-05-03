@@ -1956,6 +1956,8 @@ export const TLogView = defineComponent({
 
     function clearSearch(): void {
       emit("update:searchQuery", "");
+      if (normalizedSearchQuery()) return;
+
       searchGeneration++;
       searchCursor = 0;
       searchStatus = "idle";

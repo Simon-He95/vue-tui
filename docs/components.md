@@ -431,6 +431,10 @@ type TLogDataSource = {
 
 `searchQuery` 只搜索 visible text。`ansi=true` 时，ANSI escape sequences 不参与搜索，也不会污染 match offset；match highlight 会叠加在 ANSI style 上。match 坐标使用 terminal cell offset，因此宽字符会按 cell width 定位。`wrap=true` 时，`findNext()` / `findPrevious()` 会滚动到 match 所在 visual row。搜索范围始终是当前 retained source window；retention trim、append、tail mutation、source 或 version 变化后会基于当前窗口重新扫描。
 
+`searchOptions.wholeWord` 使用 ASCII word boundary：`[A-Za-z0-9_]`。例如 `error-1` 中的 `error` 会被视为 whole-word match，而 `_error` 不会。
+
+`clearSearch()` 会 emit `update:searchQuery`，并等待父组件把 `searchQuery` 回写为空后清除 matches；如果父组件不回写，当前 search state 和 highlight 不会提前改变。
+
 搜索扫描通过 scheduler frame task 分帧执行，默认每帧最多使用约 `4ms`，不会在 `searchQuery` 变化时同步读取全部 retained lines。`maxMatches` 默认限制为 `10_000`。
 
 当前不支持 regex/fuzzy/semantic search、OSC8 hyperlink、cursor movement、clear screen、alternate buffer、syntax highlight、markdown/rich text 或 arbitrary variable-height row model。
