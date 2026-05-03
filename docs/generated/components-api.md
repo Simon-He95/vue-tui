@@ -16,6 +16,7 @@
 - [TList](#tlist)
 - [TLogMinimap](#tlogminimap)
 - [TLogScrollbar](#tlogscrollbar)
+- [TLogSearchPager](#tlogsearchpager)
 - [TLogSearchResults](#tlogsearchresults)
 - [TLogView](#tlogview)
 - [TMultilineModal](#tmultilinemodal)
@@ -448,6 +449,33 @@
 | <code>scrollTo</code>    | —       | —    |
 | <code>scrollBy</code>    | —       | —    |
 | <code>markerClick</code> | —       | —    |
+
+## TLogSearchPager
+
+源码：`src/vue/components/TLogSearchPager.ts`
+
+### Props
+
+| 名称                       | 类型                                          | 默认值                                                            | 必填 | 说明 |
+| -------------------------- | --------------------------------------------- | ----------------------------------------------------------------- | ---- | ---- |
+| <code>x</code>             | <code>number</code>                           | —                                                                 | 是   | —    |
+| <code>y</code>             | <code>number</code>                           | —                                                                 | 是   | —    |
+| <code>w</code>             | <code>number</code>                           | —                                                                 | 是   | —    |
+| <code>zIndex</code>        | <code>number</code>                           | <code>0</code>                                                    | 否   | —    |
+| <code>state</code>         | <code>TLogSearchPagerState &#124; null</code> | <code>null</code>                                                 | 否   | —    |
+| <code>style</code>         | <code>Style</code>                            | <code>undefined</code>                                            | 否   | —    |
+| <code>activeStyle</code>   | <code>Style</code>                            | <code>undefined</code>                                            | 否   | —    |
+| <code>disabledStyle</code> | <code>Style</code>                            | <code>() =&gt; ({ dim: true })</code>                             | 否   | —    |
+| <code>errorStyle</code>    | <code>Style</code>                            | <code>() =&gt; ({ fg: &quot;redBright&quot;, bold: true })</code> | 否   | —    |
+| <code>showCount</code>     | <code>boolean</code>                          | <code>true</code>                                                 | 否   | —    |
+
+### Events
+
+| 名称                      | Payload | 说明 |
+| ------------------------- | ------- | ---- |
+| <code>previousPage</code> | —       | —    |
+| <code>nextPage</code>     | —       | —    |
+| <code>pageChange</code>   | —       | —    |
 
 ## TLogSearchResults
 

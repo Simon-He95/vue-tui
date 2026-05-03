@@ -20,6 +20,8 @@ describe("package exports", () => {
     expect("TLogScrollbar" in root).toBe(false);
     expect("TLogMinimap" in root).toBe(false);
     expect("TLogSearchResults" in root).toBe(false);
+    expect("TLogSearchPager" in root).toBe(false);
+    expect("useTLogSearchResultsPage" in root).toBe(false);
     expect("createAppendOnlyLogStore" in root).toBe(false);
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
@@ -28,6 +30,8 @@ describe("package exports", () => {
     expect(experimental.TLogScrollbar).toBeTruthy();
     expect(experimental.TLogMinimap).toBeTruthy();
     expect(experimental.TLogSearchResults).toBeTruthy();
+    expect(experimental.TLogSearchPager).toBeTruthy();
+    expect(experimental.useTLogSearchResultsPage).toBeTruthy();
     expect(experimental.createAppendOnlyLogStore).toBeTruthy();
   });
 
@@ -64,12 +68,16 @@ describe("package exports", () => {
     expect(experimental.TLogScrollbar).toBeTruthy();
     expect(experimental.TLogMinimap).toBeTruthy();
     expect(experimental.TLogSearchResults).toBeTruthy();
+    expect(experimental.TLogSearchPager).toBeTruthy();
+    expect(experimental.useTLogSearchResultsPage).toBeTruthy();
     expect(experimental.createAppendOnlyLogStore).toBeTruthy();
     expect(experimentalCjs.TVirtualList).toBeTruthy();
     expect(experimentalCjs.TLogView).toBeTruthy();
     expect(experimentalCjs.TLogScrollbar).toBeTruthy();
     expect(experimentalCjs.TLogMinimap).toBeTruthy();
     expect(experimentalCjs.TLogSearchResults).toBeTruthy();
+    expect(experimentalCjs.TLogSearchPager).toBeTruthy();
+    expect(experimentalCjs.useTLogSearchResultsPage).toBeTruthy();
     expect(experimentalCjs.createAppendOnlyLogStore).toBeTruthy();
   });
 });
