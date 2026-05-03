@@ -4182,6 +4182,7 @@ describe("TLogView", () => {
             startX: 4,
             endX: 7,
             y: 0,
+            focused: true,
           },
           source: "keyboard",
         },
@@ -4242,6 +4243,7 @@ describe("TLogView", () => {
         startX: 0,
         endX: 5,
         y: 0,
+        focused: true,
       },
       source: "programmatic",
     });
@@ -4258,6 +4260,238 @@ describe("TLogView", () => {
       focusedLinkIndex: -1,
     });
     mounted.unmount();
+  });
+
+  it("clears link focus when absolute line identity changes across retained head reuse", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const version = ref(1);
+    const firstLine = ref(10);
+    const focusPayloads: TLogViewLinkFocusPayload[] = [];
+    const App = defineComponent({
+      name: "TLogViewLinkAbsoluteIdentityApp",
+      setup() {
+        const source: TLogDataSource = {
+          lineCount: () => 1,
+          getLine: () => "\x1b]8;;https://example.com\x07one\x1b]8;;\x07",
+          getLineKey: () => "line",
+          firstLineIndex: () => firstLine.value,
+        };
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            source,
+            version: version.value,
+            ansi: true,
+            links: true,
+            onLinkFocus: (payload: TLogViewLinkFocusPayload) => focusPayloads.push(payload),
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 2, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value?.focusNextLink()).toBe(true);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(logView.value?.getVisibleLinks()[0]).toMatchObject({
+        absoluteLineIndex: 10,
+        focused: true,
+      });
+
+      firstLine.value = 11;
+      version.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value?.getVisibleLinks()[0]).toMatchObject({
+        absoluteLineIndex: 11,
+      });
+      expect(logView.value?.getVisibleLinks()[0]?.focused).toBeUndefined();
+      expect(rowStyles(app, 0)[0]).toMatchObject({
+        href: "https://example.com",
+        underline: true,
+      });
+      expect(rowStyles(app, 0)[0]?.inverse).toBeUndefined();
+      expect(focusPayloads.at(-1)).toEqual({
+        link: null,
+        focusedLinkIndex: -1,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("emits linkFocus(null) when links are disabled after a link is focused", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const links = ref(true);
+    const focusPayloads: TLogViewLinkFocusPayload[] = [];
+    const App = defineComponent({
+      name: "TLogViewDisableLinksFocusApp",
+      setup() {
+        const source: TLogDataSource = {
+          lineCount: () => 1,
+          getLine: () => "\x1b]8;;https://example.com\x07one\x1b]8;;\x07",
+          getLineKey: () => "line",
+        };
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            source,
+            version: 1,
+            ansi: true,
+            links: links.value,
+            onLinkFocus: (payload: TLogViewLinkFocusPayload) => focusPayloads.push(payload),
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 2, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value?.focusNextLink()).toBe(true);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowStyles(app, 0)[0]?.inverse).toBe(true);
+
+      links.value = false;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowStyles(app, 0)[0]).toEqual({});
+      expect(rowStyles(app, 0)[0]?.inverse).toBeUndefined();
+      expect(focusPayloads.at(-1)).toEqual({
+        link: null,
+        focusedLinkIndex: -1,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("clears custom link focus style without removing href styling", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b]8;;https://example.com\x07one\x1b]8;;\x07",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          ref: logView,
+          x: 0,
+          y: 0,
+          w: 8,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+          linkFocusStyle: { bg: "blue" },
+        }),
+      8,
+      2,
+    );
+
+    try {
+      expect(logView.value?.focusNextLink()).toBe(true);
+      await nextTick();
+      expect(rowStyles(mounted, 0)[0]).toMatchObject({
+        href: "https://example.com",
+        underline: true,
+        bg: "blue",
+      });
+
+      logView.value?.clearLinkFocus();
+      await nextTick();
+      expect(rowStyles(mounted, 0)[0]).toMatchObject({
+        href: "https://example.com",
+        underline: true,
+      });
+      expect(rowStyles(mounted, 0)[0]?.bg).toBeUndefined();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("applies focused-link overlay only to segments with the matching href", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const version = ref(1);
+    const href = ref("https://example.com/1");
+    const focusPayloads: TLogViewLinkFocusPayload[] = [];
+    const App = defineComponent({
+      name: "TLogViewLinkHrefOverlayApp",
+      setup() {
+        const source: TLogDataSource = {
+          lineCount: () => 1,
+          getLine: () => `\x1b]8;;${href.value}\x07one\x1b]8;;\x07`,
+          getLineKey: () => href.value,
+        };
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            source,
+            version: version.value,
+            ansi: true,
+            links: true,
+            onLinkFocus: (payload: TLogViewLinkFocusPayload) => focusPayloads.push(payload),
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 8, rows: 2, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value?.focusNextLink()).toBe(true);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowStyles(app, 0)[0]).toMatchObject({
+        href: "https://example.com/1",
+        inverse: true,
+      });
+
+      href.value = "https://example.com/2";
+      version.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowStyles(app, 0)[0]).toMatchObject({
+        href: "https://example.com/2",
+        underline: true,
+      });
+      expect(rowStyles(app, 0)[0]?.inverse).toBeUndefined();
+      expect(focusPayloads.at(-1)).toEqual({
+        link: null,
+        focusedLinkIndex: -1,
+      });
+    } finally {
+      app.dispose();
+    }
   });
 
   it("does not intercept Tab when keyboardLinks is disabled", async () => {

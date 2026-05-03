@@ -211,6 +211,7 @@ export type TLogViewVisibleLink = Readonly<{
   startX: number;
   endX: number;
   y: number;
+  focused?: boolean;
 }>;
 export type TLogViewLinkFocusPayload = Readonly<{
   link: TLogViewVisibleLink | null;
@@ -2429,6 +2430,7 @@ export const TLogView = defineComponent({
           .slice()
           .sort((a, b) => a.startX - b.startX);
         for (const link of rowLinks) {
+          const focused = focusedLinkMatches(link);
           out.push({
             visibleIndex: out.length,
             href: link.href,
@@ -2440,6 +2442,7 @@ export const TLogView = defineComponent({
             startX: link.startX,
             endX: link.endX,
             y,
+            ...(focused ? { focused: true } : {}),
           });
         }
       }
@@ -2447,10 +2450,14 @@ export const TLogView = defineComponent({
     }
 
     function focusedLinkMatches(
-      link: Pick<TLogViewVisibleLink, "href" | "index" | "startCell" | "endCell">,
+      link: Pick<
+        TLogViewVisibleLink,
+        "href" | "absoluteLineIndex" | "index" | "startCell" | "endCell"
+      >,
     ): boolean {
       return (
         focusedLinkTarget?.href === link.href &&
+        focusedLinkTarget.absoluteLineIndex === link.absoluteLineIndex &&
         focusedLinkTarget.index === link.index &&
         focusedLinkTarget.startCell === link.startCell &&
         focusedLinkTarget.endCell === link.endCell
@@ -2657,7 +2664,9 @@ export const TLogView = defineComponent({
       visibleStartCell: number,
     ): readonly TLogVisualSegment[] {
       const target = focusedLinkTarget;
-      if (!target || target.index !== lineIndex) return segments;
+      if (!target) return segments;
+      if (target.absoluteLineIndex !== firstLineIndex() + lineIndex) return segments;
+      if (target.index !== lineIndex) return segments;
       if (target.endCell <= visibleStartCell) return segments;
 
       const visibleEndCell = visibleStartCell + segments.reduce((sum, seg) => sum + seg.cells, 0);
@@ -2670,7 +2679,10 @@ export const TLogView = defineComponent({
         while (localStart < seg.cells) {
           const absoluteCell = cursor + localStart;
           let nextLocalEnd = seg.cells;
-          const withinFocus = absoluteCell >= target.startCell && absoluteCell < target.endCell;
+          const withinFocus =
+            seg.style.href === target.href &&
+            absoluteCell >= target.startCell &&
+            absoluteCell < target.endCell;
           if (!withinFocus && target.startCell > absoluteCell) {
             nextLocalEnd = Math.min(nextLocalEnd, target.startCell - cursor);
           } else if (withinFocus) {
@@ -3350,7 +3362,7 @@ export const TLogView = defineComponent({
       () => [props.ansi, props.links],
       ([ansi, links]) => {
         if (ansi && links) return;
-        clearLinkFocus(false);
+        clearLinkFocus();
       },
     );
 

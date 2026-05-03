@@ -22,8 +22,10 @@ describe("package exports", () => {
     expect("TLogSearchBar" in root).toBe(false);
     expect("TLogSearchResults" in root).toBe(false);
     expect("TLogSearchPager" in root).toBe(false);
+    expect("TLogLinksPanel" in root).toBe(false);
     expect("useTLogSearchController" in root).toBe(false);
     expect("useTLogSearchResultsPage" in root).toBe(false);
+    expect("useTLogLinkController" in root).toBe(false);
     expect("createAppendOnlyLogStore" in root).toBe(false);
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
@@ -34,8 +36,10 @@ describe("package exports", () => {
     expect(experimental.TLogSearchBar).toBeTruthy();
     expect(experimental.TLogSearchResults).toBeTruthy();
     expect(experimental.TLogSearchPager).toBeTruthy();
+    expect(experimental.TLogLinksPanel).toBeTruthy();
     expect(experimental.useTLogSearchController).toBeTruthy();
     expect(experimental.useTLogSearchResultsPage).toBeTruthy();
+    expect(experimental.useTLogLinkController).toBeTruthy();
     expect(experimental.createAppendOnlyLogStore).toBeTruthy();
   });
 
@@ -46,6 +50,10 @@ describe("package exports", () => {
     expect(experimentalSource).toContain("TLogViewLinkActivatePayload");
     expect(experimentalSource).toContain("TLogViewSearchMode");
     expect(experimentalSource).toContain("TLogViewSearchError");
+    expect(experimentalSource).toContain("TLogLinksPanel");
+    expect(experimentalSource).toContain("TLogLinkPanelItem");
+    expect(experimentalSource).toContain("TLogLinkAction");
+    expect(experimentalSource).toContain("useTLogLinkController");
     expect(experimentalSource).toContain("TLogSearchBarState");
     expect(experimentalSource).toContain("TLogSearchBarMode");
     expect(experimentalSource).toContain("TLogSavedSearch");
@@ -78,8 +86,10 @@ describe("package exports", () => {
     expect(experimental.TLogSearchBar).toBeTruthy();
     expect(experimental.TLogSearchResults).toBeTruthy();
     expect(experimental.TLogSearchPager).toBeTruthy();
+    expect(experimental.TLogLinksPanel).toBeTruthy();
     expect(experimental.useTLogSearchController).toBeTruthy();
     expect(experimental.useTLogSearchResultsPage).toBeTruthy();
+    expect(experimental.useTLogLinkController).toBeTruthy();
     expect(experimental.createAppendOnlyLogStore).toBeTruthy();
     expect(experimentalCjs.TVirtualList).toBeTruthy();
     expect(experimentalCjs.TLogView).toBeTruthy();
@@ -88,8 +98,10 @@ describe("package exports", () => {
     expect(experimentalCjs.TLogSearchBar).toBeTruthy();
     expect(experimentalCjs.TLogSearchResults).toBeTruthy();
     expect(experimentalCjs.TLogSearchPager).toBeTruthy();
+    expect(experimentalCjs.TLogLinksPanel).toBeTruthy();
     expect(experimentalCjs.useTLogSearchController).toBeTruthy();
     expect(experimentalCjs.useTLogSearchResultsPage).toBeTruthy();
+    expect(experimentalCjs.useTLogLinkController).toBeTruthy();
     expect(experimentalCjs.createAppendOnlyLogStore).toBeTruthy();
   });
 });
