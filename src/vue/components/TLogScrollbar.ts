@@ -17,6 +17,9 @@ const TRACK_CHAR = "│";
 const EXACT_THUMB_CHAR = "█";
 const MEASURING_THUMB_CHAR = "▒";
 const ESTIMATED_THUMB_CHAR = "░";
+const MARKER_CHAR = "•";
+const ESTIMATED_MARKER_CHAR = "·";
+const CURRENT_MARKER_CHAR = "◆";
 const UP_ARROW_CHAR = "▲";
 const DOWN_ARROW_CHAR = "▼";
 
@@ -28,6 +31,20 @@ type TLogScrollbarThumb = Readonly<{
 export type TLogScrollbarMetrics = TLogViewScrollMetrics;
 export type TLogScrollbarScrollToPayload = number;
 export type TLogScrollbarScrollByPayload = number;
+export type TLogScrollbarMarker = Readonly<{
+  id?: string | number;
+  visualRow: number;
+  current?: boolean;
+  estimated?: boolean;
+  payload?: unknown;
+}>;
+export type TLogScrollbarMarkerClickPayload = Readonly<{
+  marker: TLogScrollbarMarker;
+  markerIndex: number;
+  visualRow: number;
+  cellX: number;
+  cellY: number;
+}>;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -81,6 +98,59 @@ function computeThumb(
   };
 }
 
+function markerRow(
+  marker: TLogScrollbarMarker,
+  metrics: TLogScrollbarMetrics,
+  height: number,
+  showArrows: boolean,
+): number | null {
+  const { trackTop, trackHeight } = trackGeometry(height, showArrows);
+  if (trackHeight <= 0) return null;
+
+  const total = Math.max(
+    normalizeInt(metrics.visualRowCount),
+    normalizeInt(metrics.viewportRows),
+    1,
+  );
+  const maxVisual = Math.max(1, total - 1);
+  const visualRow = clamp(normalizeInt(marker.visualRow), 0, maxVisual);
+  return trackTop + Math.round((visualRow / maxVisual) * (trackHeight - 1));
+}
+
+type TLogScrollbarMarkerHit = Readonly<{
+  marker: TLogScrollbarMarker;
+  index: number;
+}>;
+
+function markerPriority(marker: TLogScrollbarMarker): number {
+  if (marker.current) return 2;
+  if (!marker.estimated) return 1;
+  return 0;
+}
+
+function collectMarkersByRow(
+  markers: readonly TLogScrollbarMarker[],
+  metrics: TLogScrollbarMetrics | null | undefined,
+  height: number,
+  showArrows: boolean,
+): ReadonlyMap<number, TLogScrollbarMarkerHit> {
+  if (!metrics || !markers.length) return new Map();
+
+  const rows = new Map<number, TLogScrollbarMarkerHit>();
+  for (let i = 0; i < markers.length; i++) {
+    const marker = markers[i]!;
+    const row = markerRow(marker, metrics, height, showArrows);
+    if (row == null) continue;
+
+    const previous = rows.get(row);
+    if (!previous || markerPriority(marker) >= markerPriority(previous.marker)) {
+      rows.set(row, { marker, index: i });
+    }
+  }
+
+  return rows;
+}
+
 function mergeStyle(base: Style, overlay?: Style): Style {
   return overlay ? { ...base, ...overlay } : base;
 }
@@ -100,9 +170,22 @@ export const TLogScrollbar = defineComponent({
     thumbStyle: { type: Object as PropType<Style>, default: undefined },
     trackStyle: { type: Object as PropType<Style>, default: undefined },
     measuringStyle: { type: Object as PropType<Style>, default: undefined },
+    markers: {
+      type: Array as PropType<readonly TLogScrollbarMarker[]>,
+      default: () => [],
+    },
+    markerStyle: {
+      type: Object as PropType<Style>,
+      default: () => ({ fg: "yellowBright" }),
+    },
+    currentMarkerStyle: {
+      type: Object as PropType<Style>,
+      default: () => ({ fg: "redBright", bold: true }),
+    },
+    showMarkers: { type: Boolean, default: true },
     showArrows: { type: Boolean, default: false },
   },
-  emits: ["scrollTo", "scrollBy"],
+  emits: ["scrollTo", "scrollBy", "markerClick"],
   setup(props, { emit }) {
     const { terminal, defaultStyle } = useTerminal();
     const parent = useLayout();
@@ -151,6 +234,24 @@ export const TLogScrollbar = defineComponent({
       }
       if (trackHeight <= 0) return;
 
+      const thumb = computeThumb(metrics, full.h, props.showArrows);
+      const isThumbRow = thumb != null && localY >= thumb.top && localY < thumb.top + thumb.size;
+      const markerHit =
+        !isThumbRow && props.showMarkers
+          ? collectMarkersByRow(props.markers, metrics, full.h, props.showArrows).get(localY)
+          : undefined;
+      if (markerHit != null) {
+        emit("markerClick", {
+          marker: markerHit.marker,
+          markerIndex: markerHit.index,
+          visualRow: markerHit.marker.visualRow,
+          cellX: e.cellX,
+          cellY: e.cellY,
+        } satisfies TLogScrollbarMarkerClickPayload);
+        e.preventDefault?.();
+        return;
+      }
+
       const pos = clamp(localY - trackTop, 0, trackHeight - 1);
       const ratio = trackHeight <= 1 ? 0 : pos / (trackHeight - 1);
       const target = Math.round(ratio * Math.max(0, normalizeInt(metrics.maxScrollTop)));
@@ -186,6 +287,10 @@ export const TLogScrollbar = defineComponent({
         props.trackStyle,
         props.thumbStyle,
         props.measuringStyle,
+        props.markers,
+        props.markerStyle,
+        props.currentMarkerStyle,
+        props.showMarkers,
         props.showArrows,
         defaultStyle.value,
       ],
@@ -198,11 +303,16 @@ export const TLogScrollbar = defineComponent({
         const trackStyle = mergeStyle(baseStyle, props.trackStyle ?? { dim: true });
         const thumbStyle = mergeStyle(baseStyle, props.thumbStyle ?? { inverse: true });
         const estimatedThumbStyle = mergeStyle(thumbStyle, { dim: true });
+        const markerStyle = mergeStyle(baseStyle, props.markerStyle);
+        const currentMarkerStyle = mergeStyle(baseStyle, props.currentMarkerStyle);
         const measuringThumbStyle = mergeStyle(
           baseStyle,
           props.measuringStyle ?? { ...thumbStyle, dim: true },
         );
         const thumb = computeThumb(props.metrics, full.h, props.showArrows);
+        const markersByRow = props.showMarkers
+          ? collectMarkersByRow(props.markers, props.metrics, full.h, props.showArrows)
+          : new Map<number, TLogScrollbarMarkerHit>();
         const { arrowRows } = trackGeometry(full.h, props.showArrows);
 
         const paintRow = (y: number): void => {
@@ -216,7 +326,18 @@ export const TLogScrollbar = defineComponent({
             char = UP_ARROW_CHAR;
           } else if (arrowRows && localY === full.h - 1) {
             char = DOWN_ARROW_CHAR;
-          } else if (thumb && localY >= thumb.top && localY < thumb.top + thumb.size) {
+          } else {
+            const markerHit = markersByRow.get(localY);
+            if (markerHit) {
+              char = markerHit.marker.current
+                ? CURRENT_MARKER_CHAR
+                : markerHit.marker.estimated
+                  ? ESTIMATED_MARKER_CHAR
+                  : MARKER_CHAR;
+              style = markerHit.marker.current ? currentMarkerStyle : markerStyle;
+            }
+          }
+          if (thumb && localY >= thumb.top && localY < thumb.top + thumb.size) {
             if (props.metrics?.visualIndexStatus === "measuring") {
               char = MEASURING_THUMB_CHAR;
               style = measuringThumbStyle;

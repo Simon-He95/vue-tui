@@ -1963,6 +1963,167 @@ describe("TLogView", () => {
     }
   });
 
+  it("getSearchMarkers maps wrapped matches to visual rows and updates the current marker", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 2,
+      getLine: (index) => (index === 0 ? "aaaa" : "bbbbcccc"),
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewSearchMarkersApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 2,
+            source,
+            version: 1,
+            wrap: true,
+            searchQuery: "cccc",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 3, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchMarkers()).toEqual([
+        {
+          matchIndex: 0,
+          absoluteLineIndex: 1,
+          index: 1,
+          visualRow: 2,
+          estimated: true,
+          current: false,
+        },
+      ]);
+
+      logView.value!.findNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(logView.value!.getSearchMarkers()[0]).toMatchObject({
+        visualRow: 2,
+        estimated: true,
+        current: true,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("marks wrapped search markers as exact after visual index measurement completes", async () => {
+    const raf = installManualRaf();
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 2,
+      getLine: (index) => (index === 0 ? "aaaa" : "bbbbcccc"),
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewExactSearchMarkersApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 2,
+            source,
+            version: 1,
+            wrap: true,
+            visualIndexMode: "exact",
+            visualIndexOptions: { measureBudgetMs: 0 },
+            searchQuery: "cccc",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 3, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      await flushVisualIndex(logView.value!, raf);
+
+      expect(logView.value!.getSearchMarkers()).toEqual([
+        {
+          matchIndex: 0,
+          absoluteLineIndex: 1,
+          index: 1,
+          visualRow: 2,
+          estimated: false,
+          current: false,
+        },
+      ]);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("does not synchronously wrap all search matches when projecting estimated markers", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const getLine = vi.fn((index: number) => `ERROR ${index} ${"x".repeat(200)}`);
+    const source: TLogDataSource = {
+      lineCount: () => 100_000,
+      getLine,
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewEstimatedSearchMarkersApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            wrap: true,
+            searchQuery: "ERROR",
+            searchOptions: {
+              scanBudgetMs: 1000,
+              maxMatches: 10_000,
+            },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      getLine.mockClear();
+
+      const before = logView.value!.getScrollMetrics();
+      const markers = logView.value!.getSearchMarkers();
+      const after = logView.value!.getScrollMetrics();
+
+      expect(markers.length).toBe(10_000);
+      expect(markers.some((marker) => marker.estimated)).toBe(true);
+      expect(getLine.mock.calls.length).toBeLessThan(50);
+      expect(after.estimatedVisualRowCount).toBe(before.estimatedVisualRowCount);
+      expect(after.measuredLineCount).toBe(before.measuredLineCount);
+      expect(after.visualIndexStatus).toBe(before.visualIndexStatus);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("rescans search matches after retention drops head lines", async () => {
     const log = createAppendOnlyLogStore({ maxLines: 3 });
     log.appendLines(["line-0", "line-1", "line-2"]);

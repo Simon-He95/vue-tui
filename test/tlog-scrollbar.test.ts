@@ -1,5 +1,6 @@
 import type {
   TLogDataSource,
+  TLogScrollbarMarker,
   TLogScrollbarMetrics,
   TLogViewHandle,
   TLogViewScrollMetrics,
@@ -62,6 +63,18 @@ function createMetrics(overrides: Partial<TLogScrollbarMetrics> = {}): TLogViewS
     atTop: overrides.atTop ?? scrollTop <= 0,
     atBottom: overrides.atBottom ?? scrollTop >= maxScrollTop,
   };
+}
+
+async function flushSearch(
+  app: ReturnType<typeof createTerminalApp>,
+  handle: TLogViewHandle,
+  maxFrames = 20,
+): Promise<void> {
+  for (let i = 0; i < maxFrames; i++) {
+    await nextTick();
+    app.scheduler.flushNow();
+    if (handle.getSearchState().status !== "scanning") return;
+  }
 }
 
 describe("TLogScrollbar", () => {
@@ -199,6 +212,139 @@ describe("TLogScrollbar", () => {
     }
   });
 
+  it("renders markers on the track and keeps the thumb visible", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogScrollbar, {
+          x: 0,
+          y: 0,
+          h: 10,
+          metrics: createMetrics({
+            scrollTop: 0,
+            maxScrollTop: 90,
+            viewportRows: 10,
+            visualRowCount: 100,
+            estimatedVisualRowCount: 100,
+            measuredVisualRowCount: 100,
+          }),
+          markers: [
+            { visualRow: 50 },
+            { visualRow: 0, current: true },
+            { visualRow: 99, estimated: true },
+          ] satisfies readonly TLogScrollbarMarker[],
+        }),
+      1,
+      10,
+    );
+
+    try {
+      expect(columnChars(mounted, 0, 10)).toBe("█││││•│││·");
+      expect(cell(mounted, 0, 5).style).toMatchObject({ fg: "yellowBright" });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits markerClick instead of scrollTo when clicking a marker row", async () => {
+    const onScrollTo = vi.fn();
+    const onMarkerClick = vi.fn();
+    const markers = [{ id: "m1", visualRow: 50, payload: { kind: "match" } }] as const;
+    const App = defineComponent({
+      name: "TLogScrollbarMarkerClickApp",
+      setup() {
+        return () =>
+          h(TLogScrollbar, {
+            x: 0,
+            y: 0,
+            h: 10,
+            metrics: createMetrics({
+              scrollTop: 0,
+              maxScrollTop: 90,
+              viewportRows: 10,
+              visualRowCount: 100,
+              estimatedVisualRowCount: 100,
+              measuredVisualRowCount: 100,
+            }),
+            markers,
+            onScrollTo,
+            onMarkerClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 1, rows: 10, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({
+        type: "click",
+        cellX: 0,
+        cellY: 5,
+      } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onMarkerClick).toHaveBeenCalledWith({
+        marker: markers[0],
+        markerIndex: 0,
+        visualRow: 50,
+        cellX: 0,
+        cellY: 5,
+      });
+      expect(onScrollTo).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not emit markerClick for marker rows covered by the thumb", async () => {
+    const onScrollTo = vi.fn();
+    const onMarkerClick = vi.fn();
+    const markers = [{ id: "top", visualRow: 0, current: true }] as const;
+    const App = defineComponent({
+      name: "TLogScrollbarThumbDominatesMarkerClickApp",
+      setup() {
+        return () =>
+          h(TLogScrollbar, {
+            x: 0,
+            y: 0,
+            h: 10,
+            metrics: createMetrics({
+              scrollTop: 0,
+              maxScrollTop: 90,
+              viewportRows: 10,
+              visualRowCount: 100,
+              estimatedVisualRowCount: 100,
+              measuredVisualRowCount: 100,
+            }),
+            markers,
+            onScrollTo,
+            onMarkerClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 1, rows: 10, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({
+        type: "click",
+        cellX: 0,
+        cellY: 0,
+      } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onMarkerClick).not.toHaveBeenCalled();
+      expect(onScrollTo).toHaveBeenCalledWith(0);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("emits scrollBy when receiving wheel input", async () => {
     const onScrollBy = vi.fn();
     const App = defineComponent({
@@ -330,6 +476,102 @@ describe("TLogScrollbar", () => {
       app.scheduler.flushNow();
 
       expect(rowText(app, 0, 19)).toBe("line-16");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("integrates TLogView search markers and lets the parent handle marker clicks", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const metrics = ref<TLogViewScrollMetrics | null>(null);
+    const markers = ref<readonly TLogScrollbarMarker[]>([]);
+    const source: TLogDataSource = {
+      lineCount: () => 8,
+      getLine: (index) =>
+        [
+          "ok line-0",
+          "ok line-1",
+          "error line-2",
+          "ok line-3",
+          "ok line-4",
+          "ok line-5",
+          "error line-6",
+          "ok line-7",
+        ][index] ?? "",
+      getLineKey: (index) => index,
+    };
+
+    const App = defineComponent({
+      name: "TLogScrollbarSearchMarkersIntegrationApp",
+      setup() {
+        const refresh = () => {
+          metrics.value = logView.value?.getScrollMetrics() ?? null;
+          markers.value =
+            logView.value?.getSearchMarkers().map((marker) => ({
+              id: marker.matchIndex,
+              visualRow: marker.visualRow,
+              current: marker.current,
+              estimated: marker.estimated,
+              payload: marker,
+            })) ?? [];
+        };
+
+        onMounted(refresh);
+
+        return () => [
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 19,
+            h: 4,
+            source,
+            version: 1,
+            defaultScrollTop: 0,
+            searchQuery: "error",
+            searchOptions: { scanBudgetMs: 1000 },
+            onScroll: refresh,
+            onVisualIndex: refresh,
+            onSearchMarkers: refresh,
+          }),
+          h(TLogScrollbar, {
+            x: 19,
+            y: 0,
+            h: 4,
+            metrics: metrics.value,
+            markers: markers.value,
+            onMarkerClick: (payload: {
+              marker: TLogScrollbarMarker & { payload?: { visualRow: number } };
+            }) => {
+              const marker = payload.marker.payload;
+              if (!marker) return;
+              logView.value?.scrollToVisualRow(marker.visualRow);
+              refresh();
+            },
+          }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0, 19)).toBe("ok line-0");
+      expect(columnChars(app, 19, 4)).toContain("•");
+
+      app.events.dispatch({
+        type: "click",
+        cellX: 19,
+        cellY: 3,
+      } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 2, 19)).toBe("error line-6");
     } finally {
       app.dispose();
     }

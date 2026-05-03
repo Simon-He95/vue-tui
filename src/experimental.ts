@@ -5,6 +5,8 @@ export { createAppendOnlyLogStore } from "./vue/log/append-only-log-store.js";
 export type { RowScrollMode } from "./vue/components/TVirtualList.js";
 export type {
   TLogScrollbarMetrics,
+  TLogScrollbarMarker,
+  TLogScrollbarMarkerClickPayload,
   TLogScrollbarScrollByPayload,
   TLogScrollbarScrollToPayload,
 } from "./vue/components/TLogScrollbar.js";
@@ -13,6 +15,8 @@ export type {
   TLogViewLinkClickPayload,
   TLogViewScrollMetrics,
   TLogViewSearchMatch,
+  TLogViewSearchMarker,
+  TLogViewSearchMarkersPayload,
   TLogViewSearchMatchPayload,
   TLogViewSearchOptions,
   TLogViewSearchPayload,
