@@ -15,6 +15,7 @@
 - [TJsonEditor](#tjsoneditor)
 - [TList](#tlist)
 - [TLogScrollbar](#tlogscrollbar)
+- [TLogSearchResults](#tlogsearchresults)
 - [TLogView](#tlogview)
 - [TMultilineModal](#tmultilinemodal)
 - [TPathPicker](#tpathpicker)
@@ -413,6 +414,38 @@
 | <code>scrollTo</code>    | —       | —    |
 | <code>scrollBy</code>    | —       | —    |
 | <code>markerClick</code> | —       | —    |
+
+## TLogSearchResults
+
+源码：`src/vue/components/TLogSearchResults.ts`
+
+### Props
+
+| 名称                         | 类型                                         | 默认值                                      | 必填 | 说明 |
+| ---------------------------- | -------------------------------------------- | ------------------------------------------- | ---- | ---- |
+| <code>x</code>               | <code>number</code>                          | —                                           | 是   | —    |
+| <code>y</code>               | <code>number</code>                          | —                                           | 是   | —    |
+| <code>w</code>               | <code>number</code>                          | —                                           | 是   | —    |
+| <code>h</code>               | <code>number</code>                          | —                                           | 是   | —    |
+| <code>zIndex</code>          | <code>number</code>                          | <code>0</code>                              | 否   | —    |
+| <code>results</code>         | <code>readonly TLogSearchResultItem[]</code> | <code>() =&gt; []</code>                    | 否   | —    |
+| <code>activeIndex</code>     | <code>number</code>                          | <code>-1</code>                             | 否   | —    |
+| <code>style</code>           | <code>Style</code>                           | <code>undefined</code>                      | 否   | —    |
+| <code>activeStyle</code>     | <code>Style</code>                           | <code>() =&gt; ({ inverse: true })</code>   | 否   | —    |
+| <code>matchStyle</code>      | <code>Style</code>                           | <code>() =&gt; ({ underline: true })</code> | 否   | —    |
+| <code>currentStyle</code>    | <code>Style</code>                           | <code>() =&gt; ({ bold: true })</code>      | 否   | —    |
+| <code>showLineNumbers</code> | <code>boolean</code>                         | <code>true</code>                           | 否   | —    |
+| <code>focusable</code>       | <code>boolean</code>                         | <code>true</code>                           | 否   | —    |
+
+### Events
+
+| 名称                      | Payload | 说明 |
+| ------------------------- | ------- | ---- |
+| <code>select</code>       | —       | —    |
+| <code>activeChange</code> | —       | —    |
+| <code>keydown</code>      | —       | —    |
+| <code>focus</code>        | —       | —    |
+| <code>blur</code>         | —       | —    |
 
 ## TLogView
 

@@ -127,6 +127,19 @@ export type TLogViewSelectSearchMatchOptions = Readonly<{
 export type TLogViewSearchResult = Readonly<{
   matchIndex: number;
   match: TLogViewSearchMatch;
+  preview?: TLogViewSearchResultPreview;
+}>;
+export type TLogViewSearchResultPreview = Readonly<{
+  text: string;
+  matchStartCell: number;
+  matchEndCell: number;
+}>;
+export type TLogViewSearchResultsOptions = Readonly<{
+  offset?: number;
+  limit?: number;
+  includePreview?: boolean;
+  previewWidth?: number;
+  contextCells?: number;
 }>;
 export type TLogViewSearchState = Readonly<{
   query: string;
@@ -206,12 +219,7 @@ export type TLogViewHandle = Readonly<{
   getSearchState: () => TLogViewSearchState;
   selectSearchMatch: (matchIndex: number, options?: TLogViewSelectSearchMatchOptions) => boolean;
   getSearchMatch: (matchIndex: number) => TLogViewSearchMatch | null;
-  getSearchResults: (
-    options?: Readonly<{
-      offset?: number;
-      limit?: number;
-    }>,
-  ) => readonly TLogViewSearchResult[];
+  getSearchResults: (options?: TLogViewSearchResultsOptions) => readonly TLogViewSearchResult[];
   measureVisualIndex: () => void;
   getScrollMetrics: () => TLogViewScrollMetrics;
   getSearchMarkers: () => readonly TLogViewSearchMarker[];
@@ -224,6 +232,8 @@ const DEFAULT_VISUAL_INDEX_CAPACITY = 1_024;
 const DEFAULT_SEARCH_MAX_MATCHES = 10_000;
 const DEFAULT_SEARCH_SCAN_BUDGET_MS = 4;
 const DEFAULT_VISUAL_INDEX_MEASURE_BUDGET_MS = 4;
+const DEFAULT_SEARCH_RESULTS_PREVIEW_WIDTH = 80;
+const DEFAULT_SEARCH_RESULTS_CONTEXT_CELLS = 24;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -1306,6 +1316,68 @@ export const TLogView = defineComponent({
           .join("");
       }
       return sanitizeInlineText(props.source.getLine(index));
+    }
+
+    function normalizeSearchResultPreviewWidth(value: number | undefined): number {
+      const n = Math.floor(Number(value ?? DEFAULT_SEARCH_RESULTS_PREVIEW_WIDTH));
+      if (!Number.isFinite(n)) return DEFAULT_SEARCH_RESULTS_PREVIEW_WIDTH;
+      return Math.max(1, n);
+    }
+
+    function normalizeSearchResultContextCells(value: number | undefined): number {
+      const n = Math.floor(Number(value ?? DEFAULT_SEARCH_RESULTS_CONTEXT_CELLS));
+      if (!Number.isFinite(n)) return DEFAULT_SEARCH_RESULTS_CONTEXT_CELLS;
+      return Math.max(0, n);
+    }
+
+    function previewForMatch(
+      match: TLogViewSearchMatch,
+      count: number,
+      baseStyle: Style,
+      baseStyleKey: string,
+      options: Readonly<{
+        previewWidth: number;
+        contextCells: number;
+      }>,
+    ): TLogViewSearchResultPreview {
+      const text = searchableTextForLine(match.index, count, baseStyle, baseStyleKey);
+      const totalCells = textCellWidth(text);
+      const matchCells = Math.max(1, match.endCell - match.startCell);
+      const previewWidth = Math.max(options.previewWidth, matchCells);
+      const maxStart = Math.max(0, totalCells - previewWidth);
+      let startCell = Math.max(0, match.startCell - options.contextCells);
+      let endCell = Math.min(totalCells, match.endCell + options.contextCells);
+
+      if (endCell - startCell > previewWidth) {
+        const minStart = Math.max(0, match.endCell - previewWidth);
+        const maxVisibleStart = Math.min(match.startCell, maxStart);
+        startCell = clamp(startCell, minStart, maxVisibleStart);
+        endCell = Math.min(totalCells, startCell + previewWidth);
+      }
+
+      if (endCell - startCell < previewWidth && endCell < totalCells) {
+        endCell = Math.min(totalCells, startCell + previewWidth);
+      }
+      if (endCell - startCell < previewWidth && startCell > 0) {
+        startCell = Math.max(0, endCell - previewWidth);
+      }
+
+      let previewText = sliceByCellsRange(text, startCell, endCell);
+      let matchStartCell = match.startCell - startCell;
+      let matchEndCell = match.endCell - startCell;
+
+      if (startCell > 0) {
+        previewText = `…${previewText}`;
+        matchStartCell += 1;
+        matchEndCell += 1;
+      }
+      if (endCell < totalCells) previewText = `${previewText}…`;
+
+      return {
+        text: previewText,
+        matchStartCell,
+        matchEndCell,
+      };
     }
 
     function findLineSearchMatches(text: string, query: string): readonly TLogSearchLineMatch[] {
@@ -2665,10 +2737,7 @@ export const TLogView = defineComponent({
     }
 
     function getSearchResults(
-      options?: Readonly<{
-        offset?: number;
-        limit?: number;
-      }>,
+      options?: TLogViewSearchResultsOptions,
     ): readonly TLogViewSearchResult[] {
       const rawOffset = Number(options?.offset ?? 0);
       const rawLimit = Number(options?.limit ?? searchMatches.length);
@@ -2676,10 +2745,28 @@ export const TLogView = defineComponent({
       const limit = Number.isFinite(rawLimit)
         ? Math.max(0, Math.floor(rawLimit))
         : searchMatches.length;
+      const includePreview = options?.includePreview === true;
+
+      if (!includePreview) {
+        return searchMatches.slice(offset, offset + limit).map((match, index) => ({
+          matchIndex: offset + index,
+          match,
+        }));
+      }
+
+      const count = lineCount();
+      const base = props.style ?? defaultStyle.value;
+      const baseStyleKey = styleCacheKey(base);
+      const previewWidth = normalizeSearchResultPreviewWidth(options?.previewWidth);
+      const contextCells = normalizeSearchResultContextCells(options?.contextCells);
 
       return searchMatches.slice(offset, offset + limit).map((match, index) => ({
         matchIndex: offset + index,
         match,
+        preview: previewForMatch(match, count, base, baseStyleKey, {
+          previewWidth,
+          contextCells,
+        }),
       }));
     }
 

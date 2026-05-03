@@ -7,7 +7,7 @@ import type {
   TLogViewSearchMarker,
 } from "../src/experimental.js";
 import { describe, expect, it, vi } from "vitest";
-import { createTerminalApp } from "../src/index.js";
+import { createTerminalApp, textCellWidth } from "../src/index.js";
 import { createAppendOnlyLogStore, TLogScrollbar, TLogView } from "../src/experimental.js";
 import {
   defineComponent,
@@ -1918,6 +1918,144 @@ describe("TLogView", () => {
       expect(logView.value!.getScrollMetrics()).toEqual(beforeMetrics);
       expect(onSearchMatch).not.toHaveBeenCalled();
       expect(getLine).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("getSearchResults can include preview text for the requested page only", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const getLine = vi.fn((index: number) => `line-${index} ERROR tail`);
+    const source: TLogDataSource = {
+      lineCount: () => 1_000,
+      getLine,
+      getLineKey: (index) => `line-${index}`,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewSearchPreviewPageApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 4,
+            source,
+            version: 1,
+            searchQuery: "ERROR",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 32, rows: 4, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      getLine.mockClear();
+      expect(
+        logView.value!.getSearchResults({ offset: 10, limit: 5, includePreview: true }),
+      ).toEqual(
+        Array.from({ length: 5 }, (_, index) => ({
+          matchIndex: 10 + index,
+          match: expect.objectContaining({
+            index: 10 + index,
+            absoluteLineIndex: 10 + index,
+            text: "ERROR",
+          }),
+          preview: expect.objectContaining({
+            text: expect.stringContaining("ERROR"),
+          }),
+        })),
+      );
+      expect(getLine).toHaveBeenCalledTimes(5);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("getSearchResults preview uses visible ANSI text without escape sequences", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31mERROR\x1b[0m failed",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewSearchPreviewAnsiApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 1,
+            source,
+            version: 1,
+            ansi: true,
+            searchQuery: "ERROR",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(logView.value!.getSearchResults({ includePreview: true })[0]).toMatchObject({
+        preview: {
+          text: "ERROR failed",
+          matchStartCell: 0,
+          matchEndCell: 5,
+        },
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("getSearchResults preview preserves wide-character cell offsets", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "ab中ERROR tail",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewSearchPreviewWideCharApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 1,
+            source,
+            version: 1,
+            searchQuery: "ERROR",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      const preview = logView.value!.getSearchResults({ includePreview: true })[0]!.preview!;
+      expect(preview.text).toBe("ab中ERROR tail");
+      expect(preview.matchStartCell).toBe(textCellWidth("ab中"));
+      expect(preview.matchEndCell).toBe(textCellWidth("ab中ERROR"));
     } finally {
       app.dispose();
     }

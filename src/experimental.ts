@@ -1,6 +1,7 @@
 export { TVirtualList } from "./vue/components/TVirtualList.js";
 export { TLogView } from "./vue/components/TLogView.js";
 export { TLogScrollbar } from "./vue/components/TLogScrollbar.js";
+export { TLogSearchResults } from "./vue/components/TLogSearchResults.js";
 export { createAppendOnlyLogStore } from "./vue/log/append-only-log-store.js";
 export type { RowScrollMode } from "./vue/components/TVirtualList.js";
 export type {
@@ -11,11 +12,18 @@ export type {
   TLogScrollbarScrollToPayload,
 } from "./vue/components/TLogScrollbar.js";
 export type {
+  TLogSearchResultItem,
+  TLogSearchResultsActiveChangePayload,
+  TLogSearchResultsSelectPayload,
+} from "./vue/components/TLogSearchResults.js";
+export type {
   TLogViewHandle,
   TLogViewLinkClickPayload,
   TLogViewScrollMetrics,
   TLogViewSearchMatch,
   TLogViewSearchResult,
+  TLogViewSearchResultPreview,
+  TLogViewSearchResultsOptions,
   TLogViewSearchMarker,
   TLogViewSearchMarkersPayload,
   TLogViewSearchMatchPayload,
