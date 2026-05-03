@@ -603,6 +603,85 @@ onMounted(refreshMetrics);
 />
 ```
 
+### TLogSearchResults
+
+`TLogSearchResults` 是一个 experimental search result panel，用来渲染分页后的搜索结果预览。它只消费外部准备好的 result items，不持有 search state，也不会直接读取 `TLogView` 或 log source。
+
+- 结果数据建议来自 `logView.value?.getSearchResults({ offset, limit, includePreview: true })`
+- `includePreview` 默认是 `false`，避免每次 getter 都去读取结果行内容
+- preview 基于 visible text 生成；`ansi=true` 时不会把 ANSI escape sequences 带进结果面板
+- preview 和高亮 offset 都按 cell 计算，因此宽字符场景可以保持匹配位置正确
+- 组件只负责渲染和交互：`ArrowUp` / `ArrowDown` / `Home` / `End` 更新 active row，`Enter` 和 click emit `select`
+- 不要每一帧都对全部 10k matches 调 `includePreview: true`；应当只给当前页或当前窗口取 preview
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue";
+import {
+  TLogSearchResults,
+  TLogView,
+  type TLogSearchResultItem,
+  type TLogSearchResultsSelectPayload,
+  type TLogViewHandle,
+} from "@simon_he/vue-tui/experimental";
+
+const logView = ref<TLogViewHandle | null>(null);
+const results = ref<readonly TLogSearchResultItem[]>([]);
+const activeIndex = ref(-1);
+const query = ref("ERROR");
+
+function refreshResults() {
+  const raw =
+    logView.value?.getSearchResults({
+      offset: 0,
+      limit: 20,
+      includePreview: true,
+      previewWidth: 60,
+    }) ?? [];
+  const state = logView.value?.getSearchState();
+
+  results.value = raw.map((entry) => ({
+    matchIndex: entry.matchIndex,
+    absoluteLineIndex: entry.match.absoluteLineIndex,
+    lineIndex: entry.match.index,
+    text: entry.preview?.text ?? "",
+    matchStartCell: entry.preview?.matchStartCell ?? 0,
+    matchEndCell: entry.preview?.matchEndCell ?? 0,
+    current: entry.matchIndex === state?.currentMatchIndex,
+  }));
+  activeIndex.value = raw.findIndex((entry) => entry.matchIndex === state?.currentMatchIndex);
+}
+
+function onSelect(payload: TLogSearchResultsSelectPayload) {
+  logView.value?.selectSearchMatch(payload.matchIndex);
+  refreshResults();
+}
+</script>
+
+<TLogView
+  ref="logView"
+  :x="0"
+  :y="0"
+  :w="60"
+  :h="20"
+  :source="log.source"
+  :version="log.version"
+  :search-query="query"
+  @search="refreshResults"
+  @searchMatch="refreshResults"
+/>
+
+<TLogSearchResults
+  :x="61"
+  :y="0"
+  :w="19"
+  :h="20"
+  :results="results"
+  :active-index="activeIndex"
+  @select="onSelect"
+/>
+```
+
 ### Events
 
 - `scroll`: `{ scrollTop, atBottom, lineCount, estimatedVisualRowCount, visualRowCount, measuredVisualRowCount, measuredLineCount, visualIndexStatus, firstLineIndex }`
