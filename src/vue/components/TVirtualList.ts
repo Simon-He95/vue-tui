@@ -97,7 +97,7 @@ export const TVirtualList = defineComponent({
       default: "off",
     },
   },
-  emits: ["update:modelValue", "change", "scroll", "focus", "blur", "keydown"],
+  emits: ["update:modelValue", "change", "itemClick", "scroll", "focus", "blur", "keydown"],
   setup(props, { emit }) {
     const { terminal, scheduler, render, rendererCapabilities, defaultStyle, events } =
       useTerminal();
@@ -401,6 +401,7 @@ export const TVirtualList = defineComponent({
           if (idx < 0 || idx >= itemCount.value) return;
           active.value = idx;
           emit("update:modelValue", idx);
+          emit("itemClick", { index: idx, value: props.getItem(idx) });
           markViewportDirty();
           invalidateSelf("high");
         },

@@ -21,6 +21,8 @@
 - [TLogSearchPager](#tlogsearchpager)
 - [TLogSearchResults](#tlogsearchresults)
 - [TLogView](#tlogview)
+- [TLogVirtualLinksPanel](#tlogvirtuallinkspanel)
+- [TLogVirtualSearchResults](#tlogvirtualsearchresults)
 - [TMultilineModal](#tmultilinemodal)
 - [TPathPicker](#tpathpicker)
 - [TRenderLayer](#trenderlayer)
@@ -645,6 +647,73 @@
 | <code>blur</code>               | —       | —    |
 | <code>keydown</code>            | —       | —    |
 
+## TLogVirtualLinksPanel
+
+源码：`src/vue/components/TLogVirtualLinksPanel.ts`
+
+### Props
+
+| 名称                         | 类型                                      | 默认值                       | 必填 | 说明 |
+| ---------------------------- | ----------------------------------------- | ---------------------------- | ---- | ---- |
+| <code>x</code>               | <code>number</code>                       | —                            | 是   | —    |
+| <code>y</code>               | <code>number</code>                       | —                            | 是   | —    |
+| <code>w</code>               | <code>number</code>                       | —                            | 是   | —    |
+| <code>h</code>               | <code>number</code>                       | —                            | 是   | —    |
+| <code>zIndex</code>          | <code>number</code>                       | <code>0</code>               | 否   | —    |
+| <code>links</code>           | <code>readonly TLogLinkPanelItem[]</code> | <code>() =&gt; []</code>     | 否   | —    |
+| <code>modelValue</code>      | <code>number</code>                       | <code>-1</code>              | 否   | —    |
+| <code>style</code>           | <code>Style</code>                        | <code>undefined</code>       | 否   | —    |
+| <code>activeStyle</code>     | <code>Style</code>                        | <code>undefined</code>       | 否   | —    |
+| <code>showLineNumbers</code> | <code>boolean</code>                      | <code>true</code>            | 否   | —    |
+| <code>rowScrollMode</code>   | <code>RowScrollMode</code>                | <code>&quot;off&quot;</code> | 否   | —    |
+
+### Events
+
+| 名称                           | Payload | 说明 |
+| ------------------------------ | ------- | ---- |
+| <code>update:modelValue</code> | —       | —    |
+| <code>activeChange</code>      | —       | —    |
+| <code>select</code>            | —       | —    |
+| <code>activate</code>          | —       | —    |
+| <code>focus</code>             | —       | —    |
+| <code>blur</code>              | —       | —    |
+| <code>keydown</code>           | —       | —    |
+| <code>scroll</code>            | —       | —    |
+
+## TLogVirtualSearchResults
+
+源码：`src/vue/components/TLogVirtualSearchResults.ts`
+
+### Props
+
+| 名称                         | 类型                                                                | 默认值                       | 必填 | 说明 |
+| ---------------------------- | ------------------------------------------------------------------- | ---------------------------- | ---- | ---- |
+| <code>x</code>               | <code>number</code>                                                 | —                            | 是   | —    |
+| <code>y</code>               | <code>number</code>                                                 | —                            | 是   | —    |
+| <code>w</code>               | <code>number</code>                                                 | —                            | 是   | —    |
+| <code>h</code>               | <code>number</code>                                                 | —                            | 是   | —    |
+| <code>zIndex</code>          | <code>number</code>                                                 | <code>0</code>               | 否   | —    |
+| <code>itemCount</code>       | <code>number</code>                                                 | —                            | 是   | —    |
+| <code>itemVersion</code>     | <code>number</code>                                                 | —                            | 是   | —    |
+| <code>getItem</code>         | <code>(index: number) =&gt; TLogSearchResultItem &#124; null</code> | —                            | 是   | —    |
+| <code>modelValue</code>      | <code>number</code>                                                 | <code>-1</code>              | 否   | —    |
+| <code>style</code>           | <code>Style</code>                                                  | <code>undefined</code>       | 否   | —    |
+| <code>activeStyle</code>     | <code>Style</code>                                                  | <code>undefined</code>       | 否   | —    |
+| <code>showLineNumbers</code> | <code>boolean</code>                                                | <code>true</code>            | 否   | —    |
+| <code>rowScrollMode</code>   | <code>RowScrollMode</code>                                          | <code>&quot;off&quot;</code> | 否   | —    |
+
+### Events
+
+| 名称                           | Payload | 说明 |
+| ------------------------------ | ------- | ---- |
+| <code>update:modelValue</code> | —       | —    |
+| <code>activeChange</code>      | —       | —    |
+| <code>select</code>            | —       | —    |
+| <code>focus</code>             | —       | —    |
+| <code>blur</code>              | —       | —    |
+| <code>keydown</code>           | —       | —    |
+| <code>scroll</code>            | —       | —    |
+
 ## TMultilineModal
 
 源码：`src/vue/components/TMultilineModal.ts`
@@ -904,6 +973,7 @@
 | ------------------------------ | ------- | ---- |
 | <code>update:modelValue</code> | —       | —    |
 | <code>change</code>            | —       | —    |
+| <code>itemClick</code>         | —       | —    |
 | <code>scroll</code>            | —       | —    |
 | <code>focus</code>             | —       | —    |
 | <code>blur</code>              | —       | —    |

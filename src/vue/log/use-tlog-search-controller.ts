@@ -88,6 +88,8 @@ export function useTLogSearchController(
   refresh: () => void;
   saveCurrentSearch: (label?: string) => TLogSavedSearch | null;
   applySavedSearch: (id: string) => boolean;
+  setSearchHistory: (value: readonly string[]) => void;
+  setSavedSearches: (value: readonly TLogSavedSearch[]) => void;
 } {
   const query = ref(options.initialQuery ?? "");
   const mode = ref<TLogSearchBarMode>(options.initialMode === "regex" ? "regex" : "text");
@@ -249,6 +251,25 @@ export function useTLogSearchController(
     return true;
   }
 
+  function setSearchHistory(value: readonly string[]): void {
+    searchHistory.value = value
+      .map((entry) => String(entry ?? "").trim())
+      .filter(Boolean)
+      .slice(0, historyLimit);
+  }
+
+  function setSavedSearches(value: readonly TLogSavedSearch[]): void {
+    savedSearches.value = value.map((entry) => ({
+      id: String(entry.id),
+      label: entry.label?.trim() || undefined,
+      query: String(entry.query ?? ""),
+      mode: entry.mode === "regex" ? "regex" : "text",
+      caseSensitive: entry.caseSensitive === true,
+      wholeWord: entry.wholeWord === true,
+      regexFlags: entry.regexFlags || undefined,
+    }));
+  }
+
   watch(
     () => logView.value,
     () => {
@@ -282,5 +303,7 @@ export function useTLogSearchController(
     refresh,
     saveCurrentSearch,
     applySavedSearch,
+    setSearchHistory,
+    setSavedSearches,
   };
 }
