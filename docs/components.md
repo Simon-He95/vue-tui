@@ -572,7 +572,7 @@ onMounted(refreshMetrics);
 
 ### Events
 
-- `scroll`: `{ scrollTop, atBottom, lineCount, estimatedVisualRowCount, firstLineIndex }`
+- `scroll`: `{ scrollTop, atBottom, lineCount, estimatedVisualRowCount, visualRowCount, measuredVisualRowCount, measuredLineCount, visualIndexStatus, firstLineIndex }`
 - `update:scrollTop`: `scrollTop`（visual row）
 - `update:searchQuery`: `searchQuery`
 - `search`: `{ query, status, matchCount }`
