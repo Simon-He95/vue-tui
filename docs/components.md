@@ -944,6 +944,7 @@ const {
   clearSearch,
   selectMatch,
 } = search;
+const { state: resultsPageState } = resultsPage;
 
 function refreshSuite() {
   refresh();
@@ -991,8 +992,8 @@ function refreshSuite() {
   :y="1"
   :w="19"
   :h="17"
-  :results="resultsPage.state.results"
-  :active-index="resultsPage.state.activeIndex"
+  :results="resultsPageState.results"
+  :active-index="resultsPageState.activeIndex"
   @select="({ matchIndex }) => selectMatch(matchIndex)"
 />
 
@@ -1000,7 +1001,7 @@ function refreshSuite() {
   :x="61"
   :y="18"
   :w="19"
-  :state="resultsPage.state"
+  :state="resultsPageState"
   @previousPage="resultsPage.previousPage"
   @nextPage="resultsPage.nextPage"
 />

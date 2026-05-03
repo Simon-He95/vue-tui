@@ -192,7 +192,7 @@ export function useTLogSearchController(
     query.value = "";
     searchState.value = normalizeSearchState("");
     markers.value = [];
-    metrics.value = null;
+    metrics.value = logView.value?.getScrollMetrics() ?? null;
     resultsPage.clear();
   }
 

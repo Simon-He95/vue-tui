@@ -107,6 +107,7 @@ const {
   clearSearch,
   selectMatch,
 } = search;
+const { state: resultsPageState } = resultsPage;
 
 const linkController = useTLogLinkController(logView, {
   onAction(action) {
@@ -221,8 +222,8 @@ onMounted(refreshAll);
   :y="1"
   :w="20"
   :h="16"
-  :results="resultsPage.state.results"
-  :active-index="resultsPage.state.activeIndex"
+  :results="resultsPageState.results"
+  :active-index="resultsPageState.activeIndex"
   @select="({ matchIndex }) => selectMatch(matchIndex)"
 />
 
@@ -230,7 +231,7 @@ onMounted(refreshAll);
   :x="61"
   :y="17"
   :w="20"
-  :state="resultsPage.state"
+  :state="resultsPageState"
   @previousPage="resultsPage.previousPage"
   @nextPage="resultsPage.nextPage"
 />
