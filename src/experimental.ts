@@ -3,7 +3,9 @@ export { TLogView } from "./vue/components/TLogView.js";
 export { TLogScrollbar } from "./vue/components/TLogScrollbar.js";
 export { TLogMinimap } from "./vue/components/TLogMinimap.js";
 export { TLogSearchResults } from "./vue/components/TLogSearchResults.js";
+export { TLogSearchPager } from "./vue/components/TLogSearchPager.js";
 export { createAppendOnlyLogStore } from "./vue/log/append-only-log-store.js";
+export { useTLogSearchResultsPage } from "./vue/log/use-tlog-search-results-page.js";
 export type { RowScrollMode } from "./vue/components/TVirtualList.js";
 export type {
   TLogMinimapClickPayload,
@@ -19,6 +21,10 @@ export type {
   TLogScrollbarScrollByPayload,
   TLogScrollbarScrollToPayload,
 } from "./vue/components/TLogScrollbar.js";
+export type {
+  TLogSearchPagerPageChangePayload,
+  TLogSearchPagerState,
+} from "./vue/components/TLogSearchPager.js";
 export type {
   TLogSearchResultItem,
   TLogSearchResultsActiveChangePayload,
@@ -54,3 +60,7 @@ export type {
   TLogViewVisualIndexOptions,
   TLogViewVisualIndexStatus,
 } from "./vue/log/types.js";
+export type {
+  TLogSearchResultsPageState,
+  UseTLogSearchResultsPageOptions,
+} from "./vue/log/use-tlog-search-results-page.js";

@@ -719,9 +719,11 @@ onMounted(refreshOverview);
 
 ### TLogSearchResults
 
-`TLogSearchResults` 是一个 experimental search result panel，用来渲染分页后的搜索结果预览。它只消费外部准备好的 result items，不持有 search state，也不会直接读取 `TLogView` 或 log source。
+`TLogSearchResults` 是一个 experimental search result panel，用来渲染当前页搜索结果预览。它只消费外部准备好的 result items，不持有 search state，也不会直接读取 `TLogView` 或 log source。
 
-- 结果数据建议来自 `logView.value?.getSearchResults({ offset, limit, includePreview: true })`
+- 分页状态建议交给 `useTLogSearchResultsPage`
+- `TLogSearchResults` 仍然只负责结果列表渲染和 row-level 交互
+- `select` payload 里的 `matchIndex` 仍然是 global match index，父组件或 composable 负责调用 `selectSearchMatch(matchIndex)`
 - `includePreview` 默认是 `false`，避免每次 getter 都去读取结果行内容
 - preview 基于 visible text 生成；`ansi=true` 时不会把 ANSI escape sequences 带进结果面板
 - preview 和高亮 offset 都按 cell 计算，因此宽字符场景可以保持匹配位置正确
@@ -732,43 +734,24 @@ onMounted(refreshOverview);
 <script setup lang="ts">
 import { ref } from "vue";
 import {
+  TLogSearchPager,
   TLogSearchResults,
   TLogView,
-  type TLogSearchResultItem,
+  useTLogSearchResultsPage,
   type TLogSearchResultsSelectPayload,
   type TLogViewHandle,
 } from "@simon_he/vue-tui/experimental";
 
 const logView = ref<TLogViewHandle | null>(null);
-const results = ref<readonly TLogSearchResultItem[]>([]);
-const activeIndex = ref(-1);
 const query = ref("ERROR");
-
-function refreshResults() {
-  const raw =
-    logView.value?.getSearchResults({
-      offset: 0,
-      limit: 20,
-      includePreview: true,
-      previewWidth: 60,
-    }) ?? [];
-  const state = logView.value?.getSearchState();
-
-  results.value = raw.map((entry) => ({
-    matchIndex: entry.matchIndex,
-    absoluteLineIndex: entry.match.absoluteLineIndex,
-    lineIndex: entry.match.index,
-    text: entry.preview?.text ?? "",
-    matchStartCell: entry.preview?.matchStartCell ?? 0,
-    matchEndCell: entry.preview?.matchEndCell ?? 0,
-    current: entry.matchIndex === state?.currentMatchIndex,
-  }));
-  activeIndex.value = raw.findIndex((entry) => entry.matchIndex === state?.currentMatchIndex);
-}
+const { state, refresh, previousPage, nextPage, selectResult } = useTLogSearchResultsPage(logView, {
+  pageSize: 20,
+  includePreview: true,
+  previewWidth: 60,
+});
 
 function onSelect(payload: TLogSearchResultsSelectPayload) {
-  logView.value?.selectSearchMatch(payload.matchIndex);
-  refreshResults();
+  selectResult(payload.matchIndex);
 }
 </script>
 
@@ -781,20 +764,42 @@ function onSelect(payload: TLogSearchResultsSelectPayload) {
   :source="log.source"
   :version="log.version"
   :search-query="query"
-  @search="refreshResults"
-  @searchMatch="refreshResults"
+  @search="refresh"
+  @searchMatch="refresh"
 />
 
 <TLogSearchResults
   :x="61"
   :y="0"
   :w="19"
-  :h="20"
-  :results="results"
-  :active-index="activeIndex"
+  :h="19"
+  :results="state.results"
+  :active-index="state.activeIndex"
   @select="onSelect"
 />
+
+<TLogSearchPager
+  :x="61"
+  :y="19"
+  :w="19"
+  :state="state"
+  @previousPage="previousPage"
+  @nextPage="nextPage"
+/>
 ```
+
+### TLogSearchPager
+
+`TLogSearchPager` 是一个 experimental presentational pager companion，用来渲染搜索结果页码、match count 和上一页/下一页控制。它只消费外部传入的分页状态，不会直接读取 `TLogView`，也不会自己调用 search API。
+
+- `idle` 显示 `No search`
+- `scanning` 显示 `Scanning…` 和当前已发现 match count
+- `done + matchCount=0` 显示 `No matches`
+- `error` 显示 `Invalid regex`
+- `done` 显示单行 pager，例如 `◀ 2/13 245 matches ▶`
+- click `◀` / `▶` 和 `ArrowLeft` / `ArrowRight` / `PageUp` / `PageDown` 都只 emit，父组件负责接到 composable 或 handle
+
+`useTLogSearchResultsPage` 负责从 `TLogViewHandle` 拉取当前页结果、同步 page-local `activeIndex`、clamp 页码，并在 `selectResult(matchIndex)` 时调用 `selectSearchMatch(matchIndex)` 后刷新当前页状态。推荐把它和 `TLogSearchResults` / `TLogSearchPager` 一起使用，而不是在父组件里重复手写 `offset`、`pageSize`、`currentMatchIndex` 同步逻辑。
 
 ### Events
 
