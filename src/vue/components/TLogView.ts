@@ -120,6 +120,14 @@ export type TLogViewSearchMatch = Readonly<{
   endCell: number;
   text: string;
 }>;
+export type TLogViewSelectSearchMatchOptions = Readonly<{
+  scroll?: boolean;
+  align?: "start" | "center" | "end";
+}>;
+export type TLogViewSearchResult = Readonly<{
+  matchIndex: number;
+  match: TLogViewSearchMatch;
+}>;
 export type TLogViewSearchState = Readonly<{
   query: string;
   status: TLogSearchStatus;
@@ -196,6 +204,14 @@ export type TLogViewHandle = Readonly<{
   findPrevious: () => void;
   clearSearch: () => void;
   getSearchState: () => TLogViewSearchState;
+  selectSearchMatch: (matchIndex: number, options?: TLogViewSelectSearchMatchOptions) => boolean;
+  getSearchMatch: (matchIndex: number) => TLogViewSearchMatch | null;
+  getSearchResults: (
+    options?: Readonly<{
+      offset?: number;
+      limit?: number;
+    }>,
+  ) => readonly TLogViewSearchResult[];
   measureVisualIndex: () => void;
   getScrollMetrics: () => TLogViewScrollMetrics;
   getSearchMarkers: () => readonly TLogViewSearchMarker[];
@@ -2597,25 +2613,74 @@ export const TLogView = defineComponent({
       return searchMatches.length - 1;
     }
 
-    function scrollToMatch(match: TLogViewSearchMatch): void {
+    function scrollToMatch(
+      match: TLogViewSearchMatch,
+      align: "start" | "center" | "end" = "center",
+    ): void {
       if (!props.wrap) {
-        scrollToLine(match.index, { align: "center" });
+        scrollToLine(match.index, { align });
         return;
       }
 
       const row = visualRowForMatch(match);
-      scrollToVisualRow(row - Math.floor(viewportHeight() / 2));
+      const height = viewportHeight();
+      let target = row;
+      if (align === "center") target = row - Math.floor(height / 2);
+      else if (align === "end") target = row - height + 1;
+      scrollToVisualRow(target);
     }
 
-    function setCurrentMatch(index: number): void {
-      if (index < 0 || index >= searchMatches.length) return;
+    function setCurrentMatch(index: number, options?: TLogViewSelectSearchMatchOptions): boolean {
+      if (index < 0 || index >= searchMatches.length) return false;
       currentMatchIndex = index;
       emitSearchMatch();
       invalidateSearchMarkers();
       emitSearchMarkers(true);
-      scrollToMatch(searchMatches[index]!);
+      if (options?.scroll !== false) {
+        scrollToMatch(searchMatches[index]!, options?.align ?? "center");
+      }
       markViewportDirty();
       invalidateSelf("high", "data");
+      return true;
+    }
+
+    function normalizeSearchMatchIndex(matchIndex: number): number | null {
+      const index = Math.floor(Number(matchIndex));
+      return Number.isFinite(index) ? index : null;
+    }
+
+    function selectSearchMatch(
+      matchIndex: number,
+      options?: TLogViewSelectSearchMatchOptions,
+    ): boolean {
+      const index = normalizeSearchMatchIndex(matchIndex);
+      if (index == null) return false;
+      return setCurrentMatch(index, options);
+    }
+
+    function getSearchMatch(matchIndex: number): TLogViewSearchMatch | null {
+      const index = normalizeSearchMatchIndex(matchIndex);
+      if (index == null) return null;
+      return searchMatches[index] ?? null;
+    }
+
+    function getSearchResults(
+      options?: Readonly<{
+        offset?: number;
+        limit?: number;
+      }>,
+    ): readonly TLogViewSearchResult[] {
+      const rawOffset = Number(options?.offset ?? 0);
+      const rawLimit = Number(options?.limit ?? searchMatches.length);
+      const offset = Number.isFinite(rawOffset) ? Math.max(0, Math.floor(rawOffset)) : 0;
+      const limit = Number.isFinite(rawLimit)
+        ? Math.max(0, Math.floor(rawLimit))
+        : searchMatches.length;
+
+      return searchMatches.slice(offset, offset + limit).map((match, index) => ({
+        matchIndex: offset + index,
+        match,
+      }));
     }
 
     function findNext(): void {
@@ -2624,7 +2689,7 @@ export const TLogView = defineComponent({
         currentMatchIndex < 0
           ? firstMatchAtOrAfterViewport()
           : (currentMatchIndex + 1) % searchMatches.length;
-      setCurrentMatch(next);
+      selectSearchMatch(next);
     }
 
     function findPrevious(): void {
@@ -2633,7 +2698,7 @@ export const TLogView = defineComponent({
         currentMatchIndex < 0
           ? lastMatchAtOrBeforeViewport()
           : (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
-      setCurrentMatch(previous);
+      selectSearchMatch(previous);
     }
 
     function clearSearch(): void {
@@ -2674,6 +2739,9 @@ export const TLogView = defineComponent({
       findPrevious,
       clearSearch,
       getSearchState,
+      selectSearchMatch,
+      getSearchMatch,
+      getSearchResults,
       measureVisualIndex,
       getScrollMetrics,
       getSearchMarkers,

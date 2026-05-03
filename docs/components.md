@@ -435,9 +435,11 @@ type TLogDataSource = {
 
 `links=true` 只在 `ansi=true` 时生效。TLogView 会解析 OSC8 opener/closer，忽略 params，把 visible link text 渲染为带 `Style.href` 的 cells，并叠加 `linkStyle`。BEL 和 ST terminator 都支持。组件不会自动打开链接、不会做 URL auto-detect、不会解析 Markdown link，也不会提供 hover tooltip；点击 visible link cell 时只 emit `linkClick`，由应用层决定如何处理。
 
-`searchQuery` 只搜索 visible text。`ansi=true` 时，ANSI escape sequences 不参与搜索，也不会污染 match offset；match highlight 会叠加在 ANSI style 上。match 坐标使用 terminal cell offset，因此宽字符会按 cell width 定位。`wrap=true` 时，`findNext()` / `findPrevious()` 会滚动到 match 所在 visual row。搜索范围始终是当前 retained source window；retention trim、append、tail mutation、source 或 version 变化后会基于当前窗口重新扫描。
+`searchQuery` 只搜索 visible text。`ansi=true` 时，ANSI escape sequences 不参与搜索，也不会污染 match offset；match highlight 会叠加在 ANSI style 上。match 坐标使用 terminal cell offset，因此宽字符会按 cell width 定位。`wrap=true` 时，`findNext()` / `findPrevious()` / `selectSearchMatch()` 都会滚动到 match 所在 visual row。搜索范围始终是当前 retained source window；retention trim、append、tail mutation、source 或 version 变化后会基于当前窗口重新扫描。
 
 `getSearchMarkers()` 会把当前 search matches 投影成 scrollbar-friendly marker 数据：`visualRow` 仍然是 retained window 内的 visual-row index，`absoluteLineIndex` 保留原始 logical line 编号，`estimated` 用来区分 lazy visual index 和 exact visual index，`current` 表示当前 match。这个方法只基于当前 search/visual index 状态计算 markers，不会为了 marker 数据强制做一次全量 exact measurement。
+
+当外部 UI（例如 scrollbar marker、后续的 search result panel）需要把某个 match 设为 current match 时，应该调用 `selectSearchMatch(matchIndex)`。`scrollToVisualRow(marker.visualRow)` 只会移动 viewport，不会更新 `currentMatchIndex`，也不会切换 current marker / `currentMatchStyle` 或按新的 current match 继续 `findNext()` / `findPrevious()`。`getSearchMatch()` 和 `getSearchResults()` 只返回 lightweight match 引用，不会触发滚动、事件或 preview 生成；`getSearchResults()` 当前也不会生成 line preview/snippet。
 
 `searchOptions.wholeWord` 使用 ASCII word boundary：`[A-Za-z0-9_]`。例如 `error-1` 中的 `error` 会被视为 whole-word match，而 `_error` 不会。
 
@@ -564,7 +566,9 @@ function onMarkerClick(payload: {
 }) {
   const marker = payload.marker.payload;
   if (!marker) return;
-  logView.value?.scrollToVisualRow(marker.visualRow);
+  logView.value?.selectSearchMatch(marker.matchIndex, {
+    align: "center",
+  });
   refreshMetrics();
 }
 

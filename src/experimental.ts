@@ -15,11 +15,13 @@ export type {
   TLogViewLinkClickPayload,
   TLogViewScrollMetrics,
   TLogViewSearchMatch,
+  TLogViewSearchResult,
   TLogViewSearchMarker,
   TLogViewSearchMarkersPayload,
   TLogViewSearchMatchPayload,
   TLogViewSearchOptions,
   TLogViewSearchPayload,
+  TLogViewSelectSearchMatchOptions,
   TLogViewSearchState,
   TLogViewVisualIndexPayload,
 } from "./vue/components/TLogView.js";
