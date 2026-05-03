@@ -21,10 +21,30 @@ export type AppendOnlyLogStore = Readonly<{
   clear: () => void;
 }>;
 
+export type TLogViewVisualIndexStatus = "estimated" | "measuring" | "exact";
+
+export type TLogViewVisualIndexOptions = Readonly<{
+  /**
+   * Max time spent measuring wrapped visual rows in one scheduler frame.
+   * Default: 4ms.
+   */
+  measureBudgetMs?: number;
+
+  /**
+   * Optional retained-window cap for exact visual index work.
+   * Undefined means measure the whole retained source window.
+   */
+  maxMeasuredLines?: number;
+}>;
+
 export type TLogViewScrollPayload = Readonly<{
   scrollTop: number;
   atBottom: boolean;
   lineCount: number;
   estimatedVisualRowCount: number;
+  visualRowCount: number;
+  measuredVisualRowCount: number;
+  measuredLineCount: number;
+  visualIndexStatus: TLogViewVisualIndexStatus;
   firstLineIndex?: number;
 }>;
