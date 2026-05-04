@@ -290,6 +290,7 @@ export const TVirtualMarkdown = defineComponent({
         const baseStyle = props.style ?? defaultStyle.value;
         const { x: clipX, y: clipY } = clipOffsets();
         const paintRow = (y: number) => {
+          if (y < r.y || y >= r.y + r.h) return;
           const visualIndex = internalScrollTop.value + clipY + (y - r.y);
           paintMarkdownVisualRow(terminal, rows.value[visualIndex], {
             x: r.x,

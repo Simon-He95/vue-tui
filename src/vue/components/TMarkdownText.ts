@@ -107,7 +107,8 @@ export const TMarkdownText = defineComponent({
         const baseStyle = props.style ?? defaultStyle.value;
         const clipStart = Math.max(0, Math.floor(r.x - full.x));
         const paintRow = (y: number) => {
-          const rowIndex = Math.max(0, Math.floor(y - full.y));
+          if (y < r.y || y >= r.y + r.h) return;
+          const rowIndex = Math.floor(y - full.y);
           const row = rows.value[rowIndex];
           if (!row && !props.clear) return;
           paintMarkdownVisualRow(terminal, row, {

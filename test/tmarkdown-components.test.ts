@@ -172,4 +172,72 @@ describe("markdown components", () => {
     expect(rowText(mounted, 0)).toBe("hiCDEFGHIJKL");
     mounted.unmount();
   });
+
+  it("does not paint TMarkdownText outside its rect when dirty rows include other components", async () => {
+    const top = ref("top-a");
+    const markdown = ref("**markdown-a**");
+    const mounted = await mountTerminal(
+      () => [
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 1,
+          content: top.value,
+        }),
+        h(TMarkdownText, {
+          x: 0,
+          y: 3,
+          w: 20,
+          h: 1,
+          content: markdown.value,
+        }),
+      ],
+      20,
+      6,
+    );
+
+    top.value = "top-b";
+    markdown.value = "**markdown-b**";
+    await nextTick();
+    await nextTick();
+
+    expect(rowText(mounted, 0)).toBe("top-b");
+    expect(rowText(mounted, 3)).toBe("markdown-b");
+    mounted.unmount();
+  });
+
+  it("does not let TVirtualMarkdown clear rows outside its rect when dirty rows include other components", async () => {
+    const top = ref("top-a");
+    const markdown = ref(Array.from({ length: 8 }, (_, index) => `- item-${index}`).join("\n"));
+    const mounted = await mountTerminal(
+      () => [
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 1,
+          content: top.value,
+        }),
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 2,
+          w: 20,
+          h: 3,
+          content: markdown.value,
+        }),
+      ],
+      20,
+      6,
+    );
+
+    top.value = "top-b";
+    markdown.value = Array.from({ length: 8 }, (_, index) => `- next-${index}`).join("\n");
+    await nextTick();
+    await nextTick();
+
+    expect(rowText(mounted, 0)).toBe("top-b");
+    expect([2, 3, 4].map((y) => rowText(mounted, y))).toEqual(["- next-0", "- next-1", "- next-2"]);
+    mounted.unmount();
+  });
 });
