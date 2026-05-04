@@ -2,8 +2,20 @@ import type { Style, Terminal } from "../../core/types.js";
 import { sliceByCellsRange, spaces, textCellWidth } from "../utils/text.js";
 import type { TuiMarkdownVisualRow } from "./types.js";
 
+const mergedStyleCache = new WeakMap<Style, WeakMap<Style, Style>>();
+
 function mergeStyle(base: Style, overlay?: Style): Style {
-  return overlay ? { ...base, ...overlay } : base;
+  if (!overlay) return base;
+  let bucket = mergedStyleCache.get(base);
+  if (!bucket) {
+    bucket = new WeakMap<Style, Style>();
+    mergedStyleCache.set(base, bucket);
+  }
+  const cached = bucket.get(overlay);
+  if (cached) return cached;
+  const merged = Object.freeze({ ...base, ...overlay });
+  bucket.set(overlay, merged);
+  return merged;
 }
 
 export function paintMarkdownVisualRow(

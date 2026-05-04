@@ -97,11 +97,10 @@ export const TMarkdownText = defineComponent({
         reason: props.streaming ? "stream" : "data",
         priority: props.streaming ? "low" : "normal",
         sync: false,
-        run: (ctx) => {
+        run: () => {
           if (!alive) return;
           if (currentVersion !== rebuildVersion) return;
           rebuildRows();
-          ctx.invalidate({ reason: props.streaming ? "stream" : "data" });
         },
       });
     }

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type { Terminal } from "../src/index.js";
 import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
 import { buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
 import { layoutMarkdownBlocks } from "../src/vue/markdown/layout.js";
 import { createTuiMarkdownParser } from "../src/vue/markdown/parser.js";
+import { paintMarkdownVisualRow } from "../src/vue/markdown/render.js";
 import { DEFAULT_TUI_MARKDOWN_THEME } from "../src/vue/markdown/theme.js";
 
 describe("markdown layout", () => {
@@ -146,5 +148,30 @@ describe("markdown layout", () => {
     expect(
       orderedRows.some((row) => row.plainText.includes("a") || row.plainText.includes("100")),
     ).toBe(true);
+  });
+
+  it("reuses merged style objects across markdown paints", () => {
+    const writes: Array<{ text: string; style: unknown }> = [];
+    const terminal = {
+      write(text: string, opts?: { style?: unknown }) {
+        writes.push({ text, style: opts?.style });
+      },
+    } as unknown as Terminal;
+    const baseStyle = Object.freeze({ fg: "white" });
+    const overlayStyle = Object.freeze({ bold: true });
+    const row = {
+      key: "row-1",
+      blockKey: "block-1",
+      rowInBlock: 0,
+      plainText: "a",
+      segments: [{ text: "a", cells: 1, style: overlayStyle }],
+    };
+
+    paintMarkdownVisualRow(terminal, row, { x: 0, y: 0, w: 1, baseStyle });
+    paintMarkdownVisualRow(terminal, row, { x: 0, y: 1, w: 1, baseStyle });
+
+    expect(writes).toHaveLength(2);
+    expect(writes[0]?.style).toBe(writes[1]?.style);
+    expect(writes[0]?.style).toMatchObject({ fg: "white", bold: true });
   });
 });

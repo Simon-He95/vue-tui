@@ -93,6 +93,43 @@ describe("TVirtualMarkdown performance", () => {
     mounted.unmount();
   });
 
+  it("emits a single viewport commit for a coalesced TVirtualMarkdown streaming rebuild", async () => {
+    const content = ref("- row-0");
+    const { TVirtualMarkdown } = await import("../src/experimental.js");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          content: content.value,
+          streaming: true,
+        }),
+      24,
+      8,
+    );
+
+    await nextTick();
+    await nextTick();
+
+    const commits: Array<readonly number[] | null> = [];
+    const off = mounted.terminal.on("commit", ({ dirtyRows }) => {
+      commits.push(dirtyRows);
+    });
+
+    content.value = "- row-0\n- row-1";
+    content.value = "- row-0\n- row-1\n- row-2";
+    content.value = "- row-0\n- row-1\n- row-2\n- row-3";
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(commits).toHaveLength(1);
+    expect(commits[0]?.join(",")).toBe("0,1,2,3");
+    mounted.unmount();
+  });
+
   it("coalesces multiple streaming updates for TMarkdownText into one rebuild per frame", async () => {
     const content = ref("- row-0");
     const mounted = await mountTerminal(
@@ -121,6 +158,42 @@ describe("TVirtualMarkdown performance", () => {
     await nextTick();
 
     expect(buildSpy.mock.calls.length).toBe(before + 1);
+    mounted.unmount();
+  });
+
+  it("emits a single viewport commit for a coalesced TMarkdownText streaming rebuild", async () => {
+    const content = ref("- row-0");
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          content: content.value,
+          streaming: true,
+        }),
+      24,
+      8,
+    );
+
+    await nextTick();
+    await nextTick();
+
+    const commits: Array<readonly number[] | null> = [];
+    const off = mounted.terminal.on("commit", ({ dirtyRows }) => {
+      commits.push(dirtyRows);
+    });
+
+    content.value = "- row-0\n- row-1";
+    content.value = "- row-0\n- row-1\n- row-2";
+    content.value = "- row-0\n- row-1\n- row-2\n- row-3";
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(commits).toHaveLength(1);
+    expect(commits[0]?.join(",")).toBe("0,1,2,3");
     mounted.unmount();
   });
 });
