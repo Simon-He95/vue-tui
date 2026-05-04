@@ -15,7 +15,9 @@ describe("package exports", () => {
     const root = await import("../src/index.js");
     const experimental = await import("../src/experimental.js");
 
+    expect(root.TMarkdownText).toBeTruthy();
     expect("TVirtualList" in root).toBe(false);
+    expect("TVirtualMarkdown" in root).toBe(false);
     expect("TLogView" in root).toBe(false);
     expect("TLogScrollbar" in root).toBe(false);
     expect("TLogMinimap" in root).toBe(false);
@@ -30,6 +32,7 @@ describe("package exports", () => {
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
     expect(experimental.TVirtualList).toBeTruthy();
+    expect(experimental.TVirtualMarkdown).toBeTruthy();
     expect(experimental.TLogView).toBeTruthy();
     expect(experimental.TLogScrollbar).toBeTruthy();
     expect(experimental.TLogMinimap).toBeTruthy();

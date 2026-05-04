@@ -1,4 +1,5 @@
 export { TVirtualList } from "./vue/components/TVirtualList.js";
+export { TVirtualMarkdown } from "./vue/components/TVirtualMarkdown.js";
 export { TLogView } from "./vue/components/TLogView.js";
 export { TLogScrollbar } from "./vue/components/TLogScrollbar.js";
 export { TLogMinimap } from "./vue/components/TLogMinimap.js";

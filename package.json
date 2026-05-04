@@ -72,6 +72,9 @@
     "bench:vfor": "tsx scripts/bench-vfor.ts",
     "bench:phase2": "tsx scripts/bench-phase2.ts"
   },
+  "dependencies": {
+    "stream-markdown-parser": "^0.0.90"
+  },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@types/node": "^18.19.130",

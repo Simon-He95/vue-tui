@@ -32,6 +32,7 @@ export { TPathPicker } from "./components/TPathPicker.js";
 export { TRenderLayer } from "./components/TRenderLayer.js";
 export { TRenderPlane } from "./components/TRenderPlane.js";
 export { TSelect } from "./components/TSelect.js";
+export { TMarkdownText } from "./components/TMarkdownText.js";
 export type {
   SelectOption,
   TSelectMultipleChangePayload,
@@ -47,6 +48,7 @@ export { useTerminalRuntime } from "./composables/use-runtime.js";
 export { useTerminalNode } from "./composables/use-terminal-node.js";
 export { useTerminal } from "./composables/use-terminal.js";
 export { useVisibility } from "./composables/use-visibility.js";
+export type { TuiMarkdownTheme, TuiMarkdownThemeOverrides } from "./markdown/theme.js";
 
 export type {
   LayoutContext,

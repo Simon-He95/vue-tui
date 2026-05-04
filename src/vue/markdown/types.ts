@@ -1,0 +1,49 @@
+import type { Style } from "../../core/types.js";
+
+export type TuiMarkdownInlineSegment = Readonly<{
+  text: string;
+  style?: Style;
+  hardBreak?: boolean;
+}>;
+
+export type TuiMarkdownBlock =
+  | Readonly<{
+      type: "inline";
+      key: string;
+      segments: readonly TuiMarkdownInlineSegment[];
+      prefixSegments?: readonly TuiMarkdownInlineSegment[];
+      continuationPrefixSegments?: readonly TuiMarkdownInlineSegment[];
+    }>
+  | Readonly<{
+      type: "code_block";
+      key: string;
+      lines: readonly string[];
+      style?: Style;
+      prefixSegments?: readonly TuiMarkdownInlineSegment[];
+      continuationPrefixSegments?: readonly TuiMarkdownInlineSegment[];
+    }>
+  | Readonly<{
+      type: "thematic_break";
+      key: string;
+      char?: string;
+      style?: Style;
+      prefixSegments?: readonly TuiMarkdownInlineSegment[];
+    }>
+  | Readonly<{
+      type: "blank";
+      key: string;
+    }>;
+
+export type TuiMarkdownVisualSegment = Readonly<{
+  text: string;
+  style?: Style;
+  cells: number;
+}>;
+
+export type TuiMarkdownVisualRow = Readonly<{
+  key: string;
+  blockKey: string;
+  rowInBlock: number;
+  plainText: string;
+  segments: readonly TuiMarkdownVisualSegment[];
+}>;
