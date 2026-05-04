@@ -304,6 +304,7 @@ export function createStdoutRenderer(
   }
 
   let styleKeyCache = new WeakMap<Style, number>();
+  const HREF_STYLE_FLAG = 1 << 21;
   function styleKey(style: Style): number {
     const cached = styleKeyCache.get(style);
     if (cached !== undefined) return cached;
@@ -315,7 +316,7 @@ export function createStdoutRenderer(
       (style.italic ? 1 << 18 : 0) |
       (style.underline ? 1 << 19 : 0) |
       (style.inverse ? 1 << 20 : 0) |
-      (style.href ? 1 << 21 : 0);
+      (style.href ? HREF_STYLE_FLAG : 0);
     styleKeyCache.set(style, key);
     return key;
   }
@@ -340,8 +341,12 @@ export function createStdoutRenderer(
       (style.italic ? 1 << 18 : 0) |
       (style.underline ? 1 << 19 : 0) |
       (style.inverse ? 1 << 20 : 0) |
-      (style.href ? 1 << 21 : 0)
+      (style.href ? HREF_STYLE_FLAG : 0)
     );
+  }
+
+  function normalizeHref(value: unknown): string | null {
+    return typeof value === "string" && value ? value : null;
   }
 
   function openColor(fg?: string): string {
@@ -408,9 +413,13 @@ export function createStdoutRenderer(
   let fpRows = 0;
   let currentFP = new Uint32Array(0);
   let prevFP = new Uint32Array(0);
+  let currentHrefIds = new Uint32Array(0);
+  let prevHrefIds = new Uint32Array(0);
   let fpPrevValid = false;
   let prevOverlayBlockedRows: readonly number[] = [];
   let prevOverlayPartialRows: readonly number[] = [];
+  const hrefIndex = new Map<string, number>();
+  let nextHrefId = 1;
   function ensureFingerprints(cols: number, rows: number): void {
     if (cols === fpCols && rows === fpRows) return;
     fpCols = cols;
@@ -418,6 +427,8 @@ export function createStdoutRenderer(
     const len = cols * rows;
     currentFP = new Uint32Array(len);
     prevFP = new Uint32Array(len);
+    currentHrefIds = new Uint32Array(len);
+    prevHrefIds = new Uint32Array(len);
     fpPrevValid = false;
     prevOverlayBlockedRows = [];
     prevOverlayPartialRows = [];
@@ -431,19 +442,37 @@ export function createStdoutRenderer(
     }
     return h & 0x3ff;
   }
+
+  function hrefId(href: string | null): number {
+    if (!href) return 0;
+    const cached = hrefIndex.get(href);
+    if (cached != null) return cached;
+    const id = nextHrefId++;
+    hrefIndex.set(href, id);
+    return id;
+  }
+
+  function cellFingerprint(ch: string, style: Style): number {
+    return (styleKey(style) << 10) | charHash10(ch);
+  }
+
   function fingerprintRow(row: readonly Cell[], y: number, cols: number): void {
     // Fast path: use pre-computed SoA fingerprints from composite buffer.
     // This is a TypedArray.set() copy instead of per-cell property access + hash.
     const rowFP = terminal.getRowFingerprints(y);
-    if (rowFP && rowFP.length >= cols) {
-      currentFP.set(rowFP.subarray(0, cols), y * fpCols);
-      return;
-    }
-    // Fallback: compute per-cell fingerprints
     const base = y * fpCols;
+    if (rowFP && rowFP.length >= cols) {
+      currentFP.set(rowFP.subarray(0, cols), base);
+    } else {
+      // Fallback: compute per-cell fingerprints
+      for (let x = 0; x < cols; x++) {
+        const cell = row[x]!;
+        currentFP[base + x] = cellFingerprint(cell.ch, cell.style);
+      }
+    }
     for (let x = 0; x < cols; x++) {
       const cell = row[x]!;
-      currentFP[base + x] = (styleKey(cell.style) << 10) | charHash10(cell.ch);
+      currentHrefIds[base + x] = hrefId(normalizeHref(cell.style.href));
     }
   }
   const rowCursorToCol1: string[] = [];
@@ -501,7 +530,8 @@ export function createStdoutRenderer(
     let startX = -1;
     let endXExclusive = -1;
     for (let x = 0; x < cols; x++) {
-      if (currentFP[base + x] === prevFP[base + x]) continue;
+      if (currentFP[base + x] === prevFP[base + x] && currentHrefIds[base + x] === prevHrefIds[base + x])
+        continue;
       if (startX === -1) startX = x;
       endXExclusive = x + 1;
     }
@@ -555,11 +585,12 @@ export function createStdoutRenderer(
     let startX = -1;
     let endXExclusive = -1;
     for (let x = 0; x < cols; x++) {
+      const rowHrefId = hrefId(normalizeHref(row[x]!.style.href));
       const fingerprint =
         rowFP && rowFP.length >= cols
           ? rowFP[x]!
-          : (styleKey(row[x]!.style) << 10) | charHash10(row[x]!.ch);
-      if (fingerprint === currentFP[base + x]) continue;
+          : cellFingerprint(row[x]!.ch, row[x]!.style);
+      if (fingerprint === currentFP[base + x] && rowHrefId === currentHrefIds[base + x]) continue;
       if (startX === -1) startX = x;
       endXExclusive = x + 1;
     }
@@ -581,11 +612,12 @@ export function createStdoutRenderer(
     const row = rowFP && rowFP.length >= cols ? null : (terminal.getRow(y) as Cell[]);
     const base = y * fpCols;
     for (let x = 0; x < cols; x++) {
+      const rowHrefId = hrefId(normalizeHref((row ?? terminal.getRow(y) as Cell[])[x]!.style.href));
       const fingerprint =
         rowFP && rowFP.length >= cols
           ? rowFP[x]!
-          : (styleKey(row![x]!.style) << 10) | charHash10(row![x]!.ch);
-      if (fingerprint !== prevFP[base + x]) return false;
+          : cellFingerprint(row![x]!.ch, row![x]!.style);
+      if (fingerprint !== prevFP[base + x] || rowHrefId !== prevHrefIds[base + x]) return false;
     }
     return true;
   };
@@ -809,7 +841,10 @@ export function createStdoutRenderer(
         const prevBase = srcY * fpCols;
         let rowMatch = true;
         for (let x = 0; x < cols; x++) {
-          if (currentFP[curBase + x] !== prevFP[prevBase + x]) {
+          if (
+            currentFP[curBase + x] !== prevFP[prevBase + x] ||
+            currentHrefIds[curBase + x] !== prevHrefIds[prevBase + x]
+          ) {
             rowMatch = false;
             break;
           }
@@ -844,7 +879,10 @@ export function createStdoutRenderer(
           const prevBase = srcY * fpCols;
           let rowMatch = true;
           for (let x = 0; x < cols; x++) {
-            if (currentFP[curBase + x] !== prevFP[prevBase + x]) {
+            if (
+              currentFP[curBase + x] !== prevFP[prevBase + x] ||
+              currentHrefIds[curBase + x] !== prevHrefIds[prevBase + x]
+            ) {
               rowMatch = false;
               break;
             }
@@ -941,12 +979,11 @@ export function createStdoutRenderer(
     const bgOnlyStyle: Style = { bg: defaultBg };
     const bgKey = styleKeyFromParts({ bg: defaultBg });
     const blankFP = (bgKey << 10) | charHash10(" ");
-    const cellFingerprint = (cell: Cell): number =>
-      (styleKey(cell.style) << 10) | charHash10(cell.ch);
+    const cellFP = (cell: Cell): number => cellFingerprint(cell.ch, cell.style);
     const lastOccupiedColumnInRow = (row: readonly Cell[], cols: number): number => {
       const limit = Math.min(row.length, cols);
       for (let x = limit - 1; x >= 0; x--) {
-        if (cellFingerprint(row[x]!) !== blankFP) return x;
+        if (cellFP(row[x]!) !== blankFP) return x;
       }
       return -1;
     };
@@ -1009,6 +1046,7 @@ export function createStdoutRenderer(
       // Preserve untouched rows so the next frame still compares against the
       // full previous screen, not just the rows repainted in this frame.
       currentFP.set(prevFP);
+      currentHrefIds.set(prevHrefIds);
     }
     // Build entire frame as a single string - NO async, NO multiple writes.
     // Use synchronized output mode (DEC 2026) to prevent flickering (if enabled).
@@ -1056,13 +1094,13 @@ export function createStdoutRenderer(
         italic: Boolean(style.italic),
         underline: Boolean(style.underline),
         inverse: Boolean(style.inverse),
-        href: typeof style.href === "string" && style.href ? style.href : null,
+        href: normalizeHref(style.href),
       };
     };
 
     const emitStyle = (nextStyle: Style, nextKey: number): void => {
-      if (activeStyleKey === nextKey) return;
       const next = normalizeStyle(nextStyle);
+      if (activeStyleKey === nextKey && activeStyle.href === next.href) return;
 
       if (enableOsc8Links && activeStyle.href !== next.href) {
         if (activeStyle.href) frameParts.push(OSC8_CLOSE);
@@ -1143,7 +1181,7 @@ export function createStdoutRenderer(
           }
           continue;
         }
-        if (key === currentKey && !(key & 0x8000 && nextStyle.href !== currentStyle?.href)) {
+        if (key === currentKey && normalizeHref(nextStyle.href) === normalizeHref(currentStyle?.href)) {
           currentTextParts.push(ch);
           if (needsWideCursorFix(cell, ch)) {
             currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);
@@ -1277,7 +1315,10 @@ export function createStdoutRenderer(
 
     let scrollHandled = false;
     if (enableScrollRegions && explicitScrollOperations && scrollRowsCandidate && fpPrevValid) {
-      if (currentFP.length === prevFP.length) currentFP.set(prevFP);
+      if (currentFP.length === prevFP.length) {
+        currentFP.set(prevFP);
+        currentHrefIds.set(prevHrefIds);
+      }
 
       const insertedRows = new Set<number>();
       const explicitRowsToRender = new Set<number>();
@@ -1300,13 +1341,19 @@ export function createStdoutRenderer(
           for (let y = op.startY; y < op.endY - op.delta; y++) {
             const dstBase = y * fpCols;
             const srcBase = (y + op.delta) * fpCols;
-            for (let x = 0; x < size.cols; x++) currentFP[dstBase + x] = prevFP[srcBase + x]!;
+            for (let x = 0; x < size.cols; x++) {
+              currentFP[dstBase + x] = prevFP[srcBase + x]!;
+              currentHrefIds[dstBase + x] = prevHrefIds[srcBase + x]!;
+            }
           }
           for (let y = op.endY - op.delta; y < op.endY; y++) {
             const base = y * fpCols;
             insertedRows.add(y);
             explicitRowsToRender.add(y);
-            for (let x = 0; x < size.cols; x++) currentFP[base + x] = blankFP;
+            for (let x = 0; x < size.cols; x++) {
+              currentFP[base + x] = blankFP;
+              currentHrefIds[base + x] = 0;
+            }
           }
         } else {
           const absDelta = -op.delta;
@@ -1315,13 +1362,19 @@ export function createStdoutRenderer(
           for (let y = op.endY - 1; y >= op.startY + absDelta; y--) {
             const dstBase = y * fpCols;
             const srcBase = (y - absDelta) * fpCols;
-            for (let x = 0; x < size.cols; x++) currentFP[dstBase + x] = prevFP[srcBase + x]!;
+            for (let x = 0; x < size.cols; x++) {
+              currentFP[dstBase + x] = prevFP[srcBase + x]!;
+              currentHrefIds[dstBase + x] = prevHrefIds[srcBase + x]!;
+            }
           }
           for (let y = op.startY; y < op.startY + absDelta; y++) {
             const base = y * fpCols;
             insertedRows.add(y);
             explicitRowsToRender.add(y);
-            for (let x = 0; x < size.cols; x++) currentFP[base + x] = blankFP;
+            for (let x = 0; x < size.cols; x++) {
+              currentFP[base + x] = blankFP;
+              currentHrefIds[base + x] = 0;
+            }
           }
         }
         frameParts.push("\u001B[r");
@@ -1383,7 +1436,10 @@ export function createStdoutRenderer(
       }
       const shift = detectScrollShift(size.cols, scrollRowsCandidate, overlayRows);
       if (shift) {
-        if (currentFP.length === prevFP.length) currentFP.set(prevFP);
+        if (currentFP.length === prevFP.length) {
+          currentFP.set(prevFP);
+          currentHrefIds.set(prevHrefIds);
+        }
 
         hasFrameOutput = true;
         if (isDebugEnabled()) {
@@ -1409,22 +1465,34 @@ export function createStdoutRenderer(
           for (let y = shift.regionStart; y < shift.regionEnd - shift.delta; y++) {
             const dstBase = y * fpCols;
             const srcBase = (y + shift.delta) * fpCols;
-            for (let x = 0; x < size.cols; x++) currentFP[dstBase + x] = prevFP[srcBase + x]!;
+            for (let x = 0; x < size.cols; x++) {
+              currentFP[dstBase + x] = prevFP[srcBase + x]!;
+              currentHrefIds[dstBase + x] = prevHrefIds[srcBase + x]!;
+            }
           }
           for (let y = shift.regionEnd - shift.delta; y < shift.regionEnd; y++) {
             const base = y * fpCols;
-            for (let x = 0; x < size.cols; x++) currentFP[base + x] = blankFP;
+            for (let x = 0; x < size.cols; x++) {
+              currentFP[base + x] = blankFP;
+              currentHrefIds[base + x] = 0;
+            }
           }
         } else {
           const absDelta = -shift.delta;
           for (let y = shift.regionEnd - 1; y >= shift.regionStart + absDelta; y--) {
             const dstBase = y * fpCols;
             const srcBase = (y - absDelta) * fpCols;
-            for (let x = 0; x < size.cols; x++) currentFP[dstBase + x] = prevFP[srcBase + x]!;
+            for (let x = 0; x < size.cols; x++) {
+              currentFP[dstBase + x] = prevFP[srcBase + x]!;
+              currentHrefIds[dstBase + x] = prevHrefIds[srcBase + x]!;
+            }
           }
           for (let y = shift.regionStart; y < shift.regionStart + absDelta; y++) {
             const base = y * fpCols;
-            for (let x = 0; x < size.cols; x++) currentFP[base + x] = blankFP;
+            for (let x = 0; x < size.cols; x++) {
+              currentFP[base + x] = blankFP;
+              currentHrefIds[base + x] = 0;
+            }
           }
         }
 
@@ -1553,6 +1621,9 @@ export function createStdoutRenderer(
     const tmpFP = prevFP;
     prevFP = currentFP;
     currentFP = tmpFP;
+    const tmpHrefIds = prevHrefIds;
+    prevHrefIds = currentHrefIds;
+    currentHrefIds = tmpHrefIds;
     fpPrevValid = true;
     prevOverlayBlockedRows = overlayCoverage.blockedRows;
     prevOverlayPartialRows = overlayCoverage.partialRows;
@@ -1928,7 +1999,7 @@ export function createStdoutRenderer(
   // This enables SoA pre-computation: fingerprints are computed during composeRows()
   // and fingerprintRow() becomes a TypedArray copy instead of per-cell hash computation.
   terminal.setFingerprintFn((ch: string, style: Style) => {
-    return (styleKey(style) << 10) | charHash10(ch);
+    return cellFingerprint(ch, style);
   });
 
   // Initial setup - these are one-time writes, not part of render loop

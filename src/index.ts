@@ -167,6 +167,8 @@ export type {
   TerminalScheduler,
   TerminalSchedulerConfig,
   TerminalSchedulerInvalidateOptions,
+  TuiMarkdownTheme,
+  TuiMarkdownThemeOverrides,
   TInputHostAdapter,
   TInputPlugin,
   TInputPluginContext,

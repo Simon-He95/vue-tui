@@ -1,0 +1,327 @@
+import { describe, expect, it, vi } from "vitest";
+import type { ParsedNode } from "stream-markdown-parser";
+import type { Terminal } from "../src/index.js";
+import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
+import { buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
+import { layoutMarkdownBlocks } from "../src/vue/markdown/layout.js";
+import { createTuiMarkdownParser, type TuiMarkdownParser } from "../src/vue/markdown/parser.js";
+import { paintMarkdownVisualRow } from "../src/vue/markdown/render.js";
+import { DEFAULT_TUI_MARKDOWN_THEME } from "../src/vue/markdown/theme.js";
+
+describe("markdown layout", () => {
+  it("maps headings, links, and unsafe links into terminal blocks", () => {
+    const parser = createTuiMarkdownParser();
+    const nodes = parser.parse(
+      "# Hello\n\nA **bold** [safe](https://example.com) [unsafe](javascript:alert(1))",
+      true,
+    );
+    const blocks = markdownAstToBlocks(nodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const paragraph = blocks[2];
+
+    expect(blocks[0]?.type).toBe("inline");
+    expect(blocks[1]?.type).toBe("blank");
+    expect(paragraph?.type).toBe("inline");
+    if (paragraph?.type !== "inline") throw new Error("expected paragraph block");
+    expect(paragraph.segments.some((segment) => segment.style?.bold)).toBe(true);
+    expect(
+      paragraph.segments.some((segment) => segment.style?.href === "https://example.com"),
+    ).toBe(true);
+    expect(
+      paragraph.segments.some((segment) => segment.style?.href?.startsWith("javascript:")),
+    ).toBe(false);
+  });
+
+  it("rejects markdown links with control characters and unsupported protocols", () => {
+    const parser = createTuiMarkdownParser();
+    const nodes = parser.parse(
+      [
+        "[ok](https://example.com)",
+        "[mail](mailto:test@example.com)",
+        "[bad-proto-relative](//evil.example)",
+        "[bad-control](https://example.com\u0007\u001b]8;;evil\u0007)",
+        "[bad-data](data:text/html,boom)",
+        "[bad-file](file:///tmp/demo.txt)",
+      ].join(" "),
+      true,
+    );
+    const blocks = markdownAstToBlocks(nodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const paragraph = blocks[0];
+
+    expect(paragraph?.type).toBe("inline");
+    if (paragraph?.type !== "inline") throw new Error("expected inline block");
+    expect(
+      paragraph.segments.some((segment) => segment.style?.href === "https://example.com"),
+    ).toBe(true);
+    expect(
+      paragraph.segments.some((segment) => segment.style?.href === "mailto:test@example.com"),
+    ).toBe(true);
+    expect(paragraph.segments.some((segment) => segment.style?.href?.includes("\u0007"))).toBe(
+      false,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href === "//evil.example")).toBe(
+      false,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href?.startsWith("data:"))).toBe(
+      false,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href?.startsWith("file:"))).toBe(
+      false,
+    );
+  });
+
+  it("keeps bare relative markdown links as safe hrefs", () => {
+    const parser = createTuiMarkdownParser();
+    const nodes = parser.parse(
+      [
+        "[guide](guide/parser-api)",
+        "[doc](docs/intro.md)",
+        "[asset](assets/a.png)",
+        "[anchor](#section-1)",
+      ].join(" "),
+      true,
+    );
+    const blocks = markdownAstToBlocks(nodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const paragraph = blocks[0];
+
+    expect(paragraph?.type).toBe("inline");
+    if (paragraph?.type !== "inline") throw new Error("expected inline block");
+    expect(paragraph.segments.some((segment) => segment.style?.href === "guide/parser-api")).toBe(
+      true,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href === "docs/intro.md")).toBe(
+      true,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href === "assets/a.png")).toBe(
+      true,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href === "#section-1")).toBe(true);
+  });
+
+  it("does not style unsafe markdown links as active links", () => {
+    const parser = createTuiMarkdownParser();
+    const nodes = parser.parse("[safe](https://example.com) [unsafe](javascript:alert(1))", true);
+    const blocks = markdownAstToBlocks(nodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const paragraph = blocks[0];
+
+    expect(paragraph?.type).toBe("inline");
+    if (paragraph?.type !== "inline") throw new Error("expected inline block");
+    const safeSegment = paragraph.segments.find((segment) => segment.text === "safe");
+    const unsafeSegment = paragraph.segments.find((segment) => segment.text === "unsafe");
+    expect(safeSegment?.style?.href).toBe("https://example.com");
+    expect(safeSegment?.style?.underline).toBe(true);
+    expect(unsafeSegment?.style?.href).toBeUndefined();
+    expect(unsafeSegment?.style?.underline).not.toBe(true);
+  });
+
+  it("lays out long markdown paragraphs without changing row counts", () => {
+    const parser = createTuiMarkdownParser();
+    const rows = buildMarkdownVisualRows("a".repeat(100_000), 80, parser);
+
+    expect(rows).toHaveLength(1250);
+    expect(rows[0]?.plainText).toHaveLength(80);
+    expect(rows.at(-1)?.plainText).toHaveLength(80);
+  });
+
+  it("falls back to plain text rows when markdown parsing throws", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const parser: TuiMarkdownParser = {
+      parse() {
+        throw new Error("boom");
+      },
+    };
+
+    const rows = buildMarkdownVisualRows("hello\n\nworld", 20, parser);
+
+    expect(rows.map((row) => row.plainText)).toEqual(["hello", "", "world"]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("drops unsafe hrefs even when link nodes bypass parser validation", () => {
+    const blocks = markdownAstToBlocks(
+      [
+        {
+          type: "paragraph",
+          raw: "",
+          children: [
+            {
+              type: "link",
+              raw: "",
+              href: "javascript:alert(1)",
+              children: [{ type: "text", raw: "unsafe", content: "unsafe" }],
+            },
+          ],
+        } as ParsedNode,
+      ],
+      DEFAULT_TUI_MARKDOWN_THEME,
+    );
+    const paragraph = blocks[0];
+
+    expect(paragraph?.type).toBe("inline");
+    if (paragraph?.type !== "inline") throw new Error("expected inline block");
+    expect(paragraph.segments.some((segment) => segment.style?.href)).toBe(false);
+  });
+
+  it("wraps CJK rows by terminal cells without cutting glyphs", () => {
+    const rows = buildMarkdownVisualRows("你好hello", 6, createTuiMarkdownParser());
+    expect(rows.map((row) => row.plainText)).toEqual(["你好he", "llo"]);
+  });
+
+  it("keeps unordered list markers only on the first wrapped row", () => {
+    const parser = createTuiMarkdownParser();
+    const nodes = parser.parse("- hello world", true);
+    const blocks = markdownAstToBlocks(nodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const rows = layoutMarkdownBlocks(blocks, 8);
+    expect(rows.map((row) => row.plainText)).toEqual(["- hello ", "  world"]);
+  });
+
+  it("does not insert an extra blank row before nested list items", () => {
+    const rows = buildMarkdownVisualRows("- parent\n  - child", 40, createTuiMarkdownParser());
+    expect(rows.map((row) => row.plainText)).toEqual(["- parent", "  - child"]);
+  });
+
+  it("keeps streaming strong parsing strict only when final rendering is non-streaming", () => {
+    const strictParser = createTuiMarkdownParser({ streaming: false });
+    const streamingParser = createTuiMarkdownParser({ streaming: true });
+    const strictRows = buildMarkdownVisualRows("[**cxx](xxx)", 20, strictParser, { final: true });
+    const streamingRows = buildMarkdownVisualRows("[**cxx](xxx)", 20, streamingParser, {
+      final: false,
+    });
+
+    expect(strictRows[0]?.plainText.includes("cxx")).toBe(true);
+    expect(streamingRows[0]?.plainText.includes("cxx")).toBe(true);
+  });
+
+  it("requires closing strong after streaming finalization", () => {
+    const parser = createTuiMarkdownParser({ streaming: true });
+    const pendingNodes = parser.parse("**dangling", false);
+    const finalizedNodes = parser.parse("**dangling", true);
+    const pendingBlocks = markdownAstToBlocks(pendingNodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const finalizedBlocks = markdownAstToBlocks(finalizedNodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const pendingParagraph = pendingBlocks[0];
+    const finalizedParagraph = finalizedBlocks[0];
+
+    expect(pendingParagraph?.type).toBe("inline");
+    expect(finalizedParagraph?.type).toBe("inline");
+    if (pendingParagraph?.type !== "inline" || finalizedParagraph?.type !== "inline") {
+      throw new Error("expected inline block");
+    }
+
+    expect(pendingParagraph.segments.some((segment) => segment.style?.bold)).toBe(true);
+    expect(finalizedParagraph.segments.some((segment) => segment.style?.bold)).toBe(false);
+  });
+
+  it("keeps unfinished fenced code stable across final=false to final=true", () => {
+    const parser = createTuiMarkdownParser({ streaming: true });
+    const markdown = "before\n\n```ts\nconst a = 1";
+    const pendingNodes = parser.parse(markdown, false);
+    const finalNodes = parser.parse(markdown, true);
+    const pendingCode = pendingNodes.find((node) => node.type === "code_block");
+    const finalCode = finalNodes.find((node) => node.type === "code_block");
+    const pendingRows = buildMarkdownVisualRows(markdown, 20, parser, { final: false });
+    const finalRows = buildMarkdownVisualRows(markdown, 20, parser, { final: true });
+
+    expect(pendingCode?.type).toBe("code_block");
+    expect(finalCode?.type).toBe("code_block");
+    expect("loading" in (pendingCode ?? {}) ? pendingCode?.loading : undefined).toBe(true);
+    expect("loading" in (finalCode ?? {}) ? finalCode?.loading : undefined).not.toBe(true);
+    expect(pendingRows.map((row) => row.plainText)).toEqual(finalRows.map((row) => row.plainText));
+  });
+
+  it("preserves code block tab indentation as spaces", () => {
+    const rows = buildMarkdownVisualRows("```ts\n\tconst a = 1\n```", 40, createTuiMarkdownParser());
+    expect(rows.some((row) => row.plainText.includes("    const a = 1"))).toBe(true);
+  });
+
+  it("does not hang when list and blockquote prefixes are wider than width", () => {
+    const parser = createTuiMarkdownParser();
+    const listRows = buildMarkdownVisualRows("- a", 1, parser);
+    const quoteRows = buildMarkdownVisualRows("> a", 1, parser);
+    const nestedRows = buildMarkdownVisualRows("- a\n  - b", 1, parser);
+    const orderedRows = buildMarkdownVisualRows("100. a", 3, parser);
+
+    expect(listRows.length).toBeGreaterThan(0);
+    expect(quoteRows.length).toBeGreaterThan(0);
+    expect(nestedRows.length).toBeGreaterThan(0);
+    expect(orderedRows.length).toBeGreaterThan(0);
+    expect(listRows.some((row) => row.plainText.includes("a"))).toBe(true);
+    expect(
+      quoteRows.some((row) => row.plainText.includes("a") || row.plainText.includes("│")),
+    ).toBe(true);
+    expect(nestedRows.some((row) => row.plainText.includes("b"))).toBe(true);
+    expect(
+      orderedRows.some((row) => row.plainText.includes("a") || row.plainText.includes("100")),
+    ).toBe(true);
+  });
+
+  it("does not consume wide glyphs into rows that exceed the viewport width", () => {
+    const parser = createTuiMarkdownParser();
+    const rows = buildMarkdownVisualRows("- 你", 3, parser);
+
+    for (const row of rows) {
+      const cells = row.segments.reduce((sum, segment) => sum + segment.cells, 0);
+      expect(cells).toBeLessThanOrEqual(3);
+    }
+
+    expect(rows.map((row) => row.plainText).join("\n")).toContain("你");
+  });
+
+  it("omits too-wide graphemes when the viewport is narrower than the glyph", () => {
+    const rows = buildMarkdownVisualRows("你", 1, createTuiMarkdownParser());
+    expect(rows.map((row) => row.plainText)).toEqual(["", ""]);
+  });
+
+  it("reuses merged style objects across markdown paints", () => {
+    const writes: Array<{ text: string; style: unknown }> = [];
+    const terminal = {
+      write(text: string, opts?: { style?: unknown }) {
+        writes.push({ text, style: opts?.style });
+      },
+    } as unknown as Terminal;
+    const baseStyle = Object.freeze({ fg: "white" });
+    const overlayStyle = Object.freeze({ bold: true });
+    const row = {
+      key: "row-1",
+      blockKey: "block-1",
+      rowInBlock: 0,
+      plainText: "a",
+      segments: [{ text: "a", cells: 1, style: overlayStyle }],
+    };
+
+    paintMarkdownVisualRow(terminal, row, { x: 0, y: 0, w: 1, baseStyle });
+    paintMarkdownVisualRow(terminal, row, { x: 0, y: 1, w: 1, baseStyle });
+
+    expect(writes).toHaveLength(2);
+    expect(writes[0]?.style).toBe(writes[1]?.style);
+    expect(writes[0]?.style).toMatchObject({ fg: "white", bold: true });
+  });
+
+  it("keeps horizontal clipping aligned when it starts inside a wide glyph", () => {
+    const writes: Array<{ text: string; x?: number }> = [];
+    const terminal = {
+      write(text: string, opts?: { x?: number }) {
+        writes.push({ text, x: opts?.x });
+      },
+    } as unknown as Terminal;
+    const row = {
+      key: "row-clip",
+      blockKey: "block-clip",
+      rowInBlock: 0,
+      plainText: "你a",
+      segments: [{ text: "你a", cells: 3 }],
+    };
+
+    paintMarkdownVisualRow(terminal, row, {
+      x: 0,
+      y: 0,
+      w: 2,
+      clipStart: 1,
+      baseStyle: Object.freeze({ fg: "white" }),
+    });
+
+    expect(writes.map((entry) => [entry.text, entry.x])).toEqual([
+      [" ", 0],
+      ["a", 1],
+    ]);
+  });
+});

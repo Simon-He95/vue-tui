@@ -35,6 +35,12 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./markdown": {
+      "bun": "./src/markdown.ts",
+      "types": "./dist/markdown.d.ts",
+      "import": "./dist/markdown.js",
+      "require": "./dist/markdown.cjs"
+    },
     "./experimental": {
       "bun": "./src/experimental.ts",
       "types": "./dist/experimental.d.ts",
@@ -71,6 +77,9 @@
     "e2e": "playwright test",
     "bench:vfor": "tsx scripts/bench-vfor.ts",
     "bench:phase2": "tsx scripts/bench-phase2.ts"
+  },
+  "dependencies": {
+    "stream-markdown-parser": "^0.0.90"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

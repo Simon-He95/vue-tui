@@ -3,6 +3,7 @@ import { build } from "esbuild";
 await build({
   entryPoints: {
     index: "src/index.ts",
+    markdown: "src/markdown.ts",
     experimental: "src/experimental.ts",
   },
   outdir: "dist",

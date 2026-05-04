@@ -5,17 +5,22 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const distIndex = resolve("dist/index.js");
+const distMarkdown = resolve("dist/markdown.js");
 const distExperimental = resolve("dist/experimental.js");
 const distTypes = resolve("dist/index.d.ts");
+const distMarkdownTypes = resolve("dist/markdown.d.ts");
 const distExperimentalTypes = resolve("dist/experimental.d.ts");
 const requireDistExports = process.env.VUE_TUI_REQUIRE_DIST_EXPORTS === "1";
 
 describe("package exports", () => {
   it("keeps high-throughput components behind the experimental entrypoint", async () => {
     const root = await import("../src/index.js");
+    const markdown = await import("../src/markdown.js");
     const experimental = await import("../src/experimental.js");
 
+    expect("TMarkdownText" in root).toBe(false);
     expect("TVirtualList" in root).toBe(false);
+    expect("TVirtualMarkdown" in root).toBe(false);
     expect("TLogView" in root).toBe(false);
     expect("TLogScrollbar" in root).toBe(false);
     expect("TLogMinimap" in root).toBe(false);
@@ -29,7 +34,11 @@ describe("package exports", () => {
     expect("createAppendOnlyLogStore" in root).toBe(false);
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
+    expect("TMarkdownText" in experimental).toBe(false);
     expect(experimental.TVirtualList).toBeTruthy();
+    expect("TVirtualMarkdown" in experimental).toBe(false);
+    expect(markdown.TMarkdownText).toBeTruthy();
+    expect(markdown.TVirtualMarkdown).toBeTruthy();
     expect(experimental.TLogView).toBeTruthy();
     expect(experimental.TLogScrollbar).toBeTruthy();
     expect(experimental.TLogMinimap).toBeTruthy();
@@ -115,14 +124,18 @@ describe("package exports", () => {
 
   it.skipIf(!requireDistExports)("keeps built ESM/CJS experimental exports usable", async () => {
     expect(existsSync(distIndex)).toBe(true);
+    expect(existsSync(distMarkdown)).toBe(true);
     expect(existsSync(distExperimental)).toBe(true);
     expect(existsSync(distTypes)).toBe(true);
+    expect(existsSync(distMarkdownTypes)).toBe(true);
     expect(existsSync(distExperimentalTypes)).toBe(true);
 
     const root = await import(/* @vite-ignore */ pathToFileURL(distIndex).href);
+    const markdown = await import(/* @vite-ignore */ pathToFileURL(distMarkdown).href);
     const experimental = await import(/* @vite-ignore */ pathToFileURL(distExperimental).href);
     const require = createRequire(import.meta.url);
     const rootCjs = require("../dist/index.cjs");
+    const markdownCjs = require("../dist/markdown.cjs");
     const experimentalCjs = require("../dist/experimental.cjs");
 
     expect("TVirtualList" in root).toBe(false);
@@ -132,6 +145,10 @@ describe("package exports", () => {
     expect(rootCjs.TerminalProvider).toBeTruthy();
     expect(rootCjs.createFramePerfStore).toBeTruthy();
     expect(rootCjs.framePerfNow).toBeTruthy();
+    expect(markdown.TMarkdownText).toBeTruthy();
+    expect(markdown.TVirtualMarkdown).toBeTruthy();
+    expect(markdownCjs.TMarkdownText).toBeTruthy();
+    expect(markdownCjs.TVirtualMarkdown).toBeTruthy();
     expect(experimental.TVirtualList).toBeTruthy();
     expect(experimental.TLogView).toBeTruthy();
     expect(experimental.TLogScrollbar).toBeTruthy();
@@ -151,6 +168,8 @@ describe("package exports", () => {
     expect(experimental.createTLogViewSessionStore).toBeTruthy();
     expect(experimental.createTLogLevelPlugin).toBeTruthy();
     expect(experimental.tlogDefaultPreset).toBeTruthy();
+    expect("TMarkdownText" in experimentalCjs).toBe(false);
+    expect("TVirtualMarkdown" in experimentalCjs).toBe(false);
     expect(experimentalCjs.TVirtualList).toBeTruthy();
     expect(experimentalCjs.TLogView).toBeTruthy();
     expect(experimentalCjs.TLogScrollbar).toBeTruthy();
