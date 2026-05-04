@@ -34,6 +34,7 @@ describe("markdown layout", () => {
       [
         "[ok](https://example.com)",
         "[mail](mailto:test@example.com)",
+        "[bad-proto-relative](//evil.example)",
         "[bad-control](https://example.com\u0007\u001b]8;;evil\u0007)",
         "[bad-data](data:text/html,boom)",
         "[bad-file](file:///tmp/demo.txt)",
@@ -52,6 +53,9 @@ describe("markdown layout", () => {
       paragraph.segments.some((segment) => segment.style?.href === "mailto:test@example.com"),
     ).toBe(true);
     expect(paragraph.segments.some((segment) => segment.style?.href?.includes("\u0007"))).toBe(
+      false,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href === "//evil.example")).toBe(
       false,
     );
     expect(paragraph.segments.some((segment) => segment.style?.href?.startsWith("data:"))).toBe(
@@ -85,6 +89,25 @@ describe("markdown layout", () => {
 
     expect(strictRows[0]?.plainText.includes("cxx")).toBe(true);
     expect(streamingRows[0]?.plainText.includes("cxx")).toBe(true);
+  });
+
+  it("requires closing strong after streaming finalization", () => {
+    const parser = createTuiMarkdownParser({ streaming: true });
+    const pendingNodes = parser.parse("**dangling", false);
+    const finalizedNodes = parser.parse("**dangling", true);
+    const pendingBlocks = markdownAstToBlocks(pendingNodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const finalizedBlocks = markdownAstToBlocks(finalizedNodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const pendingParagraph = pendingBlocks[0];
+    const finalizedParagraph = finalizedBlocks[0];
+
+    expect(pendingParagraph?.type).toBe("inline");
+    expect(finalizedParagraph?.type).toBe("inline");
+    if (pendingParagraph?.type !== "inline" || finalizedParagraph?.type !== "inline") {
+      throw new Error("expected inline block");
+    }
+
+    expect(pendingParagraph.segments.some((segment) => segment.style?.bold)).toBe(true);
+    expect(finalizedParagraph.segments.some((segment) => segment.style?.bold)).toBe(false);
   });
 
   it("keeps unfinished fenced code stable across final=false to final=true", () => {

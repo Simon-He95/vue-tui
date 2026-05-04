@@ -29,6 +29,7 @@ function isSafeMarkdownLink(url: string): boolean {
   const raw = String(url ?? "").trim();
   if (!raw) return false;
   if (hasControlChars(raw)) return false;
+  if (raw.startsWith("//")) return false;
 
   const value = raw.toLowerCase();
   if (value.startsWith("javascript:")) return false;
@@ -53,7 +54,7 @@ export function createTuiMarkdownParser(config?: TuiMarkdownParseConfig): TuiMar
     return parseMarkdownToStructure(content, md, {
       final,
       customHtmlTags,
-      requireClosingStrong: !config?.streaming,
+      requireClosingStrong: final || !config?.streaming,
       validateLink: isSafeMarkdownLink,
     } satisfies ParseOptions);
   }
