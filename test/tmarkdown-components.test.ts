@@ -136,6 +136,41 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("emits clamped scrollTop when a controlled scrollTop prop becomes out of range", async () => {
+    const scrollTop = ref(0);
+    const updates: number[] = [];
+    const content = Array.from({ length: 20 }, (_, index) => `- row-${index}`).join("\n");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          content,
+          scrollTop: scrollTop.value,
+          "onUpdate:scrollTop": (value: number) => {
+            updates.push(value);
+          },
+        }),
+      20,
+      8,
+    );
+
+    scrollTop.value = 999;
+    await nextTick();
+    await nextTick();
+
+    expect(updates).toContain(16);
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
+      "- row-16",
+      "- row-17",
+      "- row-18",
+      "- row-19",
+    ]);
+    mounted.unmount();
+  });
+
   it("preserves trailing cells when TMarkdownText clear=false", async () => {
     const content = ref("hello world");
     const mounted = await mountTerminal(

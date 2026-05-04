@@ -16,6 +16,7 @@ export interface TuiMarkdownParser {
 
 const RELATIVE_LINK_PREFIXES = ["#", "/", "./", "../"] as const;
 const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
+let nextMarkdownParserId = 0;
 
 function hasControlChars(value: string): boolean {
   for (const ch of value) {
@@ -25,7 +26,7 @@ function hasControlChars(value: string): boolean {
   return false;
 }
 
-function isSafeMarkdownLink(url: string): boolean {
+export function isSafeMarkdownLink(url: string): boolean {
   const raw = String(url ?? "").trim();
   if (!raw) return false;
   if (hasControlChars(raw)) return false;
@@ -46,7 +47,8 @@ function isSafeMarkdownLink(url: string): boolean {
 
 export function createTuiMarkdownParser(config?: TuiMarkdownParseConfig): TuiMarkdownParser {
   const customHtmlTags = config?.customHtmlTags?.filter(Boolean);
-  const md = getMarkdown("vue-tui-markdown", {
+  const parserId = `vue-tui-markdown-${nextMarkdownParserId++}`;
+  const md = getMarkdown(parserId, {
     customHtmlTags,
   });
 

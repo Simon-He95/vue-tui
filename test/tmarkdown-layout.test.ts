@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ParsedNode } from "stream-markdown-parser";
 import type { Terminal } from "../src/index.js";
 import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
 import { buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
@@ -66,6 +67,31 @@ describe("markdown layout", () => {
     expect(paragraph.segments.some((segment) => segment.style?.href?.startsWith("file:"))).toBe(
       false,
     );
+  });
+
+  it("drops unsafe hrefs even when link nodes bypass parser validation", () => {
+    const blocks = markdownAstToBlocks(
+      [
+        {
+          type: "paragraph",
+          raw: "",
+          children: [
+            {
+              type: "link",
+              raw: "",
+              href: "javascript:alert(1)",
+              children: [{ type: "text", raw: "unsafe", content: "unsafe" }],
+            },
+          ],
+        } as ParsedNode,
+      ],
+      DEFAULT_TUI_MARKDOWN_THEME,
+    );
+    const paragraph = blocks[0];
+
+    expect(paragraph?.type).toBe("inline");
+    if (paragraph?.type !== "inline") throw new Error("expected inline block");
+    expect(paragraph.segments.some((segment) => segment.style?.href)).toBe(false);
   });
 
   it("wraps CJK rows by terminal cells without cutting glyphs", () => {

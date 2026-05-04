@@ -197,7 +197,13 @@ export const TVirtualMarkdown = defineComponent({
       () => props.scrollTop,
       () => {
         if (!hasControlledScrollTop()) return;
-        setScrollTop(props.scrollTop, false);
+        const desired = Math.floor(Number(props.scrollTop) || 0);
+        const clamped = clamp(desired, 0, maxScrollTop());
+        internalScrollTop.value = clamped;
+        if (desired !== clamped) {
+          emit("update:scrollTop", clamped);
+          emit("scroll", clamped);
+        }
       },
     );
 

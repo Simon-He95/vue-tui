@@ -8,6 +8,7 @@ import type {
   ParsedNode,
 } from "stream-markdown-parser";
 import { sanitizeInlineText, sanitizeTextBlock, spaces, textCellWidth } from "../utils/text.js";
+import { isSafeMarkdownLink } from "./parser.js";
 import { type TuiMarkdownTheme } from "./theme.js";
 import type { TuiMarkdownBlock, TuiMarkdownInlineSegment } from "./types.js";
 
@@ -131,7 +132,11 @@ function inlineNodeSegments(
         break;
       case "link": {
         const href = stringProp(node, "href");
-        const linkStyle = mergeStyle(inheritedStyle, href ? { ...theme.link, href } : theme.link);
+        const safeHref = href && isSafeMarkdownLink(href) ? href : "";
+        const linkStyle = mergeStyle(
+          inheritedStyle,
+          safeHref ? { ...theme.link, href: safeHref } : theme.link,
+        );
         const children = nodeChildren(node);
         if (children.length) out.push(...inlineNodeSegments(children, theme, linkStyle));
         else pushTextSegments(out, stringProp(node, "text"), linkStyle);
