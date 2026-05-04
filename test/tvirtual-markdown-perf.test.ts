@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { defineComponent } from "./ui-regressions-support.js";
 
 vi.mock("../src/vue/markdown/document.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/vue/markdown/document.js")>();
@@ -238,6 +239,38 @@ describe("TVirtualMarkdown performance", () => {
     expect(
       mounted.terminal.snapshot().lines.slice(0, 4).map((line) => line.trimEnd()),
     ).toEqual(beforeLines);
+    mounted.unmount();
+  });
+
+  it("does not rebuild markdown rows when theme identity changes without semantic changes", async () => {
+    const tick = ref(0);
+    const App = defineComponent({
+      name: "MarkdownThemeIdentityApp",
+      setup() {
+        return () =>
+          h(TMarkdownText, {
+            x: 0,
+            y: 0,
+            w: 16,
+            h: 4,
+            content: "- row-0",
+            theme: { strong: { fg: "yellowBright" } },
+            clear: tick.value >= 0,
+          });
+      },
+    });
+    const mounted = await mountTerminal(() => h(App), 24, 8);
+
+    const buildSpy = vi.mocked(markdownDocument.buildMarkdownVisualRows);
+    await nextTick();
+    await nextTick();
+    const before = buildSpy.mock.calls.length;
+
+    tick.value++;
+    await nextTick();
+    await nextTick();
+
+    expect(buildSpy.mock.calls.length).toBe(before);
     mounted.unmount();
   });
 });

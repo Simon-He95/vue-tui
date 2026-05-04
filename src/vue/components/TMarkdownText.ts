@@ -14,7 +14,7 @@ import {
 import { buildMarkdownVisualRows } from "../markdown/document.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
 import { paintMarkdownVisualRow } from "../markdown/render.js";
-import type { TuiMarkdownThemeOverrides } from "../markdown/theme.js";
+import { markdownThemeSignature, type TuiMarkdownThemeOverrides } from "../markdown/theme.js";
 import type { TuiMarkdownVisualRow } from "../markdown/types.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
@@ -87,7 +87,7 @@ export const TMarkdownText = defineComponent({
 
     function scheduleRebuild(): void {
       const currentVersion = ++rebuildVersion;
-      if (!builtOnce) {
+      if (!builtOnce || !props.streaming) {
         builtOnce = true;
         rebuildRows();
         return;
@@ -114,7 +114,7 @@ export const TMarkdownText = defineComponent({
         () => props.w,
         () => parser.value,
         () => props.final,
-        () => props.theme,
+        () => markdownThemeSignature(props.theme),
       ],
       () => {
         scheduleRebuild();

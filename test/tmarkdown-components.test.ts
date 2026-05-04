@@ -237,6 +237,27 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("reflows markdown immediately when width changes", async () => {
+    const width = ref(12);
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: width.value,
+          content: "你好hello world",
+        }),
+      16,
+      6,
+    );
+
+    width.value = 4;
+    await nextTick();
+
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual(["你好", "hell", "o wo", "rld"]);
+    mounted.unmount();
+  });
+
   it("does not paint TMarkdownText outside its rect when dirty rows include other components", async () => {
     const top = ref("top-a");
     const markdown = ref("**markdown-a**");

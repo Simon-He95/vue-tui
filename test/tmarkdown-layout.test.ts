@@ -212,4 +212,33 @@ describe("markdown layout", () => {
     expect(writes[0]?.style).toBe(writes[1]?.style);
     expect(writes[0]?.style).toMatchObject({ fg: "white", bold: true });
   });
+
+  it("keeps horizontal clipping aligned when it starts inside a wide glyph", () => {
+    const writes: Array<{ text: string; x?: number }> = [];
+    const terminal = {
+      write(text: string, opts?: { x?: number }) {
+        writes.push({ text, x: opts?.x });
+      },
+    } as unknown as Terminal;
+    const row = {
+      key: "row-clip",
+      blockKey: "block-clip",
+      rowInBlock: 0,
+      plainText: "你a",
+      segments: [{ text: "你a", cells: 3 }],
+    };
+
+    paintMarkdownVisualRow(terminal, row, {
+      x: 0,
+      y: 0,
+      w: 2,
+      clipStart: 1,
+      baseStyle: Object.freeze({ fg: "white" }),
+    });
+
+    expect(writes.map((entry) => [entry.text, entry.x])).toEqual([
+      [" ", 0],
+      ["a", 1],
+    ]);
+  });
 });

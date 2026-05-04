@@ -51,8 +51,20 @@ export function paintMarkdownVisualRow(
     const clippedEnd = Math.min(segment.cells, clipEnd - logicalX);
     logicalX += segment.cells;
     if (clippedEnd <= clippedStart) continue;
+    const clippedPrefix = sliceByCellsRange(segment.text, 0, clippedStart);
+    const leftPad = Math.max(0, clippedStart - textCellWidth(clippedPrefix));
     const text = sliceByCellsRange(segment.text, clippedStart, clippedEnd);
     const cells = textCellWidth(text);
+    if (leftPad > 0 && used < options.w) {
+      const pad = Math.min(leftPad, options.w - used);
+      terminal.write(spaces(pad), {
+        x: drawX,
+        y: options.y,
+        style: options.baseStyle,
+      });
+      drawX += pad;
+      used += pad;
+    }
     if (!text || cells <= 0) continue;
     terminal.write(text, {
       x: drawX,

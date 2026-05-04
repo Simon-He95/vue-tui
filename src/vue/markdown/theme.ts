@@ -62,6 +62,20 @@ export const DEFAULT_TUI_MARKDOWN_THEME = Object.freeze({
   html: freezeStyle({ dim: true }),
 } satisfies TuiMarkdownTheme);
 
+function stableSerialize(value: unknown): string {
+  if (value == null) return "null";
+  if (typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableSerialize(item)}`).join(",")}}`;
+}
+
+export function markdownThemeSignature(overrides?: TuiMarkdownThemeOverrides): string {
+  return stableSerialize(overrides ?? null);
+}
+
 export function resolveTuiMarkdownTheme(overrides?: TuiMarkdownThemeOverrides): TuiMarkdownTheme {
   if (!overrides) return DEFAULT_TUI_MARKDOWN_THEME;
   const heading = DEFAULT_TUI_MARKDOWN_THEME.heading.map((style, index) =>
