@@ -41,7 +41,7 @@ export type TerminalFrameContext = Readonly<{
    * Compatibility note:
    * TerminalFrameContext is an exported type, so additions here are public.
    */
-  reportDroppedUpdates: (count: number) => void;
+  reportDroppedUpdates?: (count: number) => void;
 }>;
 
 export type TerminalFrameTask = Readonly<{
@@ -73,7 +73,7 @@ export type TerminalScheduler = Readonly<{
    * If the scheduler has already taken the task for the current frame,
    * the task run() still needs to guard its own stale state.
    */
-  cancelFrameTask: (id: string) => void;
+  cancelFrameTask?: (id: string) => void;
   requestLive: (reason: string) => () => void;
   dropLive: (reason: string) => void;
   isInsideFrame: () => boolean;

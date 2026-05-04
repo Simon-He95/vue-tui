@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { createTerminalApp, TList, useTerminal } from "../src/index.js";
+import { createTerminalApp, TList, TView, useTerminal } from "../src/index.js";
 
 function installRaf() {
   const previousRaf = globalThis.requestAnimationFrame;
@@ -145,6 +145,8 @@ describe("TList wheel scrolling", () => {
         droppedUpdates: 49,
         remainingFrameTasks: 0,
       });
+      expect(framePerf!.latest()?.dirtyRows).toBeLessThanOrEqual(4);
+      expect(framePerf!.latest()?.paintedNodes).toBe(1);
     } finally {
       app.dispose();
       raf.restore();
@@ -483,6 +485,45 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("external modelValue from synchronous onScroll wins after wheel apply", async () => {
+    const App = defineComponent({
+      name: "ListWheelOnScrollModelValueApp",
+      setup() {
+        const modelValue = ref(0);
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: Array.from({ length: 100 }, (_, index) => `item-${index}`),
+            modelValue: modelValue.value,
+            autoFocus: true,
+            onScroll: () => {
+              modelValue.value = 50;
+            },
+            "onUpdate:modelValue": (value: number) => {
+              modelValue.value = value;
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("item-47");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("resets pending wheel base after external modelValue wins", async () => {
     const raf = installRaf();
     const items = Array.from({ length: 200 }, (_, index) => `item-${index}`);
@@ -541,13 +582,14 @@ describe("TList wheel scrolling", () => {
       name: "ControlledListModelValueApp",
       setup() {
         const modelValue = ref(0);
+        const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
         return () =>
           h(TList, {
             x: 0,
             y: 0,
             w: 12,
             h: 4,
-            items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+            items,
             modelValue: modelValue.value,
             autoFocus: true,
             "onUpdate:modelValue": (value: number) => {
@@ -571,6 +613,81 @@ describe("TList wheel scrolling", () => {
       expect(rowText(app, 0)).toBe("item-0");
       expect(commits).toHaveLength(1);
       off();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints old and new active rows on keyboard selection without scrolling", async () => {
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: ["a", "b", "c", "d"],
+        modelValue: 0,
+        autoFocus: true,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      expect(app.terminal.getRow(0)[0]?.style.inverse).toBe(true);
+      expect(app.terminal.getRow(1)[0]?.style.inverse).not.toBe(true);
+
+      app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(app.terminal.getRow(0)[0]?.style.inverse).not.toBe(true);
+      expect(app.terminal.getRow(1)[0]?.style.inverse).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints active rows when external modelValue changes without scrolling", async () => {
+    let setModelValue!: (value: number) => void;
+    const App = defineComponent({
+      name: "ExternalModelValueStyleApp",
+      setup() {
+        const modelValue = ref(0);
+        setModelValue = (value) => {
+          modelValue.value = value;
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: ["a", "b", "c", "d"],
+            modelValue: modelValue.value,
+            autoFocus: true,
+            "onUpdate:modelValue": (value: number) => {
+              modelValue.value = value;
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      setModelValue(2);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(app.terminal.getRow(0)[0]?.style.inverse).not.toBe(true);
+      expect(app.terminal.getRow(2)[0]?.style.inverse).toBe(true);
     } finally {
       app.dispose();
     }
@@ -755,6 +872,83 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("repaints when items are mutated in place", async () => {
+    let pushItem!: () => void;
+    const App = defineComponent({
+      name: "InPlaceItemsPushApp",
+      setup() {
+        const items = ref(["item-0", "item-1", "item-2", "item-3"]);
+        pushItem = () => {
+          items.value.push(`item-${items.value.length}`);
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 5,
+            items: items.value,
+            modelValue: 0,
+            autoFocus: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      pushItem();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 4)).toBe("item-4");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("clamps and repaints when items are spliced in place", async () => {
+    let spliceItems!: () => void;
+    const App = defineComponent({
+      name: "InPlaceItemsSpliceApp",
+      setup() {
+        const items = ref(Array.from({ length: 30 }, (_, index) => `item-${index}`));
+        spliceItems = () => {
+          items.value.splice(10);
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            modelValue: 0,
+            autoFocus: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 3000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      spliceItems();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("item-6");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not prevent default or scroll when wheel cannot change scrollTop", () => {
     const onScroll = vi.fn();
     const app = createTerminalApp({
@@ -785,6 +979,166 @@ describe("TList wheel scrolling", () => {
 
       expect(prevented).toBe(false);
       expect(onScroll).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not prevent default at the top edge when scrolling upward", () => {
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+        autoFocus: true,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      const prevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: -100,
+        time: 1_000,
+      });
+
+      expect(prevented).toBe(false);
+      expect(onScroll).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not prevent default at the bottom edge when scrolling downward", async () => {
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+        autoFocus: true,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+      const callCount = onScroll.mock.calls.length;
+
+      const prevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: 100,
+        time: 1_010,
+      });
+
+      expect(prevented).toBe(false);
+      expect(onScroll).toHaveBeenCalledTimes(callCount);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("uses clipped viewport height for wheel scroll range", async () => {
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "ClippedWheelViewportApp",
+      setup() {
+        return () =>
+          h(
+            TView,
+            { x: 0, y: 0, w: 12, h: 4 },
+            {
+              default: () =>
+                h(TList, {
+                  x: 0,
+                  y: 0,
+                  w: 12,
+                  h: 10,
+                  items,
+                  modelValue: 0,
+                  autoFocus: true,
+                }),
+            },
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("item-96");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("uses clipped viewport height for detached PageDown anchor", async () => {
+    const items = Array.from({ length: 200 }, (_, index) => `item-${index}`);
+    const onUpdateModelValue = vi.fn();
+    const App = defineComponent({
+      name: "ClippedPageDownViewportApp",
+      setup() {
+        return () =>
+          h(
+            TView,
+            { x: 0, y: 0, w: 12, h: 4 },
+            {
+              default: () =>
+                h(TList, {
+                  x: 0,
+                  y: 0,
+                  w: 12,
+                  h: 10,
+                  items,
+                  modelValue: 0,
+                  autoFocus: true,
+                  "onUpdate:modelValue": onUpdateModelValue,
+                }),
+            },
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      app.events.dispatch({ type: "keydown", key: "PageDown", code: "PageDown", time: 1_010 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onUpdateModelValue).toHaveBeenLastCalledWith(104);
+      expect(rowText(app, 0)).toBe("item-101");
     } finally {
       app.dispose();
     }

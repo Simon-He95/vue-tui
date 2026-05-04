@@ -37,13 +37,23 @@ export type FrameMailboxOptions<T> = Readonly<{
  * cancel() is best-effort at scheduler level. The run callback still guards
  * `disposed || !hasPending`, because a scheduler may already have taken a
  * snapshot of tasks for the current frame.
+ *
+ * id is scheduler-global. Components should include instance id and producer
+ * name, for example `TList:${uid}:wheel`.
  */
 export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
   let disposed = false;
   let hasPending = false;
-  let pending!: T;
+  let pending: T | undefined;
   let queued = 0;
   let pendingTaskId: string | null = null;
+
+  function clearPending(): void {
+    hasPending = false;
+    pending = undefined;
+    queued = 0;
+    pendingTaskId = null;
+  }
 
   function currentTaskId(): string {
     if (pendingTaskId) return pendingTaskId;
@@ -60,7 +70,7 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
     const wasPending = hasPending;
     const taskId = wasPending ? pendingTaskId! : currentTaskId();
 
-    if (hasPending && options.merge) pending = options.merge(pending, value);
+    if (hasPending && options.merge) pending = options.merge(pending as T, value);
     else pending = value;
 
     hasPending = true;
@@ -75,14 +85,12 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
       run(ctx) {
         if (disposed || !hasPending) return;
 
-        const value = pending;
+        const value = pending as T;
         const count = queued;
         const dropped = Math.max(0, count - 1);
 
-        hasPending = false;
-        queued = 0;
-        pendingTaskId = null;
-        ctx.reportDroppedUpdates(dropped);
+        clearPending();
+        ctx.reportDroppedUpdates?.(dropped);
 
         options.apply(value, ctx, {
           queued: count,
@@ -94,10 +102,8 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
 
   function cancel(): void {
     const taskId = pendingTaskId;
-    hasPending = false;
-    queued = 0;
-    pendingTaskId = null;
-    if (taskId) options.scheduler.cancelFrameTask(taskId);
+    clearPending();
+    if (taskId) options.scheduler.cancelFrameTask?.(taskId);
   }
 
   function dispose(): void {

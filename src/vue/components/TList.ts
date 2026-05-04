@@ -95,6 +95,7 @@ export const TList = defineComponent({
     const wheelState = createWheelScrollState();
     let detachedByWheel = false;
     let pendingWheelTop: number | null = null;
+    const dirtyRowsScratch: number[] = [];
 
     const absRect = computed<Rect>(() => {
       const raw = { x: props.x, y: props.y, w: props.w, h: props.h };
@@ -104,13 +105,13 @@ export const TList = defineComponent({
     });
 
     function viewportHeight(): number {
-      // TODO: viewport semantics currently use props.h, not clipped absRect.h.
-      // This matches previous TList behavior but can be wrong under parent clipping.
-      return Math.max(0, props.h);
+      return Math.max(0, absRect.value.h);
     }
 
     function maxScrollTop(): number {
-      return Math.max(0, props.items.length - viewportHeight());
+      const h = viewportHeight();
+      if (h <= 0) return 0;
+      return Math.max(0, props.items.length - h);
     }
 
     function clampScrollTop(value: number): number {
@@ -122,9 +123,32 @@ export const TList = defineComponent({
       if (!nodeId) return;
       const r = absRect.value;
       if (r.w <= 0 || r.h <= 0) return;
-      const dirtyRows: number[] = [];
-      for (let y = r.y; y < r.y + r.h; y++) dirtyRows.push(y);
-      render.update(nodeId, { dirtyRowsHint: dirtyRows });
+      dirtyRowsScratch.length = 0;
+      for (let y = r.y; y < r.y + r.h; y++) dirtyRowsScratch.push(y);
+      render.update(nodeId, { dirtyRowsHint: dirtyRowsScratch });
+    }
+
+    function markIndexRowsDirty(...indexes: number[]): void {
+      const nodeId = renderNode.id.value;
+      if (!nodeId) return;
+      const r = absRect.value;
+      if (r.w <= 0 || r.h <= 0) return;
+
+      const rows: number[] = [];
+      const seen = new Set<number>();
+      const top = scrollTop.value;
+      for (const index of indexes) {
+        if (!Number.isFinite(index)) continue;
+        const offset = index - top;
+        if (offset < 0 || offset >= r.h) continue;
+        const y = r.y + offset;
+        if (seen.has(y)) continue;
+        seen.add(y);
+        rows.push(y);
+      }
+      if (rows.length > 0) {
+        render.update(nodeId, { dirtyRowsHint: rows });
+      }
     }
 
     function setScrollTop(nextTop: number, options?: { emitScroll?: boolean }): boolean {
@@ -213,12 +237,14 @@ export const TList = defineComponent({
     }
 
     function selectActive(index: number, options?: { emitChange?: boolean }): void {
+      const prev = active.value;
       reattachSelection();
       const next = clamp(index, 0, Math.max(0, props.items.length - 1));
       active.value = next;
       emit("update:modelValue", next);
       if (options?.emitChange) emit("change", { index: next, value: props.items[next] ?? "" });
-      ensureActiveVisible();
+      const changedScroll = ensureActiveVisible();
+      if (!changedScroll && prev !== next) markIndexRowsDirty(prev, next);
       scheduler.invalidate({ priority: "high", reason: "input" });
     }
 
@@ -227,6 +253,7 @@ export const TList = defineComponent({
     }
 
     function syncExternalModelValue(value: number): void {
+      const prev = active.value;
       const last = Math.max(0, props.items.length - 1);
       const next = clamp(value, 0, last);
       const hadPendingWheel = wheelMailbox.hasPending();
@@ -239,6 +266,7 @@ export const TList = defineComponent({
 
       active.value = next;
       const changedScroll = ensureActiveVisible();
+      if (!changedScroll && changedActive) markIndexRowsDirty(prev, next);
 
       if (hadPendingWheel || changedActive || changedScroll) {
         scheduler.invalidate({ priority: "high", reason: "input" });
@@ -376,10 +404,8 @@ export const TList = defineComponent({
         props.w,
         props.h,
         props.items,
-        props.modelValue,
         props.style,
         focused.value,
-        active.value,
         defaultStyle.value,
       ],
       paint: () => {
@@ -412,12 +438,31 @@ export const TList = defineComponent({
       { immediate: true },
     );
 
-    watch([() => props.items.length, () => props.h], () => {
+    watch([() => props.items.length, () => props.h], ([itemsLength, height], [prevItemsLength, prevHeight]) => {
+      const structureChanged = itemsLength !== prevItemsLength || height !== prevHeight;
       const last = Math.max(0, props.items.length - 1);
-      if (active.value > last) active.value = last;
+      const prevActive = active.value;
+      let needsInvalidate = false;
+      if (active.value > last) {
+        active.value = last;
+        if (prevActive !== active.value) markIndexRowsDirty(prevActive, active.value);
+        needsInvalidate = true;
+      }
       const clampedTop = clampScrollTop(scrollTop.value);
-      if (clampedTop !== scrollTop.value) setScrollTop(clampedTop, { emitScroll: true });
-      if (!detachedByWheel) ensureActiveVisible();
+      if (clampedTop !== scrollTop.value) {
+        setScrollTop(clampedTop, { emitScroll: true });
+        needsInvalidate = true;
+      }
+      if (!detachedByWheel) {
+        needsInvalidate = ensureActiveVisible() || needsInvalidate;
+      }
+      if (structureChanged) {
+        markViewportDirty();
+        needsInvalidate = true;
+      }
+      if (needsInvalidate) {
+        scheduler.invalidate({ priority: "normal", reason: "data" });
+      }
     });
 
     return () => h("span", rootProps);

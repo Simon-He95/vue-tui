@@ -116,6 +116,26 @@ describe("frame mailbox", () => {
     expect(apply.mock.calls[0]![2]).toEqual({ queued: 100, dropped: 99 });
   });
 
+  it("clears retained payload after apply and cancel", () => {
+    const probe = createScheduler();
+    const mailbox = createFrameMailbox<{ value: number }>({
+      scheduler: probe.scheduler,
+      id: "probe",
+      apply: vi.fn(),
+    });
+
+    const first = { value: 1 };
+    mailbox.queue(first);
+    expect(mailbox.peek()).toBe(first);
+
+    probe.flush();
+    expect(mailbox.peek()).toBeUndefined();
+
+    mailbox.queue({ value: 2 });
+    mailbox.cancel();
+    expect(mailbox.peek()).toBeUndefined();
+  });
+
   it("does not run after dispose", () => {
     const probe = createScheduler();
     const apply = vi.fn();
