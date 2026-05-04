@@ -1,4 +1,9 @@
-import { repeatChar, sliceByCellsRange, textCellWidth } from "../utils/text.js";
+import {
+  forEachTextCellSegment,
+  repeatChar,
+  sliceByCellsRange,
+  textCellWidth,
+} from "../utils/text.js";
 import type {
   TuiMarkdownBlock,
   TuiMarkdownInlineSegment,
@@ -60,20 +65,6 @@ function clipInlineSegmentsToWidth(
     remaining -= cells;
   }
   return out;
-}
-
-function firstRenderableSlice(
-  text: string,
-  start: number,
-  totalCells: number,
-): Readonly<{ text: string; cells: number }> | null {
-  for (let end = start + 1; end <= totalCells; end++) {
-    const piece = sliceByCellsRange(text, start, end);
-    const cells = textCellWidth(piece);
-    if (!piece || cells <= 0) continue;
-    return { text: piece, cells };
-  }
-  return null;
 }
 
 function wrapLineSegments(
@@ -139,44 +130,40 @@ function wrapLineSegments(
   const rowHasBody = () => row.segments.length > prefixLengthForRow();
 
   for (const segment of source) {
-    const totalCells = textCellWidth(segment.text);
-    let start = 0;
-    while (start < totalCells) {
-      if (row.remaining <= 0) pushRow();
-      const end = Math.min(totalCells, start + row.remaining);
-      let piece = sliceByCellsRange(segment.text, start, end);
-      let pieceCells = textCellWidth(piece);
-      if (pieceCells <= 0) {
-        const nextSlice = firstRenderableSlice(segment.text, start, totalCells);
-        if (!nextSlice) break;
-        if (rowHasBody()) {
+    let aborted = false;
+    forEachTextCellSegment(segment.text, (piece) => {
+      while (true) {
+        if (row.remaining <= 0) {
           pushRow();
           continue;
         }
-        if (!row.useContinuation) {
-          rows.push(row.segments);
-          row = openDegradedRow();
-          continue;
+        if (piece.cells > row.remaining) {
+          if (rowHasBody()) {
+            pushRow();
+            continue;
+          }
+          if (!row.useContinuation) {
+            rows.push(row.segments);
+            row = openDegradedRow();
+            continue;
+          }
+          if (piece.cells <= width) {
+            row = openDegradedRow();
+            continue;
+          }
+          aborted = true;
+          return false;
         }
-        if (nextSlice.cells <= width) {
-          row = openDegradedRow();
-          continue;
-        }
-        break;
+        row.segments.push({
+          text: piece.text,
+          style: segment.style,
+          cells: piece.cells,
+        });
+        row.remaining -= piece.cells;
+        return undefined;
       }
-      if (pieceCells > row.remaining) {
-        pushRow();
-        continue;
-      }
-      row.segments.push({
-        text: piece,
-        style: segment.style,
-        cells: pieceCells,
-      });
-      start += pieceCells;
-      row.remaining -= pieceCells;
-      if (start < totalCells) pushRow();
-    }
+    });
+    if (aborted) continue;
   }
 
   rows.push(row.segments);

@@ -5,6 +5,13 @@ interface GraphemeSegment {
   index: number;
 }
 
+export interface TextCellSegment {
+  text: string;
+  cells: number;
+  start: number;
+  end: number;
+}
+
 let renderPassDepth = 0;
 const renderPassTextWidthCache = new Map<string, number>();
 
@@ -79,6 +86,42 @@ function forEachGrapheme(text: string, cb: (g: string) => void | false): void {
   for (const part of seg.segment(text) as any as Iterable<GraphemeSegment>) {
     const r = cb(part.segment);
     if (r === false) return;
+  }
+}
+
+export function forEachTextCellSegment(
+  text: string,
+  cb: (segment: TextCellSegment) => void | false,
+): void {
+  if (!text) return;
+  const seg = graphemeSegmenter;
+  if (!seg || !needsGraphemeSegmentation(text)) {
+    let index = 0;
+    for (const ch of text) {
+      const next = index + ch.length;
+      const result = cb({
+        text: ch,
+        cells: charCellWidth(ch),
+        start: index,
+        end: next,
+      });
+      if (result === false) return;
+      index = next;
+    }
+    return;
+  }
+  let index = 0;
+  for (const part of seg.segment(text) as any as Iterable<GraphemeSegment>) {
+    const start = part.index ?? index;
+    const end = start + part.segment.length;
+    const result = cb({
+      text: part.segment,
+      cells: charCellWidth(part.segment),
+      start,
+      end,
+    });
+    if (result === false) return;
+    index = end;
   }
 }
 

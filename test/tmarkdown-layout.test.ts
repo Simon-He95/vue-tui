@@ -97,6 +97,15 @@ describe("markdown layout", () => {
     expect(paragraph.segments.some((segment) => segment.style?.href === "#section-1")).toBe(true);
   });
 
+  it("lays out long markdown paragraphs without changing row counts", () => {
+    const parser = createTuiMarkdownParser();
+    const rows = buildMarkdownVisualRows("a".repeat(100_000), 80, parser);
+
+    expect(rows).toHaveLength(1250);
+    expect(rows[0]?.plainText).toHaveLength(80);
+    expect(rows.at(-1)?.plainText).toHaveLength(80);
+  });
+
   it("drops unsafe hrefs even when link nodes bypass parser validation", () => {
     const blocks = markdownAstToBlocks(
       [

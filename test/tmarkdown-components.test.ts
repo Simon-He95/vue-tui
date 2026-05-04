@@ -350,6 +350,30 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("reflows streaming markdown text when width changes", async () => {
+    const width = ref(12);
+    const content = ref("你好hello world");
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: width.value,
+          content: content.value,
+          streaming: true,
+        }),
+      16,
+      6,
+    );
+
+    width.value = 4;
+    await nextTick();
+    await nextTick();
+
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual(["你好", "hell", "o wo", "rld"]);
+    mounted.unmount();
+  });
+
   it("clears old rows when auto-height markdown text shrinks", async () => {
     const content = ref("one\n\ntwo\n\nthree");
     const mounted = await mountTerminal(
