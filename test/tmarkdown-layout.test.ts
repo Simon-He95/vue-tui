@@ -69,6 +69,34 @@ describe("markdown layout", () => {
     );
   });
 
+  it("keeps bare relative markdown links as safe hrefs", () => {
+    const parser = createTuiMarkdownParser();
+    const nodes = parser.parse(
+      [
+        "[guide](guide/parser-api)",
+        "[doc](docs/intro.md)",
+        "[asset](assets/a.png)",
+        "[anchor](#section-1)",
+      ].join(" "),
+      true,
+    );
+    const blocks = markdownAstToBlocks(nodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const paragraph = blocks[0];
+
+    expect(paragraph?.type).toBe("inline");
+    if (paragraph?.type !== "inline") throw new Error("expected inline block");
+    expect(paragraph.segments.some((segment) => segment.style?.href === "guide/parser-api")).toBe(
+      true,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href === "docs/intro.md")).toBe(
+      true,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href === "assets/a.png")).toBe(
+      true,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href === "#section-1")).toBe(true);
+  });
+
   it("drops unsafe hrefs even when link nodes bypass parser validation", () => {
     const blocks = markdownAstToBlocks(
       [

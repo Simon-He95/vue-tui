@@ -100,6 +100,7 @@ export const TVirtualMarkdown = defineComponent({
     final: { type: Boolean, default: true },
     streaming: { type: Boolean, default: false },
     autoFocus: { type: Boolean, default: false },
+    selectable: { type: Boolean, default: true },
     customHtmlTags: {
       type: Array as PropType<readonly string[]>,
       default: undefined,
@@ -343,6 +344,7 @@ export const TVirtualMarkdown = defineComponent({
       zIndex: eventZ.value,
       visible: visible.value,
       focusable: true,
+      selectable: props.selectable,
       handlers: {
         click: (_event: TerminalPointerEvent) => {},
         wheel: (event: any) => {

@@ -366,6 +366,8 @@ Experimental Markdown renderer / virtual scroller。它们走独立的 `parser -
 > Experimental markdown import: `@simon_he/vue-tui/markdown`
 >
 > 当前 streaming Markdown 只做 **per-frame coalescing**：一帧内多次 append 会合并成一次 rebuild，但 rebuild 本身仍然是 **full-document parse + layout**，还不是增量解析/增量布局。长文档 streaming transcript 场景请按这个成本模型评估。
+>
+> `TVirtualMarkdown` 默认保持文本可选中复制，即使它自身是 focusable 节点；如需列表式交互，可传 `selectable=false`。
 
 ## TLogView
 

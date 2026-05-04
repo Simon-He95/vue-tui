@@ -66,6 +66,24 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("keeps href metadata for bare relative markdown links", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 2,
+          content: "[guide](guide/parser-api)",
+        }),
+      24,
+      4,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("guide/parser-api");
+    mounted.unmount();
+  });
+
   it("virtualizes markdown rows and repaints the viewport on wheel scroll", async () => {
     const content = Array.from({ length: 12 }, (_, index) => `- item-${index}`).join("\n");
     const mounted = await mountTerminal(
@@ -99,6 +117,76 @@ describe("markdown components", () => {
       "- item-3",
       "- item-4",
     ]);
+    mounted.unmount();
+  });
+
+  it("updates href metadata inside TVirtualMarkdown when only the link target changes", async () => {
+    const content = ref("[ok](https://a.example)");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 2,
+          content: content.value,
+        }),
+      24,
+      4,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://a.example");
+
+    content.value = "[ok](https://b.example)";
+    await nextTick();
+    await nextTick();
+
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://b.example");
+    mounted.unmount();
+  });
+
+  it("keeps native text selection enabled for TVirtualMarkdown by default", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          content: "hello",
+        }),
+      20,
+      4,
+    );
+
+    const container = mounted.container()!;
+    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+    expect(container.style.userSelect).toBe("text");
+    container.dispatchEvent(new MouseEvent("mouseup", { clientX: 0, clientY: 0, bubbles: true }));
+    expect(container.style.userSelect).toBe("text");
+    mounted.unmount();
+  });
+
+  it("can disable native text selection for TVirtualMarkdown", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          content: "hello",
+          selectable: false,
+        }),
+      20,
+      4,
+    );
+
+    const container = mounted.container()!;
+    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+    expect(container.style.userSelect).toBe("none");
+    container.dispatchEvent(new MouseEvent("mouseup", { clientX: 0, clientY: 0, bubbles: true }));
+    expect(container.style.userSelect).toBe("text");
     mounted.unmount();
   });
 

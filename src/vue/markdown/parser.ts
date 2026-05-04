@@ -18,6 +18,7 @@ const RELATIVE_LINK_PREFIXES = ["#", "/", "./", "../"] as const;
 const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 const markdownInstanceCache = new Map<string, ReturnType<typeof getMarkdown>>();
 const MAX_MARKDOWN_INSTANCE_CACHE = 32;
+const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
 function hasControlChars(value: string): boolean {
   for (const ch of value) {
@@ -37,6 +38,7 @@ export function isSafeMarkdownLink(url: string): boolean {
   if (value.startsWith("javascript:")) return false;
   if (value.startsWith("data:")) return false;
   if (RELATIVE_LINK_PREFIXES.some((prefix) => raw.startsWith(prefix))) return true;
+  if (!SCHEME_RE.test(raw)) return true;
 
   try {
     const parsed = new URL(raw);
