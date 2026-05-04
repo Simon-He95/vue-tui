@@ -12,6 +12,7 @@ export type SchedulerFrameTaskRunStats = Readonly<{
   frameTaskCount: number;
   coalescedFrameTasks: number;
   remainingFrameTasks: number;
+  droppedUpdates: number;
   reason: FramePerfReason;
   sync: boolean;
   requestMore: boolean;
@@ -21,6 +22,7 @@ export const EMPTY_FRAME_TASK_RUN_STATS: SchedulerFrameTaskRunStats = Object.fre
   frameTaskCount: 0,
   coalescedFrameTasks: 0,
   remainingFrameTasks: 0,
+  droppedUpdates: 0,
   reason: "unknown",
   sync: false,
   requestMore: false,
@@ -66,15 +68,20 @@ function mergeFrameTasks(prev: TerminalFrameTask, next: TerminalFrameTask): Term
   };
 }
 
-function orderedTasks(tasks: readonly TerminalFrameTask[]): TerminalFrameTask[] {
-  const high: TerminalFrameTask[] = [];
-  const normal: TerminalFrameTask[] = [];
-  const low: TerminalFrameTask[] = [];
-  for (const task of tasks) {
-    const priority = normalizePriority(task.priority);
-    if (priority === "high") high.push(task);
-    else if (priority === "low") low.push(task);
-    else normal.push(task);
+type QueuedFrameTask = Readonly<{
+  task: TerminalFrameTask;
+  coalesced: number;
+}>;
+
+function orderedQueuedTasks(tasks: readonly QueuedFrameTask[]): QueuedFrameTask[] {
+  const high: QueuedFrameTask[] = [];
+  const normal: QueuedFrameTask[] = [];
+  const low: QueuedFrameTask[] = [];
+  for (const entry of tasks) {
+    const priority = normalizePriority(entry.task.priority);
+    if (priority === "high") high.push(entry);
+    else if (priority === "low") low.push(entry);
+    else normal.push(entry);
   }
   return [...high, ...normal, ...low];
 }
@@ -91,10 +98,8 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
   let runningScheduledFrame = false;
   let pendingScheduleMicrotask = false;
   let pendingScheduleRequestMore = false;
-  let coalescedFrameTasks = 0;
-
-  const frameTasksById = new Map<string, TerminalFrameTask>();
-  const anonymousFrameTasks: TerminalFrameTask[] = [];
+  const frameTasksById = new Map<string, QueuedFrameTask>();
+  const anonymousFrameTasks: QueuedFrameTask[] = [];
   const liveReasons = new Map<string, number>();
 
   function hasPendingFrameTasks(): boolean {
@@ -163,27 +168,36 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     if (handle && handle !== SCHEDULED_SENTINEL) cancelFrame(handle);
   }
 
-  function addDeferredTask(task: TerminalFrameTask): void {
+  function addQueuedTask(entry: QueuedFrameTask): void {
+    const task = entry.task;
     if (!task.id) {
-      anonymousFrameTasks.push(task);
+      anonymousFrameTasks.push(entry);
       return;
     }
     const existing = frameTasksById.get(task.id);
-    frameTasksById.set(task.id, existing ? mergeFrameTasks(existing, task) : task);
+    frameTasksById.set(
+      task.id,
+      existing
+        ? {
+            task: mergeFrameTasks(existing.task, task),
+            coalesced: existing.coalesced + entry.coalesced + 1,
+          }
+        : entry,
+    );
   }
 
-  function requeueDeferredTasks(tasks: readonly TerminalFrameTask[]): void {
+  function requeueDeferredTasks(tasks: readonly QueuedFrameTask[]): void {
     if (!tasks.length) return;
     const queuedById = new Map(frameTasksById);
     const queuedAnonymous = anonymousFrameTasks.splice(0);
     frameTasksById.clear();
-    for (const task of tasks) addDeferredTask(task);
-    for (const task of queuedById.values()) addDeferredTask(task);
+    for (const task of tasks) addQueuedTask(task);
+    for (const task of queuedById.values()) addQueuedTask(task);
     anonymousFrameTasks.push(...queuedAnonymous);
   }
 
-  function takeOrderedTasks(): TerminalFrameTask[] {
-    const tasks = orderedTasks([...frameTasksById.values(), ...anonymousFrameTasks]);
+  function takeOrderedTasks(): QueuedFrameTask[] {
+    const tasks = orderedQueuedTasks([...frameTasksById.values(), ...anonymousFrameTasks]);
     frameTasksById.clear();
     anonymousFrameTasks.length = 0;
     return tasks;
@@ -200,13 +214,13 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
 
     const startedAt = framePerfNow();
     const currentFrameId = ++frameTaskFrameId;
-    const coalesced = coalescedFrameTasks;
-    coalescedFrameTasks = 0;
     let requestMore = false;
     let frameTaskCount = 0;
+    let coalescedFrameTasks = 0;
+    let droppedUpdates = 0;
     let frameReason: FramePerfReason = "unknown";
     let shouldSync = false;
-    const deferredTasks: TerminalFrameTask[] = [];
+    const deferredTasks: QueuedFrameTask[] = [];
 
     const ctx: TerminalFrameContext = {
       frameId: currentFrameId,
@@ -222,12 +236,17 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
         if ((invalidateOptions?.priority ?? "normal") === "high") shouldSync = true;
         options.invalidate(invalidateOptions);
       },
+      reportDroppedUpdates: (count) => {
+        if (!Number.isFinite(count) || count <= 0) return;
+        droppedUpdates += Math.floor(count);
+      },
     };
 
     insideFrame = true;
     try {
       for (let i = 0; i < tasks.length; i++) {
-        const task = tasks[i]!;
+        const entry = tasks[i]!;
+        const task = entry.task;
         const priority = normalizePriority(task.priority);
         if (!force && frameTaskCount > 0 && priority !== "high" && ctx.remainingMs() <= 0) {
           deferredTasks.push(...tasks.slice(i));
@@ -236,6 +255,7 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
         }
 
         frameTaskCount++;
+        coalescedFrameTasks += entry.coalesced;
         frameReason = mergeFramePerfReason(frameReason, task.reason);
         shouldSync = shouldSync || task.sync === true || priority === "high";
         task.run(ctx);
@@ -255,8 +275,9 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     const remaining = remainingFrameTasks();
     return {
       frameTaskCount,
-      coalescedFrameTasks: coalesced,
+      coalescedFrameTasks,
       remainingFrameTasks: remaining,
+      droppedUpdates,
       reason: frameReason,
       sync: shouldSync,
       requestMore,
@@ -313,13 +334,15 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     if (task.id) {
       const prev = frameTasksById.get(task.id);
       if (prev) {
-        coalescedFrameTasks++;
-        frameTasksById.set(task.id, mergeFrameTasks(prev, task));
+        frameTasksById.set(task.id, {
+          task: mergeFrameTasks(prev.task, task),
+          coalesced: prev.coalesced + 1,
+        });
       } else {
-        frameTasksById.set(task.id, task);
+        frameTasksById.set(task.id, { task, coalesced: 0 });
       }
     } else {
-      anonymousFrameTasks.push(task);
+      anonymousFrameTasks.push({ task, coalesced: 0 });
     }
     scheduleFrame(false);
   }

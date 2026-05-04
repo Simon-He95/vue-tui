@@ -295,7 +295,7 @@ export const TerminalProvider = defineComponent({
         frameTaskCount: frameTasks.frameTaskCount,
         coalescedFrameTasks: frameTasks.coalescedFrameTasks,
         remainingFrameTasks: frameTasks.remainingFrameTasks,
-        droppedUpdates: 0,
+        droppedUpdates: frameTasks.droppedUpdates,
         queueDepth: queueDepth(),
         liveReasons: (() => {
           const reasons = frameScheduler.liveReasonList();

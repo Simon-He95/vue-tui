@@ -114,6 +114,52 @@ describe("scheduler frame tasks", () => {
     }
   });
 
+  it("does not carry coalesced counts from canceled tasks into the next frame", async () => {
+    const raf = installRaf();
+    const probe = createSchedulerProbeApp();
+    let runCount = 0;
+
+    try {
+      probe.app.mount();
+      await nextTick();
+      probe.scheduler.flushNow();
+      probe.framePerf.clear();
+
+      for (let i = 0; i < 100; i++) {
+        probe.scheduler.queueFrameTask({
+          id: "canceled",
+          reason: "scroll",
+          priority: "high",
+          run(ctx) {
+            ctx.invalidate({ priority: "high", plane: "default", reason: "scroll" });
+          },
+        });
+      }
+      probe.scheduler.cancelFrameTask("canceled");
+      probe.scheduler.queueFrameTask({
+        id: "kept",
+        reason: "input",
+        priority: "high",
+        run(ctx) {
+          runCount++;
+          ctx.invalidate({ priority: "high", plane: "default", reason: "input" });
+        },
+      });
+
+      raf.runNext();
+
+      expect(runCount).toBe(1);
+      expect(probe.framePerf.latest()).toMatchObject({
+        reason: "input",
+        frameTaskCount: 1,
+        coalescedFrameTasks: 0,
+      });
+    } finally {
+      probe.app.dispose();
+      raf.restore();
+    }
+  });
+
   it("runs different-id tasks in priority order and merges reasons", async () => {
     const raf = installRaf();
     const probe = createSchedulerProbeApp();

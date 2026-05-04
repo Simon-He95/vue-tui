@@ -290,7 +290,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       frameTaskCount: frameTasks.frameTaskCount,
       coalescedFrameTasks: frameTasks.coalescedFrameTasks,
       remainingFrameTasks: frameTasks.remainingFrameTasks,
-      droppedUpdates: 0,
+      droppedUpdates: frameTasks.droppedUpdates,
       queueDepth: queueDepth(),
       liveReasons: (() => {
         const reasons = frameScheduler.liveReasonList();

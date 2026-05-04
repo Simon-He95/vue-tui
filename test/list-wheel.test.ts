@@ -141,7 +141,8 @@ describe("TList wheel scrolling", () => {
       expect(framePerf!.latest()).toMatchObject({
         reason: "scroll",
         frameTaskCount: 1,
-        coalescedFrameTasks: 49,
+        coalescedFrameTasks: 0,
+        droppedUpdates: 49,
         remainingFrameTasks: 0,
       });
     } finally {
@@ -478,6 +479,47 @@ describe("TList wheel scrolling", () => {
     } finally {
       app.dispose();
       raf.restore();
+    }
+  });
+
+  it("does not issue a redundant high flush for reflected modelValue", async () => {
+    const commits: unknown[] = [];
+    const App = defineComponent({
+      name: "ControlledListModelValueApp",
+      setup() {
+        const modelValue = ref(0);
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+            modelValue: modelValue.value,
+            autoFocus: true,
+            "onUpdate:modelValue": (value: number) => {
+              modelValue.value = value;
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      const off = app.terminal.on("commit", (commit) => commits.push(commit));
+
+      app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("item-0");
+      expect(commits).toHaveLength(1);
+      off();
+    } finally {
+      app.dispose();
     }
   });
 

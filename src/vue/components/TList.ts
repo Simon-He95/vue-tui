@@ -146,14 +146,14 @@ export const TList = defineComponent({
       return h > 0 && active.value >= start && active.value <= end;
     }
 
-    function ensureActiveVisible(): void {
+    function ensureActiveVisible(): boolean {
       const h = viewportHeight();
-      if (h <= 0) return;
+      if (h <= 0) return false;
       const maxTop = maxScrollTop();
       let nextTop = clampScrollTop(scrollTop.value);
       if (active.value < nextTop) nextTop = active.value;
       else if (active.value >= nextTop + h) nextTop = clamp(active.value - (h - 1), 0, maxTop);
-      setScrollTop(nextTop, { emitScroll: false });
+      return setScrollTop(nextTop, { emitScroll: false });
     }
 
     const wheelMailbox = createFrameMailbox<number>({
@@ -164,9 +164,10 @@ export const TList = defineComponent({
       sync: true,
       apply(nextTop, ctx) {
         pendingWheelTop = null;
-        const changed = setScrollTop(nextTop, { emitScroll: true });
-        if (!changed) return;
+        const clampedTop = clampScrollTop(nextTop);
+        if (clampedTop === scrollTop.value) return;
         detachedByWheel = true;
+        setScrollTop(clampedTop, { emitScroll: true });
         ctx.invalidate({ priority: "high", reason: "scroll" });
       },
     });
@@ -221,10 +222,22 @@ export const TList = defineComponent({
     }
 
     function syncExternalModelValue(value: number): void {
-      reattachSelection();
-      active.value = clamp(value, 0, Math.max(0, props.items.length - 1));
-      ensureActiveVisible();
-      scheduler.invalidate({ priority: "high", reason: "input" });
+      const last = Math.max(0, props.items.length - 1);
+      const next = clamp(value, 0, last);
+      const hadPendingWheel = wheelMailbox.hasPending();
+      const changedActive = active.value !== next;
+      const wasDetached = detachedByWheel;
+
+      if (hadPendingWheel || wasDetached || changedActive) {
+        reattachSelection();
+      }
+
+      active.value = next;
+      const changedScroll = ensureActiveVisible();
+
+      if (hadPendingWheel || changedActive || changedScroll) {
+        scheduler.invalidate({ priority: "high", reason: "input" });
+      }
     }
 
     function onKeydown(e: TerminalKeyboardEvent): void {

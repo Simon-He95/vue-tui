@@ -56,6 +56,7 @@ function createScheduler() {
     remainingMs: () => 8,
     requestMore: vi.fn(),
     invalidate: vi.fn(),
+    reportDroppedUpdates: vi.fn(),
   };
   const scheduler: TerminalScheduler = {
     invalidate: vi.fn(),
@@ -200,17 +201,25 @@ describe("frame mailbox", () => {
     mailbox.queue(2);
     mailbox.queue(3);
 
-    expect(probe.queueFrameTask).toHaveBeenCalledTimes(3);
-    expect(
-      probe.queueFrameTask.mock.calls.map(
-        ([task]: [TerminalFrameTask]) => task.id,
-      ),
-    ).toEqual(["probe-1", "probe-1", "probe-1"]);
+    expect(probe.queueFrameTask).toHaveBeenCalledTimes(1);
+    expect(probe.queueFrameTask.mock.calls[0]![0].id).toBe("probe-1");
 
     probe.flush();
     mailbox.queue(4);
 
-    expect(probe.queueFrameTask.mock.calls[3]![0].id).toBe("probe-2");
+    expect(probe.queueFrameTask).toHaveBeenCalledTimes(2);
+    expect(probe.queueFrameTask.mock.calls[1]![0].id).toBe("probe-2");
+  });
+
+  it("throws when id is empty", () => {
+    const probe = createScheduler();
+    const mailbox = createFrameMailbox({
+      scheduler: probe.scheduler,
+      id: "",
+      apply: vi.fn(),
+    });
+
+    expect(() => mailbox.queue(1)).toThrow(/non-empty task id/);
   });
 
   it("coalesces through the real scheduler and preserves priority order", async () => {
@@ -268,7 +277,8 @@ describe("frame mailbox", () => {
       expect(order).toEqual(["high:99:99", "low:99:99"]);
       expect(framePerf!.latest()).toMatchObject({
         frameTaskCount: 2,
-        coalescedFrameTasks: 198,
+        coalescedFrameTasks: 0,
+        droppedUpdates: 198,
         remainingFrameTasks: 0,
       });
     } finally {

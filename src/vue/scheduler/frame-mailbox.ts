@@ -33,21 +33,28 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
 
   function currentTaskId(): string {
     if (pendingTaskId) return pendingTaskId;
-    pendingTaskId = typeof options.id === "function" ? options.id() : options.id;
+    const id = typeof options.id === "function" ? options.id() : options.id;
+    if (!id) {
+      throw new Error("createFrameMailbox requires a non-empty task id");
+    }
+    pendingTaskId = id;
     return pendingTaskId;
   }
 
   function queue(value: T): void {
     if (disposed) return;
+    const wasPending = hasPending;
+    const taskId = wasPending ? pendingTaskId! : currentTaskId();
 
     if (hasPending && options.merge) pending = options.merge(pending, value);
     else pending = value;
 
     hasPending = true;
     queued++;
+    if (wasPending) return;
 
     options.scheduler.queueFrameTask({
-      id: currentTaskId(),
+      id: taskId,
       reason: options.reason,
       priority: options.priority,
       sync: options.sync,
@@ -56,14 +63,16 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
 
         const value = pending;
         const count = queued;
+        const dropped = Math.max(0, count - 1);
 
         hasPending = false;
         queued = 0;
         pendingTaskId = null;
+        ctx.reportDroppedUpdates(dropped);
 
         options.apply(value, ctx, {
           queued: count,
-          dropped: Math.max(0, count - 1),
+          dropped,
         });
       },
     });

@@ -34,6 +34,7 @@ export type TerminalFrameContext = Readonly<{
   remainingMs: () => number;
   requestMore: () => void;
   invalidate: (options?: TerminalSchedulerInvalidateOptions) => void;
+  reportDroppedUpdates: (count: number) => void;
 }>;
 
 export type TerminalFrameTask = Readonly<{
@@ -60,6 +61,11 @@ export type TerminalScheduler = Readonly<{
   flushNow: () => void;
   configure: (options: TerminalSchedulerConfig) => void;
   queueFrameTask: (task: TerminalFrameTask) => void;
+  /**
+   * Best-effort cancellation for a pending id task.
+   * If the scheduler has already taken the task for the current frame,
+   * the task run() still needs to guard its own stale state.
+   */
   cancelFrameTask: (id: string) => void;
   requestLive: (reason: string) => () => void;
   dropLive: (reason: string) => void;

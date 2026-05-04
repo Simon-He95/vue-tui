@@ -40,6 +40,7 @@ export const TRenderPlane = defineComponent({
             task.run({
               ...ctx,
               invalidate: (options) => ctx.invalidate(withPlane(options)),
+              reportDroppedUpdates: (count) => ctx.reportDroppedUpdates(count),
             }),
         }),
       cancelFrameTask: (id: string) => parentCtx.scheduler.cancelFrameTask(id),
