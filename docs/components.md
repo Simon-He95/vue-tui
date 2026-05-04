@@ -370,6 +370,10 @@ Experimental Markdown renderer / virtual scroller。它们走独立的 `parser -
 > `TVirtualMarkdown` 默认保持文本可选中复制，即使它自身是 focusable 节点；如需列表式交互，可传 `selectable=false`。
 >
 > Markdown link 在 DOM renderer 中当前仍表现为带 `Style.href` metadata 的样式文本，不会生成原生可点击 `<a>`；CLI/stdout renderer 才会在支持时发出 OSC8 hyperlink。
+>
+> `TVirtualMarkdown` 当前仍是 **viewport-level repaint**，不是 row-local dirty diff；streaming append 也不会自动 follow tail，默认保持 absolute `scrollTop` / absolute visual-row index 语义。
+>
+> `@simon_he/vue-tui/markdown` 当前只公开 Markdown 组件和相关类型/theme；parser/layout/render internals 还不是稳定公共 API。
 
 ## TLogView
 

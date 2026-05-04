@@ -242,6 +242,34 @@ describe("TVirtualMarkdown performance", () => {
     mounted.unmount();
   });
 
+  it("keeps absolute scrollTop semantics instead of following tail on streaming append", async () => {
+    const content = ref(Array.from({ length: 8 }, (_, index) => `- row-${index}`).join("\n"));
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          content: content.value,
+          streaming: true,
+          scrollTop: 4,
+        }),
+      24,
+      8,
+    );
+
+    content.value = `${content.value}\n- row-8\n- row-9`;
+    await nextTick();
+    await nextTick();
+
+    expect(
+      mounted.terminal.snapshot().lines.slice(0, 4).map((line) => line.trimEnd()),
+    ).toEqual(["- row-4", "- row-5", "- row-6", "- row-7"]);
+    mounted.unmount();
+  });
+
   it("does not rebuild markdown rows when theme identity changes without semantic changes", async () => {
     const tick = ref(0);
     const App = defineComponent({

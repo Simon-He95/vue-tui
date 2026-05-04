@@ -2,6 +2,27 @@ import process from "node:process";
 import { describe, expect, it } from "vitest";
 import { createStdoutRenderer, createTerminal } from "../src/index.js";
 
+function hrefHash10Legacy(href: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < href.length; i++) {
+    h ^= href.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h ^ (h >>> 16) ^ (h >>> 22)) & 0x3ff;
+}
+
+function findHrefHashCollision(): readonly [string, string] {
+  const seen = new Map<number, string>();
+  for (let i = 0; i < 10_000; i++) {
+    const href = `https://collision.example/${i.toString(36)}`;
+    const hash = hrefHash10Legacy(href);
+    const previous = seen.get(hash);
+    if (previous && previous !== href) return [previous, href];
+    seen.set(hash, href);
+  }
+  throw new Error("failed to find href hash collision");
+}
+
 describe("stdout renderer style diffing", () => {
   it("avoids per-run resets when only setting attributes", () => {
     const terminal = createTerminal({ cols: 4, rows: 1 });
@@ -70,6 +91,55 @@ describe("stdout renderer style diffing", () => {
 
       expect(out).toContain("https://b.example");
       expect(out).not.toContain("https://a.example");
+
+      renderer.dispose();
+    } finally {
+      if (previousTermProgram == null) delete process.env.TERM_PROGRAM;
+      else process.env.TERM_PROGRAM = previousTermProgram;
+      if (previousVscodePid == null) delete process.env.VSCODE_PID;
+      else process.env.VSCODE_PID = previousVscodePid;
+      if (previousVscodeHook == null) delete process.env.VSCODE_IPC_HOOK_CLI;
+      else process.env.VSCODE_IPC_HOOK_CLI = previousVscodeHook;
+    }
+  });
+
+  it("re-emits OSC8 links even when legacy href hashes collide", () => {
+    const [hrefA, hrefB] = findHrefHashCollision();
+    const previousTermProgram = process.env.TERM_PROGRAM;
+    const previousVscodePid = process.env.VSCODE_PID;
+    const previousVscodeHook = process.env.VSCODE_IPC_HOOK_CLI;
+    process.env.TERM_PROGRAM = "xterm";
+    delete process.env.VSCODE_PID;
+    delete process.env.VSCODE_IPC_HOOK_CLI;
+    try {
+      const terminal = createTerminal({ cols: 2, rows: 1 });
+      let out = "";
+      const output = {
+        isTTY: true,
+        write(chunk: string) {
+          out += chunk;
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+      });
+
+      terminal.put(0, 0, "o", { underline: true, href: hrefA });
+      terminal.put(1, 0, "k", { underline: true, href: hrefA });
+      terminal.commit({ sync: true });
+
+      out = "";
+      terminal.put(0, 0, "o", { underline: true, href: hrefB });
+      terminal.put(1, 0, "k", { underline: true, href: hrefB });
+      terminal.commit({ sync: true });
+
+      expect(hrefHash10Legacy(hrefA)).toBe(hrefHash10Legacy(hrefB));
+      expect(out).toContain(hrefB);
+      expect(out).not.toContain(hrefA);
 
       renderer.dispose();
     } finally {

@@ -11,8 +11,8 @@
 
 ## 运行环境
 
-- **Node.js >= 18**
-- `@simon_he/vue-tui/markdown` 依赖 `stream-markdown-parser` / `markdown-it-ts` 链路，因此当前包发布面已统一到 Node 18。
+- `@simon_he/vue-tui` 本身不再强制 Node 18 基线。
+- `@simon_he/vue-tui/markdown` 依赖 `stream-markdown-parser` / `markdown-it-ts` 链路；其上游包当前仍声明 `node >= 18`，因此如果你使用 Markdown 子入口，请按该依赖链的运行时要求评估。
 
 ### 浏览器渲染
 

@@ -97,6 +97,22 @@ describe("markdown layout", () => {
     expect(paragraph.segments.some((segment) => segment.style?.href === "#section-1")).toBe(true);
   });
 
+  it("does not style unsafe markdown links as active links", () => {
+    const parser = createTuiMarkdownParser();
+    const nodes = parser.parse("[safe](https://example.com) [unsafe](javascript:alert(1))", true);
+    const blocks = markdownAstToBlocks(nodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const paragraph = blocks[0];
+
+    expect(paragraph?.type).toBe("inline");
+    if (paragraph?.type !== "inline") throw new Error("expected inline block");
+    const safeSegment = paragraph.segments.find((segment) => segment.text === "safe");
+    const unsafeSegment = paragraph.segments.find((segment) => segment.text === "unsafe");
+    expect(safeSegment?.style?.href).toBe("https://example.com");
+    expect(safeSegment?.style?.underline).toBe(true);
+    expect(unsafeSegment?.style?.href).toBeUndefined();
+    expect(unsafeSegment?.style?.underline).not.toBe(true);
+  });
+
   it("lays out long markdown paragraphs without changing row counts", () => {
     const parser = createTuiMarkdownParser();
     const rows = buildMarkdownVisualRows("a".repeat(100_000), 80, parser);
@@ -159,6 +175,11 @@ describe("markdown layout", () => {
     expect(rows.map((row) => row.plainText)).toEqual(["- hello ", "  world"]);
   });
 
+  it("does not insert an extra blank row before nested list items", () => {
+    const rows = buildMarkdownVisualRows("- parent\n  - child", 40, createTuiMarkdownParser());
+    expect(rows.map((row) => row.plainText)).toEqual(["- parent", "  - child"]);
+  });
+
   it("keeps streaming strong parsing strict only when final rendering is non-streaming", () => {
     const strictParser = createTuiMarkdownParser({ streaming: false });
     const streamingParser = createTuiMarkdownParser({ streaming: true });
@@ -207,6 +228,11 @@ describe("markdown layout", () => {
     expect(pendingRows.map((row) => row.plainText)).toEqual(finalRows.map((row) => row.plainText));
   });
 
+  it("preserves code block tab indentation as spaces", () => {
+    const rows = buildMarkdownVisualRows("```ts\n\tconst a = 1\n```", 40, createTuiMarkdownParser());
+    expect(rows.some((row) => row.plainText.includes("    const a = 1"))).toBe(true);
+  });
+
   it("does not hang when list and blockquote prefixes are wider than width", () => {
     const parser = createTuiMarkdownParser();
     const listRows = buildMarkdownVisualRows("- a", 1, parser);
@@ -238,6 +264,11 @@ describe("markdown layout", () => {
     }
 
     expect(rows.map((row) => row.plainText).join("\n")).toContain("你");
+  });
+
+  it("omits too-wide graphemes when the viewport is narrower than the glyph", () => {
+    const rows = buildMarkdownVisualRows("你", 1, createTuiMarkdownParser());
+    expect(rows.map((row) => row.plainText)).toEqual(["", ""]);
   });
 
   it("reuses merged style objects across markdown paints", () => {

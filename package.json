@@ -106,8 +106,5 @@
   "lint-staged": {
     "*": "oxfmt --write",
     "*.{vue,js,ts,jsx,tsx}": "oxlint --fix"
-  },
-  "engines": {
-    "node": ">=18"
   }
 }

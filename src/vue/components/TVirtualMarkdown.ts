@@ -26,7 +26,11 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
-import { applyWheelScroll, createWheelScrollState } from "../utils/wheel-scroll.js";
+import {
+  applyWheelScroll,
+  createWheelScrollState,
+  resetWheelScrollState,
+} from "../utils/wheel-scroll.js";
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -289,6 +293,13 @@ export const TVirtualMarkdown = defineComponent({
         scheduleRebuild();
       },
       { immediate: true },
+    );
+
+    watch(
+      [() => props.content, () => props.w, () => props.h, () => absRect.value.h],
+      () => {
+        resetWheelScrollState(wheelState);
+      },
     );
 
     watch(

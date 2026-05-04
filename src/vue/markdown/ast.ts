@@ -69,6 +69,21 @@ function pushTextSegments(
   }
 }
 
+function sanitizeCodeBlockText(text: string, tabSize = 4): string {
+  const normalized = String(text ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\t/g, spaces(tabSize))
+    .replace(/\u00a0/g, " ");
+  let out = "";
+  for (const ch of normalized) {
+    const code = ch.charCodeAt(0);
+    if ((code >= 0x00 && code <= 0x08) || code === 0x0b || code === 0x0c) continue;
+    if ((code >= 0x0e && code <= 0x1f) || code === 0x7f) continue;
+    out += ch;
+  }
+  return out;
+}
+
 function inlineNodeSegments(
   nodes: readonly ParsedNode[],
   theme: TuiMarkdownTheme,
@@ -133,10 +148,9 @@ function inlineNodeSegments(
       case "link": {
         const href = stringProp(node, "href");
         const safeHref = href && isSafeMarkdownLink(href) ? href : "";
-        const linkStyle = mergeStyle(
-          inheritedStyle,
-          safeHref ? { ...theme.link, href: safeHref } : theme.link,
-        );
+        const linkStyle = safeHref
+          ? mergeStyle(inheritedStyle, { ...theme.link, href: safeHref })
+          : inheritedStyle;
         const children = nodeChildren(node);
         if (children.length) out.push(...inlineNodeSegments(children, theme, linkStyle));
         else pushTextSegments(out, stringProp(node, "text"), linkStyle);
@@ -236,7 +250,7 @@ function blockFromCodeBlock(
   return {
     type: "code_block",
     key,
-    lines: sanitizeTextBlock(node.code ?? "").split("\n"),
+    lines: sanitizeCodeBlockText(node.code ?? "").split("\n"),
     style: theme.codeBlock,
     prefixSegments: context.prefixSegments,
     continuationPrefixSegments: context.continuationPrefixSegments,
@@ -328,7 +342,17 @@ function listItemBlocks(
       ),
     );
     if (!childBlocks.length) continue;
-    if (out.length && out[out.length - 1]?.type !== "blank" && childBlocks[0]?.type !== "blank") {
+    const startsNestedList =
+      child.type === "list" &&
+      out.length > 0 &&
+      out[out.length - 1]?.type === "inline" &&
+      childBlocks[0]?.type === "inline";
+    if (
+      out.length &&
+      out[out.length - 1]?.type !== "blank" &&
+      childBlocks[0]?.type !== "blank" &&
+      !startsNestedList
+    ) {
       out.push({ type: "blank", key: `${keyPrefix}-${i}-gap` });
     }
     out.push(...childBlocks);

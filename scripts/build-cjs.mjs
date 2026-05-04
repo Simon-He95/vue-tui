@@ -11,7 +11,7 @@ await build({
   bundle: true,
   format: "cjs",
   platform: "node",
-  target: ["node18"],
+  target: ["node14"],
   sourcemap: false,
   external: ["vue"],
 });

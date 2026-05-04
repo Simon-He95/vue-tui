@@ -18,6 +18,17 @@ function dispatchWheel(container: HTMLElement): void {
   container.dispatchEvent(wheel);
 }
 
+function dispatchTimedWheel(container: HTMLElement, timeStamp: number): void {
+  const wheel = new Event("wheel", { bubbles: true, cancelable: true }) as any;
+  Object.defineProperties(wheel, {
+    clientX: { value: 0 },
+    clientY: { value: 0 },
+    deltaY: { value: 100 },
+    timeStamp: { value: timeStamp },
+  });
+  container.dispatchEvent(wheel);
+}
+
 describe("markdown components", () => {
   it("renders styled markdown rows without feeding raw AST into TText", async () => {
     const mounted = await mountTerminal(
@@ -84,6 +95,27 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("does not render unsafe markdown links with active link styling", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 32,
+          h: 2,
+          content: "[safe](https://example.com) [unsafe](javascript:alert(1))",
+        }),
+      32,
+      4,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://example.com");
+    expect(mounted.terminal.getCell(0, 0).style.underline).toBe(true);
+    expect(mounted.terminal.getCell(5, 0).style.href).toBeUndefined();
+    expect(mounted.terminal.getCell(5, 0).style.underline).not.toBe(true);
+    mounted.unmount();
+  });
+
   it("virtualizes markdown rows and repaints the viewport on wheel scroll", async () => {
     const content = Array.from({ length: 12 }, (_, index) => `- item-${index}`).join("\n");
     const mounted = await mountTerminal(
@@ -116,6 +148,41 @@ describe("markdown components", () => {
       "- item-2",
       "- item-3",
       "- item-4",
+    ]);
+    mounted.unmount();
+  });
+
+  it("resets wheel timing after markdown content shrink", async () => {
+    const content = ref(Array.from({ length: 20 }, (_, index) => `- row-${index}`).join("\n"));
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          content: content.value,
+          autoFocus: true,
+        }),
+      20,
+      8,
+    );
+
+    dispatchTimedWheel(mounted.container()!, 100);
+    await nextTick();
+
+    content.value = Array.from({ length: 10 }, (_, index) => `- row-${index}`).join("\n");
+    await nextTick();
+    await nextTick();
+
+    dispatchTimedWheel(mounted.container()!, 102);
+    await nextTick();
+
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
+      "- row-2",
+      "- row-3",
+      "- row-4",
+      "- row-5",
     ]);
     mounted.unmount();
   });
