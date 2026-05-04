@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ParsedNode } from "stream-markdown-parser";
 import type { Terminal } from "../src/index.js";
 import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
 import { buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
 import { layoutMarkdownBlocks } from "../src/vue/markdown/layout.js";
-import { createTuiMarkdownParser } from "../src/vue/markdown/parser.js";
+import { createTuiMarkdownParser, type TuiMarkdownParser } from "../src/vue/markdown/parser.js";
 import { paintMarkdownVisualRow } from "../src/vue/markdown/render.js";
 import { DEFAULT_TUI_MARKDOWN_THEME } from "../src/vue/markdown/theme.js";
 
@@ -104,6 +104,21 @@ describe("markdown layout", () => {
     expect(rows).toHaveLength(1250);
     expect(rows[0]?.plainText).toHaveLength(80);
     expect(rows.at(-1)?.plainText).toHaveLength(80);
+  });
+
+  it("falls back to plain text rows when markdown parsing throws", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const parser: TuiMarkdownParser = {
+      parse() {
+        throw new Error("boom");
+      },
+    };
+
+    const rows = buildMarkdownVisualRows("hello\n\nworld", 20, parser);
+
+    expect(rows.map((row) => row.plainText)).toEqual(["hello", "", "world"]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 
   it("drops unsafe hrefs even when link nodes bypass parser validation", () => {

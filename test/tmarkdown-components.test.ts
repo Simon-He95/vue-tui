@@ -448,6 +448,40 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("keeps absolute scrollTop semantics when content is inserted before the viewport", async () => {
+    const content = ref(Array.from({ length: 100 }, (_, index) => `- row-${index}`).join("\n"));
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          content: content.value,
+          scrollTop: 50,
+        }),
+      20,
+      8,
+    );
+
+    content.value = [
+      "- pre-0",
+      "- pre-1",
+      "- pre-2",
+      content.value,
+    ].join("\n");
+    await nextTick();
+    await nextTick();
+
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
+      "- row-47",
+      "- row-48",
+      "- row-49",
+      "- row-50",
+    ]);
+    mounted.unmount();
+  });
+
   it("does not paint TMarkdownText outside its rect when dirty rows include other components", async () => {
     const top = ref("top-a");
     const markdown = ref("**markdown-a**");
