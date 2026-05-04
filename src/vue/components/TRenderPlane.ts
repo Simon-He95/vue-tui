@@ -42,6 +42,7 @@ export const TRenderPlane = defineComponent({
               invalidate: (options) => ctx.invalidate(withPlane(options)),
             }),
         }),
+      cancelFrameTask: (id: string) => parentCtx.scheduler.cancelFrameTask(id),
       requestLive: (reason: string) => parentCtx.scheduler.requestLive(reason),
       dropLive: (reason: string) => parentCtx.scheduler.dropLive(reason),
       isInsideFrame: () => parentCtx.scheduler.isInsideFrame(),

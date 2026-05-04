@@ -100,10 +100,6 @@ export const TList = defineComponent({
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
-    watchEffect(() => {
-      active.value = clamp(props.modelValue, 0, Math.max(0, props.items.length - 1));
-    });
-
     function viewportHeight(): number {
       return Math.max(0, props.h);
     }
@@ -116,125 +112,48 @@ export const TList = defineComponent({
       return clamp(value, 0, maxScrollTop());
     }
 
-    function applyScrollTop(nextTop: number, options?: { emitScroll?: boolean }): boolean {
+    function markViewportDirty(): void {
+      const nodeId = renderNode.id.value;
+      if (!nodeId) return;
+      const r = absRect.value;
+      if (r.w <= 0 || r.h <= 0) return;
+      const dirtyRows: number[] = [];
+      for (let y = r.y; y < r.y + r.h; y++) dirtyRows.push(y);
+      render.update(nodeId, { dirtyRowsHint: dirtyRows });
+    }
+
+    function setScrollTop(nextTop: number, options?: { emitScroll?: boolean }): boolean {
       const clampedTop = clampScrollTop(nextTop);
       if (clampedTop === scrollTop.value) return false;
       scrollTop.value = clampedTop;
-      const nodeId = renderNode.id.value;
-      if (nodeId) {
-        const r = absRect.value;
-        const dirtyRows: number[] = [];
-        for (let y = r.y; y < r.y + r.h; y++) dirtyRows.push(y);
-        render.update(nodeId, { dirtyRowsHint: dirtyRows });
-      }
+      markViewportDirty();
       if (options?.emitScroll !== false) emit("scroll", clampedTop);
       return true;
+    }
+
+    function visibleRange(): { start: number; end: number; h: number } {
+      const h = viewportHeight();
+      const start = scrollTop.value;
+      return {
+        start,
+        end: h <= 0 ? start : start + h - 1,
+        h,
+      };
+    }
+
+    function isActiveVisible(): boolean {
+      const { start, end, h } = visibleRange();
+      return h > 0 && active.value >= start && active.value <= end;
     }
 
     function ensureActiveVisible(): void {
       const h = viewportHeight();
       if (h <= 0) return;
       const maxTop = maxScrollTop();
-      scrollTop.value = clampScrollTop(scrollTop.value);
-      if (active.value < scrollTop.value) scrollTop.value = active.value;
-      else if (active.value >= scrollTop.value + h)
-        scrollTop.value = clamp(active.value - (h - 1), 0, maxTop);
-    }
-
-    watch(
-      () => active.value,
-      () => {
-        detachedByWheel = false;
-        ensureActiveVisible();
-      },
-      { immediate: true },
-    );
-
-    watch(
-      [() => props.items.length, () => props.h],
-      () => {
-        scrollTop.value = clampScrollTop(scrollTop.value);
-        if (detachedByWheel) return;
-        ensureActiveVisible();
-      },
-      { immediate: true },
-    );
-
-    function commit(index: number): void {
-      const next = clamp(index, 0, Math.max(0, props.items.length - 1));
-      active.value = next;
-      emit("update:modelValue", next);
-      emit("change", { index: next, value: props.items[next] ?? "" });
-    }
-
-    function cancelWheelScrollFrame(): void {
-      pendingWheelTop = null;
-      wheelMailbox.cancel();
-      resetWheelScrollState(wheelState);
-    }
-
-    function visibleKeyboardAnchor(direction: -1 | 1): number {
-      const h = viewportHeight();
-      if (h <= 0) return active.value;
-      const start = scrollTop.value;
-      const end = scrollTop.value + h - 1;
-      if (active.value < start) return start;
-      if (active.value > end) return end;
-      return clamp(active.value + direction, 0, Math.max(0, props.items.length - 1));
-    }
-
-    function moveActiveFromKeyboard(next: number): void {
-      detachedByWheel = false;
-      cancelWheelScrollFrame();
-      const clamped = clamp(next, 0, Math.max(0, props.items.length - 1));
-      active.value = clamped;
-      emit("update:modelValue", clamped);
-      ensureActiveVisible();
-      scheduler.invalidate({ priority: "high", reason: "input" });
-    }
-
-    function onKeydown(e: TerminalKeyboardEvent): void {
-      emit("keydown", e);
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        moveActiveFromKeyboard(visibleKeyboardAnchor(-1));
-        return;
-      }
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        moveActiveFromKeyboard(visibleKeyboardAnchor(1));
-        return;
-      }
-      if (e.key === "PageUp") {
-        e.preventDefault();
-        moveActiveFromKeyboard(active.value - props.h);
-        return;
-      }
-      if (e.key === "PageDown") {
-        e.preventDefault();
-        moveActiveFromKeyboard(active.value + props.h);
-        return;
-      }
-      if (e.key === "Home") {
-        e.preventDefault();
-        moveActiveFromKeyboard(0);
-        return;
-      }
-      if (e.key === "End") {
-        e.preventDefault();
-        const last = Math.max(0, props.items.length - 1);
-        moveActiveFromKeyboard(last);
-        return;
-      }
-      if (e.key === "Enter") {
-        e.preventDefault();
-        commit(active.value);
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        emit("close");
-      }
+      let nextTop = clampScrollTop(scrollTop.value);
+      if (active.value < nextTop) nextTop = active.value;
+      else if (active.value >= nextTop + h) nextTop = clamp(active.value - (h - 1), 0, maxTop);
+      setScrollTop(nextTop, { emitScroll: false });
     }
 
     const wheelMailbox = createFrameMailbox<number>({
@@ -245,12 +164,112 @@ export const TList = defineComponent({
       sync: true,
       apply(nextTop, ctx) {
         pendingWheelTop = null;
-        const changed = applyScrollTop(nextTop, { emitScroll: true });
+        const changed = setScrollTop(nextTop, { emitScroll: true });
         if (!changed) return;
         detachedByWheel = true;
         ctx.invalidate({ priority: "high", reason: "scroll" });
       },
     });
+
+    function cancelWheelScrollFrame(): void {
+      pendingWheelTop = null;
+      wheelMailbox.cancel();
+      resetWheelScrollState(wheelState);
+    }
+
+    function reattachSelection(): void {
+      detachedByWheel = false;
+      cancelWheelScrollFrame();
+    }
+
+    function anchorActiveToViewport(direction: -1 | 1): number {
+      const { start, end, h } = visibleRange();
+      if (h <= 0) return active.value;
+      if (active.value < start) return start;
+      if (active.value > end) return end;
+      return clamp(active.value + direction, 0, Math.max(0, props.items.length - 1));
+    }
+
+    function pageAnchor(direction: -1 | 1): number {
+      const { start, h } = visibleRange();
+      const last = Math.max(0, props.items.length - 1);
+      if (h <= 0) return active.value;
+      if (!isActiveVisible()) return clamp(start + direction * h, 0, last);
+      return clamp(active.value + direction * h, 0, last);
+    }
+
+    function nearestVisibleActive(): number {
+      const { start, h } = visibleRange();
+      const last = Math.max(0, props.items.length - 1);
+      if (h <= 0) return clamp(active.value, 0, last);
+      if (!isActiveVisible()) return clamp(start, 0, last);
+      return clamp(active.value, 0, last);
+    }
+
+    function selectActive(index: number, options?: { emitChange?: boolean }): void {
+      reattachSelection();
+      const next = clamp(index, 0, Math.max(0, props.items.length - 1));
+      active.value = next;
+      emit("update:modelValue", next);
+      if (options?.emitChange) emit("change", { index: next, value: props.items[next] ?? "" });
+      ensureActiveVisible();
+      scheduler.invalidate({ priority: "high", reason: "input" });
+    }
+
+    function commitVisibleSelection(): void {
+      selectActive(nearestVisibleActive(), { emitChange: true });
+    }
+
+    function syncExternalModelValue(value: number): void {
+      reattachSelection();
+      active.value = clamp(value, 0, Math.max(0, props.items.length - 1));
+      ensureActiveVisible();
+      scheduler.invalidate({ priority: "high", reason: "input" });
+    }
+
+    function onKeydown(e: TerminalKeyboardEvent): void {
+      emit("keydown", e);
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        selectActive(anchorActiveToViewport(-1));
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        selectActive(anchorActiveToViewport(1));
+        return;
+      }
+      if (e.key === "PageUp") {
+        e.preventDefault();
+        selectActive(pageAnchor(-1));
+        return;
+      }
+      if (e.key === "PageDown") {
+        e.preventDefault();
+        selectActive(pageAnchor(1));
+        return;
+      }
+      if (e.key === "Home") {
+        e.preventDefault();
+        selectActive(0);
+        return;
+      }
+      if (e.key === "End") {
+        e.preventDefault();
+        const last = Math.max(0, props.items.length - 1);
+        selectActive(last);
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commitVisibleSelection();
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        emit("close");
+      }
+    }
 
     const eventNode = useTerminalNode(() => ({
       rect: absRect.value,
@@ -259,22 +278,18 @@ export const TList = defineComponent({
       focusable: true,
       handlers: {
         click: (e: TerminalPointerEvent) => {
-          cancelWheelScrollFrame();
           const r = absRect.value;
           const idx = scrollTop.value + (e.cellY - r.y);
           if (idx >= 0 && idx < props.items.length) {
-            active.value = idx;
-            emit("update:modelValue", idx);
-            scheduler.invalidate({ reason: "input" });
+            selectActive(idx);
           } else {
             emit("close");
           }
         },
         dblclick: (e: TerminalPointerEvent) => {
-          cancelWheelScrollFrame();
           const r = absRect.value;
           const idx = scrollTop.value + (e.cellY - r.y);
-          if (idx >= 0 && idx < props.items.length) commit(idx);
+          if (idx >= 0 && idx < props.items.length) selectActive(idx, { emitChange: true });
         },
         wheel: (e: any) => {
           const { deltaY, mode } = getWheelScrollInput(e);
@@ -329,8 +344,9 @@ export const TList = defineComponent({
     });
 
     onBeforeUnmount(() => {
+      pendingWheelTop = null;
+      resetWheelScrollState(wheelState);
       wheelMailbox.dispose();
-      cancelWheelScrollFrame();
     });
 
     const renderNode = useRenderNode(() => ({
@@ -346,7 +362,6 @@ export const TList = defineComponent({
         props.style,
         focused.value,
         active.value,
-        scrollTop.value,
         defaultStyle.value,
       ],
       paint: () => {
@@ -372,6 +387,20 @@ export const TList = defineComponent({
         }
       },
     }));
+
+    watch(
+      () => props.modelValue,
+      (value) => syncExternalModelValue(value),
+      { immediate: true },
+    );
+
+    watch([() => props.items.length, () => props.h], () => {
+      const last = Math.max(0, props.items.length - 1);
+      if (active.value > last) active.value = last;
+      const clampedTop = clampScrollTop(scrollTop.value);
+      if (clampedTop !== scrollTop.value) setScrollTop(clampedTop, { emitScroll: true });
+      if (!detachedByWheel) ensureActiveVisible();
+    });
 
     return () => h("span", rootProps);
   },

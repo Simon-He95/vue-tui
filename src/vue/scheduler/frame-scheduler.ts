@@ -324,6 +324,20 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     scheduleFrame(false);
   }
 
+  function cancelFrameTask(id: string): void {
+    if (!id) return;
+    frameTasksById.delete(id);
+    if (
+      frameTasksById.size === 0 &&
+      anonymousFrameTasks.length === 0 &&
+      scheduledFrame &&
+      !scheduledLiveOnly
+    ) {
+      cancelScheduledFrame();
+      scheduleIfNeeded();
+    }
+  }
+
   function requestLive(reason: string): () => void {
     const key = String(reason || "unknown");
     liveReasons.set(key, (liveReasons.get(key) ?? 0) + 1);
@@ -348,6 +362,7 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
   return {
     configure,
     queueFrameTask,
+    cancelFrameTask,
     requestLive,
     dropLive,
     isInsideFrame: () => insideFrame,

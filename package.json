@@ -76,7 +76,8 @@
     "typecheck": "tsc --noEmit",
     "e2e": "playwright test",
     "bench:vfor": "tsx scripts/bench-vfor.ts",
-    "bench:phase2": "tsx scripts/bench-phase2.ts"
+    "bench:phase2": "tsx scripts/bench-phase2.ts",
+    "bench:scroll-mailbox": "tsx scripts/bench-scroll-mailbox.ts"
   },
   "dependencies": {
     "stream-markdown-parser": "^0.0.90"

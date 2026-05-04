@@ -29,9 +29,12 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
   let hasPending = false;
   let pending!: T;
   let queued = 0;
+  let pendingTaskId: string | null = null;
 
-  function taskId(): string {
-    return typeof options.id === "function" ? options.id() : options.id;
+  function currentTaskId(): string {
+    if (pendingTaskId) return pendingTaskId;
+    pendingTaskId = typeof options.id === "function" ? options.id() : options.id;
+    return pendingTaskId;
   }
 
   function queue(value: T): void {
@@ -44,7 +47,7 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
     queued++;
 
     options.scheduler.queueFrameTask({
-      id: taskId(),
+      id: currentTaskId(),
       reason: options.reason,
       priority: options.priority,
       sync: options.sync,
@@ -56,6 +59,7 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
 
         hasPending = false;
         queued = 0;
+        pendingTaskId = null;
 
         options.apply(value, ctx, {
           queued: count,
@@ -66,8 +70,11 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
   }
 
   function cancel(): void {
+    const taskId = pendingTaskId;
     hasPending = false;
     queued = 0;
+    pendingTaskId = null;
+    if (taskId) options.scheduler.cancelFrameTask(taskId);
   }
 
   function dispose(): void {

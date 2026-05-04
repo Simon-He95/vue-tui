@@ -470,6 +470,7 @@ export const TerminalProvider = defineComponent({
       flushNow,
       configure: frameScheduler.configure,
       queueFrameTask: frameScheduler.queueFrameTask,
+      cancelFrameTask: frameScheduler.cancelFrameTask,
       requestLive: frameScheduler.requestLive,
       dropLive: frameScheduler.dropLive,
       isInsideFrame: frameScheduler.isInsideFrame,

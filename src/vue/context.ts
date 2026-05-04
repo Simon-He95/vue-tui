@@ -60,6 +60,7 @@ export type TerminalScheduler = Readonly<{
   flushNow: () => void;
   configure: (options: TerminalSchedulerConfig) => void;
   queueFrameTask: (task: TerminalFrameTask) => void;
+  cancelFrameTask: (id: string) => void;
   requestLive: (reason: string) => () => void;
   dropLive: (reason: string) => void;
   isInsideFrame: () => boolean;

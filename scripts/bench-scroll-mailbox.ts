@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { defineComponent, h, nextTick } from "vue";
 import { createTerminalApp, TList, useTerminal } from "../src/index.js";
 import { createFrameMailbox } from "../src/vue/scheduler/frame-mailbox.js";
@@ -192,5 +193,19 @@ const result = {
   tListBurstWheel: await benchTListBurstWheel(),
   concurrentMailboxes: await benchConcurrentMailboxes(),
 };
+
+assert.equal(result.tListBurstWheel.updateModelValue, 0);
+assert.equal(result.tListBurstWheel.scroll, 1);
+assert.equal(result.tListBurstWheel.commitsBeforeFrame, 0);
+assert.equal(result.tListBurstWheel.commitsAfterFrame, 1);
+assert.equal(result.tListBurstWheel.framePerf?.frameTaskCount, 1);
+assert.equal(result.tListBurstWheel.framePerf?.coalescedFrameTasks, 99);
+assert.deepEqual(result.concurrentMailboxes.order, [
+  "input:19:dropped=19",
+  "scroll:99:dropped=99",
+  "stream:499:dropped=499",
+]);
+assert.equal(result.concurrentMailboxes.framePerf?.frameTaskCount, 3);
+assert.equal(result.concurrentMailboxes.framePerf?.coalescedFrameTasks, 617);
 
 console.log(JSON.stringify(result, null, 2));
