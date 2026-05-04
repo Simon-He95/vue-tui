@@ -230,6 +230,78 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("does not emit update:modelValue or commit for ArrowUp at the first item", async () => {
+    const commits: unknown[] = [];
+    const onUpdateModelValue = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+        modelValue: 0,
+        autoFocus: true,
+        "onUpdate:modelValue": onUpdateModelValue,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      const off = app.terminal.on("commit", (commit) => commits.push(commit));
+
+      app.events.dispatch({ type: "keydown", key: "ArrowUp", code: "ArrowUp", time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
+      expect(commits).toHaveLength(0);
+      off();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not emit update:modelValue or commit for Home at the first item", async () => {
+    const commits: unknown[] = [];
+    const onUpdateModelValue = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+        modelValue: 0,
+        autoFocus: true,
+        "onUpdate:modelValue": onUpdateModelValue,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      const off = app.terminal.on("commit", (commit) => commits.push(commit));
+
+      app.events.dispatch({ type: "keydown", key: "Home", code: "Home", time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
+      expect(commits).toHaveLength(0);
+      off();
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("anchors PageDown to the visible viewport after detached wheel scroll", async () => {
     const items = Array.from({ length: 200 }, (_, index) => `item-${index}`);
     const onUpdateModelValue = vi.fn();
@@ -347,6 +419,41 @@ describe("TList wheel scrolling", () => {
       expect(onUpdateModelValue).toHaveBeenLastCalledWith(100);
       expect(onChange).toHaveBeenLastCalledWith({ index: 100, value: "item-100" });
       expect(rowText(app, 0)).toBe("item-100");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("emits change but not update:modelValue when Enter commits the current active row", async () => {
+    const onUpdateModelValue = vi.fn();
+    const onChange = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+        modelValue: 0,
+        autoFocus: true,
+        onChange,
+        "onUpdate:modelValue": onUpdateModelValue,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onChange).toHaveBeenCalledWith({ index: 0, value: "item-0" });
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
     } finally {
       app.dispose();
     }
@@ -693,9 +800,10 @@ describe("TList wheel scrolling", () => {
     }
   });
 
-  it("clicking the same active row clears detached mode", async () => {
+  it("clicking the same active row clears detached mode without emitting update:modelValue", async () => {
     const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
     let setHeight!: (value: number) => void;
+    const onUpdateModelValue = vi.fn();
     const App = defineComponent({
       name: "ListWheelReattachApp",
       setup() {
@@ -714,6 +822,7 @@ describe("TList wheel scrolling", () => {
             modelValue: modelValue.value,
             autoFocus: true,
             "onUpdate:modelValue": (value: number) => {
+              onUpdateModelValue(value);
               modelValue.value = value;
             },
           });
@@ -740,6 +849,7 @@ describe("TList wheel scrolling", () => {
       app.scheduler.flushNow();
 
       expect(rowText(app, 0)).toBe("item-2");
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
     } finally {
       app.dispose();
     }
@@ -829,7 +939,7 @@ describe("TList wheel scrolling", () => {
     }
   });
 
-  it("clamps scrollTop and emits scroll when items shrink", async () => {
+  it("emits scroll when data shrink programmatically clamps viewport", async () => {
     let shrink!: () => void;
     const onScroll = vi.fn();
     const App = defineComponent({
@@ -869,6 +979,56 @@ describe("TList wheel scrolling", () => {
       expect(onScroll).toHaveBeenLastCalledWith(16);
     } finally {
       app.dispose();
+    }
+  });
+
+  it("pending wheel plus data shrink before the frame does not apply a stale top", async () => {
+    const raf = installRaf();
+    let shrink!: () => void;
+    const onScroll = vi.fn();
+    const App = defineComponent({
+      name: "PendingWheelDataShrinkApp",
+      setup() {
+        const items = ref(Array.from({ length: 200 }, (_, index) => `item-${index}`));
+        shrink = () => {
+          items.value = items.value.slice(0, 20);
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            modelValue: 0,
+            autoFocus: true,
+            onScroll,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      expect(raf.callbacks.size).toBe(1);
+
+      shrink();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("item-16");
+      expect(onScroll).toHaveBeenLastCalledWith(16);
+    } finally {
+      app.dispose();
+      raf.restore();
     }
   });
 
@@ -1093,6 +1253,120 @@ describe("TList wheel scrolling", () => {
       await nextTick();
 
       expect(rowText(app, 0)).toBe("item-96");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("clipped viewport expansion clamps internal scrollTop", async () => {
+    const onScroll = vi.fn();
+    let setHeight!: (value: number) => void;
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "ClippedViewportExpansionClampApp",
+      setup() {
+        const height = ref(4);
+        setHeight = (value) => {
+          height.value = value;
+        };
+        return () =>
+          h(
+            TView,
+            { x: 0, y: 0, w: 12, h: height.value },
+            {
+              default: () =>
+                h(TList, {
+                  x: 0,
+                  y: 0,
+                  w: 12,
+                  h: 20,
+                  items,
+                  modelValue: 0,
+                  autoFocus: true,
+                  onScroll,
+                }),
+            },
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 24, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("item-96");
+
+      setHeight(20);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("item-80");
+      expect(onScroll).toHaveBeenLastCalledWith(80);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("click and wheel stay aligned with rows after clipped viewport height changes", async () => {
+    const onUpdateModelValue = vi.fn();
+    let setHeight!: (value: number) => void;
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "ClippedViewportInteractionApp",
+      setup() {
+        const height = ref(4);
+        setHeight = (value) => {
+          height.value = value;
+        };
+        return () =>
+          h(
+            TView,
+            { x: 0, y: 0, w: 12, h: height.value },
+            {
+              default: () =>
+                h(TList, {
+                  x: 0,
+                  y: 0,
+                  w: 12,
+                  h: 20,
+                  items,
+                  modelValue: 0,
+                  autoFocus: true,
+                  "onUpdate:modelValue": onUpdateModelValue,
+                }),
+            },
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 24, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      setHeight(20);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_010 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("item-79");
+
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 2, time: 1_020 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onUpdateModelValue).toHaveBeenLastCalledWith(81);
+      expect(rowText(app, 2)).toBe("item-81");
     } finally {
       app.dispose();
     }

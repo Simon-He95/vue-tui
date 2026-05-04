@@ -73,9 +73,14 @@ function createScheduler() {
   return {
     scheduler,
     queueFrameTask,
-    flush() {
+    ctx,
+    snapshot() {
       const pending = Array.from(tasks.values());
       tasks.clear();
+      return pending;
+    },
+    flush() {
+      const pending = this.snapshot();
       for (const task of pending) task.run(ctx);
     },
   };
@@ -136,6 +141,27 @@ describe("frame mailbox", () => {
     expect(mailbox.peek()).toBeUndefined();
   });
 
+  it("supports undefined payload values when T allows them", () => {
+    const probe = createScheduler();
+    const apply = vi.fn();
+    const mailbox = createFrameMailbox<number | undefined>({
+      scheduler: probe.scheduler,
+      id: "probe",
+      apply,
+    });
+
+    mailbox.queue(undefined);
+    expect(mailbox.hasPending()).toBe(true);
+    expect(mailbox.peek()).toBeUndefined();
+
+    probe.flush();
+
+    expect(apply).toHaveBeenCalledWith(undefined, expect.anything(), {
+      queued: 1,
+      dropped: 0,
+    });
+  });
+
   it("does not run after dispose", () => {
     const probe = createScheduler();
     const apply = vi.fn();
@@ -167,6 +193,25 @@ describe("frame mailbox", () => {
 
     expect(apply).not.toHaveBeenCalled();
     expect(probe.scheduler.cancelFrameTask).toHaveBeenCalledWith("probe");
+  });
+
+  it("guards against stale scheduled runs after cancel", () => {
+    const probe = createScheduler();
+    const apply = vi.fn();
+    const mailbox = createFrameMailbox({
+      scheduler: probe.scheduler,
+      id: "probe",
+      apply,
+    });
+
+    mailbox.queue(1);
+    const pending = probe.snapshot();
+    mailbox.cancel();
+
+    expect(pending).toHaveLength(1);
+    pending[0]!.run(probe.ctx);
+
+    expect(apply).not.toHaveBeenCalled();
   });
 
   it("starts a fresh pending cycle after cancel", () => {

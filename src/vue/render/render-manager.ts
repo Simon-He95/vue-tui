@@ -65,6 +65,10 @@ export type RenderManager = Readonly<{
       plane: TerminalRenderPlane;
       zIndex: number;
       rect: RenderRect | null;
+      /**
+       * Consumed synchronously during update() and must not be retained.
+       * Callers may pass scratch arrays for hot-path invalidation.
+       */
       dirtyRowsHint: readonly number[];
       paint: (dirtyRows?: readonly number[]) => void;
     }>,
@@ -351,13 +355,14 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       (next.stack && next.stack !== prev.stack) ||
       (typeof next.zIndex === "number" && next.zIndex !== prev.zIndex);
     const nextPlane = next.plane ?? prev.plane;
-    const planeChanged = nextPlane !== prev.plane;
-    const hasRect = Object.prototype.hasOwnProperty.call(next, "rect");
-    const nextRect = hasRect ? (next.rect ?? null) : prev.rect;
-    const rectChanged = !sameRect(prev.rect, nextRect);
-    const bucketChanged = planeChanged || rectChanged;
-    const { y0, y1 } = rectToYBounds(nextRect);
-    const dirtyRowsHint = next.dirtyRowsHint;
+      const planeChanged = nextPlane !== prev.plane;
+      const hasRect = Object.prototype.hasOwnProperty.call(next, "rect");
+      const nextRect = hasRect ? (next.rect ?? null) : prev.rect;
+      const rectChanged = !sameRect(prev.rect, nextRect);
+      const bucketChanged = planeChanged || rectChanged;
+      const { y0, y1 } = rectToYBounds(nextRect);
+      // dirtyRowsHint is consumed synchronously here via markRows().
+      const dirtyRowsHint = next.dirtyRowsHint;
     const canUseDirtyRowsHint =
       !sortChanged &&
       !rectChanged &&

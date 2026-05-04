@@ -24,6 +24,8 @@ export type FrameMailboxOptions<T> = Readonly<{
   apply: FrameMailboxApply<T>;
 }>;
 
+const EMPTY = Symbol("frame-mailbox-empty");
+
 /**
  * Coalesces many producer updates into a single scheduler frame task.
  *
@@ -44,13 +46,13 @@ export type FrameMailboxOptions<T> = Readonly<{
 export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
   let disposed = false;
   let hasPending = false;
-  let pending: T | undefined;
+  let pending: T | typeof EMPTY = EMPTY;
   let queued = 0;
   let pendingTaskId: string | null = null;
 
   function clearPending(): void {
     hasPending = false;
-    pending = undefined;
+    pending = EMPTY;
     queued = 0;
     pendingTaskId = null;
   }
@@ -116,6 +118,6 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
     cancel,
     dispose,
     hasPending: () => hasPending,
-    peek: () => (hasPending ? pending : undefined),
+    peek: () => (hasPending ? (pending as T) : undefined),
   } as const;
 }
