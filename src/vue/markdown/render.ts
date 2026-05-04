@@ -15,12 +15,15 @@ export function paintMarkdownVisualRow(
     w: number;
     clipStart?: number;
     baseStyle: Style;
+    clear?: boolean;
   }>,
 ): void {
   const clipStart = Math.max(0, Math.floor(options.clipStart ?? 0));
   const clipEnd = clipStart + options.w;
   if (!row) {
-    terminal.write(spaces(options.w), { x: options.x, y: options.y, style: options.baseStyle });
+    if (options.clear !== false) {
+      terminal.write(spaces(options.w), { x: options.x, y: options.y, style: options.baseStyle });
+    }
     return;
   }
 
@@ -47,7 +50,7 @@ export function paintMarkdownVisualRow(
     drawX += cells;
     used += cells;
   }
-  if (used < options.w) {
+  if (used < options.w && options.clear !== false) {
     terminal.write(spaces(options.w - used), {
       x: drawX,
       y: options.y,

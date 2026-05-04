@@ -4,6 +4,7 @@ import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../ev
 import {
   computed,
   defineComponent,
+  getCurrentInstance,
   h,
   inject,
   markRaw,
@@ -63,6 +64,7 @@ export const TVirtualMarkdown = defineComponent({
   },
   emits: ["update:scrollTop", "scroll", "focus", "blur", "keydown"],
   setup(props, { emit }) {
+    const instance = getCurrentInstance();
     const { terminal, defaultStyle, events } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
@@ -130,6 +132,10 @@ export const TVirtualMarkdown = defineComponent({
       return Math.max(0, rows.value.length - (clipY + clip.h));
     }
 
+    function hasControlledScrollTop(): boolean {
+      return Object.prototype.hasOwnProperty.call(instance?.vnode.props ?? {}, "scrollTop");
+    }
+
     function setScrollTop(next: number, emitChange = true): void {
       const clamped = clamp(Math.floor(Number(next) || 0), 0, maxScrollTop());
       if (internalScrollTop.value === clamped) return;
@@ -140,12 +146,25 @@ export const TVirtualMarkdown = defineComponent({
       }
     }
 
+    function reconcileScrollTop(): void {
+      const desired = hasControlledScrollTop()
+        ? Math.floor(Number(props.scrollTop) || 0)
+        : internalScrollTop.value;
+      const clamped = clamp(desired, 0, maxScrollTop());
+      if (internalScrollTop.value === clamped) return;
+      internalScrollTop.value = clamped;
+      if (desired !== clamped) {
+        emit("update:scrollTop", clamped);
+        emit("scroll", clamped);
+      }
+    }
+
     watch(
       () => props.scrollTop,
-      (value) => {
-        setScrollTop(value, false);
+      () => {
+        if (!hasControlledScrollTop()) return;
+        setScrollTop(props.scrollTop, false);
       },
-      { immediate: true },
     );
 
     watch(
@@ -162,10 +181,7 @@ export const TVirtualMarkdown = defineComponent({
           theme: props.theme,
         });
         rows.value = markRaw(nextRows);
-        const clip = normalizedRect();
-        const { y: clipY } = clipOffsets();
-        const nextMaxScrollTop = Math.max(0, nextRows.length - (clipY + clip.h));
-        internalScrollTop.value = clamp(internalScrollTop.value, 0, nextMaxScrollTop);
+        reconcileScrollTop();
         documentVersion.value++;
       },
       { immediate: true },
@@ -180,7 +196,7 @@ export const TVirtualMarkdown = defineComponent({
         () => fullRect.value.h,
       ],
       () => {
-        internalScrollTop.value = clamp(internalScrollTop.value, 0, maxScrollTop());
+        reconcileScrollTop();
       },
       { immediate: true },
     );
@@ -281,6 +297,7 @@ export const TVirtualMarkdown = defineComponent({
             w: r.w,
             clipStart: clipX,
             baseStyle,
+            clear: true,
           });
         };
         if (dirtyRows?.length) {

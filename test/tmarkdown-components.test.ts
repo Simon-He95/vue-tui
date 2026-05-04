@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TMarkdownText } from "../src/index.js";
 import { TVirtualMarkdown } from "../src/experimental.js";
-import { h, mountTerminal, nextTick } from "./ui-regressions-support.js";
+import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
 function rowText(mounted: Awaited<ReturnType<typeof mountTerminal>>, y: number): string {
   return mounted.terminal
@@ -75,6 +75,101 @@ describe("markdown components", () => {
       "- item-3",
       "- item-4",
     ]);
+    mounted.unmount();
+  });
+
+  it("honors initial controlled scrollTop after markdown rows are built", async () => {
+    const content = Array.from({ length: 40 }, (_, index) => `- row-${index}`).join("\n");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          content,
+          scrollTop: 20,
+        }),
+      20,
+      8,
+    );
+
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
+      "- row-20",
+      "- row-21",
+      "- row-22",
+      "- row-23",
+    ]);
+    mounted.unmount();
+  });
+
+  it("emits clamped scrollTop when controlled content shrinks below the current viewport", async () => {
+    const content = ref(Array.from({ length: 100 }, (_, index) => `- row-${index}`).join("\n"));
+    const updates: number[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          content: content.value,
+          scrollTop: 90,
+          "onUpdate:scrollTop": (value: number) => {
+            updates.push(value);
+          },
+        }),
+      20,
+      8,
+    );
+
+    content.value = Array.from({ length: 10 }, (_, index) => `- row-${index}`).join("\n");
+    await nextTick();
+    await nextTick();
+
+    expect(updates).toContain(6);
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
+      "- row-6",
+      "- row-7",
+      "- row-8",
+      "- row-9",
+    ]);
+    mounted.unmount();
+  });
+
+  it("preserves trailing cells when TMarkdownText clear=false", async () => {
+    const content = ref("hello world");
+    const mounted = await mountTerminal(
+      () => [
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 1,
+          content: "ABCDEFGHIJKL",
+        }),
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          zIndex: 1,
+          w: 12,
+          h: 1,
+          content: content.value,
+          clear: false,
+        }),
+      ],
+      16,
+      4,
+    );
+
+    content.value = "hi";
+    await nextTick();
+    await nextTick();
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe("h");
+    expect(mounted.terminal.getCell(1, 0).ch).toBe("i");
+    expect(mounted.terminal.getCell(2, 0).ch).toBe("C");
+    expect(rowText(mounted, 0)).toBe("hiCDEFGHIJKL");
     mounted.unmount();
   });
 });

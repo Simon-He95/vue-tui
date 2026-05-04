@@ -116,6 +116,7 @@ export const TMarkdownText = defineComponent({
             w: r.w,
             clipStart,
             baseStyle,
+            clear: props.clear,
           });
         };
         if (dirtyRows?.length) {
