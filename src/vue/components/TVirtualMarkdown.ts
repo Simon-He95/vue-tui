@@ -8,6 +8,7 @@ import {
   h,
   inject,
   markRaw,
+  onBeforeUnmount,
   ref,
   shallowRef,
   watch,
@@ -76,6 +77,7 @@ export const TVirtualMarkdown = defineComponent({
     const rows = shallowRef<readonly TuiMarkdownVisualRow[]>(markRaw([]));
     let builtOnce = false;
     let rebuildVersion = 0;
+    let alive = true;
     const parser = shallowRef(
       markRaw(
         createTuiMarkdownParser({
@@ -120,6 +122,7 @@ export const TVirtualMarkdown = defineComponent({
         priority: props.streaming ? "low" : "normal",
         sync: false,
         run: (ctx) => {
+          if (!alive) return;
           if (currentVersion !== rebuildVersion) return;
           rebuildRows();
           ctx.invalidate({ reason: props.streaming ? "stream" : "data" });
@@ -294,6 +297,11 @@ export const TVirtualMarkdown = defineComponent({
       if (!manager) return;
       if (manager.getFocused() === nodeId) return;
       manager.focus(nodeId);
+    });
+
+    onBeforeUnmount(() => {
+      alive = false;
+      rebuildVersion++;
     });
 
     useRenderNode(() => ({

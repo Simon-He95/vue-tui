@@ -9,7 +9,7 @@ vi.mock("../src/vue/markdown/document.js", async (importOriginal) => {
 });
 
 import * as markdownDocument from "../src/vue/markdown/document.js";
-import { TMarkdownText } from "../src/index.js";
+import { TMarkdownText } from "../src/experimental.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
 function dispatchWheel(container: HTMLElement): void {

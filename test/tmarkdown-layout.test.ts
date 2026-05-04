@@ -103,4 +103,25 @@ describe("markdown layout", () => {
     expect("loading" in (finalCode ?? {}) ? finalCode?.loading : undefined).not.toBe(true);
     expect(pendingRows.map((row) => row.plainText)).toEqual(finalRows.map((row) => row.plainText));
   });
+
+  it("does not hang when list and blockquote prefixes are wider than width", () => {
+    const parser = createTuiMarkdownParser();
+    const listRows = buildMarkdownVisualRows("- a", 1, parser);
+    const quoteRows = buildMarkdownVisualRows("> a", 1, parser);
+    const nestedRows = buildMarkdownVisualRows("- a\n  - b", 1, parser);
+    const orderedRows = buildMarkdownVisualRows("100. a", 3, parser);
+
+    expect(listRows.length).toBeGreaterThan(0);
+    expect(quoteRows.length).toBeGreaterThan(0);
+    expect(nestedRows.length).toBeGreaterThan(0);
+    expect(orderedRows.length).toBeGreaterThan(0);
+    expect(listRows.some((row) => row.plainText.includes("a"))).toBe(true);
+    expect(
+      quoteRows.some((row) => row.plainText.includes("a") || row.plainText.includes("│")),
+    ).toBe(true);
+    expect(nestedRows.some((row) => row.plainText.includes("b"))).toBe(true);
+    expect(
+      orderedRows.some((row) => row.plainText.includes("a") || row.plainText.includes("100")),
+    ).toBe(true);
+  });
 });

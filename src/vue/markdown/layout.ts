@@ -44,6 +44,24 @@ function normalizeInlineSegments(
   return lines;
 }
 
+function clipInlineSegmentsToWidth(
+  segments: readonly TuiMarkdownInlineSegment[],
+  width: number,
+): readonly TuiMarkdownInlineSegment[] {
+  let remaining = Math.max(0, Math.floor(width));
+  if (remaining <= 0) return [];
+  const out: TuiMarkdownInlineSegment[] = [];
+  for (const segment of segments) {
+    if (segment.hardBreak || !segment.text || remaining <= 0) continue;
+    const piece = sliceByCellsRange(segment.text, 0, remaining);
+    const cells = textCellWidth(piece);
+    if (!piece || cells <= 0) continue;
+    out.push(segment.style ? { text: piece, style: segment.style } : { text: piece });
+    remaining -= cells;
+  }
+  return out;
+}
+
 function wrapLineSegments(
   source: readonly TuiMarkdownInlineSegment[],
   prefixSegments: readonly TuiMarkdownInlineSegment[],
@@ -53,8 +71,16 @@ function wrapLineSegments(
   const rows: TuiMarkdownVisualSegment[][] = [];
   const prefixCells = segmentsCellWidth(prefixSegments);
   const continuationPrefixCells = segmentsCellWidth(continuationPrefixSegments);
-  const maxFirst = Math.max(0, width - prefixCells);
-  const maxNext = Math.max(0, width - continuationPrefixCells);
+  const firstPrefix =
+    prefixCells >= width ? clipInlineSegmentsToWidth(prefixSegments, width) : prefixSegments;
+  const firstPrefixCells = segmentsCellWidth(firstPrefix);
+  const continuationPrefix =
+    continuationPrefixCells >= width
+      ? clipInlineSegmentsToWidth(continuationPrefixSegments, Math.max(0, width - 1))
+      : continuationPrefixSegments;
+  const trimmedContinuationPrefixCells = segmentsCellWidth(continuationPrefix);
+  const maxFirst = Math.max(0, width - firstPrefixCells);
+  const maxNext = Math.max(0, width - trimmedContinuationPrefixCells);
 
   const openRow = (
     useContinuation: boolean,
@@ -62,7 +88,7 @@ function wrapLineSegments(
     segments: TuiMarkdownVisualSegment[];
     remaining: number;
   } => {
-    const prefix = useContinuation ? continuationPrefixSegments : prefixSegments;
+    const prefix = useContinuation ? continuationPrefix : firstPrefix;
     const renderedPrefix = prefix
       .map(toVisualSegment)
       .filter(Boolean) as TuiMarkdownVisualSegment[];
@@ -93,8 +119,7 @@ function wrapLineSegments(
       let pieceCells = textCellWidth(piece);
       if (pieceCells <= 0) {
         if (
-          row.segments.length >
-          (rows.length > 0 ? continuationPrefixSegments.length : prefixSegments.length)
+          row.segments.length > (rows.length > 0 ? continuationPrefix.length : firstPrefix.length)
         ) {
           pushRow();
           continue;

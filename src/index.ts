@@ -129,7 +129,6 @@ export {
   TInputPluginsContextKey,
   TJsonEditor,
   TList,
-  TMarkdownText,
   TMultilineModal,
   TPathPicker,
   TRenderLayer,

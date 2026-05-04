@@ -32,7 +32,6 @@ export { TPathPicker } from "./components/TPathPicker.js";
 export { TRenderLayer } from "./components/TRenderLayer.js";
 export { TRenderPlane } from "./components/TRenderPlane.js";
 export { TSelect } from "./components/TSelect.js";
-export { TMarkdownText } from "./components/TMarkdownText.js";
 export type {
   SelectOption,
   TSelectMultipleChangePayload,

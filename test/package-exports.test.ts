@@ -15,7 +15,7 @@ describe("package exports", () => {
     const root = await import("../src/index.js");
     const experimental = await import("../src/experimental.js");
 
-    expect(root.TMarkdownText).toBeTruthy();
+    expect("TMarkdownText" in root).toBe(false);
     expect("TVirtualList" in root).toBe(false);
     expect("TVirtualMarkdown" in root).toBe(false);
     expect("TLogView" in root).toBe(false);
@@ -31,6 +31,7 @@ describe("package exports", () => {
     expect("createAppendOnlyLogStore" in root).toBe(false);
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
+    expect(experimental.TMarkdownText).toBeTruthy();
     expect(experimental.TVirtualList).toBeTruthy();
     expect(experimental.TVirtualMarkdown).toBeTruthy();
     expect(experimental.TLogView).toBeTruthy();
