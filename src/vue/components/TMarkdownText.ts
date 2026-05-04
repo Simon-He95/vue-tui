@@ -1,7 +1,7 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import type { Rect } from "../../events/index.js";
-import { computed, defineComponent, h, markRaw, shallowRef, watch, watchEffect } from "vue";
+import { computed, defineComponent, getCurrentInstance, h, markRaw, shallowRef, watch } from "vue";
 import { buildMarkdownVisualRows } from "../markdown/document.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
 import { paintMarkdownVisualRow } from "../markdown/render.js";
@@ -36,11 +36,14 @@ export const TMarkdownText = defineComponent({
     },
   },
   setup(props) {
-    const { terminal, defaultStyle } = useTerminal();
+    const instance = getCurrentInstance();
+    const { terminal, defaultStyle, scheduler } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const rows = shallowRef<readonly TuiMarkdownVisualRow[]>(markRaw([]));
     const documentVersion = shallowRef(0);
+    let builtOnce = false;
+    let rebuildVersion = 0;
     const parser = shallowRef(
       markRaw(
         createTuiMarkdownParser({
@@ -62,7 +65,7 @@ export const TMarkdownText = defineComponent({
       },
     );
 
-    watchEffect(() => {
+    function rebuildRows(): void {
       rows.value = markRaw(
         buildMarkdownVisualRows(props.content, props.w, parser.value, {
           final: props.final,
@@ -70,7 +73,41 @@ export const TMarkdownText = defineComponent({
         }),
       );
       documentVersion.value++;
-    });
+    }
+
+    function scheduleRebuild(): void {
+      const currentVersion = ++rebuildVersion;
+      if (!builtOnce) {
+        builtOnce = true;
+        rebuildRows();
+        return;
+      }
+      scheduler.queueFrameTask({
+        id: `TMarkdownText:${instance?.uid ?? "unknown"}:markdown`,
+        reason: props.streaming ? "stream" : "data",
+        priority: props.streaming ? "low" : "normal",
+        sync: false,
+        run: (ctx) => {
+          if (currentVersion !== rebuildVersion) return;
+          rebuildRows();
+          ctx.invalidate({ reason: props.streaming ? "stream" : "data" });
+        },
+      });
+    }
+
+    watch(
+      [
+        () => props.content,
+        () => props.w,
+        () => parser.value,
+        () => props.final,
+        () => props.theme,
+      ],
+      () => {
+        scheduleRebuild();
+      },
+      { immediate: true },
+    );
 
     const fullRect = computed<Rect>(() => {
       const height = props.h ?? Math.max(1, rows.value.length);
