@@ -41,6 +41,31 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("updates href metadata when only the markdown link target changes", async () => {
+    const content = ref("[ok](https://a.example)");
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 2,
+          content: content.value,
+        }),
+      24,
+      4,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://a.example");
+
+    content.value = "[ok](https://b.example)";
+    await nextTick();
+    await nextTick();
+
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://b.example");
+    mounted.unmount();
+  });
+
   it("virtualizes markdown rows and repaints the viewport on wheel scroll", async () => {
     const content = Array.from({ length: 12 }, (_, index) => `- item-${index}`).join("\n");
     const mounted = await mountTerminal(
@@ -237,6 +262,28 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("clears old rows when auto-height markdown text shrinks", async () => {
+    const content = ref("one\n\ntwo\n\nthree");
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 12,
+          content: content.value,
+        }),
+      16,
+      6,
+    );
+
+    content.value = "one";
+    await nextTick();
+    await nextTick();
+
+    expect([0, 1, 2, 3, 4].map((y) => rowText(mounted, y))).toEqual(["one", "", "", "", ""]);
+    mounted.unmount();
+  });
+
   it("reflows markdown immediately when width changes", async () => {
     const width = ref(12);
     const mounted = await mountTerminal(
@@ -255,6 +302,37 @@ describe("markdown components", () => {
     await nextTick();
 
     expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual(["你好", "hell", "o wo", "rld"]);
+    mounted.unmount();
+  });
+
+  it("honors same-tick controlled scrollTop updates when content appends", async () => {
+    const content = ref(Array.from({ length: 50 }, (_, index) => `- row-${index}`).join("\n"));
+    const scrollTop = ref(46);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          content: content.value,
+          scrollTop: scrollTop.value,
+        }),
+      20,
+      8,
+    );
+
+    content.value = Array.from({ length: 100 }, (_, index) => `- row-${index}`).join("\n");
+    scrollTop.value = 96;
+    await nextTick();
+    await nextTick();
+
+    expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
+      "- row-96",
+      "- row-97",
+      "- row-98",
+      "- row-99",
+    ]);
     mounted.unmount();
   });
 

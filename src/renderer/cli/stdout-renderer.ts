@@ -304,6 +304,7 @@ export function createStdoutRenderer(
   }
 
   let styleKeyCache = new WeakMap<Style, number>();
+  const HREF_STYLE_FLAG = 1 << 21;
   function styleKey(style: Style): number {
     const cached = styleKeyCache.get(style);
     if (cached !== undefined) return cached;
@@ -315,7 +316,7 @@ export function createStdoutRenderer(
       (style.italic ? 1 << 18 : 0) |
       (style.underline ? 1 << 19 : 0) |
       (style.inverse ? 1 << 20 : 0) |
-      (style.href ? 1 << 21 : 0);
+      (style.href ? HREF_STYLE_FLAG : 0);
     styleKeyCache.set(style, key);
     return key;
   }
@@ -340,8 +341,12 @@ export function createStdoutRenderer(
       (style.italic ? 1 << 18 : 0) |
       (style.underline ? 1 << 19 : 0) |
       (style.inverse ? 1 << 20 : 0) |
-      (style.href ? 1 << 21 : 0)
+      (style.href ? HREF_STYLE_FLAG : 0)
     );
+  }
+
+  function normalizeHref(value: unknown): string | null {
+    return typeof value === "string" && value ? value : null;
   }
 
   function openColor(fg?: string): string {
@@ -431,6 +436,21 @@ export function createStdoutRenderer(
     }
     return h & 0x3ff;
   }
+
+  function hrefHash10(href: string | null): number {
+    if (!href) return 0;
+    let h = 0x811c9dc5;
+    for (let i = 0; i < href.length; i++) {
+      h ^= href.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    return (h ^ (h >>> 16) ^ (h >>> 22)) & 0x3ff;
+  }
+
+  function cellFingerprint(ch: string, style: Style): number {
+    return (styleKey(style) << 10) | ((charHash10(ch) ^ hrefHash10(normalizeHref(style.href))) & 0x3ff);
+  }
+
   function fingerprintRow(row: readonly Cell[], y: number, cols: number): void {
     // Fast path: use pre-computed SoA fingerprints from composite buffer.
     // This is a TypedArray.set() copy instead of per-cell property access + hash.
@@ -443,7 +463,7 @@ export function createStdoutRenderer(
     const base = y * fpCols;
     for (let x = 0; x < cols; x++) {
       const cell = row[x]!;
-      currentFP[base + x] = (styleKey(cell.style) << 10) | charHash10(cell.ch);
+      currentFP[base + x] = cellFingerprint(cell.ch, cell.style);
     }
   }
   const rowCursorToCol1: string[] = [];
@@ -558,7 +578,7 @@ export function createStdoutRenderer(
       const fingerprint =
         rowFP && rowFP.length >= cols
           ? rowFP[x]!
-          : (styleKey(row[x]!.style) << 10) | charHash10(row[x]!.ch);
+          : cellFingerprint(row[x]!.ch, row[x]!.style);
       if (fingerprint === currentFP[base + x]) continue;
       if (startX === -1) startX = x;
       endXExclusive = x + 1;
@@ -584,7 +604,7 @@ export function createStdoutRenderer(
       const fingerprint =
         rowFP && rowFP.length >= cols
           ? rowFP[x]!
-          : (styleKey(row![x]!.style) << 10) | charHash10(row![x]!.ch);
+          : cellFingerprint(row![x]!.ch, row![x]!.style);
       if (fingerprint !== prevFP[base + x]) return false;
     }
     return true;
@@ -941,12 +961,11 @@ export function createStdoutRenderer(
     const bgOnlyStyle: Style = { bg: defaultBg };
     const bgKey = styleKeyFromParts({ bg: defaultBg });
     const blankFP = (bgKey << 10) | charHash10(" ");
-    const cellFingerprint = (cell: Cell): number =>
-      (styleKey(cell.style) << 10) | charHash10(cell.ch);
+    const cellFP = (cell: Cell): number => cellFingerprint(cell.ch, cell.style);
     const lastOccupiedColumnInRow = (row: readonly Cell[], cols: number): number => {
       const limit = Math.min(row.length, cols);
       for (let x = limit - 1; x >= 0; x--) {
-        if (cellFingerprint(row[x]!) !== blankFP) return x;
+        if (cellFP(row[x]!) !== blankFP) return x;
       }
       return -1;
     };
@@ -1056,13 +1075,13 @@ export function createStdoutRenderer(
         italic: Boolean(style.italic),
         underline: Boolean(style.underline),
         inverse: Boolean(style.inverse),
-        href: typeof style.href === "string" && style.href ? style.href : null,
+        href: normalizeHref(style.href),
       };
     };
 
     const emitStyle = (nextStyle: Style, nextKey: number): void => {
-      if (activeStyleKey === nextKey) return;
       const next = normalizeStyle(nextStyle);
+      if (activeStyleKey === nextKey && activeStyle.href === next.href) return;
 
       if (enableOsc8Links && activeStyle.href !== next.href) {
         if (activeStyle.href) frameParts.push(OSC8_CLOSE);
@@ -1143,7 +1162,7 @@ export function createStdoutRenderer(
           }
           continue;
         }
-        if (key === currentKey && !(key & 0x8000 && nextStyle.href !== currentStyle?.href)) {
+        if (key === currentKey && normalizeHref(nextStyle.href) === normalizeHref(currentStyle?.href)) {
           currentTextParts.push(ch);
           if (needsWideCursorFix(cell, ch)) {
             currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);
@@ -1928,7 +1947,7 @@ export function createStdoutRenderer(
   // This enables SoA pre-computation: fingerprints are computed during composeRows()
   // and fingerprintRow() becomes a TypedArray copy instead of per-cell hash computation.
   terminal.setFingerprintFn((ch: string, style: Style) => {
-    return (styleKey(style) << 10) | charHash10(ch);
+    return cellFingerprint(ch, style);
   });
 
   // Initial setup - these are one-time writes, not part of render loop

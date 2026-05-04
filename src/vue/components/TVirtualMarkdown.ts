@@ -26,6 +26,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
+import { applyWheelScroll, createWheelScrollState } from "../utils/wheel-scroll.js";
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -65,6 +66,26 @@ function markdownRowSignature(row: TuiMarkdownVisualRow | undefined): string {
   ].join("\u0003");
 }
 
+function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
+  deltaY: number;
+  mode: "auto" | "line" | "pixel";
+} {
+  const deltaY = Number(e.deltaY ?? 0);
+  const deltaMode = typeof e.deltaMode === "number" ? e.deltaMode : undefined;
+  if (
+    Number.isInteger(deltaY) &&
+    deltaY !== 0 &&
+    Math.abs(deltaY) >= 100 &&
+    Math.abs(deltaY) % 100 === 0 &&
+    deltaMode == null
+  ) {
+    return { deltaY: deltaY / 100, mode: "line" };
+  }
+  if (deltaMode === 1) return { deltaY, mode: "line" };
+  if (deltaMode === 0) return { deltaY, mode: "pixel" };
+  return { deltaY, mode: "auto" };
+}
+
 export const TVirtualMarkdown = defineComponent({
   name: "TVirtualMarkdown",
   props: {
@@ -96,10 +117,10 @@ export const TVirtualMarkdown = defineComponent({
     const { visible, rootProps } = useVisibility();
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
-    const focused = ref(false);
     const internalScrollTop = ref(0);
     const documentVersion = ref(0);
     const rows = shallowRef<readonly TuiMarkdownVisualRow[]>(markRaw([]));
+    const wheelState = createWheelScrollState();
     let builtOnce = false;
     let rebuildVersion = 0;
     let alive = true;
@@ -325,17 +346,31 @@ export const TVirtualMarkdown = defineComponent({
       handlers: {
         click: (_event: TerminalPointerEvent) => {},
         wheel: (event: any) => {
-          const deltaY = Number(event.deltaY ?? 0);
+          const { deltaY, mode } = getWheelScrollInput(event);
           if (!deltaY) return;
+          const now =
+            typeof event.time === "number"
+              ? event.time
+              : typeof event.timeStamp === "number"
+                ? event.timeStamp
+                : Date.now();
+          const { nextTop, dir } = applyWheelScroll(
+            wheelState,
+            deltaY,
+            internalScrollTop.value,
+            maxScrollTop(),
+            now,
+            mode,
+            { disableAcceleration: mode === "pixel" },
+          );
+          if (!dir || nextTop === internalScrollTop.value) return;
           event.preventDefault?.();
-          setScrollTop(internalScrollTop.value + Math.sign(deltaY));
+          setScrollTop(nextTop);
         },
         focus: () => {
-          focused.value = true;
           emit("focus");
         },
         blur: () => {
-          focused.value = false;
           emit("blur");
         },
         keydown: onKeydown,
@@ -365,7 +400,6 @@ export const TVirtualMarkdown = defineComponent({
         absRect.value,
         fullRect.value,
         internalScrollTop.value,
-        focused.value,
         props.style,
         defaultStyle.value,
         documentVersion.value,

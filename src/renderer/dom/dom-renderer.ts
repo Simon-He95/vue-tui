@@ -112,6 +112,7 @@ function styleKey(style: Style): string {
     style.italic ? "1" : "0",
     style.underline ? "1" : "0",
     style.inverse ? "1" : "0",
+    style.href ?? "",
   ].join("|");
   styleKeyCache.set(style as any, key);
   return key;

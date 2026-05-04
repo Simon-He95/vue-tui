@@ -17,6 +17,7 @@ export interface TuiMarkdownParser {
 const RELATIVE_LINK_PREFIXES = ["#", "/", "./", "../"] as const;
 const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 const markdownInstanceCache = new Map<string, ReturnType<typeof getMarkdown>>();
+const MAX_MARKDOWN_INSTANCE_CACHE = 32;
 
 function hasControlChars(value: string): boolean {
   for (const ch of value) {
@@ -59,6 +60,7 @@ function getCachedMarkdownInstance(config?: TuiMarkdownParseConfig) {
   const created = getMarkdown(`vue-tui-markdown:${cacheKey}`, {
     customHtmlTags,
   });
+  if (markdownInstanceCache.size >= MAX_MARKDOWN_INSTANCE_CACHE) markdownInstanceCache.clear();
   markdownInstanceCache.set(cacheKey, created);
   return created;
 }
