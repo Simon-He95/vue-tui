@@ -35,6 +35,10 @@ export type TLogRetainedIndexOptions = Readonly<{
 const DEFAULT_BUDGET_MS = 4;
 const DEFAULT_MAX_ITEMS = 10_000;
 
+type ScheduledFrameHandle =
+  | { kind: "raf"; id: number }
+  | { kind: "timer"; id: ReturnType<typeof setTimeout> };
+
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
@@ -77,7 +81,7 @@ export function useTLogRetainedIndex(
 
   let generation = 0;
   let cursor = 0;
-  let rafId: number | null = null;
+  let rafHandle: ScheduledFrameHandle | null = null;
   let indexedLines: Array<{
     lineIndex: number;
     absoluteLineIndex: number;
@@ -92,11 +96,31 @@ export function useTLogRetainedIndex(
     }>;
   }> = [];
 
+  function requestFrame(cb: () => void): ScheduledFrameHandle {
+    const g = globalThis as any;
+    if (
+      typeof g.requestAnimationFrame === "function" &&
+      typeof g.cancelAnimationFrame === "function"
+    ) {
+      return { kind: "raf", id: g.requestAnimationFrame(cb) };
+    }
+    return { kind: "timer", id: setTimeout(cb, 16) };
+  }
+
+  function cancelFrame(handle: ScheduledFrameHandle | null): void {
+    if (!handle) return;
+    if (handle.kind === "raf") {
+      (globalThis as any).cancelAnimationFrame?.(handle.id);
+      return;
+    }
+    clearTimeout(handle.id);
+  }
+
   function cancel(): void {
     generation++;
     cursor = 0;
-    if (rafId != null) cancelAnimationFrame(rafId);
-    rafId = null;
+    cancelFrame(rafHandle);
+    rafHandle = null;
     if (status.value === "indexing") status.value = "idle";
   }
 
@@ -229,15 +253,15 @@ export function useTLogRetainedIndex(
       }
 
       if (cursor >= lineCount) {
-        rafId = null;
+        rafHandle = null;
         finalize(generationAtStart);
         return;
       }
 
-      rafId = requestAnimationFrame(runFrame);
+      rafHandle = requestFrame(runFrame);
     };
 
-    rafId = requestAnimationFrame(runFrame);
+    rafHandle = requestFrame(runFrame);
   }
 
   function refresh(): void {

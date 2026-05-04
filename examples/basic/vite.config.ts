@@ -2,6 +2,23 @@ import { fileURLToPath, URL } from "node:url";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 
+const terminalExternal = [
+  "fs",
+  "node:fs",
+  "node:fs/promises",
+  "child_process",
+  "node:child_process",
+  "events",
+  "node:events",
+  "buffer",
+  "node:buffer",
+  "process",
+  "node:process",
+  "url",
+  "node:url",
+  "util",
+];
+
 export default defineConfig(({ mode }) => {
   const base = {
     plugins: [vue()],
@@ -24,7 +41,7 @@ export default defineConfig(({ mode }) => {
           fileName: () => "terminal.js",
         },
         rollupOptions: {
-          external: ["events", "node:events", "buffer", "node:buffer"],
+          external: terminalExternal,
         },
         target: "node18",
         minify: false,
@@ -44,7 +61,7 @@ export default defineConfig(({ mode }) => {
           fileName: () => "terminal.js",
         },
         rollupOptions: {
-          external: ["events", "node:events", "buffer", "node:buffer"],
+          external: terminalExternal,
         },
         target: "node18",
         minify: false,
@@ -64,7 +81,7 @@ export default defineConfig(({ mode }) => {
           fileName: () => "terminal.js",
         },
         rollupOptions: {
-          external: ["events", "node:events", "buffer", "node:buffer"],
+          external: terminalExternal,
         },
         target: "node18",
         minify: false,

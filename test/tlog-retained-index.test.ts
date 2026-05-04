@@ -1,5 +1,5 @@
 import type { TLogDataSource, TLogViewHandle, TLogViewScrollMetrics } from "../src/experimental.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "./ui-regressions-support.js";
 import { createTLogLineMatcherPlugin, useTLogRetainedIndex } from "../src/experimental.js";
 
@@ -120,6 +120,61 @@ describe("useTLogRetainedIndex", () => {
       expect(retained.density.value.length).toBeGreaterThan(0);
     } finally {
       raf.restore();
+    }
+  });
+
+  it("falls back to timers when requestAnimationFrame is unavailable", async () => {
+    vi.useFakeTimers();
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    (globalThis as any).requestAnimationFrame = undefined;
+    (globalThis as any).cancelAnimationFrame = undefined;
+
+    const source = ref<TLogDataSource>({
+      lineCount: () => 2,
+      firstLineIndex: () => 0,
+      getLineKey: (index) => index,
+      getLine: (index) => ["ERROR https://example.com/one", "INFO tail-draft"][index] ?? "",
+    });
+    const version = ref(1);
+    const logView = ref<TLogViewHandle | null>({
+      getScrollMetrics: () => createMetrics(),
+      getSearchState: () => ({
+        query: "",
+        status: "idle" as const,
+        matchCount: 0,
+        currentMatchIndex: -1,
+        error: null,
+      }),
+      getSearchMatch: () => null,
+    } as Partial<TLogViewHandle> as TLogViewHandle);
+
+    const retained = useTLogRetainedIndex(logView, source, version, {
+      links: true,
+      levels: true,
+      urls: true,
+    });
+
+    try {
+      await nextTick();
+      await vi.runAllTimersAsync();
+      await nextTick();
+
+      expect(retained.status.value).toBe("done");
+      expect(retained.links.value).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            href: "https://example.com/one",
+          }),
+        ]),
+      );
+      expect(retained.diagnostics.value).toEqual(
+        expect.arrayContaining([expect.objectContaining({ severity: "error" })]),
+      );
+    } finally {
+      (globalThis as any).requestAnimationFrame = previousRaf;
+      (globalThis as any).cancelAnimationFrame = previousCancel;
+      vi.useRealTimers();
     }
   });
 });
