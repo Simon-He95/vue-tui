@@ -172,6 +172,36 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("reflows auto-height markdown text to the latest coalesced streaming content", async () => {
+    const content = ref("one");
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 12,
+          content: content.value,
+          streaming: true,
+        }),
+      16,
+      6,
+    );
+
+    content.value = "one\n\ntwo";
+    content.value = "one\n\ntwo\n\nthree";
+    await nextTick();
+    await nextTick();
+
+    expect([0, 1, 2, 3, 4].map((y) => rowText(mounted, y))).toEqual([
+      "one",
+      "",
+      "two",
+      "",
+      "three",
+    ]);
+    mounted.unmount();
+  });
+
   it("does not paint TMarkdownText outside its rect when dirty rows include other components", async () => {
     const top = ref("top-a");
     const markdown = ref("**markdown-a**");

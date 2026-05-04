@@ -150,6 +150,18 @@ describe("markdown layout", () => {
     ).toBe(true);
   });
 
+  it("does not consume wide glyphs into rows that exceed the viewport width", () => {
+    const parser = createTuiMarkdownParser();
+    const rows = buildMarkdownVisualRows("- 你", 3, parser);
+
+    for (const row of rows) {
+      const cells = row.segments.reduce((sum, segment) => sum + segment.cells, 0);
+      expect(cells).toBeLessThanOrEqual(3);
+    }
+
+    expect(rows.map((row) => row.plainText).join("\n")).toContain("你");
+  });
+
   it("reuses merged style objects across markdown paints", () => {
     const writes: Array<{ text: string; style: unknown }> = [];
     const terminal = {

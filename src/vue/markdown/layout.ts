@@ -62,6 +62,20 @@ function clipInlineSegmentsToWidth(
   return out;
 }
 
+function firstRenderableSlice(
+  text: string,
+  start: number,
+  totalCells: number,
+): Readonly<{ text: string; cells: number }> | null {
+  for (let end = start + 1; end <= totalCells; end++) {
+    const piece = sliceByCellsRange(text, start, end);
+    const cells = textCellWidth(piece);
+    if (!piece || cells <= 0) continue;
+    return { text: piece, cells };
+  }
+  return null;
+}
+
 function wrapLineSegments(
   source: readonly TuiMarkdownInlineSegment[],
   prefixSegments: readonly TuiMarkdownInlineSegment[],
@@ -85,6 +99,7 @@ function wrapLineSegments(
   const openRow = (
     useContinuation: boolean,
   ): {
+    useContinuation: boolean;
     segments: TuiMarkdownVisualSegment[];
     remaining: number;
   } => {
@@ -93,10 +108,21 @@ function wrapLineSegments(
       .map(toVisualSegment)
       .filter(Boolean) as TuiMarkdownVisualSegment[];
     return {
+      useContinuation,
       segments: [...renderedPrefix],
       remaining: useContinuation ? maxNext : maxFirst,
     };
   };
+
+  const openDegradedRow = (): {
+    useContinuation: boolean;
+    segments: TuiMarkdownVisualSegment[];
+    remaining: number;
+  } => ({
+    useContinuation: true,
+    segments: [],
+    remaining: width,
+  });
 
   let row = openRow(false);
   if (!source.length) {
@@ -109,6 +135,9 @@ function wrapLineSegments(
     row = openRow(true);
   };
 
+  const prefixLengthForRow = () => (row.useContinuation ? continuationPrefix.length : firstPrefix.length);
+  const rowHasBody = () => row.segments.length > prefixLengthForRow();
+
   for (const segment of source) {
     const totalCells = textCellWidth(segment.text);
     let start = 0;
@@ -118,15 +147,26 @@ function wrapLineSegments(
       let piece = sliceByCellsRange(segment.text, start, end);
       let pieceCells = textCellWidth(piece);
       if (pieceCells <= 0) {
-        if (
-          row.segments.length > (rows.length > 0 ? continuationPrefix.length : firstPrefix.length)
-        ) {
+        const nextSlice = firstRenderableSlice(segment.text, start, totalCells);
+        if (!nextSlice) break;
+        if (rowHasBody()) {
           pushRow();
           continue;
         }
-        piece = sliceByCellsRange(segment.text, start, totalCells);
-        pieceCells = textCellWidth(piece);
-        if (pieceCells <= 0) break;
+        if (!row.useContinuation) {
+          rows.push(row.segments);
+          row = openDegradedRow();
+          continue;
+        }
+        if (nextSlice.cells <= width) {
+          row = openDegradedRow();
+          continue;
+        }
+        break;
+      }
+      if (pieceCells > row.remaining) {
+        pushRow();
+        continue;
       }
       row.segments.push({
         text: piece,

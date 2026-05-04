@@ -42,4 +42,38 @@ describe("TVirtualMarkdown streaming", () => {
     expect(visibleLines.some((line) => line.includes("const a = 1"))).toBe(true);
     mounted.unmount();
   });
+
+  it("renders the latest coalesced streaming content after one scheduled rebuild", async () => {
+    const content = ref("a");
+    const { TVirtualMarkdown } = await import("../src/experimental.js");
+
+    const App = defineComponent({
+      name: "MarkdownStreamingContentApp",
+      setup() {
+        return () =>
+          h(TVirtualMarkdown, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            content: content.value,
+            streaming: true,
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 12, 6);
+
+    content.value = "a\nb";
+    content.value = "a\nb\nc";
+    await nextTick();
+    await nextTick();
+
+    const visibleLines = mounted.terminal
+      .snapshot()
+      .lines.slice(0, 4)
+      .map((line) => line.trimEnd());
+    expect(visibleLines.slice(0, 3)).toEqual(["a", "b", "c"]);
+    mounted.unmount();
+  });
 });
