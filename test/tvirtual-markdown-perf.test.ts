@@ -9,7 +9,8 @@ vi.mock("../src/vue/markdown/document.js", async (importOriginal) => {
 });
 
 import * as markdownDocument from "../src/vue/markdown/document.js";
-import { h, mountTerminal, nextTick } from "./ui-regressions-support.js";
+import { TMarkdownText } from "../src/index.js";
+import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
 function dispatchWheel(container: HTMLElement): void {
   const wheel = new Event("wheel", { bubbles: true }) as any;
@@ -57,6 +58,69 @@ describe("TVirtualMarkdown performance", () => {
     expect(
       commits.filter((rows) => rows != null).every((rows) => rows!.join(",") === "0,1,2,3,4,5"),
     ).toBe(true);
+    mounted.unmount();
+  });
+
+  it("coalesces multiple streaming updates for TVirtualMarkdown into one rebuild per frame", async () => {
+    const content = ref("- row-0");
+    const { TVirtualMarkdown } = await import("../src/experimental.js");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          content: content.value,
+          streaming: true,
+        }),
+      24,
+      8,
+    );
+
+    const buildSpy = vi.mocked(markdownDocument.buildMarkdownVisualRows);
+    await nextTick();
+    await nextTick();
+    const before = buildSpy.mock.calls.length;
+
+    content.value = "- row-0\n- row-1";
+    content.value = "- row-0\n- row-1\n- row-2";
+    content.value = "- row-0\n- row-1\n- row-2\n- row-3";
+    await nextTick();
+    await nextTick();
+
+    expect(buildSpy.mock.calls.length).toBe(before + 1);
+    mounted.unmount();
+  });
+
+  it("coalesces multiple streaming updates for TMarkdownText into one rebuild per frame", async () => {
+    const content = ref("- row-0");
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          content: content.value,
+          streaming: true,
+        }),
+      24,
+      8,
+    );
+
+    const buildSpy = vi.mocked(markdownDocument.buildMarkdownVisualRows);
+    await nextTick();
+    await nextTick();
+    const before = buildSpy.mock.calls.length;
+
+    content.value = "- row-0\n- row-1";
+    content.value = "- row-0\n- row-1\n- row-2";
+    content.value = "- row-0\n- row-1\n- row-2\n- row-3";
+    await nextTick();
+    await nextTick();
+
+    expect(buildSpy.mock.calls.length).toBe(before + 1);
     mounted.unmount();
   });
 });

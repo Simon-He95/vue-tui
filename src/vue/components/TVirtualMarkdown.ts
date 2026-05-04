@@ -65,7 +65,7 @@ export const TVirtualMarkdown = defineComponent({
   emits: ["update:scrollTop", "scroll", "focus", "blur", "keydown"],
   setup(props, { emit }) {
     const instance = getCurrentInstance();
-    const { terminal, defaultStyle, events } = useTerminal();
+    const { terminal, defaultStyle, events, scheduler } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
@@ -74,6 +74,8 @@ export const TVirtualMarkdown = defineComponent({
     const internalScrollTop = ref(0);
     const documentVersion = ref(0);
     const rows = shallowRef<readonly TuiMarkdownVisualRow[]>(markRaw([]));
+    let builtOnce = false;
+    let rebuildVersion = 0;
     const parser = shallowRef(
       markRaw(
         createTuiMarkdownParser({
@@ -94,6 +96,36 @@ export const TVirtualMarkdown = defineComponent({
         );
       },
     );
+
+    function rebuildRows(): void {
+      const nextRows = buildMarkdownVisualRows(props.content, props.w, parser.value, {
+        final: props.final,
+        theme: props.theme,
+      });
+      rows.value = markRaw(nextRows);
+      reconcileScrollTop();
+      documentVersion.value++;
+    }
+
+    function scheduleRebuild(): void {
+      const currentVersion = ++rebuildVersion;
+      if (!builtOnce) {
+        builtOnce = true;
+        rebuildRows();
+        return;
+      }
+      scheduler.queueFrameTask({
+        id: `TVirtualMarkdown:${instance?.uid ?? "unknown"}:markdown`,
+        reason: props.streaming ? "stream" : "data",
+        priority: props.streaming ? "low" : "normal",
+        sync: false,
+        run: (ctx) => {
+          if (currentVersion !== rebuildVersion) return;
+          rebuildRows();
+          ctx.invalidate({ reason: props.streaming ? "stream" : "data" });
+        },
+      });
+    }
 
     const fullRect = computed<Rect>(() =>
       translateRect(
@@ -176,13 +208,7 @@ export const TVirtualMarkdown = defineComponent({
         () => props.theme,
       ],
       () => {
-        const nextRows = buildMarkdownVisualRows(props.content, props.w, parser.value, {
-          final: props.final,
-          theme: props.theme,
-        });
-        rows.value = markRaw(nextRows);
-        reconcileScrollTop();
-        documentVersion.value++;
+        scheduleRebuild();
       },
       { immediate: true },
     );

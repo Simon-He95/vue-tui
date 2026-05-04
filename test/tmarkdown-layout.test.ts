@@ -28,6 +28,40 @@ describe("markdown layout", () => {
     ).toBe(false);
   });
 
+  it("rejects markdown links with control characters and unsupported protocols", () => {
+    const parser = createTuiMarkdownParser();
+    const nodes = parser.parse(
+      [
+        "[ok](https://example.com)",
+        "[mail](mailto:test@example.com)",
+        "[bad-control](https://example.com\u0007\u001b]8;;evil\u0007)",
+        "[bad-data](data:text/html,boom)",
+        "[bad-file](file:///tmp/demo.txt)",
+      ].join(" "),
+      true,
+    );
+    const blocks = markdownAstToBlocks(nodes, DEFAULT_TUI_MARKDOWN_THEME);
+    const paragraph = blocks[0];
+
+    expect(paragraph?.type).toBe("inline");
+    if (paragraph?.type !== "inline") throw new Error("expected inline block");
+    expect(
+      paragraph.segments.some((segment) => segment.style?.href === "https://example.com"),
+    ).toBe(true);
+    expect(
+      paragraph.segments.some((segment) => segment.style?.href === "mailto:test@example.com"),
+    ).toBe(true);
+    expect(paragraph.segments.some((segment) => segment.style?.href?.includes("\u0007"))).toBe(
+      false,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href?.startsWith("data:"))).toBe(
+      false,
+    );
+    expect(paragraph.segments.some((segment) => segment.style?.href?.startsWith("file:"))).toBe(
+      false,
+    );
+  });
+
   it("wraps CJK rows by terminal cells without cutting glyphs", () => {
     const rows = buildMarkdownVisualRows("你好hello", 6, createTuiMarkdownParser());
     expect(rows.map((row) => row.plainText)).toEqual(["你好he", "llo"]);
