@@ -35,6 +35,12 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./markdown": {
+      "bun": "./src/markdown.ts",
+      "types": "./dist/markdown.d.ts",
+      "import": "./dist/markdown.js",
+      "require": "./dist/markdown.cjs"
+    },
     "./experimental": {
       "bun": "./src/experimental.ts",
       "types": "./dist/experimental.d.ts",

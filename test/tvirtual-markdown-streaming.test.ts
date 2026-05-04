@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
 describe("TVirtualMarkdown streaming", () => {
-  it("repaints the viewport when final mode changes for visible markdown", async () => {
-    const content = "before\n\n```ts\nconst a = 1";
+  it("repaints the viewport when final mode changes visible markdown styling", async () => {
+    const content = "**dangling";
     const final = ref(false);
-    const { TVirtualMarkdown } = await import("../src/experimental.js");
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
 
     const App = defineComponent({
       name: "MarkdownStreamingApp",
@@ -14,15 +14,17 @@ describe("TVirtualMarkdown streaming", () => {
           h(TVirtualMarkdown, {
             x: 0,
             y: 0,
-            w: 20,
-            h: 4,
+            w: 12,
+            h: 2,
             content,
             final: final.value,
+            streaming: true,
           });
       },
     });
 
-    const mounted = await mountTerminal(() => h(App), 20, 6);
+    const mounted = await mountTerminal(() => h(App), 12, 4);
+    expect(mounted.terminal.getCell(0, 0).style.bold).toBe(true);
     const commits: Array<readonly number[] | null> = [];
     const off = mounted.terminal.on("commit", ({ dirtyRows }) => {
       commits.push(dirtyRows);
@@ -33,19 +35,16 @@ describe("TVirtualMarkdown streaming", () => {
     await nextTick();
 
     off();
-    const visibleLines = mounted.terminal
-      .snapshot()
-      .lines.slice(0, 4)
-      .map((line) => line.trimEnd());
+    const visibleLines = mounted.terminal.snapshot().lines.slice(0, 2).map((line) => line.trimEnd());
     expect(commits.length).toBeGreaterThan(0);
-    expect(visibleLines).toContain("before");
-    expect(visibleLines.some((line) => line.includes("const a = 1"))).toBe(true);
+    expect(visibleLines[0]).toBe("**dangling");
+    expect(mounted.terminal.getCell(0, 0).style.bold).not.toBe(true);
     mounted.unmount();
   });
 
   it("renders the latest coalesced streaming content after one scheduled rebuild", async () => {
     const content = ref("a");
-    const { TVirtualMarkdown } = await import("../src/experimental.js");
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
 
     const App = defineComponent({
       name: "MarkdownStreamingContentApp",

@@ -9,7 +9,7 @@ vi.mock("../src/vue/markdown/document.js", async (importOriginal) => {
 });
 
 import * as markdownDocument from "../src/vue/markdown/document.js";
-import { TMarkdownText } from "../src/experimental.js";
+import { TMarkdownText } from "../src/markdown.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
 function dispatchWheel(container: HTMLElement): void {
@@ -23,7 +23,7 @@ function dispatchWheel(container: HTMLElement): void {
 describe("TVirtualMarkdown performance", () => {
   it("does not rebuild markdown visual rows while scrolling a long document", async () => {
     const content = Array.from({ length: 5000 }, (_, index) => `- row-${index}`).join("\n");
-    const { TVirtualMarkdown } = await import("../src/experimental.js");
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
     const mounted = await mountTerminal(
       () =>
         h(TVirtualMarkdown, {
@@ -63,7 +63,7 @@ describe("TVirtualMarkdown performance", () => {
 
   it("coalesces multiple streaming updates for TVirtualMarkdown into one rebuild per frame", async () => {
     const content = ref("- row-0");
-    const { TVirtualMarkdown } = await import("../src/experimental.js");
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
     const mounted = await mountTerminal(
       () =>
         h(TVirtualMarkdown, {
@@ -95,7 +95,7 @@ describe("TVirtualMarkdown performance", () => {
 
   it("emits a single viewport commit for a coalesced TVirtualMarkdown streaming rebuild", async () => {
     const content = ref("- row-0");
-    const { TVirtualMarkdown } = await import("../src/experimental.js");
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
     const mounted = await mountTerminal(
       () =>
         h(TVirtualMarkdown, {
@@ -194,6 +194,50 @@ describe("TVirtualMarkdown performance", () => {
     off();
     expect(commits).toHaveLength(1);
     expect(commits[0]?.join(",")).toBe("0,1,2,3");
+    mounted.unmount();
+  });
+
+  it("does not repaint the viewport when streaming appends stay fully offscreen", async () => {
+    const content = ref(Array.from({ length: 50 }, (_, index) => `- row-${index}`).join("\n"));
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          content: content.value,
+          streaming: true,
+          scrollTop: 0,
+        }),
+      24,
+      8,
+    );
+
+    const buildSpy = vi.mocked(markdownDocument.buildMarkdownVisualRows);
+    await nextTick();
+    await nextTick();
+    const beforeBuilds = buildSpy.mock.calls.length;
+    const beforeLines = mounted.terminal
+      .snapshot()
+      .lines.slice(0, 4)
+      .map((line) => line.trimEnd());
+    const commits: Array<readonly number[] | null> = [];
+    const off = mounted.terminal.on("commit", ({ dirtyRows }) => {
+      commits.push(dirtyRows);
+    });
+
+    content.value = `${content.value}\n- row-50\n- row-51\n- row-52`;
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(buildSpy.mock.calls.length).toBe(beforeBuilds + 1);
+    expect(commits).toHaveLength(0);
+    expect(
+      mounted.terminal.snapshot().lines.slice(0, 4).map((line) => line.trimEnd()),
+    ).toEqual(beforeLines);
     mounted.unmount();
   });
 });

@@ -16,7 +16,7 @@ export interface TuiMarkdownParser {
 
 const RELATIVE_LINK_PREFIXES = ["#", "/", "./", "../"] as const;
 const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
-let nextMarkdownParserId = 0;
+const markdownInstanceCache = new Map<string, ReturnType<typeof getMarkdown>>();
 
 function hasControlChars(value: string): boolean {
   for (const ch of value) {
@@ -45,12 +45,27 @@ export function isSafeMarkdownLink(url: string): boolean {
   }
 }
 
-export function createTuiMarkdownParser(config?: TuiMarkdownParseConfig): TuiMarkdownParser {
+function markdownInstanceCacheKey(config?: TuiMarkdownParseConfig): string {
+  return JSON.stringify({
+    customHtmlTags: [...(config?.customHtmlTags?.filter(Boolean) ?? [])].sort(),
+  });
+}
+
+function getCachedMarkdownInstance(config?: TuiMarkdownParseConfig) {
+  const cacheKey = markdownInstanceCacheKey(config);
+  const cached = markdownInstanceCache.get(cacheKey);
+  if (cached) return cached;
   const customHtmlTags = config?.customHtmlTags?.filter(Boolean);
-  const parserId = `vue-tui-markdown-${nextMarkdownParserId++}`;
-  const md = getMarkdown(parserId, {
+  const created = getMarkdown(`vue-tui-markdown:${cacheKey}`, {
     customHtmlTags,
   });
+  markdownInstanceCache.set(cacheKey, created);
+  return created;
+}
+
+export function createTuiMarkdownParser(config?: TuiMarkdownParseConfig): TuiMarkdownParser {
+  const customHtmlTags = config?.customHtmlTags?.filter(Boolean);
+  const md = getCachedMarkdownInstance(config);
 
   function parse(content: string, final: boolean): ParsedNode[] {
     return parseMarkdownToStructure(content, md, {

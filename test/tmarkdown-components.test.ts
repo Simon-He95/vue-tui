@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TMarkdownText, TVirtualMarkdown } from "../src/experimental.js";
+import { TMarkdownText, TVirtualMarkdown } from "../src/markdown.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
 function rowText(mounted: Awaited<ReturnType<typeof mountTerminal>>, y: number): string {

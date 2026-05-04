@@ -40,6 +40,31 @@ function normalizeRect(r: Rect): Rect {
   };
 }
 
+function markdownStyleSignature(style?: Style): string {
+  if (!style) return "";
+  return [
+    style.fg ?? "",
+    style.bg ?? "",
+    style.bold ? "1" : "0",
+    style.dim ? "1" : "0",
+    style.italic ? "1" : "0",
+    style.underline ? "1" : "0",
+    style.inverse ? "1" : "0",
+    style.href ?? "",
+  ].join("\u0001");
+}
+
+function markdownRowSignature(row: TuiMarkdownVisualRow | undefined): string {
+  if (!row) return "";
+  return [
+    row.key,
+    row.plainText,
+    row.segments
+      .map((segment) => `${segment.text}\u0001${segment.cells}\u0001${markdownStyleSignature(segment.style)}`)
+      .join("\u0002"),
+  ].join("\u0003");
+}
+
 export const TVirtualMarkdown = defineComponent({
   name: "TVirtualMarkdown",
   props: {
@@ -100,13 +125,20 @@ export const TVirtualMarkdown = defineComponent({
     );
 
     function rebuildRows(): void {
+      const prevScrollTop = internalScrollTop.value;
+      const prevVisibleRows = visibleRowSignatures(rows.value, prevScrollTop);
       const nextRows = buildMarkdownVisualRows(props.content, props.w, parser.value, {
         final: props.final,
         theme: props.theme,
       });
       rows.value = markRaw(nextRows);
       reconcileScrollTop();
-      documentVersion.value++;
+      const nextScrollTop = internalScrollTop.value;
+      const nextVisibleRows = visibleRowSignatures(nextRows, nextScrollTop);
+      const visibleChanged =
+        prevVisibleRows.length !== nextVisibleRows.length ||
+        prevVisibleRows.some((row, index) => row !== nextVisibleRows[index]);
+      if (!builtOnce || prevScrollTop !== nextScrollTop || visibleChanged) documentVersion.value++;
     }
 
     function scheduleRebuild(): void {
@@ -164,6 +196,19 @@ export const TVirtualMarkdown = defineComponent({
       const clip = normalizedRect();
       const { y: clipY } = clipOffsets();
       return Math.max(0, rows.value.length - (clipY + clip.h));
+    }
+
+    function visibleRowSignatures(
+      sourceRows: readonly TuiMarkdownVisualRow[],
+      scrollTop: number,
+    ): readonly string[] {
+      const clip = normalizedRect();
+      const { y: clipY } = clipOffsets();
+      const start = Math.max(0, scrollTop + clipY);
+      const end = Math.max(start, start + clip.h);
+      const out: string[] = [];
+      for (let index = start; index < end; index++) out.push(markdownRowSignature(sourceRows[index]));
+      return out;
     }
 
     function hasControlledScrollTop(): boolean {
