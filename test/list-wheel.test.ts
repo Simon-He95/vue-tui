@@ -220,9 +220,9 @@ describe("TList wheel scrolling", () => {
       app.scheduler.flushNow();
       await nextTick();
 
-      expect(top).toBeGreaterThan(0);
-      expect(onUpdateModelValue).toHaveBeenLastCalledWith(top);
-      expect(rowText(app, 0)).toBe(`item-${top}`);
+      expect(top).toBe(1);
+      expect(onUpdateModelValue).toHaveBeenLastCalledWith(1);
+      expect(rowText(app, 0)).toBe("item-1");
     } finally {
       app.dispose();
     }
@@ -260,9 +260,9 @@ describe("TList wheel scrolling", () => {
       await nextTick();
 
       const selected = onUpdateModelValue.mock.calls.at(-1)![0];
-      expect(top).toBeGreaterThan(4);
-      expect(selected).toBeGreaterThan(4);
-      expect(rowText(app, 0)).not.toBe("item-0");
+      expect(top).toBe(100);
+      expect(selected).toBe(104);
+      expect(rowText(app, 0)).toBe("item-101");
     } finally {
       app.dispose();
     }
@@ -300,9 +300,9 @@ describe("TList wheel scrolling", () => {
       await nextTick();
 
       const selected = onUpdateModelValue.mock.calls.at(-1)![0];
-      expect(top).toBeLessThan(200);
-      expect(selected).toBeLessThan(200);
-      expect(rowText(app, 0)).not.toBe("item-197");
+      expect(top).toBe(97);
+      expect(selected).toBe(93);
+      expect(rowText(app, 0)).toBe("item-93");
     } finally {
       app.dispose();
     }
@@ -341,9 +341,10 @@ describe("TList wheel scrolling", () => {
       app.scheduler.flushNow();
       await nextTick();
 
-      expect(top).toBeGreaterThan(0);
-      expect(onUpdateModelValue).toHaveBeenLastCalledWith(top);
-      expect(onChange).toHaveBeenLastCalledWith({ index: top, value: `item-${top}` });
+      expect(top).toBe(100);
+      expect(onUpdateModelValue).toHaveBeenLastCalledWith(100);
+      expect(onChange).toHaveBeenLastCalledWith({ index: 100, value: "item-100" });
+      expect(rowText(app, 0)).toBe("item-100");
     } finally {
       app.dispose();
     }
@@ -476,6 +477,58 @@ describe("TList wheel scrolling", () => {
 
       expect(onScroll).not.toHaveBeenCalled();
       expect(rowText(app, 0)).toBe("item-47");
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("resets pending wheel base after external modelValue wins", async () => {
+    const raf = installRaf();
+    const items = Array.from({ length: 200 }, (_, index) => `item-${index}`);
+    let setModelValue!: (value: number) => void;
+    const App = defineComponent({
+      name: "ListWheelPendingBaseResetApp",
+      setup() {
+        const modelValue = ref(0);
+        setModelValue = (value) => {
+          modelValue.value = value;
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items,
+            modelValue: modelValue.value,
+            autoFocus: true,
+            "onUpdate:modelValue": (value: number) => {
+              modelValue.value = value;
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      setModelValue(50);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_010 });
+      expect(raf.callbacks.size).toBe(1);
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("item-48");
     } finally {
       app.dispose();
       raf.restore();
@@ -731,6 +784,113 @@ describe("TList wheel scrolling", () => {
       });
 
       expect(prevented).toBe(false);
+      expect(onScroll).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not wheel or emit scroll for an empty list", () => {
+    const onScroll = vi.fn();
+    const onUpdateModelValue = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: [],
+        autoFocus: true,
+        onScroll,
+        "onUpdate:modelValue": onUpdateModelValue,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      const prevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: 100,
+        time: 1_000,
+      });
+
+      expect(prevented).toBe(false);
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not throw when Enter is pressed on an empty list", async () => {
+    const onChange = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: [],
+        autoFocus: true,
+        onChange,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      expect(() =>
+        app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: 1_000 }),
+      ).not.toThrow();
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onChange).toHaveBeenCalledWith({ index: 0, value: "" });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not scroll or throw when height is zero", async () => {
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 0,
+        items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+        autoFocus: true,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      expect(() =>
+        app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 }),
+      ).not.toThrow();
+      expect(() =>
+        app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: 1_010 }),
+      ).not.toThrow();
+      app.scheduler.flushNow();
+      await nextTick();
+
       expect(onScroll).not.toHaveBeenCalled();
     } finally {
       app.dispose();

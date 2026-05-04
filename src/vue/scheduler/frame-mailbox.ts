@@ -24,6 +24,20 @@ export type FrameMailboxOptions<T> = Readonly<{
   apply: FrameMailboxApply<T>;
 }>;
 
+/**
+ * Coalesces many producer updates into a single scheduler frame task.
+ *
+ * Default behavior keeps only the latest queued value. If `merge` is provided,
+ * the pending value is updated with `merge(prev, next)`.
+ *
+ * Only the first queue() call in a pending cycle schedules a frame task.
+ * Later queue() calls update the pending payload and are reported as dropped
+ * producer updates when the frame task runs.
+ *
+ * cancel() is best-effort at scheduler level. The run callback still guards
+ * `disposed || !hasPending`, because a scheduler may already have taken a
+ * snapshot of tasks for the current frame.
+ */
 export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
   let disposed = false;
   let hasPending = false;

@@ -34,6 +34,13 @@ export type TerminalFrameContext = Readonly<{
   remainingMs: () => number;
   requestMore: () => void;
   invalidate: (options?: TerminalSchedulerInvalidateOptions) => void;
+  /**
+   * Internal scheduler metric hook used by frame tasks/mailboxes to report
+   * dropped producer updates that were intentionally coalesced before paint.
+   *
+   * Compatibility note:
+   * TerminalFrameContext is an exported type, so additions here are public.
+   */
   reportDroppedUpdates: (count: number) => void;
 }>;
 

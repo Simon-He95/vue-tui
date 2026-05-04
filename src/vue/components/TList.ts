@@ -88,6 +88,9 @@ export const TList = defineComponent({
 
     const focused = ref(false);
     const active = ref(props.modelValue);
+    // Intentionally excluded from render deps.
+    // Every mutation must go through setScrollTop(), otherwise the render node
+    // will not receive dirtyRowsHint and the visible rows may become stale.
     const scrollTop = ref(0);
     const wheelState = createWheelScrollState();
     let detachedByWheel = false;
@@ -101,6 +104,8 @@ export const TList = defineComponent({
     });
 
     function viewportHeight(): number {
+      // TODO: viewport semantics currently use props.h, not clipped absRect.h.
+      // This matches previous TList behavior but can be wrong under parent clipping.
       return Math.max(0, props.h);
     }
 

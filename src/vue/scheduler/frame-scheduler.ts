@@ -10,8 +10,15 @@ import { framePerfNow, mergeFramePerfReason } from "../../observability/frame-pe
 
 export type SchedulerFrameTaskRunStats = Readonly<{
   frameTaskCount: number;
+  /**
+   * Number of scheduler-level tasks merged by task id before execution.
+   */
   coalescedFrameTasks: number;
   remainingFrameTasks: number;
+  /**
+   * Number of producer-level values dropped before apply.
+   * Example: a mailbox queued 100 values but applied only the latest => 99.
+   */
   droppedUpdates: number;
   reason: FramePerfReason;
   sync: boolean;

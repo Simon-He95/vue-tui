@@ -197,6 +197,8 @@ const result = {
 assert.equal(result.tListBurstWheel.updateModelValue, 0);
 assert.equal(result.tListBurstWheel.scroll, 1);
 assert.equal(result.tListBurstWheel.commitsBeforeFrame, 0);
+// Intentionally strict: this benchmark guards against event-driven
+// intermediate commits during wheel bursts.
 assert.equal(result.tListBurstWheel.commitsAfterFrame, 1);
 assert.equal(result.tListBurstWheel.framePerf?.frameTaskCount, 1);
 assert.equal(result.tListBurstWheel.framePerf?.droppedUpdates, 99);
@@ -210,4 +212,5 @@ assert.equal(result.concurrentMailboxes.framePerf?.frameTaskCount, 3);
 assert.equal(result.concurrentMailboxes.framePerf?.droppedUpdates, 617);
 assert.equal(result.concurrentMailboxes.pendingFrames, 0);
 
+console.log("[bench:scroll-mailbox] passed");
 console.log(JSON.stringify(result, null, 2));
