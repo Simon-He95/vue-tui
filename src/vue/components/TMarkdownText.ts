@@ -100,6 +100,9 @@ export const TMarkdownText = defineComponent({
         run: () => {
           if (!alive) return;
           if (currentVersion !== rebuildVersion) return;
+          // Let rows/documentVersion flow through useRenderNode first so any rect
+          // changes (especially auto-height) are observed before the scheduler
+          // decides what region to flush.
           rebuildRows();
         },
       });

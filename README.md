@@ -9,6 +9,11 @@
 
 ## 快速开始
 
+## 运行环境
+
+- **Node.js >= 18**
+- `@simon_he/vue-tui/markdown` 依赖 `stream-markdown-parser` / `markdown-it-ts` 链路，因此当前包发布面已统一到 Node 18。
+
 ### 浏览器渲染
 
 ```vue

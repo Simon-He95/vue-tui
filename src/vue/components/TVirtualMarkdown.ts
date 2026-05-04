@@ -156,6 +156,9 @@ export const TVirtualMarkdown = defineComponent({
         run: () => {
           if (!alive) return;
           if (currentVersion !== rebuildVersion) return;
+          // Do not call ctx.invalidate() directly here. Visible-row diffing and
+          // render-node deps must observe the rebuilt rows first so viewport/rect
+          // invalidation reflects the latest scroll range and repaint policy.
           rebuildRows();
         },
       });
