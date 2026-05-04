@@ -359,6 +359,14 @@ const renderItem = (item: Row) => item.title;
 - `scroll`: `scrollTop`（number）
 - `focus` / `blur` / `keydown`
 
+## TMarkdownText / TVirtualMarkdown
+
+Experimental Markdown renderer / virtual scroller。它们走独立的 `parser -> block -> visual row -> paint` 链路，不会把 Markdown AST 直接交给 `TText` 或 `TVirtualList`。
+
+> Experimental import: `@simon_he/vue-tui/experimental`
+>
+> 当前 streaming Markdown 只做 **per-frame coalescing**：一帧内多次 append 会合并成一次 rebuild，但 rebuild 本身仍然是 **full-document parse + layout**，还不是增量解析/增量布局。长文档 streaming transcript 场景请按这个成本模型评估。
+
 ## TLogView
 
 Append-only / streaming 日志视图：从 `source` / `version` 数据源读取可见窗口，不接收大数组，也不把日志内容放进 Vue deep reactivity。

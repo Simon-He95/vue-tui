@@ -5,6 +5,11 @@ import { type TuiMarkdownParser } from "./parser.js";
 import { resolveTuiMarkdownTheme, type TuiMarkdownThemeOverrides } from "./theme.js";
 import type { TuiMarkdownBlock, TuiMarkdownVisualRow } from "./types.js";
 
+/**
+ * Markdown currently rebuilds from the full source string on every scheduled update.
+ * Streaming components coalesce burst updates to at most one rebuild per frame,
+ * but the rebuild itself is still full-document parse -> block -> visual-row layout.
+ */
 export function buildMarkdownBlocks(
   content: string,
   parser: TuiMarkdownParser,
