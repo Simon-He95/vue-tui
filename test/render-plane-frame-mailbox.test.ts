@@ -264,4 +264,33 @@ describe("render-plane frame mailbox", () => {
       raf.restore();
     }
   });
+
+  it("warns when TRenderPlane.plane changes after mount", async () => {
+    const plane = ref<"transcript" | "overlay">("transcript");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const App = defineComponent({
+      name: "RenderPlaneImmutablePlaneApp",
+      setup() {
+        return () => h(TRenderPlane, { plane: plane.value }, () => [h(TText, { x: 0, y: 0, value: "plane" })]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      plane.value = "overlay";
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain("TRenderPlane.plane is immutable after mount");
+    } finally {
+      app.dispose();
+      warn.mockRestore();
+    }
+  });
 });

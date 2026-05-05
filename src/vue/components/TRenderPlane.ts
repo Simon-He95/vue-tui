@@ -1,7 +1,7 @@
 import type { PropType } from "vue";
 import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { TerminalFrameContext, TerminalSchedulerInvalidateOptions } from "../context.js";
-import { defineComponent, inject, provide, toRef } from "vue";
+import { defineComponent, inject, provide, ref, watch } from "vue";
 import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
 import { RenderPlaneContextKey, TerminalContextKey } from "../context.js";
 
@@ -17,8 +17,20 @@ export const TRenderPlane = defineComponent({
     const parentCtx = inject(TerminalContextKey, null);
     if (!parentCtx) throw new Error("TRenderPlane is missing TerminalContext");
 
-    const planeRef = toRef(props, "plane") as any;
-    const terminal = getPlaneTerminal(parentCtx.terminal, props.plane);
+    const initialPlane = props.plane;
+    const planeRef = ref<TerminalRenderPlane>(initialPlane);
+    const terminal = getPlaneTerminal(parentCtx.terminal, initialPlane);
+    let warnedPlaneMutation = false;
+    watch(
+      () => props.plane,
+      (next) => {
+        if (next === initialPlane || warnedPlaneMutation) return;
+        warnedPlaneMutation = true;
+        console.warn(
+          `[vue-tui] TRenderPlane.plane is immutable after mount. Key TRenderPlane by plane if you need to move a subtree.`,
+        );
+      },
+    );
     const withPlane = (
       plane: TerminalRenderPlane,
       options?: TerminalSchedulerInvalidateOptions,
@@ -31,7 +43,7 @@ export const TRenderPlane = defineComponent({
     };
     const scheduler = {
       invalidate: (options?: TerminalSchedulerInvalidateOptions) =>
-        parentCtx.scheduler.invalidate(withPlane(props.plane, options)),
+        parentCtx.scheduler.invalidate(withPlane(initialPlane, options)),
       flush: () => parentCtx.scheduler.flush(),
       flushNow: () => parentCtx.scheduler.flushNow(),
       configure: (options: Parameters<typeof parentCtx.scheduler.configure>[0]) =>
@@ -40,7 +52,7 @@ export const TRenderPlane = defineComponent({
       // Components should include plane/instance information in their ids
       // when they need isolation across planes.
       queueFrameTask: (task: Parameters<typeof parentCtx.scheduler.queueFrameTask>[0]) => {
-        const queuedPlane = props.plane;
+        const queuedPlane = initialPlane;
         return parentCtx.scheduler.queueFrameTask({
           ...task,
           run: (ctx: TerminalFrameContext) =>
@@ -64,7 +76,7 @@ export const TRenderPlane = defineComponent({
         options?: Readonly<{ plane?: TerminalRenderPlane }>,
       ) =>
         parentCtx.runtime.mount(component, runtimeProps, {
-          plane: options?.plane ?? props.plane,
+          plane: options?.plane ?? initialPlane,
         }),
     } as const;
 

@@ -404,7 +404,7 @@ export const TList = defineComponent({
         emitUpdate: true,
         emitChange: options?.emitChange,
       });
-      if (hadPendingWheel || wasDetached || result.dirty) {
+      if (result.changedScroll || result.dirty) {
         scheduler.invalidate({ priority: "high", reason: "input" });
       }
     }
@@ -522,9 +522,14 @@ export const TList = defineComponent({
             return;
           }
 
-          e.preventDefault?.();
+          const queued = wheelMailbox.queue(nextTop);
+          if (!queued) {
+            pendingWheelTop = null;
+            resetWheelScrollState(wheelState);
+            return;
+          }
           pendingWheelTop = nextTop;
-          wheelMailbox.queue(nextTop);
+          e.preventDefault?.();
         },
         focus: () => {
           focused.value = true;

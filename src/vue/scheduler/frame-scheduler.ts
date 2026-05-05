@@ -229,6 +229,7 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     let frameReason: FramePerfReason = "unknown";
     let shouldSync = false;
     const deferredTasks: QueuedFrameTask[] = [];
+    let thrown: unknown = null;
 
     const ctx: TerminalFrameContext = {
       frameId: currentFrameId,
@@ -266,7 +267,16 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
         coalescedFrameTasks += entry.coalesced;
         frameReason = mergeFramePerfReason(frameReason, task.reason);
         shouldSync = shouldSync || task.sync === true || priority === "high";
-        task.run(ctx);
+        try {
+          task.run(ctx);
+        } catch (error) {
+          thrown = error;
+          if (i < tasks.length - 1) {
+            deferredTasks.push(...tasks.slice(i + 1));
+            requestMore = true;
+          }
+          break;
+        }
 
         if (!force && priority !== "high" && ctx.remainingMs() <= 0 && i < tasks.length - 1) {
           deferredTasks.push(...tasks.slice(i + 1));
@@ -276,9 +286,9 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
       }
     } finally {
       insideFrame = false;
+      requeueDeferredTasks(deferredTasks);
     }
-
-    requeueDeferredTasks(deferredTasks);
+    if (thrown) throw thrown;
 
     const remaining = remainingFrameTasks();
     return {
@@ -315,13 +325,18 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
   function runScheduledFrame(_time = framePerfNow()): void {
     if (!options.isActive()) return;
     runningScheduledFrame = true;
+    let thrown: unknown = null;
     try {
       const stats = runPendingFrameTasks();
       if (stats.frameTaskCount > 0) options.flushFrame(stats);
       scheduleIfNeeded(stats.requestMore);
+    } catch (error) {
+      thrown = error;
+      if (hasPendingFrameTasks()) scheduleIfNeeded(true);
     } finally {
       runningScheduledFrame = false;
     }
+    if (thrown) throw thrown;
   }
 
   function configure(config: TerminalSchedulerConfig): void {

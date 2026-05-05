@@ -1635,6 +1635,48 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("does not commit when reattaching detached state without any visual change", async () => {
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    const onUpdateModelValue = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items,
+        modelValue: 2,
+        autoFocus: true,
+        "onUpdate:modelValue": onUpdateModelValue,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      const commits: unknown[] = [];
+      const off = app.terminal.on("commit", (commit) => commits.push(commit));
+
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 1, time: 1_010 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      off();
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
+      expect(commits).toHaveLength(0);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not schedule a redundant follow-up repaint after one wheel frame", async () => {
     const raf = installRaf();
     const items = Array.from({ length: 1_000 }, (_, index) => `item-${index}`);
@@ -2102,6 +2144,58 @@ describe("TList wheel scrolling", () => {
 
       expect(prevented).toBe(false);
       expect(onScroll).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("clears pending wheel state when queueFrameTask is rejected", () => {
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+        autoFocus: true,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      const originalQueue = app.scheduler.queueFrameTask.bind(app.scheduler);
+      (app.scheduler as any).queueFrameTask = () => false;
+
+      const prevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: 100,
+        time: 1_000,
+      });
+
+      expect(prevented).toBe(false);
+      expect(onScroll).not.toHaveBeenCalled();
+
+      (app.scheduler as any).queueFrameTask = originalQueue;
+
+      const nextPrevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: 100,
+        time: 1_010,
+      });
+      app.scheduler.flushNow();
+
+      expect(nextPrevented).toBe(true);
+      expect(onScroll).toHaveBeenLastCalledWith(1);
     } finally {
       app.dispose();
     }

@@ -292,7 +292,7 @@ export const TVirtualList = defineComponent({
 
     function requestWheelScroll(nextTop: number): void {
       pendingWheelTop = nextTop;
-      scheduler.queueFrameTask({
+      const accepted = scheduler.queueFrameTask({
         id: wheelTaskId,
         reason: "scroll",
         priority: "high",
@@ -307,6 +307,11 @@ export const TVirtualList = defineComponent({
           ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
         },
       });
+      if (accepted === false) {
+        pendingWheelTop = null;
+        resetWheelScrollState(wheelState);
+        return;
+      }
     }
 
     function invalidateSelf(

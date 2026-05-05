@@ -950,6 +950,50 @@ describe("TVirtualList", () => {
     }
   });
 
+  it("clears pending wheel state when queueFrameTask is rejected", async () => {
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: items.length,
+        itemVersion: 1,
+        getItem: (index: number) => items[index],
+        autoFocus: true,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      const originalQueue = app.scheduler.queueFrameTask.bind(app.scheduler);
+      (app.scheduler as any).queueFrameTask = () => false;
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
+
+      (app.scheduler as any).queueFrameTask = originalQueue;
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_010 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onScroll).toHaveBeenLastCalledWith(1);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("clamps pending wheel scroll when itemCount shrinks before the frame", async () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;

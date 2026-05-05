@@ -490,6 +490,49 @@ describe("scheduler frame tasks", () => {
     }
   });
 
+  it("requeues remaining tasks after a task throws and restores insideFrame", async () => {
+    const raf = installRaf();
+    const probe = createSchedulerProbeApp();
+    const order: string[] = [];
+
+    try {
+      probe.app.mount();
+      await nextTick();
+      probe.scheduler.flushNow();
+
+      probe.scheduler.queueFrameTask({
+        id: "throwing",
+        priority: "high",
+        run() {
+          order.push("throw");
+          throw new Error("boom");
+        },
+      });
+      probe.scheduler.queueFrameTask({
+        id: "after",
+        priority: "normal",
+        run(ctx) {
+          order.push("after");
+          expect(probe.scheduler.isInsideFrame()).toBe(true);
+          ctx.invalidate({ plane: "default" });
+        },
+      });
+
+      expect(() => raf.runNext()).toThrow("boom");
+      expect(probe.scheduler.isInsideFrame()).toBe(false);
+      expect(order).toEqual(["throw"]);
+
+      await Promise.resolve();
+      expect(raf.callbacks.size).toBe(1);
+
+      raf.runNext();
+      expect(order).toEqual(["throw", "after"]);
+    } finally {
+      probe.app.dispose();
+      raf.restore();
+    }
+  });
+
   it("throttles live-only frames by targetFps/maxFps in rAF environments", async () => {
     vi.useFakeTimers();
     const raf = installRaf();
