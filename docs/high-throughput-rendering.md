@@ -366,7 +366,7 @@ type FramePerf = {
 | Experimental `TLogView` append-only streaming path                  | ✅ Phase 2.2 |
 | `TLogView` fixed one-line line-level render cache                   | ✅ Phase 2.5 |
 | `TLogView` plain-text wrap with line-level wrap cache               | ✅ Phase 2.6 |
-| `TList` wheel 行为修改（不再同步更新 active/modelValue）            | 🔲 planned   |
+| `TList` wheel 行为修改（不再同步更新 active/modelValue）            | ✅ done      |
 | Debug overlay 展示 `scannedNodes/paintedNodes/dirtyRows/frameMs`    | ✅ Phase 2.0 |
 
 > **注意**：`TVirtualList` 的 `rowScrollMode` 默认为 `"off"`。这是危险优化开关，只有显式设置 `rowScrollMode: "unsafe-full-row"`、当前 renderer 支持 `scrollOperations`、且 list 是 unclipped full-row 并独占这些 plane rows 时，才会使用 `unsafeScrollPlaneRows()` + exposed dirty rows。DOM renderer 的优化只移动 line nodes 并 repaint exposed dirty rows，不改变 terminal buffer/compositor 语义。

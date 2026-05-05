@@ -2251,6 +2251,64 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("does not leave a stale pending wheel base when queueFrameTask runs synchronously", async () => {
+    const onScroll = vi.fn();
+    let bumpVersion!: () => void;
+    const App = defineComponent({
+      name: "TListSyncWheelSchedulerApp",
+      setup() {
+        const itemVersion = ref(0);
+        bumpVersion = () => {
+          itemVersion.value++;
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: Array.from({ length: 200 }, (_, index) => `item-${index}`),
+            itemVersion: itemVersion.value,
+            autoFocus: true,
+            onScroll,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      const invalidate = app.scheduler.invalidate.bind(app.scheduler);
+      (app.scheduler as any).queueFrameTask = (task: any) => {
+        task.run({
+          frameId: 1,
+          startedAt: 0,
+          now: () => 0,
+          budgetMs: 16,
+          remainingMs: () => 16,
+          requestMore: () => {},
+          invalidate,
+          reportDroppedUpdates: () => {},
+        });
+        return true;
+      };
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 32, time: 1_000 });
+      expect(onScroll).toHaveBeenLastCalledWith(2);
+
+      bumpVersion();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 32, time: 1_010 });
+
+      expect(onScroll.mock.calls.at(-1)?.[0]).toBeGreaterThan(10);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not prevent default at the bottom edge when scrolling downward", async () => {
     const onScroll = vi.fn();
     const app = createTerminalApp({
@@ -2853,6 +2911,71 @@ describe("TList wheel scrolling", () => {
       await nextTick();
       app.scheduler.flushNow();
 
+      expect(rowText(app, 0)).toBe("visible");
+      expect(commits).toHaveLength(0);
+    } finally {
+      off();
+      app.dispose();
+    }
+  });
+
+  it("emits hidden programmatic clamp without committing visible rows", async () => {
+    let shrink!: () => void;
+    const show = ref(true);
+    const onScroll = vi.fn();
+    const commits: unknown[] = [];
+
+    const App = defineComponent({
+      name: "HiddenTListClampApp",
+      setup() {
+        const items = ref(Array.from({ length: 200 }, (_, index) => `hidden-${index}`));
+        shrink = () => {
+          items.value = items.value.slice(0, 20);
+        };
+
+        return () => [
+          withDirectives(
+            h(TList, {
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 4,
+              items: items.value,
+              modelValue: 0,
+              autoFocus: true,
+              onScroll,
+            }),
+            [[vShow, show.value]],
+          ),
+          h(TText, { x: 0, y: 0, value: "visible" }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    const off = app.terminal.on("commit", (commit) => commits.push(commit));
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+      expect(onScroll).toHaveBeenLastCalledWith(100);
+
+      show.value = false;
+      await nextTick();
+      await nextTick();
+      app.scheduler.flushNow();
+      commits.length = 0;
+      onScroll.mockClear();
+
+      shrink();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).toHaveBeenCalledOnce();
+      expect(onScroll).toHaveBeenLastCalledWith(16);
       expect(rowText(app, 0)).toBe("visible");
       expect(commits).toHaveLength(0);
     } finally {

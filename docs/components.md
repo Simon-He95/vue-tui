@@ -313,6 +313,13 @@ const app = createTerminalApp({
 
 ### Wheel scrolling and selection
 
+Behavior change for the wheel-mailbox release:
+
+- `TList` wheel is viewport-only.
+- `TList` wheel no longer updates `modelValue`.
+- `TList` wheel no longer moves the active selection.
+- `TList` `scroll` now represents viewport-driven scroll changes.
+
 `TList` treats wheel scrolling as viewport-only. Wheel scrolling emits `scroll`,
 but it does not update `modelValue` and does not move the active selection.
 Keyboard navigation, click, double click, and Enter reattach selection to the
@@ -333,6 +340,11 @@ viewport-top mutation.
 
 - wheel scrolling changes the viewport top
 - item-count or clipped-viewport changes programmatically clamp the viewport top
+
+Hidden `v-show=false` lists still emit `scroll(top)` when item-count changes
+force a real internal `scrollTop` clamp, but they do not dirty terminal rows or
+commit visible output. A fully clipped viewport keeps detached `scrollTop`
+without clamping to `0` until a finite viewport height is restored.
 
 `scroll(top)` is not emitted when:
 

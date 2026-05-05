@@ -522,13 +522,13 @@ export const TList = defineComponent({
             return;
           }
 
+          pendingWheelTop = nextTop;
           const queued = wheelMailbox.queue(nextTop);
           if (!queued) {
             pendingWheelTop = null;
             resetWheelScrollState(wheelState);
             return;
           }
-          pendingWheelTop = nextTop;
           e.preventDefault?.();
         },
         focus: () => {
@@ -703,8 +703,9 @@ export const TList = defineComponent({
         if (wheelDetachedOrPending) {
           if (active.value > last || active.value < 0) {
             const updated = setActiveSilently(last);
-            if (updated.changed) markIndexRowsDirty(updated.prev, updated.next);
-            needsInvalidate = true;
+            if (updated.changed) {
+              needsInvalidate = markIndexRowsDirty(updated.prev, updated.next) || needsInvalidate;
+            }
           }
         } else {
           const modelSync = setActiveIndex(clampedModelValue(), { emitUpdate: false });
@@ -731,9 +732,8 @@ export const TList = defineComponent({
           needsInvalidate = scroll.dirty || needsInvalidate;
         }
 
-        if (structureChanged && visible.value) {
-          markViewportDirty();
-          needsInvalidate = true;
+        if (structureChanged) {
+          needsInvalidate = markViewportDirty() || needsInvalidate;
         }
 
         if (needsInvalidate) {
