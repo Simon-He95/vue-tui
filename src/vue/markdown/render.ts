@@ -51,6 +51,7 @@ export function paintMarkdownVisualRow(
     logicalX += segment.cells;
     if (segmentEnd <= clipStart || segmentStart >= clipEnd) continue;
 
+    const segmentStyle = mergeStyle(options.baseStyle, segment.style);
     let pieceStart = segmentStart;
     forEachTextCellSegment(segment.text, (piece) => {
       if (used >= options.w) return false;
@@ -75,7 +76,7 @@ export function paintMarkdownVisualRow(
         terminal.write(piece.text, {
           x: options.x + used,
           y: options.y,
-          style: mergeStyle(options.baseStyle, segment.style),
+          style: segmentStyle,
         });
         used += piece.cells;
         return;
@@ -86,7 +87,7 @@ export function paintMarkdownVisualRow(
         terminal.write(spaces(pad), {
           x: options.x + used,
           y: options.y,
-          style: options.baseStyle,
+          style: segmentStyle,
         });
         used += pad;
       }

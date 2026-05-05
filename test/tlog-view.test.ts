@@ -4722,6 +4722,71 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
+  it("keeps wrapped ANSI wide-character placeholders inside a one-cell viewport", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31m你🙂\x1b[0m",
+      getLineKey: () => "wide-one-cell",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 1,
+          h: 4,
+          source,
+          version: 1,
+          wrap: true,
+          ansi: true,
+        }),
+      3,
+      4,
+    );
+
+    for (let y = 0; y < 4; y++) {
+      expect(mounted.terminal.getCell(0, y).ch).toBe(" ");
+      expect(mounted.terminal.getCell(0, y).style.fg).toBe("red");
+      expect(mounted.terminal.getCell(1, y).continuation).not.toBe(true);
+      expect(mounted.terminal.getCell(1, y).style.fg).toBeUndefined();
+    }
+    mounted.unmount();
+  });
+
+  it("keeps wrapped OSC8 wide-character placeholders inside a one-cell viewport", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b]8;;https://example.com\x07你\x1b]8;;\x07",
+      getLineKey: () => "wide-link-one-cell",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 1,
+          h: 2,
+          source,
+          version: 1,
+          wrap: true,
+          ansi: true,
+          links: true,
+        }),
+      3,
+      2,
+    );
+
+    for (let y = 0; y < 2; y++) {
+      expect(mounted.terminal.getCell(0, y).ch).toBe(" ");
+      expect(mounted.terminal.getCell(0, y).style.href).toBe("https://example.com");
+      expect(mounted.terminal.getCell(1, y).continuation).not.toBe(true);
+      expect(mounted.terminal.getCell(1, y).style.href).toBeUndefined();
+    }
+    mounted.unmount();
+  });
+
   it("resets ANSI style to the TLogView base style across wrapped rows", async () => {
     const source: TLogDataSource = {
       lineCount: () => 1,

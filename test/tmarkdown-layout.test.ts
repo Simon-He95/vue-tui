@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ParsedNode } from "stream-markdown-parser";
-import type { Terminal } from "../src/index.js";
+import type { Style, Terminal } from "../src/index.js";
 import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
 import { buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
 import { layoutMarkdownBlocks } from "../src/vue/markdown/layout.js";
@@ -298,19 +298,20 @@ describe("markdown layout", () => {
     expect(writes[0]?.style).toMatchObject({ fg: "white", bold: true });
   });
 
-  it("keeps horizontal clipping aligned when it starts inside a wide glyph", () => {
-    const writes: Array<{ text: string; x?: number }> = [];
+  it("keeps horizontal clipping aligned when it starts inside a styled wide glyph", () => {
+    const writes: Array<{ text: string; x?: number; style?: Style }> = [];
     const terminal = {
-      write(text: string, opts?: { x?: number }) {
-        writes.push({ text, x: opts?.x });
+      write(text: string, opts?: { x?: number; style?: Style }) {
+        writes.push({ text, x: opts?.x, style: opts?.style });
       },
     } as unknown as Terminal;
+    const segmentStyle = Object.freeze({ bold: true, href: "https://example.com" });
     const row = {
       key: "row-clip",
       blockKey: "block-clip",
       rowInBlock: 0,
       plainText: "你a",
-      segments: [{ text: "你a", cells: 3 }],
+      segments: [{ text: "你a", cells: 3, style: segmentStyle }],
     };
 
     paintMarkdownVisualRow(terminal, row, {
@@ -325,5 +326,11 @@ describe("markdown layout", () => {
       [" ", 0],
       ["a", 1],
     ]);
+    expect(writes[0]?.style).toMatchObject({
+      fg: "white",
+      bold: true,
+      href: "https://example.com",
+    });
+    expect(writes[1]?.style).toBe(writes[0]?.style);
   });
 });

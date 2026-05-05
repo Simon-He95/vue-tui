@@ -658,17 +658,30 @@ function wrapStyledSegmentsByCells(
     rowCells = 0;
   };
 
+  const pushWrappedPiece = (text: string, cells: number, style: Style): void => {
+    if (cells <= 0) return;
+    if (rowCells > 0 && rowCells + cells > width) openRow();
+    if (cells > width) {
+      let remaining = cells;
+      while (remaining > 0) {
+        if (rowCells >= width) openRow();
+        const take = Math.min(width - rowCells, remaining);
+        row.push({ text: spaces(take), cells: take, style });
+        rowCells += take;
+        remaining -= take;
+      }
+      return;
+    }
+
+    if (rowCells >= width) openRow();
+    row.push({ text, cells, style });
+    rowCells += cells;
+  };
+
   for (const seg of segments) {
     forEachTextCellSegment(seg.text, (piece) => {
       if (!piece.text || piece.cells <= 0) return;
-      if (rowCells > 0 && rowCells + piece.cells > width) openRow();
-      if (rowCells >= width) openRow();
-      row.push({
-        text: piece.text,
-        cells: piece.cells,
-        style: seg.style,
-      });
-      rowCells += piece.cells;
+      pushWrappedPiece(piece.text, piece.cells, seg.style);
     });
   }
 
