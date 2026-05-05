@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import {
-  createTerminalApp,
-  TRenderPlane,
-  TText,
-  useTerminal,
-} from "../src/index.js";
+import { createTerminalApp, TRenderPlane, TText, useTerminal } from "../src/index.js";
 import { createFrameMailbox } from "../src/vue/scheduler/frame-mailbox.js";
 
 function installRaf() {

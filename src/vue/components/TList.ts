@@ -97,6 +97,7 @@ export const TList = defineComponent({
     let pendingWheelTop: number | null = null;
     const dirtyRowsScratch: number[] = [];
     const indexDirtyRowsScratch: number[] = [];
+    const paintRowsScratch: number[] = [];
 
     const absRect = computed<Rect>(() => {
       const raw = { x: props.x, y: props.y, w: props.w, h: props.h };
@@ -119,6 +120,10 @@ export const TList = defineComponent({
 
     function clampScrollTop(value: number): number {
       return clamp(value, 0, maxScrollTop());
+    }
+
+    function clampedModelValue(): number {
+      return clamp(props.modelValue, 0, Math.max(0, props.items.length - 1));
     }
 
     function markViewportDirty(): void {
@@ -275,10 +280,19 @@ export const TList = defineComponent({
       selectActive(nearestVisibleActive(), { emitChange: true });
     }
 
+    function syncActiveToModelValueForData(): { changed: boolean; prev: number; next: number } {
+      const prev = active.value;
+      const next = clampedModelValue();
+      if (prev === next) {
+        return { changed: false, prev, next };
+      }
+      active.value = next;
+      return { changed: true, prev, next };
+    }
+
     function syncExternalModelValue(value: number): void {
       const prev = active.value;
-      const last = Math.max(0, props.items.length - 1);
-      const next = clamp(value, 0, last);
+      const next = clamp(value, 0, Math.max(0, props.items.length - 1));
       const hadPendingWheel = wheelMailbox.hasPending();
       const changedActive = active.value !== next;
       const wasDetached = detachedByWheel;
@@ -433,20 +447,47 @@ export const TList = defineComponent({
         focused.value,
         defaultStyle.value,
       ],
-      paint: () => {
+      paint: (dirtyRows) => {
         if (!visible.value) return;
         const r = absRect.value;
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
         const top = clamp(scrollTop.value, 0, Math.max(0, props.items.length - r.h));
         const activeStyle = defaultActiveStyle(base);
-
-        for (let i = 0; i < r.h; i++) {
+        const paintRow = (i: number) => {
+          if (i < 0 || i >= r.h) return;
           const idx = top + i;
           const line = formatInlineCellLine(props.items[idx] ?? "", r.w);
           const style = idx === active.value ? activeStyle : base;
           terminal.write(line, { x: r.x, y: r.y + i, style });
+        };
+
+        if (dirtyRows) {
+          if (dirtyRows.length === 0) return;
+          paintRowsScratch.length = 0;
+          for (const y of dirtyRows) {
+            const localY = Math.floor(y) - r.y;
+            if (localY < 0 || localY >= r.h) continue;
+            if (paintRowsScratch.includes(localY)) continue;
+            paintRowsScratch.push(localY);
+          }
+          for (const localY of paintRowsScratch) paintRow(localY);
+          if (
+            focused.value &&
+            props.items.length === 0 &&
+            r.h > 0 &&
+            paintRowsScratch.includes(0)
+          ) {
+            terminal.write(formatInlineCellLine("(empty)", r.w), {
+              x: r.x,
+              y: r.y,
+              style: { ...base, dim: true },
+            });
+          }
+          return;
         }
+
+        for (let i = 0; i < r.h; i++) paintRow(i);
         if (focused.value && r.h > 0 && props.items.length === 0) {
           terminal.write(formatInlineCellLine("(empty)", r.w), {
             x: r.x,
@@ -468,13 +509,24 @@ export const TList = defineComponent({
       ([itemsLength, height], [prevItemsLength, prevHeight]) => {
         const structureChanged = itemsLength !== prevItemsLength || height !== prevHeight;
         const last = Math.max(0, props.items.length - 1);
-        const prevActive = active.value;
         let needsInvalidate = false;
+        const wheelDetachedOrPending = detachedByWheel || wheelMailbox.hasPending();
 
-        if (active.value > last) {
-          active.value = last;
-          if (prevActive !== active.value) markIndexRowsDirty(prevActive, active.value);
-          needsInvalidate = true;
+        if (wheelDetachedOrPending) {
+          if (active.value > last) {
+            const prevActive = active.value;
+            active.value = last;
+            if (prevActive !== active.value) markIndexRowsDirty(prevActive, active.value);
+            needsInvalidate = true;
+          }
+        } else {
+          const modelSync = syncActiveToModelValueForData();
+          if (modelSync.changed) {
+            needsInvalidate = true;
+            const changedScroll = ensureActiveVisible();
+            if (!changedScroll) markIndexRowsDirty(modelSync.prev, modelSync.next);
+            needsInvalidate = changedScroll || needsInvalidate;
+          }
         }
 
         if (pendingWheelTop !== null) {
@@ -489,7 +541,7 @@ export const TList = defineComponent({
           needsInvalidate = true;
         }
 
-        if (!detachedByWheel) {
+        if (!wheelDetachedOrPending) {
           needsInvalidate = ensureActiveVisible() || needsInvalidate;
         }
 

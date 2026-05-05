@@ -631,6 +631,86 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("restores controlled modelValue when items grow after an initial empty list", async () => {
+    let load!: () => void;
+    const App = defineComponent({
+      name: "ControlledModelValueGrowthApp",
+      setup() {
+        const items = ref<string[]>([]);
+        load = () => {
+          items.value = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            modelValue: 50,
+            autoFocus: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      load();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("item-47");
+      expect(app.terminal.getRow(3)[0]?.style.inverse).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("restores controlled modelValue after shrink then grow when not detached", async () => {
+    let setLength!: (next: number) => void;
+    const App = defineComponent({
+      name: "ControlledModelValueShrinkGrowApp",
+      setup() {
+        const items = ref(Array.from({ length: 100 }, (_, index) => `item-${index}`));
+        setLength = (next) => {
+          items.value = Array.from({ length: next }, (_, index) => `item-${index}`);
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            modelValue: 50,
+            autoFocus: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("item-47");
+
+      setLength(10);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("item-6");
+
+      setLength(100);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("item-47");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("resets pending wheel base after external modelValue wins", async () => {
     const raf = installRaf();
     const items = Array.from({ length: 200 }, (_, index) => `item-${index}`);
@@ -752,6 +832,52 @@ describe("TList wheel scrolling", () => {
       app.scheduler.flushNow();
       await nextTick();
 
+      expect(app.terminal.getRow(0)[0]?.style.inverse).not.toBe(true);
+      expect(app.terminal.getRow(1)[0]?.style.inverse).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keyboard selection repaints only old and new active rows", async () => {
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+    const Probe = defineComponent({
+      name: "TListDirtyRowsProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
+    const App = defineComponent({
+      name: "TListDirtyRowsApp",
+      setup() {
+        return () => [
+          h(Probe),
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 10,
+            items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+            modelValue: 0,
+            autoFocus: true,
+          }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 16, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+
+      app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(framePerf!.latest()?.dirtyRows).toBeLessThanOrEqual(2);
       expect(app.terminal.getRow(0)[0]?.style.inverse).not.toBe(true);
       expect(app.terminal.getRow(1)[0]?.style.inverse).toBe(true);
     } finally {
