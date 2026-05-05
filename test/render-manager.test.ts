@@ -801,7 +801,7 @@ describe("render-manager", () => {
     expect(dirtyArgs).toEqual(["0,1"]);
   });
 
-  it("falls back to full plane scan but still filters by dirty-row intersection when dirty rows exceed 50%", () => {
+  it("falls back to full plane scan when row bucket candidates exceed 60% after many dirty rows", () => {
     const paints: string[] = [];
     const listeners = new Map<string, Set<(...args: any[]) => void>>();
     const terminal: any = {
@@ -831,8 +831,6 @@ describe("render-manager", () => {
     rm.render();
     paints.length = 0;
 
-    // Register a wide node covering rows 0-59 (60 rows = 60% of 100)
-    // This triggers dirtyRatio > 0.5 fallback
     const wide = rm.register({
       stack: rm.rootStack,
       rect: { x: 0, y: 0, w: 10, h: 60 },
@@ -840,16 +838,50 @@ describe("render-manager", () => {
     });
     const stats = rm.render();
 
-    // All nodes should be scanned (full plane fallback)
-    expect(stats?.scannedNodes).toBe(11); // 10 original + 1 wide
+    expect(stats?.scannedNodes).toBe(11);
     expect(stats?.rowBucketFallbacks).toEqual([
-      { plane: "default", reason: "dirty-ratio", dirtyRows: 60, planeNodes: 11 },
+      {
+        plane: "default",
+        reason: "candidate-ratio",
+        dirtyRows: 60,
+        planeNodes: 11,
+        candidates: 7,
+      },
     ]);
-    // But only nodes intersecting dirty rows [0-59] should paint:
-    // wide (0-59), n0 (0-9), n1 (10-19), n2 (20-29), n3 (30-39), n4 (40-49), n5 (50-59)
-    // n6 (60-69), n7 (70-79), n8 (80-89), n9 (90-99) should NOT paint
     expect(paints.sort()).toEqual(["n0", "n1", "n2", "n3", "n4", "n5", "wide"]);
     expect(stats?.paintedNodes).toBe(7);
+  });
+
+  it("does not full-scan a large plane only because dirty rows cover most terminal rows", () => {
+    const terminal = createTerminal({ cols: 10, rows: 24 });
+    const rm = createRenderManager(terminal);
+    const target = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 20 },
+      paint: () => {},
+    });
+
+    for (let i = 0; i < 300; i++) {
+      rm.register({
+        stack: rm.rootStack,
+        rect: { x: 0, y: 23, w: 1, h: 1 },
+        paint: () => {},
+      });
+    }
+
+    rm.render();
+
+    expect(
+      rm.markDirtyRows(
+        target.id,
+        Array.from({ length: 20 }, (_, index) => index),
+      ),
+    ).toBe(true);
+    const stats = rm.render();
+
+    expect(stats?.scannedNodes).toBe(1);
+    expect(stats?.paintedNodes).toBe(1);
+    expect(stats?.rowBucketFallbacks).toBeUndefined();
   });
 
   it("falls back to full plane scan when bucket candidates exceed 60% of planeNodes", () => {
@@ -870,9 +902,8 @@ describe("render-manager", () => {
     };
 
     const rm = createRenderManager(terminal);
-    // Register 5 nodes that all overlap rows 0-4
     const nodes: { id: string }[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       nodes.push(
         rm.register({
           stack: rm.rootStack,
@@ -881,14 +912,18 @@ describe("render-manager", () => {
         }),
       );
     }
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 9, w: 10, h: 1 },
+      paint: () => paints.push("outside"),
+    });
     rm.render();
     paints.length = 0;
 
-    // Dirty rows 0-3 — all 5 nodes are candidates, which is 5/5 = 100% > 60% threshold
+    // Dirty rows 0-3 — 4/5 nodes are candidates, which is > 60%.
     rm.update(nodes[0]!.id, { dirtyRowsHint: [0, 1, 2, 3] });
     const stats = rm.render();
 
-    // Should fall back to planeNodes since candidates (5) > planeNodes (5) * 0.6
     expect(stats?.scannedNodes).toBe(5);
     expect(stats?.rowBucketFallbacks).toEqual([
       {
@@ -896,27 +931,24 @@ describe("render-manager", () => {
         reason: "candidate-ratio",
         dirtyRows: 4,
         planeNodes: 5,
-        candidates: 5,
+        candidates: 4,
       },
     ]);
-    // All 5 nodes intersect dirty rows 0-3, so all should paint
-    expect(paints.sort()).toEqual(["n0", "n1", "n2", "n3", "n4"]);
-    expect(stats?.paintedNodes).toBe(5);
+    expect(paints.sort()).toEqual(["n0", "n1", "n2", "n3"]);
+    expect(stats?.paintedNodes).toBe(4);
   });
 
-  it("fallback scan does not paint non-intersecting nodes", () => {
+  it("row bucket partial repaint does not scan non-intersecting nodes", () => {
     const paints: string[] = [];
     const terminal = createTerminal({ cols: 10, rows: 100 });
     const rm = createRenderManager(terminal);
 
-    // Node A: covers rows 0-59 (intersects dirty rows)
     const nodeA = rm.register({
       stack: rm.rootStack,
       rect: { x: 0, y: 0, w: 10, h: 60 },
       paint: () => paints.push("A"),
     });
 
-    // Node B: covers rows 90-99 (does NOT intersect dirty rows 0-59)
     rm.register({
       stack: rm.rootStack,
       rect: { x: 0, y: 90, w: 10, h: 10 },
@@ -926,16 +958,11 @@ describe("render-manager", () => {
     rm.render();
     paints.length = 0;
 
-    // Re-register nodeA's rect — this marks rows 0-59 dirty (60/100 = 60% > 50%)
-    // This triggers the dirtyRatio fallback, scanning all planeNodes
     rm.update(nodeA.id, { rect: { x: 0, y: 0, w: 10, h: 60 } });
     const stats = rm.render();
 
-    // Both nodes are scanned (full plane fallback)
-    expect(stats?.scannedNodes).toBe(2);
-    // But B must NOT be painted since its rect (90-99) doesn't intersect dirty rows (0-59)
+    expect(stats?.scannedNodes).toBe(1);
     expect(paints).not.toContain("B");
-    // A should be painted (it intersects dirty rows)
     expect(paints).toContain("A");
     expect(stats?.paintedNodes).toBe(1);
   });

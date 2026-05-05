@@ -364,7 +364,9 @@ export const TList = defineComponent({
       const { start, end, h } = visibleRange();
       const last = Math.max(0, props.items.length - 1);
       if (h <= 0) return active.value;
-      if (!isActiveVisible()) return direction > 0 ? clamp(end, 0, last) : clamp(start, 0, last);
+      if (!isActiveVisible()) {
+        return direction > 0 ? clamp(end + h, 0, last) : clamp(start - h, 0, last);
+      }
       return clamp(active.value + direction * h, 0, last);
     }
 
@@ -570,13 +572,13 @@ export const TList = defineComponent({
         focus: () => {
           focused.value = true;
           emit("focus");
-          scheduler.invalidate();
+          scheduler.invalidate({ reason: "input" });
         },
         blur: () => {
           focused.value = false;
           emit("blur");
           if (props.closeOnBlur) emit("close");
-          scheduler.invalidate();
+          scheduler.invalidate({ reason: "input" });
         },
         keydown: onKeydown,
       },

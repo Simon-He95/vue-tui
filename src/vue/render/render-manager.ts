@@ -7,7 +7,6 @@ import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { clearTextCaches, withTextRenderPass } from "../utils/text.js";
 
 const renderMgrDebugLog = createDebugLogger(isDebugEnabled());
-const ROW_BUCKET_DIRTY_RATIO_FALLBACK = 0.5;
 const ROW_BUCKET_CANDIDATE_RATIO_FALLBACK = 0.6;
 
 export type RenderRect = Readonly<{
@@ -581,18 +580,6 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                 // TODO: Phase 2 — reuse a scratch set/array across frames to reduce
                 // per-frame allocation for high-frequency scroll. A numeric node index
                 // with a Uint8Array/generation marker could also eliminate string Set overhead.
-                // Row bucket degradation: skip bucket collection when dirty rows cover > 50% of terminal
-                const dirtyRatio = rows.length / terminalRows;
-                if (dirtyRatio > ROW_BUCKET_DIRTY_RATIO_FALLBACK) {
-                  needsIntersectFilter = true;
-                  rowBucketFallbacks.push({
-                    plane,
-                    reason: "dirty-ratio",
-                    dirtyRows: rows.length,
-                    planeNodes: planeNodes.length,
-                  });
-                  return planeNodes;
-                }
                 const ids = new Set<string>();
                 const buckets = rowBuckets.get(plane);
                 for (const y of rows) {
@@ -611,7 +598,10 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                     return ai - bi;
                   });
                 // Row bucket degradation: fall back to planeNodes when bucket candidates exceed 60%
-                if (candidates.length > planeNodes.length * ROW_BUCKET_CANDIDATE_RATIO_FALLBACK) {
+                if (
+                  candidates.length < planeNodes.length &&
+                  candidates.length > planeNodes.length * ROW_BUCKET_CANDIDATE_RATIO_FALLBACK
+                ) {
                   needsIntersectFilter = true;
                   rowBucketFallbacks.push({
                     plane,

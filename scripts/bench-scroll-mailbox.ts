@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { defineComponent, h, nextTick } from "vue";
-import { createTerminalApp, TList, useTerminal } from "../src/index.js";
+import { createTerminalApp, TList, TText, useTerminal } from "../src/index.js";
 import { createFrameMailbox } from "../src/vue/scheduler/frame-mailbox.js";
 
 function installManualRaf() {
@@ -202,9 +202,79 @@ async function benchConcurrentMailboxes() {
   }
 }
 
+async function benchTListManySamePlaneSiblings() {
+  const raf = installManualRaf();
+  const items = Array.from({ length: 10_000 }, (_, index) => `item-${index}`);
+  let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+  const Probe = defineComponent({
+    name: "BenchManySiblingsFramePerfProbe",
+    setup() {
+      framePerf = useTerminal().observability.framePerf;
+      framePerf.enabled.value = true;
+      return () => null;
+    },
+  });
+  const App = defineComponent({
+    name: "BenchTListManySamePlaneSiblings",
+    setup() {
+      return () => [
+        h(Probe),
+        h(TList, {
+          x: 0,
+          y: 0,
+          w: 80,
+          h: 20,
+          items,
+          modelValue: 0,
+          autoFocus: true,
+        }),
+        ...Array.from({ length: 300 }, (_, index) =>
+          h(TText, {
+            key: `sibling-${index}`,
+            x: index % 80,
+            y: 23,
+            w: 1,
+            value: "x",
+          }),
+        ),
+      ];
+    },
+  });
+  const app = createTerminalApp({ cols: 80, rows: 24, component: App });
+
+  try {
+    app.mount();
+    app.scheduler.flushNow();
+    framePerf!.clear();
+
+    for (let i = 0; i < 100; i++) {
+      app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: 100,
+        time: 1_000 + i * 10,
+      });
+    }
+    raf.flush();
+    await nextTick();
+
+    return {
+      framePerf: framePerf!.latest(),
+      scheduledFrames: raf.scheduled(),
+      pendingFrames: raf.pending(),
+    };
+  } finally {
+    app.dispose();
+    raf.restore();
+  }
+}
+
 const result = {
   tListBurstWheel: await benchTListBurstWheel(),
   concurrentMailboxes: await benchConcurrentMailboxes(),
+  tListManySamePlaneSiblings: await benchTListManySamePlaneSiblings(),
 };
 
 assert.equal(result.tListBurstWheel.updateModelValue, 0);
@@ -217,6 +287,7 @@ assert.equal(result.tListBurstWheel.framePerf?.frameTaskCount, 1);
 assert.equal(result.tListBurstWheel.framePerf?.droppedUpdates, 99);
 assert.ok((result.tListBurstWheel.framePerf?.dirtyRows ?? Infinity) <= 20);
 assert.equal(result.tListBurstWheel.framePerf?.paintedNodes, 1);
+assert.ok((result.tListBurstWheel.framePerf?.scannedNodes ?? Infinity) < 50);
 assert.match(result.tListBurstWheel.firstVisibleRow, /^item-[1-9]\d*$/);
 assert.deepEqual(result.concurrentMailboxes.order, [
   "input:19:dropped=19",
@@ -226,6 +297,11 @@ assert.deepEqual(result.concurrentMailboxes.order, [
 assert.equal(result.concurrentMailboxes.framePerf?.frameTaskCount, 3);
 assert.equal(result.concurrentMailboxes.framePerf?.droppedUpdates, 617);
 assert.equal(result.concurrentMailboxes.pendingFrames, 0);
+assert.equal(result.tListManySamePlaneSiblings.framePerf?.frameTaskCount, 1);
+assert.equal(result.tListManySamePlaneSiblings.framePerf?.droppedUpdates, 99);
+assert.ok((result.tListManySamePlaneSiblings.framePerf?.dirtyRows ?? Infinity) <= 20);
+assert.ok((result.tListManySamePlaneSiblings.framePerf?.scannedNodes ?? Infinity) < 50);
+assert.equal(result.tListManySamePlaneSiblings.framePerf?.paintedNodes, 1);
 
 console.log("[bench:scroll-mailbox] passed");
 console.log(JSON.stringify(result, null, 2));

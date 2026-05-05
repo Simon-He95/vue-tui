@@ -483,8 +483,8 @@ describe("TList wheel scrolling", () => {
 
       const selected = onUpdateModelValue.mock.calls.at(-1)![0];
       expect(top).toBe(100);
-      expect(selected).toBe(103);
-      expect(rowText(app, 0)).toBe("item-100");
+      expect(selected).toBe(107);
+      expect(rowText(app, 0)).toBe("item-104");
     } finally {
       app.dispose();
     }
@@ -559,8 +559,8 @@ describe("TList wheel scrolling", () => {
 
       const selected = onUpdateModelValue.mock.calls.at(-1)![0];
       expect(top).toBe(97);
-      expect(selected).toBe(97);
-      expect(rowText(app, 0)).toBe("item-97");
+      expect(selected).toBe(93);
+      expect(rowText(app, 0)).toBe("item-93");
     } finally {
       app.dispose();
     }
@@ -926,6 +926,85 @@ describe("TList wheel scrolling", () => {
       app.scheduler.flushNow();
 
       expect(rowText(app, 0)).toBe("item-47");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints items replaced synchronously from onScroll", async () => {
+    const App = defineComponent({
+      name: "ListWheelOnScrollReplaceItemsApp",
+      setup() {
+        const items = ref(Array.from({ length: 100 }, (_, index) => `item-${index}`));
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            modelValue: 0,
+            autoFocus: true,
+            onScroll: () => {
+              items.value = Array.from({ length: 100 }, (_, index) => `next-${index}`);
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("next-1");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("clamps active and scrollTop when onScroll synchronously shrinks items", async () => {
+    const onUpdateModelValue = vi.fn();
+    const scrollCalls: number[] = [];
+    const App = defineComponent({
+      name: "ListWheelOnScrollShrinkItemsApp",
+      setup() {
+        const items = ref(Array.from({ length: 100 }, (_, index) => `item-${index}`));
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            modelValue: 50,
+            autoFocus: true,
+            onScroll: (top: number) => {
+              scrollCalls.push(top);
+              if (items.value.length > 10) items.value = items.value.slice(0, 10);
+            },
+            "onUpdate:modelValue": onUpdateModelValue,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
+      expect(scrollCalls.at(-1)).toBe(6);
+      expect(rowText(app, 0)).toBe("item-6");
+      expect(app.terminal.getRow(3)[0]?.style.inverse).toBe(true);
     } finally {
       app.dispose();
     }
@@ -2709,8 +2788,8 @@ describe("TList wheel scrolling", () => {
       app.scheduler.flushNow();
       await nextTick();
 
-      expect(onUpdateModelValue).toHaveBeenLastCalledWith(103);
-      expect(rowText(app, 0)).toBe("item-100");
+      expect(onUpdateModelValue).toHaveBeenLastCalledWith(107);
+      expect(rowText(app, 0)).toBe("item-104");
     } finally {
       app.dispose();
     }
