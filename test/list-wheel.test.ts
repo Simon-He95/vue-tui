@@ -1080,6 +1080,41 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("does not keep stale active style when style object is mutated in place", async () => {
+    const style = { fg: "red" };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: ["a", "b", "c", "d"],
+        modelValue: 0,
+        autoFocus: true,
+        style,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      expect(app.terminal.getRow(0)[0]?.style.fg).toBe("red");
+
+      style.fg = "blue";
+      app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(app.terminal.getRow(1)[0]?.style.fg).toBe("blue");
+      expect(app.terminal.getRow(1)[0]?.style.inverse).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("clicking the same active row clears detached mode without emitting update:modelValue", async () => {
     const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
     let setHeight!: (value: number) => void;
@@ -1850,6 +1885,42 @@ describe("TList wheel scrolling", () => {
 
       expect(rowText(app, 0)).toBe("3456789");
       expect(app.terminal.getRow(0)[0]?.style.inverse).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("uses the normalized painted rect for fractional hit testing", async () => {
+    const onUpdateModelValue = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0.5,
+        y: 0.5,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 10 }, (_, index) => `item-${index}`),
+        modelValue: 0,
+        autoFocus: true,
+        "onUpdate:modelValue": onUpdateModelValue,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 3, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+      expect(onUpdateModelValue).toHaveBeenLastCalledWith(3);
+
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 4, time: 1_010 });
+      app.scheduler.flushNow();
+      await nextTick();
+      expect(onUpdateModelValue).toHaveBeenCalledTimes(1);
     } finally {
       app.dispose();
     }

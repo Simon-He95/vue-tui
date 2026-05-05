@@ -73,6 +73,11 @@ export type RenderManager = Readonly<{
       paint: (dirtyRows?: readonly number[]) => void;
     }>,
   ) => void;
+  /**
+   * Hot-path dirty row marker for stable nodes. Consumed synchronously and does
+   * not replace the RenderNode object.
+   */
+  markDirtyRows: (id: string, rows: readonly number[]) => boolean;
   unregister: (id: string) => void;
   render: (options?: { activePlanes?: TerminalRenderPlanes | null }) => RenderStats | null;
 }>;
@@ -399,6 +404,14 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     }
   }
 
+  function markDirtyRows(id: string, rows: readonly number[]): boolean {
+    if (!rows.length) return false;
+    const node = nodes.get(id);
+    if (!node) return false;
+    markRows(node.plane, rows);
+    return true;
+  }
+
   function unregister(id: string): void {
     const prev = nodes.get(id);
     if (prev) {
@@ -665,6 +678,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     unsafeScrollPlaneRows,
     register,
     update,
+    markDirtyRows,
     unregister,
     render,
   };

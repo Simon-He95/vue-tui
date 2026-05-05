@@ -90,6 +90,50 @@ describe("render-manager", () => {
     expect(paints).toEqual(["n0"]);
   });
 
+  it("markDirtyRows only repaints nodes intersecting requested rows", () => {
+    const paints: string[] = [];
+
+    const listeners = new Map<string, Set<(...args: any[]) => void>>();
+    const terminal: any = {
+      size() {
+        return { cols: 10, rows: 6 };
+      },
+      on(event: string, cb: (...args: any[]) => void) {
+        let set = listeners.get(event);
+        if (!set) {
+          set = new Set();
+          listeners.set(event, set);
+        }
+        set.add(cb);
+        return () => set!.delete(cb);
+      },
+      batch(fn: () => void) {
+        fn();
+      },
+      clear() {},
+    };
+
+    const rm = createRenderManager(terminal);
+    const n0 = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      paint: () => paints.push("n0"),
+    });
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 5, w: 10, h: 1 },
+      paint: () => paints.push("n5"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    expect(rm.markDirtyRows(n0.id, [0])).toBe(true);
+    rm.render();
+
+    expect(paints).toEqual(["n0"]);
+  });
+
   it("only paints nodes intersecting dirty rows when many rows are dirty", () => {
     const paints: string[] = [];
 
@@ -389,6 +433,30 @@ describe("render-manager", () => {
     expect(paints).toEqual(["n42"]);
     expect(stats?.paintedNodes).toBe(1);
     expect(stats?.scannedNodes).toBeLessThan(100);
+  });
+
+  it("markDirtyRows consumes scratch arrays synchronously and returns false after unregister", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 8 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("node"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    const scratch = [1];
+    expect(rm.markDirtyRows(node.id, scratch)).toBe(true);
+    scratch[0] = 7;
+    rm.render();
+    expect(paints).toEqual(["node"]);
+
+    paints.length = 0;
+    rm.unregister(node.id);
+    expect(rm.markDirtyRows(node.id, [1])).toBe(false);
   });
 
   it("keeps row buckets in sync across rect updates, plane migration, unregister, and global nodes", () => {

@@ -38,18 +38,6 @@ function normalizeIndex(value: unknown, count: number): number {
   return clamp(n, 0, max);
 }
 
-const activeStyleCache = new WeakMap<Style, Style>();
-
-function defaultActiveStyle(base: Style): Style {
-  if (base.inverse) return base;
-  let cached = activeStyleCache.get(base);
-  if (!cached) {
-    cached = Object.freeze({ ...base, inverse: true });
-    activeStyleCache.set(base, cached);
-  }
-  return cached;
-}
-
 function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
   deltaY: number;
   mode: "auto" | "line" | "pixel";
@@ -493,8 +481,9 @@ export const TVirtualList = defineComponent({
     }
 
     function markRowsDirty(nextRows: readonly number[]): void {
+      if (!visible.value) return;
       dirtyRowsHint = unionDirtyRows(nextRows);
-      if (renderNodeId) render.update(renderNodeId, { dirtyRowsHint });
+      if (renderNodeId) render.markDirtyRows(renderNodeId, dirtyRowsHint);
     }
 
     function markViewportDirty(): void {
@@ -579,7 +568,7 @@ export const TVirtualList = defineComponent({
         const full = normalizedFullRect();
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
-        const activeStyle = props.activeStyle ?? defaultActiveStyle(base);
+        const activeStyle = props.activeStyle ?? (base.inverse ? base : { ...base, inverse: true });
         const top = visibleWindow.value.top;
         const { x: clipX, y: clipY } = clipOffsets();
 

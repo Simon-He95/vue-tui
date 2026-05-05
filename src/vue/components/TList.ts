@@ -30,18 +30,7 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
-const activeStyleCache = new WeakMap<Style, Style>();
 let tListInstanceSeq = 0;
-
-function defaultActiveStyle(base: Style): Style {
-  if (base.inverse) return base;
-  let cached = activeStyleCache.get(base);
-  if (!cached) {
-    cached = Object.freeze({ ...base, inverse: true });
-    activeStyleCache.set(base, cached);
-  }
-  return cached;
-}
 
 function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
   deltaY: number;
@@ -168,16 +157,15 @@ export const TList = defineComponent({
       return normalizeIndex(props.modelValue);
     }
 
-    function markViewportDirty(): void {
-      if (!visible.value) return;
+    function markViewportDirty(): boolean {
+      if (!visible.value) return false;
       const nodeId = renderNode.id.value;
-      if (!nodeId) return;
+      if (!nodeId) return false;
       const r = normalizedRect();
-      if (r.w <= 0 || r.h <= 0) return;
+      if (r.w <= 0 || r.h <= 0) return false;
       dirtyRowsScratch.length = 0;
       for (let y = r.y; y < r.y + r.h; y++) dirtyRowsScratch.push(y);
-      // dirtyRowsHint is consumed synchronously by RenderManager.update().
-      render.update(nodeId, { dirtyRowsHint: dirtyRowsScratch });
+      return render.markDirtyRows(nodeId, dirtyRowsScratch);
     }
 
     function invalidateViewportForScroll(): void {
@@ -191,12 +179,12 @@ export const TList = defineComponent({
       rows.push(y);
     }
 
-    function markIndexRowsDirty(...indexes: number[]): void {
-      if (!visible.value) return;
+    function markIndexRowsDirty(...indexes: number[]): boolean {
+      if (!visible.value) return false;
       const nodeId = renderNode.id.value;
-      if (!nodeId) return;
+      if (!nodeId) return false;
       const r = normalizedRect();
-      if (r.w <= 0 || r.h <= 0) return;
+      if (r.w <= 0 || r.h <= 0) return false;
 
       indexDirtyRowsScratch.length = 0;
       const { start, h } = visibleRange();
@@ -206,10 +194,7 @@ export const TList = defineComponent({
         if (offset < 0 || offset >= h) continue;
         pushDirtyIndexRow(indexDirtyRowsScratch, r.y + offset);
       }
-      if (indexDirtyRowsScratch.length > 0) {
-        // dirtyRowsHint is consumed synchronously by RenderManager.update().
-        render.update(nodeId, { dirtyRowsHint: indexDirtyRowsScratch });
-      }
+      return render.markDirtyRows(nodeId, indexDirtyRowsScratch);
     }
 
     function setScrollTop(nextTop: number, options?: { emitScroll?: boolean }): boolean {
@@ -433,7 +418,7 @@ export const TList = defineComponent({
     }
 
     const eventNode = useTerminalNode(() => ({
-      rect: absRect.value,
+      rect: normalizedRect(),
       zIndex: eventZ.value,
       visible: visible.value,
       focusable: true,
@@ -533,20 +518,35 @@ export const TList = defineComponent({
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
         const top = clampScrollTop(scrollTop.value);
-        const activeStyle = defaultActiveStyle(base);
+        const activeStyle = base.inverse ? base : { ...base, inverse: true };
         const { x: clipX, y: clipY } = clipOffsets();
-        const emptyLine =
-          clipY === 0
-            ? padEndByCells(
-                sliceByCellsRange(formatInlineCellLine("(empty)", full.w), clipX, clipX + r.w),
-                r.w,
-              )
-            : "";
+        const needsHorizontalSlice = clipX !== 0 || r.w !== full.w;
+        let emptyLine: string | null = null;
+
+        function getEmptyLine(): string {
+          if (emptyLine != null) return emptyLine;
+          emptyLine =
+            clipY !== 0
+              ? ""
+              : needsHorizontalSlice
+                ? padEndByCells(
+                    sliceByCellsRange(formatInlineCellLine("(empty)", full.w), clipX, clipX + r.w),
+                    r.w,
+                  )
+                : formatInlineCellLine("(empty)", r.w);
+          return emptyLine;
+        }
+
         const paintRow = (i: number) => {
           if (i < 0 || i >= r.h) return;
           const idx = top + clipY + i;
-          const fullLine = formatInlineCellLine(props.items[idx] ?? "", full.w);
-          const line = padEndByCells(sliceByCellsRange(fullLine, clipX, clipX + r.w), r.w);
+          const raw = props.items[idx] ?? "";
+          const line = needsHorizontalSlice
+            ? padEndByCells(
+                sliceByCellsRange(formatInlineCellLine(raw, full.w), clipX, clipX + r.w),
+                r.w,
+              )
+            : formatInlineCellLine(raw, r.w);
           const style = idx === active.value ? activeStyle : base;
           terminal.write(line, { x: r.x, y: r.y + i, style });
         };
@@ -561,7 +561,7 @@ export const TList = defineComponent({
             paintRow(localY);
           }
           if (focused.value && props.items.length === 0 && r.h > 0 && firstRowDirty && clipY === 0) {
-            terminal.write(emptyLine, {
+            terminal.write(getEmptyLine(), {
               x: r.x,
               y: r.y,
               style: { ...base, dim: true },
@@ -572,7 +572,7 @@ export const TList = defineComponent({
 
         for (let i = 0; i < r.h; i++) paintRow(i);
         if (focused.value && r.h > 0 && props.items.length === 0 && clipY === 0) {
-          terminal.write(emptyLine, {
+          terminal.write(getEmptyLine(), {
             x: r.x,
             y: r.y,
             style: { ...base, dim: true },

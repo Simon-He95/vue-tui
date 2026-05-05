@@ -333,6 +333,29 @@ When changing styles, replace the style object instead of mutating it in place.
 - external `modelValue` synchronization calls `ensureActiveVisible()`
 - click / double click selection calls `ensureActiveVisible()`
 
+Terminal-level DOM wheel handling may still prevent browser page scrolling even
+when `TList` itself does not consume an edge wheel event. Handler-level
+`preventDefault()` here only describes whether the list consumes the wheel
+internally.
+
+### Selection event semantics
+
+`TList` treats `update:modelValue` as a selection-change event, not a
+selection-confirm event.
+
+- Arrow / Home / End / PageUp / PageDown emit `update:modelValue` only when the
+  active index changes.
+- Click emits `update:modelValue` only when the clicked index differs from the
+  current active index.
+- Enter and double click emit `change`.
+- Enter and double click do not emit `update:modelValue` when they commit the
+  already-active index.
+
+`scroll` is emitted synchronously after internal viewport state changes. If an
+`onScroll` handler synchronously mutates `modelValue` or replaces `items`,
+`TList` may render the viewport change first and reconcile controlled props on
+the next Vue tick.
+
 ## TVirtualList
 
 大数据选择/浏览列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。它不是日志/streaming 组件；append-only 输出请使用 `TLogView`。
