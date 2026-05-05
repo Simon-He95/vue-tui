@@ -127,7 +127,7 @@ t.mount();
 plane 相关：
 
 - `scheduler.invalidate({ plane })`：把本轮刷新归到指定 plane
-- `scheduler.queueFrameTask(task)`：下一帧先执行 task，再根据 task 内的 `ctx.invalidate()` render/commit；`flushNow()` 会先 drain pending frame tasks
+- `scheduler.queueFrameTask(task)`：下一帧先执行 task，再根据 task 内的 `ctx.invalidate()` render/commit；`flushNow()` 会先 drain pending frame tasks；返回 `false` 表示 scheduler 显式拒绝，返回 `true` 或 `undefined` 都表示已接受
 - `queueFrameTask()` 的 `task.id` 是整个 `TerminalProvider` / `createTerminalApp` scheduler 级别的全局 coalescing key，不会因为 `TRenderPlane` 自动加 namespace。跨 plane 使用相同 id 会互相覆盖；如需 plane-local coalescing，请自行把 plane 写入 id。
 - `runtime.mount(Component, props, { plane })`：命令式挂载到指定 plane
 - `terminal.commit({ planes })`：只提交某些 plane 的变化
@@ -159,6 +159,16 @@ plane 相关：
 ```
 
 `TRenderPlane` 本身不负责布局，只负责切换子树所处的 plane。
+
+`TRenderPlane.plane` 在 mount 后按 immutable 处理；如果需要移动子树，请用 plane 作为 key 重新挂载：
+
+```vue
+<TRenderPlane :key="activePlane" :plane="activePlane">
+  <PaneBody />
+</TRenderPlane>
+```
+
+frame task 中的 `ctx.invalidate()` 默认绑定到 mounted plane。显式传入 `plane: undefined` 会跳出 mounted plane，在 root scheduler 中按 all-plane invalidate 处理。
 
 ### `createTInputHostPlugin(adapter)`
 

@@ -491,7 +491,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     scheduler: schedulerApi,
     runtime,
     observability: { trace, framePerf },
-    defaultStyle: ref(options.defaultStyle ?? Object.freeze({})),
+    defaultStyle: ref(options.defaultStyle ?? {}),
     render,
   };
 

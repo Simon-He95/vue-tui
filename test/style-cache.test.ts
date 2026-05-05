@@ -29,12 +29,24 @@ describe("derived style cache", () => {
     expect(defaultDimStyle(base)).toMatchObject({ fg: "blue", dim: true });
   });
 
-  it("freezes only the internal default style", () => {
-    let implicitDefaultFrozen = false;
+  it("reuses cached derived styles for mutable empty base styles", () => {
+    const base = {};
+
+    const active = defaultActiveStyle(base);
+    const dim = defaultDimStyle(base);
+
+    expect(defaultActiveStyle(base)).toBe(active);
+    expect(defaultDimStyle(base)).toBe(dim);
+    expect(Object.isFrozen(active)).toBe(true);
+    expect(Object.isFrozen(dim)).toBe(true);
+  });
+
+  it("keeps createTerminalApp defaultStyle mutable", () => {
+    let implicitDefaultStyle: unknown = null;
     const ImplicitProbe = defineComponent({
       name: "ImplicitDefaultStyleProbe",
       setup() {
-        implicitDefaultFrozen = Object.isFrozen(useTerminal().defaultStyle.value);
+        implicitDefaultStyle = useTerminal().defaultStyle.value;
         return () => null;
       },
     });
@@ -60,7 +72,8 @@ describe("derived style cache", () => {
       implicit.mount();
       explicit.mount();
 
-      expect(implicitDefaultFrozen).toBe(true);
+      expect(implicitDefaultStyle).toMatchObject({});
+      expect(Object.isFrozen(implicitDefaultStyle)).toBe(false);
       expect(explicitDefaultStyle).toMatchObject(explicitStyle);
       expect(Object.isFrozen(explicitDefaultStyle)).toBe(false);
     } finally {
@@ -69,12 +82,12 @@ describe("derived style cache", () => {
     }
   });
 
-  it("freezes TerminalProvider internal default style", async () => {
-    let providerDefaultFrozen = false;
+  it("keeps TerminalProvider defaultStyle mutable", async () => {
+    let providerDefaultStyle: unknown = null;
     const Probe = defineComponent({
       name: "TerminalProviderDefaultStyleProbe",
       setup() {
-        providerDefaultFrozen = Object.isFrozen(useTerminal().defaultStyle.value);
+        providerDefaultStyle = useTerminal().defaultStyle.value;
         return () => null;
       },
     });
@@ -90,7 +103,8 @@ describe("derived style cache", () => {
       app.mount(root);
       await nextTick();
 
-      expect(providerDefaultFrozen).toBe(true);
+      expect(providerDefaultStyle).toMatchObject({});
+      expect(Object.isFrozen(providerDefaultStyle)).toBe(false);
     } finally {
       app.unmount();
     }

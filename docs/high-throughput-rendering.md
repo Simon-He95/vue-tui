@@ -95,7 +95,7 @@ interface TerminalScheduler {
   invalidate(options?: TerminalSchedulerInvalidateOptions): void;
   flush(): void;
   flushNow(): void;
-  queueFrameTask(task: TerminalFrameTask): void;
+  queueFrameTask(task: TerminalFrameTask): boolean | void;
   configure(options: { targetFps?: number; maxFps?: number; frameBudgetMs?: number }): void;
   requestLive(reason: string): () => void;
   dropLive(reason: string): void;
@@ -106,7 +106,7 @@ interface TerminalScheduler {
 行为：
 
 - 默认 `on-demand`，只有 invalidate 才 render。
-- `queueFrameTask()` 把 wheel/input/stream 这类高频任务排到下一帧；同 `id` 任务只保留最新 `run`，priority 取更高值，reason 合并，`sync` 只要任一任务为 `true` 就保留。
+- `queueFrameTask()` 把 wheel/input/stream 这类高频任务排到下一帧；同 `id` 任务只保留最新 `run`，priority 取更高值，reason 合并，`sync` 只要任一任务为 `true` 就保留。返回 `false` 表示 scheduler 显式拒绝任务；返回 `true` 或旧实现的 `undefined` 都表示接受。
 - `requestLive(reason)` 使用引用计数进入 live mode，直到对应 `dropLive(reason)` 后退出。
 - live mode 按 `targetFps` 运行，但不超过 `maxFps`。
 - 高优先级 invalidation 可同帧 flush，普通 invalidation 继续 rAF 合并。
@@ -190,7 +190,7 @@ deps 只允许包含：
 ];
 ```
 
-不允许把大数组或每行对象数组放进 deps。数据本体由外部 `shallowRef`、`markRaw` 或普通 store 管理。`getItem` 和 `renderItem` 应保持稳定引用，数据变化通过 `itemVersion` 驱动。`scrollTop` 不进入 deps；滚动由组件内部 `render.update({ dirtyRowsHint })` 标记 dirty rows，否则会退化成每次滚动都整块 repaint。
+不允许把大数组或每行对象数组放进 deps。数据本体由外部 `shallowRef`、`markRaw` 或普通 store 管理。`getItem` 和 `renderItem` 应保持稳定引用，数据变化通过 `itemVersion` 驱动。`scrollTop` 不进入 deps；滚动由组件内部 `render.markDirtyRows(renderNodeId, rows)` 标记 dirty rows，否则会退化成每次滚动都整块 repaint。`markDirtyRows()` 接收的是 terminal absolute Y，不是组件内 local row；它标记 node 所在 plane 的行，render 时也会 repaint 同 plane 中与这些行相交的其他 nodes。
 
 wheel 行为：
 
@@ -284,8 +284,12 @@ log.replaceTail("next line...");
 规则：
 
 - paint 循环中不要每行创建 `{ ...base, inverse: true }`。
-- `Style` interning 返回 frozen stable object。
+- `Style` interning 返回 frozen stable object，但不要为了缓存冻结公开的 `defaultStyle` ref；空样式由 style-cache 内部归一到 frozen singleton。
 - key 使用稳定字段顺序，覆盖现有 style 字段。
+
+### 6.1 Wide-cell clipping
+
+`sliceByCellsRange()` 在 range start/end 落进宽字符内部时，用空格保留被占用的 cells，而不是把后续字符左移。这个语义会影响 `TList`、`TLogView`、`TVirtualMarkdown`、markdown renderer 和所有直接使用 text utils 的调用点。带 style 或 href 的宽字符占位空格保留原 segment style，调用方仍需要确保下一 cell/row 不泄漏旧 style 或 OSC8 href。
 
 验收测试：
 
@@ -374,9 +378,12 @@ type FramePerf = {
 验收命令：
 
 ```bash
-pnpm vitest run test/render-manager.test.ts test/dom-renderer-sync-flush.test.ts test/virtual-list.test.ts test/ui-regressions.test.ts test/index.test.ts test/docs-components.test.ts
+pnpm vitest run test/frame-mailbox.test.ts test/list-wheel.test.ts test/render-plane-frame-mailbox.test.ts test/scheduler-frame-tasks.test.ts test/virtual-list.test.ts test/render-manager.test.ts test/style-cache.test.ts test/text-utils.test.ts test/tlog-view.test.ts test/tmarkdown-layout.test.ts test/tmarkdown-components.test.ts test/tvirtual-markdown-perf.test.ts test/tvirtual-markdown-streaming.test.ts test/ui-regressions.test.ts test/index.test.ts
+pnpm run bench:scroll-mailbox
+pnpm run bench:phase2
 pnpm run typecheck
 pnpm run lint
+pnpm run build
 ```
 
 ### Phase 2: 一个月内
