@@ -342,6 +342,42 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("does not emit scroll when keyboard selection moves the viewport", async () => {
+    const onScroll = vi.fn();
+    const onUpdateModelValue = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 100 }, (_, index) => `item-${index}`),
+        modelValue: 0,
+        autoFocus: true,
+        onScroll,
+        "onUpdate:modelValue": onUpdateModelValue,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "keydown", key: "End", code: "End", time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(onUpdateModelValue).toHaveBeenLastCalledWith(99);
+      expect(rowText(app, 0)).toBe("item-96");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("anchors PageUp to the visible viewport after detached wheel scroll", async () => {
     const items = Array.from({ length: 260 }, (_, index) => `item-${index}`);
     const onUpdateModelValue = vi.fn();
@@ -625,6 +661,46 @@ describe("TList wheel scrolling", () => {
       await nextTick();
       app.scheduler.flushNow();
 
+      expect(rowText(app, 0)).toBe("item-47");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not emit scroll when external modelValue sync moves the viewport", async () => {
+    const onScroll = vi.fn();
+    let setModelValue!: (value: number) => void;
+    const App = defineComponent({
+      name: "ExternalModelValueScrollSemanticsApp",
+      setup() {
+        const modelValue = ref(0);
+        setModelValue = (value) => {
+          modelValue.value = value;
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: Array.from({ length: 100 }, (_, index) => `item-${index}`),
+            modelValue: modelValue.value,
+            autoFocus: true,
+            onScroll,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      setModelValue(50);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
       expect(rowText(app, 0)).toBe("item-47");
     } finally {
       app.dispose();
@@ -1493,6 +1569,51 @@ describe("TList wheel scrolling", () => {
 
       expect(onUpdateModelValue).toHaveBeenLastCalledWith(81);
       expect(rowText(app, 2)).toBe("item-81");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keeps click and paint aligned when TList is clipped from the top", async () => {
+    const onUpdateModelValue = vi.fn();
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    const App = defineComponent({
+      name: "TopClippedTListApp",
+      setup() {
+        return () =>
+          h(
+            TView,
+            { x: 0, y: 0, w: 12, h: 4, scrollY: 2 },
+            {
+              default: () =>
+                h(TList, {
+                  x: 0,
+                  y: 0,
+                  w: 12,
+                  h: 10,
+                  items,
+                  modelValue: 0,
+                  autoFocus: true,
+                  "onUpdate:modelValue": onUpdateModelValue,
+                }),
+            },
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("item-0");
+
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 1, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onUpdateModelValue).toHaveBeenLastCalledWith(1);
+      expect(app.terminal.getRow(1)[0]?.style.inverse).toBe(true);
     } finally {
       app.dispose();
     }

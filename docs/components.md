@@ -310,6 +310,24 @@ const app = createTerminalApp({
 - `scroll`: `scrollTop`（number）
 - `close` / `focus` / `blur` / `keydown`
 
+### Wheel scrolling and selection
+
+`TList` treats wheel scrolling as viewport-only. Wheel scrolling emits `scroll`,
+but it does not update `modelValue` and does not move the active selection.
+Keyboard navigation, click, double click, and Enter reattach selection to the
+visible viewport.
+
+`scroll(top)` is emitted when:
+
+- wheel scrolling changes the viewport top
+- item-count or clipped-viewport changes programmatically clamp the viewport top
+
+`scroll(top)` is not emitted when:
+
+- keyboard selection calls `ensureActiveVisible()`
+- external `modelValue` synchronization calls `ensureActiveVisible()`
+- click / double click selection calls `ensureActiveVisible()`
+
 ## TVirtualList
 
 大数据选择/浏览列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。它不是日志/streaming 组件；append-only 输出请使用 `TLogView`。

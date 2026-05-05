@@ -29,6 +29,9 @@ const EMPTY = Symbol("frame-mailbox-empty");
 /**
  * Coalesces many producer updates into a single scheduler frame task.
  *
+ * This helper is currently internal to vue-tui. It is used by library
+ * components and internal tests, but it is not exported from the package root.
+ *
  * Default behavior keeps only the latest queued value. If `merge` is provided,
  * the pending value is updated with `merge(prev, next)`.
  *
@@ -118,6 +121,8 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
     cancel,
     dispose,
     hasPending: () => hasPending,
+    // Ambiguous when T includes undefined. Pair with hasPending() to
+    // distinguish "pending undefined" from "no pending value".
     peek: () => (hasPending ? (pending as T) : undefined),
   } as const;
 }

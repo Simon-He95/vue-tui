@@ -33,6 +33,9 @@ export const TRenderPlane = defineComponent({
       flushNow: () => parentCtx.scheduler.flushNow(),
       configure: (options: Parameters<typeof parentCtx.scheduler.configure>[0]) =>
         parentCtx.scheduler.configure(options),
+      // Frame task ids remain scheduler-global even inside TRenderPlane.
+      // Components should include plane/instance information in their ids
+      // when they need isolation across planes.
       queueFrameTask: (task: Parameters<typeof parentCtx.scheduler.queueFrameTask>[0]) =>
         parentCtx.scheduler.queueFrameTask({
           ...task,
@@ -43,6 +46,7 @@ export const TRenderPlane = defineComponent({
               reportDroppedUpdates: (count) => ctx.reportDroppedUpdates?.(count),
             }),
         }),
+      // Cancellation uses the same scheduler-global id space as queueFrameTask.
       cancelFrameTask: (id: string) => parentCtx.scheduler.cancelFrameTask?.(id),
       requestLive: (reason: string) => parentCtx.scheduler.requestLive(reason),
       dropLive: (reason: string) => parentCtx.scheduler.dropLive(reason),

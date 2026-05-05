@@ -97,7 +97,6 @@ export const TList = defineComponent({
     let pendingWheelTop: number | null = null;
     const dirtyRowsScratch: number[] = [];
     const indexDirtyRowsScratch: number[] = [];
-    const paintRowsScratch: number[] = [];
 
     const absRect = computed<Rect>(() => {
       const raw = { x: props.x, y: props.y, w: props.w, h: props.h };
@@ -138,7 +137,7 @@ export const TList = defineComponent({
     }
 
     function pushDirtyIndexRow(rows: number[], y: number): void {
-      if (rows.includes(y)) return;
+      if (rows[0] === y || rows[1] === y) return;
       rows.push(y);
     }
 
@@ -193,6 +192,7 @@ export const TList = defineComponent({
       let nextTop = clampScrollTop(scrollTop.value);
       if (active.value < nextTop) nextTop = active.value;
       else if (active.value >= nextTop + h) nextTop = clamp(active.value - (h - 1), 0, maxTop);
+      // Selection-driven viewport changes intentionally do not emit scroll.
       return setScrollTop(nextTop, { emitScroll: false });
     }
 
@@ -247,65 +247,75 @@ export const TList = defineComponent({
       return clamp(active.value, 0, last);
     }
 
-    function selectActive(index: number, options?: { emitChange?: boolean }): void {
-      const last = Math.max(0, props.items.length - 1);
+    function setActiveIndex(
+      nextIndex: number,
+      options?: {
+        emitUpdate?: boolean;
+        emitChange?: boolean;
+      },
+    ): { changedActive: boolean; changedScroll: boolean; next: number } {
       const prev = active.value;
-      const next = clamp(index, 0, last);
+      const next = clamp(nextIndex, 0, Math.max(0, props.items.length - 1));
+      if (prev === next) {
+        if (options?.emitChange) {
+          emit("change", { index: next, value: props.items[next] ?? "" });
+        }
+        return {
+          changedActive: false,
+          changedScroll: ensureActiveVisible(),
+          next,
+        };
+      }
+
+      active.value = next;
+      if (options?.emitUpdate !== false) {
+        emit("update:modelValue", next);
+      }
+      if (options?.emitChange) {
+        emit("change", { index: next, value: props.items[next] ?? "" });
+      }
+
+      const changedScroll = ensureActiveVisible();
+      if (!changedScroll) {
+        markIndexRowsDirty(prev, next);
+      }
+
+      return { changedActive: true, changedScroll, next };
+    }
+
+    function selectActive(index: number, options?: { emitChange?: boolean }): void {
       const hadPendingWheel = wheelMailbox.hasPending();
       const wasDetached = detachedByWheel;
-      const changedActive = prev !== next;
 
       if (hadPendingWheel || wasDetached) {
         reattachSelection();
       }
 
-      if (!changedActive) {
-        if (options?.emitChange) emit("change", { index: next, value: props.items[next] ?? "" });
-        const changedScroll = ensureActiveVisible();
-        if (changedScroll) {
-          scheduler.invalidate({ priority: "high", reason: "input" });
-        }
-        return;
+      const result = setActiveIndex(index, {
+        emitUpdate: true,
+        emitChange: options?.emitChange,
+      });
+      if (hadPendingWheel || wasDetached || result.changedActive || result.changedScroll) {
+        scheduler.invalidate({ priority: "high", reason: "input" });
       }
-
-      active.value = next;
-      emit("update:modelValue", next);
-      if (options?.emitChange) emit("change", { index: next, value: props.items[next] ?? "" });
-      const changedScroll = ensureActiveVisible();
-      if (!changedScroll) markIndexRowsDirty(prev, next);
-      scheduler.invalidate({ priority: "high", reason: "input" });
     }
 
     function commitVisibleSelection(): void {
       selectActive(nearestVisibleActive(), { emitChange: true });
     }
 
-    function syncActiveToModelValueForData(): { changed: boolean; prev: number; next: number } {
-      const prev = active.value;
-      const next = clampedModelValue();
-      if (prev === next) {
-        return { changed: false, prev, next };
-      }
-      active.value = next;
-      return { changed: true, prev, next };
-    }
-
     function syncExternalModelValue(value: number): void {
-      const prev = active.value;
-      const next = clamp(value, 0, Math.max(0, props.items.length - 1));
       const hadPendingWheel = wheelMailbox.hasPending();
-      const changedActive = active.value !== next;
       const wasDetached = detachedByWheel;
+      const next = clamp(value, 0, Math.max(0, props.items.length - 1));
+      const changedActive = active.value !== next;
 
       if (hadPendingWheel || wasDetached || changedActive) {
         reattachSelection();
       }
 
-      active.value = next;
-      const changedScroll = ensureActiveVisible();
-      if (!changedScroll && changedActive) markIndexRowsDirty(prev, next);
-
-      if (hadPendingWheel || changedActive || changedScroll) {
+      const result = setActiveIndex(next, { emitUpdate: false });
+      if (hadPendingWheel || wasDetached || result.changedActive || result.changedScroll) {
         scheduler.invalidate({ priority: "high", reason: "input" });
       }
     }
@@ -464,20 +474,14 @@ export const TList = defineComponent({
 
         if (dirtyRows) {
           if (dirtyRows.length === 0) return;
-          paintRowsScratch.length = 0;
+          let firstRowDirty = false;
           for (const y of dirtyRows) {
+            if (Math.floor(y) === r.y) firstRowDirty = true;
             const localY = Math.floor(y) - r.y;
             if (localY < 0 || localY >= r.h) continue;
-            if (paintRowsScratch.includes(localY)) continue;
-            paintRowsScratch.push(localY);
+            paintRow(localY);
           }
-          for (const localY of paintRowsScratch) paintRow(localY);
-          if (
-            focused.value &&
-            props.items.length === 0 &&
-            r.h > 0 &&
-            paintRowsScratch.includes(0)
-          ) {
+          if (focused.value && props.items.length === 0 && r.h > 0 && firstRowDirty) {
             terminal.write(formatInlineCellLine("(empty)", r.w), {
               x: r.x,
               y: r.y,
@@ -520,13 +524,8 @@ export const TList = defineComponent({
             needsInvalidate = true;
           }
         } else {
-          const modelSync = syncActiveToModelValueForData();
-          if (modelSync.changed) {
-            needsInvalidate = true;
-            const changedScroll = ensureActiveVisible();
-            if (!changedScroll) markIndexRowsDirty(modelSync.prev, modelSync.next);
-            needsInvalidate = changedScroll || needsInvalidate;
-          }
+          const modelSync = setActiveIndex(clampedModelValue(), { emitUpdate: false });
+          needsInvalidate = modelSync.changedActive || modelSync.changedScroll || needsInvalidate;
         }
 
         if (pendingWheelTop !== null) {
@@ -539,10 +538,6 @@ export const TList = defineComponent({
           // clamps caused by data length or clipped viewport changes.
           setScrollTop(clampedTop, { emitScroll: true });
           needsInvalidate = true;
-        }
-
-        if (!wheelDetachedOrPending) {
-          needsInvalidate = ensureActiveVisible() || needsInvalidate;
         }
 
         if (structureChanged) {
