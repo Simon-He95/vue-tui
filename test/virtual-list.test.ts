@@ -792,6 +792,91 @@ describe("TVirtualList", () => {
     }
   });
 
+  it("keeps multiple TVirtualList wheel tasks isolated by instance id", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const first = Array.from({ length: 200 }, (_, index) => `a-${index}`);
+    const second = Array.from({ length: 200 }, (_, index) => `b-${index}`);
+    const firstScroll = vi.fn();
+    const secondScroll = vi.fn();
+
+    const App = defineComponent({
+      name: "MultipleVirtualListWheelIsolationApp",
+      setup() {
+        return () => [
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 3,
+            itemCount: first.length,
+            itemVersion: 1,
+            getItem: (index: number) => first[index],
+            autoFocus: true,
+            onScroll: firstScroll,
+          }),
+          h(TVirtualList, {
+            x: 0,
+            y: 4,
+            w: 12,
+            h: 3,
+            itemCount: second.length,
+            itemVersion: 1,
+            getItem: (index: number) => second[index],
+            onScroll: secondScroll,
+          }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      for (let i = 0; i < 20; i++) {
+        app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 + i });
+        app.events.dispatch({ type: "wheel", cellX: 0, cellY: 4, deltaY: 100, time: 2_000 + i });
+      }
+
+      expect(callbacks.size).toBe(1);
+      Array.from(callbacks.values())[0]?.(0);
+      await nextTick();
+
+      expect(firstScroll).toHaveBeenCalledTimes(1);
+      expect(secondScroll).toHaveBeenCalledTimes(1);
+      expect(
+        app.terminal
+          .getRow(0)
+          .map((cell) => cell.ch)
+          .join("")
+          .trimEnd(),
+      ).toBe(`a-${firstScroll.mock.calls[0]![0]}`);
+      expect(
+        app.terminal
+          .getRow(4)
+          .map((cell) => cell.ch)
+          .join("")
+          .trimEnd(),
+      ).toBe(`b-${secondScroll.mock.calls[0]![0]}`);
+    } finally {
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
   it("clamps pending wheel scroll when itemCount shrinks before the frame", async () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;

@@ -299,6 +299,7 @@ const app = createTerminalApp({
 
 - `x`/`y`/`w`/`h` `(number, required)`
 - `items` `(string[], required)`
+- `itemVersion` `(number)`：同长度内容更新时可递增，触发 repaint
 - `modelValue` `(number)` + `update:modelValue`
 - `style` `(Style?)`
 - `autoFocus` `(boolean)`
@@ -322,7 +323,8 @@ the list is clipped from the top or left, paint and hit testing keep the source
 row/column offset instead of rebasing the clipped area to a new viewport origin.
 When changing styles, replace the style object instead of mutating it in place.
 Replace the `items` array reference when item text changes without changing
-length. For large mutable data sources, prefer `TVirtualList` with `itemVersion`.
+length, or bump `itemVersion`. For large mutable data sources, prefer
+`TVirtualList` with `itemVersion`.
 
 `scroll(top)` represents viewport-driven scroll changes, not every internal
 viewport-top mutation.
@@ -361,6 +363,10 @@ selection-confirm event.
 `TList` may render the viewport change first and reconcile controlled props on
 the next Vue tick; `onScroll` is not a synchronous veto point for wheel
 scrolling.
+
+Mutating `style` in place does not schedule repaint by itself. Replace the
+style object, or rely on a later repaint-triggering interaction if you choose
+to mutate it in place.
 
 Detached wheel state is reattached only when selection changes, external
 `modelValue` changes, click/double-click/Enter/keyboard navigation happens, or

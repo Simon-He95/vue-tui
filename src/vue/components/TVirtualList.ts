@@ -62,6 +62,8 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
 type ScrollStrategy = "auto" | "viewport-repaint";
 export type RowScrollMode = "off" | "unsafe-full-row";
 
+let virtualListInstanceSeq = 0;
+
 export const TVirtualList = defineComponent({
   name: "TVirtualList",
   props: {
@@ -95,6 +97,7 @@ export const TVirtualList = defineComponent({
     const plane = inject(RenderPlaneContextKey, ref<TerminalRenderPlane>("default"));
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
+    const virtualListInstanceId = ++virtualListInstanceSeq;
 
     const focused = ref(false);
     const active = ref(props.modelValue);
@@ -288,7 +291,7 @@ export const TVirtualList = defineComponent({
     function requestWheelScroll(nextTop: number): void {
       pendingWheelTop = nextTop;
       scheduler.queueFrameTask({
-        id: `TVirtualList:${renderNodeId ?? "pending"}:wheel`,
+        id: `TVirtualList:${virtualListInstanceId}:wheel`,
         reason: "scroll",
         priority: "high",
         sync: true,

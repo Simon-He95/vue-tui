@@ -134,6 +134,32 @@ describe("render-manager", () => {
     expect(paints).toEqual(["n0"]);
   });
 
+  it("repaints overlapping same-plane nodes in z-order for dirty rows", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 6 });
+    const rm = createRenderManager(terminal);
+    rm.register({
+      stack: rm.rootStack,
+      zIndex: 0,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("base"),
+    });
+    const overlay = rm.register({
+      stack: rm.rootStack,
+      zIndex: 1,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("overlay"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    expect(rm.markDirtyRows(overlay.id, [1])).toBe(true);
+    rm.render();
+
+    expect(paints).toEqual(["base", "overlay"]);
+  });
+
   it("markDirtyRows returns false when no valid terminal row is accepted", () => {
     const terminal = createTerminal({ cols: 10, rows: 4 });
     const rm = createRenderManager(terminal);

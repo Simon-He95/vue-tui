@@ -868,6 +868,46 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("repaints same-length in-place item mutation when itemVersion changes", async () => {
+    let mutate!: () => void;
+    const App = defineComponent({
+      name: "TListItemVersionMutationApp",
+      setup() {
+        const items = ref(["item-0", "item-1", "item-2", "item-3"]);
+        const itemVersion = ref(0);
+        mutate = () => {
+          items.value[2] = "changed";
+          itemVersion.value++;
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            itemVersion: itemVersion.value,
+            modelValue: 0,
+            autoFocus: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      mutate();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 2)).toBe("changed");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not reattach detached viewport on parent re-render with the same modelValue", async () => {
     let rerender!: () => void;
     const App = defineComponent({

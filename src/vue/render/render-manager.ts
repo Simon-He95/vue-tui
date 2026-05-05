@@ -290,14 +290,17 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     }
   }
 
-  function markRows(plane: TerminalRenderPlane, rows: readonly number[]): boolean {
+  function markRowsForNode(node: RenderNode, rows: readonly number[]): boolean {
     if (!rows.length) return false;
-    const state = getDirtyState(plane);
+    const state = getDirtyState(node.plane);
     let accepted = false;
+
     for (let i = 0; i < rows.length; i++) {
       const y = Math.floor(rows[i] ?? -1);
       if (!Number.isFinite(y)) continue;
       if (y < 0 || y >= terminalRows) continue;
+      if (node.rect && (y < node.rectY0 || y >= node.rectY1)) continue;
+
       accepted = true;
       if (state.dirtyRowBits[y] === 0) {
         state.dirtyRowBits[y] = 1;
@@ -306,27 +309,8 @@ export function createRenderManager(terminal: Terminal): RenderManager {
         if (y > state.dirtyMaxY) state.dirtyMaxY = y;
       }
     }
+
     return accepted;
-  }
-
-  function filterRowsForNode(node: RenderNode, rows: readonly number[]): number[] {
-    const filtered: number[] = [];
-    if (!node.rect) {
-      for (let i = 0; i < rows.length; i++) {
-        const y = Math.floor(rows[i] ?? -1);
-        if (!Number.isFinite(y)) continue;
-        filtered.push(y);
-      }
-      return filtered;
-    }
-
-    for (let i = 0; i < rows.length; i++) {
-      const y = Math.floor(rows[i] ?? -1);
-      if (!Number.isFinite(y)) continue;
-      if (y < node.rectY0 || y >= node.rectY1) continue;
-      filtered.push(y);
-    }
-    return filtered;
   }
 
   function unsafeScrollPlaneRows(
@@ -403,7 +387,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       dirtyRowsHint != null &&
       dirtyRowsHint.length > 0;
     if (canUseDirtyRowsHint) {
-      markRows(nextPlane, filterRowsForNode(prev, dirtyRowsHint));
+      markRowsForNode(prev, dirtyRowsHint);
     } else {
       markRect(prev.plane, prev.rect);
       markRect(nextPlane, nextRect);
@@ -436,7 +420,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     if (!rows.length) return false;
     const node = nodes.get(id);
     if (!node) return false;
-    return markRows(node.plane, filterRowsForNode(node, rows));
+    return markRowsForNode(node, rows);
   }
 
   function unregister(id: string): void {

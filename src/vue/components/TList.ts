@@ -75,6 +75,7 @@ export const TList = defineComponent({
     h: { type: Number, required: true },
     zIndex: { type: Number, default: 0 },
     items: { type: Array as PropType<string[]>, required: true },
+    itemVersion: { type: Number, default: 0 },
     modelValue: { type: Number, default: 0 },
     style: { type: Object as PropType<Style>, default: undefined },
     autoFocus: { type: Boolean, default: false },
@@ -557,6 +558,7 @@ export const TList = defineComponent({
         props.w,
         props.h,
         props.items,
+        props.itemVersion,
         props.style,
         focused.value,
         defaultStyle.value,
@@ -650,14 +652,26 @@ export const TList = defineComponent({
     watch(
       [
         () => props.items.length,
+        () => props.itemVersion,
         () => fullRect.value.y,
         () => fullRect.value.h,
         () => absRect.value.y,
         () => absRect.value.h,
       ],
-      ([itemsLength, fullY, fullH, clipY, clipH], [prevItemsLength, prevFullY, prevFullH, prevClipY, prevClipH]) => {
+      (
+        [itemsLength, itemVersion, fullY, fullH, clipY, clipH],
+        [
+          prevItemsLength,
+          prevItemVersion,
+          prevFullY,
+          prevFullH,
+          prevClipY,
+          prevClipH,
+        ] = [itemsLength, itemVersion, fullY, fullH, clipY, clipH],
+      ) => {
         const structureChanged =
           itemsLength !== prevItemsLength ||
+          itemVersion !== prevItemVersion ||
           fullY !== prevFullY ||
           fullH !== prevFullH ||
           clipY !== prevClipY ||
