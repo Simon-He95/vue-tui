@@ -35,9 +35,6 @@ let tListInstanceSeq = 0;
 
 function defaultActiveStyle(base: Style): Style {
   if (base.inverse) return base;
-  if (!Object.isFrozen(base)) {
-    return Object.freeze({ ...base, inverse: true });
-  }
   let cached = activeStyleCache.get(base);
   if (!cached) {
     cached = Object.freeze({ ...base, inverse: true });
@@ -90,12 +87,17 @@ export const TList = defineComponent({
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
 
     const focused = ref(false);
-    const active = ref(props.modelValue);
-    // Intentionally excluded from render deps.
-    // Do not add scrollTop/active/modelValue back to render deps.
-    // Every viewport change must go through setScrollTop(), and active-only
-    // changes must go through setActiveIndex()/markIndexRowsDirty(), otherwise
-    // the render node will not receive the dirtyRowsHint needed to repaint.
+    /**
+     * TList render invalidation contract:
+     *
+     * - scrollTop/active/modelValue are intentionally not render deps.
+     * - paint reads latest refs at render time.
+     * - viewport changes must call setScrollTop(), which marks viewport rows dirty.
+     * - active-only changes must call setActiveIndex(), which marks old/new rows dirty.
+     * - no manual dirty rows should be marked while visible=false.
+     * - initial modelValue sync must not trigger a high-priority flush during setup.
+     */
+    const active = ref(0);
     const scrollTop = ref(0);
     const wheelState = createWheelScrollState();
     let detachedByWheel = false;
@@ -150,11 +152,24 @@ export const TList = defineComponent({
       return clamp(value, 0, maxScrollTop());
     }
 
+    function hasItems(): boolean {
+      return props.items.length > 0;
+    }
+
+    function normalizeIndex(value: unknown): number {
+      const last = props.items.length - 1;
+      if (last < 0) return 0;
+      const n = Math.floor(Number(value));
+      if (!Number.isFinite(n)) return 0;
+      return clamp(n, 0, last);
+    }
+
     function clampedModelValue(): number {
-      return clamp(props.modelValue, 0, Math.max(0, props.items.length - 1));
+      return normalizeIndex(props.modelValue);
     }
 
     function markViewportDirty(): void {
+      if (!visible.value) return;
       const nodeId = renderNode.id.value;
       if (!nodeId) return;
       const r = normalizedRect();
@@ -177,6 +192,7 @@ export const TList = defineComponent({
     }
 
     function markIndexRowsDirty(...indexes: number[]): void {
+      if (!visible.value) return;
       const nodeId = renderNode.id.value;
       if (!nodeId) return;
       const r = normalizedRect();
@@ -200,7 +216,9 @@ export const TList = defineComponent({
       const clampedTop = clampScrollTop(nextTop);
       if (clampedTop === scrollTop.value) return false;
       scrollTop.value = clampedTop;
-      invalidateViewportForScroll();
+      if (visible.value) {
+        invalidateViewportForScroll();
+      }
       if (options?.emitScroll !== false) emit("scroll", clampedTop);
       return true;
     }
@@ -233,9 +251,9 @@ export const TList = defineComponent({
       return setScrollTop(nextTop, { emitScroll: false });
     }
 
-    function setActiveSilently(nextIndex: number): { prev: number; next: number; changed: boolean } {
+    function setActiveSilently(nextIndex: unknown): { prev: number; next: number; changed: boolean } {
       const prev = active.value;
-      const next = clamp(nextIndex, 0, Math.max(0, props.items.length - 1));
+      const next = normalizeIndex(nextIndex);
       if (prev === next) return { prev, next, changed: false };
       active.value = next;
       return { prev, next, changed: true };
@@ -302,6 +320,11 @@ export const TList = defineComponent({
         emitChange?: boolean;
       },
     ): { changedActive: boolean; changedScroll: boolean; next: number } {
+      if (!hasItems()) {
+        if (active.value !== 0) active.value = 0;
+        return { changedActive: false, changedScroll: false, next: 0 };
+      }
+
       const updated = setActiveSilently(nextIndex);
       if (!updated.changed) {
         if (options?.emitChange) {
@@ -347,13 +370,14 @@ export const TList = defineComponent({
     }
 
     function commitVisibleSelection(): void {
+      if (!hasItems()) return;
       selectActive(nearestVisibleActive(), { emitChange: true });
     }
 
-    function syncExternalModelValue(value: number): void {
+    function syncExternalModelValue(value: number): boolean {
       const hadPendingWheel = wheelMailbox.hasPending();
       const wasDetached = detachedByWheel;
-      const next = clamp(value, 0, Math.max(0, props.items.length - 1));
+      const next = normalizeIndex(value);
       const changedActive = active.value !== next;
 
       if (hadPendingWheel || wasDetached || changedActive) {
@@ -361,9 +385,7 @@ export const TList = defineComponent({
       }
 
       const result = setActiveIndex(next, { emitUpdate: false });
-      if (hadPendingWheel || wasDetached || result.changedActive || result.changedScroll) {
-        scheduler.invalidate({ priority: "high", reason: "input" });
-      }
+      return hadPendingWheel || wasDetached || result.changedActive || result.changedScroll;
     }
 
     function onKeydown(e: TerminalKeyboardEvent): void {
@@ -559,9 +581,18 @@ export const TList = defineComponent({
       },
     }));
 
+    let didInitialModelSync = false;
+
     watch(
       () => props.modelValue,
-      (value) => syncExternalModelValue(value),
+      (value) => {
+        const isInitial = !didInitialModelSync;
+        didInitialModelSync = true;
+        const needsInvalidate = syncExternalModelValue(value);
+        if (!isInitial && needsInvalidate) {
+          scheduler.invalidate({ priority: "high", reason: "input" });
+        }
+      },
       { immediate: true },
     );
 
@@ -607,7 +638,7 @@ export const TList = defineComponent({
           needsInvalidate = true;
         }
 
-        if (structureChanged) {
+        if (structureChanged && visible.value) {
           markViewportDirty();
           needsInvalidate = true;
         }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { defineComponent, h, nextTick, ref } from "vue";
-import { createTerminalApp, TList, TRenderPlane, TView, useTerminal } from "../src/index.js";
+import { defineComponent, h, nextTick, ref, vShow, withDirectives } from "vue";
+import { createTerminalApp, TList, TRenderPlane, TText, TView, useTerminal } from "../src/index.js";
 
 function installRaf() {
   const previousRaf = globalThis.requestAnimationFrame;
@@ -74,6 +74,44 @@ describe("TList wheel scrolling", () => {
       expect(onUpdateModelValue).not.toHaveBeenCalled();
       expect(onScroll).toHaveBeenCalledTimes(1);
     } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not synchronously commit while mounting an initially scrolled TList", () => {
+    const commits: unknown[] = [];
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: defineComponent({
+        name: "InitialScrolledTListMountApp",
+        setup() {
+          return () => [
+            h(TList, {
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 4,
+              items: Array.from({ length: 100 }, (_, index) => `item-${index}`),
+              modelValue: 50,
+              autoFocus: true,
+            }),
+            h(TText, { x: 0, y: 6, value: "sibling" }),
+          ];
+        },
+      }),
+    });
+
+    const off = app.terminal.on("commit", (commit) => commits.push(commit));
+    try {
+      app.mount();
+      expect(commits).toHaveLength(0);
+
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("item-47");
+      expect(rowText(app, 6)).toBe("sibling");
+    } finally {
+      off();
       app.dispose();
     }
   });
@@ -1146,16 +1184,26 @@ describe("TList wheel scrolling", () => {
     }
   });
 
-  it("keeps multiple TList wheel mailboxes independent", async () => {
+  it("keeps multiple TList wheel mailboxes independent across bursts", async () => {
     const raf = installRaf();
     const first = Array.from({ length: 50 }, (_, index) => `a-${index}`);
     const second = Array.from({ length: 50 }, (_, index) => `b-${index}`);
+    const firstScroll = vi.fn();
+    const secondScroll = vi.fn();
     const App = defineComponent({
       name: "MultipleListWheelMailboxApp",
       setup() {
         return () => [
-          h(TList, { x: 0, y: 0, w: 12, h: 3, items: first, autoFocus: true }),
-          h(TList, { x: 0, y: 4, w: 12, h: 3, items: second }),
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 3,
+            items: first,
+            autoFocus: true,
+            onScroll: firstScroll,
+          }),
+          h(TList, { x: 0, y: 4, w: 12, h: 3, items: second, onScroll: secondScroll }),
         ];
       },
     });
@@ -1166,15 +1214,24 @@ describe("TList wheel scrolling", () => {
       app.scheduler.flushNow();
       raf.callbacks.clear();
 
-      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
-      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 4, deltaY: 100, time: 1_000 });
+      for (let i = 0; i < 20; i++) {
+        app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 + i });
+      }
+      for (let i = 0; i < 30; i++) {
+        app.events.dispatch({ type: "wheel", cellX: 0, cellY: 4, deltaY: 100, time: 2_000 + i });
+      }
 
       expect(raf.callbacks.size).toBe(1);
       raf.runNext();
       await nextTick();
 
-      expect(rowText(app, 0)).toBe("a-1");
-      expect(rowText(app, 4)).toBe("b-1");
+      expect(firstScroll).toHaveBeenCalledTimes(1);
+      expect(secondScroll).toHaveBeenCalledTimes(1);
+      const firstTop = firstScroll.mock.calls[0]![0];
+      const secondTop = secondScroll.mock.calls[0]![0];
+      expect(secondTop).toBeGreaterThan(firstTop);
+      expect(rowText(app, 0)).toBe(`a-${firstTop}`);
+      expect(rowText(app, 4)).toBe(`b-${secondTop}`);
     } finally {
       app.dispose();
       raf.restore();
@@ -1878,6 +1935,7 @@ describe("TList wheel scrolling", () => {
 
   it("does not throw when Enter is pressed on an empty list", async () => {
     const onChange = vi.fn();
+    const onUpdateModelValue = vi.fn();
     const app = createTerminalApp({
       cols: 20,
       rows: 8,
@@ -1890,6 +1948,7 @@ describe("TList wheel scrolling", () => {
         items: [],
         autoFocus: true,
         onChange,
+        "onUpdate:modelValue": onUpdateModelValue,
       },
     });
 
@@ -1903,8 +1962,90 @@ describe("TList wheel scrolling", () => {
       app.scheduler.flushNow();
       await nextTick();
 
-      expect(onChange).toHaveBeenCalledWith({ index: 0, value: "" });
+      expect(onChange).not.toHaveBeenCalled();
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
     } finally {
+      app.dispose();
+    }
+  });
+
+  it("normalizes non-finite modelValue", () => {
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: ["a", "b", "c"],
+        modelValue: Number.NaN,
+        autoFocus: true,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("a");
+      expect(app.terminal.getRow(0)[0]?.style.inverse).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not dirty visible terminal rows when hidden TList data changes", async () => {
+    let setItems!: (items: string[]) => void;
+    const show = ref(true);
+    const commits: unknown[] = [];
+
+    const App = defineComponent({
+      name: "HiddenTListDataChangeApp",
+      setup() {
+        const items = ref(["hidden-0", "hidden-1"]);
+        setItems = (next) => {
+          items.value = next;
+        };
+
+        return () => [
+          withDirectives(
+            h(TList, {
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 4,
+              items: items.value,
+              modelValue: 0,
+              autoFocus: true,
+            }),
+            [[vShow, show.value]],
+          ),
+          h(TText, { x: 0, y: 0, value: "visible" }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    const off = app.terminal.on("commit", (commit) => commits.push(commit));
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      show.value = false;
+      await nextTick();
+      await nextTick();
+      app.scheduler.flushNow();
+      commits.length = 0;
+
+      setItems(Array.from({ length: 100 }, (_, index) => `hidden-${index}`));
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("visible");
+      expect(commits).toHaveLength(0);
+    } finally {
+      off();
       app.dispose();
     }
   });

@@ -351,4 +351,77 @@ describe("frame mailbox", () => {
       raf.restore();
     }
   });
+
+  it("defers low-priority mailbox work when frame budget is exhausted after high work", async () => {
+    const raf = installRaf();
+    const order: string[] = [];
+    let scheduler: ReturnType<typeof useTerminal>["scheduler"] | null = null;
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "FrameMailboxBudgetProbe",
+      setup() {
+        const ctx = useTerminal();
+        scheduler = ctx.scheduler;
+        framePerf = ctx.observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => h(TText, { x: 0, y: 0, w: 8, value: "probe" });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 4, component: Probe });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+      framePerf!.clear();
+      scheduler!.configure({ frameBudgetMs: 0 });
+
+      const high = createFrameMailbox<number>({
+        scheduler: scheduler!,
+        id: "high-budget",
+        reason: "input",
+        priority: "high",
+        apply(value, ctx) {
+          order.push(`high:${value}`);
+          ctx.invalidate({ priority: "high", reason: "input" });
+        },
+      });
+      const low = createFrameMailbox<number>({
+        scheduler: scheduler!,
+        id: "low-budget",
+        reason: "data",
+        priority: "low",
+        apply(value, ctx) {
+          order.push(`low:${value}`);
+          ctx.invalidate({ priority: "low", reason: "data" });
+        },
+      });
+
+      high.queue(1);
+      low.queue(1);
+
+      expect(raf.callbacks.size).toBe(1);
+      raf.runNext();
+      await nextTick();
+
+      expect(order).toEqual(["high:1"]);
+      expect(framePerf!.latest()).toMatchObject({
+        frameTaskCount: 1,
+        remainingFrameTasks: 1,
+      });
+
+      raf.runNext();
+      await nextTick();
+
+      expect(order).toEqual(["high:1", "low:1"]);
+      expect(framePerf!.latest()).toMatchObject({
+        frameTaskCount: 1,
+        remainingFrameTasks: 0,
+      });
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
 });

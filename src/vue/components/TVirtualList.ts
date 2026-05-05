@@ -42,9 +42,6 @@ const activeStyleCache = new WeakMap<Style, Style>();
 
 function defaultActiveStyle(base: Style): Style {
   if (base.inverse) return base;
-  if (!Object.isFrozen(base)) {
-    return Object.freeze({ ...base, inverse: true });
-  }
   let cached = activeStyleCache.get(base);
   if (!cached) {
     cached = Object.freeze({ ...base, inverse: true });
