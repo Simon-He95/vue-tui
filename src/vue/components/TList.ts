@@ -569,7 +569,6 @@ export const TList = defineComponent({
         props.w,
         props.h,
         props.items,
-        props.itemVersion,
         props.style,
         focused.value,
         defaultStyle.value,

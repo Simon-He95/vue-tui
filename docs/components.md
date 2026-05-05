@@ -366,7 +366,9 @@ scrolling.
 
 Mutating `style` in place does not schedule repaint by itself. Replace the
 style object, or rely on a later repaint-triggering interaction if you choose
-to mutate it in place.
+to mutate it in place. Derived active/dim style caching only applies to stable
+frozen style objects; mutable style objects favor correctness over allocation
+reuse.
 
 Detached wheel state is reattached only when selection changes, external
 `modelValue` changes, click/double-click/Enter/keyboard navigation happens, or

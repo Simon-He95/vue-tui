@@ -16,8 +16,9 @@ export type SchedulerFrameTaskRunStats = Readonly<{
   coalescedFrameTasks: number;
   remainingFrameTasks: number;
   /**
-   * Number of producer-level values dropped before apply.
-   * Example: a mailbox queued 100 values but applied only the latest => 99.
+   * Number of producer-level values that were not applied individually.
+   * For latest-only mailboxes these are dropped intermediate states.
+   * For merge mailboxes they may be folded into the applied payload.
    */
   droppedUpdates: number;
   reason: FramePerfReason;

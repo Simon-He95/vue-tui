@@ -266,6 +266,44 @@ describe("frame mailbox", () => {
     expect(apply).not.toHaveBeenCalled();
   });
 
+  it("treats void-returning legacy schedulers as accepted", () => {
+    const tasks = new Map<string, TerminalFrameTask>();
+    const legacyScheduler: TerminalScheduler = {
+      invalidate: vi.fn(),
+      flush: vi.fn(),
+      flushNow: vi.fn(),
+      configure: vi.fn(),
+      queueFrameTask(task) {
+        tasks.set(task.id ?? "task", task);
+      },
+      requestLive: vi.fn(() => vi.fn()),
+      dropLive: vi.fn(),
+      isInsideFrame: vi.fn(() => false),
+    };
+    const apply = vi.fn();
+    const mailbox = createFrameMailbox({
+      scheduler: legacyScheduler,
+      id: "legacy",
+      apply,
+    });
+
+    expect(mailbox.queue(1)).toBe(true);
+    tasks.get("legacy")!.run({
+      frameId: 1,
+      startedAt: 0,
+      now: () => 0,
+      budgetMs: 8,
+      remainingMs: () => 8,
+      requestMore: vi.fn(),
+      invalidate: vi.fn(),
+    });
+
+    expect(apply).toHaveBeenCalledWith(1, expect.anything(), {
+      queued: 1,
+      dropped: 0,
+    });
+  });
+
   it("merges queued values before apply", () => {
     const probe = createScheduler();
     const apply = vi.fn();

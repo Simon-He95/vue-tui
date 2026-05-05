@@ -110,7 +110,7 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
       },
     });
 
-    if (!accepted) {
+    if (accepted === false) {
       clearPending();
       return false;
     }
