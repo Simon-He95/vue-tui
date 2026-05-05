@@ -76,6 +76,9 @@ export type RenderManager = Readonly<{
   /**
    * Hot-path dirty row marker for stable nodes. Consumed synchronously and does
    * not replace the RenderNode object.
+   *
+   * rows are absolute terminal Y coordinates, not local component row offsets.
+   * For rect-bound nodes, rows outside the node rect are ignored.
    */
   markDirtyRows: (id: string, rows: readonly number[]) => boolean;
   unregister: (id: string) => void;
@@ -306,6 +309,26 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     return accepted;
   }
 
+  function filterRowsForNode(node: RenderNode, rows: readonly number[]): number[] {
+    const filtered: number[] = [];
+    if (!node.rect) {
+      for (let i = 0; i < rows.length; i++) {
+        const y = Math.floor(rows[i] ?? -1);
+        if (!Number.isFinite(y)) continue;
+        filtered.push(y);
+      }
+      return filtered;
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      const y = Math.floor(rows[i] ?? -1);
+      if (!Number.isFinite(y)) continue;
+      if (y < node.rectY0 || y >= node.rectY1) continue;
+      filtered.push(y);
+    }
+    return filtered;
+  }
+
   function unsafeScrollPlaneRows(
     plane: TerminalRenderPlane,
     startY: number,
@@ -370,7 +393,8 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     const rectChanged = !sameRect(prev.rect, nextRect);
     const bucketChanged = planeChanged || rectChanged;
     const { y0, y1 } = rectToYBounds(nextRect);
-    // dirtyRowsHint is consumed synchronously here via markRows().
+    // dirtyRowsHint is consumed synchronously here and must use absolute
+    // terminal rows. Rows outside the stable node rect are ignored.
     const dirtyRowsHint = next.dirtyRowsHint;
     const canUseDirtyRowsHint =
       !sortChanged &&
@@ -379,7 +403,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       dirtyRowsHint != null &&
       dirtyRowsHint.length > 0;
     if (canUseDirtyRowsHint) {
-      markRows(nextPlane, dirtyRowsHint);
+      markRows(nextPlane, filterRowsForNode(prev, dirtyRowsHint));
     } else {
       markRect(prev.plane, prev.rect);
       markRect(nextPlane, nextRect);
@@ -412,7 +436,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     if (!rows.length) return false;
     const node = nodes.get(id);
     if (!node) return false;
-    return markRows(node.plane, rows);
+    return markRows(node.plane, filterRowsForNode(node, rows));
   }
 
   function unregister(id: string): void {

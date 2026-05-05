@@ -2163,8 +2163,9 @@ describe("TList wheel scrolling", () => {
       app.mount();
       app.scheduler.flushNow();
 
-      expect(rowText(app, 0)).toBe("a");
-      expect(app.terminal.getRow(0)[0]?.ch).toBe("a");
+      expect(app.terminal.getRow(0)[0]?.ch).toBe(" ");
+      expect(app.terminal.getRow(0)[1]?.ch).toBe("a");
+      expect(app.terminal.getRow(0)[0]?.continuation).not.toBe(true);
       expect(app.terminal.getRow(0)[1]?.continuation).not.toBe(true);
     } finally {
       app.dispose();

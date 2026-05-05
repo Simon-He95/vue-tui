@@ -284,12 +284,19 @@ export function sliceByCellsRange(text: string, startCells: number, endCells: nu
       cells = next;
       return undefined;
     }
-    // If the start cuts through a wide grapheme, skip it (can't render half a cell).
+    // If the start cuts through a wide grapheme, preserve the visible occupied
+    // cells with spaces so later graphemes do not shift left.
     if (cells < startCells && next > startCells) {
+      out.push(spaces(Math.min(next, endCells) - startCells));
       cells = next;
       return undefined;
     }
-    if (next > endCells) return false;
+    // If the end cuts through a wide grapheme, preserve the visible occupied
+    // cells with spaces and stop.
+    if (next > endCells) {
+      out.push(spaces(endCells - cells));
+      return false;
+    }
     out.push(g);
     cells = next;
     return undefined;

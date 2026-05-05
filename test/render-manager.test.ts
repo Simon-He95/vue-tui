@@ -149,6 +149,38 @@ describe("render-manager", () => {
     expect(rm.markDirtyRows("missing", [1])).toBe(false);
   });
 
+  it("markDirtyRows ignores rows outside the node rect", () => {
+    const terminal = createTerminal({ cols: 10, rows: 8 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => {},
+    });
+
+    rm.render();
+    expect(rm.markDirtyRows(node.id, [7])).toBe(false);
+    expect(rm.render()).toBeNull();
+  });
+
+  it("markDirtyRows keeps rect-null nodes global", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 8 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: null,
+      paint: () => paints.push("global"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    expect(rm.markDirtyRows(node.id, [7])).toBe(true);
+    rm.render();
+    expect(paints).toEqual(["global"]);
+  });
+
   it("only paints nodes intersecting dirty rows when many rows are dirty", () => {
     const paints: string[] = [];
 
@@ -517,8 +549,8 @@ describe("render-manager", () => {
 
     paints.length = 0;
     rm.update(node.id, { dirtyRowsHint: [1] });
-    rm.render();
-    expect(paints).toEqual(["global"]);
+    expect(rm.render()).toBeNull();
+    expect(paints).toEqual([]);
 
     paints.length = 0;
     rm.update(mover.id, { plane: "overlay", dirtyRowsHint: [2] });
@@ -911,11 +943,11 @@ describe("render-manager", () => {
     rm.update(first.id, { dirtyRowsHint: [0, 99] });
     const stats = rm.render();
 
-    expect(stats?.scannedNodes).toBe(3);
+    expect(stats?.scannedNodes).toBe(1);
     expect(paints).toContain("first");
-    expect(paints).toContain("last");
+    expect(paints).not.toContain("last");
     expect(paints).not.toContain("middle");
-    expect(stats?.paintedNodes).toBe(2);
+    expect(stats?.paintedNodes).toBe(1);
   });
 
   it("rebuilds row buckets after terminal resize shrink", () => {
