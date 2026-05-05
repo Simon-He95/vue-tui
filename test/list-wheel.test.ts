@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { createTerminalApp, TList, TView, useTerminal } from "../src/index.js";
+import { createTerminalApp, TList, TRenderPlane, TView, useTerminal } from "../src/index.js";
 
 function installRaf() {
   const previousRaf = globalThis.requestAnimationFrame;
@@ -1002,6 +1002,46 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("updates the active style when the style object is replaced", async () => {
+    let setStyle!: (fg: string) => void;
+    const App = defineComponent({
+      name: "TListStyleReplacementApp",
+      setup() {
+        const style = ref({ fg: "red" });
+        setStyle = (fg) => {
+          style.value = { fg };
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: ["a", "b", "c", "d"],
+            modelValue: 0,
+            autoFocus: true,
+            style: style.value,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      expect(app.terminal.getRow(0)[0]?.style.fg).toBe("red");
+
+      setStyle("blue");
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(app.terminal.getRow(0)[0]?.style.fg).toBe("blue");
+      expect(app.terminal.getRow(0)[0]?.style.inverse).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("clicking the same active row clears detached mode without emitting update:modelValue", async () => {
     const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
     let setHeight!: (value: number) => void;
@@ -1228,6 +1268,56 @@ describe("TList wheel scrolling", () => {
 
       expect(rowText(app, 0)).toBe("item-16");
       expect(onScroll).toHaveBeenLastCalledWith(16);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("drops a pending wheel frame when the list unmounts before RAF", async () => {
+    const raf = installRaf();
+    let hide!: () => void;
+    const onScroll = vi.fn();
+    const App = defineComponent({
+      name: "PendingWheelUnmountApp",
+      setup() {
+        const visible = ref(true);
+        hide = () => {
+          visible.value = false;
+        };
+        return () =>
+          visible.value
+            ? h(TList, {
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 4,
+                items: Array.from({ length: 200 }, (_, index) => `item-${index}`),
+                autoFocus: true,
+                onScroll,
+              })
+            : null;
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 1000, time: 1_000 });
+      expect(raf.callbacks.size).toBe(1);
+
+      hide();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
     } finally {
       app.dispose();
       raf.restore();
@@ -1574,7 +1664,7 @@ describe("TList wheel scrolling", () => {
     }
   });
 
-  it("keeps click and paint aligned when TList is clipped from the top", async () => {
+  it("keeps paint, wheel, and click aligned when TList is clipped from the top", async () => {
     const onUpdateModelValue = vi.fn();
     const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
     const App = defineComponent({
@@ -1606,13 +1696,20 @@ describe("TList wheel scrolling", () => {
       app.mount();
       app.scheduler.flushNow();
 
-      expect(rowText(app, 0)).toBe("item-0");
+      expect(rowText(app, 0)).toBe("item-2");
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 990 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("item-96");
 
       app.events.dispatch({ type: "click", cellX: 0, cellY: 1, time: 1_000 });
       app.scheduler.flushNow();
       await nextTick();
 
-      expect(onUpdateModelValue).toHaveBeenLastCalledWith(1);
+      expect(onUpdateModelValue).toHaveBeenLastCalledWith(97);
+      expect(rowText(app, 1)).toBe("item-97");
       expect(app.terminal.getRow(1)[0]?.style.inverse).toBe(true);
     } finally {
       app.dispose();
@@ -1661,6 +1758,82 @@ describe("TList wheel scrolling", () => {
       expect(onUpdateModelValue).toHaveBeenLastCalledWith(104);
       expect(rowText(app, 0)).toBe("item-101");
     } finally {
+      app.dispose();
+    }
+  });
+
+  it("clips list content from the left without rebasing visible text", () => {
+    const App = defineComponent({
+      name: "LeftClippedTListApp",
+      setup() {
+        return () =>
+          h(
+            TView,
+            { x: 0, y: 0, w: 7, h: 3 },
+            {
+              default: () =>
+                h(TList, {
+                  x: -3,
+                  y: 0,
+                  w: 10,
+                  h: 3,
+                  items: ["0123456789", "abcdefghij", "klmnopqrst"],
+                  modelValue: 0,
+                  autoFocus: true,
+                }),
+            },
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("3456789");
+      expect(app.terminal.getRow(0)[0]?.style.inverse).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("limits wheel commits to the current render plane for TList", async () => {
+    const commits: Array<readonly string[] | null> = [];
+    const App = defineComponent({
+      name: "PlaneScopedTListWheelApp",
+      setup() {
+        return () => [
+          h(TView, { x: 0, y: 5, w: 12, h: 1 }, () => h("span")),
+          h(TRenderPlane, { plane: "transcript" }, () => [
+            h(TList, {
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 4,
+              items: Array.from({ length: 100 }, (_, index) => `item-${index}`),
+              autoFocus: true,
+            }),
+          ]),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    const offCommit = app.terminal.on("commit", ({ planes }) => commits.push(planes));
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      commits.length = 0;
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("item-1");
+      expect(commits.at(-1)).toEqual(["transcript"]);
+    } finally {
+      offCommit();
       app.dispose();
     }
   });

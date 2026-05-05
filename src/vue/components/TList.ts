@@ -19,7 +19,7 @@ import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey } from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
-import { formatInlineCellLine } from "../utils/text.js";
+import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
 import {
   applyWheelScroll,
   createWheelScrollState,
@@ -35,6 +35,9 @@ let tListInstanceSeq = 0;
 
 function defaultActiveStyle(base: Style): Style {
   if (base.inverse) return base;
+  if (!Object.isFrozen(base)) {
+    return Object.freeze({ ...base, inverse: true });
+  }
   let cached = activeStyleCache.get(base);
   if (!cached) {
     cached = Object.freeze({ ...base, inverse: true });
@@ -89,8 +92,10 @@ export const TList = defineComponent({
     const focused = ref(false);
     const active = ref(props.modelValue);
     // Intentionally excluded from render deps.
-    // Every mutation must go through setScrollTop(), otherwise the render node
-    // will not receive dirtyRowsHint and the visible rows may become stale.
+    // Do not add scrollTop/active/modelValue back to render deps.
+    // Every viewport change must go through setScrollTop(), and active-only
+    // changes must go through setActiveIndex()/markIndexRowsDirty(), otherwise
+    // the render node will not receive the dirtyRowsHint needed to repaint.
     const scrollTop = ref(0);
     const wheelState = createWheelScrollState();
     let detachedByWheel = false;
@@ -98,23 +103,47 @@ export const TList = defineComponent({
     const dirtyRowsScratch: number[] = [];
     const indexDirtyRowsScratch: number[] = [];
 
+    const fullRect = computed<Rect>(() =>
+      translateRect({ x: props.x, y: props.y, w: props.w, h: props.h }, layout.originX, layout.originY),
+    );
+
     const absRect = computed<Rect>(() => {
-      const raw = { x: props.x, y: props.y, w: props.w, h: props.h };
-      const translated = translateRect(raw, layout.originX, layout.originY);
+      const translated = fullRect.value;
       if (!layout.clipRect) return translated;
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
-    const viewportRows = computed(() => Math.max(0, absRect.value.h));
+    function normalizeRect(r: Rect): Rect {
+      return {
+        x: Math.floor(r.x),
+        y: Math.floor(r.y),
+        w: Math.max(0, Math.floor(r.w)),
+        h: Math.max(0, Math.floor(r.h)),
+      };
+    }
 
-    function viewportHeight(): number {
-      return viewportRows.value;
+    function normalizedRect(): Rect {
+      return normalizeRect(absRect.value);
+    }
+
+    function normalizedFullRect(): Rect {
+      return normalizeRect(fullRect.value);
+    }
+
+    function clipOffsets(): { x: number; y: number } {
+      const full = normalizedFullRect();
+      const clip = normalizedRect();
+      return {
+        x: Math.max(0, clip.x - full.x),
+        y: Math.max(0, clip.y - full.y),
+      };
     }
 
     function maxScrollTop(): number {
-      const h = viewportHeight();
-      if (h <= 0) return 0;
-      return Math.max(0, props.items.length - h);
+      const clip = normalizedRect();
+      const { y: clipY } = clipOffsets();
+      if (clip.h <= 0) return 0;
+      return Math.max(0, props.items.length - (clipY + clip.h));
     }
 
     function clampScrollTop(value: number): number {
@@ -128,7 +157,7 @@ export const TList = defineComponent({
     function markViewportDirty(): void {
       const nodeId = renderNode.id.value;
       if (!nodeId) return;
-      const r = absRect.value;
+      const r = normalizedRect();
       if (r.w <= 0 || r.h <= 0) return;
       dirtyRowsScratch.length = 0;
       for (let y = r.y; y < r.y + r.h; y++) dirtyRowsScratch.push(y);
@@ -136,23 +165,29 @@ export const TList = defineComponent({
       render.update(nodeId, { dirtyRowsHint: dirtyRowsScratch });
     }
 
+    function invalidateViewportForScroll(): void {
+      markViewportDirty();
+    }
+
     function pushDirtyIndexRow(rows: number[], y: number): void {
-      if (rows[0] === y || rows[1] === y) return;
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i] === y) return;
+      }
       rows.push(y);
     }
 
     function markIndexRowsDirty(...indexes: number[]): void {
       const nodeId = renderNode.id.value;
       if (!nodeId) return;
-      const r = absRect.value;
+      const r = normalizedRect();
       if (r.w <= 0 || r.h <= 0) return;
 
       indexDirtyRowsScratch.length = 0;
-      const top = scrollTop.value;
+      const { start, h } = visibleRange();
       for (const index of indexes) {
         if (!Number.isFinite(index)) continue;
-        const offset = index - top;
-        if (offset < 0 || offset >= r.h) continue;
+        const offset = index - start;
+        if (offset < 0 || offset >= h) continue;
         pushDirtyIndexRow(indexDirtyRowsScratch, r.y + offset);
       }
       if (indexDirtyRowsScratch.length > 0) {
@@ -165,18 +200,19 @@ export const TList = defineComponent({
       const clampedTop = clampScrollTop(nextTop);
       if (clampedTop === scrollTop.value) return false;
       scrollTop.value = clampedTop;
-      markViewportDirty();
+      invalidateViewportForScroll();
       if (options?.emitScroll !== false) emit("scroll", clampedTop);
       return true;
     }
 
     function visibleRange(): { start: number; end: number; h: number } {
-      const h = viewportHeight();
-      const start = scrollTop.value;
+      const clip = normalizedRect();
+      const { y: clipY } = clipOffsets();
+      const start = clampScrollTop(scrollTop.value) + clipY;
       return {
         start,
-        end: h <= 0 ? start : start + h - 1,
-        h,
+        end: clip.h <= 0 ? start - 1 : start + clip.h - 1,
+        h: clip.h,
       };
     }
 
@@ -186,14 +222,23 @@ export const TList = defineComponent({
     }
 
     function ensureActiveVisible(): boolean {
-      const h = viewportHeight();
+      const { start, end, h } = visibleRange();
       if (h <= 0) return false;
+      const { y: clipY } = clipOffsets();
       const maxTop = maxScrollTop();
       let nextTop = clampScrollTop(scrollTop.value);
-      if (active.value < nextTop) nextTop = active.value;
-      else if (active.value >= nextTop + h) nextTop = clamp(active.value - (h - 1), 0, maxTop);
+      if (active.value < start) nextTop = clamp(active.value - clipY, 0, maxTop);
+      else if (active.value > end) nextTop = clamp(active.value - (clipY + h - 1), 0, maxTop);
       // Selection-driven viewport changes intentionally do not emit scroll.
       return setScrollTop(nextTop, { emitScroll: false });
+    }
+
+    function setActiveSilently(nextIndex: number): { prev: number; next: number; changed: boolean } {
+      const prev = active.value;
+      const next = clamp(nextIndex, 0, Math.max(0, props.items.length - 1));
+      if (prev === next) return { prev, next, changed: false };
+      active.value = next;
+      return { prev, next, changed: true };
     }
 
     const wheelMailbox = createFrameMailbox<number>({
@@ -205,7 +250,10 @@ export const TList = defineComponent({
       apply(nextTop, ctx) {
         pendingWheelTop = null;
         const clampedTop = clampScrollTop(nextTop);
-        if (clampedTop === scrollTop.value) return;
+        if (clampedTop === scrollTop.value) {
+          resetWheelScrollState(wheelState);
+          return;
+        }
         detachedByWheel = true;
         setScrollTop(clampedTop, { emitScroll: true });
         ctx.invalidate({ priority: "high", reason: "scroll" });
@@ -254,33 +302,31 @@ export const TList = defineComponent({
         emitChange?: boolean;
       },
     ): { changedActive: boolean; changedScroll: boolean; next: number } {
-      const prev = active.value;
-      const next = clamp(nextIndex, 0, Math.max(0, props.items.length - 1));
-      if (prev === next) {
+      const updated = setActiveSilently(nextIndex);
+      if (!updated.changed) {
         if (options?.emitChange) {
-          emit("change", { index: next, value: props.items[next] ?? "" });
+          emit("change", { index: updated.next, value: props.items[updated.next] ?? "" });
         }
         return {
           changedActive: false,
           changedScroll: ensureActiveVisible(),
-          next,
+          next: updated.next,
         };
       }
 
-      active.value = next;
       if (options?.emitUpdate !== false) {
-        emit("update:modelValue", next);
+        emit("update:modelValue", updated.next);
       }
       if (options?.emitChange) {
-        emit("change", { index: next, value: props.items[next] ?? "" });
+        emit("change", { index: updated.next, value: props.items[updated.next] ?? "" });
       }
 
       const changedScroll = ensureActiveVisible();
       if (!changedScroll) {
-        markIndexRowsDirty(prev, next);
+        markIndexRowsDirty(updated.prev, updated.next);
       }
 
-      return { changedActive: true, changedScroll, next };
+      return { changedActive: true, changedScroll, next: updated.next };
     }
 
     function selectActive(index: number, options?: { emitChange?: boolean }): void {
@@ -371,8 +417,8 @@ export const TList = defineComponent({
       focusable: true,
       handlers: {
         click: (e: TerminalPointerEvent) => {
-          const r = absRect.value;
-          const idx = scrollTop.value + (e.cellY - r.y);
+          const r = normalizedRect();
+          const idx = visibleRange().start + (e.cellY - r.y);
           if (idx >= 0 && idx < props.items.length) {
             selectActive(idx);
           } else {
@@ -380,8 +426,8 @@ export const TList = defineComponent({
           }
         },
         dblclick: (e: TerminalPointerEvent) => {
-          const r = absRect.value;
-          const idx = scrollTop.value + (e.cellY - r.y);
+          const r = normalizedRect();
+          const idx = visibleRange().start + (e.cellY - r.y);
           if (idx >= 0 && idx < props.items.length) selectActive(idx, { emitChange: true });
         },
         wheel: (e: any) => {
@@ -446,10 +492,11 @@ export const TList = defineComponent({
     // markViewportDirty / markIndexRowsDirty close over renderNode.
     const renderNode = useRenderNode(() => ({
       zIndex: props.zIndex,
-      rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
+      rect: visible.value ? normalizedRect() : { x: 0, y: 0, w: 0, h: 0 },
       deps: [
         visible.value,
         absRect.value,
+        fullRect.value,
         props.w,
         props.h,
         props.items,
@@ -459,15 +506,25 @@ export const TList = defineComponent({
       ],
       paint: (dirtyRows) => {
         if (!visible.value) return;
-        const r = absRect.value;
+        const r = normalizedRect();
+        const full = normalizedFullRect();
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
-        const top = clamp(scrollTop.value, 0, Math.max(0, props.items.length - r.h));
+        const top = clampScrollTop(scrollTop.value);
         const activeStyle = defaultActiveStyle(base);
+        const { x: clipX, y: clipY } = clipOffsets();
+        const emptyLine =
+          clipY === 0
+            ? padEndByCells(
+                sliceByCellsRange(formatInlineCellLine("(empty)", full.w), clipX, clipX + r.w),
+                r.w,
+              )
+            : "";
         const paintRow = (i: number) => {
           if (i < 0 || i >= r.h) return;
-          const idx = top + i;
-          const line = formatInlineCellLine(props.items[idx] ?? "", r.w);
+          const idx = top + clipY + i;
+          const fullLine = formatInlineCellLine(props.items[idx] ?? "", full.w);
+          const line = padEndByCells(sliceByCellsRange(fullLine, clipX, clipX + r.w), r.w);
           const style = idx === active.value ? activeStyle : base;
           terminal.write(line, { x: r.x, y: r.y + i, style });
         };
@@ -481,8 +538,8 @@ export const TList = defineComponent({
             if (localY < 0 || localY >= r.h) continue;
             paintRow(localY);
           }
-          if (focused.value && props.items.length === 0 && r.h > 0 && firstRowDirty) {
-            terminal.write(formatInlineCellLine("(empty)", r.w), {
+          if (focused.value && props.items.length === 0 && r.h > 0 && firstRowDirty && clipY === 0) {
+            terminal.write(emptyLine, {
               x: r.x,
               y: r.y,
               style: { ...base, dim: true },
@@ -492,8 +549,8 @@ export const TList = defineComponent({
         }
 
         for (let i = 0; i < r.h; i++) paintRow(i);
-        if (focused.value && r.h > 0 && props.items.length === 0) {
-          terminal.write(formatInlineCellLine("(empty)", r.w), {
+        if (focused.value && r.h > 0 && props.items.length === 0 && clipY === 0) {
+          terminal.write(emptyLine, {
             x: r.x,
             y: r.y,
             style: { ...base, dim: true },
@@ -509,18 +566,28 @@ export const TList = defineComponent({
     );
 
     watch(
-      [() => props.items.length, viewportRows],
-      ([itemsLength, height], [prevItemsLength, prevHeight]) => {
-        const structureChanged = itemsLength !== prevItemsLength || height !== prevHeight;
+      [
+        () => props.items.length,
+        () => fullRect.value.y,
+        () => fullRect.value.h,
+        () => absRect.value.y,
+        () => absRect.value.h,
+      ],
+      ([itemsLength, fullY, fullH, clipY, clipH], [prevItemsLength, prevFullY, prevFullH, prevClipY, prevClipH]) => {
+        const structureChanged =
+          itemsLength !== prevItemsLength ||
+          fullY !== prevFullY ||
+          fullH !== prevFullH ||
+          clipY !== prevClipY ||
+          clipH !== prevClipH;
         const last = Math.max(0, props.items.length - 1);
         let needsInvalidate = false;
         const wheelDetachedOrPending = detachedByWheel || wheelMailbox.hasPending();
 
         if (wheelDetachedOrPending) {
-          if (active.value > last) {
-            const prevActive = active.value;
-            active.value = last;
-            if (prevActive !== active.value) markIndexRowsDirty(prevActive, active.value);
+          if (active.value > last || active.value < 0) {
+            const updated = setActiveSilently(last);
+            if (updated.changed) markIndexRowsDirty(updated.prev, updated.next);
             needsInvalidate = true;
           }
         } else {

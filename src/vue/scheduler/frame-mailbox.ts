@@ -43,6 +43,9 @@ const EMPTY = Symbol("frame-mailbox-empty");
  * `disposed || !hasPending`, because a scheduler may already have taken a
  * snapshot of tasks for the current frame.
  *
+ * queue() assumes the scheduler accepts the task. Owners should call
+ * dispose() before the component/scope that owns the mailbox is destroyed.
+ *
  * id is scheduler-global. Components should include instance id and producer
  * name, for example `TList:${uid}:wheel`.
  */

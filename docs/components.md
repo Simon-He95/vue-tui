@@ -317,6 +317,11 @@ but it does not update `modelValue` and does not move the active selection.
 Keyboard navigation, click, double click, and Enter reattach selection to the
 visible viewport.
 
+`TList` uses the same full-rect clipping model as `TText`/`TVirtualList`: when
+the list is clipped from the top or left, paint and hit testing keep the source
+row/column offset instead of rebasing the clipped area to a new viewport origin.
+When changing styles, replace the style object instead of mutating it in place.
+
 `scroll(top)` is emitted when:
 
 - wheel scrolling changes the viewport top
