@@ -134,6 +134,21 @@ describe("render-manager", () => {
     expect(paints).toEqual(["n0"]);
   });
 
+  it("markDirtyRows returns false when no valid terminal row is accepted", () => {
+    const terminal = createTerminal({ cols: 10, rows: 4 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => {},
+    });
+
+    expect(rm.markDirtyRows(node.id, [])).toBe(false);
+    expect(rm.markDirtyRows(node.id, [-1, 99, Number.NaN])).toBe(false);
+    expect(rm.markDirtyRows(node.id, [1, 1])).toBe(true);
+    expect(rm.markDirtyRows("missing", [1])).toBe(false);
+  });
+
   it("only paints nodes intersecting dirty rows when many rows are dirty", () => {
     const paints: string[] = [];
 

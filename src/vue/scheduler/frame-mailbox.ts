@@ -39,6 +39,9 @@ const EMPTY = Symbol("frame-mailbox-empty");
  * Later queue() calls update the pending payload and are reported as dropped
  * producer updates when the frame task runs.
  *
+ * droppedUpdates are reported at frame-task execution time. They only appear in
+ * framePerf when apply() also invalidates and produces a rendered frame sample.
+ *
  * cancel() is best-effort at scheduler level. The run callback still guards
  * `disposed || !hasPending`, because a scheduler may already have taken a
  * snapshot of tasks for the current frame.

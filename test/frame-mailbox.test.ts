@@ -40,6 +40,20 @@ function installRaf() {
   };
 }
 
+function disableRaf() {
+  const g = globalThis as any;
+  const previousRaf = g.requestAnimationFrame;
+  const previousCancel = g.cancelAnimationFrame;
+  g.requestAnimationFrame = undefined;
+  g.cancelAnimationFrame = undefined;
+  return {
+    restore() {
+      g.requestAnimationFrame = previousRaf;
+      g.cancelAnimationFrame = previousCancel;
+    },
+  };
+}
+
 function createScheduler() {
   const tasks = new Map<string, TerminalFrameTask>();
   const queueFrameTask = vi.fn((task: TerminalFrameTask) => {
@@ -420,6 +434,136 @@ describe("frame mailbox", () => {
         remainingFrameTasks: 0,
       });
     } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("coalesces mailbox updates through timer fallback when requestAnimationFrame is unavailable", async () => {
+    vi.useFakeTimers();
+    const noRaf = disableRaf();
+    let scheduler: ReturnType<typeof useTerminal>["scheduler"] | null = null;
+    const apply = vi.fn();
+
+    const Probe = defineComponent({
+      name: "FrameMailboxTimerFallbackProbe",
+      setup() {
+        scheduler = useTerminal().scheduler;
+        return () => h(TText, { x: 0, y: 0, value: "probe" });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 4, component: Probe });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      const mailbox = createFrameMailbox<number>({
+        scheduler: scheduler!,
+        id: "timer-fallback",
+        apply,
+      });
+
+      mailbox.queue(1);
+      mailbox.queue(2);
+      mailbox.queue(3);
+
+      expect(apply).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(20);
+      await nextTick();
+
+      expect(apply).toHaveBeenCalledTimes(1);
+      expect(apply).toHaveBeenCalledWith(3, expect.anything(), { queued: 3, dropped: 2 });
+    } finally {
+      app.dispose();
+      noRaf.restore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels mailbox timer fallback task before it runs", async () => {
+    vi.useFakeTimers();
+    const noRaf = disableRaf();
+    let scheduler: ReturnType<typeof useTerminal>["scheduler"] | null = null;
+    const apply = vi.fn();
+
+    const Probe = defineComponent({
+      name: "FrameMailboxTimerCancelProbe",
+      setup() {
+        scheduler = useTerminal().scheduler;
+        return () => h(TText, { x: 0, y: 0, value: "probe" });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 4, component: Probe });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      const mailbox = createFrameMailbox<number>({
+        scheduler: scheduler!,
+        id: "timer-cancel",
+        apply,
+      });
+
+      mailbox.queue(1);
+      mailbox.cancel();
+
+      await vi.advanceTimersByTimeAsync(20);
+      await nextTick();
+
+      expect(apply).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+      noRaf.restore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not create a framePerf sample for dropped no-op mailbox runs without invalidation", async () => {
+    const raf = installRaf();
+    const commits: unknown[] = [];
+    let scheduler: ReturnType<typeof useTerminal>["scheduler"] | null = null;
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "FrameMailboxNoopDroppedProbe",
+      setup() {
+        const ctx = useTerminal();
+        scheduler = ctx.scheduler;
+        framePerf = ctx.observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => h(TText, { x: 0, y: 0, value: "probe" });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 4, component: Probe });
+    const offCommit = app.terminal.on("commit", (commit) => commits.push(commit));
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+      framePerf!.clear();
+      commits.length = 0;
+
+      const mailbox = createFrameMailbox<number>({
+        scheduler: scheduler!,
+        id: "noop-dropped",
+        apply: () => {},
+      });
+
+      mailbox.queue(1);
+      mailbox.queue(2);
+      mailbox.queue(3);
+
+      raf.runNext();
+      await nextTick();
+
+      expect(commits).toHaveLength(0);
+      expect(framePerf!.latest()).toBeNull();
+    } finally {
+      offCommit();
       app.dispose();
       raf.restore();
     }

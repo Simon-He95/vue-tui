@@ -309,8 +309,9 @@ export const TList = defineComponent({
       },
     ): { changedActive: boolean; changedScroll: boolean; next: number } {
       if (!hasItems()) {
-        if (active.value !== 0) active.value = 0;
-        return { changedActive: false, changedScroll: false, next: 0 };
+        const changedActive = active.value !== 0;
+        if (changedActive) active.value = 0;
+        return { changedActive, changedScroll: false, next: 0 };
       }
 
       const updated = setActiveSilently(nextIndex);

@@ -287,12 +287,15 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     }
   }
 
-  function markRows(plane: TerminalRenderPlane, rows: readonly number[]): void {
-    if (!rows.length) return;
+  function markRows(plane: TerminalRenderPlane, rows: readonly number[]): boolean {
+    if (!rows.length) return false;
     const state = getDirtyState(plane);
+    let accepted = false;
     for (let i = 0; i < rows.length; i++) {
       const y = Math.floor(rows[i] ?? -1);
+      if (!Number.isFinite(y)) continue;
       if (y < 0 || y >= terminalRows) continue;
+      accepted = true;
       if (state.dirtyRowBits[y] === 0) {
         state.dirtyRowBits[y] = 1;
         state.dirtyRowCount++;
@@ -300,6 +303,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
         if (y > state.dirtyMaxY) state.dirtyMaxY = y;
       }
     }
+    return accepted;
   }
 
   function unsafeScrollPlaneRows(
@@ -408,8 +412,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     if (!rows.length) return false;
     const node = nodes.get(id);
     if (!node) return false;
-    markRows(node.plane, rows);
-    return true;
+    return markRows(node.plane, rows);
   }
 
   function unregister(id: string): void {

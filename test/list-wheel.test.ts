@@ -34,6 +34,20 @@ function installRaf() {
   };
 }
 
+function disableRaf() {
+  const g = globalThis as any;
+  const previousRaf = g.requestAnimationFrame;
+  const previousCancel = g.cancelAnimationFrame;
+  g.requestAnimationFrame = undefined;
+  g.cancelAnimationFrame = undefined;
+  return {
+    restore() {
+      g.requestAnimationFrame = previousRaf;
+      g.cancelAnimationFrame = previousCancel;
+    },
+  };
+}
+
 function rowText(app: ReturnType<typeof createTerminalApp>, y: number): string {
   return app.terminal
     .getRow(y)
@@ -188,6 +202,58 @@ describe("TList wheel scrolling", () => {
     } finally {
       app.dispose();
       raf.restore();
+    }
+  });
+
+  it("coalesces TList wheel burst through timer fallback without RAF", async () => {
+    vi.useFakeTimers();
+    const noRaf = disableRaf();
+    const items = Array.from({ length: 1_000 }, (_, index) => `item-${index}`);
+    const onScroll = vi.fn();
+    const onUpdateModelValue = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items,
+        modelValue: 0,
+        autoFocus: true,
+        onScroll,
+        "onUpdate:modelValue": onUpdateModelValue,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      for (let i = 0; i < 50; i++) {
+        app.events.dispatch({
+          type: "wheel",
+          cellX: 0,
+          cellY: 0,
+          deltaY: 100,
+          time: 1_000 + i * 10,
+        });
+      }
+
+      expect(onScroll).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(20);
+      await nextTick();
+
+      expect(onScroll).toHaveBeenCalledTimes(1);
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
+      expect(rowText(app, 0)).toBe(`item-${onScroll.mock.calls[0]![0]}`);
+    } finally {
+      app.dispose();
+      noRaf.restore();
+      vi.useRealTimers();
     }
   });
 
@@ -761,6 +827,47 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("repaints a detached viewport when items are replaced with the same length", async () => {
+    let replaceItems!: () => void;
+    const App = defineComponent({
+      name: "DetachedSameLengthReplacementApp",
+      setup() {
+        const items = ref(Array.from({ length: 100 }, (_, index) => `item-${index}`));
+        replaceItems = () => {
+          items.value = Array.from({ length: 100 }, (_, index) => `next-${index}`);
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            modelValue: 0,
+            autoFocus: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 1000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+      const top = Number(rowText(app, 0).slice("item-".length));
+
+      replaceItems();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe(`next-${top}`);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not emit scroll when external modelValue sync moves the viewport", async () => {
     const onScroll = vi.fn();
     let setModelValue!: (value: number) => void;
@@ -871,6 +978,48 @@ describe("TList wheel scrolling", () => {
       await nextTick();
       app.scheduler.flushNow();
       expect(rowText(app, 0)).toBe("item-6");
+
+      setLength(100);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("item-47");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("restores controlled modelValue after shrinking to empty and growing again", async () => {
+    let setLength!: (next: number) => void;
+    const App = defineComponent({
+      name: "ControlledModelValueEmptyShrinkGrowApp",
+      setup() {
+        const items = ref(Array.from({ length: 100 }, (_, index) => `item-${index}`));
+        setLength = (next) => {
+          items.value = Array.from({ length: next }, (_, index) => `item-${index}`);
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            modelValue: 50,
+            autoFocus: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("item-47");
+
+      setLength(0);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("(empty)");
 
       setLength(100);
       await nextTick();
@@ -1416,6 +1565,45 @@ describe("TList wheel scrolling", () => {
 
       expect(rowText(app, 0)).toBe("item-16");
       expect(onScroll).toHaveBeenLastCalledWith(16);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("allows wheel reversal before the frame to cancel pending scroll without emitting scroll", async () => {
+    const raf = installRaf();
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 100 }, (_, index) => `item-${index}`),
+        autoFocus: true,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_010 });
+
+      expect(raf.callbacks.size).toBe(1);
+
+      raf.runNext();
+      await nextTick();
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(rowText(app, 0)).toBe("item-0");
     } finally {
       app.dispose();
       raf.restore();
