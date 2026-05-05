@@ -31,6 +31,19 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
+type ScrollTopChange = Readonly<{
+  changed: boolean;
+  dirty: boolean;
+  top: number;
+}>;
+
+type ActiveChange = Readonly<{
+  changedActive: boolean;
+  changedScroll: boolean;
+  dirty: boolean;
+  next: number;
+}>;
+
 let tListInstanceSeq = 0;
 
 function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
@@ -139,7 +152,9 @@ export const TList = defineComponent({
     }
 
     function clampScrollTop(value: number): number {
-      return clamp(value, 0, maxScrollTop());
+      const n = Math.floor(Number(value));
+      if (!Number.isFinite(n)) return 0;
+      return clamp(n, 0, maxScrollTop());
     }
 
     function hasItems(): boolean {
@@ -199,16 +214,24 @@ export const TList = defineComponent({
     }
 
     // Marks affected rows dirty but does not schedule a renderer flush.
-    // Callers must invalidate the scheduler/context themselves when this returns true.
-    function setScrollTop(nextTop: number, options?: { emitScroll?: boolean }): boolean {
+    // Callers must invalidate the scheduler/context themselves when dirty=true.
+    function setScrollTop(nextTop: number, options?: { emitScroll?: boolean }): ScrollTopChange {
       const clampedTop = clampScrollTop(nextTop);
-      if (clampedTop === scrollTop.value) return false;
-      scrollTop.value = clampedTop;
-      if (visible.value) {
-        markViewportDirtyForScroll();
+      if (clampedTop === scrollTop.value) {
+        return {
+          changed: false,
+          dirty: false,
+          top: scrollTop.value,
+        };
       }
+      scrollTop.value = clampedTop;
+      const dirty = visible.value ? markViewportDirtyForScroll() : false;
       if (options?.emitScroll !== false) emit("scroll", clampedTop);
-      return true;
+      return {
+        changed: true,
+        dirty,
+        top: clampedTop,
+      };
     }
 
     function visibleRange(): { start: number; end: number; h: number } {
@@ -227,9 +250,15 @@ export const TList = defineComponent({
       return h > 0 && active.value >= start && active.value <= end;
     }
 
-    function ensureActiveVisible(): boolean {
+    function ensureActiveVisible(): ScrollTopChange {
       const { start, end, h } = visibleRange();
-      if (h <= 0) return false;
+      if (h <= 0) {
+        return {
+          changed: false,
+          dirty: false,
+          top: clampScrollTop(scrollTop.value),
+        };
+      }
       const { y: clipY } = clipOffsets();
       const maxTop = maxScrollTop();
       let nextTop = clampScrollTop(scrollTop.value);
@@ -261,8 +290,10 @@ export const TList = defineComponent({
           return;
         }
         detachedByWheel = true;
-        setScrollTop(clampedTop, { emitScroll: true });
-        ctx.invalidate({ priority: "high", reason: "scroll" });
+        const result = setScrollTop(clampedTop, { emitScroll: true });
+        if (result.dirty) {
+          ctx.invalidate({ priority: "high", reason: "scroll" });
+        }
       },
     });
 
@@ -307,11 +338,11 @@ export const TList = defineComponent({
         emitUpdate?: boolean;
         emitChange?: boolean;
       },
-    ): { changedActive: boolean; changedScroll: boolean; next: number } {
+    ): ActiveChange {
       if (!hasItems()) {
         const changedActive = active.value !== 0;
         if (changedActive) active.value = 0;
-        return { changedActive, changedScroll: false, next: 0 };
+        return { changedActive, changedScroll: false, dirty: false, next: 0 };
       }
 
       const updated = setActiveSilently(nextIndex);
@@ -319,9 +350,11 @@ export const TList = defineComponent({
         if (options?.emitChange) {
           emit("change", { index: updated.next, value: props.items[updated.next] ?? "" });
         }
+        const scroll = ensureActiveVisible();
         return {
           changedActive: false,
-          changedScroll: ensureActiveVisible(),
+          changedScroll: scroll.changed,
+          dirty: scroll.dirty,
           next: updated.next,
         };
       }
@@ -333,12 +366,18 @@ export const TList = defineComponent({
         emit("change", { index: updated.next, value: props.items[updated.next] ?? "" });
       }
 
-      const changedScroll = ensureActiveVisible();
-      if (!changedScroll) {
-        markIndexRowsDirty(updated.prev, updated.next);
+      const scroll = ensureActiveVisible();
+      if (!scroll.changed) {
+        const dirty = markIndexRowsDirty(updated.prev, updated.next);
+        return { changedActive: true, changedScroll: false, dirty, next: updated.next };
       }
 
-      return { changedActive: true, changedScroll, next: updated.next };
+      return {
+        changedActive: true,
+        changedScroll: true,
+        dirty: scroll.dirty,
+        next: updated.next,
+      };
     }
 
     function selectActive(index: number, options?: { emitChange?: boolean }): void {
@@ -353,7 +392,7 @@ export const TList = defineComponent({
         emitUpdate: true,
         emitChange: options?.emitChange,
       });
-      if (hadPendingWheel || wasDetached || result.changedActive || result.changedScroll) {
+      if (hadPendingWheel || wasDetached || result.dirty) {
         scheduler.invalidate({ priority: "high", reason: "input" });
       }
     }
@@ -374,7 +413,7 @@ export const TList = defineComponent({
       }
 
       const result = setActiveIndex(next, { emitUpdate: false });
-      return hadPendingWheel || wasDetached || result.changedActive || result.changedScroll;
+      return hadPendingWheel || wasDetached || result.dirty;
     }
 
     function onKeydown(e: TerminalKeyboardEvent): void {
@@ -462,7 +501,14 @@ export const TList = defineComponent({
               disableAcceleration: mode === "pixel",
             },
           );
-          if (!dir || nextTop === baseTop) return;
+          if (!dir || nextTop === baseTop) {
+            const maxTop = maxScrollTop();
+            const isEdgeNoop =
+              pendingWheelTop == null &&
+              ((deltaY < 0 && baseTop <= 0) || (deltaY > 0 && baseTop >= maxTop));
+            if (isEdgeNoop) resetWheelScrollState(wheelState);
+            return;
+          }
 
           e.preventDefault?.();
           pendingWheelTop = nextTop;
@@ -628,7 +674,7 @@ export const TList = defineComponent({
           }
         } else {
           const modelSync = setActiveIndex(clampedModelValue(), { emitUpdate: false });
-          needsInvalidate = modelSync.changedActive || modelSync.changedScroll || needsInvalidate;
+          needsInvalidate = modelSync.dirty || needsInvalidate;
         }
 
         if (pendingWheelTop !== null) {
@@ -644,8 +690,8 @@ export const TList = defineComponent({
         if (clampedTop !== scrollTop.value) {
           // Scroll is defined as viewport-driven changes, including programmatic
           // clamps caused by data length or clipped viewport changes.
-          setScrollTop(clampedTop, { emitScroll: true });
-          needsInvalidate = true;
+          const scroll = setScrollTop(clampedTop, { emitScroll: true });
+          needsInvalidate = scroll.dirty || needsInvalidate;
         }
 
         if (structureChanged && visible.value) {

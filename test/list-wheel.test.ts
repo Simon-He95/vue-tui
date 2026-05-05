@@ -868,6 +868,51 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("does not reattach detached viewport on parent re-render with the same modelValue", async () => {
+    let rerender!: () => void;
+    const App = defineComponent({
+      name: "DetachedSameModelValueRerenderApp",
+      setup() {
+        const tick = ref(0);
+        rerender = () => {
+          tick.value++;
+        };
+        return () => [
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: Array.from({ length: 100 }, (_, index) => `item-${index}`),
+            modelValue: 2,
+            autoFocus: true,
+          }),
+          h(TText, { x: 0, y: 6, value: `tick-${tick.value}` }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("item-1");
+
+      rerender();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("item-1");
+      expect(rowText(app, 6)).toBe("tick-1");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not emit scroll when external modelValue sync moves the viewport", async () => {
     const onScroll = vi.fn();
     let setModelValue!: (value: number) => void;
@@ -1604,6 +1649,46 @@ describe("TList wheel scrolling", () => {
 
       expect(onScroll).not.toHaveBeenCalled();
       expect(rowText(app, 0)).toBe("item-0");
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("keeps an existing pending wheel scroll when later edge wheel events are no-ops", async () => {
+    const raf = installRaf();
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+        autoFocus: true,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_010 });
+
+      expect(raf.callbacks.size).toBe(1);
+
+      raf.runNext();
+      await nextTick();
+
+      expect(onScroll).toHaveBeenCalledTimes(1);
+      expect(onScroll).toHaveBeenLastCalledWith(16);
+      expect(rowText(app, 0)).toBe("item-16");
     } finally {
       app.dispose();
       raf.restore();
