@@ -169,8 +169,8 @@ export const TList = defineComponent({
       return render.markDirtyRows(nodeId, dirtyRowsScratch);
     }
 
-    function invalidateViewportForScroll(): void {
-      markViewportDirty();
+    function markViewportDirtyForScroll(): boolean {
+      return markViewportDirty();
     }
 
     function pushDirtyIndexRow(rows: number[], y: number): void {
@@ -198,12 +198,14 @@ export const TList = defineComponent({
       return render.markDirtyRows(nodeId, indexDirtyRowsScratch);
     }
 
+    // Marks affected rows dirty but does not schedule a renderer flush.
+    // Callers must invalidate the scheduler/context themselves when this returns true.
     function setScrollTop(nextTop: number, options?: { emitScroll?: boolean }): boolean {
       const clampedTop = clampScrollTop(nextTop);
       if (clampedTop === scrollTop.value) return false;
       scrollTop.value = clampedTop;
       if (visible.value) {
-        invalidateViewportForScroll();
+        markViewportDirtyForScroll();
       }
       if (options?.emitScroll !== false) emit("scroll", clampedTop);
       return true;
@@ -629,12 +631,17 @@ export const TList = defineComponent({
         }
 
         if (pendingWheelTop !== null) {
-          pendingWheelTop = clampScrollTop(pendingWheelTop);
+          const nextPendingTop = clampScrollTop(pendingWheelTop);
+          if (nextPendingTop === scrollTop.value) {
+            cancelWheelScrollFrame();
+          } else {
+            pendingWheelTop = nextPendingTop;
+          }
         }
 
         const clampedTop = clampScrollTop(scrollTop.value);
         if (clampedTop !== scrollTop.value) {
-          // Scroll is defined as viewport-top changes, including programmatic
+          // Scroll is defined as viewport-driven changes, including programmatic
           // clamps caused by data length or clipped viewport changes.
           setScrollTop(clampedTop, { emitScroll: true });
           needsInvalidate = true;

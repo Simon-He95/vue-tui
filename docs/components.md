@@ -322,6 +322,9 @@ the list is clipped from the top or left, paint and hit testing keep the source
 row/column offset instead of rebasing the clipped area to a new viewport origin.
 When changing styles, replace the style object instead of mutating it in place.
 
+`scroll(top)` represents viewport-driven scroll changes, not every internal
+viewport-top mutation.
+
 `scroll(top)` is emitted when:
 
 - wheel scrolling changes the viewport top
@@ -354,7 +357,8 @@ selection-confirm event.
 `scroll` is emitted synchronously after internal viewport state changes. If an
 `onScroll` handler synchronously mutates `modelValue` or replaces `items`,
 `TList` may render the viewport change first and reconcile controlled props on
-the next Vue tick.
+the next Vue tick; `onScroll` is not a synchronous veto point for wheel
+scrolling.
 
 ## TVirtualList
 
