@@ -58,9 +58,10 @@ function createScheduler() {
   const tasks = new Map<string, TerminalFrameTask>();
   const queueFrameTask = vi.fn((task: TerminalFrameTask) => {
     tasks.set(task.id ?? String(tasks.size), task);
+    return true;
   });
   const cancelFrameTask = vi.fn((id: string) => {
-    tasks.delete(id);
+    return tasks.delete(id);
   });
   const ctx: TerminalFrameContext = {
     frameId: 1,
@@ -244,6 +245,25 @@ describe("frame mailbox", () => {
 
     expect(apply).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledWith(2, expect.anything(), { queued: 1, dropped: 0 });
+  });
+
+  it("does not retain pending payload when scheduler rejects the task", () => {
+    const probe = createScheduler();
+    const apply = vi.fn();
+    const rejectingScheduler: TerminalScheduler = {
+      ...probe.scheduler,
+      queueFrameTask: vi.fn(() => false),
+    };
+    const mailbox = createFrameMailbox({
+      scheduler: rejectingScheduler,
+      id: "probe",
+      apply,
+    });
+
+    expect(mailbox.queue(1)).toBe(false);
+    expect(mailbox.hasPending()).toBe(false);
+    expect(mailbox.peek()).toBeUndefined();
+    expect(apply).not.toHaveBeenCalled();
   });
 
   it("merges queued values before apply", () => {

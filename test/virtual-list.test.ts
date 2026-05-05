@@ -877,6 +877,79 @@ describe("TVirtualList", () => {
     }
   });
 
+  it("cancels a pending wheel task when keyboard navigation reattaches selection", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    const onScroll = vi.fn();
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "VirtualListPendingWheelCancelProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
+
+    const App = defineComponent({
+      name: "VirtualListPendingWheelCancelApp",
+      setup() {
+        return () => [
+          h(Probe),
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: items.length,
+            itemVersion: 1,
+            getItem: (index: number) => items[index],
+            autoFocus: true,
+            onScroll,
+          }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      expect(callbacks.size).toBe(1);
+
+      app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: 1_001 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(callbacks.size).toBe(0);
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(framePerf!.list().some((sample) => sample.reason === "scroll" && sample.frameTaskCount > 0)).toBe(
+        false,
+      );
+    } finally {
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
   it("clamps pending wheel scroll when itemCount shrinks before the frame", async () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;

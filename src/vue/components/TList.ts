@@ -152,10 +152,21 @@ export const TList = defineComponent({
       return Math.max(0, props.items.length - (clipY + clip.h));
     }
 
+    function maxScrollTopForClamp(): number | null {
+      const full = normalizedFullRect();
+      const clip = normalizedRect();
+      if (full.h <= 0) return 0;
+      if (clip.h <= 0) return null;
+      const { y: clipY } = clipOffsets();
+      return Math.max(0, props.items.length - (clipY + clip.h));
+    }
+
     function clampScrollTop(value: number): number {
       const n = Math.floor(Number(value));
       if (!Number.isFinite(n)) return 0;
-      return clamp(n, 0, maxScrollTop());
+      const max = maxScrollTopForClamp();
+      if (max == null) return Math.max(0, n);
+      return clamp(n, 0, max);
     }
 
     function hasItems(): boolean {
@@ -318,10 +329,10 @@ export const TList = defineComponent({
     }
 
     function pageAnchor(direction: -1 | 1): number {
-      const { start, h } = visibleRange();
+      const { start, end, h } = visibleRange();
       const last = Math.max(0, props.items.length - 1);
       if (h <= 0) return active.value;
-      if (!isActiveVisible()) return clamp(start + direction * h, 0, last);
+      if (!isActiveVisible()) return direction > 0 ? clamp(end, 0, last) : clamp(start, 0, last);
       return clamp(active.value + direction * h, 0, last);
     }
 
@@ -692,11 +703,14 @@ export const TList = defineComponent({
         }
 
         if (pendingWheelTop !== null) {
-          const nextPendingTop = clampScrollTop(pendingWheelTop);
-          if (nextPendingTop === scrollTop.value) {
-            cancelWheelScrollFrame();
-          } else {
-            pendingWheelTop = nextPendingTop;
+          const maxPendingTop = maxScrollTopForClamp();
+          if (maxPendingTop != null) {
+            const nextPendingTop = clamp(pendingWheelTop, 0, maxPendingTop);
+            if (nextPendingTop === scrollTop.value) {
+              cancelWheelScrollFrame();
+            } else {
+              pendingWheelTop = nextPendingTop;
+            }
           }
         }
 

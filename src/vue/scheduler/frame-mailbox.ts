@@ -76,8 +76,8 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
     return pendingTaskId;
   }
 
-  function queue(value: T): void {
-    if (disposed) return;
+  function queue(value: T): boolean {
+    if (disposed) return false;
     const wasPending = hasPending;
     const taskId = wasPending ? pendingTaskId! : currentTaskId();
 
@@ -86,9 +86,9 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
 
     hasPending = true;
     queued++;
-    if (wasPending) return;
+    if (wasPending) return true;
 
-    options.scheduler.queueFrameTask({
+    const accepted = options.scheduler.queueFrameTask({
       id: taskId,
       reason: options.reason,
       priority: options.priority,
@@ -109,6 +109,13 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
         });
       },
     });
+
+    if (!accepted) {
+      clearPending();
+      return false;
+    }
+
+    return true;
   }
 
   function cancel(): void {

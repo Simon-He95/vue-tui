@@ -406,7 +406,7 @@ describe("TList wheel scrolling", () => {
     }
   });
 
-  it("anchors PageDown to the visible viewport after detached wheel scroll", async () => {
+  it("reattaches PageDown to the current visible viewport after detached wheel scroll", async () => {
     const items = Array.from({ length: 200 }, (_, index) => `item-${index}`);
     const onUpdateModelValue = vi.fn();
     const app = createTerminalApp({
@@ -439,8 +439,8 @@ describe("TList wheel scrolling", () => {
 
       const selected = onUpdateModelValue.mock.calls.at(-1)![0];
       expect(top).toBe(100);
-      expect(selected).toBe(104);
-      expect(rowText(app, 0)).toBe("item-101");
+      expect(selected).toBe(103);
+      expect(rowText(app, 0)).toBe("item-100");
     } finally {
       app.dispose();
     }
@@ -482,7 +482,7 @@ describe("TList wheel scrolling", () => {
     }
   });
 
-  it("anchors PageUp to the visible viewport after detached wheel scroll", async () => {
+  it("reattaches PageUp to the current visible viewport after detached wheel scroll", async () => {
     const items = Array.from({ length: 260 }, (_, index) => `item-${index}`);
     const onUpdateModelValue = vi.fn();
     const app = createTerminalApp({
@@ -515,8 +515,8 @@ describe("TList wheel scrolling", () => {
 
       const selected = onUpdateModelValue.mock.calls.at(-1)![0];
       expect(top).toBe(97);
-      expect(selected).toBe(93);
-      expect(rowText(app, 0)).toBe("item-93");
+      expect(selected).toBe(97);
+      expect(rowText(app, 0)).toBe("item-97");
     } finally {
       app.dispose();
     }
@@ -561,6 +561,122 @@ describe("TList wheel scrolling", () => {
       expect(rowText(app, 0)).toBe("item-100");
     } finally {
       app.dispose();
+    }
+  });
+
+  it("preserves detached scrollTop when the list becomes fully clipped and visible again", async () => {
+    const items = Array.from({ length: 200 }, (_, index) => `item-${index}`);
+    const onScroll = vi.fn();
+    let viewportH!: { value: number };
+
+    const App = defineComponent({
+      name: "TListFullyClippedViewportApp",
+      setup() {
+        viewportH = ref(4);
+        return () =>
+          h(
+            TView,
+            { x: 0, y: 0, w: 12, h: viewportH.value },
+            {
+              default: () =>
+                h(TList, {
+                  x: 0,
+                  y: 0,
+                  w: 12,
+                  h: 10,
+                  items,
+                  modelValue: 0,
+                  autoFocus: true,
+                  onScroll,
+                }),
+            },
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("item-100");
+
+      viewportH.value = 0;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll.mock.calls.some(([top]) => top === 0)).toBe(false);
+
+      viewportH.value = 4;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("item-100");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("preserves a pending detached wheel target when the list becomes fully clipped before the frame", async () => {
+    const raf = installRaf();
+    const items = Array.from({ length: 200 }, (_, index) => `item-${index}`);
+    const onScroll = vi.fn();
+    let viewportH!: { value: number };
+
+    const App = defineComponent({
+      name: "TListPendingWheelFullClipApp",
+      setup() {
+        viewportH = ref(4);
+        return () =>
+          h(
+            TView,
+            { x: 0, y: 0, w: 12, h: viewportH.value },
+            {
+              default: () =>
+                h(TList, {
+                  x: 0,
+                  y: 0,
+                  w: 12,
+                  h: 10,
+                  items,
+                  modelValue: 0,
+                  autoFocus: true,
+                  onScroll,
+                }),
+            },
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      expect(raf.callbacks.size).toBe(1);
+
+      viewportH.value = 0;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      raf.runNext();
+      await nextTick();
+      expect(onScroll).toHaveBeenCalledWith(100);
+      expect(onScroll.mock.calls.some(([top]) => top === 0)).toBe(false);
+
+      viewportH.value = 4;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("item-100");
+    } finally {
+      app.dispose();
+      raf.restore();
     }
   });
 
@@ -2216,8 +2332,8 @@ describe("TList wheel scrolling", () => {
       app.scheduler.flushNow();
       await nextTick();
 
-      expect(onUpdateModelValue).toHaveBeenLastCalledWith(104);
-      expect(rowText(app, 0)).toBe("item-101");
+      expect(onUpdateModelValue).toHaveBeenLastCalledWith(103);
+      expect(rowText(app, 0)).toBe("item-100");
     } finally {
       app.dispose();
     }

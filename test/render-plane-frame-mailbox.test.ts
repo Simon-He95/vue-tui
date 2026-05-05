@@ -177,4 +177,91 @@ describe("render-plane frame mailbox", () => {
       raf.restore();
     }
   });
+
+  it("captures the queued plane for default task invalidation", async () => {
+    const raf = installRaf();
+    const plane = ref<"transcript" | "overlay">("transcript");
+    let queueDefaultTask!: () => void;
+    let queueExplicitTask!: () => void;
+    const value = ref("plane-0");
+
+    const PlaneTaskNode = defineComponent({
+      name: "PlaneTaskNode",
+      setup() {
+        const { scheduler } = useTerminal();
+        queueDefaultTask = () => {
+          scheduler.queueFrameTask({
+            id: "plane-task:default",
+            reason: "input",
+            priority: "high",
+            run(ctx) {
+              value.value = "plane-1";
+              ctx.invalidate();
+            },
+          });
+        };
+        queueExplicitTask = () => {
+          scheduler.queueFrameTask({
+            id: "plane-task:explicit",
+            reason: "input",
+            priority: "high",
+            run(ctx) {
+              value.value = "plane-2";
+              ctx.invalidate({ plane: "overlay" });
+            },
+          });
+        };
+        return () => h(TText, { x: 0, y: 0, value: `${value.value}:${plane.value}` });
+      },
+    });
+
+    const App = defineComponent({
+      name: "RenderPlaneQueuedPlaneCaptureApp",
+      setup() {
+        return () => h(TRenderPlane, { plane: plane.value }, () => [h(PlaneTaskNode)]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const invalidations: Array<string | undefined> = [];
+    const originalInvalidate = app.scheduler.invalidate.bind(app.scheduler);
+    (app.scheduler as any).invalidate = (options?: { plane?: string }) => {
+      invalidations.push(options?.plane);
+      return originalInvalidate(options);
+    };
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+      invalidations.length = 0;
+
+      queueDefaultTask();
+      plane.value = "overlay";
+      await nextTick();
+      expect(raf.callbacks.size).toBe(1);
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(invalidations).toContain("transcript");
+
+      invalidations.length = 0;
+      raf.callbacks.clear();
+      queueExplicitTask();
+      await nextTick();
+      expect(raf.callbacks.size).toBe(1);
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(invalidations).toContain("overlay");
+    } finally {
+      (app.scheduler as any).invalidate = originalInvalidate;
+      app.dispose();
+      raf.restore();
+    }
+  });
 });

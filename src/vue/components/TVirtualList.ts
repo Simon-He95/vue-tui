@@ -98,6 +98,7 @@ export const TVirtualList = defineComponent({
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
     const virtualListInstanceId = ++virtualListInstanceSeq;
+    const wheelTaskId = `TVirtualList:${virtualListInstanceId}:wheel`;
 
     const focused = ref(false);
     const active = ref(props.modelValue);
@@ -285,13 +286,14 @@ export const TVirtualList = defineComponent({
 
     function cancelWheelScrollFrame(): void {
       pendingWheelTop = null;
+      scheduler.cancelFrameTask?.(wheelTaskId);
       resetWheelScrollState(wheelState);
     }
 
     function requestWheelScroll(nextTop: number): void {
       pendingWheelTop = nextTop;
       scheduler.queueFrameTask({
-        id: `TVirtualList:${virtualListInstanceId}:wheel`,
+        id: wheelTaskId,
         reason: "scroll",
         priority: "high",
         sync: true,

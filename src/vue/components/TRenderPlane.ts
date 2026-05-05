@@ -19,16 +19,19 @@ export const TRenderPlane = defineComponent({
 
     const planeRef = toRef(props, "plane") as any;
     const terminal = getPlaneTerminal(parentCtx.terminal, props.plane);
-    const withPlane = (options?: TerminalSchedulerInvalidateOptions) => {
+    const withPlane = (
+      plane: TerminalRenderPlane,
+      options?: TerminalSchedulerInvalidateOptions,
+    ) => {
       const hasPlane = options && Object.prototype.hasOwnProperty.call(options, "plane");
       return {
         ...options,
-        plane: hasPlane ? options.plane : props.plane,
+        plane: hasPlane ? options.plane : plane,
       };
     };
     const scheduler = {
       invalidate: (options?: TerminalSchedulerInvalidateOptions) =>
-        parentCtx.scheduler.invalidate(withPlane(options)),
+        parentCtx.scheduler.invalidate(withPlane(props.plane, options)),
       flush: () => parentCtx.scheduler.flush(),
       flushNow: () => parentCtx.scheduler.flushNow(),
       configure: (options: Parameters<typeof parentCtx.scheduler.configure>[0]) =>
@@ -36,16 +39,18 @@ export const TRenderPlane = defineComponent({
       // Frame task ids remain scheduler-global even inside TRenderPlane.
       // Components should include plane/instance information in their ids
       // when they need isolation across planes.
-      queueFrameTask: (task: Parameters<typeof parentCtx.scheduler.queueFrameTask>[0]) =>
-        parentCtx.scheduler.queueFrameTask({
+      queueFrameTask: (task: Parameters<typeof parentCtx.scheduler.queueFrameTask>[0]) => {
+        const queuedPlane = props.plane;
+        return parentCtx.scheduler.queueFrameTask({
           ...task,
           run: (ctx: TerminalFrameContext) =>
             task.run({
               ...ctx,
-              invalidate: (options) => ctx.invalidate(withPlane(options)),
+              invalidate: (options) => ctx.invalidate(withPlane(queuedPlane, options)),
               reportDroppedUpdates: (count) => ctx.reportDroppedUpdates?.(count),
             }),
-        }),
+        });
+      },
       // Cancellation uses the same scheduler-global id space as queueFrameTask.
       cancelFrameTask: (id: string) => parentCtx.scheduler.cancelFrameTask?.(id),
       requestLive: (reason: string) => parentCtx.scheduler.requestLive(reason),

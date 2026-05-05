@@ -336,8 +336,8 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
       frameBudgetMs = config.frameBudgetMs;
   }
 
-  function queueFrameTask(task: TerminalFrameTask): void {
-    if (!options.isActive()) return;
+  function queueFrameTask(task: TerminalFrameTask): boolean {
+    if (!options.isActive()) return false;
     if (task.id) {
       const prev = frameTasksById.get(task.id);
       if (prev) {
@@ -352,11 +352,12 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
       anonymousFrameTasks.push({ task, coalesced: 0 });
     }
     scheduleFrame(false);
+    return true;
   }
 
-  function cancelFrameTask(id: string): void {
-    if (!id) return;
-    frameTasksById.delete(id);
+  function cancelFrameTask(id: string): boolean {
+    if (!id) return false;
+    const deleted = frameTasksById.delete(id);
     if (
       frameTasksById.size === 0 &&
       anonymousFrameTasks.length === 0 &&
@@ -366,6 +367,7 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
       cancelScheduledFrame();
       scheduleIfNeeded();
     }
+    return deleted;
   }
 
   function requestLive(reason: string): () => void {

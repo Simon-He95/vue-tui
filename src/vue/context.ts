@@ -67,13 +67,13 @@ export type TerminalScheduler = Readonly<{
    */
   flushNow: () => void;
   configure: (options: TerminalSchedulerConfig) => void;
-  queueFrameTask: (task: TerminalFrameTask) => void;
+  queueFrameTask: (task: TerminalFrameTask) => boolean;
   /**
    * Best-effort cancellation for a pending id task.
    * If the scheduler has already taken the task for the current frame,
    * the task run() still needs to guard its own stale state.
    */
-  cancelFrameTask?: (id: string) => void;
+  cancelFrameTask?: (id: string) => boolean;
   requestLive: (reason: string) => () => void;
   dropLive: (reason: string) => void;
   isInsideFrame: () => boolean;
