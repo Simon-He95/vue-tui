@@ -19,6 +19,7 @@ import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey } from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
+import { defaultActiveStyle, defaultDimStyle } from "../utils/style-cache.js";
 import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
 import {
   applyWheelScroll,
@@ -517,8 +518,9 @@ export const TList = defineComponent({
         const full = normalizedFullRect();
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
+        const emptyStyle = defaultDimStyle(base);
         const top = clampScrollTop(scrollTop.value);
-        const activeStyle = base.inverse ? base : { ...base, inverse: true };
+        const activeStyle = defaultActiveStyle(base);
         const { x: clipX, y: clipY } = clipOffsets();
         const needsHorizontalSlice = clipX !== 0 || r.w !== full.w;
         let emptyLine: string | null = null;
@@ -564,7 +566,7 @@ export const TList = defineComponent({
             terminal.write(getEmptyLine(), {
               x: r.x,
               y: r.y,
-              style: { ...base, dim: true },
+              style: emptyStyle,
             });
           }
           return;
@@ -575,7 +577,7 @@ export const TList = defineComponent({
           terminal.write(getEmptyLine(), {
             x: r.x,
             y: r.y,
-            style: { ...base, dim: true },
+            style: emptyStyle,
           });
         }
       },

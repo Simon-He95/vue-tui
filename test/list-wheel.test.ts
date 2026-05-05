@@ -705,6 +705,62 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("external modelValue and same-tick items replacement beat a stale pending wheel", async () => {
+    const raf = installRaf();
+    const onScroll = vi.fn();
+    let replaceData!: () => void;
+    const App = defineComponent({
+      name: "ListWheelPendingReplacementApp",
+      setup() {
+        const modelValue = ref(0);
+        const items = ref(Array.from({ length: 200 }, (_, index) => `item-${index}`));
+        replaceData = () => {
+          modelValue.value = 50;
+          items.value = Array.from({ length: 200 }, (_, index) => `next-${index}`);
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            modelValue: modelValue.value,
+            autoFocus: true,
+            onScroll,
+            "onUpdate:modelValue": (value: number) => {
+              modelValue.value = value;
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      expect(raf.callbacks.size).toBe(1);
+
+      replaceData();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(rowText(app, 0)).toBe("next-47");
+      expect(app.terminal.getRow(3)[0]?.style.inverse).toBe(true);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
   it("does not emit scroll when external modelValue sync moves the viewport", async () => {
     const onScroll = vi.fn();
     let setModelValue!: (value: number) => void;
@@ -1890,6 +1946,43 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("does not split wide characters incorrectly when horizontally clipped", () => {
+    const App = defineComponent({
+      name: "WideCharClippedTListApp",
+      setup() {
+        return () =>
+          h(
+            TView,
+            { x: 0, y: 0, w: 2, h: 2 },
+            {
+              default: () =>
+                h(TList, {
+                  x: -1,
+                  y: 0,
+                  w: 3,
+                  h: 2,
+                  items: ["你a", "b"],
+                  modelValue: 0,
+                  autoFocus: true,
+                }),
+            },
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("a");
+      expect(app.terminal.getRow(0)[0]?.ch).toBe("a");
+      expect(app.terminal.getRow(0)[1]?.continuation).not.toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("uses the normalized painted rect for fractional hit testing", async () => {
     const onUpdateModelValue = vi.fn();
     const app = createTerminalApp({
@@ -1928,11 +2021,21 @@ describe("TList wheel scrolling", () => {
 
   it("limits wheel commits to the current render plane for TList", async () => {
     const commits: Array<readonly string[] | null> = [];
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+    const Probe = defineComponent({
+      name: "PlaneScopedTListProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
     const App = defineComponent({
       name: "PlaneScopedTListWheelApp",
       setup() {
         return () => [
-          h(TView, { x: 0, y: 5, w: 12, h: 1 }, () => h("span")),
+          h(Probe),
+          h(TText, { x: 0, y: 5, value: "default" }),
           h(TRenderPlane, { plane: "transcript" }, () => [
             h(TList, {
               x: 0,
@@ -1943,6 +2046,7 @@ describe("TList wheel scrolling", () => {
               autoFocus: true,
             }),
           ]),
+          h(TRenderPlane, { plane: "overlay" }, () => [h(TText, { x: 0, y: 6, value: "overlay" })]),
         ];
       },
     });
@@ -1953,6 +2057,7 @@ describe("TList wheel scrolling", () => {
       app.mount();
       app.scheduler.flushNow();
       commits.length = 0;
+      framePerf!.clear();
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
       app.scheduler.flushNow();
@@ -1960,6 +2065,8 @@ describe("TList wheel scrolling", () => {
 
       expect(rowText(app, 0)).toBe("item-1");
       expect(commits.at(-1)).toEqual(["transcript"]);
+      expect(framePerf!.latest()?.dirtyRows).toBeLessThanOrEqual(4);
+      expect(framePerf!.latest()?.paintedNodes).toBe(1);
     } finally {
       offCommit();
       app.dispose();

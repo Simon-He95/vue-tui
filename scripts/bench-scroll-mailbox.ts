@@ -202,6 +202,8 @@ assert.equal(result.tListBurstWheel.commitsBeforeFrame, 0);
 assert.equal(result.tListBurstWheel.commitsAfterFrame, 1);
 assert.equal(result.tListBurstWheel.framePerf?.frameTaskCount, 1);
 assert.equal(result.tListBurstWheel.framePerf?.droppedUpdates, 99);
+assert.ok((result.tListBurstWheel.framePerf?.dirtyRows ?? Infinity) <= 20);
+assert.equal(result.tListBurstWheel.framePerf?.paintedNodes, 1);
 assert.match(result.tListBurstWheel.firstVisibleRow, /^item-[1-9]\d*$/);
 assert.deepEqual(result.concurrentMailboxes.order, [
   "input:19:dropped=19",

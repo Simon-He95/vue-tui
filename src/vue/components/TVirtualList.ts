@@ -20,6 +20,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
+import { defaultActiveStyle } from "../utils/style-cache.js";
 import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
 import {
   applyWheelScroll,
@@ -568,7 +569,7 @@ export const TVirtualList = defineComponent({
         const full = normalizedFullRect();
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
-        const activeStyle = props.activeStyle ?? (base.inverse ? base : { ...base, inverse: true });
+        const activeStyle = props.activeStyle ?? defaultActiveStyle(base);
         const top = visibleWindow.value.top;
         const { x: clipX, y: clipY } = clipOffsets();
 
