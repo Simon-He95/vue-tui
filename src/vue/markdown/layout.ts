@@ -126,7 +126,8 @@ function wrapLineSegments(
     row = openRow(true);
   };
 
-  const prefixLengthForRow = () => (row.useContinuation ? continuationPrefix.length : firstPrefix.length);
+  const prefixLengthForRow = () =>
+    row.useContinuation ? continuationPrefix.length : firstPrefix.length;
   const rowHasBody = () => row.segments.length > prefixLengthForRow();
 
   for (const segment of source) {

@@ -292,6 +292,9 @@ export const TVirtualList = defineComponent({
 
     function requestWheelScroll(nextTop: number): void {
       pendingWheelTop = nextTop;
+      // TODO(perf): Convert TVirtualList wheel scheduling to createFrameMailbox
+      // so wheel burst metrics match TList: producer-level droppedUpdates instead
+      // of scheduler-level coalescedFrameTasks.
       const accepted = scheduler.queueFrameTask({
         id: wheelTaskId,
         reason: "scroll",

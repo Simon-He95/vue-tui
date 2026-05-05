@@ -176,7 +176,7 @@
 | ------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- | ---- | ---- |
 | <code>cols</code>               | <code>number</code>                                                 | —                                               | 是   | —    |
 | <code>rows</code>               | <code>number</code>                                                 | —                                               | 是   | —    |
-| <code>defaultStyle</code>       | <code>Style</code>                                                  | <code>() =&gt; ({})</code>                      | 否   | —    |
+| <code>defaultStyle</code>       | <code>Style</code>                                                  | <code>() =&gt; Object.freeze({})</code>         | 否   | —    |
 | <code>autoResize</code>         | <code>boolean</code>                                                | <code>false</code>                              | 否   | —    |
 | <code>minCols</code>            | <code>number</code>                                                 | <code>1</code>                                  | 否   | —    |
 | <code>minRows</code>            | <code>number</code>                                                 | <code>1</code>                                  | 否   | —    |
@@ -373,6 +373,7 @@
 | <code>h</code>           | <code>number</code>   | —                      | 是   | —    |
 | <code>zIndex</code>      | <code>number</code>   | <code>0</code>         | 否   | —    |
 | <code>items</code>       | <code>string[]</code> | —                      | 是   | —    |
+| <code>itemVersion</code> | <code>number</code>   | <code>0</code>         | 否   | —    |
 | <code>modelValue</code>  | <code>number</code>   | <code>0</code>         | 否   | —    |
 | <code>style</code>       | <code>Style</code>    | <code>undefined</code> | 否   | —    |
 | <code>autoFocus</code>   | <code>boolean</code>  | <code>false</code>     | 否   | —    |

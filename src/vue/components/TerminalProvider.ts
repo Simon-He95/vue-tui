@@ -102,7 +102,7 @@ export const TerminalProvider = defineComponent({
   props: {
     cols: { type: Number, required: true },
     rows: { type: Number, required: true },
-    defaultStyle: { type: Object as PropType<Style>, default: () => ({}) },
+    defaultStyle: { type: Object as PropType<Style>, default: () => Object.freeze({}) },
     autoResize: { type: Boolean, default: false },
     minCols: { type: Number, default: 1 },
     minRows: { type: Number, default: 1 },

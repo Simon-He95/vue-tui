@@ -39,7 +39,7 @@ const EMPTY = Symbol("frame-mailbox-empty");
  * Later queue() calls update the pending payload and are reported as dropped
  * producer updates when the frame task runs.
  *
- * droppedUpdates are reported at frame-task execution time. They only appear in
+ * droppedUpdates are reported after apply() succeeds. They only appear in
  * framePerf when apply() also invalidates and produces a rendered frame sample.
  *
  * cancel() is best-effort at scheduler level. The run callback still guards
@@ -103,12 +103,11 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
         const dropped = Math.max(0, count - 1);
 
         clearPending();
-        ctx.reportDroppedUpdates?.(dropped);
-
         options.apply(value, ctx, {
           queued: count,
           dropped,
         });
+        ctx.reportDroppedUpdates?.(dropped);
       },
     });
 

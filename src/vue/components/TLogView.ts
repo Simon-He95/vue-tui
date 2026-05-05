@@ -29,6 +29,7 @@ import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
 import {
+  forEachTextCellSegment,
   formatInlineCellLine,
   padEndByCells,
   sanitizeInlineText,
@@ -651,42 +652,24 @@ function wrapStyledSegmentsByCells(
   let row = rows[0]!;
   let rowCells = 0;
 
+  const openRow = (): void => {
+    row = [];
+    rows.push(row);
+    rowCells = 0;
+  };
+
   for (const seg of segments) {
-    const totalCells = textCellWidth(seg.text);
-    let offset = 0;
-    while (offset < totalCells) {
-      if (rowCells >= width) {
-        row = [];
-        rows.push(row);
-        rowCells = 0;
-      }
-
-      const remaining = totalCells - offset;
-      const available = Math.max(1, width - rowCells);
-      let text = sliceByCellsRange(seg.text, offset, offset + Math.min(available, remaining));
-      let cells = textCellWidth(text);
-
-      if (!text || cells <= 0) {
-        if (rowCells > 0) {
-          row = [];
-          rows.push(row);
-          rowCells = 0;
-          continue;
-        }
-
-        text = sliceByCellsRange(seg.text, offset, offset + Math.max(available, 2));
-        cells = textCellWidth(text);
-        if (!text || cells <= 0) break;
-      }
-
+    forEachTextCellSegment(seg.text, (piece) => {
+      if (!piece.text || piece.cells <= 0) return;
+      if (rowCells > 0 && rowCells + piece.cells > width) openRow();
+      if (rowCells >= width) openRow();
       row.push({
-        text,
-        cells,
+        text: piece.text,
+        cells: piece.cells,
         style: seg.style,
       });
-      rowCells += cells;
-      offset += cells;
-    }
+      rowCells += piece.cells;
+    });
   }
 
   return rows;

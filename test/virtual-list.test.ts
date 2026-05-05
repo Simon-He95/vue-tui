@@ -940,9 +940,9 @@ describe("TVirtualList", () => {
       expect(callbacks.size).toBe(0);
 
       expect(onScroll).not.toHaveBeenCalled();
-      expect(framePerf!.list().some((sample) => sample.reason === "scroll" && sample.frameTaskCount > 0)).toBe(
-        false,
-      );
+      expect(
+        framePerf!.list().some((sample) => sample.reason === "scroll" && sample.frameTaskCount > 0),
+      ).toBe(false);
     } finally {
       app.dispose();
       globalThis.requestAnimationFrame = previousRaf;

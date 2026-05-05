@@ -87,6 +87,7 @@ async function benchTListBurstWheel() {
     framePerf!.clear();
     const off = app.terminal.on("commit", () => commits++);
 
+    const startedAt = performance.now();
     for (let i = 0; i < 100; i++) {
       app.events.dispatch({
         type: "wheel",
@@ -96,18 +97,30 @@ async function benchTListBurstWheel() {
         time: 1_000 + i * 10,
       });
     }
+    const eventDispatchMs = performance.now() - startedAt;
     const commitsBeforeFrame = commits;
     raf.flush();
     await nextTick();
     off();
+    const frame = framePerf!.latest();
 
     return {
+      eventDispatchMs,
       scroll,
       updateModelValue,
       commitsBeforeFrame,
       commitsAfterFrame: commits,
       firstVisibleRow: rowText(app, 0),
-      framePerf: framePerf!.latest(),
+      framePerf: frame,
+      metrics: {
+        frameDurationMs: frame?.durationMs,
+        renderManagerMs: frame?.renderManagerMs,
+        commitMs: frame?.commitMs,
+        dirtyRows: frame?.dirtyRows,
+        scannedNodes: frame?.scannedNodes,
+        paintedNodes: frame?.paintedNodes,
+        droppedUpdates: frame?.droppedUpdates,
+      },
       scheduledFrames: raf.scheduled(),
       pendingFrames: raf.pending(),
     };

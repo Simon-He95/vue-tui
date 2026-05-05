@@ -91,9 +91,7 @@ describe("markdown layout", () => {
     expect(paragraph.segments.some((segment) => segment.style?.href === "docs/intro.md")).toBe(
       true,
     );
-    expect(paragraph.segments.some((segment) => segment.style?.href === "assets/a.png")).toBe(
-      true,
-    );
+    expect(paragraph.segments.some((segment) => segment.style?.href === "assets/a.png")).toBe(true);
     expect(paragraph.segments.some((segment) => segment.style?.href === "#section-1")).toBe(true);
   });
 
@@ -229,7 +227,11 @@ describe("markdown layout", () => {
   });
 
   it("preserves code block tab indentation as spaces", () => {
-    const rows = buildMarkdownVisualRows("```ts\n\tconst a = 1\n```", 40, createTuiMarkdownParser());
+    const rows = buildMarkdownVisualRows(
+      "```ts\n\tconst a = 1\n```",
+      40,
+      createTuiMarkdownParser(),
+    );
     expect(rows.some((row) => row.plainText.includes("    const a = 1"))).toBe(true);
   });
 

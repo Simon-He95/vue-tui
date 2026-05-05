@@ -31,6 +31,22 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
+function formatClippedInlineCellLine(
+  raw: string,
+  fullWidth: number,
+  clipX: number,
+  width: number,
+): string {
+  if (clipX === 0 && width === fullWidth) {
+    return formatInlineCellLine(raw, width);
+  }
+
+  return padEndByCells(
+    sliceByCellsRange(formatInlineCellLine(raw, fullWidth), clipX, clipX + width),
+    width,
+  );
+}
+
 type ScrollTopChange = Readonly<{
   changed: boolean;
   dirty: boolean;
@@ -42,6 +58,14 @@ type ActiveChange = Readonly<{
   changedScroll: boolean;
   dirty: boolean;
   next: number;
+}>;
+
+type SyncModelResult = Readonly<{
+  canceledPendingWheel: boolean;
+  reattached: boolean;
+  changedActive: boolean;
+  changedScroll: boolean;
+  dirty: boolean;
 }>;
 
 let tListInstanceSeq = 0;
@@ -110,7 +134,11 @@ export const TList = defineComponent({
     const indexDirtyRowsScratch: number[] = [];
 
     const fullRect = computed<Rect>(() =>
-      translateRect({ x: props.x, y: props.y, w: props.w, h: props.h }, layout.originX, layout.originY),
+      translateRect(
+        { x: props.x, y: props.y, w: props.w, h: props.h },
+        layout.originX,
+        layout.originY,
+      ),
     );
 
     const absRect = computed<Rect>(() => {
@@ -280,7 +308,11 @@ export const TList = defineComponent({
       return setScrollTop(nextTop, { emitScroll: false });
     }
 
-    function setActiveSilently(nextIndex: unknown): { prev: number; next: number; changed: boolean } {
+    function setActiveSilently(nextIndex: unknown): {
+      prev: number;
+      next: number;
+      changed: boolean;
+    } {
       const prev = active.value;
       const next = normalizeIndex(nextIndex);
       if (prev === next) return { prev, next, changed: false };
@@ -414,7 +446,7 @@ export const TList = defineComponent({
       selectActive(nearestVisibleActive(), { emitChange: true });
     }
 
-    function syncExternalModelValue(value: number): boolean {
+    function syncExternalModelValue(value: number): SyncModelResult {
       const hadPendingWheel = wheelMailbox.hasPending();
       const wasDetached = detachedByWheel;
       const next = normalizeIndex(value);
@@ -425,7 +457,13 @@ export const TList = defineComponent({
       }
 
       const result = setActiveIndex(next, { emitUpdate: false });
-      return hadPendingWheel || wasDetached || result.dirty;
+      return {
+        canceledPendingWheel: hadPendingWheel,
+        reattached: wasDetached,
+        changedActive: result.changedActive,
+        changedScroll: result.changedScroll,
+        dirty: result.dirty,
+      };
     }
 
     function onKeydown(e: TerminalKeyboardEvent): void {
@@ -515,9 +553,7 @@ export const TList = defineComponent({
           );
           if (!dir || nextTop === baseTop) {
             const maxTop = maxScrollTop();
-            const isEdgeNoop =
-              pendingWheelTop == null &&
-              ((deltaY < 0 && baseTop <= 0) || (deltaY > 0 && baseTop >= maxTop));
+            const isEdgeNoop = (deltaY < 0 && baseTop <= 0) || (deltaY > 0 && baseTop >= maxTop);
             if (isEdgeNoop) resetWheelScrollState(wheelState);
             return;
           }
@@ -598,15 +634,7 @@ export const TList = defineComponent({
 
         function getEmptyLine(): string {
           if (emptyLine != null) return emptyLine;
-          emptyLine =
-            clipY !== 0
-              ? ""
-              : needsHorizontalSlice
-                ? padEndByCells(
-                    sliceByCellsRange(formatInlineCellLine("(empty)", full.w), clipX, clipX + r.w),
-                    r.w,
-                  )
-                : formatInlineCellLine("(empty)", r.w);
+          emptyLine = clipY !== 0 ? "" : formatClippedInlineCellLine("(empty)", full.w, clipX, r.w);
           return emptyLine;
         }
 
@@ -615,10 +643,7 @@ export const TList = defineComponent({
           const idx = top + clipY + i;
           const raw = props.items[idx] ?? "";
           const line = needsHorizontalSlice
-            ? padEndByCells(
-                sliceByCellsRange(formatInlineCellLine(raw, full.w), clipX, clipX + r.w),
-                r.w,
-              )
+            ? formatClippedInlineCellLine(raw, full.w, clipX, r.w)
             : formatInlineCellLine(raw, r.w);
           const style = idx === active.value ? activeStyle : base;
           terminal.write(line, { x: r.x, y: r.y + i, style });
@@ -633,7 +658,13 @@ export const TList = defineComponent({
             if (localY < 0 || localY >= r.h) continue;
             paintRow(localY);
           }
-          if (focused.value && props.items.length === 0 && r.h > 0 && firstRowDirty && clipY === 0) {
+          if (
+            focused.value &&
+            props.items.length === 0 &&
+            r.h > 0 &&
+            firstRowDirty &&
+            clipY === 0
+          ) {
             terminal.write(getEmptyLine(), {
               x: r.x,
               y: r.y,
@@ -661,8 +692,8 @@ export const TList = defineComponent({
       (value) => {
         const isInitial = !didInitialModelSync;
         didInitialModelSync = true;
-        const needsInvalidate = syncExternalModelValue(value);
-        if (!isInitial && needsInvalidate) {
+        const result = syncExternalModelValue(value);
+        if (!isInitial && (result.dirty || result.changedScroll)) {
           scheduler.invalidate({ priority: "high", reason: "input" });
         }
       },
@@ -680,14 +711,14 @@ export const TList = defineComponent({
       ],
       (
         [itemsLength, itemVersion, fullY, fullH, clipY, clipH],
-        [
-          prevItemsLength,
-          prevItemVersion,
-          prevFullY,
-          prevFullH,
-          prevClipY,
-          prevClipH,
-        ] = [itemsLength, itemVersion, fullY, fullH, clipY, clipH],
+        [prevItemsLength, prevItemVersion, prevFullY, prevFullH, prevClipY, prevClipH] = [
+          itemsLength,
+          itemVersion,
+          fullY,
+          fullH,
+          clipY,
+          clipH,
+        ],
       ) => {
         const structureChanged =
           itemsLength !== prevItemsLength ||

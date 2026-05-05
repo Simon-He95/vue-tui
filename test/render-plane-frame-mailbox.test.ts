@@ -272,7 +272,8 @@ describe("render-plane frame mailbox", () => {
     const App = defineComponent({
       name: "RenderPlaneImmutablePlaneApp",
       setup() {
-        return () => h(TRenderPlane, { plane: plane.value }, () => [h(TText, { x: 0, y: 0, value: "plane" })]);
+        return () =>
+          h(TRenderPlane, { plane: plane.value }, () => [h(TText, { x: 0, y: 0, value: "plane" })]);
       },
     });
 

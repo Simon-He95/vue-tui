@@ -295,6 +295,50 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("does not suppress reversal after pending wheel reaches virtual edge", async () => {
+    const raf = installRaf();
+    const items = Array.from({ length: 200 }, (_, index) => `item-${index}`);
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items,
+        autoFocus: true,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 20_000, time: 1_000 });
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_010 });
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_020 });
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(raf.callbacks.size).toBe(1);
+
+      raf.runNext();
+      await nextTick();
+
+      const maxTop = items.length - 4;
+      const finalTop = onScroll.mock.calls[0]![0];
+      expect(finalTop).toBeLessThan(maxTop);
+      expect(rowText(app, 0)).toBe(`item-${finalTop}`);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
   it("anchors keyboard navigation to visible viewport after detached wheel scroll", async () => {
     const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
     const onUpdateModelValue = vi.fn();
@@ -1724,6 +1768,78 @@ describe("TList wheel scrolling", () => {
       expect(commits).toHaveLength(0);
     } finally {
       app.dispose();
+    }
+  });
+
+  it("does not invalidate when external modelValue only cancels a pending wheel", async () => {
+    const raf = installRaf();
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    let setModelValue!: (value: number) => void;
+    const invalidates: unknown[] = [];
+
+    const Probe = defineComponent({
+      name: "PendingWheelCancelInvalidateProbe",
+      setup() {
+        const scheduler = useTerminal().scheduler;
+        const originalInvalidate = scheduler.invalidate.bind(scheduler);
+        (scheduler as any).invalidate = (options?: unknown) => {
+          invalidates.push(options);
+          return originalInvalidate(options as any);
+        };
+        return () => null;
+      },
+    });
+
+    const App = defineComponent({
+      name: "PendingWheelCancelModelSyncApp",
+      setup() {
+        const modelValue = ref(2);
+        setModelValue = (value) => {
+          modelValue.value = value;
+        };
+        return () => [
+          h(Probe),
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items,
+            modelValue: modelValue.value,
+            autoFocus: true,
+          }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    const commits: unknown[] = [];
+    const off = app.terminal.on("commit", (commit) => commits.push(commit));
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      await nextTick();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+      commits.length = 0;
+      invalidates.length = 0;
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      setModelValue(2.1);
+      await nextTick();
+
+      expect(invalidates).toHaveLength(0);
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(commits).toHaveLength(0);
+      expect(rowText(app, 0)).toBe("item-0");
+    } finally {
+      off();
+      app.dispose();
+      raf.restore();
     }
   });
 

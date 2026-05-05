@@ -65,7 +65,10 @@ function markdownRowSignature(row: TuiMarkdownVisualRow | undefined): string {
     row.key,
     row.plainText,
     row.segments
-      .map((segment) => `${segment.text}\u0001${segment.cells}\u0001${markdownStyleSignature(segment.style)}`)
+      .map(
+        (segment) =>
+          `${segment.text}\u0001${segment.cells}\u0001${markdownStyleSignature(segment.style)}`,
+      )
       .join("\u0002"),
   ].join("\u0003");
 }
@@ -236,7 +239,8 @@ export const TVirtualMarkdown = defineComponent({
       const start = Math.max(0, scrollTop + clipY);
       const end = Math.max(start, start + clip.h);
       const out: string[] = [];
-      for (let index = start; index < end; index++) out.push(markdownRowSignature(sourceRows[index]));
+      for (let index = start; index < end; index++)
+        out.push(markdownRowSignature(sourceRows[index]));
       return out;
     }
 
@@ -295,12 +299,9 @@ export const TVirtualMarkdown = defineComponent({
       { immediate: true },
     );
 
-    watch(
-      [() => props.content, () => props.w, () => props.h, () => absRect.value.h],
-      () => {
-        resetWheelScrollState(wheelState);
-      },
-    );
+    watch([() => props.content, () => props.w, () => props.h, () => absRect.value.h], () => {
+      resetWheelScrollState(wheelState);
+    });
 
     watch(
       [

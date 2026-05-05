@@ -35,7 +35,10 @@ describe("TVirtualMarkdown streaming", () => {
     await nextTick();
 
     off();
-    const visibleLines = mounted.terminal.snapshot().lines.slice(0, 2).map((line) => line.trimEnd());
+    const visibleLines = mounted.terminal
+      .snapshot()
+      .lines.slice(0, 2)
+      .map((line) => line.trimEnd());
     expect(commits.length).toBeGreaterThan(0);
     expect(visibleLines[0]).toBe("**dangling");
     expect(mounted.terminal.getCell(0, 0).style.bold).not.toBe(true);

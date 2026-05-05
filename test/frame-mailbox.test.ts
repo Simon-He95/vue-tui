@@ -136,6 +136,44 @@ describe("frame mailbox", () => {
     expect(apply.mock.calls[0]![2]).toEqual({ queued: 100, dropped: 99 });
   });
 
+  it("reports dropped updates after apply succeeds", () => {
+    const probe = createScheduler();
+    const order: string[] = [];
+    (probe.ctx as any).reportDroppedUpdates = vi.fn((count: number) => {
+      order.push(`report:${count}`);
+    });
+    const mailbox = createFrameMailbox({
+      scheduler: probe.scheduler,
+      id: "probe",
+      apply: (_value, _ctx, meta) => {
+        order.push(`apply:${meta.dropped}`);
+      },
+    });
+
+    mailbox.queue(1);
+    mailbox.queue(2);
+    probe.flush();
+
+    expect(order).toEqual(["apply:1", "report:1"]);
+  });
+
+  it("does not report dropped updates when apply throws", () => {
+    const probe = createScheduler();
+    const mailbox = createFrameMailbox({
+      scheduler: probe.scheduler,
+      id: "probe",
+      apply: () => {
+        throw new Error("apply failed");
+      },
+    });
+
+    mailbox.queue(1);
+    mailbox.queue(2);
+
+    expect(() => probe.flush()).toThrow("apply failed");
+    expect(probe.ctx.reportDroppedUpdates).not.toHaveBeenCalled();
+  });
+
   it("clears retained payload after apply and cancel", () => {
     const probe = createScheduler();
     const mailbox = createFrameMailbox<{ value: number }>({
