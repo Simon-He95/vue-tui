@@ -5,6 +5,12 @@ import { defineComponent, inject, provide, ref, watch } from "vue";
 import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
 import { RenderPlaneContextKey, TerminalContextKey } from "../context.js";
 
+function warnDev(message: string): void {
+  const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
+    ?.NODE_ENV;
+  if (nodeEnv !== undefined && nodeEnv !== "production") console.warn(message);
+}
+
 export const TRenderPlane = defineComponent({
   name: "TRenderPlane",
   props: {
@@ -26,7 +32,7 @@ export const TRenderPlane = defineComponent({
       (next) => {
         if (next === initialPlane || warnedPlaneMutation) return;
         warnedPlaneMutation = true;
-        console.warn(
+        warnDev(
           `[vue-tui] TRenderPlane.plane is immutable after mount. Key TRenderPlane by plane if you need to move a subtree.`,
         );
       },

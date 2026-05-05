@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run typecheck
+
+      - run: pnpm run lint
+
+      - run: pnpm exec vitest run test/frame-mailbox.test.ts test/list-wheel.test.ts test/render-manager.test.ts test/render-plane-frame-mailbox.test.ts test/scheduler-frame-tasks.test.ts test/style-cache.test.ts test/text-utils.test.ts test/tlog-view.test.ts test/tmarkdown-layout.test.ts test/tmarkdown-components.test.ts test/tvirtual-markdown-perf.test.ts test/tvirtual-markdown-streaming.test.ts test/virtual-list.test.ts test/ui-regressions.test.ts test/index.test.ts
+
+      - run: pnpm run bench:scroll-mailbox
+
+      - run: pnpm run bench:phase2
+
+      - run: pnpm run check:hidden-unicode
+
+      - run: pnpm run build

@@ -295,6 +295,45 @@ describe("render-plane frame mailbox", () => {
     }
   });
 
+  it("moves TRenderPlane content with a keyed remount", async () => {
+    const plane = ref<"transcript" | "overlay">("transcript");
+    const value = ref("old");
+    const commits: Array<readonly string[] | null> = [];
+
+    const App = defineComponent({
+      name: "RenderPlaneKeyedMoveApp",
+      setup() {
+        return () =>
+          h(TRenderPlane, { key: plane.value, plane: plane.value }, () => [
+            h(TText, { x: 0, y: 0, value: value.value }),
+          ]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const offCommit = app.terminal.on("commit", ({ planes }) => {
+      commits.push(planes);
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      expect(app.terminal.snapshot().lines[0]?.slice(0, 3)).toBe("old");
+
+      commits.length = 0;
+      value.value = "new";
+      plane.value = "overlay";
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(commits).toContainEqual(["transcript", "overlay"]);
+      expect(app.terminal.snapshot().lines[0]?.slice(0, 3)).toBe("new");
+    } finally {
+      offCommit();
+      app.dispose();
+    }
+  });
+
   it("forwards explicit plane undefined through TRenderPlane task invalidation", async () => {
     const raf = installRaf();
     let queueUndefinedTask!: () => void;

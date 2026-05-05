@@ -324,18 +324,28 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
 
   function runScheduledFrame(_time = framePerfNow()): void {
     if (!options.isActive()) return;
+
     runningScheduledFrame = true;
     let thrown: unknown = null;
+    let shouldSchedule = false;
+    let scheduleRequestMore = false;
+
     try {
       const stats = runPendingFrameTasks();
+
       if (stats.frameTaskCount > 0) options.flushFrame(stats);
-      scheduleIfNeeded(stats.requestMore);
+
+      scheduleRequestMore = stats.requestMore || hasPendingFrameTasks();
+      shouldSchedule = scheduleRequestMore || liveReasons.size > 0;
     } catch (error) {
       thrown = error;
-      if (hasPendingFrameTasks()) scheduleIfNeeded(true);
+      scheduleRequestMore = hasPendingFrameTasks();
+      shouldSchedule = scheduleRequestMore || liveReasons.size > 0;
     } finally {
       runningScheduledFrame = false;
     }
+
+    if (shouldSchedule) scheduleIfNeeded(scheduleRequestMore);
     if (thrown) throw thrown;
   }
 

@@ -412,6 +412,57 @@ describe("scheduler frame tasks", () => {
     }
   });
 
+  it("runs deferred low-priority work after finite high-priority pressure stops", async () => {
+    const raf = installRaf();
+    const probe = createSchedulerProbeApp();
+    const order: string[] = [];
+    let highRuns = 0;
+
+    try {
+      probe.app.mount();
+      await nextTick();
+      probe.scheduler.flushNow();
+      probe.scheduler.configure({ frameBudgetMs: 0 });
+
+      const queueHigh = () => {
+        probe.scheduler.queueFrameTask({
+          id: "continuous-high",
+          priority: "high",
+          reason: "scroll",
+          run(ctx) {
+            highRuns++;
+            order.push(`high:${highRuns}`);
+            ctx.invalidate({ priority: "high", plane: "default", reason: "scroll" });
+            if (highRuns < 3) queueHigh();
+          },
+        });
+      };
+
+      queueHigh();
+      probe.scheduler.queueFrameTask({
+        id: "low",
+        priority: "low",
+        reason: "data",
+        run(ctx) {
+          order.push("low");
+          ctx.invalidate({ plane: "default", reason: "data" });
+        },
+      });
+
+      raf.runNext();
+      expect(order).toEqual(["high:1"]);
+      raf.runNext();
+      expect(order).toEqual(["high:1", "high:2"]);
+      raf.runNext();
+      expect(order).toEqual(["high:1", "high:2", "high:3"]);
+      raf.runNext();
+      expect(order).toEqual(["high:1", "high:2", "high:3", "low"]);
+    } finally {
+      probe.app.dispose();
+      raf.restore();
+    }
+  });
+
   it("keeps the latest same-id task when a deferred task is replaced during drain", async () => {
     const raf = installRaf();
     const probe = createSchedulerProbeApp();

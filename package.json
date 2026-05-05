@@ -68,6 +68,7 @@
     "format:check": "oxfmt --check .",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
+    "check:hidden-unicode": "node scripts/check-hidden-unicode.cjs",
     "prepublishOnly": "pnpm build",
     "release": "bumpp && pnpm publish --no-git-checks --access public",
     "start": "esno src/index.ts",
