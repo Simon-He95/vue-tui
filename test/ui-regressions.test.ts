@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createCliEventManager,
   createEventManager,
@@ -137,9 +137,10 @@ describe("ui regressions", () => {
     mounted.unmount();
   });
 
-  it("useRenderNode invalidates old and new planes when plane changes", async () => {
+  it("treats TRenderPlane.plane as immutable after mount", async () => {
     const plane = ref<"default" | "overlay">("default");
     const invalidatePlanes: Array<string | null> = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const Probe = defineComponent({
       name: "PlaneMigrationProbe",
@@ -181,8 +182,12 @@ describe("ui regressions", () => {
     await nextTick();
     await Promise.resolve();
 
-    expect(invalidatePlanes).toContain(null);
+    expect(invalidatePlanes).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("TRenderPlane.plane is immutable after mount"),
+    );
     mounted.unmount();
+    warn.mockRestore();
   });
 
   it("TerminalProvider high priority flush updates DOM without waiting for renderer rAF", async () => {

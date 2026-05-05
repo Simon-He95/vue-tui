@@ -1083,6 +1083,56 @@ describe("TList wheel scrolling", () => {
     }
   });
 
+  it("keeps pending detached wheel target across itemVersion change before the frame", async () => {
+    const raf = installRaf();
+    let mutate!: () => void;
+    const App = defineComponent({
+      name: "TListPendingWheelItemVersionApp",
+      setup() {
+        const items = ref(Array.from({ length: 200 }, (_, index) => `item-${index}`));
+        const itemVersion = ref(0);
+        mutate = () => {
+          items.value[100] = "changed";
+          itemVersion.value++;
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            itemVersion: itemVersion.value,
+            modelValue: 0,
+            autoFocus: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      expect(raf.callbacks.size).toBe(1);
+
+      mutate();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("changed");
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
   it("does not reattach detached viewport on parent re-render with the same modelValue", async () => {
     let rerender!: () => void;
     const App = defineComponent({

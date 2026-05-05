@@ -567,6 +567,11 @@ export const TList = defineComponent({
     const renderNode = useRenderNode(() => ({
       zIndex: props.zIndex,
       rect: visible.value ? normalizedRect() : { x: 0, y: 0, w: 0, h: 0 },
+      // Intentionally not in render deps:
+      // - scrollTop / active / modelValue repaint through manual dirty-row paths.
+      // - itemVersion is handled by the structure watcher below so same-length
+      //   content updates stay on the viewport dirty-row path instead of the
+      //   more conservative render.update() rect path.
       deps: [
         visible.value,
         absRect.value,

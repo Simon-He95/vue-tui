@@ -293,4 +293,57 @@ describe("render-plane frame mailbox", () => {
       warn.mockRestore();
     }
   });
+
+  it("forwards explicit plane undefined through TRenderPlane task invalidation", async () => {
+    const raf = installRaf();
+    let queueUndefinedTask!: () => void;
+
+    const PlaneTaskNode = defineComponent({
+      name: "PlaneUndefinedTaskNode",
+      setup() {
+        const { scheduler } = useTerminal();
+        queueUndefinedTask = () => {
+          scheduler.queueFrameTask({
+            id: "plane-task:undefined",
+            priority: "high",
+            run(ctx) {
+              ctx.invalidate({ plane: undefined, reason: "input" });
+            },
+          });
+        };
+        return () => h(TText, { x: 0, y: 0, value: "plane" });
+      },
+    });
+
+    const App = defineComponent({
+      name: "RenderPlaneUndefinedEscapeApp",
+      setup() {
+        return () => h(TRenderPlane, { plane: "transcript" }, () => [h(PlaneTaskNode)]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const invalidations: Array<string | undefined> = [];
+    const originalInvalidate = app.scheduler.invalidate.bind(app.scheduler);
+    (app.scheduler as any).invalidate = (options?: { plane?: string }) => {
+      invalidations.push(options?.plane);
+      return originalInvalidate(options);
+    };
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      queueUndefinedTask();
+      expect(raf.callbacks.size).toBe(1);
+      raf.runNext();
+
+      expect(invalidations).toContain(undefined);
+    } finally {
+      (app.scheduler as any).invalidate = originalInvalidate;
+      app.dispose();
+      raf.restore();
+    }
+  });
 });
