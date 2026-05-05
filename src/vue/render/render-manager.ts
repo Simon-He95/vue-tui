@@ -67,6 +67,7 @@ export type RenderManager = Readonly<{
       /**
        * Consumed synchronously during update() and must not be retained.
        * Callers may pass scratch arrays for hot-path invalidation.
+       * Rows are absolute terminal Y coordinates for the node's plane.
        */
       dirtyRowsHint: readonly number[];
       paint: (dirtyRows?: readonly number[]) => void;
@@ -205,7 +206,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   } {
     if (!rect) return { y0: 0, y1: 0 };
     const y0 = Math.floor(rect.y);
-    const y1 = y0 + Math.max(0, Math.floor(rect.h));
+    const y1 = Math.max(y0, Math.floor(rect.y + rect.h));
     return { y0, y1 };
   }
 
@@ -271,7 +272,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       return;
     }
     const y0 = Math.floor(rect.y);
-    const y1 = y0 + Math.max(0, Math.floor(rect.h));
+    const y1 = Math.max(y0, Math.floor(rect.y + rect.h));
     const startY = Math.max(0, y0);
     const endY = Math.min(terminalRows, y1);
     const span = endY - startY;
@@ -299,6 +300,28 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       if (!Number.isFinite(y)) continue;
       if (y < 0 || y >= terminalRows) continue;
       if (node.rect && (y < node.rectY0 || y >= node.rectY1)) continue;
+
+      accepted = true;
+      if (state.dirtyRowBits[y] === 0) {
+        state.dirtyRowBits[y] = 1;
+        state.dirtyRowCount++;
+        if (y < state.dirtyMinY) state.dirtyMinY = y;
+        if (y > state.dirtyMaxY) state.dirtyMaxY = y;
+      }
+    }
+
+    return accepted;
+  }
+
+  function markRows(plane: TerminalRenderPlane, rows: readonly number[]): boolean {
+    if (!rows.length) return false;
+    const state = getDirtyState(plane);
+    let accepted = false;
+
+    for (let i = 0; i < rows.length; i++) {
+      const y = Math.floor(rows[i] ?? -1);
+      if (!Number.isFinite(y)) continue;
+      if (y < 0 || y >= terminalRows) continue;
 
       accepted = true;
       if (state.dirtyRowBits[y] === 0) {
@@ -377,7 +400,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     const bucketChanged = planeChanged || rectChanged;
     const { y0, y1 } = rectToYBounds(nextRect);
     // dirtyRowsHint is consumed synchronously here and must use absolute
-    // terminal rows. Rows outside the stable node rect are ignored.
+    // terminal rows for this plane.
     const dirtyRowsHint = next.dirtyRowsHint;
     const canUseDirtyRowsHint =
       !sortChanged &&
@@ -386,7 +409,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       dirtyRowsHint != null &&
       dirtyRowsHint.length > 0;
     if (canUseDirtyRowsHint) {
-      markRowsForNode(prev, dirtyRowsHint);
+      markRows(prev.plane, dirtyRowsHint);
     } else {
       markRect(prev.plane, prev.rect);
       markRect(nextPlane, nextRect);

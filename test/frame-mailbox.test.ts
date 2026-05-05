@@ -194,6 +194,30 @@ describe("frame mailbox", () => {
     expect(mailbox.peek()).toBeUndefined();
   });
 
+  it("allows apply to queue a new value for a later frame", () => {
+    const probe = createScheduler();
+    const values: number[] = [];
+    let mailbox!: ReturnType<typeof createFrameMailbox<number>>;
+    mailbox = createFrameMailbox<number>({
+      scheduler: probe.scheduler,
+      id: "self-queue",
+      apply: (value) => {
+        values.push(value);
+        if (value === 1) mailbox.queue(2);
+      },
+    });
+
+    mailbox.queue(1);
+    probe.flush();
+
+    expect(values).toEqual([1]);
+    expect(mailbox.hasPending()).toBe(true);
+
+    probe.flush();
+
+    expect(values).toEqual([1, 2]);
+  });
+
   it("supports undefined payload values when T allows them", () => {
     const probe = createScheduler();
     const apply = vi.fn();

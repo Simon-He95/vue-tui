@@ -27,7 +27,7 @@ import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
-import { intersectRect, translateRect } from "../utils/rect.js";
+import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import {
   forEachTextCellSegment,
   formatInlineCellLine,
@@ -857,21 +857,12 @@ export const TLogView = defineComponent({
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
-    function normalizeRect(r: Rect): Rect {
-      return {
-        x: Math.floor(r.x),
-        y: Math.floor(r.y),
-        w: Math.max(0, Math.floor(r.w)),
-        h: Math.max(0, Math.floor(r.h)),
-      };
-    }
-
     function normalizedRect(): Rect {
-      return normalizeRect(absRect.value);
+      return normalizeCellRect(absRect.value);
     }
 
     function normalizedFullRect(): Rect {
-      return normalizeRect(fullRect.value);
+      return normalizeCellRect(fullRect.value);
     }
 
     function clipOffsets(): { x: number; y: number } {

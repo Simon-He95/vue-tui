@@ -18,7 +18,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey } from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
-import { intersectRect, translateRect } from "../utils/rect.js";
+import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import { defaultActiveStyle, defaultDimStyle } from "../utils/style-cache.js";
 import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
 import {
@@ -147,21 +147,12 @@ export const TList = defineComponent({
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
-    function normalizeRect(r: Rect): Rect {
-      return {
-        x: Math.floor(r.x),
-        y: Math.floor(r.y),
-        w: Math.max(0, Math.floor(r.w)),
-        h: Math.max(0, Math.floor(r.h)),
-      };
-    }
-
     function normalizedRect(): Rect {
-      return normalizeRect(absRect.value);
+      return normalizeCellRect(absRect.value);
     }
 
     function normalizedFullRect(): Rect {
-      return normalizeRect(fullRect.value);
+      return normalizeCellRect(fullRect.value);
     }
 
     function clipOffsets(): { x: number; y: number } {

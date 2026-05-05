@@ -575,8 +575,8 @@ describe("render-manager", () => {
 
     paints.length = 0;
     rm.update(node.id, { dirtyRowsHint: [1] });
-    expect(rm.render()).toBeNull();
-    expect(paints).toEqual([]);
+    rm.render();
+    expect(paints).toEqual(["global"]);
 
     paints.length = 0;
     rm.update(mover.id, { plane: "overlay", dirtyRowsHint: [2] });
@@ -967,7 +967,7 @@ describe("render-manager", () => {
     expect(stats?.paintedNodes).toBe(1);
   });
 
-  it("fallback scan filters non-contiguous dirty rows exactly", () => {
+  it("keeps dirtyRowsHint plane-scoped for non-contiguous dirty rows", () => {
     const paints: string[] = [];
     const terminal = createTerminal({ cols: 10, rows: 100 });
     const rm = createRenderManager(terminal);
@@ -996,11 +996,11 @@ describe("render-manager", () => {
     rm.update(first.id, { dirtyRowsHint: [0, 99] });
     const stats = rm.render();
 
-    expect(stats?.scannedNodes).toBe(1);
+    expect(stats?.scannedNodes).toBe(3);
     expect(paints).toContain("first");
-    expect(paints).not.toContain("last");
+    expect(paints).toContain("last");
     expect(paints).not.toContain("middle");
-    expect(stats?.paintedNodes).toBe(1);
+    expect(stats?.paintedNodes).toBe(2);
   });
 
   it("rebuilds row buckets after terminal resize shrink", () => {

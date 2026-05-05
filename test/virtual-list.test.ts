@@ -1907,8 +1907,8 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    expect(commits).toEqual([[3]]);
-    expect(rowText({ terminal: app.terminal } as any, 3)).toBe("item-4");
+    expect(commits).toEqual([[4]]);
+    expect(rowText({ terminal: app.terminal } as any, 4)).toBe("item-5");
     app.dispose();
   });
 

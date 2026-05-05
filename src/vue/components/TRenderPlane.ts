@@ -8,7 +8,8 @@ import { RenderPlaneContextKey, TerminalContextKey } from "../context.js";
 function warnDev(message: string): void {
   const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
     ?.NODE_ENV;
-  if (nodeEnv !== undefined && nodeEnv !== "production") console.warn(message);
+  if (nodeEnv === "production") return;
+  console.warn(message);
 }
 
 export const TRenderPlane = defineComponent({

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createApp, defineComponent, h, nextTick } from "vue";
+import { createApp, defineComponent, h, nextTick, onBeforeUnmount } from "vue";
 import {
   createTerminalApp,
   TerminalProvider,
@@ -580,6 +580,134 @@ describe("scheduler frame tasks", () => {
       expect(order).toEqual(["throw", "after"]);
     } finally {
       probe.app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("flushes successful invalidations before rethrowing a later task error", async () => {
+    const raf = installRaf();
+    let renderNodeId = "";
+    let render: ReturnType<typeof useTerminal>["render"] | null = null;
+    let value = "old";
+
+    const Node = defineComponent({
+      name: "ThrowingFramePartialFlushNode",
+      setup() {
+        const ctx = useTerminal();
+        render = ctx.render;
+        const paint = () => ctx.terminal.write(value, { x: 0, y: 1 });
+        const node = ctx.render.register({
+          stack: ctx.render.rootStack,
+          rect: { x: 0, y: 1, w: 8, h: 1 },
+          paint,
+        });
+        renderNodeId = node.id;
+        onBeforeUnmount(() => ctx.render.unregister(node.id));
+        return () => null;
+      },
+    });
+
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 4,
+      component: defineComponent({
+        setup: () => () => h(Node),
+      }),
+    });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.scheduler.queueFrameTask({
+        id: "first",
+        priority: "high",
+        reason: "scroll",
+        run(ctx) {
+          value = "new";
+          render!.update(renderNodeId, {});
+          ctx.invalidate({ priority: "high", plane: "default", reason: "scroll" });
+        },
+      });
+      app.scheduler.queueFrameTask({
+        id: "throwing",
+        priority: "normal",
+        run() {
+          throw new Error("boom");
+        },
+      });
+
+      expect(() => raf.runNext()).toThrow("boom");
+      expect(app.terminal.snapshot().lines[1]?.slice(0, 3)).toBe("new");
+      expect(app.scheduler.isInsideFrame()).toBe(false);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("flushNow flushes successful invalidations before rethrowing a later task error", async () => {
+    const raf = installRaf();
+    let renderNodeId = "";
+    let render: ReturnType<typeof useTerminal>["render"] | null = null;
+    let value = "old";
+
+    const Node = defineComponent({
+      name: "ThrowingFlushNowPartialFlushNode",
+      setup() {
+        const ctx = useTerminal();
+        render = ctx.render;
+        const paint = () => ctx.terminal.write(value, { x: 0, y: 1 });
+        const node = ctx.render.register({
+          stack: ctx.render.rootStack,
+          rect: { x: 0, y: 1, w: 8, h: 1 },
+          paint,
+        });
+        renderNodeId = node.id;
+        onBeforeUnmount(() => ctx.render.unregister(node.id));
+        return () => null;
+      },
+    });
+
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 4,
+      component: defineComponent({
+        setup: () => () => h(Node),
+      }),
+    });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.scheduler.queueFrameTask({
+        id: "first",
+        priority: "high",
+        reason: "scroll",
+        run(ctx) {
+          value = "new";
+          render!.update(renderNodeId, {});
+          ctx.invalidate({ priority: "high", plane: "default", reason: "scroll" });
+        },
+      });
+      app.scheduler.queueFrameTask({
+        id: "throwing",
+        priority: "normal",
+        run() {
+          throw new Error("boom");
+        },
+      });
+
+      expect(() => app.scheduler.flushNow()).toThrow("boom");
+      expect(app.terminal.snapshot().lines[1]?.slice(0, 3)).toBe("new");
+      await Promise.resolve();
+      expect(raf.callbacks.size).toBe(0);
+    } finally {
+      app.dispose();
       raf.restore();
     }
   });

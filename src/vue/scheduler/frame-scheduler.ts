@@ -24,6 +24,7 @@ export type SchedulerFrameTaskRunStats = Readonly<{
   reason: FramePerfReason;
   sync: boolean;
   requestMore: boolean;
+  error?: unknown;
 }>;
 
 export const EMPTY_FRAME_TASK_RUN_STATS: SchedulerFrameTaskRunStats = Object.freeze({
@@ -229,7 +230,8 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     let frameReason: FramePerfReason = "unknown";
     let shouldSync = false;
     const deferredTasks: QueuedFrameTask[] = [];
-    let thrown: unknown = null;
+    let didThrow = false;
+    let error: unknown;
 
     const ctx: TerminalFrameContext = {
       frameId: currentFrameId,
@@ -269,8 +271,9 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
         shouldSync = shouldSync || task.sync === true || priority === "high";
         try {
           task.run(ctx);
-        } catch (error) {
-          thrown = error;
+        } catch (taskError) {
+          didThrow = true;
+          error = taskError;
           if (i < tasks.length - 1) {
             deferredTasks.push(...tasks.slice(i + 1));
             requestMore = true;
@@ -288,7 +291,6 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
       insideFrame = false;
       requeueDeferredTasks(deferredTasks);
     }
-    if (thrown) throw thrown;
 
     const remaining = remainingFrameTasks();
     return {
@@ -299,6 +301,7 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
       reason: frameReason,
       sync: shouldSync,
       requestMore,
+      ...(didThrow ? { error } : {}),
     };
   }
 
@@ -326,7 +329,8 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     if (!options.isActive()) return;
 
     runningScheduledFrame = true;
-    let thrown: unknown = null;
+    let didThrow = false;
+    let thrown: unknown;
     let shouldSchedule = false;
     let scheduleRequestMore = false;
 
@@ -337,7 +341,12 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
 
       scheduleRequestMore = stats.requestMore || hasPendingFrameTasks();
       shouldSchedule = scheduleRequestMore || liveReasons.size > 0;
+      if (Object.prototype.hasOwnProperty.call(stats, "error")) {
+        didThrow = true;
+        thrown = stats.error;
+      }
     } catch (error) {
+      didThrow = true;
       thrown = error;
       scheduleRequestMore = hasPendingFrameTasks();
       shouldSchedule = scheduleRequestMore || liveReasons.size > 0;
@@ -346,7 +355,7 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     }
 
     if (shouldSchedule) scheduleIfNeeded(scheduleRequestMore);
-    if (thrown) throw thrown;
+    if (didThrow) throw thrown;
   }
 
   function configure(config: TerminalSchedulerConfig): void {

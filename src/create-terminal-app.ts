@@ -355,6 +355,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     scheduled = false;
     flush(true, frameTasks);
     frameScheduler.scheduleIfNeeded(frameTasks.requestMore);
+    if (Object.prototype.hasOwnProperty.call(frameTasks, "error")) throw frameTasks.error;
   }
 
   function invalidate(options?: TerminalSchedulerInvalidateOptions): void {
