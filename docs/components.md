@@ -432,7 +432,7 @@ request repaint; repaint only happens when active rows or `scrollTop` change.
 
 大数据选择/浏览列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。它不是日志/streaming 组件；append-only 输出请使用 `TLogView`。
 
-> Phase 1 experimental API：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。API 仍可能在 scheduler frame task、controlled scrollTop、overscan、TLogView 等后续能力落地前调整。
+> Phase 1 experimental API：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。API 仍可能在 overscan、TLogView 等后续能力落地前调整。
 
 ### Props
 
@@ -442,9 +442,10 @@ request repaint; repaint only happens when active rows or `scrollTop` change.
 - `getItem` `((index: number) => unknown, required)`
 - `renderItem` `((item, index) => unknown)`
 - `modelValue` `(number)` + `update:modelValue`
+- `scrollTop` `(number?)` + `update:scrollTop`：受控 viewport scrollTop；省略时由组件内部维护
 - `style` / `activeStyle` `(Style?)`
 - `autoFocus` `(boolean)`
-- `rowScrollMode` `("off" | "unsafe-full-row")`：full-row 场景的 opt-in unsafe row-scroll 优化
+- `rowScrollMode` `("off" | "unsafe-full-row")`：保留的实验性开关；当前 wheel path 走 viewport repaint，不使用 exposed-row row-scroll
 
 ### Data source
 
@@ -463,9 +464,9 @@ const renderItem = (item: Row) => item.title;
 <TVirtualList :get-item="(index) => items[index]" />
 ```
 
-### Row scroll
+### Wheel Scroll
 
-`rowScrollMode` 是危险优化开关，不是列表内部局部滚动。它会 shift 当前 render plane 的整行区域，只能用于该 plane 的这些 rows 被 `TVirtualList` 独占且列表没有被裁剪的场景；同 plane 其它内容会被一起移动。DOM renderer 支持通过移动 line nodes 消费 terminal `scrollOperations`，但只有列表占满终端整行、列表 rect 未被裁剪、rows 在 terminal bounds 内且 renderer capability 开启时才会走 exposed-row repaint；其它场景会退回 viewport repaint。debug perf 模式会对这些被忽略的场景发出一次 warning。
+Wheel burst 通过 frame mailbox 合并；同一帧只应用最后的 `scrollTop`。滚动 repaint 只调用 `markDirtyRows(viewportRows)`，dirty rows 不超过可见 viewport 高度，也不会走 exposed-row fast path 或提交 `scrollOperations`。组件 hidden、fully clipped、unmount 或受控 `scrollTop` 在 RAF 前变化时，会取消 pending wheel，不会让旧 wheel 覆盖新的受控位置。
 
 ### Selection model
 
@@ -474,6 +475,7 @@ const renderItem = (item: Row) => item.title;
 ### Events
 
 - `change`: `{ index, value }`
+- `update:scrollTop`: `scrollTop`（number）
 - `scroll`: `scrollTop`（number）
 - `focus` / `blur` / `keydown`
 

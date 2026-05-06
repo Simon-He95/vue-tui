@@ -963,6 +963,7 @@
 | <code>getItem</code>       | <code>(index: number) =&gt; unknown</code>                | —                            | 是   | —    |
 | <code>renderItem</code>    | <code>(item: unknown, index: number) =&gt; unknown</code> | <code>undefined</code>       | 否   | —    |
 | <code>modelValue</code>    | <code>number</code>                                       | <code>0</code>               | 否   | —    |
+| <code>scrollTop</code>     | <code>number</code>                                       | <code>undefined</code>       | 否   | —    |
 | <code>style</code>         | <code>Style</code>                                        | <code>undefined</code>       | 否   | —    |
 | <code>activeStyle</code>   | <code>Style</code>                                        | <code>undefined</code>       | 否   | —    |
 | <code>autoFocus</code>     | <code>boolean</code>                                      | <code>false</code>           | 否   | —    |
@@ -973,6 +974,7 @@
 | 名称                           | Payload | 说明 |
 | ------------------------------ | ------- | ---- |
 | <code>update:modelValue</code> | —       | —    |
+| <code>update:scrollTop</code>  | —       | —    |
 | <code>change</code>            | —       | —    |
 | <code>itemClick</code>         | —       | —    |
 | <code>scroll</code>            | —       | —    |
