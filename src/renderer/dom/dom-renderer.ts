@@ -325,6 +325,10 @@ function isTransparentBlankRow(segments: readonly RowSegment[]): boolean {
   );
 }
 
+function isPlainTextRow(segments: readonly RowSegment[]): boolean {
+  return segments.length === 1 && !segments[0]!.wide && isPlainStyle(segments[0]!.style);
+}
+
 function renderRow(
   terminal: Terminal,
   metrics: CellMetrics,
@@ -343,6 +347,17 @@ function renderRow(
 
   if (isTransparentBlankRow(segments)) {
     lineEl.replaceChildren();
+    return;
+  }
+
+  if (isPlainTextRow(segments)) {
+    const text = segments[0]!.text;
+    const firstChild = lineEl.firstChild;
+    if (lineEl.childNodes.length === 1 && firstChild?.nodeType === Node.TEXT_NODE) {
+      firstChild.nodeValue = text;
+    } else {
+      lineEl.textContent = text;
+    }
     return;
   }
 
