@@ -2939,23 +2939,36 @@ export const TLogView = defineComponent({
       });
     }
 
-    function requestWheelScroll(nextTop: number): void {
+    function requestWheelScroll(nextTop: number): boolean {
       pendingWheelTop = nextTop;
-      scheduler.queueFrameTask({
-        id: `${frameTaskId}:wheel`,
-        reason: "scroll",
-        priority: "high",
-        sync: true,
-        run(ctx) {
-          if (!alive) return;
-          const top = pendingWheelTop;
-          pendingWheelTop = null;
-          if (top == null) return;
-          const changed = applyScrollTop(top, "viewport-repaint", { emitScroll: true });
-          if (!changed) return;
-          ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
-        },
-      });
+      let accepted: boolean | void;
+      try {
+        accepted = scheduler.queueFrameTask({
+          id: `${frameTaskId}:wheel`,
+          reason: "scroll",
+          priority: "high",
+          sync: true,
+          run(ctx) {
+            if (!alive) return;
+            const top = pendingWheelTop;
+            pendingWheelTop = null;
+            if (top == null) return;
+            const changed = applyScrollTop(top, "viewport-repaint", { emitScroll: true });
+            if (!changed) return;
+            ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
+          },
+        });
+      } catch (error) {
+        pendingWheelTop = null;
+        resetWheelScrollState(wheelState);
+        throw error;
+      }
+      if (accepted === false) {
+        pendingWheelTop = null;
+        resetWheelScrollState(wheelState);
+        return false;
+      }
+      return true;
     }
 
     function keyboardScroll(nextTop: number, nextStick?: boolean): void {
@@ -3318,8 +3331,8 @@ export const TLogView = defineComponent({
           );
           if (!dir || nextTop === baseTop) return;
 
+          if (!requestWheelScroll(nextTop)) return;
           e.preventDefault?.();
-          requestWheelScroll(nextTop);
         },
         focus: () => {
           focused.value = true;

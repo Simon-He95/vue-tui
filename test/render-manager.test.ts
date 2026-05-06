@@ -1077,6 +1077,31 @@ describe("render-manager", () => {
     expect(stats?.paintedNodes).toBe(1);
   });
 
+  it("does not repaint another same-plane node from dirtyRowsHint outside the source node", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 20 });
+    const rm = createRenderManager(terminal);
+
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 2 },
+      paint: () => paints.push("top"),
+    });
+    const source = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 10, w: 10, h: 2 },
+      paint: () => paints.push("source"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    rm.update(source.id, { dirtyRowsHint: [0] });
+
+    expect(rm.render()).toBeNull();
+    expect(paints).toEqual([]);
+  });
+
   it("rebuilds row buckets after terminal resize shrink", () => {
     const paints: string[] = [];
     const terminal = createTerminal({ cols: 10, rows: 8 });

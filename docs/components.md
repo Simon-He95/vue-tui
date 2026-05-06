@@ -331,6 +331,8 @@ Behavior change for the wheel-mailbox release:
 but it does not update `modelValue` and does not move the active selection.
 Keyboard navigation, click, double click, and Enter reattach selection to the
 visible viewport.
+Each applied `TList` wheel scroll still repaints the visible viewport; exposed
+row-only slow scrolling remains a `TVirtualList` / `TLogView` / renderer follow-up.
 If existing code depended on wheel scrolling to update `modelValue`, listen to
 `scroll` instead. If selection should follow scroll, synchronize that explicitly
 from `onScroll`; `onScroll` is a result notification, not a veto/cancel hook.

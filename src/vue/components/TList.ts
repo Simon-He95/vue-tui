@@ -7,6 +7,7 @@ import {
   h,
   inject,
   onBeforeUnmount,
+  onMounted,
   ref,
   watch,
   watchEffect,
@@ -133,6 +134,7 @@ export const TList = defineComponent({
     const wheelState = createWheelScrollState();
     let detachedByWheel = false;
     let pendingWheelTop: number | null = null;
+    let mounted = false;
     const dirtyRowsScratch: number[] = [];
     const indexDirtyRowsScratch: number[] = [];
 
@@ -469,6 +471,13 @@ export const TList = defineComponent({
       emit("close");
     }
 
+    function invalidateFocusChange(): void {
+      scheduler.invalidate({
+        priority: mounted ? "high" : "normal",
+        reason: "input",
+      });
+    }
+
     function syncExternalModelValue(value: number): SyncModelResult {
       const hadPendingWheel = wheelMailbox.hasPending();
       const wasDetached = detachedByWheel;
@@ -588,17 +597,21 @@ export const TList = defineComponent({
         focus: () => {
           focused.value = true;
           emit("focus");
-          scheduler.invalidate({ reason: "input" });
+          invalidateFocusChange();
         },
         blur: () => {
           focused.value = false;
           emit("blur");
           if (props.closeOnBlur) closeList();
-          scheduler.invalidate({ reason: "input" });
+          invalidateFocusChange();
         },
         keydown: onKeydown,
       },
     }));
+
+    onMounted(() => {
+      mounted = true;
+    });
 
     watchEffect(() => {
       if (!props.autoFocus) return;

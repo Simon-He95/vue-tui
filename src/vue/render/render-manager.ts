@@ -33,6 +33,10 @@ export type RenderNode = Readonly<{
   rect: RenderRect | null;
   rectY0: number;
   rectY1: number;
+  /**
+   * dirtyRows are absolute terminal rows for this node's plane.
+   * Components must ignore rows outside their rect.
+   */
   paint: (dirtyRows?: readonly number[]) => void;
 }>;
 
