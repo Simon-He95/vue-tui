@@ -258,7 +258,8 @@ export const TVirtualList = defineComponent({
           resetWheelScrollState(wheelState);
           return;
         }
-        if (changed.dirty) ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
+        if (changed.dirty)
+          ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
       },
     });
 
