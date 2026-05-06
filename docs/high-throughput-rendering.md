@@ -78,6 +78,14 @@ render 时：
 - bucket 候选节点超过 plane nodes 的 60% 时回退扫描 plane nodes，并在 `rowBucketFallbacks` 记录 `reason: "candidate-ratio"`。
 - `scannedNodes` 语义改为本轮候选节点数，不再是 plane 节点总数。
 
+`markDirtyRows()` contract：
+
+- `rows` 必须是 terminal absolute Y，不是组件内 local row。
+- rows 只作用于 node 当前所在 plane。
+- node rect 外、terminal bounds 外、`NaN` 和 `Infinity` rows 会被忽略。
+- dirty row repaint 会重绘同 plane 中与 dirty rows 相交的其他 nodes，并保持 z-order。
+- `dirtyRowsHint` / `markDirtyRows()` 的 rows 同步消费；`paint(dirtyRows)` 不能保存数组引用。
+
 验收测试：
 
 - `test/render-manager.test.ts` 增加大量节点只 dirty 一行的测试：`paintedNodes` 只包含相交节点，`scannedNodes` 小于 plane 总节点数。
@@ -208,7 +216,7 @@ wheel 行为：
 
 Frame mailbox 语义：
 
-`createFrameMailbox()` 是 at-most-once 的 frame coalescing primitive，不是 durable queue。它适合 wheel `scrollTop`、resize sample、cursor blink、latest-only highlight 这类只关心最新状态的渲染工作。`merge()` 或 `apply()` 抛错时，pending payload 已被清空，不会重试，也不会上报这次 coalesced `droppedUpdates`；需要可靠处理的数据必须保存在 owner/source/store 里，mailbox 只合并“下一帧要 repaint 到哪个状态”。如果某类任务需要 retry，调用方应在 `merge()` / `apply()` 内捕获错误并保留可重试状态。
+`createFrameMailbox()` 是 internal at-most-once frame coalescing primitive，不是 durable queue，也不从 package root 或 experimental entrypoint export。它适合 wheel `scrollTop`、resize sample、cursor blink、latest-only highlight 这类只关心最新状态的渲染工作。`merge()` 或 `apply()` 抛错时，pending payload 已被清空，不会重试，也不会上报这次 coalesced `droppedUpdates`；需要可靠处理的数据必须保存在 owner/source/store 里，mailbox 只合并“下一帧要 repaint 到哪个状态”。如果某类任务需要 retry，调用方应在 `merge()` / `apply()` 内捕获错误并保留可重试状态。
 
 高优先级 frame task 只用于 input、wheel、焦点这类必须尽快反映到屏幕的有限工作。stream/data producer 应使用稳定 task id 或 `createFrameMailbox()`；在 `globalThis.__VT_DEBUG_PERF__` 开启时，大量 unique high-priority task 会触发 warning，帮助定位错误 producer。
 
