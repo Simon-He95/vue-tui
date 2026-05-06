@@ -37,4 +37,10 @@ jobs:
 
       - run: pnpm run check:hidden-unicode
 
+      - run: pnpm exec tsx scripts/generate-component-api-docs.ts
+
+      - run: git diff --exit-code docs/generated/components-api.md
+
       - run: pnpm run build
+
+      - run: pnpm run test:package-exports

@@ -90,26 +90,32 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
     queued++;
     if (wasPending) return true;
 
-    const accepted = options.scheduler.queueFrameTask({
-      id: taskId,
-      reason: options.reason,
-      priority: options.priority,
-      sync: options.sync,
-      run(ctx) {
-        if (disposed || !hasPending) return;
+    let accepted: boolean | void;
+    try {
+      accepted = options.scheduler.queueFrameTask({
+        id: taskId,
+        reason: options.reason,
+        priority: options.priority,
+        sync: options.sync,
+        run(ctx) {
+          if (disposed || !hasPending) return;
 
-        const value = pending as T;
-        const count = queued;
-        const dropped = Math.max(0, count - 1);
+          const value = pending as T;
+          const count = queued;
+          const dropped = Math.max(0, count - 1);
 
-        clearPending();
-        options.apply(value, ctx, {
-          queued: count,
-          dropped,
-        });
-        ctx.reportDroppedUpdates?.(dropped);
-      },
-    });
+          clearPending();
+          options.apply(value, ctx, {
+            queued: count,
+            dropped,
+          });
+          ctx.reportDroppedUpdates?.(dropped);
+        },
+      });
+    } catch (error) {
+      clearPending();
+      throw error;
+    }
 
     if (accepted === false) {
       clearPending();

@@ -328,6 +328,27 @@ describe("frame mailbox", () => {
     expect(apply).not.toHaveBeenCalled();
   });
 
+  it("does not retain pending payload when scheduler queue throws", () => {
+    const probe = createScheduler();
+    const apply = vi.fn();
+    const throwingScheduler: TerminalScheduler = {
+      ...probe.scheduler,
+      queueFrameTask: vi.fn(() => {
+        throw new Error("scheduler failed");
+      }),
+    };
+    const mailbox = createFrameMailbox({
+      scheduler: throwingScheduler,
+      id: "probe",
+      apply,
+    });
+
+    expect(() => mailbox.queue(1)).toThrow("scheduler failed");
+    expect(mailbox.hasPending()).toBe(false);
+    expect(mailbox.peek()).toBeUndefined();
+    expect(apply).not.toHaveBeenCalled();
+  });
+
   it("treats void-returning legacy schedulers as accepted", () => {
     const tasks = new Map<string, TerminalFrameTask>();
     const legacyScheduler: TerminalScheduler = {
