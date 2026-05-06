@@ -4,6 +4,7 @@ import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../ev
 import {
   computed,
   defineComponent,
+  getCurrentInstance,
   h,
   inject,
   onBeforeUnmount,
@@ -21,75 +22,35 @@ import { EventZIndexContextKey } from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import { defaultActiveStyle, defaultDimStyle } from "../utils/style-cache.js";
-import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
+import { formatInlineCellLine } from "../utils/text.js";
 import {
   applyWheelScroll,
   createWheelScrollState,
   resetWheelScrollState,
 } from "../utils/wheel-scroll.js";
+import {
+  clampScrollTop,
+  clipOffsets,
+  hasPaintableViewport as listHasPaintableViewport,
+  maxScrollTop,
+  maxScrollTopForClamp,
+  visibleRange,
+} from "./list/list-geometry.js";
+import { formatClippedInlineCellLine } from "./list/list-paint.js";
+import {
+  anchorActiveToViewport,
+  nearestVisibleActive,
+  normalizeListIndex,
+  pageAnchor,
+} from "./list/selection-state.js";
+import {
+  getWheelScrollInput,
+  type ActiveChange,
+  type ScrollTopChange,
+  type SyncModelResult,
+} from "./list/scroll-state.js";
 
-function clamp(n: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, n));
-}
-
-function formatClippedInlineCellLine(
-  raw: string,
-  fullWidth: number,
-  clipX: number,
-  width: number,
-): string {
-  if (clipX === 0 && width === fullWidth) {
-    return formatInlineCellLine(raw, width);
-  }
-
-  return padEndByCells(
-    sliceByCellsRange(formatInlineCellLine(raw, fullWidth), clipX, clipX + width),
-    width,
-  );
-}
-
-type ScrollTopChange = Readonly<{
-  changed: boolean;
-  dirty: boolean;
-  top: number;
-}>;
-
-type ActiveChange = Readonly<{
-  changedActive: boolean;
-  changedScroll: boolean;
-  dirty: boolean;
-  next: number;
-}>;
-
-type SyncModelResult = Readonly<{
-  canceledPendingWheel: boolean;
-  reattached: boolean;
-  changedActive: boolean;
-  changedScroll: boolean;
-  dirty: boolean;
-}>;
-
-let tListInstanceSeq = 0;
-
-function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
-  deltaY: number;
-  mode: "auto" | "line" | "pixel";
-} {
-  const deltaY = Number(e.deltaY ?? 0);
-  const deltaMode = typeof e.deltaMode === "number" ? e.deltaMode : undefined;
-  if (
-    Number.isInteger(deltaY) &&
-    deltaY !== 0 &&
-    Math.abs(deltaY) >= 100 &&
-    Math.abs(deltaY) % 100 === 0 &&
-    deltaMode == null
-  ) {
-    return { deltaY: deltaY / 100, mode: "line" };
-  }
-  if (deltaMode === 1) return { deltaY, mode: "line" };
-  if (deltaMode === 0) return { deltaY, mode: "pixel" };
-  return { deltaY, mode: "auto" };
-}
+let tListFallbackInstanceSeq = 0;
 
 export const TList = defineComponent({
   name: "TList",
@@ -109,7 +70,8 @@ export const TList = defineComponent({
   emits: ["update:modelValue", "change", "scroll", "close", "focus", "blur", "keydown"],
   setup(props, { emit }) {
     const { terminal, scheduler, render, defaultStyle, events } = useTerminal();
-    const tListInstanceId = ++tListInstanceSeq;
+    const instance = getCurrentInstance();
+    const tListInstanceId = instance?.uid ?? ++tListFallbackInstanceSeq;
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
@@ -161,42 +123,28 @@ export const TList = defineComponent({
     }
 
     function hasPaintableViewport(): boolean {
-      if (!visible.value) return false;
-      const r = normalizedRect();
-      return r.w > 0 && r.h > 0;
+      return listHasPaintableViewport(visible.value, normalizedRect());
     }
 
-    function clipOffsets(): { x: number; y: number } {
+    function currentClipOffsets(): { x: number; y: number } {
+      return clipOffsets(normalizedFullRect(), normalizedRect());
+    }
+
+    function currentMaxScrollTop(): number {
+      const clip = normalizedRect();
+      const { y: clipY } = currentClipOffsets();
+      return maxScrollTop(props.items.length, clipY, clip.h);
+    }
+
+    function currentMaxScrollTopForClamp(): number | null {
       const full = normalizedFullRect();
       const clip = normalizedRect();
-      return {
-        x: Math.max(0, clip.x - full.x),
-        y: Math.max(0, clip.y - full.y),
-      };
+      const { y: clipY } = currentClipOffsets();
+      return maxScrollTopForClamp(full.h, clip.h, props.items.length, clipY);
     }
 
-    function maxScrollTop(): number {
-      const clip = normalizedRect();
-      const { y: clipY } = clipOffsets();
-      if (clip.h <= 0) return 0;
-      return Math.max(0, props.items.length - (clipY + clip.h));
-    }
-
-    function maxScrollTopForClamp(): number | null {
-      const full = normalizedFullRect();
-      const clip = normalizedRect();
-      if (full.h <= 0) return 0;
-      if (clip.h <= 0) return null;
-      const { y: clipY } = clipOffsets();
-      return Math.max(0, props.items.length - (clipY + clip.h));
-    }
-
-    function clampScrollTop(value: number): number {
-      const n = Math.floor(Number(value));
-      if (!Number.isFinite(n)) return 0;
-      const max = maxScrollTopForClamp();
-      if (max == null) return Math.max(0, n);
-      return clamp(n, 0, max);
+    function clampListScrollTop(value: number): number {
+      return clampScrollTop(value, currentMaxScrollTopForClamp());
     }
 
     function hasItems(): boolean {
@@ -204,11 +152,7 @@ export const TList = defineComponent({
     }
 
     function normalizeIndex(value: unknown): number {
-      const last = props.items.length - 1;
-      if (last < 0) return 0;
-      const n = Math.floor(Number(value));
-      if (!Number.isFinite(n)) return 0;
-      return clamp(n, 0, last);
+      return normalizeListIndex(value, props.items.length);
     }
 
     function clampedModelValue(): number {
@@ -243,7 +187,7 @@ export const TList = defineComponent({
       const r = normalizedRect();
 
       indexDirtyRowsScratch.length = 0;
-      const { start, h } = visibleRange();
+      const { start, h } = currentVisibleRange();
       for (const index of indexes) {
         if (!Number.isFinite(index)) continue;
         const offset = index - start;
@@ -256,7 +200,7 @@ export const TList = defineComponent({
     // Marks affected rows dirty but does not schedule a renderer flush.
     // Callers must invalidate the scheduler/context themselves when dirty=true.
     function setScrollTop(nextTop: number, options?: { emitScroll?: boolean }): ScrollTopChange {
-      const clampedTop = clampScrollTop(nextTop);
+      const clampedTop = clampListScrollTop(nextTop);
       if (clampedTop === scrollTop.value) {
         return {
           changed: false,
@@ -274,36 +218,31 @@ export const TList = defineComponent({
       };
     }
 
-    function visibleRange(): { start: number; end: number; h: number } {
-      const clip = normalizedRect();
-      const { y: clipY } = clipOffsets();
-      const start = clampScrollTop(scrollTop.value) + clipY;
-      return {
-        start,
-        end: clip.h <= 0 ? start - 1 : start + clip.h - 1,
-        h: clip.h,
-      };
-    }
-
-    function isActiveVisible(): boolean {
-      const { start, end, h } = visibleRange();
-      return h > 0 && active.value >= start && active.value <= end;
+    function currentVisibleRange(): { start: number; end: number; h: number } {
+      return visibleRange(
+        scrollTop.value,
+        props.items.length,
+        normalizedFullRect(),
+        normalizedRect(),
+      );
     }
 
     function ensureActiveVisible(): ScrollTopChange {
-      const { start, end, h } = visibleRange();
+      const { start, end, h } = currentVisibleRange();
       if (h <= 0) {
         return {
           changed: false,
           dirty: false,
-          top: clampScrollTop(scrollTop.value),
+          top: clampListScrollTop(scrollTop.value),
         };
       }
-      const { y: clipY } = clipOffsets();
-      const maxTop = maxScrollTop();
-      let nextTop = clampScrollTop(scrollTop.value);
-      if (active.value < start) nextTop = clamp(active.value - clipY, 0, maxTop);
-      else if (active.value > end) nextTop = clamp(active.value - (clipY + h - 1), 0, maxTop);
+      const { y: clipY } = currentClipOffsets();
+      const maxTop = currentMaxScrollTop();
+      let nextTop = clampListScrollTop(scrollTop.value);
+      if (active.value < start) nextTop = clampScrollTop(active.value - clipY, maxTop);
+      else if (active.value > end) {
+        nextTop = clampScrollTop(active.value - (clipY + h - 1), maxTop);
+      }
       // Selection-driven viewport changes intentionally do not emit scroll.
       return setScrollTop(nextTop, { emitScroll: false });
     }
@@ -332,7 +271,7 @@ export const TList = defineComponent({
           resetWheelScrollState(wheelState);
           return;
         }
-        const clampedTop = clampScrollTop(nextTop);
+        const clampedTop = clampListScrollTop(nextTop);
         if (clampedTop === scrollTop.value) {
           resetWheelScrollState(wheelState);
           return;
@@ -378,30 +317,21 @@ export const TList = defineComponent({
       cancelWheelScrollFrame();
     }
 
-    function anchorActiveToViewport(direction: -1 | 1): number {
-      const { start, end, h } = visibleRange();
-      if (h <= 0) return active.value;
-      if (active.value < start) return start;
-      if (active.value > end) return end;
-      return clamp(active.value + direction, 0, Math.max(0, props.items.length - 1));
+    function anchorActiveToCurrentViewport(direction: -1 | 1): number {
+      return anchorActiveToViewport(
+        active.value,
+        props.items.length,
+        currentVisibleRange(),
+        direction,
+      );
     }
 
-    function pageAnchor(direction: -1 | 1): number {
-      const { start, end, h } = visibleRange();
-      const last = Math.max(0, props.items.length - 1);
-      if (h <= 0) return active.value;
-      if (!isActiveVisible()) {
-        return direction > 0 ? clamp(end + h, 0, last) : clamp(start - h, 0, last);
-      }
-      return clamp(active.value + direction * h, 0, last);
+    function pageAnchorFromCurrentViewport(direction: -1 | 1): number {
+      return pageAnchor(active.value, props.items.length, currentVisibleRange(), direction);
     }
 
-    function nearestVisibleActive(): number {
-      const { start, h } = visibleRange();
-      const last = Math.max(0, props.items.length - 1);
-      if (h <= 0) return clamp(active.value, 0, last);
-      if (!isActiveVisible()) return clamp(start, 0, last);
-      return clamp(active.value, 0, last);
+    function nearestVisibleActiveIndex(): number {
+      return nearestVisibleActive(active.value, props.items.length, currentVisibleRange());
     }
 
     function setActiveIndex(
@@ -471,7 +401,7 @@ export const TList = defineComponent({
 
     function commitVisibleSelection(): void {
       if (!hasItems()) return;
-      selectActive(nearestVisibleActive(), { emitChange: true });
+      selectActive(nearestVisibleActiveIndex(), { emitChange: true });
     }
 
     function closeList(): void {
@@ -510,22 +440,22 @@ export const TList = defineComponent({
       emit("keydown", e);
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        selectActive(anchorActiveToViewport(-1));
+        selectActive(anchorActiveToCurrentViewport(-1));
         return;
       }
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        selectActive(anchorActiveToViewport(1));
+        selectActive(anchorActiveToCurrentViewport(1));
         return;
       }
       if (e.key === "PageUp") {
         e.preventDefault();
-        selectActive(pageAnchor(-1));
+        selectActive(pageAnchorFromCurrentViewport(-1));
         return;
       }
       if (e.key === "PageDown") {
         e.preventDefault();
-        selectActive(pageAnchor(1));
+        selectActive(pageAnchorFromCurrentViewport(1));
         return;
       }
       if (e.key === "Home") {
@@ -558,7 +488,7 @@ export const TList = defineComponent({
       handlers: {
         click: (e: TerminalPointerEvent) => {
           const r = normalizedRect();
-          const idx = visibleRange().start + (e.cellY - r.y);
+          const idx = currentVisibleRange().start + (e.cellY - r.y);
           if (idx >= 0 && idx < props.items.length) {
             selectActive(idx);
           } else {
@@ -568,7 +498,7 @@ export const TList = defineComponent({
         dblclick: (e: TerminalPointerEvent) => {
           cancelWheelScrollFrame();
           const r = normalizedRect();
-          const idx = visibleRange().start + (e.cellY - r.y);
+          const idx = currentVisibleRange().start + (e.cellY - r.y);
           if (idx >= 0 && idx < props.items.length) selectActive(idx, { emitChange: true });
         },
         wheel: (e: any) => {
@@ -585,7 +515,7 @@ export const TList = defineComponent({
             wheelState,
             deltaY,
             baseTop,
-            maxScrollTop(),
+            currentMaxScrollTop(),
             now,
             mode,
             {
@@ -593,7 +523,7 @@ export const TList = defineComponent({
             },
           );
           if (!dir || nextTop === baseTop) {
-            const maxTop = maxScrollTop();
+            const maxTop = currentMaxScrollTop();
             const isEdgeNoop = (deltaY < 0 && baseTop <= 0) || (deltaY > 0 && baseTop >= maxTop);
             if (isEdgeNoop) resetWheelScrollState(wheelState);
             return;
@@ -671,9 +601,9 @@ export const TList = defineComponent({
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
         const emptyStyle = defaultDimStyle(base);
-        const top = clampScrollTop(scrollTop.value);
+        const top = clampListScrollTop(scrollTop.value);
         const activeStyle = defaultActiveStyle(base);
-        const { x: clipX, y: clipY } = clipOffsets();
+        const { x: clipX, y: clipY } = currentClipOffsets();
         const needsHorizontalSlice = clipX !== 0 || r.w !== full.w;
         let emptyLine: string | null = null;
 
@@ -793,7 +723,7 @@ export const TList = defineComponent({
         if (pendingWheelTop !== null && !hasPaintableViewport()) {
           cancelWheelScrollFrame();
         } else if (pendingWheelTop !== null) {
-          const nextPendingTop = clampScrollTop(pendingWheelTop);
+          const nextPendingTop = clampListScrollTop(pendingWheelTop);
           if (nextPendingTop === scrollTop.value) {
             cancelWheelScrollFrame();
           } else if (nextPendingTop !== pendingWheelTop) {
@@ -801,7 +731,7 @@ export const TList = defineComponent({
           }
         }
 
-        const clampedTop = clampScrollTop(scrollTop.value);
+        const clampedTop = clampListScrollTop(scrollTop.value);
         if (clampedTop !== scrollTop.value) {
           // Scroll is defined as viewport-driven changes, including programmatic
           // clamps caused by data length or clipped viewport changes.
