@@ -297,7 +297,7 @@ function computeRowSegments(terminal: Terminal, y: number): RowSegment[] {
   const cells = terminal.getRow(y);
   let currentKey: string | null = null;
   let currentStyle: Style | null = null;
-  let currentParts: string[] = [];
+  let currentText = "";
   let currentCols = 0;
   let currentWide = false;
   const spans: RowSegment[] = [];
@@ -313,18 +313,18 @@ function computeRowSegments(terminal: Terminal, y: number): RowSegment[] {
     if (currentKey == null) {
       currentKey = key;
       currentStyle = nextStyle;
-      currentParts = [ch];
+      currentText = ch;
       currentCols = cols;
       currentWide = wide;
       continue;
     }
     if (key === currentKey && wide === currentWide) {
-      currentParts.push(ch);
+      currentText += ch;
       currentCols += cols;
       continue;
     }
     spans.push({
-      text: currentParts.join(""),
+      text: currentText,
       cols: currentCols,
       wide: currentWide,
       style: currentStyle!,
@@ -332,13 +332,13 @@ function computeRowSegments(terminal: Terminal, y: number): RowSegment[] {
     });
     currentKey = key;
     currentStyle = nextStyle;
-    currentParts = [ch];
+    currentText = ch;
     currentCols = cols;
     currentWide = wide;
   }
   if (currentKey != null) {
     spans.push({
-      text: currentParts.join(""),
+      text: currentText,
       cols: currentCols,
       wide: currentWide,
       style: currentStyle!,
