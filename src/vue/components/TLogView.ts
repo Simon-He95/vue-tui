@@ -27,8 +27,9 @@ import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
-import { intersectRect, translateRect } from "../utils/rect.js";
+import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import {
+  forEachTextCellSegment,
   formatInlineCellLine,
   padEndByCells,
   sanitizeInlineText,
@@ -651,42 +652,37 @@ function wrapStyledSegmentsByCells(
   let row = rows[0]!;
   let rowCells = 0;
 
-  for (const seg of segments) {
-    const totalCells = textCellWidth(seg.text);
-    let offset = 0;
-    while (offset < totalCells) {
-      if (rowCells >= width) {
-        row = [];
-        rows.push(row);
-        rowCells = 0;
+  const openRow = (): void => {
+    row = [];
+    rows.push(row);
+    rowCells = 0;
+  };
+
+  const pushWrappedPiece = (text: string, cells: number, style: Style): void => {
+    if (cells <= 0) return;
+    if (rowCells > 0 && rowCells + cells > width) openRow();
+    if (cells > width) {
+      let remaining = cells;
+      while (remaining > 0) {
+        if (rowCells >= width) openRow();
+        const take = Math.min(width - rowCells, remaining);
+        row.push({ text: spaces(take), cells: take, style });
+        rowCells += take;
+        remaining -= take;
       }
-
-      const remaining = totalCells - offset;
-      const available = Math.max(1, width - rowCells);
-      let text = sliceByCellsRange(seg.text, offset, offset + Math.min(available, remaining));
-      let cells = textCellWidth(text);
-
-      if (!text || cells <= 0) {
-        if (rowCells > 0) {
-          row = [];
-          rows.push(row);
-          rowCells = 0;
-          continue;
-        }
-
-        text = sliceByCellsRange(seg.text, offset, offset + Math.max(available, 2));
-        cells = textCellWidth(text);
-        if (!text || cells <= 0) break;
-      }
-
-      row.push({
-        text,
-        cells,
-        style: seg.style,
-      });
-      rowCells += cells;
-      offset += cells;
+      return;
     }
+
+    if (rowCells >= width) openRow();
+    row.push({ text, cells, style });
+    rowCells += cells;
+  };
+
+  for (const seg of segments) {
+    forEachTextCellSegment(seg.text, (piece) => {
+      if (!piece.text || piece.cells <= 0) return;
+      pushWrappedPiece(piece.text, piece.cells, seg.style);
+    });
   }
 
   return rows;
@@ -861,21 +857,12 @@ export const TLogView = defineComponent({
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
-    function normalizeRect(r: Rect): Rect {
-      return {
-        x: Math.floor(r.x),
-        y: Math.floor(r.y),
-        w: Math.max(0, Math.floor(r.w)),
-        h: Math.max(0, Math.floor(r.h)),
-      };
-    }
-
     function normalizedRect(): Rect {
-      return normalizeRect(absRect.value);
+      return normalizeCellRect(absRect.value);
     }
 
     function normalizedFullRect(): Rect {
-      return normalizeRect(fullRect.value);
+      return normalizeCellRect(fullRect.value);
     }
 
     function clipOffsets(): { x: number; y: number } {
@@ -2952,23 +2939,36 @@ export const TLogView = defineComponent({
       });
     }
 
-    function requestWheelScroll(nextTop: number): void {
+    function requestWheelScroll(nextTop: number): boolean {
       pendingWheelTop = nextTop;
-      scheduler.queueFrameTask({
-        id: `${frameTaskId}:wheel`,
-        reason: "scroll",
-        priority: "high",
-        sync: true,
-        run(ctx) {
-          if (!alive) return;
-          const top = pendingWheelTop;
-          pendingWheelTop = null;
-          if (top == null) return;
-          const changed = applyScrollTop(top, "viewport-repaint", { emitScroll: true });
-          if (!changed) return;
-          ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
-        },
-      });
+      let accepted: boolean | void;
+      try {
+        accepted = scheduler.queueFrameTask({
+          id: `${frameTaskId}:wheel`,
+          reason: "scroll",
+          priority: "high",
+          sync: true,
+          run(ctx) {
+            if (!alive) return;
+            const top = pendingWheelTop;
+            pendingWheelTop = null;
+            if (top == null) return;
+            const changed = applyScrollTop(top, "viewport-repaint", { emitScroll: true });
+            if (!changed) return;
+            ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
+          },
+        });
+      } catch (error) {
+        pendingWheelTop = null;
+        resetWheelScrollState(wheelState);
+        throw error;
+      }
+      if (accepted === false) {
+        pendingWheelTop = null;
+        resetWheelScrollState(wheelState);
+        return false;
+      }
+      return true;
     }
 
     function keyboardScroll(nextTop: number, nextStick?: boolean): void {
@@ -3331,8 +3331,8 @@ export const TLogView = defineComponent({
           );
           if (!dir || nextTop === baseTop) return;
 
+          if (!requestWheelScroll(nextTop)) return;
           e.preventDefault?.();
-          requestWheelScroll(nextTop);
         },
         focus: () => {
           focused.value = true;

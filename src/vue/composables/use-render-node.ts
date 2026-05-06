@@ -12,7 +12,7 @@ export interface RenderNodeOptions {
   stack?: RenderStack;
   rect?: RenderRect | null;
   /**
-   * One-shot absolute terminal rows for row-local content changes only.
+   * One-shot absolute terminal rows for row-local content changes on this node's plane only.
    * Omit this when geometry, z-order, style, data identity, or paint semantics changed.
    */
   dirtyRowsHint?: readonly number[];

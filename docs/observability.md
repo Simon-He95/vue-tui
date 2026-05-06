@@ -81,11 +81,23 @@ DIMCODE_PROFILE_TUI=1
 - `coalescedInvalidates`
 - `frameTaskCount`
 - `coalescedFrameTasks`
+- `frameTaskQueueDepthBeforeRun`
+- `frameTaskQueueDepthAfterRun`
 - `remainingFrameTasks`
+- `droppedUpdates`
 - `liveReasons`
 - `queueDepth`
 
-Phase 2.0 里 `droppedUpdates` 保留为后续 scheduler backpressure 指标，当前恒为 `0`。`coalescedInvalidates` 只统计 scheduler invalidate coalescing；Phase 2.1 起 frame task coalescing 单独记录在 `coalescedFrameTasks`，`frameTaskCount` 是本帧实际执行的 scheduler-owned tasks。`domFlushMs` 只记录与本 scheduler frame 同调用栈完成的 DOM flush；普通 rAF-deferred DOM flush 会体现在 `renderer.debugStats.flush.last`，不会 retroactively 更新已经 push 的 frame sample。DOM renderer flush stats 里的 `planeRows` 是 flushed plane-row line elements，不是去重后的 terminal rows。
+`coalescedInvalidates` 只统计 scheduler invalidate coalescing；`coalescedFrameTasks` 统计 scheduler 层同 id frame task 合并；`droppedUpdates` 统计 producer/mailbox 层没有被单独 apply 的 payload 数。对于 latest-only mailbox，它们是真正被丢弃的中间状态；对于 merge mailbox，它们可能被折叠进最终 apply 的 payload。`droppedUpdates` 是 rendered-frame metric，不是全局 mailbox counter；没有 invalidate 的 mailbox run 可能不会产生 framePerf sample。
+
+当前 wheel burst 指标有两个路径：
+
+- `TList`: 使用 frame mailbox，通常表现为 `droppedUpdates > 0` 且 `coalescedFrameTasks = 0`
+- `TVirtualList`: 暂时仍使用 scheduler-level wheel task coalescing，通常表现为 `coalescedFrameTasks > 0`，后续 mailbox 化后会对齐到 `TList`
+
+`frameTaskCount` 是本帧实际执行的 scheduler-owned tasks。`frameTaskQueueDepthBeforeRun` / `frameTaskQueueDepthAfterRun` 是本帧运行前后的 scheduler frame task 数量，用来观察 producer/task pressure；`queueDepth` 仍然是 terminal scheduler 还有多少已安排的 flush/timer/frame handles，不能当作 pending producer 数。`domFlushMs` 只记录与本 scheduler frame 同调用栈完成的 DOM flush；普通 rAF-deferred DOM flush 会体现在 `renderer.debugStats.flush.last`，不会 retroactively 更新已经 push 的 frame sample。DOM renderer flush stats 里的 `planeRows` 是 flushed plane-row line elements，不是去重后的 terminal rows。
+
+开启 `globalThis.__VT_DEBUG_PERF__` 后，如果单帧里有大量 unique high-priority frame tasks，scheduler 会输出 warning。high-priority task 应使用稳定 id 或 `createFrameMailbox()` 合并 latest-only producer；否则 normal/low task 只能在有限 high pressure 停止后继续 drain。
 
 DOM full-row scroll 优化生效时，FramePerf 的 `dirtyRows` 应接近 exposed rows，而不是 viewport height；`renderer.debugStats.flush.last.planeRows` 表示实际 repaint 的 plane-row line elements。`dirtyRows` 反映 terminal commit 语义，`planeRows` 反映 DOM renderer 实际刷新量；line-node shift 本身不会被计入 dirty row 数。
 

@@ -8,19 +8,41 @@ import type {
 } from "../context.js";
 import { framePerfNow, mergeFramePerfReason } from "../../observability/frame-perf.js";
 
+export type SchedulerFrameMailboxDeliveryAttempt = Readonly<{
+  id: string;
+  queued: number;
+  dropped: number;
+}>;
+
 export type SchedulerFrameTaskRunStats = Readonly<{
   frameTaskCount: number;
+  /**
+   * Number of scheduler-level tasks merged by task id before execution.
+   */
   coalescedFrameTasks: number;
+  frameTaskQueueDepthBeforeRun: number;
+  frameTaskQueueDepthAfterRun: number;
   remainingFrameTasks: number;
+  /**
+   * Number of producer-level values that were not applied individually.
+   * For latest-only mailboxes these are dropped intermediate states.
+   * For merge mailboxes they may be folded into the applied payload.
+   */
+  droppedUpdates: number;
   reason: FramePerfReason;
   sync: boolean;
   requestMore: boolean;
+  error?: unknown;
+  mailboxFailure?: SchedulerFrameMailboxDeliveryAttempt;
 }>;
 
 export const EMPTY_FRAME_TASK_RUN_STATS: SchedulerFrameTaskRunStats = Object.freeze({
   frameTaskCount: 0,
   coalescedFrameTasks: 0,
+  frameTaskQueueDepthBeforeRun: 0,
+  frameTaskQueueDepthAfterRun: 0,
   remainingFrameTasks: 0,
+  droppedUpdates: 0,
   reason: "unknown",
   sync: false,
   requestMore: false,
@@ -37,6 +59,7 @@ type ScheduledFrameHandle =
   | Readonly<{ kind: "timer"; id: ReturnType<typeof setTimeout> }>;
 
 const SCHEDULED_SENTINEL = Symbol("scheduled-frame-task");
+const HIGH_TASK_WARN_THRESHOLD = 128;
 
 const PRIORITY_RANK: Record<TerminalFrameTaskPriority, number> = {
   low: 0,
@@ -66,17 +89,30 @@ function mergeFrameTasks(prev: TerminalFrameTask, next: TerminalFrameTask): Term
   };
 }
 
-function orderedTasks(tasks: readonly TerminalFrameTask[]): TerminalFrameTask[] {
-  const high: TerminalFrameTask[] = [];
-  const normal: TerminalFrameTask[] = [];
-  const low: TerminalFrameTask[] = [];
-  for (const task of tasks) {
-    const priority = normalizePriority(task.priority);
-    if (priority === "high") high.push(task);
-    else if (priority === "low") low.push(task);
-    else normal.push(task);
+type QueuedFrameTask = Readonly<{
+  task: TerminalFrameTask;
+  coalesced: number;
+}>;
+
+function orderedQueuedTasks(tasks: readonly QueuedFrameTask[]): QueuedFrameTask[] {
+  const high: QueuedFrameTask[] = [];
+  const normal: QueuedFrameTask[] = [];
+  const low: QueuedFrameTask[] = [];
+  for (const entry of tasks) {
+    const priority = normalizePriority(entry.task.priority);
+    if (priority === "high") high.push(entry);
+    else if (priority === "low") low.push(entry);
+    else normal.push(entry);
   }
   return [...high, ...normal, ...low];
+}
+
+function highPriorityTaskCount(tasks: readonly QueuedFrameTask[]): number {
+  let count = 0;
+  for (const entry of tasks) {
+    if (normalizePriority(entry.task.priority) === "high") count++;
+  }
+  return count;
 }
 
 export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
@@ -91,10 +127,8 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
   let runningScheduledFrame = false;
   let pendingScheduleMicrotask = false;
   let pendingScheduleRequestMore = false;
-  let coalescedFrameTasks = 0;
-
-  const frameTasksById = new Map<string, TerminalFrameTask>();
-  const anonymousFrameTasks: TerminalFrameTask[] = [];
+  const frameTasksById = new Map<string, QueuedFrameTask>();
+  const anonymousFrameTasks: QueuedFrameTask[] = [];
   const liveReasons = new Map<string, number>();
 
   function hasPendingFrameTasks(): boolean {
@@ -163,27 +197,36 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     if (handle && handle !== SCHEDULED_SENTINEL) cancelFrame(handle);
   }
 
-  function addDeferredTask(task: TerminalFrameTask): void {
+  function addQueuedTask(entry: QueuedFrameTask): void {
+    const task = entry.task;
     if (!task.id) {
-      anonymousFrameTasks.push(task);
+      anonymousFrameTasks.push(entry);
       return;
     }
     const existing = frameTasksById.get(task.id);
-    frameTasksById.set(task.id, existing ? mergeFrameTasks(existing, task) : task);
+    frameTasksById.set(
+      task.id,
+      existing
+        ? {
+            task: mergeFrameTasks(existing.task, task),
+            coalesced: existing.coalesced + entry.coalesced + 1,
+          }
+        : entry,
+    );
   }
 
-  function requeueDeferredTasks(tasks: readonly TerminalFrameTask[]): void {
+  function requeueDeferredTasks(tasks: readonly QueuedFrameTask[]): void {
     if (!tasks.length) return;
     const queuedById = new Map(frameTasksById);
     const queuedAnonymous = anonymousFrameTasks.splice(0);
     frameTasksById.clear();
-    for (const task of tasks) addDeferredTask(task);
-    for (const task of queuedById.values()) addDeferredTask(task);
+    for (const task of tasks) addQueuedTask(task);
+    for (const task of queuedById.values()) addQueuedTask(task);
     anonymousFrameTasks.push(...queuedAnonymous);
   }
 
-  function takeOrderedTasks(): TerminalFrameTask[] {
-    const tasks = orderedTasks([...frameTasksById.values(), ...anonymousFrameTasks]);
+  function takeOrderedTasks(): QueuedFrameTask[] {
+    const tasks = orderedQueuedTasks([...frameTasksById.values(), ...anonymousFrameTasks]);
     frameTasksById.clear();
     anonymousFrameTasks.length = 0;
     return tasks;
@@ -195,18 +238,31 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     if (!options.isActive()) return EMPTY_FRAME_TASK_RUN_STATS;
 
     const force = optionsForRun?.force === true;
+    const frameTaskQueueDepthBeforeRun = remainingFrameTasks();
     const tasks = takeOrderedTasks();
     if (!tasks.length) return EMPTY_FRAME_TASK_RUN_STATS;
 
+    const highTaskCount = highPriorityTaskCount(tasks);
+    if ((globalThis as any).__VT_DEBUG_PERF__ && highTaskCount > HIGH_TASK_WARN_THRESHOLD) {
+      console.warn(
+        `[vue-tui] high-priority frame task queue is large (${highTaskCount}/${frameTaskQueueDepthBeforeRun}). ` +
+          `Use stable task ids or createFrameMailbox() for latest-only producers.`,
+      );
+    }
+
     const startedAt = framePerfNow();
     const currentFrameId = ++frameTaskFrameId;
-    const coalesced = coalescedFrameTasks;
-    coalescedFrameTasks = 0;
     let requestMore = false;
     let frameTaskCount = 0;
+    let coalescedFrameTasks = 0;
+    let droppedUpdates = 0;
     let frameReason: FramePerfReason = "unknown";
     let shouldSync = false;
-    const deferredTasks: TerminalFrameTask[] = [];
+    const deferredTasks: QueuedFrameTask[] = [];
+    let didThrow = false;
+    let error: unknown;
+    let mailboxFailure: SchedulerFrameMailboxDeliveryAttempt | undefined;
+    let currentMailboxAttempt: SchedulerFrameMailboxDeliveryAttempt | undefined;
 
     const ctx: TerminalFrameContext = {
       frameId: currentFrameId,
@@ -222,12 +278,24 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
         if ((invalidateOptions?.priority ?? "normal") === "high") shouldSync = true;
         options.invalidate(invalidateOptions);
       },
+      reportDroppedUpdates: (count) => {
+        if (!Number.isFinite(count) || count <= 0) return;
+        droppedUpdates += Math.floor(count);
+      },
+      reportMailboxDeliveryAttempt: (attempt) => {
+        currentMailboxAttempt = {
+          id: attempt.id,
+          queued: attempt.queued,
+          dropped: attempt.dropped,
+        };
+      },
     };
 
     insideFrame = true;
     try {
       for (let i = 0; i < tasks.length; i++) {
-        const task = tasks[i]!;
+        const entry = tasks[i]!;
+        const task = entry.task;
         const priority = normalizePriority(task.priority);
         if (!force && frameTaskCount > 0 && priority !== "high" && ctx.remainingMs() <= 0) {
           deferredTasks.push(...tasks.slice(i));
@@ -236,9 +304,22 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
         }
 
         frameTaskCount++;
+        coalescedFrameTasks += entry.coalesced;
         frameReason = mergeFramePerfReason(frameReason, task.reason);
         shouldSync = shouldSync || task.sync === true || priority === "high";
-        task.run(ctx);
+        currentMailboxAttempt = undefined;
+        try {
+          task.run(ctx);
+        } catch (taskError) {
+          didThrow = true;
+          error = taskError;
+          mailboxFailure = currentMailboxAttempt;
+          if (i < tasks.length - 1) {
+            deferredTasks.push(...tasks.slice(i + 1));
+            requestMore = true;
+          }
+          break;
+        }
 
         if (!force && priority !== "high" && ctx.remainingMs() <= 0 && i < tasks.length - 1) {
           deferredTasks.push(...tasks.slice(i + 1));
@@ -248,18 +329,22 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
       }
     } finally {
       insideFrame = false;
+      requeueDeferredTasks(deferredTasks);
     }
-
-    requeueDeferredTasks(deferredTasks);
 
     const remaining = remainingFrameTasks();
     return {
       frameTaskCount,
-      coalescedFrameTasks: coalesced,
+      coalescedFrameTasks,
+      frameTaskQueueDepthBeforeRun,
+      frameTaskQueueDepthAfterRun: remaining,
       remainingFrameTasks: remaining,
+      droppedUpdates,
       reason: frameReason,
       sync: shouldSync,
       requestMore,
+      ...(didThrow ? { error } : {}),
+      ...(mailboxFailure ? { mailboxFailure } : {}),
     };
   }
 
@@ -285,14 +370,35 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
 
   function runScheduledFrame(_time = framePerfNow()): void {
     if (!options.isActive()) return;
+
     runningScheduledFrame = true;
+    let didThrow = false;
+    let thrown: unknown;
+    let shouldSchedule = false;
+    let scheduleRequestMore = false;
+
     try {
       const stats = runPendingFrameTasks();
+
       if (stats.frameTaskCount > 0) options.flushFrame(stats);
-      scheduleIfNeeded(stats.requestMore);
+
+      scheduleRequestMore = stats.requestMore || hasPendingFrameTasks();
+      shouldSchedule = scheduleRequestMore || liveReasons.size > 0;
+      if (Object.prototype.hasOwnProperty.call(stats, "error")) {
+        didThrow = true;
+        thrown = stats.error;
+      }
+    } catch (error) {
+      didThrow = true;
+      thrown = error;
+      scheduleRequestMore = hasPendingFrameTasks();
+      shouldSchedule = scheduleRequestMore || liveReasons.size > 0;
     } finally {
       runningScheduledFrame = false;
     }
+
+    if (shouldSchedule) scheduleIfNeeded(scheduleRequestMore);
+    if (didThrow) throw thrown;
   }
 
   function configure(config: TerminalSchedulerConfig): void {
@@ -308,20 +414,38 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
       frameBudgetMs = config.frameBudgetMs;
   }
 
-  function queueFrameTask(task: TerminalFrameTask): void {
-    if (!options.isActive()) return;
+  function queueFrameTask(task: TerminalFrameTask): boolean {
+    if (!options.isActive()) return false;
     if (task.id) {
       const prev = frameTasksById.get(task.id);
       if (prev) {
-        coalescedFrameTasks++;
-        frameTasksById.set(task.id, mergeFrameTasks(prev, task));
+        frameTasksById.set(task.id, {
+          task: mergeFrameTasks(prev.task, task),
+          coalesced: prev.coalesced + 1,
+        });
       } else {
-        frameTasksById.set(task.id, task);
+        frameTasksById.set(task.id, { task, coalesced: 0 });
       }
     } else {
-      anonymousFrameTasks.push(task);
+      anonymousFrameTasks.push({ task, coalesced: 0 });
     }
     scheduleFrame(false);
+    return true;
+  }
+
+  function cancelFrameTask(id: string): boolean {
+    if (!id) return false;
+    const deleted = frameTasksById.delete(id);
+    if (
+      frameTasksById.size === 0 &&
+      anonymousFrameTasks.length === 0 &&
+      scheduledFrame &&
+      !scheduledLiveOnly
+    ) {
+      cancelScheduledFrame();
+      scheduleIfNeeded();
+    }
+    return deleted;
   }
 
   function requestLive(reason: string): () => void {
@@ -348,6 +472,7 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
   return {
     configure,
     queueFrameTask,
+    cancelFrameTask,
     requestLive,
     dropLive,
     isInsideFrame: () => insideFrame,

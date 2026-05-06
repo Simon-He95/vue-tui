@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createTerminal } from "../src/index.js";
 import { createRenderManager } from "../src/vue/render/render-manager.js";
 
@@ -88,6 +88,154 @@ describe("render-manager", () => {
     rm.render();
 
     expect(paints).toEqual(["n0"]);
+  });
+
+  it("markDirtyRows only repaints nodes intersecting requested rows", () => {
+    const paints: string[] = [];
+
+    const listeners = new Map<string, Set<(...args: any[]) => void>>();
+    const terminal: any = {
+      size() {
+        return { cols: 10, rows: 6 };
+      },
+      on(event: string, cb: (...args: any[]) => void) {
+        let set = listeners.get(event);
+        if (!set) {
+          set = new Set();
+          listeners.set(event, set);
+        }
+        set.add(cb);
+        return () => set!.delete(cb);
+      },
+      batch(fn: () => void) {
+        fn();
+      },
+      clear() {},
+    };
+
+    const rm = createRenderManager(terminal);
+    const n0 = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      paint: () => paints.push("n0"),
+    });
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 5, w: 10, h: 1 },
+      paint: () => paints.push("n5"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    expect(rm.markDirtyRows(n0.id, [0])).toBe(true);
+    rm.render();
+
+    expect(paints).toEqual(["n0"]);
+  });
+
+  it("treats markDirtyRows rows as absolute terminal Y coordinates", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 20 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 10, w: 10, h: 3 },
+      paint: () => paints.push("node"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(rm.markDirtyRows(node.id, [0])).toBe(false);
+      expect(rm.render()).toBeNull();
+      expect(paints).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("absolute terminal rows"));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("ignored for this node"));
+
+      expect(rm.markDirtyRows(node.id, [10])).toBe(true);
+      const stats = rm.render();
+
+      expect(stats?.paintedNodes).toBe(1);
+      expect(paints).toEqual(["node"]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("repaints overlapping same-plane nodes in z-order for dirty rows", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 6 });
+    const rm = createRenderManager(terminal);
+    rm.register({
+      stack: rm.rootStack,
+      zIndex: 0,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("base"),
+    });
+    const overlay = rm.register({
+      stack: rm.rootStack,
+      zIndex: 1,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("overlay"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    expect(rm.markDirtyRows(overlay.id, [1])).toBe(true);
+    rm.render();
+
+    expect(paints).toEqual(["base", "overlay"]);
+  });
+
+  it("markDirtyRows returns false when no valid terminal row is accepted", () => {
+    const terminal = createTerminal({ cols: 10, rows: 4 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => {},
+    });
+
+    expect(rm.markDirtyRows(node.id, [])).toBe(false);
+    expect(rm.markDirtyRows(node.id, [-1, 99, Number.NaN])).toBe(false);
+    expect(rm.markDirtyRows(node.id, [1, 1])).toBe(true);
+    expect(rm.markDirtyRows("missing", [1])).toBe(false);
+  });
+
+  it("markDirtyRows ignores rows outside the node rect", () => {
+    const terminal = createTerminal({ cols: 10, rows: 8 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => {},
+    });
+
+    rm.render();
+    expect(rm.markDirtyRows(node.id, [7])).toBe(false);
+    expect(rm.render()).toBeNull();
+  });
+
+  it("markDirtyRows keeps rect-null nodes global", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 8 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: null,
+      paint: () => paints.push("global"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    expect(rm.markDirtyRows(node.id, [7])).toBe(true);
+    rm.render();
+    expect(paints).toEqual(["global"]);
   });
 
   it("only paints nodes intersecting dirty rows when many rows are dirty", () => {
@@ -391,6 +539,30 @@ describe("render-manager", () => {
     expect(stats?.scannedNodes).toBeLessThan(100);
   });
 
+  it("markDirtyRows consumes scratch arrays synchronously and returns false after unregister", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 8 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("node"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    const scratch = [1];
+    expect(rm.markDirtyRows(node.id, scratch)).toBe(true);
+    scratch[0] = 7;
+    rm.render();
+    expect(paints).toEqual(["node"]);
+
+    paints.length = 0;
+    rm.unregister(node.id);
+    expect(rm.markDirtyRows(node.id, [1])).toBe(false);
+  });
+
   it("keeps row buckets in sync across rect updates, plane migration, unregister, and global nodes", () => {
     const paints: string[] = [];
     const listeners = new Map<string, Set<(...args: any[]) => void>>();
@@ -435,7 +607,12 @@ describe("render-manager", () => {
     paints.length = 0;
     rm.update(node.id, { dirtyRowsHint: [1] });
     rm.render();
-    expect(paints).toEqual(["global"]);
+    expect(paints).toEqual([]);
+
+    paints.length = 0;
+    rm.update(node.id, { dirtyRowsHint: [5] });
+    rm.render();
+    expect(paints).toEqual(["global", "node"]);
 
     paints.length = 0;
     rm.update(mover.id, { plane: "overlay", dirtyRowsHint: [2] });
@@ -660,7 +837,7 @@ describe("render-manager", () => {
     expect(dirtyArgs).toEqual(["0,1"]);
   });
 
-  it("falls back to full plane scan but still filters by dirty-row intersection when dirty rows exceed 50%", () => {
+  it("falls back to full plane repaint when dirty rows reach 60% of terminal rows", () => {
     const paints: string[] = [];
     const listeners = new Map<string, Set<(...args: any[]) => void>>();
     const terminal: any = {
@@ -690,8 +867,6 @@ describe("render-manager", () => {
     rm.render();
     paints.length = 0;
 
-    // Register a wide node covering rows 0-59 (60 rows = 60% of 100)
-    // This triggers dirtyRatio > 0.5 fallback
     const wide = rm.register({
       stack: rm.rootStack,
       rect: { x: 0, y: 0, w: 10, h: 60 },
@@ -699,16 +874,132 @@ describe("render-manager", () => {
     });
     const stats = rm.render();
 
-    // All nodes should be scanned (full plane fallback)
-    expect(stats?.scannedNodes).toBe(11); // 10 original + 1 wide
+    expect(stats?.scannedNodes).toBe(11);
     expect(stats?.rowBucketFallbacks).toEqual([
-      { plane: "default", reason: "dirty-ratio", dirtyRows: 60, planeNodes: 11 },
+      {
+        plane: "default",
+        reason: "dirty-ratio",
+        dirtyRows: 60,
+        planeNodes: 11,
+      },
     ]);
-    // But only nodes intersecting dirty rows [0-59] should paint:
-    // wide (0-59), n0 (0-9), n1 (10-19), n2 (20-29), n3 (30-39), n4 (40-49), n5 (50-59)
-    // n6 (60-69), n7 (70-79), n8 (80-89), n9 (90-99) should NOT paint
-    expect(paints.sort()).toEqual(["n0", "n1", "n2", "n3", "n4", "n5", "wide"]);
-    expect(stats?.paintedNodes).toBe(7);
+    expect(paints.sort()).toEqual([
+      "n0",
+      "n1",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "n7",
+      "n8",
+      "n9",
+      "wide",
+    ]);
+    expect(stats?.paintedNodes).toBe(11);
+  });
+
+  it("records dirty-ratio fallback when manual dirty rows cover most terminal rows", () => {
+    const terminal = createTerminal({ cols: 10, rows: 24 });
+    const rm = createRenderManager(terminal);
+    const target = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 20 },
+      paint: () => {},
+    });
+
+    for (let i = 0; i < 2; i++) {
+      rm.register({
+        stack: rm.rootStack,
+        rect: { x: 0, y: 23, w: 1, h: 1 },
+        paint: () => {},
+      });
+    }
+
+    rm.render();
+
+    expect(
+      rm.markDirtyRows(
+        target.id,
+        Array.from({ length: 20 }, (_, index) => index),
+      ),
+    ).toBe(true);
+    const stats = rm.render();
+
+    expect(stats?.scannedNodes).toBe(3);
+    expect(stats?.paintedNodes).toBe(3);
+    expect(stats?.rowBucketFallbacks).toEqual([
+      {
+        plane: "default",
+        reason: "dirty-ratio",
+        dirtyRows: 20,
+        planeNodes: 3,
+      },
+    ]);
+  });
+
+  it("keeps row-bucket path when many unrelated plane nodes make full scan expensive", () => {
+    const terminal = createTerminal({ cols: 10, rows: 24 });
+    const rm = createRenderManager(terminal);
+    const target = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 20 },
+      paint: () => {},
+    });
+
+    for (let i = 0; i < 300; i++) {
+      rm.register({
+        stack: rm.rootStack,
+        rect: { x: 0, y: 23, w: 1, h: 1 },
+        paint: () => {},
+      });
+    }
+
+    rm.render();
+
+    expect(
+      rm.markDirtyRows(
+        target.id,
+        Array.from({ length: 20 }, (_, index) => index),
+      ),
+    ).toBe(true);
+    const stats = rm.render();
+
+    expect(stats?.scannedNodes).toBe(1);
+    expect(stats?.paintedNodes).toBe(1);
+    expect(stats?.rowBucketFallbacks).toBeUndefined();
+  });
+
+  it("does not use dirty-ratio fallback for small dirty row counts", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 10 });
+    const rm = createRenderManager(terminal);
+    const target = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 6 },
+      paint: () => paints.push("target"),
+    });
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 9, w: 10, h: 1 },
+      paint: () => paints.push("outside"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    expect(
+      rm.markDirtyRows(
+        target.id,
+        Array.from({ length: 6 }, (_, index) => index),
+      ),
+    ).toBe(true);
+    const stats = rm.render();
+
+    expect(stats?.scannedNodes).toBe(1);
+    expect(stats?.paintedNodes).toBe(1);
+    expect(stats?.rowBucketFallbacks).toBeUndefined();
+    expect(paints).toEqual(["target"]);
   });
 
   it("falls back to full plane scan when bucket candidates exceed 60% of planeNodes", () => {
@@ -729,9 +1020,8 @@ describe("render-manager", () => {
     };
 
     const rm = createRenderManager(terminal);
-    // Register 5 nodes that all overlap rows 0-4
     const nodes: { id: string }[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       nodes.push(
         rm.register({
           stack: rm.rootStack,
@@ -740,14 +1030,18 @@ describe("render-manager", () => {
         }),
       );
     }
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 9, w: 10, h: 1 },
+      paint: () => paints.push("outside"),
+    });
     rm.render();
     paints.length = 0;
 
-    // Dirty rows 0-3 — all 5 nodes are candidates, which is 5/5 = 100% > 60% threshold
+    // Dirty rows 0-3 — 4/5 nodes are candidates, which is > 60%.
     rm.update(nodes[0]!.id, { dirtyRowsHint: [0, 1, 2, 3] });
     const stats = rm.render();
 
-    // Should fall back to planeNodes since candidates (5) > planeNodes (5) * 0.6
     expect(stats?.scannedNodes).toBe(5);
     expect(stats?.rowBucketFallbacks).toEqual([
       {
@@ -755,27 +1049,24 @@ describe("render-manager", () => {
         reason: "candidate-ratio",
         dirtyRows: 4,
         planeNodes: 5,
-        candidates: 5,
+        candidates: 4,
       },
     ]);
-    // All 5 nodes intersect dirty rows 0-3, so all should paint
-    expect(paints.sort()).toEqual(["n0", "n1", "n2", "n3", "n4"]);
-    expect(stats?.paintedNodes).toBe(5);
+    expect(paints.sort()).toEqual(["n0", "n1", "n2", "n3"]);
+    expect(stats?.paintedNodes).toBe(4);
   });
 
-  it("fallback scan does not paint non-intersecting nodes", () => {
+  it("row bucket partial repaint does not scan non-intersecting nodes", () => {
     const paints: string[] = [];
     const terminal = createTerminal({ cols: 10, rows: 100 });
     const rm = createRenderManager(terminal);
 
-    // Node A: covers rows 0-59 (intersects dirty rows)
     const nodeA = rm.register({
       stack: rm.rootStack,
-      rect: { x: 0, y: 0, w: 10, h: 60 },
+      rect: { x: 0, y: 0, w: 10, h: 59 },
       paint: () => paints.push("A"),
     });
 
-    // Node B: covers rows 90-99 (does NOT intersect dirty rows 0-59)
     rm.register({
       stack: rm.rootStack,
       rect: { x: 0, y: 90, w: 10, h: 10 },
@@ -785,21 +1076,61 @@ describe("render-manager", () => {
     rm.render();
     paints.length = 0;
 
-    // Re-register nodeA's rect — this marks rows 0-59 dirty (60/100 = 60% > 50%)
-    // This triggers the dirtyRatio fallback, scanning all planeNodes
-    rm.update(nodeA.id, { rect: { x: 0, y: 0, w: 10, h: 60 } });
+    rm.update(nodeA.id, { rect: { x: 0, y: 0, w: 10, h: 59 } });
     const stats = rm.render();
 
-    // Both nodes are scanned (full plane fallback)
-    expect(stats?.scannedNodes).toBe(2);
-    // But B must NOT be painted since its rect (90-99) doesn't intersect dirty rows (0-59)
+    expect(stats?.scannedNodes).toBe(1);
     expect(paints).not.toContain("B");
-    // A should be painted (it intersects dirty rows)
     expect(paints).toContain("A");
     expect(stats?.paintedNodes).toBe(1);
   });
 
-  it("fallback scan filters non-contiguous dirty rows exactly", () => {
+  it("updates and removes large rect candidates without leaking ids", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 100 });
+    const rm = createRenderManager(terminal);
+
+    const large = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 60 },
+      paint: () => paints.push("large"),
+    });
+    const target = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 90, w: 10, h: 1 },
+      paint: () => paints.push("target"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    expect(rm.markDirtyRows(target.id, [90])).toBe(true);
+    let stats = rm.render();
+    expect(stats?.scannedNodes).toBe(1);
+    expect(paints).toEqual(["target"]);
+
+    paints.length = 0;
+    rm.update(large.id, { rect: { x: 0, y: 80, w: 10, h: 20 } });
+    rm.render();
+
+    paints.length = 0;
+    expect(rm.markDirtyRows(target.id, [90])).toBe(true);
+    stats = rm.render();
+    expect(stats?.scannedNodes).toBe(2);
+    expect(paints.sort()).toEqual(["large", "target"]);
+
+    paints.length = 0;
+    rm.unregister(large.id);
+    rm.render();
+
+    paints.length = 0;
+    expect(rm.markDirtyRows(target.id, [90])).toBe(true);
+    stats = rm.render();
+    expect(stats?.scannedNodes).toBe(1);
+    expect(paints).toEqual(["target"]);
+  });
+
+  it("filters dirtyRowsHint to the node rect", () => {
     const paints: string[] = [];
     const terminal = createTerminal({ cols: 10, rows: 100 });
     const rm = createRenderManager(terminal);
@@ -828,11 +1159,36 @@ describe("render-manager", () => {
     rm.update(first.id, { dirtyRowsHint: [0, 99] });
     const stats = rm.render();
 
-    expect(stats?.scannedNodes).toBe(3);
-    expect(paints).toContain("first");
-    expect(paints).toContain("last");
+    expect(stats?.scannedNodes).toBe(1);
+    expect(paints).toEqual(["first"]);
     expect(paints).not.toContain("middle");
-    expect(stats?.paintedNodes).toBe(2);
+    expect(paints).not.toContain("last");
+    expect(stats?.paintedNodes).toBe(1);
+  });
+
+  it("does not repaint another same-plane node from dirtyRowsHint outside the source node", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 20 });
+    const rm = createRenderManager(terminal);
+
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 2 },
+      paint: () => paints.push("top"),
+    });
+    const source = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 10, w: 10, h: 2 },
+      paint: () => paints.push("source"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    rm.update(source.id, { dirtyRowsHint: [0] });
+
+    expect(rm.render()).toBeNull();
+    expect(paints).toEqual([]);
   });
 
   it("rebuilds row buckets after terminal resize shrink", () => {

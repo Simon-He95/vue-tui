@@ -29,8 +29,10 @@ describe("TDebugOverlay", () => {
           coalescedInvalidates: 4,
           frameTaskCount: 1,
           coalescedFrameTasks: 3,
+          frameTaskQueueDepthBeforeRun: 4,
+          frameTaskQueueDepthAfterRun: 0,
           remainingFrameTasks: 0,
-          droppedUpdates: 0,
+          droppedUpdates: 7,
           queueDepth: 0,
         });
         return () => null;
@@ -44,7 +46,7 @@ describe("TDebugOverlay", () => {
       },
     });
 
-    const app = createTerminalApp({ cols: 52, rows: 16, component: App as any });
+    const app = createTerminalApp({ cols: 52, rows: 17, component: App as any });
     try {
       app.mount();
       app.scheduler.flushNow();
@@ -57,8 +59,9 @@ describe("TDebugOverlay", () => {
       expect(text).toContain("paintedNodes: 2");
       expect(text).toContain("domFlush: 1.2ms");
       expect(text).toContain("coalescedInvalidates: 4");
-      expect(text).toContain("frameTasks: 1");
+      expect(text).toContain("frameTasks: 1 queue:4->0");
       expect(text).toContain("coalescedTasks: 3");
+      expect(text).toContain("droppedUpdates: 7");
       expect(text).toContain("queueDepth: 0");
     } finally {
       app.dispose();
@@ -105,6 +108,8 @@ describe("TDebugOverlay", () => {
         coalescedInvalidates: 0,
         frameTaskCount: 0,
         coalescedFrameTasks: 0,
+        frameTaskQueueDepthBeforeRun: 0,
+        frameTaskQueueDepthAfterRun: 0,
         remainingFrameTasks: 0,
         droppedUpdates: 0,
         queueDepth: 0,

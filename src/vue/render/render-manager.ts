@@ -7,8 +7,17 @@ import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { clearTextCaches, withTextRenderPass } from "../utils/text.js";
 
 const renderMgrDebugLog = createDebugLogger(isDebugEnabled());
-const ROW_BUCKET_DIRTY_RATIO_FALLBACK = 0.5;
 const ROW_BUCKET_CANDIDATE_RATIO_FALLBACK = 0.6;
+const ROW_BUCKET_DIRTY_RATIO_FALLBACK = 0.6;
+const ROW_BUCKET_DIRTY_RATIO_MIN_ROWS = 16;
+const LARGE_RECT_BUCKET_RATIO = 0.5;
+
+function warnDev(message: string): void {
+  const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
+    ?.NODE_ENV;
+  if (nodeEnv === "production") return;
+  console.warn(message);
+}
 
 export type RenderRect = Readonly<{
   x: number;
@@ -33,6 +42,10 @@ export type RenderNode = Readonly<{
   rect: RenderRect | null;
   rectY0: number;
   rectY1: number;
+  /**
+   * dirtyRows are absolute terminal rows for this node's plane.
+   * Components must ignore rows outside their rect.
+   */
   paint: (dirtyRows?: readonly number[]) => void;
 }>;
 
@@ -65,10 +78,23 @@ export type RenderManager = Readonly<{
       plane: TerminalRenderPlane;
       zIndex: number;
       rect: RenderRect | null;
+      /**
+       * Consumed synchronously during update() and must not be retained.
+       * Callers may pass scratch arrays for hot-path invalidation.
+       * Rows are absolute terminal Y coordinates for the node's plane.
+       */
       dirtyRowsHint: readonly number[];
       paint: (dirtyRows?: readonly number[]) => void;
     }>,
   ) => void;
+  /**
+   * Hot-path dirty row marker for stable nodes. Consumed synchronously and does
+   * not replace the RenderNode object.
+   *
+   * rows are absolute terminal Y coordinates, not local component row offsets.
+   * For rect-bound nodes, rows outside the node rect are ignored.
+   */
+  markDirtyRows: (id: string, rows: readonly number[]) => boolean;
   unregister: (id: string) => void;
   render: (options?: { activePlanes?: TerminalRenderPlanes | null }) => RenderStats | null;
 }>;
@@ -137,6 +163,14 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   let sortedDirty = true;
   const rowBuckets: RenderRowBuckets = new Map();
   const globalNodeIdsByPlane = new Map<TerminalRenderPlane, Set<string>>();
+  const largeNodeIdsByPlane = new Map<TerminalRenderPlane, Set<string>>();
+  let renderedRowsScratch = new Uint8Array(terminalRows);
+  const touchedRenderedRowsScratch: number[] = [];
+  const dirtyRowsScratch: number[] = [];
+  let candidateMarksScratch = new Uint32Array(0);
+  let candidateGeneration = 1;
+  const candidateNodesScratch: RenderNode[] = [];
+  const warnedLocalDirtyRows = new Set<string>();
 
   const stackPathCache = new WeakMap<RenderStack, readonly PathSegment[]>();
   const profiler = createTuiProfiler("render-manager");
@@ -194,11 +228,15 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   } {
     if (!rect) return { y0: 0, y1: 0 };
     const y0 = Math.floor(rect.y);
-    const y1 = y0 + Math.max(0, Math.floor(rect.h));
+    const y1 = Math.max(y0, Math.floor(rect.y + rect.h));
     return { y0, y1 };
   }
 
   function removeFromRowBuckets(node: RenderNode): void {
+    const largeIds = largeNodeIdsByPlane.get(node.plane);
+    largeIds?.delete(node.id);
+    if (largeIds?.size === 0) largeNodeIdsByPlane.delete(node.plane);
+
     if (!node.rect) {
       const globalIds = globalNodeIdsByPlane.get(node.plane);
       globalIds?.delete(node.id);
@@ -232,6 +270,16 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     const startY = Math.max(0, node.rectY0);
     const endY = Math.min(terminalRows, node.rectY1);
     if (endY <= startY) return;
+    if (endY - startY >= terminalRows * LARGE_RECT_BUCKET_RATIO) {
+      let largeIds = largeNodeIdsByPlane.get(node.plane);
+      if (!largeIds) {
+        largeIds = new Set();
+        largeNodeIdsByPlane.set(node.plane, largeIds);
+      }
+      largeIds.add(node.id);
+      return;
+    }
+
     let buckets = rowBuckets.get(node.plane);
     if (!buckets) {
       buckets = new Map();
@@ -250,7 +298,106 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   function rebuildRowBuckets(): void {
     rowBuckets.clear();
     globalNodeIdsByPlane.clear();
+    largeNodeIdsByPlane.clear();
     for (const node of nodes.values()) addToRowBuckets(node);
+  }
+
+  function shouldPromoteToFullPlaneDirty(dirtyRows: number, planeNodes: number): boolean {
+    return (
+      planeNodes > 1 &&
+      dirtyRows >= ROW_BUCKET_DIRTY_RATIO_MIN_ROWS &&
+      terminalRows > 0 &&
+      dirtyRows / terminalRows >= ROW_BUCKET_DIRTY_RATIO_FALLBACK &&
+      dirtyRows >= planeNodes * ROW_BUCKET_DIRTY_RATIO_FALLBACK
+    );
+  }
+
+  function ensureRenderedRowsScratch(): Uint8Array {
+    if (renderedRowsScratch.length !== terminalRows) {
+      renderedRowsScratch = new Uint8Array(terminalRows);
+      touchedRenderedRowsScratch.length = 0;
+    }
+    return renderedRowsScratch;
+  }
+
+  function clearRenderedRowsScratch(rows: Uint8Array): void {
+    for (const y of touchedRenderedRowsScratch) rows[y] = 0;
+    touchedRenderedRowsScratch.length = 0;
+  }
+
+  function markRenderedRow(rows: Uint8Array, y: number): boolean {
+    if (y < 0 || y >= terminalRows || rows[y] === 1) return false;
+    rows[y] = 1;
+    touchedRenderedRowsScratch.push(y);
+    return true;
+  }
+
+  function warnIfRowsLookLocal(node: RenderNode, rows: readonly number[]): void {
+    if (!node.rect || node.rectY0 === 0 || warnedLocalDirtyRows.has(node.id)) return;
+    const height = node.rectY1 - node.rectY0;
+    if (height <= 0) return;
+    let sawRow = false;
+    let sawAboveRect = false;
+    for (let i = 0; i < rows.length; i++) {
+      const y = Math.floor(rows[i] ?? -1);
+      if (!Number.isFinite(y) || y < 0 || y >= height) return;
+      sawRow = true;
+      if (y < node.rectY0) sawAboveRect = true;
+    }
+    if (!sawRow || !sawAboveRect) return;
+    warnedLocalDirtyRows.add(node.id);
+    warnDev(
+      `[vue-tui] RenderManager markDirtyRows()/dirtyRowsHint rows must be absolute terminal rows for the node's plane. ` +
+        `Received rows that look local to a node at y=${node.rectY0}; these rows will be ignored for this node. ` +
+        `Add the node y offset before marking dirty rows.`,
+    );
+  }
+
+  function ensureCandidateMarks(size: number): Uint32Array {
+    if (candidateMarksScratch.length < size) {
+      candidateMarksScratch = new Uint32Array(size);
+    }
+    return candidateMarksScratch;
+  }
+
+  function beginCandidateCollection(planeNodes: readonly RenderNode[]): Uint32Array {
+    candidateNodesScratch.length = 0;
+    const marks = ensureCandidateMarks(planeNodes.length);
+    candidateGeneration++;
+    if (candidateGeneration === 0xffffffff) {
+      marks.fill(0);
+      candidateGeneration = 1;
+    }
+    return marks;
+  }
+
+  function markCandidateNode(
+    planeNodes: readonly RenderNode[],
+    marks: Uint32Array,
+    node: RenderNode | undefined,
+  ): void {
+    if (!node) return;
+    const index = sortedPlaneNodeIndexById.get(node.id);
+    if (index == null || planeNodes[index]?.id !== node.id) return;
+    if (marks[index] === candidateGeneration) return;
+    marks[index] = candidateGeneration;
+    candidateNodesScratch.push(node);
+  }
+
+  function sortCandidateNodesByPlaneOrder(): void {
+    for (let i = 1; i < candidateNodesScratch.length; i++) {
+      const node = candidateNodesScratch[i]!;
+      const nodeIndex = sortedPlaneNodeIndexById.get(node.id) ?? 0;
+      let j = i - 1;
+      while (
+        j >= 0 &&
+        (sortedPlaneNodeIndexById.get(candidateNodesScratch[j]!.id) ?? 0) > nodeIndex
+      ) {
+        candidateNodesScratch[j + 1] = candidateNodesScratch[j]!;
+        j--;
+      }
+      candidateNodesScratch[j + 1] = node;
+    }
   }
 
   function markRect(plane: TerminalRenderPlane, rect: RenderRect | null | undefined): void {
@@ -260,7 +407,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       return;
     }
     const y0 = Math.floor(rect.y);
-    const y1 = y0 + Math.max(0, Math.floor(rect.h));
+    const y1 = Math.max(y0, Math.floor(rect.y + rect.h));
     const startY = Math.max(0, y0);
     const endY = Math.min(terminalRows, y1);
     const span = endY - startY;
@@ -278,12 +425,19 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     }
   }
 
-  function markRows(plane: TerminalRenderPlane, rows: readonly number[]): void {
-    if (!rows.length) return;
-    const state = getDirtyState(plane);
+  function markRowsForNode(node: RenderNode, rows: readonly number[]): boolean {
+    if (!rows.length) return false;
+    warnIfRowsLookLocal(node, rows);
+    const state = getDirtyState(node.plane);
+    let accepted = false;
+
     for (let i = 0; i < rows.length; i++) {
       const y = Math.floor(rows[i] ?? -1);
+      if (!Number.isFinite(y)) continue;
       if (y < 0 || y >= terminalRows) continue;
+      if (node.rect && (y < node.rectY0 || y >= node.rectY1)) continue;
+
+      accepted = true;
       if (state.dirtyRowBits[y] === 0) {
         state.dirtyRowBits[y] = 1;
         state.dirtyRowCount++;
@@ -291,6 +445,8 @@ export function createRenderManager(terminal: Terminal): RenderManager {
         if (y > state.dirtyMaxY) state.dirtyMaxY = y;
       }
     }
+
+    return accepted;
   }
 
   function unsafeScrollPlaneRows(
@@ -357,6 +513,8 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     const rectChanged = !sameRect(prev.rect, nextRect);
     const bucketChanged = planeChanged || rectChanged;
     const { y0, y1 } = rectToYBounds(nextRect);
+    // dirtyRowsHint is consumed synchronously here and must use absolute
+    // terminal rows for this plane.
     const dirtyRowsHint = next.dirtyRowsHint;
     const canUseDirtyRowsHint =
       !sortChanged &&
@@ -365,7 +523,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       dirtyRowsHint != null &&
       dirtyRowsHint.length > 0;
     if (canUseDirtyRowsHint) {
-      markRows(nextPlane, dirtyRowsHint);
+      markRowsForNode(prev, dirtyRowsHint);
     } else {
       markRect(prev.plane, prev.rect);
       markRect(nextPlane, nextRect);
@@ -394,11 +552,19 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     }
   }
 
+  function markDirtyRows(id: string, rows: readonly number[]): boolean {
+    if (!rows.length) return false;
+    const node = nodes.get(id);
+    if (!node) return false;
+    return markRowsForNode(node, rows);
+  }
+
   function unregister(id: string): void {
     const prev = nodes.get(id);
     if (prev) {
       markRect(prev.plane, prev.rect);
       removeFromRowBuckets(prev);
+      warnedLocalDirtyRows.delete(id);
     }
     nodes.delete(id);
     sortedDirty = true;
@@ -497,19 +663,19 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     let fullRepaint = false;
     const processedPlanes: TerminalRenderPlane[] = [];
     const rowBucketFallbacks: RowBucketFallback[] = [];
-    const renderedRows = new Uint8Array(terminalRows);
+    const renderedRows = ensureRenderedRowsScratch();
+    clearRenderedRowsScratch(renderedRows);
     let renderedRowCount = 0;
 
     const markRenderedRows = (rows: readonly number[] | null): void => {
       if (rows === null) {
-        renderedRowCount = terminalRows;
-        renderedRows.fill(1);
+        for (let y = 0; y < terminalRows; y++) {
+          if (markRenderedRow(renderedRows, y)) renderedRowCount++;
+        }
         return;
       }
       for (const y of rows) {
-        if (y < 0 || y >= terminalRows || renderedRows[y] === 1) continue;
-        renderedRows[y] = 1;
-        renderedRowCount++;
+        if (markRenderedRow(renderedRows, y)) renderedRowCount++;
       }
     };
 
@@ -520,11 +686,26 @@ export function createRenderManager(terminal: Terminal): RenderManager {
           if (!state || (!state.allRowsDirty && state.dirtyRowCount === 0)) continue;
 
           const planeNodes = sortedNodesByPlane.get(plane) ?? [];
-          const isFullPlaneRepaint = state.allRowsDirty;
+          let isFullPlaneRepaint = state.allRowsDirty;
           let rows: number[] = allRows;
 
+          if (
+            !isFullPlaneRepaint &&
+            shouldPromoteToFullPlaneDirty(state.dirtyRowCount, planeNodes.length)
+          ) {
+            isFullPlaneRepaint = true;
+            state.allRowsDirty = true;
+            rowBucketFallbacks.push({
+              plane,
+              reason: "dirty-ratio",
+              dirtyRows: state.dirtyRowCount,
+              planeNodes: planeNodes.length,
+            });
+          }
+
           if (!isFullPlaneRepaint) {
-            rows = [];
+            dirtyRowsScratch.length = 0;
+            rows = dirtyRowsScratch;
             const startY = Number.isFinite(state.dirtyMinY) ? state.dirtyMinY : 0;
             const endY = state.dirtyMaxY;
             for (let y = startY; y <= endY; y++) {
@@ -549,51 +730,47 @@ export function createRenderManager(terminal: Terminal): RenderManager {
           const candidateNodes = isFullPlaneRepaint
             ? planeNodes
             : (() => {
-                // TODO: Phase 2 — reuse a scratch set/array across frames to reduce
-                // per-frame allocation for high-frequency scroll. A numeric node index
-                // with a Uint8Array/generation marker could also eliminate string Set overhead.
-                // Row bucket degradation: skip bucket collection when dirty rows cover > 50% of terminal
-                const dirtyRatio = rows.length / terminalRows;
-                if (dirtyRatio > ROW_BUCKET_DIRTY_RATIO_FALLBACK) {
-                  needsIntersectFilter = true;
-                  rowBucketFallbacks.push({
-                    plane,
-                    reason: "dirty-ratio",
-                    dirtyRows: rows.length,
-                    planeNodes: planeNodes.length,
-                  });
-                  return planeNodes;
-                }
-                const ids = new Set<string>();
+                const marks = beginCandidateCollection(planeNodes);
                 const buckets = rowBuckets.get(plane);
                 for (const y of rows) {
                   const rowIds = buckets?.get(y);
                   if (!rowIds) continue;
-                  for (const id of rowIds) ids.add(id);
+                  for (const id of rowIds) {
+                    markCandidateNode(planeNodes, marks, nodes.get(id));
+                  }
+                }
+                const largeIds = largeNodeIdsByPlane.get(plane);
+                if (largeIds) {
+                  for (const id of largeIds) {
+                    const node = nodes.get(id);
+                    if (!node) continue;
+                    if (intersectsDirtyRows(node.rectY0, node.rectY1, rows)) {
+                      markCandidateNode(planeNodes, marks, node);
+                    }
+                  }
                 }
                 const globalIds = globalNodeIdsByPlane.get(plane);
-                if (globalIds) for (const id of globalIds) ids.add(id);
-                const candidates = Array.from(ids, (id) => nodes.get(id))
-                  .filter((node): node is RenderNode => node != null)
-                  .sort((a, b) => {
-                    const ai = sortedPlaneNodeIndexById.get(a.id);
-                    const bi = sortedPlaneNodeIndexById.get(b.id);
-                    if (ai == null || bi == null) return compareNodes(a, b);
-                    return ai - bi;
-                  });
+                if (globalIds) {
+                  for (const id of globalIds) markCandidateNode(planeNodes, marks, nodes.get(id));
+                }
+                sortCandidateNodesByPlaneOrder();
                 // Row bucket degradation: fall back to planeNodes when bucket candidates exceed 60%
-                if (candidates.length > planeNodes.length * ROW_BUCKET_CANDIDATE_RATIO_FALLBACK) {
+                if (
+                  candidateNodesScratch.length < planeNodes.length &&
+                  candidateNodesScratch.length >
+                    planeNodes.length * ROW_BUCKET_CANDIDATE_RATIO_FALLBACK
+                ) {
                   needsIntersectFilter = true;
                   rowBucketFallbacks.push({
                     plane,
                     reason: "candidate-ratio",
                     dirtyRows: rows.length,
                     planeNodes: planeNodes.length,
-                    candidates: candidates.length,
+                    candidates: candidateNodesScratch.length,
                   });
                   return planeNodes;
                 }
-                return candidates;
+                return candidateNodesScratch;
               })();
           scannedNodes += candidateNodes.length;
 
@@ -660,6 +837,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     unsafeScrollPlaneRows,
     register,
     update,
+    markDirtyRows,
     unregister,
     render,
   };

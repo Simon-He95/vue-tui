@@ -68,15 +68,18 @@
     "format:check": "oxfmt --check .",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
+    "check:hidden-unicode": "node scripts/check-hidden-unicode.cjs",
     "prepublishOnly": "pnpm build",
     "release": "bumpp && pnpm publish --no-git-checks --access public",
     "start": "esno src/index.ts",
     "test": "vitest run",
+    "test:unit": "vitest run --exclude test/package-exports.test.ts",
     "test:package-exports": "pnpm run build && VUE_TUI_REQUIRE_DIST_EXPORTS=1 vitest run test/package-exports.test.ts",
     "typecheck": "tsc --noEmit",
     "e2e": "playwright test",
     "bench:vfor": "tsx scripts/bench-vfor.ts",
-    "bench:phase2": "tsx scripts/bench-phase2.ts"
+    "bench:phase2": "tsx scripts/bench-phase2.ts",
+    "bench:scroll-mailbox": "tsx scripts/bench-scroll-mailbox.ts"
   },
   "dependencies": {
     "stream-markdown-parser": "^0.0.90"
@@ -106,5 +109,6 @@
   "lint-staged": {
     "*": "oxfmt --write",
     "*.{vue,js,ts,jsx,tsx}": "oxlint --fix"
-  }
+  },
+  "packageManager": "pnpm@10.32.1"
 }

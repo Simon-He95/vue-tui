@@ -401,6 +401,34 @@ type TerminalHandle = {
 - `TDialog`:
   - 居中布局、遮罩区域、阻止底层事件
 
+## 0.0.x 迁移提示
+
+`TList` 的滚轮滚动只移动 viewport，不再同步移动选中项，也不再触发
+`update:modelValue`。如果旧代码依赖滚轮更新选中项，请改为分别监听
+`@scroll` 和 `@update:modelValue`：
+
+```vue
+<TList
+  :items="items"
+  :model-value="selectedIndex"
+  @update:model-value="selectedIndex = $event"
+  @scroll="viewportTop = $event"
+  @change="confirmItem"
+/>
+```
+
+`TRenderPlane.plane` mount 后不再动态迁移子树；需要换 plane 时给
+`TRenderPlane` 加 key 触发重挂载：
+
+```vue
+<TRenderPlane :key="activePlane" :plane="activePlane">
+  <PaneBody />
+</TRenderPlane>
+```
+
+`scheduler.queueFrameTask()` 返回 `false` 表示任务被拒绝，producer 应清理本地
+pending 状态；返回 `true` 或旧实现的 `undefined` 都表示已接受。
+
 ## 响应式与尺寸变化（建议）
 
 - `TerminalProvider` 监听容器尺寸变化，触发 `resize(cols, rows)` 并广播 `resize` 事件

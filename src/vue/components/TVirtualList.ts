@@ -19,7 +19,8 @@ import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
-import { intersectRect, translateRect } from "../utils/rect.js";
+import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
+import { defaultActiveStyle } from "../utils/style-cache.js";
 import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
 import {
   applyWheelScroll,
@@ -36,18 +37,6 @@ function normalizeIndex(value: unknown, count: number): number {
   const n = Math.floor(Number(value));
   if (!Number.isFinite(n)) return 0;
   return clamp(n, 0, max);
-}
-
-const activeStyleCache = new WeakMap<Style, Style>();
-
-function defaultActiveStyle(base: Style): Style {
-  if (base.inverse) return base;
-  let cached = activeStyleCache.get(base);
-  if (!cached) {
-    cached = Object.freeze({ ...base, inverse: true });
-    activeStyleCache.set(base, cached);
-  }
-  return cached;
 }
 
 function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
@@ -72,6 +61,8 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
 
 type ScrollStrategy = "auto" | "viewport-repaint";
 export type RowScrollMode = "off" | "unsafe-full-row";
+
+let virtualListInstanceSeq = 0;
 
 export const TVirtualList = defineComponent({
   name: "TVirtualList",
@@ -106,6 +97,8 @@ export const TVirtualList = defineComponent({
     const plane = inject(RenderPlaneContextKey, ref<TerminalRenderPlane>("default"));
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
+    const virtualListInstanceId = ++virtualListInstanceSeq;
+    const wheelTaskId = `TVirtualList:${virtualListInstanceId}:wheel`;
 
     const focused = ref(false);
     const active = ref(props.modelValue);
@@ -138,21 +131,12 @@ export const TVirtualList = defineComponent({
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
-    function normalizeRect(r: Rect): Rect {
-      return {
-        x: Math.floor(r.x),
-        y: Math.floor(r.y),
-        w: Math.max(0, Math.floor(r.w)),
-        h: Math.max(0, Math.floor(r.h)),
-      };
-    }
-
     function normalizedRect(): Rect {
-      return normalizeRect(absRect.value);
+      return normalizeCellRect(absRect.value);
     }
 
     function normalizedFullRect(): Rect {
-      return normalizeRect(fullRect.value);
+      return normalizeCellRect(fullRect.value);
     }
 
     function clipOffsets(): { x: number; y: number } {
@@ -293,26 +277,43 @@ export const TVirtualList = defineComponent({
 
     function cancelWheelScrollFrame(): void {
       pendingWheelTop = null;
+      scheduler.cancelFrameTask?.(wheelTaskId);
       resetWheelScrollState(wheelState);
     }
 
-    function requestWheelScroll(nextTop: number): void {
+    function requestWheelScroll(nextTop: number): boolean {
       pendingWheelTop = nextTop;
-      scheduler.queueFrameTask({
-        id: `TVirtualList:${renderNodeId ?? "pending"}:wheel`,
-        reason: "scroll",
-        priority: "high",
-        sync: true,
-        run(ctx) {
-          if (!alive) return;
-          const top = pendingWheelTop;
-          pendingWheelTop = null;
-          if (top == null) return;
-          const changed = applyScrollTop(top, "auto", { emitScroll: true });
-          if (!changed) return;
-          ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
-        },
-      });
+      // TODO(perf): Convert TVirtualList wheel scheduling to createFrameMailbox
+      // so wheel burst metrics match TList: producer-level droppedUpdates instead
+      // of scheduler-level coalescedFrameTasks.
+      let accepted: boolean | void;
+      try {
+        accepted = scheduler.queueFrameTask({
+          id: wheelTaskId,
+          reason: "scroll",
+          priority: "high",
+          sync: true,
+          run(ctx) {
+            if (!alive) return;
+            const top = pendingWheelTop;
+            pendingWheelTop = null;
+            if (top == null) return;
+            const changed = applyScrollTop(top, "auto", { emitScroll: true });
+            if (!changed) return;
+            ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
+          },
+        });
+      } catch (error) {
+        pendingWheelTop = null;
+        resetWheelScrollState(wheelState);
+        throw error;
+      }
+      if (accepted === false) {
+        pendingWheelTop = null;
+        resetWheelScrollState(wheelState);
+        return false;
+      }
+      return true;
     }
 
     function invalidateSelf(
@@ -436,8 +437,8 @@ export const TVirtualList = defineComponent({
           );
           if (!dir || nextTop === baseTop) return;
 
+          if (!requestWheelScroll(nextTop)) return;
           e.preventDefault?.();
-          requestWheelScroll(nextTop);
         },
         focus: () => {
           focused.value = true;
@@ -493,8 +494,9 @@ export const TVirtualList = defineComponent({
     }
 
     function markRowsDirty(nextRows: readonly number[]): void {
+      if (!visible.value) return;
       dirtyRowsHint = unionDirtyRows(nextRows);
-      if (renderNodeId) render.update(renderNodeId, { dirtyRowsHint });
+      if (renderNodeId) render.markDirtyRows(renderNodeId, dirtyRowsHint);
     }
 
     function markViewportDirty(): void {

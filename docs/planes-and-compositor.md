@@ -110,6 +110,10 @@ runtime.mount(DialogLike, { open: true }, { plane: "overlay" });
 - 普通组件库 demo 可以继续停留在 `default`
 - 只有当你明确想把正文、状态栏、弹层解耦时，再引入 `TRenderPlane`
 - `overlay` 适合所有“应该盖住下面内容”的节点
+- `TRenderPlane.plane` 在 mount 后按 immutable 处理；需要移动子树时，用 `<TRenderPlane :key="activePlane" :plane="activePlane">` 重新挂载
+- 不要依赖动态修改 `plane` prop 迁移已 mount subtree；tab switching、dialog migration 或 animation plane 迁移都应 key remount
+- `ctx.invalidate({ plane: undefined })` 会跳出当前 `TRenderPlane`，在 root scheduler 中按 all-plane invalidate 处理
+- frame task / mailbox id 是 scheduler-global，不会自动带 plane namespace；跨 plane producer 需要把 plane/instance 写进 id
 
 ## 渲染顺序
 

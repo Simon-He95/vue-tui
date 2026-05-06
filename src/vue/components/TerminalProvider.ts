@@ -294,8 +294,11 @@ export const TerminalProvider = defineComponent({
         coalescedInvalidates,
         frameTaskCount: frameTasks.frameTaskCount,
         coalescedFrameTasks: frameTasks.coalescedFrameTasks,
+        frameTaskQueueDepthBeforeRun: frameTasks.frameTaskQueueDepthBeforeRun,
+        frameTaskQueueDepthAfterRun: frameTasks.frameTaskQueueDepthAfterRun,
         remainingFrameTasks: frameTasks.remainingFrameTasks,
-        droppedUpdates: 0,
+        droppedUpdates: frameTasks.droppedUpdates,
+        ...(frameTasks.mailboxFailure ? { mailboxFailure: frameTasks.mailboxFailure } : {}),
         queueDepth: queueDepth(),
         liveReasons: (() => {
           const reasons = frameScheduler.liveReasonList();
@@ -339,6 +342,7 @@ export const TerminalProvider = defineComponent({
       scheduleNormalInvalidateRelease();
       flush(true, frameTasks);
       frameScheduler.scheduleIfNeeded(frameTasks.requestMore);
+      if (Object.prototype.hasOwnProperty.call(frameTasks, "error")) throw frameTasks.error;
     }
 
     function invalidate(options?: TerminalSchedulerInvalidateOptions): void {
@@ -470,6 +474,7 @@ export const TerminalProvider = defineComponent({
       flushNow,
       configure: frameScheduler.configure,
       queueFrameTask: frameScheduler.queueFrameTask,
+      cancelFrameTask: frameScheduler.cancelFrameTask,
       requestLive: frameScheduler.requestLive,
       dropLive: frameScheduler.dropLive,
       isInsideFrame: frameScheduler.isInsideFrame,

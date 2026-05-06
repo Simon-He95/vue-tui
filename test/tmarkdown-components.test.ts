@@ -531,12 +531,7 @@ describe("markdown components", () => {
       8,
     );
 
-    content.value = [
-      "- pre-0",
-      "- pre-1",
-      "- pre-2",
-      content.value,
-    ].join("\n");
+    content.value = ["- pre-0", "- pre-1", "- pre-2", content.value].join("\n");
     await nextTick();
     await nextTick();
 

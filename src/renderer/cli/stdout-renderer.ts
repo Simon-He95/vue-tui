@@ -530,7 +530,10 @@ export function createStdoutRenderer(
     let startX = -1;
     let endXExclusive = -1;
     for (let x = 0; x < cols; x++) {
-      if (currentFP[base + x] === prevFP[base + x] && currentHrefIds[base + x] === prevHrefIds[base + x])
+      if (
+        currentFP[base + x] === prevFP[base + x] &&
+        currentHrefIds[base + x] === prevHrefIds[base + x]
+      )
         continue;
       if (startX === -1) startX = x;
       endXExclusive = x + 1;
@@ -587,9 +590,7 @@ export function createStdoutRenderer(
     for (let x = 0; x < cols; x++) {
       const rowHrefId = hrefId(normalizeHref(row[x]!.style.href));
       const fingerprint =
-        rowFP && rowFP.length >= cols
-          ? rowFP[x]!
-          : cellFingerprint(row[x]!.ch, row[x]!.style);
+        rowFP && rowFP.length >= cols ? rowFP[x]! : cellFingerprint(row[x]!.ch, row[x]!.style);
       if (fingerprint === currentFP[base + x] && rowHrefId === currentHrefIds[base + x]) continue;
       if (startX === -1) startX = x;
       endXExclusive = x + 1;
@@ -612,11 +613,11 @@ export function createStdoutRenderer(
     const row = rowFP && rowFP.length >= cols ? null : (terminal.getRow(y) as Cell[]);
     const base = y * fpCols;
     for (let x = 0; x < cols; x++) {
-      const rowHrefId = hrefId(normalizeHref((row ?? terminal.getRow(y) as Cell[])[x]!.style.href));
+      const rowHrefId = hrefId(
+        normalizeHref((row ?? (terminal.getRow(y) as Cell[]))[x]!.style.href),
+      );
       const fingerprint =
-        rowFP && rowFP.length >= cols
-          ? rowFP[x]!
-          : cellFingerprint(row![x]!.ch, row![x]!.style);
+        rowFP && rowFP.length >= cols ? rowFP[x]! : cellFingerprint(row![x]!.ch, row![x]!.style);
       if (fingerprint !== prevFP[base + x] || rowHrefId !== prevHrefIds[base + x]) return false;
     }
     return true;
@@ -1181,7 +1182,10 @@ export function createStdoutRenderer(
           }
           continue;
         }
-        if (key === currentKey && normalizeHref(nextStyle.href) === normalizeHref(currentStyle?.href)) {
+        if (
+          key === currentKey &&
+          normalizeHref(nextStyle.href) === normalizeHref(currentStyle?.href)
+        ) {
           currentTextParts.push(ch);
           if (needsWideCursorFix(cell, ch)) {
             currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);

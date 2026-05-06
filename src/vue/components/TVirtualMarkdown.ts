@@ -25,7 +25,7 @@ import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey } from "../context.js";
-import { intersectRect, translateRect } from "../utils/rect.js";
+import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import {
   applyWheelScroll,
   createWheelScrollState,
@@ -34,15 +34,6 @@ import {
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
-}
-
-function normalizeRect(r: Rect): Rect {
-  return {
-    x: Math.floor(r.x),
-    y: Math.floor(r.y),
-    w: Math.max(0, Math.floor(r.w)),
-    h: Math.max(0, Math.floor(r.h)),
-  };
 }
 
 function markdownStyleSignature(style?: Style): string {
@@ -65,7 +56,10 @@ function markdownRowSignature(row: TuiMarkdownVisualRow | undefined): string {
     row.key,
     row.plainText,
     row.segments
-      .map((segment) => `${segment.text}\u0001${segment.cells}\u0001${markdownStyleSignature(segment.style)}`)
+      .map(
+        (segment) =>
+          `${segment.text}\u0001${segment.cells}\u0001${markdownStyleSignature(segment.style)}`,
+      )
       .join("\u0002"),
   ].join("\u0003");
 }
@@ -205,11 +199,11 @@ export const TVirtualMarkdown = defineComponent({
     });
 
     function normalizedRect(): Rect {
-      return normalizeRect(absRect.value);
+      return normalizeCellRect(absRect.value);
     }
 
     function normalizedFullRect(): Rect {
-      return normalizeRect(fullRect.value);
+      return normalizeCellRect(fullRect.value);
     }
 
     function clipOffsets(): { x: number; y: number } {
@@ -236,7 +230,8 @@ export const TVirtualMarkdown = defineComponent({
       const start = Math.max(0, scrollTop + clipY);
       const end = Math.max(start, start + clip.h);
       const out: string[] = [];
-      for (let index = start; index < end; index++) out.push(markdownRowSignature(sourceRows[index]));
+      for (let index = start; index < end; index++)
+        out.push(markdownRowSignature(sourceRows[index]));
       return out;
     }
 
@@ -295,12 +290,9 @@ export const TVirtualMarkdown = defineComponent({
       { immediate: true },
     );
 
-    watch(
-      [() => props.content, () => props.w, () => props.h, () => absRect.value.h],
-      () => {
-        resetWheelScrollState(wheelState);
-      },
-    );
+    watch([() => props.content, () => props.w, () => props.h, () => absRect.value.h], () => {
+      resetWheelScrollState(wheelState);
+    });
 
     watch(
       [

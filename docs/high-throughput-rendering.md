@@ -71,10 +71,20 @@ type RenderRowBuckets = Map<TerminalRenderPlane, Map<number, Set<string>>>;
 render 时：
 
 - full plane repaint 仍按排序后的 `planeNodes` 处理。
-- partial repaint 使用 dirty rows 查 bucket，合并 candidate ids。
-- plane-global 节点加入 candidate ids。
-- candidate ids 必须按现有 stack/zIndex/order 排序，保证覆盖顺序不变。
+- partial repaint 使用 dirty rows 查 bucket，并复用 scratch marks/arrays 合并候选节点。
+- plane-global 节点加入候选集合。
+- 候选节点必须按现有 stack/zIndex/order 排序，保证覆盖顺序不变。
+- dirty rows 至少 16 行、达到 terminal rows 的 60%，且 plane 节点规模让 bucket walk 不再明显更便宜时，提升为 full-plane repaint，并在 `rowBucketFallbacks` 记录 `reason: "dirty-ratio"`。
+- bucket 候选节点超过 plane nodes 的 60% 时回退扫描 plane nodes，并在 `rowBucketFallbacks` 记录 `reason: "candidate-ratio"`。
 - `scannedNodes` 语义改为本轮候选节点数，不再是 plane 节点总数。
+
+`markDirtyRows()` contract：
+
+- `rows` 必须是 terminal absolute Y，不是组件内 local row。
+- rows 只作用于 node 当前所在 plane。
+- node rect 外、terminal bounds 外、`NaN` 和 `Infinity` rows 会被忽略。
+- dirty row repaint 会重绘同 plane 中与 dirty rows 相交的其他 nodes，并保持 z-order。
+- `dirtyRowsHint` / `markDirtyRows()` 的 rows 同步消费；`paint(dirtyRows)` 不能保存数组引用。
 
 验收测试：
 
@@ -95,7 +105,7 @@ interface TerminalScheduler {
   invalidate(options?: TerminalSchedulerInvalidateOptions): void;
   flush(): void;
   flushNow(): void;
-  queueFrameTask(task: TerminalFrameTask): void;
+  queueFrameTask(task: TerminalFrameTask): boolean | void;
   configure(options: { targetFps?: number; maxFps?: number; frameBudgetMs?: number }): void;
   requestLive(reason: string): () => void;
   dropLive(reason: string): void;
@@ -106,7 +116,7 @@ interface TerminalScheduler {
 行为：
 
 - 默认 `on-demand`，只有 invalidate 才 render。
-- `queueFrameTask()` 把 wheel/input/stream 这类高频任务排到下一帧；同 `id` 任务只保留最新 `run`，priority 取更高值，reason 合并，`sync` 只要任一任务为 `true` 就保留。
+- `queueFrameTask()` 把 wheel/input/stream 这类高频任务排到下一帧；同 `id` 任务只保留最新 `run`，priority 取更高值，reason 合并，`sync` 只要任一任务为 `true` 就保留。返回 `false` 表示 scheduler 显式拒绝任务；返回 `true` 或旧实现的 `undefined` 都表示接受。
 - `requestLive(reason)` 使用引用计数进入 live mode，直到对应 `dropLive(reason)` 后退出。
 - live mode 按 `targetFps` 运行，但不超过 `maxFps`。
 - 高优先级 invalidation 可同帧 flush，普通 invalidation 继续 rAF 合并。
@@ -190,7 +200,7 @@ deps 只允许包含：
 ];
 ```
 
-不允许把大数组或每行对象数组放进 deps。数据本体由外部 `shallowRef`、`markRaw` 或普通 store 管理。`getItem` 和 `renderItem` 应保持稳定引用，数据变化通过 `itemVersion` 驱动。`scrollTop` 不进入 deps；滚动由组件内部 `render.update({ dirtyRowsHint })` 标记 dirty rows，否则会退化成每次滚动都整块 repaint。
+不允许把大数组或每行对象数组放进 deps。数据本体由外部 `shallowRef`、`markRaw` 或普通 store 管理。`getItem` 和 `renderItem` 应保持稳定引用，数据变化通过 `itemVersion` 驱动。`scrollTop` 不进入 deps；滚动由组件内部 `render.markDirtyRows(renderNodeId, rows)` 标记 dirty rows，否则会退化成每次滚动都整块 repaint。`markDirtyRows()` 接收的是 terminal absolute Y，不是组件内 local row；它标记 node 所在 plane 的行，render 时也会 repaint 同 plane 中与这些行相交的其他 nodes。
 
 wheel 行为：
 
@@ -203,6 +213,12 @@ wheel 行为：
 - PageUp/PageDown/Home/End 或大跳转直接 repaint viewport。
 
 > **`rowScrollMode` 语义**：`unsafeScrollPlaneRows()` 会 shift 该 plane 的完整 row region，只适合 TVirtualList 独占这些 rows 的 full-row 场景；如果同一 plane 上还有其它内容覆盖这些 rows，请保持默认 `rowScrollMode: "off"`（repaint viewport）。调用 `render.unsafeScrollPlaneRows()` 前也必须确认当前 renderer 会消费 terminal `scrollOperations`；DOM renderer 会通过移动 line nodes 消费该 hint，但这仍然不是组件内部的局部 rect scroll。
+
+Frame mailbox 语义：
+
+`createFrameMailbox()` 是 internal at-most-once frame coalescing primitive，不是 durable queue，也不从 package root 或 experimental entrypoint export。它适合 wheel `scrollTop`、resize sample、cursor blink、latest-only highlight 这类只关心最新状态的渲染工作。`merge()` 或 `apply()` 抛错时，pending payload 已被清空，不会重试，也不会上报这次 coalesced `droppedUpdates`；需要可靠处理的数据必须保存在 owner/source/store 里，mailbox 只合并“下一帧要 repaint 到哪个状态”。如果某类任务需要 retry，调用方应在 `merge()` / `apply()` 内捕获错误并保留可重试状态。
+
+高优先级 frame task 只用于 input、wheel、焦点这类必须尽快反映到屏幕的有限工作。stream/data producer 应使用稳定 task id 或 `createFrameMailbox()`；在 `globalThis.__VT_DEBUG_PERF__` 开启时，大量 unique high-priority task 会触发 warning，帮助定位错误 producer。
 
 键盘和点击行为：
 
@@ -284,8 +300,12 @@ log.replaceTail("next line...");
 规则：
 
 - paint 循环中不要每行创建 `{ ...base, inverse: true }`。
-- `Style` interning 返回 frozen stable object。
+- `Style` interning 返回 frozen stable object，但不要为了缓存冻结公开的 `defaultStyle` ref；空样式由 style-cache 内部归一到 frozen singleton。
 - key 使用稳定字段顺序，覆盖现有 style 字段。
+
+### 6.1 Wide-cell clipping
+
+`sliceByCellsRange()` 在 range start/end 落进宽字符内部时，用空格保留被占用的 cells，而不是把后续字符左移。这个语义会影响 `TList`、`TLogView`、`TVirtualMarkdown`、markdown renderer 和所有直接使用 text utils 的调用点。带 style 或 href 的宽字符占位空格保留原 segment style，调用方仍需要确保下一 cell/row 不泄漏旧 style 或 OSC8 href。
 
 验收测试：
 
@@ -323,6 +343,8 @@ type FramePerf = {
     candidates?: number;
   }>;
   droppedUpdates: number;
+  frameTaskQueueDepthBeforeRun: number;
+  frameTaskQueueDepthAfterRun: number;
   coalescedInvalidates: number;
   heapUsed?: number;
 };
@@ -335,8 +357,12 @@ type FramePerf = {
 - `scannedNodes`
 - `paintedNodes`
 - `queueDepth`
+- `frameTaskQueueDepthBeforeRun`
+- `frameTaskQueueDepthAfterRun`
 - `coalescedInvalidates`
 - `droppedUpdates`
+
+高优先级 task 可能压过 normal/low task。无限 high-priority pressure 无法保证 low task 及时执行；有限 pressure 停止后，deferred low task 必须继续 drain。调试时看 `frameTaskQueueDepthBeforeRun` / `frameTaskQueueDepthAfterRun`，并处理 high-priority queue warning。
 
 验收测试：
 
@@ -366,18 +392,32 @@ type FramePerf = {
 | Experimental `TLogView` append-only streaming path                  | ✅ Phase 2.2 |
 | `TLogView` fixed one-line line-level render cache                   | ✅ Phase 2.5 |
 | `TLogView` plain-text wrap with line-level wrap cache               | ✅ Phase 2.6 |
-| `TList` wheel 行为修改（不再同步更新 active/modelValue）            | 🔲 planned   |
+| `TList` wheel 行为修改（不再同步更新 active/modelValue）            | ✅ done      |
 | Debug overlay 展示 `scannedNodes/paintedNodes/dirtyRows/frameMs`    | ✅ Phase 2.0 |
 
 > **注意**：`TVirtualList` 的 `rowScrollMode` 默认为 `"off"`。这是危险优化开关，只有显式设置 `rowScrollMode: "unsafe-full-row"`、当前 renderer 支持 `scrollOperations`、且 list 是 unclipped full-row 并独占这些 plane rows 时，才会使用 `unsafeScrollPlaneRows()` + exposed dirty rows。DOM renderer 的优化只移动 line nodes 并 repaint exposed dirty rows，不改变 terminal buffer/compositor 语义。
 
+> **当前范围**：本轮完成 `TList` wheel burst mailbox、RenderManager dirty-row primitive 和 frame task metrics；`TVirtualList` / `TLogView` 的 fast/slow scroll mailbox 化仍是后续工作。
+> `TList` 现在合并 wheel burst，但每次实际应用滚动仍 repaint 可见 viewport；只 repaint exposed rows 的慢滚路径不属于本轮范围。
+
 验收命令：
 
 ```bash
-pnpm vitest run test/render-manager.test.ts test/dom-renderer-sync-flush.test.ts test/virtual-list.test.ts test/ui-regressions.test.ts test/index.test.ts test/docs-components.test.ts
 pnpm run typecheck
 pnpm run lint
+pnpm run format:check
+pnpm run test:unit
+pnpm run bench:scroll-mailbox
+pnpm run check:hidden-unicode
+pnpm exec tsx scripts/generate-component-api-docs.ts
+git diff --exit-code docs/generated/components-api.md
+pnpm run build
+pnpm run test:package-exports
 ```
+
+`bench:scroll-mailbox` 是 PR CI 的 deterministic smoke bench，只使用行为阈值，
+不按 GitHub runner timing 设门槛。`bench:phase2` 只在 nightly/manual benchmark
+workflow 中运行。
 
 ### Phase 2: 一个月内
 

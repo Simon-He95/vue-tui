@@ -25,6 +25,12 @@ export type FramePerfRowBucketFallback = Readonly<{
   candidates?: number;
 }>;
 
+export type FramePerfMailboxFailure = Readonly<{
+  id: string;
+  queued: number;
+  dropped: number;
+}>;
+
 export type FramePerfSample = Readonly<{
   frameId: number;
   reason: FramePerfReason;
@@ -42,8 +48,11 @@ export type FramePerfSample = Readonly<{
   coalescedInvalidates: number;
   frameTaskCount: number;
   coalescedFrameTasks: number;
+  frameTaskQueueDepthBeforeRun: number;
+  frameTaskQueueDepthAfterRun: number;
   remainingFrameTasks: number;
   droppedUpdates: number;
+  mailboxFailure?: FramePerfMailboxFailure;
   queueDepth: number;
   liveReasons?: readonly string[];
 }>;

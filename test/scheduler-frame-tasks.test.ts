@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createApp, defineComponent, h, nextTick } from "vue";
+import { createApp, defineComponent, h, nextTick, onBeforeUnmount } from "vue";
 import {
   createTerminalApp,
   TerminalProvider,
@@ -106,7 +106,57 @@ describe("scheduler frame tasks", () => {
         reason: "scroll",
         frameTaskCount: 1,
         coalescedFrameTasks: 99,
+        frameTaskQueueDepthBeforeRun: 1,
+        frameTaskQueueDepthAfterRun: 0,
         remainingFrameTasks: 0,
+      });
+    } finally {
+      probe.app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("does not carry coalesced counts from canceled tasks into the next frame", async () => {
+    const raf = installRaf();
+    const probe = createSchedulerProbeApp();
+    let runCount = 0;
+
+    try {
+      probe.app.mount();
+      await nextTick();
+      probe.scheduler.flushNow();
+      probe.framePerf.clear();
+
+      for (let i = 0; i < 100; i++) {
+        probe.scheduler.queueFrameTask({
+          id: "canceled",
+          reason: "scroll",
+          priority: "high",
+          run(ctx) {
+            ctx.invalidate({ priority: "high", plane: "default", reason: "scroll" });
+          },
+        });
+      }
+      probe.scheduler.cancelFrameTask("canceled");
+      probe.scheduler.queueFrameTask({
+        id: "kept",
+        reason: "input",
+        priority: "high",
+        run(ctx) {
+          runCount++;
+          ctx.invalidate({ priority: "high", plane: "default", reason: "input" });
+        },
+      });
+
+      raf.runNext();
+
+      expect(runCount).toBe(1);
+      expect(probe.framePerf.latest()).toMatchObject({
+        reason: "input",
+        frameTaskCount: 1,
+        coalescedFrameTasks: 0,
+        frameTaskQueueDepthBeforeRun: 1,
+        frameTaskQueueDepthAfterRun: 0,
       });
     } finally {
       probe.app.dispose();
@@ -159,6 +209,8 @@ describe("scheduler frame tasks", () => {
       expect(probe.framePerf.latest()).toMatchObject({
         reason: "input",
         frameTaskCount: 3,
+        frameTaskQueueDepthBeforeRun: 3,
+        frameTaskQueueDepthAfterRun: 0,
       });
     } finally {
       probe.app.dispose();
@@ -349,6 +401,8 @@ describe("scheduler frame tasks", () => {
       expect(order).toEqual(["a"]);
       expect(probe.framePerf.latest()).toMatchObject({
         frameTaskCount: 1,
+        frameTaskQueueDepthBeforeRun: 3,
+        frameTaskQueueDepthAfterRun: 2,
         remainingFrameTasks: 2,
       });
       await Promise.resolve();
@@ -358,9 +412,114 @@ describe("scheduler frame tasks", () => {
       expect(order).toEqual(["a", "b"]);
       expect(probe.framePerf.latest()).toMatchObject({
         frameTaskCount: 1,
+        frameTaskQueueDepthBeforeRun: 2,
+        frameTaskQueueDepthAfterRun: 1,
         remainingFrameTasks: 1,
       });
     } finally {
+      probe.app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("runs deferred low-priority work after finite high-priority pressure stops", async () => {
+    const raf = installRaf();
+    const probe = createSchedulerProbeApp();
+    const order: string[] = [];
+    let highRuns = 0;
+
+    try {
+      probe.app.mount();
+      await nextTick();
+      probe.scheduler.flushNow();
+      probe.scheduler.configure({ frameBudgetMs: 0 });
+
+      const queueHigh = () => {
+        probe.scheduler.queueFrameTask({
+          id: "continuous-high",
+          priority: "high",
+          reason: "scroll",
+          run(ctx) {
+            highRuns++;
+            order.push(`high:${highRuns}`);
+            ctx.invalidate({ priority: "high", plane: "default", reason: "scroll" });
+            if (highRuns < 3) queueHigh();
+          },
+        });
+      };
+
+      queueHigh();
+      probe.scheduler.queueFrameTask({
+        id: "low",
+        priority: "low",
+        reason: "data",
+        run(ctx) {
+          order.push("low");
+          ctx.invalidate({ plane: "default", reason: "data" });
+        },
+      });
+
+      raf.runNext();
+      expect(order).toEqual(["high:1"]);
+      raf.runNext();
+      expect(order).toEqual(["high:1", "high:2"]);
+      raf.runNext();
+      expect(order).toEqual(["high:1", "high:2", "high:3"]);
+      raf.runNext();
+      expect(order).toEqual(["high:1", "high:2", "high:3", "low"]);
+    } finally {
+      probe.app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("warns about large high-priority queues and drains finite pressure", async () => {
+    const raf = installRaf();
+    const probe = createSchedulerProbeApp();
+    const order: string[] = [];
+    const previousDebugPerf = (globalThis as any).__VT_DEBUG_PERF__;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      (globalThis as any).__VT_DEBUG_PERF__ = true;
+      probe.app.mount();
+      await nextTick();
+      probe.scheduler.flushNow();
+      probe.scheduler.configure({ frameBudgetMs: 0 });
+
+      for (let i = 0; i < 129; i++) {
+        probe.scheduler.queueFrameTask({
+          id: `high-${i}`,
+          priority: "high",
+          reason: "scroll",
+          run(ctx) {
+            order.push(`high-${i}`);
+            ctx.invalidate({ priority: "high", plane: "default", reason: "scroll" });
+          },
+        });
+      }
+      probe.scheduler.queueFrameTask({
+        id: "low-after-high-pressure",
+        priority: "low",
+        reason: "data",
+        run(ctx) {
+          order.push("low");
+          ctx.invalidate({ plane: "default", reason: "data" });
+        },
+      });
+
+      raf.runNext();
+      expect(order).toHaveLength(129);
+      expect(order).not.toContain("low");
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain("high-priority frame task queue is large");
+
+      raf.runNext();
+      expect(order.at(-1)).toBe("low");
+    } finally {
+      if (previousDebugPerf === undefined) delete (globalThis as any).__VT_DEBUG_PERF__;
+      else (globalThis as any).__VT_DEBUG_PERF__ = previousDebugPerf;
+      warn.mockRestore();
       probe.app.dispose();
       raf.restore();
     }
@@ -440,6 +599,177 @@ describe("scheduler frame tasks", () => {
       expect(raf.callbacks.size).toBe(0);
     } finally {
       probe.app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("requeues remaining tasks after a task throws and restores insideFrame", async () => {
+    const raf = installRaf();
+    const probe = createSchedulerProbeApp();
+    const order: string[] = [];
+
+    try {
+      probe.app.mount();
+      await nextTick();
+      probe.scheduler.flushNow();
+
+      probe.scheduler.queueFrameTask({
+        id: "throwing",
+        priority: "high",
+        run() {
+          order.push("throw");
+          throw new Error("boom");
+        },
+      });
+      probe.scheduler.queueFrameTask({
+        id: "after",
+        priority: "normal",
+        run(ctx) {
+          order.push("after");
+          expect(probe.scheduler.isInsideFrame()).toBe(true);
+          ctx.invalidate({ plane: "default" });
+        },
+      });
+
+      expect(() => raf.runNext()).toThrow("boom");
+      expect(probe.scheduler.isInsideFrame()).toBe(false);
+      expect(order).toEqual(["throw"]);
+
+      await Promise.resolve();
+      expect(raf.callbacks.size).toBe(1);
+
+      raf.runNext();
+      expect(order).toEqual(["throw", "after"]);
+    } finally {
+      probe.app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("flushes successful invalidations before rethrowing a later task error", async () => {
+    const raf = installRaf();
+    let renderNodeId = "";
+    let render: ReturnType<typeof useTerminal>["render"] | null = null;
+    let value = "old";
+
+    const Node = defineComponent({
+      name: "ThrowingFramePartialFlushNode",
+      setup() {
+        const ctx = useTerminal();
+        render = ctx.render;
+        const paint = () => ctx.terminal.write(value, { x: 0, y: 1 });
+        const node = ctx.render.register({
+          stack: ctx.render.rootStack,
+          rect: { x: 0, y: 1, w: 8, h: 1 },
+          paint,
+        });
+        renderNodeId = node.id;
+        onBeforeUnmount(() => ctx.render.unregister(node.id));
+        return () => null;
+      },
+    });
+
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 4,
+      component: defineComponent({
+        setup: () => () => h(Node),
+      }),
+    });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.scheduler.queueFrameTask({
+        id: "first",
+        priority: "high",
+        reason: "scroll",
+        run(ctx) {
+          value = "new";
+          render!.update(renderNodeId, {});
+          ctx.invalidate({ priority: "high", plane: "default", reason: "scroll" });
+        },
+      });
+      app.scheduler.queueFrameTask({
+        id: "throwing",
+        priority: "normal",
+        run() {
+          throw new Error("boom");
+        },
+      });
+
+      expect(() => raf.runNext()).toThrow("boom");
+      expect(app.terminal.snapshot().lines[1]?.slice(0, 3)).toBe("new");
+      expect(app.scheduler.isInsideFrame()).toBe(false);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("flushNow flushes successful invalidations before rethrowing a later task error", async () => {
+    const raf = installRaf();
+    let renderNodeId = "";
+    let render: ReturnType<typeof useTerminal>["render"] | null = null;
+    let value = "old";
+
+    const Node = defineComponent({
+      name: "ThrowingFlushNowPartialFlushNode",
+      setup() {
+        const ctx = useTerminal();
+        render = ctx.render;
+        const paint = () => ctx.terminal.write(value, { x: 0, y: 1 });
+        const node = ctx.render.register({
+          stack: ctx.render.rootStack,
+          rect: { x: 0, y: 1, w: 8, h: 1 },
+          paint,
+        });
+        renderNodeId = node.id;
+        onBeforeUnmount(() => ctx.render.unregister(node.id));
+        return () => null;
+      },
+    });
+
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 4,
+      component: defineComponent({
+        setup: () => () => h(Node),
+      }),
+    });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.scheduler.queueFrameTask({
+        id: "first",
+        priority: "high",
+        reason: "scroll",
+        run(ctx) {
+          value = "new";
+          render!.update(renderNodeId, {});
+          ctx.invalidate({ priority: "high", plane: "default", reason: "scroll" });
+        },
+      });
+      app.scheduler.queueFrameTask({
+        id: "throwing",
+        priority: "normal",
+        run() {
+          throw new Error("boom");
+        },
+      });
+
+      expect(() => app.scheduler.flushNow()).toThrow("boom");
+      expect(app.terminal.snapshot().lines[1]?.slice(0, 3)).toBe("new");
+      await Promise.resolve();
+      expect(raf.callbacks.size).toBe(0);
+    } finally {
+      app.dispose();
       raf.restore();
     }
   });

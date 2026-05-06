@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      benchmark:
+        description: Run the benchmark suite instead of regular verification
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "17 18 * * *"
+
+jobs:
+  verify:
+    if: ${{ github.event_name != 'schedule' && github.event.inputs.benchmark != 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run check:hidden-unicode
+
+      - run: pnpm run typecheck
+
+      - run: pnpm run lint
+
+      - run: pnpm run format:check
+
+      - run: pnpm run test:unit
+
+      # Deterministic smoke bench: behavior thresholds only, no runner-timing gate.
+      - run: pnpm run bench:scroll-mailbox
+
+      - run: pnpm exec tsx scripts/generate-component-api-docs.ts
+
+      - run: git diff --exit-code docs/generated/components-api.md
+
+      - run: pnpm run build
+
+      - run: pnpm run test:package-exports
+
+  benchmark:
+    if: ${{ github.event_name == 'schedule' || github.event.inputs.benchmark == 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run bench:scroll-mailbox
+
+      - run: pnpm run bench:phase2

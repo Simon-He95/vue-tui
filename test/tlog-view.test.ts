@@ -213,6 +213,138 @@ describe("TLogView", () => {
     }
   });
 
+  it("does not consume wheel or keep pending scroll when queueFrameTask is rejected", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const onScroll = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewRejectedWheelQueueApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            onScroll,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      const originalQueue = app.scheduler.queueFrameTask.bind(app.scheduler);
+      (app.scheduler as any).queueFrameTask = () => false;
+
+      const prevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: -100,
+        time: Date.now(),
+      });
+
+      expect(prevented).toBe(false);
+      expect(onScroll).not.toHaveBeenCalled();
+
+      (app.scheduler as any).queueFrameTask = originalQueue;
+
+      const nextPrevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: -100,
+        time: Date.now() + 10,
+      });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(nextPrevented).toBe(true);
+      expect(onScroll.mock.calls.at(-1)?.[0]).toMatchObject({ scrollTop: 95 });
+      expect(rowText(app, 0)).toBe("line-95");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("clears pending wheel state when queueFrameTask throws", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const onScroll = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewThrowingWheelQueueApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            onScroll,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      const originalQueue = app.scheduler.queueFrameTask.bind(app.scheduler);
+      const throwingQueue = vi.fn(() => {
+        throw new Error("queue failed");
+      });
+      try {
+        (app.scheduler as any).queueFrameTask = throwingQueue;
+
+        const prevented = app.events.dispatch({
+          type: "wheel",
+          cellX: 0,
+          cellY: 0,
+          deltaY: -100,
+          time: Date.now(),
+        });
+
+        expect(prevented).toBe(false);
+        expect(throwingQueue).toHaveBeenCalledTimes(1);
+        expect(onScroll).not.toHaveBeenCalled();
+      } finally {
+        (app.scheduler as any).queueFrameTask = originalQueue;
+      }
+
+      const nextPrevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: -100,
+        time: Date.now() + 10,
+      });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(nextPrevented).toBe(true);
+      expect(onScroll.mock.calls.at(-1)?.[0]).toMatchObject({ scrollTop: 95 });
+      expect(rowText(app, 0)).toBe("line-95");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("waits for controlled scrollTop prop updates before changing rendered rows", async () => {
     const controlledTop = ref(96);
     const source: TLogDataSource = {
@@ -3706,6 +3838,56 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
+  it("keeps ANSI OSC8 wide-cell clipping styles inside the clipped link segment", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "p \x1b]8;;https://example.com\x07\x1b[31m你A\x1b[0m\x1b]8;;\x07 z",
+      getLineKey: () => "wide-link-clip",
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          ref: logView,
+          x: -3,
+          y: 0,
+          w: 7,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+        }),
+      4,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe(" A z");
+    const row = mounted.terminal.getRow(0);
+    expect(row[0]!.ch).toBe(" ");
+    expect(row[1]!.ch).toBe("A");
+    expect(row[0]!.style.href).toBe("https://example.com");
+    expect(row[1]!.style.href).toBe("https://example.com");
+    expect(row[0]!.style.fg).toBe("red");
+    expect(row[1]!.style.fg).toBe("red");
+    expect(row[2]!.style.href).toBeUndefined();
+    expect(row[2]!.style.fg).toBeUndefined();
+    expect(row[3]!.style.href).toBeUndefined();
+    expect(row[3]!.style.fg).toBeUndefined();
+    expect(logView.value!.getVisibleLinks()).toMatchObject([
+      {
+        href: "https://example.com",
+        text: " A",
+        startX: 0,
+        endX: 2,
+        startCell: 3,
+        endCell: 5,
+      },
+    ]);
+    mounted.unmount();
+  });
+
   it("resets SGR foreground and background to the TLogView base style", async () => {
     const source: TLogDataSource = {
       lineCount: () => 1,
@@ -3797,6 +3979,65 @@ describe("TLogView", () => {
     expect(styles[1]!.fg).toBe("red");
     expect(styles[2]!.fg).toBe("red");
     expect(styles[4]!.fg).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it("preserves ANSI style on wide-character clip placeholders", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "a\x1b[31m你\x1b[0mb",
+      getLineKey: () => "wide-clip-style",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: -2,
+          y: 0,
+          w: 4,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+        }),
+      4,
+      2,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe(" ");
+    expect(mounted.terminal.getCell(0, 0).style.fg).toBe("red");
+    expect(mounted.terminal.getCell(1, 0).ch).toBe("b");
+    expect(mounted.terminal.getCell(1, 0).style.fg).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it("does not leak OSC8 href from wide-character clip placeholders", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "a\x1b]8;;https://example.com\x07你\x1b]8;;\x07b",
+      getLineKey: () => "wide-clip-link",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: -2,
+          y: 0,
+          w: 4,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+        }),
+      4,
+      2,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe(" ");
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://example.com");
+    expect(mounted.terminal.getCell(1, 0).ch).toBe("b");
+    expect(mounted.terminal.getCell(1, 0).style.href).toBeUndefined();
     mounted.unmount();
   });
 
@@ -4719,6 +4960,71 @@ describe("TLogView", () => {
     expect([0, 1, 2].map((y) => rowText(mounted, y))).toEqual(["ab", "中c", "d"]);
     expect(rowStyles(mounted, 1)[0]!.fg).toBe("red");
     expect(rowStyles(mounted, 1)[2]!.fg).toBe("red");
+    mounted.unmount();
+  });
+
+  it("keeps wrapped ANSI wide-character placeholders inside a one-cell viewport", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b[31m你🙂\x1b[0m",
+      getLineKey: () => "wide-one-cell",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 1,
+          h: 4,
+          source,
+          version: 1,
+          wrap: true,
+          ansi: true,
+        }),
+      3,
+      4,
+    );
+
+    for (let y = 0; y < 4; y++) {
+      expect(mounted.terminal.getCell(0, y).ch).toBe(" ");
+      expect(mounted.terminal.getCell(0, y).style.fg).toBe("red");
+      expect(mounted.terminal.getCell(1, y).continuation).not.toBe(true);
+      expect(mounted.terminal.getCell(1, y).style.fg).toBeUndefined();
+    }
+    mounted.unmount();
+  });
+
+  it("keeps wrapped OSC8 wide-character placeholders inside a one-cell viewport", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "\x1b]8;;https://example.com\x07你\x1b]8;;\x07",
+      getLineKey: () => "wide-link-one-cell",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 1,
+          h: 2,
+          source,
+          version: 1,
+          wrap: true,
+          ansi: true,
+          links: true,
+        }),
+      3,
+      2,
+    );
+
+    for (let y = 0; y < 2; y++) {
+      expect(mounted.terminal.getCell(0, y).ch).toBe(" ");
+      expect(mounted.terminal.getCell(0, y).style.href).toBe("https://example.com");
+      expect(mounted.terminal.getCell(1, y).continuation).not.toBe(true);
+      expect(mounted.terminal.getCell(1, y).style.href).toBeUndefined();
+    }
     mounted.unmount();
   });
 

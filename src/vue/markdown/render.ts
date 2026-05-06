@@ -1,5 +1,5 @@
 import type { Style, Terminal } from "../../core/types.js";
-import { sliceByCellsRange, spaces, textCellWidth } from "../utils/text.js";
+import { forEachTextCellSegment, spaces } from "../utils/text.js";
 import type { TuiMarkdownVisualRow } from "./types.js";
 
 const mergedStyleCache = new WeakMap<Style, WeakMap<Style, Style>>();
@@ -40,43 +40,62 @@ export function paintMarkdownVisualRow(
   }
 
   let logicalX = 0;
-  let drawX = options.x;
   let used = 0;
   for (const segment of row.segments) {
     if (used >= options.w || !segment.text) {
       logicalX += segment.cells;
       continue;
     }
-    const clippedStart = Math.max(0, clipStart - logicalX);
-    const clippedEnd = Math.min(segment.cells, clipEnd - logicalX);
+    const segmentStart = logicalX;
+    const segmentEnd = logicalX + segment.cells;
     logicalX += segment.cells;
-    if (clippedEnd <= clippedStart) continue;
-    const clippedPrefix = sliceByCellsRange(segment.text, 0, clippedStart);
-    const leftPad = Math.max(0, clippedStart - textCellWidth(clippedPrefix));
-    const text = sliceByCellsRange(segment.text, clippedStart, clippedEnd);
-    const cells = textCellWidth(text);
-    if (leftPad > 0 && used < options.w) {
-      const pad = Math.min(leftPad, options.w - used);
-      terminal.write(spaces(pad), {
-        x: drawX,
-        y: options.y,
-        style: options.baseStyle,
-      });
-      drawX += pad;
-      used += pad;
-    }
-    if (!text || cells <= 0) continue;
-    terminal.write(text, {
-      x: drawX,
-      y: options.y,
-      style: mergeStyle(options.baseStyle, segment.style),
+    if (segmentEnd <= clipStart || segmentStart >= clipEnd) continue;
+
+    const segmentStyle = mergeStyle(options.baseStyle, segment.style);
+    let pieceStart = segmentStart;
+    forEachTextCellSegment(segment.text, (piece) => {
+      if (used >= options.w) return false;
+      const pieceEnd = pieceStart + piece.cells;
+      const visibleStart = Math.max(pieceStart, clipStart);
+      const visibleEnd = Math.min(pieceEnd, clipEnd);
+      pieceStart = pieceEnd;
+      if (visibleEnd <= visibleStart) return;
+
+      const expectedUsed = visibleStart - clipStart;
+      if (expectedUsed > used) {
+        const pad = Math.min(expectedUsed - used, options.w - used);
+        terminal.write(spaces(pad), {
+          x: options.x + used,
+          y: options.y,
+          style: options.baseStyle,
+        });
+        used += pad;
+      }
+
+      if (visibleStart === pieceStart - piece.cells && visibleEnd === pieceEnd) {
+        terminal.write(piece.text, {
+          x: options.x + used,
+          y: options.y,
+          style: segmentStyle,
+        });
+        used += piece.cells;
+        return;
+      }
+
+      const pad = Math.min(visibleEnd - visibleStart, options.w - used);
+      if (pad > 0) {
+        terminal.write(spaces(pad), {
+          x: options.x + used,
+          y: options.y,
+          style: segmentStyle,
+        });
+        used += pad;
+      }
     });
-    drawX += cells;
-    used += cells;
   }
   if (used < options.w && options.clear !== false) {
     terminal.write(spaces(options.w - used), {
-      x: drawX,
+      x: options.x + used,
       y: options.y,
       style: options.baseStyle,
     });

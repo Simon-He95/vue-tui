@@ -237,7 +237,10 @@ describe("TVirtualMarkdown performance", () => {
     expect(buildSpy.mock.calls.length).toBe(beforeBuilds + 1);
     expect(commits).toHaveLength(0);
     expect(
-      mounted.terminal.snapshot().lines.slice(0, 4).map((line) => line.trimEnd()),
+      mounted.terminal
+        .snapshot()
+        .lines.slice(0, 4)
+        .map((line) => line.trimEnd()),
     ).toEqual(beforeLines);
     mounted.unmount();
   });
@@ -265,7 +268,10 @@ describe("TVirtualMarkdown performance", () => {
     await nextTick();
 
     expect(
-      mounted.terminal.snapshot().lines.slice(0, 4).map((line) => line.trimEnd()),
+      mounted.terminal
+        .snapshot()
+        .lines.slice(0, 4)
+        .map((line) => line.trimEnd()),
     ).toEqual(["- row-4", "- row-5", "- row-6", "- row-7"]);
     mounted.unmount();
   });

@@ -127,10 +127,23 @@ t.mount();
 plane 相关：
 
 - `scheduler.invalidate({ plane })`：把本轮刷新归到指定 plane
-- `scheduler.queueFrameTask(task)`：下一帧先执行 task，再根据 task 内的 `ctx.invalidate()` render/commit；`flushNow()` 会先 drain pending frame tasks
+- `scheduler.queueFrameTask(task)`：下一帧先执行 task，再根据 task 内的 `ctx.invalidate()` render/commit；`flushNow()` 会先 drain pending frame tasks；返回 `false` 表示 scheduler 显式拒绝，producer 必须清理本地 pending state；返回 `true` 或 `undefined` 都表示已接受，其中 `undefined` 用于兼容旧 scheduler
+- `scheduler.cancelFrameTask(id)`：best-effort 取消。task 可能已被当前 frame snapshot 取走，所以 `run()` 内仍要 guard stale/disposed state。
 - `queueFrameTask()` 的 `task.id` 是整个 `TerminalProvider` / `createTerminalApp` scheduler 级别的全局 coalescing key，不会因为 `TRenderPlane` 自动加 namespace。跨 plane 使用相同 id 会互相覆盖；如需 plane-local coalescing，请自行把 plane 写入 id。
+- frame task context 里的 `reportDroppedUpdates(count)` 是内部观测 hook，用于把 mailbox / producer 合并掉的中间态计入 frame perf；它不表示数据可靠送达。
 - `runtime.mount(Component, props, { plane })`：命令式挂载到指定 plane
 - `terminal.commit({ planes })`：只提交某些 plane 的变化
+
+### RenderManager dirty rows
+
+`render.markDirtyRows(id, rows)` 是热路径 repaint primitive：
+
+- `rows` 必须是 terminal absolute Y，不是组件局部 row index。
+- dirty rows 只作用于该 render node 当前所在 plane。
+- 对有 rect 的 node，rect 外 rows 会被忽略；`NaN`、`Infinity` 和 terminal bounds 外 rows 也会被忽略。
+- partial repaint 会重绘同 plane 中与 dirty rows 相交的 nodes，并按原 z-order paint，不只是重绘调用 `markDirtyRows()` 的 node。
+- `dirtyRowsHint` 和 `paint(dirtyRows)` 的 rows 必须同步消费，组件不能保存数组引用，因为 RenderManager 可以传入 scratch buffer。
+- `paint(dirtyRows)` 收到 `undefined` 表示 full repaint；收到数组表示只 repaint 这些 absolute terminal rows。
 
 ### `<TRenderPlane />`
 
@@ -159,6 +172,18 @@ plane 相关：
 ```
 
 `TRenderPlane` 本身不负责布局，只负责切换子树所处的 plane。
+
+`TRenderPlane.plane` 在 mount 后按 immutable 处理；如果需要移动子树，请用 plane 作为 key 重新挂载：
+
+```vue
+<TRenderPlane :key="activePlane" :plane="activePlane">
+  <PaneBody />
+</TRenderPlane>
+```
+
+不要依赖动态修改 `plane` prop 迁移已 mount subtree；tab switching、dialog migration 或 animation plane 迁移都应 key remount。frame task / mailbox id 仍是 scheduler-global，不会自动加 plane namespace。
+
+frame task 中的 `ctx.invalidate()` 默认绑定到 mounted plane。显式传入 `plane: undefined` 会跳出 mounted plane，在 root scheduler 中按 all-plane invalidate 处理。
 
 ### `createTInputHostPlugin(adapter)`
 

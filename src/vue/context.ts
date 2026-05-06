@@ -34,6 +34,15 @@ export type TerminalFrameContext = Readonly<{
   remainingMs: () => number;
   requestMore: () => void;
   invalidate: (options?: TerminalSchedulerInvalidateOptions) => void;
+  /**
+   * Internal scheduler metric hook used by frame tasks/mailboxes to report
+   * dropped producer updates that were intentionally coalesced before paint.
+   *
+   * Compatibility note:
+   * TerminalFrameContext is an exported type, so additions here are public.
+   */
+  reportDroppedUpdates?: (count: number) => void;
+  reportMailboxDeliveryAttempt?: (attempt: { id: string; queued: number; dropped: number }) => void;
 }>;
 
 export type TerminalFrameTask = Readonly<{
@@ -59,7 +68,19 @@ export type TerminalScheduler = Readonly<{
    */
   flushNow: () => void;
   configure: (options: TerminalSchedulerConfig) => void;
-  queueFrameTask: (task: TerminalFrameTask) => void;
+  /**
+   * Queues a frame task for the next scheduler frame.
+   * false means the scheduler explicitly rejected the task; producers must clear
+   * local pending state. true or undefined means accepted so legacy schedulers
+   * that do not return a value remain valid.
+   */
+  queueFrameTask: (task: TerminalFrameTask) => boolean | void;
+  /**
+   * Best-effort cancellation for a pending id task.
+   * If the scheduler has already taken the task for the current frame,
+   * the task run() still needs to guard its own stale state.
+   */
+  cancelFrameTask?: (id: string) => boolean | void;
   requestLive: (reason: string) => () => void;
   dropLive: (reason: string) => void;
   isInsideFrame: () => boolean;

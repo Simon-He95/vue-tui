@@ -1,40 +1,56 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
-import { computed, defineComponent, h, inject, ref, watch, watchEffect } from "vue";
+import {
+  computed,
+  defineComponent,
+  getCurrentInstance,
+  h,
+  inject,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+  watchEffect,
+} from "vue";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey } from "../context.js";
-import { intersectRect, translateRect } from "../utils/rect.js";
+import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
+import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
+import { defaultActiveStyle, defaultDimStyle } from "../utils/style-cache.js";
 import { formatInlineCellLine } from "../utils/text.js";
-import { applyWheelScroll, createWheelScrollState } from "../utils/wheel-scroll.js";
+import {
+  applyWheelScroll,
+  createWheelScrollState,
+  resetWheelScrollState,
+} from "../utils/wheel-scroll.js";
+import {
+  clampScrollTop,
+  clipOffsets,
+  hasPaintableViewport as listHasPaintableViewport,
+  maxScrollTop,
+  maxScrollTopForClamp,
+  visibleRange,
+} from "./list/list-geometry.js";
+import { formatClippedInlineCellLine } from "./list/list-paint.js";
+import {
+  anchorActiveToViewport,
+  nearestVisibleActive,
+  normalizeListIndex,
+  pageAnchor,
+} from "./list/selection-state.js";
+import {
+  getWheelScrollInput,
+  type ActiveChange,
+  type ScrollTopChange,
+  type SyncModelResult,
+} from "./list/scroll-state.js";
 
-function clamp(n: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, n));
-}
-
-function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
-  deltaY: number;
-  mode: "auto" | "line" | "pixel";
-} {
-  const deltaY = Number(e.deltaY ?? 0);
-  const deltaMode = typeof e.deltaMode === "number" ? e.deltaMode : undefined;
-  if (
-    Number.isInteger(deltaY) &&
-    deltaY !== 0 &&
-    Math.abs(deltaY) >= 100 &&
-    Math.abs(deltaY) % 100 === 0 &&
-    deltaMode == null
-  ) {
-    return { deltaY: deltaY / 100, mode: "line" };
-  }
-  if (deltaMode === 1) return { deltaY, mode: "line" };
-  if (deltaMode === 0) return { deltaY, mode: "pixel" };
-  return { deltaY, mode: "auto" };
-}
+let tListFallbackInstanceSeq = 0;
 
 export const TList = defineComponent({
   name: "TList",
@@ -45,6 +61,7 @@ export const TList = defineComponent({
     h: { type: Number, required: true },
     zIndex: { type: Number, default: 0 },
     items: { type: Array as PropType<string[]>, required: true },
+    itemVersion: { type: Number, default: 0 },
     modelValue: { type: Number, default: 0 },
     style: { type: Object as PropType<Style>, default: undefined },
     autoFocus: { type: Boolean, default: false },
@@ -52,240 +69,689 @@ export const TList = defineComponent({
   },
   emits: ["update:modelValue", "change", "scroll", "close", "focus", "blur", "keydown"],
   setup(props, { emit }) {
-    const { terminal, scheduler, defaultStyle, events } = useTerminal();
+    const { terminal, scheduler, render, defaultStyle, events } = useTerminal();
+    const instance = getCurrentInstance();
+    const tListInstanceId = instance?.uid ?? ++tListFallbackInstanceSeq;
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
 
     const focused = ref(false);
-    const active = ref(props.modelValue);
+    /**
+     * TList render invalidation contract:
+     *
+     * - scrollTop/active/modelValue are intentionally not render deps.
+     * - items reference/length changes and itemVersion repaint through the
+     *   structure watcher.
+     * - paint reads latest refs at render time.
+     * - viewport changes must call setScrollTop(), which marks viewport rows dirty.
+     * - active-only changes must call setActiveIndex(), which marks old/new rows dirty.
+     * - don't assign scrollTop/active directly outside these helpers.
+     * - no manual dirty rows should be marked while visible=false.
+     * - initial modelValue sync must not trigger a high-priority flush during setup.
+     */
+    const active = ref(0);
     const scrollTop = ref(0);
     const wheelState = createWheelScrollState();
+    let detachedByWheel = false;
+    let pendingWheelTop: number | null = null;
+    let mounted = false;
+    const dirtyRowsScratch: number[] = [];
+    const indexDirtyRowsScratch: number[] = [];
+
+    const fullRect = computed<Rect>(() =>
+      translateRect(
+        { x: props.x, y: props.y, w: props.w, h: props.h },
+        layout.originX,
+        layout.originY,
+      ),
+    );
 
     const absRect = computed<Rect>(() => {
-      const raw = { x: props.x, y: props.y, w: props.w, h: props.h };
-      const translated = translateRect(raw, layout.originX, layout.originY);
+      const translated = fullRect.value;
       if (!layout.clipRect) return translated;
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
-    watchEffect(() => {
-      active.value = clamp(props.modelValue, 0, Math.max(0, props.items.length - 1));
-    });
-
-    function ensureActiveVisible(): void {
-      const h = Math.max(0, props.h);
-      if (h <= 0) return;
-      const maxTop = Math.max(0, props.items.length - h);
-      scrollTop.value = clamp(scrollTop.value, 0, maxTop);
-      if (active.value < scrollTop.value) scrollTop.value = active.value;
-      else if (active.value >= scrollTop.value + h)
-        scrollTop.value = clamp(active.value - (h - 1), 0, maxTop);
+    function normalizedRect(): Rect {
+      return normalizeCellRect(absRect.value);
     }
 
-    watch(
-      [() => active.value, () => props.items.length, () => props.h],
-      () => {
-        ensureActiveVisible();
-      },
-      { immediate: true },
-    );
+    function normalizedFullRect(): Rect {
+      return normalizeCellRect(fullRect.value);
+    }
 
-    function commit(index: number): void {
-      const next = clamp(index, 0, Math.max(0, props.items.length - 1));
+    function hasPaintableViewport(): boolean {
+      return listHasPaintableViewport(visible.value, normalizedRect());
+    }
+
+    function currentClipOffsets(): { x: number; y: number } {
+      return clipOffsets(normalizedFullRect(), normalizedRect());
+    }
+
+    function currentMaxScrollTop(): number {
+      const clip = normalizedRect();
+      const { y: clipY } = currentClipOffsets();
+      return maxScrollTop(props.items.length, clipY, clip.h);
+    }
+
+    function currentMaxScrollTopForClamp(): number | null {
+      const full = normalizedFullRect();
+      const clip = normalizedRect();
+      const { y: clipY } = currentClipOffsets();
+      return maxScrollTopForClamp(full.h, clip.h, props.items.length, clipY);
+    }
+
+    function clampListScrollTop(value: number): number {
+      return clampScrollTop(value, currentMaxScrollTopForClamp());
+    }
+
+    function hasItems(): boolean {
+      return props.items.length > 0;
+    }
+
+    function normalizeIndex(value: unknown): number {
+      return normalizeListIndex(value, props.items.length);
+    }
+
+    function clampedModelValue(): number {
+      return normalizeIndex(props.modelValue);
+    }
+
+    function markViewportDirty(): boolean {
+      if (!hasPaintableViewport()) return false;
+      const nodeId = renderNode.id.value;
+      if (!nodeId) return false;
+      const r = normalizedRect();
+      dirtyRowsScratch.length = 0;
+      for (let y = r.y; y < r.y + r.h; y++) dirtyRowsScratch.push(y);
+      return render.markDirtyRows(nodeId, dirtyRowsScratch);
+    }
+
+    function markViewportDirtyForScroll(): boolean {
+      return markViewportDirty();
+    }
+
+    function pushDirtyIndexRow(rows: number[], y: number): void {
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i] === y) return;
+      }
+      rows.push(y);
+    }
+
+    function markIndexRowsDirty(...indexes: number[]): boolean {
+      if (!hasPaintableViewport()) return false;
+      const nodeId = renderNode.id.value;
+      if (!nodeId) return false;
+      const r = normalizedRect();
+
+      indexDirtyRowsScratch.length = 0;
+      const { start, h } = currentVisibleRange();
+      for (const index of indexes) {
+        if (!Number.isFinite(index)) continue;
+        const offset = index - start;
+        if (offset < 0 || offset >= h) continue;
+        pushDirtyIndexRow(indexDirtyRowsScratch, r.y + offset);
+      }
+      return render.markDirtyRows(nodeId, indexDirtyRowsScratch);
+    }
+
+    // Marks affected rows dirty but does not schedule a renderer flush.
+    // Callers must invalidate the scheduler/context themselves when dirty=true.
+    function setScrollTop(nextTop: number, options?: { emitScroll?: boolean }): ScrollTopChange {
+      const clampedTop = clampListScrollTop(nextTop);
+      if (clampedTop === scrollTop.value) {
+        return {
+          changed: false,
+          dirty: false,
+          top: scrollTop.value,
+        };
+      }
+      scrollTop.value = clampedTop;
+      const dirty = visible.value ? markViewportDirtyForScroll() : false;
+      if (options?.emitScroll !== false) emit("scroll", clampedTop);
+      return {
+        changed: true,
+        dirty,
+        top: clampedTop,
+      };
+    }
+
+    function currentVisibleRange(): { start: number; end: number; h: number } {
+      return visibleRange(
+        scrollTop.value,
+        props.items.length,
+        normalizedFullRect(),
+        normalizedRect(),
+      );
+    }
+
+    function ensureActiveVisible(): ScrollTopChange {
+      const { start, end, h } = currentVisibleRange();
+      if (h <= 0) {
+        return {
+          changed: false,
+          dirty: false,
+          top: clampListScrollTop(scrollTop.value),
+        };
+      }
+      const { y: clipY } = currentClipOffsets();
+      const maxTop = currentMaxScrollTop();
+      let nextTop = clampListScrollTop(scrollTop.value);
+      if (active.value < start) nextTop = clampScrollTop(active.value - clipY, maxTop);
+      else if (active.value > end) {
+        nextTop = clampScrollTop(active.value - (clipY + h - 1), maxTop);
+      }
+      // Selection-driven viewport changes intentionally do not emit scroll.
+      return setScrollTop(nextTop, { emitScroll: false });
+    }
+
+    function setActiveSilently(nextIndex: unknown): {
+      prev: number;
+      next: number;
+      changed: boolean;
+    } {
+      const prev = active.value;
+      const next = normalizeIndex(nextIndex);
+      if (prev === next) return { prev, next, changed: false };
       active.value = next;
-      emit("update:modelValue", next);
-      emit("change", { index: next, value: props.items[next] ?? "" });
+      return { prev, next, changed: true };
+    }
+
+    const wheelMailbox = createFrameMailbox<number>({
+      scheduler,
+      id: `TList:${tListInstanceId}:wheel`,
+      reason: "scroll",
+      priority: "high",
+      sync: true,
+      apply(nextTop, ctx) {
+        pendingWheelTop = null;
+        if (!hasPaintableViewport()) {
+          resetWheelScrollState(wheelState);
+          return;
+        }
+        const clampedTop = clampListScrollTop(nextTop);
+        if (clampedTop === scrollTop.value) {
+          resetWheelScrollState(wheelState);
+          return;
+        }
+        detachedByWheel = true;
+        const result = setScrollTop(clampedTop, { emitScroll: true });
+        if (result.dirty) {
+          ctx.invalidate({ priority: "high", reason: "scroll" });
+        }
+      },
+    });
+
+    function cancelWheelScrollFrame(): void {
+      pendingWheelTop = null;
+      wheelMailbox.cancel();
+      resetWheelScrollState(wheelState);
+    }
+
+    function queueWheelTop(nextTop: number): boolean {
+      pendingWheelTop = nextTop;
+      try {
+        if (wheelMailbox.queue(nextTop)) return true;
+      } catch (error) {
+        pendingWheelTop = null;
+        resetWheelScrollState(wheelState);
+        throw error;
+      }
+      pendingWheelTop = null;
+      resetWheelScrollState(wheelState);
+      return false;
+    }
+
+    function replacePendingWheelTop(nextTop: number): boolean {
+      pendingWheelTop = nextTop;
+      if (wheelMailbox.replacePending(nextTop)) return true;
+      pendingWheelTop = null;
+      resetWheelScrollState(wheelState);
+      return false;
+    }
+
+    function reattachSelection(): void {
+      detachedByWheel = false;
+      cancelWheelScrollFrame();
+    }
+
+    function anchorActiveToCurrentViewport(direction: -1 | 1): number {
+      return anchorActiveToViewport(
+        active.value,
+        props.items.length,
+        currentVisibleRange(),
+        direction,
+      );
+    }
+
+    function pageAnchorFromCurrentViewport(direction: -1 | 1): number {
+      return pageAnchor(active.value, props.items.length, currentVisibleRange(), direction);
+    }
+
+    function nearestVisibleActiveIndex(): number {
+      return nearestVisibleActive(active.value, props.items.length, currentVisibleRange());
+    }
+
+    function setActiveIndex(
+      nextIndex: number,
+      options?: {
+        emitUpdate?: boolean;
+        emitChange?: boolean;
+      },
+    ): ActiveChange {
+      if (!hasItems()) {
+        const changedActive = active.value !== 0;
+        if (changedActive) active.value = 0;
+        return { changedActive, changedScroll: false, dirty: false, next: 0 };
+      }
+
+      const updated = setActiveSilently(nextIndex);
+      if (!updated.changed) {
+        if (options?.emitChange) {
+          emit("change", { index: updated.next, value: props.items[updated.next] ?? "" });
+        }
+        const scroll = ensureActiveVisible();
+        return {
+          changedActive: false,
+          changedScroll: scroll.changed,
+          dirty: scroll.dirty,
+          next: updated.next,
+        };
+      }
+
+      if (options?.emitUpdate !== false) {
+        emit("update:modelValue", updated.next);
+      }
+      if (options?.emitChange) {
+        emit("change", { index: updated.next, value: props.items[updated.next] ?? "" });
+      }
+
+      const scroll = ensureActiveVisible();
+      if (!scroll.changed) {
+        const dirty = markIndexRowsDirty(updated.prev, updated.next);
+        return { changedActive: true, changedScroll: false, dirty, next: updated.next };
+      }
+
+      return {
+        changedActive: true,
+        changedScroll: true,
+        dirty: scroll.dirty,
+        next: updated.next,
+      };
+    }
+
+    function selectActive(index: number, options?: { emitChange?: boolean }): void {
+      const hadPendingWheel = wheelMailbox.hasPending();
+      const wasDetached = detachedByWheel;
+
+      if (hadPendingWheel || wasDetached) {
+        reattachSelection();
+      }
+
+      const result = setActiveIndex(index, {
+        emitUpdate: true,
+        emitChange: options?.emitChange,
+      });
+      if (result.changedScroll || result.dirty) {
+        scheduler.invalidate({ priority: "high", reason: "input" });
+      }
+    }
+
+    function commitVisibleSelection(): void {
+      if (!hasItems()) return;
+      selectActive(nearestVisibleActiveIndex(), { emitChange: true });
+    }
+
+    function closeList(): void {
+      reattachSelection();
+      emit("close");
+    }
+
+    function invalidateFocusChange(): void {
+      scheduler.invalidate({
+        priority: mounted ? "high" : "normal",
+        reason: "input",
+      });
+    }
+
+    function syncExternalModelValue(value: number): SyncModelResult {
+      const hadPendingWheel = wheelMailbox.hasPending();
+      const wasDetached = detachedByWheel;
+      const next = normalizeIndex(value);
+      const changedActive = active.value !== next;
+
+      if (hadPendingWheel || wasDetached || changedActive) {
+        reattachSelection();
+      }
+
+      const result = setActiveIndex(next, { emitUpdate: false });
+      return {
+        canceledPendingWheel: hadPendingWheel,
+        reattached: wasDetached,
+        changedActive: result.changedActive,
+        changedScroll: result.changedScroll,
+        dirty: result.dirty,
+      };
     }
 
     function onKeydown(e: TerminalKeyboardEvent): void {
       emit("keydown", e);
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        const next = clamp(active.value - 1, 0, Math.max(0, props.items.length - 1));
-        active.value = next;
-        emit("update:modelValue", next);
-        ensureActiveVisible();
-        scheduler.invalidate({ reason: "input" });
+        selectActive(anchorActiveToCurrentViewport(-1));
         return;
       }
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        const next = clamp(active.value + 1, 0, Math.max(0, props.items.length - 1));
-        active.value = next;
-        emit("update:modelValue", next);
-        ensureActiveVisible();
-        scheduler.invalidate({ reason: "input" });
+        selectActive(anchorActiveToCurrentViewport(1));
         return;
       }
       if (e.key === "PageUp") {
         e.preventDefault();
-        const next = clamp(active.value - props.h, 0, Math.max(0, props.items.length - 1));
-        active.value = next;
-        emit("update:modelValue", next);
-        ensureActiveVisible();
-        scheduler.invalidate({ reason: "input" });
+        selectActive(pageAnchorFromCurrentViewport(-1));
         return;
       }
       if (e.key === "PageDown") {
         e.preventDefault();
-        const next = clamp(active.value + props.h, 0, Math.max(0, props.items.length - 1));
-        active.value = next;
-        emit("update:modelValue", next);
-        ensureActiveVisible();
-        scheduler.invalidate({ reason: "input" });
+        selectActive(pageAnchorFromCurrentViewport(1));
         return;
       }
       if (e.key === "Home") {
         e.preventDefault();
-        active.value = 0;
-        emit("update:modelValue", 0);
-        ensureActiveVisible();
-        scheduler.invalidate({ reason: "input" });
+        selectActive(0);
         return;
       }
       if (e.key === "End") {
         e.preventDefault();
         const last = Math.max(0, props.items.length - 1);
-        active.value = last;
-        emit("update:modelValue", last);
-        ensureActiveVisible();
-        scheduler.invalidate({ reason: "input" });
+        selectActive(last);
         return;
       }
       if (e.key === "Enter") {
         e.preventDefault();
-        commit(active.value);
+        commitVisibleSelection();
         return;
       }
       if (e.key === "Escape") {
         e.preventDefault();
-        emit("close");
+        closeList();
       }
     }
 
-    const { id } = useTerminalNode(() => ({
-      rect: absRect.value,
+    const eventNode = useTerminalNode(() => ({
+      rect: normalizedRect(),
       zIndex: eventZ.value,
       visible: visible.value,
       focusable: true,
       handlers: {
         click: (e: TerminalPointerEvent) => {
-          const r = absRect.value;
-          const idx = scrollTop.value + (e.cellY - r.y);
+          const r = normalizedRect();
+          const idx = currentVisibleRange().start + (e.cellY - r.y);
           if (idx >= 0 && idx < props.items.length) {
-            active.value = idx;
-            emit("update:modelValue", idx);
-            scheduler.invalidate({ reason: "input" });
+            selectActive(idx);
           } else {
-            emit("close");
+            closeList();
           }
         },
         dblclick: (e: TerminalPointerEvent) => {
-          const r = absRect.value;
-          const idx = scrollTop.value + (e.cellY - r.y);
-          if (idx >= 0 && idx < props.items.length) commit(idx);
+          cancelWheelScrollFrame();
+          const r = normalizedRect();
+          const idx = currentVisibleRange().start + (e.cellY - r.y);
+          if (idx >= 0 && idx < props.items.length) selectActive(idx, { emitChange: true });
         },
         wheel: (e: any) => {
           const { deltaY, mode } = getWheelScrollInput(e);
-          const delta = deltaY;
-          if (!delta) return;
-          const h = Math.max(0, props.h);
-          const maxTop = Math.max(0, props.items.length - h);
+          if (!deltaY) return;
+          const baseTop = pendingWheelTop ?? scrollTop.value;
+          const now =
+            typeof e.time === "number"
+              ? e.time
+              : typeof e.timeStamp === "number"
+                ? e.timeStamp
+                : Date.now();
           const { nextTop, dir } = applyWheelScroll(
             wheelState,
-            delta,
-            scrollTop.value,
-            maxTop,
-            Date.now(),
+            deltaY,
+            baseTop,
+            currentMaxScrollTop(),
+            now,
             mode,
             {
               disableAcceleration: mode === "pixel",
             },
           );
-          if (!dir || nextTop === scrollTop.value) return;
-          scrollTop.value = nextTop;
-          // Keep active within visible range to prevent ensureActiveVisible from
-          // resetting scrollTop when watch triggers (e.g., on height change)
-          const visibleStart = nextTop;
-          const visibleEnd = nextTop + h - 1;
-          if (active.value < visibleStart || active.value > visibleEnd) {
-            // Move active to follow scroll direction
-            const newActive = dir > 0 ? visibleEnd : visibleStart;
-            const clampedActive = clamp(newActive, 0, Math.max(0, props.items.length - 1));
-            if (clampedActive !== active.value) {
-              active.value = clampedActive;
-              emit("update:modelValue", clampedActive);
-            }
+          if (!dir || nextTop === baseTop) {
+            const maxTop = currentMaxScrollTop();
+            const isEdgeNoop = (deltaY < 0 && baseTop <= 0) || (deltaY > 0 && baseTop >= maxTop);
+            if (isEdgeNoop) resetWheelScrollState(wheelState);
+            return;
           }
-          emit("scroll", nextTop);
-          scheduler.invalidate({ reason: "scroll" });
+
+          if (!queueWheelTop(nextTop)) return;
+          e.preventDefault?.();
         },
         focus: () => {
           focused.value = true;
           emit("focus");
-          scheduler.invalidate();
+          invalidateFocusChange();
         },
         blur: () => {
           focused.value = false;
           emit("blur");
-          if (props.closeOnBlur) emit("close");
-          scheduler.invalidate();
+          if (props.closeOnBlur) closeList();
+          invalidateFocusChange();
         },
         keydown: onKeydown,
       },
     }));
 
+    onMounted(() => {
+      mounted = true;
+    });
+
     watchEffect(() => {
       if (!props.autoFocus) return;
       if (!visible.value) return;
       const manager = events.value;
-      const nodeId = id.value;
+      const nodeId = eventNode.id.value;
       if (!manager || !nodeId) return;
       if (manager.getFocused() === nodeId) return;
       manager.focus(nodeId);
     });
 
-    useRenderNode(() => ({
+    watch(
+      () => visible.value,
+      (nextVisible) => {
+        if (!nextVisible) cancelWheelScrollFrame();
+      },
+    );
+
+    onBeforeUnmount(() => {
+      pendingWheelTop = null;
+      resetWheelScrollState(wheelState);
+      wheelMailbox.dispose();
+    });
+
+    // Keep renderNode declaration before immediate watchers.
+    // markViewportDirty / markIndexRowsDirty close over renderNode.
+    const renderNode = useRenderNode(() => ({
       zIndex: props.zIndex,
-      rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
+      rect: visible.value ? normalizedRect() : { x: 0, y: 0, w: 0, h: 0 },
+      // Intentionally not in render deps:
+      // - scrollTop / active / modelValue repaint through manual dirty-row paths.
+      // - props.items / itemVersion are handled by the structure watcher below
+      //   so same-length content updates stay on the viewport dirty-row path
+      //   instead of the more conservative render.update() rect path.
       deps: [
         visible.value,
         absRect.value,
+        fullRect.value,
         props.w,
         props.h,
-        props.items,
-        props.modelValue,
         props.style,
         focused.value,
-        active.value,
-        scrollTop.value,
         defaultStyle.value,
       ],
-      paint: () => {
+      paint: (dirtyRows) => {
         if (!visible.value) return;
-        const r = absRect.value;
+        const r = normalizedRect();
+        const full = normalizedFullRect();
         if (r.w <= 0 || r.h <= 0) return;
         const base = props.style ?? defaultStyle.value;
-        const top = clamp(scrollTop.value, 0, Math.max(0, props.items.length - r.h));
-        const activeStyle = base.inverse ? base : { ...base, inverse: true };
+        const emptyStyle = defaultDimStyle(base);
+        const top = clampListScrollTop(scrollTop.value);
+        const activeStyle = defaultActiveStyle(base);
+        const { x: clipX, y: clipY } = currentClipOffsets();
+        const needsHorizontalSlice = clipX !== 0 || r.w !== full.w;
+        let emptyLine: string | null = null;
 
-        for (let i = 0; i < r.h; i++) {
-          const idx = top + i;
-          const line = formatInlineCellLine(props.items[idx] ?? "", r.w);
+        function getEmptyLine(): string {
+          if (emptyLine != null) return emptyLine;
+          emptyLine = clipY !== 0 ? "" : formatClippedInlineCellLine("(empty)", full.w, clipX, r.w);
+          return emptyLine;
+        }
+
+        const paintRow = (i: number) => {
+          if (i < 0 || i >= r.h) return;
+          const idx = top + clipY + i;
+          const raw = props.items[idx] ?? "";
+          const line = needsHorizontalSlice
+            ? formatClippedInlineCellLine(raw, full.w, clipX, r.w)
+            : formatInlineCellLine(raw, r.w);
           const style = idx === active.value ? activeStyle : base;
           terminal.write(line, { x: r.x, y: r.y + i, style });
+        };
+
+        if (dirtyRows) {
+          if (dirtyRows.length === 0) return;
+          let firstRowDirty = false;
+          for (const y of dirtyRows) {
+            if (Math.floor(y) === r.y) firstRowDirty = true;
+            const localY = Math.floor(y) - r.y;
+            if (localY < 0 || localY >= r.h) continue;
+            paintRow(localY);
+          }
+          if (
+            focused.value &&
+            props.items.length === 0 &&
+            r.h > 0 &&
+            firstRowDirty &&
+            clipY === 0
+          ) {
+            terminal.write(getEmptyLine(), {
+              x: r.x,
+              y: r.y,
+              style: emptyStyle,
+            });
+          }
+          return;
         }
-        if (focused.value && r.h > 0 && props.items.length === 0) {
-          terminal.write(formatInlineCellLine("(empty)", r.w), {
+
+        for (let i = 0; i < r.h; i++) paintRow(i);
+        if (focused.value && r.h > 0 && props.items.length === 0 && clipY === 0) {
+          terminal.write(getEmptyLine(), {
             x: r.x,
             y: r.y,
-            style: { ...base, dim: true },
+            style: emptyStyle,
           });
         }
       },
     }));
+
+    let didInitialModelSync = false;
+
+    watch(
+      () => props.modelValue,
+      (value) => {
+        const isInitial = !didInitialModelSync;
+        didInitialModelSync = true;
+        const result = syncExternalModelValue(value);
+        if (!isInitial && (result.dirty || result.changedScroll)) {
+          scheduler.invalidate({ priority: "high", reason: "input" });
+        }
+      },
+      { immediate: true },
+    );
+
+    watch(
+      [
+        () => props.items,
+        () => props.items.length,
+        () => props.itemVersion,
+        () => fullRect.value.y,
+        () => fullRect.value.h,
+        () => absRect.value.y,
+        () => absRect.value.h,
+      ],
+      (
+        [itemsRef, itemsLength, itemVersion, fullY, fullH, clipY, clipH],
+        [
+          prevItemsRef,
+          prevItemsLength,
+          prevItemVersion,
+          prevFullY,
+          prevFullH,
+          prevClipY,
+          prevClipH,
+        ] = [itemsRef, itemsLength, itemVersion, fullY, fullH, clipY, clipH],
+      ) => {
+        const dataChanged =
+          itemsRef !== prevItemsRef ||
+          itemsLength !== prevItemsLength ||
+          itemVersion !== prevItemVersion;
+        const geometryChanged =
+          fullY !== prevFullY || fullH !== prevFullH || clipY !== prevClipY || clipH !== prevClipH;
+        const structureChanged = dataChanged || geometryChanged;
+        const last = Math.max(0, props.items.length - 1);
+        let needsInvalidate = false;
+        const wheelDetachedOrPending = detachedByWheel || wheelMailbox.hasPending();
+
+        if (wheelDetachedOrPending) {
+          if (active.value > last || active.value < 0) {
+            const updated = setActiveSilently(last);
+            if (updated.changed) {
+              needsInvalidate = markIndexRowsDirty(updated.prev, updated.next) || needsInvalidate;
+            }
+          }
+        } else {
+          const modelSync = setActiveIndex(clampedModelValue(), { emitUpdate: false });
+          needsInvalidate = modelSync.dirty || needsInvalidate;
+        }
+
+        if (pendingWheelTop !== null && !hasPaintableViewport()) {
+          cancelWheelScrollFrame();
+        } else if (pendingWheelTop !== null) {
+          const nextPendingTop = clampListScrollTop(pendingWheelTop);
+          if (nextPendingTop === scrollTop.value) {
+            cancelWheelScrollFrame();
+          } else if (nextPendingTop !== pendingWheelTop) {
+            replacePendingWheelTop(nextPendingTop);
+          }
+        }
+
+        const clampedTop = clampListScrollTop(scrollTop.value);
+        if (clampedTop !== scrollTop.value) {
+          // Scroll is defined as viewport-driven changes, including programmatic
+          // clamps caused by data length or clipped viewport changes.
+          const scroll = setScrollTop(clampedTop, { emitScroll: true });
+          needsInvalidate = scroll.dirty || needsInvalidate;
+        }
+
+        if (pendingWheelTop !== null && pendingWheelTop === scrollTop.value) {
+          cancelWheelScrollFrame();
+        }
+
+        if (structureChanged) {
+          needsInvalidate = markViewportDirty() || needsInvalidate;
+        }
+
+        if (needsInvalidate) {
+          scheduler.invalidate({ priority: "normal", reason: "data" });
+        }
+      },
+    );
 
     return () => h("span", rootProps);
   },

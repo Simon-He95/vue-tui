@@ -87,8 +87,9 @@ export const TDebugOverlay = defineComponent({
             `commit: ${perf.commitMs.toFixed(1)}ms`,
             `domFlush: ${perf.domFlushMs == null ? "-" : `${perf.domFlushMs.toFixed(1)}ms`}`,
             `coalescedInvalidates: ${perf.coalescedInvalidates}`,
-            `frameTasks: ${perf.frameTaskCount}`,
+            `frameTasks: ${perf.frameTaskCount} queue:${perf.frameTaskQueueDepthBeforeRun}->${perf.frameTaskQueueDepthAfterRun}`,
             `coalescedTasks: ${perf.coalescedFrameTasks}`,
+            `droppedUpdates: ${perf.droppedUpdates}`,
             `queueDepth: ${perf.queueDepth}`,
           );
         } else {
@@ -138,7 +139,7 @@ export const TDebugOverlay = defineComponent({
 
       if (props.panel) {
         const panelW = Math.min(cols, 42);
-        const panelH = rows >= 16 ? Math.min(rows, 16) : Math.min(rows, 6);
+        const panelH = rows >= 16 ? Math.min(rows, 17) : Math.min(rows, 6);
         children.push(
           h(
             TBox as any,
