@@ -115,6 +115,88 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("reuses multi-segment row spans", () => {
+    const { terminal, container, renderer } = setup(4);
+
+    try {
+      terminal.fill(0, 0, 2, 1, "A", { fg: "red" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      const firstSpan = line.childNodes[0];
+      const secondSpan = line.childNodes[1];
+      expect(line.childNodes).toHaveLength(2);
+      expect((firstSpan as HTMLSpanElement).dataset.vtFastRow).toBe("segment");
+      expect((secondSpan as HTMLSpanElement).dataset.vtFastRow).toBe("segment");
+
+      terminal.fill(0, 0, 2, 1, "C", { fg: "red" });
+      terminal.fill(2, 0, 2, 1, "D", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(line.childNodes).toHaveLength(2);
+      expect(line.childNodes[0]).toBe(firstSpan);
+      expect(line.childNodes[1]).toBe(secondSpan);
+      expect(line.textContent).toBe("CCDD");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("resets reused multi-segment row span styles", () => {
+    const { terminal, container, renderer } = setup(4);
+
+    try {
+      terminal.fill(0, 0, 2, 1, "A", { fg: "red", underline: true });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      const span = line.childNodes[0] as HTMLSpanElement;
+      expect(span.style.textDecoration).toBe("underline");
+
+      terminal.fill(0, 0, 2, 1, "C", { fg: "blue" });
+      terminal.fill(2, 0, 2, 1, "D", { fg: "red" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(line.childNodes[0]).toBe(span);
+      expect(span.style.color).toBe("var(--vt-color-blue)");
+      expect(span.style.textDecoration).toBe("");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("replaces multi-segment row spans when the segment count changes", () => {
+    const { terminal, container, renderer } = setup(6);
+
+    try {
+      terminal.fill(0, 0, 3, 1, "A", { fg: "red" });
+      terminal.fill(3, 0, 3, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      const firstSpan = line.childNodes[0];
+      const secondSpan = line.childNodes[1];
+      expect(line.childNodes).toHaveLength(2);
+
+      terminal.fill(0, 0, 2, 1, "C", { fg: "red" });
+      terminal.fill(2, 0, 2, 1, "D", { fg: "blue" });
+      terminal.fill(4, 0, 2, 1, "E", { fg: "green" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(line.childNodes).toHaveLength(3);
+      expect(line.childNodes[0]).not.toBe(firstSpan);
+      expect(line.childNodes[1]).not.toBe(secondSpan);
+      expect(line.textContent).toBe("CCDDEE");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("renders styled rows as plain text when they become plain", () => {
     const { terminal, container, renderer } = setup(3);
 
@@ -153,6 +235,41 @@ describe("DomRenderer row rendering", () => {
       expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
       expect((line.firstChild as HTMLSpanElement).dataset.vtFastRow).toBe("styled");
       expect(line.textContent).toBe("BBB");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not mark href multi-segment rows for reuse", () => {
+    const { terminal, container, renderer } = setup(4);
+
+    try {
+      terminal.fill(0, 0, 2, 1, "A", { href: "https://example.com" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      expect(line.childNodes).toHaveLength(2);
+      for (const child of Array.from(line.children) as HTMLSpanElement[])
+        expect(child.dataset.vtFastRow).toBeUndefined();
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not mark wide multi-segment rows for reuse", () => {
+    const { terminal, container, renderer } = setup(4);
+
+    try {
+      terminal.write("中", { x: 0, y: 0, style: { fg: "red" } });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      expect(line.textContent).toContain("中");
+      expect(line.querySelector('[data-vt-fast-row="segment"]')).toBeNull();
     } finally {
       renderer.dispose();
       container.remove();
