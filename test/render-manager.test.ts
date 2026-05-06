@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createTerminal } from "../src/index.js";
 import { createRenderManager } from "../src/vue/render/render-manager.js";
 
@@ -147,15 +147,21 @@ describe("render-manager", () => {
     rm.render();
     paints.length = 0;
 
-    expect(rm.markDirtyRows(node.id, [0])).toBe(false);
-    expect(rm.render()).toBeNull();
-    expect(paints).toEqual([]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(rm.markDirtyRows(node.id, [0])).toBe(false);
+      expect(rm.render()).toBeNull();
+      expect(paints).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("absolute terminal rows"));
 
-    expect(rm.markDirtyRows(node.id, [10])).toBe(true);
-    const stats = rm.render();
+      expect(rm.markDirtyRows(node.id, [10])).toBe(true);
+      const stats = rm.render();
 
-    expect(stats?.paintedNodes).toBe(1);
-    expect(paints).toEqual(["node"]);
+      expect(stats?.paintedNodes).toBe(1);
+      expect(paints).toEqual(["node"]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("repaints overlapping same-plane nodes in z-order for dirty rows", () => {

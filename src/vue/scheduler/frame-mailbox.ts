@@ -149,8 +149,8 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
   }
 
   function dispose(): void {
-    disposed = true;
     cancel();
+    disposed = true;
   }
 
   return {

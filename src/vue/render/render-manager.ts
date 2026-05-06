@@ -12,6 +12,13 @@ const ROW_BUCKET_DIRTY_RATIO_FALLBACK = 0.6;
 const ROW_BUCKET_DIRTY_RATIO_MIN_ROWS = 16;
 const LARGE_RECT_BUCKET_RATIO = 0.5;
 
+function warnDev(message: string): void {
+  const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
+    ?.NODE_ENV;
+  if (nodeEnv === "production") return;
+  console.warn(message);
+}
+
 export type RenderRect = Readonly<{
   x: number;
   y: number;
@@ -163,6 +170,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   let candidateMarksScratch = new Uint32Array(0);
   let candidateGeneration = 1;
   const candidateNodesScratch: RenderNode[] = [];
+  const warnedLocalDirtyRows = new Set<string>();
 
   const stackPathCache = new WeakMap<RenderStack, readonly PathSegment[]>();
   const profiler = createTuiProfiler("render-manager");
@@ -324,6 +332,26 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     return true;
   }
 
+  function warnIfRowsLookLocal(node: RenderNode, rows: readonly number[]): void {
+    if (!node.rect || node.rectY0 === 0 || warnedLocalDirtyRows.has(node.id)) return;
+    const height = node.rectY1 - node.rectY0;
+    if (height <= 0) return;
+    let sawRow = false;
+    let sawAboveRect = false;
+    for (let i = 0; i < rows.length; i++) {
+      const y = Math.floor(rows[i] ?? -1);
+      if (!Number.isFinite(y) || y < 0 || y >= height) return;
+      sawRow = true;
+      if (y < node.rectY0) sawAboveRect = true;
+    }
+    if (!sawRow || !sawAboveRect) return;
+    warnedLocalDirtyRows.add(node.id);
+    warnDev(
+      `[vue-tui] RenderManager markDirtyRows()/dirtyRowsHint rows must be absolute terminal rows for the node's plane. ` +
+        `Received rows that look local to a node at y=${node.rectY0}; add the node y offset before marking dirty rows.`,
+    );
+  }
+
   function ensureCandidateMarks(size: number): Uint32Array {
     if (candidateMarksScratch.length < size) {
       candidateMarksScratch = new Uint32Array(size);
@@ -398,6 +426,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
 
   function markRowsForNode(node: RenderNode, rows: readonly number[]): boolean {
     if (!rows.length) return false;
+    warnIfRowsLookLocal(node, rows);
     const state = getDirtyState(node.plane);
     let accepted = false;
 
@@ -534,6 +563,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     if (prev) {
       markRect(prev.plane, prev.rect);
       removeFromRowBuckets(prev);
+      warnedLocalDirtyRows.delete(id);
     }
     nodes.delete(id);
     sortedDirty = true;
