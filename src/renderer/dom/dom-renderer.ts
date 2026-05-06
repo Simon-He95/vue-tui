@@ -329,6 +329,19 @@ function isPlainTextRow(segments: readonly RowSegment[]): boolean {
   return segments.length === 1 && !segments[0]!.wide && isPlainStyle(segments[0]!.style);
 }
 
+function isSingleStyledTextRow(segments: readonly RowSegment[]): boolean {
+  return (
+    segments.length === 1 &&
+    !segments[0]!.wide &&
+    !segments[0]!.style.href &&
+    !isPlainStyle(segments[0]!.style)
+  );
+}
+
+function resetSpanStyle(span: HTMLSpanElement): void {
+  span.removeAttribute("style");
+}
+
 function renderRow(
   terminal: Terminal,
   metrics: CellMetrics,
@@ -358,6 +371,30 @@ function renderRow(
     } else {
       lineEl.textContent = text;
     }
+    return;
+  }
+
+  if (isSingleStyledTextRow(segments)) {
+    const seg = segments[0]!;
+    const firstChild = lineEl.firstChild;
+    let span: HTMLSpanElement;
+
+    if (
+      lineEl.childNodes.length === 1 &&
+      firstChild instanceof HTMLSpanElement &&
+      firstChild.dataset.vtFastRow === "styled"
+    ) {
+      span = firstChild;
+    } else {
+      span = document.createElement("span");
+      span.dataset.vtFastRow = "styled";
+      lineEl.replaceChildren(span);
+    }
+
+    span.textContent = seg.text;
+    resetSpanStyle(span);
+    span.style.cssText = `display:inline-block;width:${seg.cols * metrics.cellWidth}px;height:${metrics.cellHeight}px;overflow:hidden;white-space:pre;vertical-align:top`;
+    applyStyle(span, seg.style);
     return;
   }
 
