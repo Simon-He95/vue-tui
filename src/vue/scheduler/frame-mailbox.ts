@@ -135,6 +135,13 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
     return true;
   }
 
+  function replacePending(value: T): boolean {
+    if (disposed) return false;
+    if (!hasPending) return queue(value);
+    pending = value;
+    return true;
+  }
+
   function cancel(): void {
     const taskId = pendingTaskId;
     clearPending();
@@ -148,6 +155,7 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
 
   return {
     queue,
+    replacePending,
     cancel,
     dispose,
     hasPending: () => hasPending,

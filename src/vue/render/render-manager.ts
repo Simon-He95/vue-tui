@@ -8,6 +8,8 @@ import { clearTextCaches, withTextRenderPass } from "../utils/text.js";
 
 const renderMgrDebugLog = createDebugLogger(isDebugEnabled());
 const ROW_BUCKET_CANDIDATE_RATIO_FALLBACK = 0.6;
+const ROW_BUCKET_DIRTY_RATIO_FALLBACK = 0.6;
+const ROW_BUCKET_DIRTY_RATIO_MIN_ROWS = 16;
 const LARGE_RECT_BUCKET_RATIO = 0.5;
 
 export type RenderRect = Readonly<{
@@ -155,6 +157,12 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   const rowBuckets: RenderRowBuckets = new Map();
   const globalNodeIdsByPlane = new Map<TerminalRenderPlane, Set<string>>();
   const largeNodeIdsByPlane = new Map<TerminalRenderPlane, Set<string>>();
+  let renderedRowsScratch = new Uint8Array(terminalRows);
+  const touchedRenderedRowsScratch: number[] = [];
+  const dirtyRowsScratch: number[] = [];
+  let candidateMarksScratch = new Uint32Array(0);
+  let candidateGeneration = 1;
+  const candidateNodesScratch: RenderNode[] = [];
 
   const stackPathCache = new WeakMap<RenderStack, readonly PathSegment[]>();
   const profiler = createTuiProfiler("render-manager");
@@ -284,6 +292,83 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     globalNodeIdsByPlane.clear();
     largeNodeIdsByPlane.clear();
     for (const node of nodes.values()) addToRowBuckets(node);
+  }
+
+  function shouldPromoteToFullPlaneDirty(dirtyRows: number, planeNodes: number): boolean {
+    return (
+      planeNodes > 1 &&
+      dirtyRows >= ROW_BUCKET_DIRTY_RATIO_MIN_ROWS &&
+      terminalRows > 0 &&
+      dirtyRows / terminalRows >= ROW_BUCKET_DIRTY_RATIO_FALLBACK &&
+      dirtyRows >= planeNodes * ROW_BUCKET_DIRTY_RATIO_FALLBACK
+    );
+  }
+
+  function ensureRenderedRowsScratch(): Uint8Array {
+    if (renderedRowsScratch.length !== terminalRows) {
+      renderedRowsScratch = new Uint8Array(terminalRows);
+      touchedRenderedRowsScratch.length = 0;
+    }
+    return renderedRowsScratch;
+  }
+
+  function clearRenderedRowsScratch(rows: Uint8Array): void {
+    for (const y of touchedRenderedRowsScratch) rows[y] = 0;
+    touchedRenderedRowsScratch.length = 0;
+  }
+
+  function markRenderedRow(rows: Uint8Array, y: number): boolean {
+    if (y < 0 || y >= terminalRows || rows[y] === 1) return false;
+    rows[y] = 1;
+    touchedRenderedRowsScratch.push(y);
+    return true;
+  }
+
+  function ensureCandidateMarks(size: number): Uint32Array {
+    if (candidateMarksScratch.length < size) {
+      candidateMarksScratch = new Uint32Array(size);
+    }
+    return candidateMarksScratch;
+  }
+
+  function beginCandidateCollection(planeNodes: readonly RenderNode[]): Uint32Array {
+    candidateNodesScratch.length = 0;
+    const marks = ensureCandidateMarks(planeNodes.length);
+    candidateGeneration++;
+    if (candidateGeneration === 0xffffffff) {
+      marks.fill(0);
+      candidateGeneration = 1;
+    }
+    return marks;
+  }
+
+  function markCandidateNode(
+    planeNodes: readonly RenderNode[],
+    marks: Uint32Array,
+    node: RenderNode | undefined,
+  ): void {
+    if (!node) return;
+    const index = sortedPlaneNodeIndexById.get(node.id);
+    if (index == null || planeNodes[index]?.id !== node.id) return;
+    if (marks[index] === candidateGeneration) return;
+    marks[index] = candidateGeneration;
+    candidateNodesScratch.push(node);
+  }
+
+  function sortCandidateNodesByPlaneOrder(): void {
+    for (let i = 1; i < candidateNodesScratch.length; i++) {
+      const node = candidateNodesScratch[i]!;
+      const nodeIndex = sortedPlaneNodeIndexById.get(node.id) ?? 0;
+      let j = i - 1;
+      while (
+        j >= 0 &&
+        (sortedPlaneNodeIndexById.get(candidateNodesScratch[j]!.id) ?? 0) > nodeIndex
+      ) {
+        candidateNodesScratch[j + 1] = candidateNodesScratch[j]!;
+        j--;
+      }
+      candidateNodesScratch[j + 1] = node;
+    }
   }
 
   function markRect(plane: TerminalRenderPlane, rect: RenderRect | null | undefined): void {
@@ -547,19 +632,19 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     let fullRepaint = false;
     const processedPlanes: TerminalRenderPlane[] = [];
     const rowBucketFallbacks: RowBucketFallback[] = [];
-    const renderedRows = new Uint8Array(terminalRows);
+    const renderedRows = ensureRenderedRowsScratch();
+    clearRenderedRowsScratch(renderedRows);
     let renderedRowCount = 0;
 
     const markRenderedRows = (rows: readonly number[] | null): void => {
       if (rows === null) {
-        renderedRowCount = terminalRows;
-        renderedRows.fill(1);
+        for (let y = 0; y < terminalRows; y++) {
+          if (markRenderedRow(renderedRows, y)) renderedRowCount++;
+        }
         return;
       }
       for (const y of rows) {
-        if (y < 0 || y >= terminalRows || renderedRows[y] === 1) continue;
-        renderedRows[y] = 1;
-        renderedRowCount++;
+        if (markRenderedRow(renderedRows, y)) renderedRowCount++;
       }
     };
 
@@ -570,11 +655,26 @@ export function createRenderManager(terminal: Terminal): RenderManager {
           if (!state || (!state.allRowsDirty && state.dirtyRowCount === 0)) continue;
 
           const planeNodes = sortedNodesByPlane.get(plane) ?? [];
-          const isFullPlaneRepaint = state.allRowsDirty;
+          let isFullPlaneRepaint = state.allRowsDirty;
           let rows: number[] = allRows;
 
+          if (
+            !isFullPlaneRepaint &&
+            shouldPromoteToFullPlaneDirty(state.dirtyRowCount, planeNodes.length)
+          ) {
+            isFullPlaneRepaint = true;
+            state.allRowsDirty = true;
+            rowBucketFallbacks.push({
+              plane,
+              reason: "dirty-ratio",
+              dirtyRows: state.dirtyRowCount,
+              planeNodes: planeNodes.length,
+            });
+          }
+
           if (!isFullPlaneRepaint) {
-            rows = [];
+            dirtyRowsScratch.length = 0;
+            rows = dirtyRowsScratch;
             const startY = Number.isFinite(state.dirtyMinY) ? state.dirtyMinY : 0;
             const endY = state.dirtyMaxY;
             for (let y = startY; y <= endY; y++) {
@@ -599,38 +699,35 @@ export function createRenderManager(terminal: Terminal): RenderManager {
           const candidateNodes = isFullPlaneRepaint
             ? planeNodes
             : (() => {
-                // TODO: Phase 2 — reuse a scratch set/array across frames to reduce
-                // per-frame allocation for high-frequency scroll. A numeric node index
-                // with a Uint8Array/generation marker could also eliminate string Set overhead.
-                const ids = new Set<string>();
+                const marks = beginCandidateCollection(planeNodes);
                 const buckets = rowBuckets.get(plane);
                 for (const y of rows) {
                   const rowIds = buckets?.get(y);
                   if (!rowIds) continue;
-                  for (const id of rowIds) ids.add(id);
+                  for (const id of rowIds) {
+                    markCandidateNode(planeNodes, marks, nodes.get(id));
+                  }
                 }
                 const largeIds = largeNodeIdsByPlane.get(plane);
                 if (largeIds) {
                   for (const id of largeIds) {
                     const node = nodes.get(id);
                     if (!node) continue;
-                    if (intersectsDirtyRows(node.rectY0, node.rectY1, rows)) ids.add(id);
+                    if (intersectsDirtyRows(node.rectY0, node.rectY1, rows)) {
+                      markCandidateNode(planeNodes, marks, node);
+                    }
                   }
                 }
                 const globalIds = globalNodeIdsByPlane.get(plane);
-                if (globalIds) for (const id of globalIds) ids.add(id);
-                const candidates = Array.from(ids, (id) => nodes.get(id))
-                  .filter((node): node is RenderNode => node != null)
-                  .sort((a, b) => {
-                    const ai = sortedPlaneNodeIndexById.get(a.id);
-                    const bi = sortedPlaneNodeIndexById.get(b.id);
-                    if (ai == null || bi == null) return compareNodes(a, b);
-                    return ai - bi;
-                  });
+                if (globalIds) {
+                  for (const id of globalIds) markCandidateNode(planeNodes, marks, nodes.get(id));
+                }
+                sortCandidateNodesByPlaneOrder();
                 // Row bucket degradation: fall back to planeNodes when bucket candidates exceed 60%
                 if (
-                  candidates.length < planeNodes.length &&
-                  candidates.length > planeNodes.length * ROW_BUCKET_CANDIDATE_RATIO_FALLBACK
+                  candidateNodesScratch.length < planeNodes.length &&
+                  candidateNodesScratch.length >
+                    planeNodes.length * ROW_BUCKET_CANDIDATE_RATIO_FALLBACK
                 ) {
                   needsIntersectFilter = true;
                   rowBucketFallbacks.push({
@@ -638,11 +735,11 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                     reason: "candidate-ratio",
                     dirtyRows: rows.length,
                     planeNodes: planeNodes.length,
-                    candidates: candidates.length,
+                    candidates: candidateNodesScratch.length,
                   });
                   return planeNodes;
                 }
-                return candidates;
+                return candidateNodesScratch;
               })();
           scannedNodes += candidateNodes.length;
 

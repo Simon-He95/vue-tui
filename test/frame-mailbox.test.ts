@@ -157,6 +157,24 @@ describe("frame mailbox", () => {
     expect(order).toEqual(["apply:1", "report:1"]);
   });
 
+  it("replaces a pending payload without counting another dropped update", () => {
+    const probe = createScheduler();
+    const apply = vi.fn();
+    const mailbox = createFrameMailbox({
+      scheduler: probe.scheduler,
+      id: "probe",
+      apply,
+    });
+
+    mailbox.queue(1);
+    mailbox.queue(2);
+    expect(mailbox.replacePending(3)).toBe(true);
+    probe.flush();
+
+    expect(probe.queueFrameTask).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledWith(3, expect.anything(), { queued: 2, dropped: 1 });
+  });
+
   it("does not report dropped updates when apply throws", () => {
     const probe = createScheduler();
     const mailbox = createFrameMailbox({

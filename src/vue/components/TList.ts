@@ -365,6 +365,14 @@ export const TList = defineComponent({
       return false;
     }
 
+    function replacePendingWheelTop(nextTop: number): boolean {
+      pendingWheelTop = nextTop;
+      if (wheelMailbox.replacePending(nextTop)) return true;
+      pendingWheelTop = null;
+      resetWheelScrollState(wheelState);
+      return false;
+    }
+
     function reattachSelection(): void {
       detachedByWheel = false;
       cancelWheelScrollFrame();
@@ -785,14 +793,11 @@ export const TList = defineComponent({
         if (pendingWheelTop !== null && !hasPaintableViewport()) {
           cancelWheelScrollFrame();
         } else if (pendingWheelTop !== null) {
-          const maxPendingTop = maxScrollTopForClamp();
-          if (maxPendingTop != null) {
-            const nextPendingTop = clamp(pendingWheelTop, 0, maxPendingTop);
-            if (nextPendingTop === scrollTop.value) {
-              cancelWheelScrollFrame();
-            } else {
-              pendingWheelTop = nextPendingTop;
-            }
+          const nextPendingTop = clampScrollTop(pendingWheelTop);
+          if (nextPendingTop === scrollTop.value) {
+            cancelWheelScrollFrame();
+          } else if (nextPendingTop !== pendingWheelTop) {
+            replacePendingWheelTop(nextPendingTop);
           }
         }
 

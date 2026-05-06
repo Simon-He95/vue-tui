@@ -867,6 +867,60 @@ describe("TList data geometry", () => {
     }
   });
 
+  it("uses the clamped pending wheel top as the base for the next wheel before the frame", async () => {
+    const raf = installRaf();
+    let shrink!: () => void;
+    const onScroll = vi.fn();
+    const App = defineComponent({
+      name: "PendingWheelClampedBaseApp",
+      setup() {
+        const items = ref(Array.from({ length: 200 }, (_, index) => `item-${index}`));
+        shrink = () => {
+          items.value = items.value.slice(0, 54);
+        };
+        return () =>
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            modelValue: 0,
+            autoFocus: true,
+            onScroll,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      expect(raf.callbacks.size).toBe(1);
+
+      shrink();
+      await nextTick();
+      expect(onScroll).not.toHaveBeenCalled();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_100 });
+      expect(raf.callbacks.size).toBe(1);
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).toHaveBeenCalledOnce();
+      expect(onScroll).toHaveBeenLastCalledWith(49);
+      expect(rowText(app, 0)).toBe("item-49");
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
   it("cancels pending wheel when data shrink clamps it to the clamped scrollTop", async () => {
     const raf = installRaf();
     let shrink!: () => void;

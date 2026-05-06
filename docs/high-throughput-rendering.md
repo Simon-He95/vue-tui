@@ -71,9 +71,11 @@ type RenderRowBuckets = Map<TerminalRenderPlane, Map<number, Set<string>>>;
 render 时：
 
 - full plane repaint 仍按排序后的 `planeNodes` 处理。
-- partial repaint 使用 dirty rows 查 bucket，合并 candidate ids。
-- plane-global 节点加入 candidate ids。
-- candidate ids 必须按现有 stack/zIndex/order 排序，保证覆盖顺序不变。
+- partial repaint 使用 dirty rows 查 bucket，并复用 scratch marks/arrays 合并候选节点。
+- plane-global 节点加入候选集合。
+- 候选节点必须按现有 stack/zIndex/order 排序，保证覆盖顺序不变。
+- dirty rows 至少 16 行、达到 terminal rows 的 60%，且 plane 节点规模让 bucket walk 不再明显更便宜时，提升为 full-plane repaint，并在 `rowBucketFallbacks` 记录 `reason: "dirty-ratio"`。
+- bucket 候选节点超过 plane nodes 的 60% 时回退扫描 plane nodes，并在 `rowBucketFallbacks` 记录 `reason: "candidate-ratio"`。
 - `scannedNodes` 语义改为本轮候选节点数，不再是 plane 节点总数。
 
 验收测试：

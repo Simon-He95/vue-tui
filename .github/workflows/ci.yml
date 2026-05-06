@@ -23,6 +23,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - run: pnpm run check:hidden-unicode
+
       - run: pnpm run typecheck
 
       - run: pnpm run lint
@@ -37,8 +39,6 @@ jobs:
       - run: pnpm run bench:scroll-mailbox
 
       - run: pnpm run bench:phase2
-
-      - run: pnpm run check:hidden-unicode
 
       - run: pnpm exec tsx scripts/generate-component-api-docs.ts
 

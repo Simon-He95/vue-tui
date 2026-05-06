@@ -830,7 +830,7 @@ describe("render-manager", () => {
     expect(dirtyArgs).toEqual(["0,1"]);
   });
 
-  it("falls back to full plane scan when row bucket candidates exceed 60% after many dirty rows", () => {
+  it("falls back to full plane repaint when dirty rows reach 60% of terminal rows", () => {
     const paints: string[] = [];
     const listeners = new Map<string, Set<(...args: any[]) => void>>();
     const terminal: any = {
@@ -871,17 +871,67 @@ describe("render-manager", () => {
     expect(stats?.rowBucketFallbacks).toEqual([
       {
         plane: "default",
-        reason: "candidate-ratio",
+        reason: "dirty-ratio",
         dirtyRows: 60,
         planeNodes: 11,
-        candidates: 7,
       },
     ]);
-    expect(paints.sort()).toEqual(["n0", "n1", "n2", "n3", "n4", "n5", "wide"]);
-    expect(stats?.paintedNodes).toBe(7);
+    expect(paints.sort()).toEqual([
+      "n0",
+      "n1",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "n7",
+      "n8",
+      "n9",
+      "wide",
+    ]);
+    expect(stats?.paintedNodes).toBe(11);
   });
 
-  it("does not full-scan a large plane only because dirty rows cover most terminal rows", () => {
+  it("records dirty-ratio fallback when manual dirty rows cover most terminal rows", () => {
+    const terminal = createTerminal({ cols: 10, rows: 24 });
+    const rm = createRenderManager(terminal);
+    const target = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 20 },
+      paint: () => {},
+    });
+
+    for (let i = 0; i < 2; i++) {
+      rm.register({
+        stack: rm.rootStack,
+        rect: { x: 0, y: 23, w: 1, h: 1 },
+        paint: () => {},
+      });
+    }
+
+    rm.render();
+
+    expect(
+      rm.markDirtyRows(
+        target.id,
+        Array.from({ length: 20 }, (_, index) => index),
+      ),
+    ).toBe(true);
+    const stats = rm.render();
+
+    expect(stats?.scannedNodes).toBe(3);
+    expect(stats?.paintedNodes).toBe(3);
+    expect(stats?.rowBucketFallbacks).toEqual([
+      {
+        plane: "default",
+        reason: "dirty-ratio",
+        dirtyRows: 20,
+        planeNodes: 3,
+      },
+    ]);
+  });
+
+  it("keeps row-bucket path when many unrelated plane nodes make full scan expensive", () => {
     const terminal = createTerminal({ cols: 10, rows: 24 });
     const rm = createRenderManager(terminal);
     const target = rm.register({
@@ -911,6 +961,38 @@ describe("render-manager", () => {
     expect(stats?.scannedNodes).toBe(1);
     expect(stats?.paintedNodes).toBe(1);
     expect(stats?.rowBucketFallbacks).toBeUndefined();
+  });
+
+  it("does not use dirty-ratio fallback for small dirty row counts", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 10 });
+    const rm = createRenderManager(terminal);
+    const target = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 6 },
+      paint: () => paints.push("target"),
+    });
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 9, w: 10, h: 1 },
+      paint: () => paints.push("outside"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    expect(
+      rm.markDirtyRows(
+        target.id,
+        Array.from({ length: 6 }, (_, index) => index),
+      ),
+    ).toBe(true);
+    const stats = rm.render();
+
+    expect(stats?.scannedNodes).toBe(1);
+    expect(stats?.paintedNodes).toBe(1);
+    expect(stats?.rowBucketFallbacks).toBeUndefined();
+    expect(paints).toEqual(["target"]);
   });
 
   it("falls back to full plane scan when bucket candidates exceed 60% of planeNodes", () => {
@@ -974,7 +1056,7 @@ describe("render-manager", () => {
 
     const nodeA = rm.register({
       stack: rm.rootStack,
-      rect: { x: 0, y: 0, w: 10, h: 60 },
+      rect: { x: 0, y: 0, w: 10, h: 59 },
       paint: () => paints.push("A"),
     });
 
@@ -987,7 +1069,7 @@ describe("render-manager", () => {
     rm.render();
     paints.length = 0;
 
-    rm.update(nodeA.id, { rect: { x: 0, y: 0, w: 10, h: 60 } });
+    rm.update(nodeA.id, { rect: { x: 0, y: 0, w: 10, h: 59 } });
     const stats = rm.render();
 
     expect(stats?.scannedNodes).toBe(1);
