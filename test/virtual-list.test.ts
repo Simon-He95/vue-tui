@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTerminal, createTerminalApp } from "../src/index.js";
 import { createRenderManager } from "../src/vue/render/render-manager.js";
+import { createFramePerfProbe, expectScrollMailboxFrame } from "./helpers/frame-perf.js";
+import { installManualRaf } from "./helpers/manual-raf.js";
+import { rowText } from "./helpers/terminal-rows.js";
+import { dispatchWheelBurst } from "./helpers/wheel.js";
 import {
   defineComponent,
   h,
@@ -48,14 +52,6 @@ function dispatchDomWheel(
     deltaMode: { value: init.deltaMode },
   });
   container.dispatchEvent(wheel);
-}
-
-function rowText(mounted: Awaited<ReturnType<typeof mountTerminal>>, y: number): string {
-  return mounted.terminal
-    .getRow(y)
-    .map((cell) => cell.ch)
-    .join("")
-    .trimEnd();
 }
 
 describe("TVirtualList", () => {
@@ -630,19 +626,7 @@ describe("TVirtualList", () => {
   });
 
   it("coalesces consecutive headless wheel ticks into one scroll frame", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
       cols: 12,
@@ -680,8 +664,8 @@ describe("TVirtualList", () => {
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: now });
 
       expect(commits).toEqual([]);
-      expect(callbacks.size).toBe(1);
-      Array.from(callbacks.values())[0]?.(0);
+      expect(raf.pending()).toBe(1);
+      raf.runNext();
       await nextTick();
 
       off();
@@ -695,44 +679,22 @@ describe("TVirtualList", () => {
     } finally {
       dateNow.mockRestore();
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
   it("coalesces burst wheel ticks through scheduler frame tasks", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const itemCount = 100_000;
     const onScroll = vi.fn();
     const onUpdateModelValue = vi.fn();
-    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
-
-    const Probe = defineComponent({
-      name: "VirtualListSchedulerFrameTaskProbe",
-      setup() {
-        framePerf = useTerminal().observability.framePerf;
-        framePerf.enabled.value = true;
-        return () => null;
-      },
-    });
+    const framePerf = createFramePerfProbe("VirtualListSchedulerFrameTaskProbe");
 
     const App = defineComponent({
       name: "VirtualListBurstWheelSchedulerApp",
       setup() {
         return () => [
-          h(Probe),
+          h(framePerf.component),
           h(TVirtualList, {
             x: 0,
             y: 0,
@@ -756,61 +718,36 @@ describe("TVirtualList", () => {
     try {
       app.mount();
       app.scheduler.flushNow();
-      framePerf!.clear();
+      framePerf.clear();
       dateNow.mockReturnValue(1_000);
 
-      for (let i = 0; i < 1_000; i++) {
-        app.events.dispatch({
-          type: "wheel",
-          cellX: 0,
-          cellY: 0,
-          deltaY: 100,
-          time: 1_000 + i * 10,
-        });
-      }
+      dispatchWheelBurst(app.events, { count: 1_000 });
 
-      expect(callbacks.size).toBe(1);
-      Array.from(callbacks.values())[0]?.(0);
+      expect(raf.pending()).toBe(1);
+      raf.runNext();
       await nextTick();
 
       expect(onScroll).toHaveBeenCalledTimes(1);
       expect(onScroll.mock.calls[0]![0]).toBeGreaterThan(0);
       expect(onUpdateModelValue).not.toHaveBeenCalled();
       expect(rowText({ terminal: app.terminal } as any, 6)).toBe("sibling");
-      const scrollSample = [...framePerf!.list()]
+      const scrollSample = [...framePerf.list()]
         .reverse()
         .find((sample) => sample.reason === "scroll");
-      expect(scrollSample).toMatchObject({
-        reason: "scroll",
-        frameTaskCount: 1,
-        coalescedFrameTasks: 0,
+      expectScrollMailboxFrame(scrollSample, {
         droppedUpdates: 999,
-        remainingFrameTasks: 0,
+        viewportHeight: 4,
+        paintedNodes: 1,
       });
-      expect(scrollSample?.dirtyRows).toBeLessThanOrEqual(4);
-      expect(scrollSample?.paintedNodes).toBe(1);
     } finally {
       dateNow.mockRestore();
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
   it("keeps multiple TVirtualList wheel tasks isolated by instance id", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const first = Array.from({ length: 200 }, (_, index) => `a-${index}`);
     const second = Array.from({ length: 200 }, (_, index) => `b-${index}`);
     const firstScroll = vi.fn();
@@ -850,13 +787,11 @@ describe("TVirtualList", () => {
       app.mount();
       app.scheduler.flushNow();
 
-      for (let i = 0; i < 20; i++) {
-        app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 + i });
-        app.events.dispatch({ type: "wheel", cellX: 0, cellY: 4, deltaY: 100, time: 2_000 + i });
-      }
+      dispatchWheelBurst(app.events, { count: 20, cellY: 0, startTime: 1_000, stepMs: 1 });
+      dispatchWheelBurst(app.events, { count: 20, cellY: 4, startTime: 2_000, stepMs: 1 });
 
-      expect(callbacks.size).toBe(1);
-      Array.from(callbacks.values())[0]?.(0);
+      expect(raf.pending()).toBe(1);
+      raf.runNext();
       await nextTick();
 
       expect(firstScroll).toHaveBeenCalledTimes(1);
@@ -877,43 +812,21 @@ describe("TVirtualList", () => {
       ).toBe(`b-${secondScroll.mock.calls[0]![0]}`);
     } finally {
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
   it("cancels a pending wheel task when keyboard navigation reattaches selection", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
     const onScroll = vi.fn();
-    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
-
-    const Probe = defineComponent({
-      name: "VirtualListPendingWheelCancelProbe",
-      setup() {
-        framePerf = useTerminal().observability.framePerf;
-        framePerf.enabled.value = true;
-        return () => null;
-      },
-    });
+    const framePerf = createFramePerfProbe("VirtualListPendingWheelCancelProbe");
 
     const App = defineComponent({
       name: "VirtualListPendingWheelCancelApp",
       setup() {
         return () => [
-          h(Probe),
+          h(framePerf.component),
           h(TVirtualList, {
             x: 0,
             y: 0,
@@ -933,42 +846,29 @@ describe("TVirtualList", () => {
     try {
       app.mount();
       app.scheduler.flushNow();
-      framePerf!.clear();
+      framePerf.clear();
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
-      expect(callbacks.size).toBe(1);
+      expect(raf.pending()).toBe(1);
 
       app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown", time: 1_001 });
       app.scheduler.flushNow();
       await nextTick();
 
-      expect(callbacks.size).toBe(0);
+      expect(raf.pending()).toBe(0);
 
       expect(onScroll).not.toHaveBeenCalled();
       expect(
-        framePerf!.list().some((sample) => sample.reason === "scroll" && sample.frameTaskCount > 0),
+        framePerf.list().some((sample) => sample.reason === "scroll" && sample.frameTaskCount > 0),
       ).toBe(false);
     } finally {
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
   it("drops a pending wheel frame when unmounted before RAF", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     let hide!: () => void;
     const onScroll = vi.fn();
     const App = defineComponent({
@@ -1001,37 +901,24 @@ describe("TVirtualList", () => {
       app.scheduler.flushNow();
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 1000, time: 1_000 });
-      expect(callbacks.size).toBe(1);
+      expect(raf.pending()).toBe(1);
 
       hide();
       await nextTick();
       app.scheduler.flushNow();
-      Array.from(callbacks.values())[0]?.(0);
+      raf.runNext();
       await nextTick();
       app.scheduler.flushNow();
 
       expect(onScroll).not.toHaveBeenCalled();
     } finally {
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
   it("cancels pending wheel scroll when hidden before RAF", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const visible = ref(true);
     const onScroll = vi.fn();
     const App = defineComponent({
@@ -1063,14 +950,14 @@ describe("TVirtualList", () => {
       app.scheduler.flushNow();
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 1000, time: 1_000 });
-      expect(callbacks.size).toBe(1);
+      expect(raf.pending()).toBe(1);
 
       visible.value = false;
       await nextTick();
       app.scheduler.flushNow();
       expect(rowText({ terminal: app.terminal } as any, 0)).toBe("visible");
 
-      Array.from(callbacks.values())[0]?.(0);
+      raf.runNext();
       await nextTick();
       app.scheduler.flushNow();
 
@@ -1078,25 +965,12 @@ describe("TVirtualList", () => {
       expect(rowText({ terminal: app.terminal } as any, 0)).toBe("visible");
     } finally {
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
   it("cancels pending wheel scroll when fully clipped before RAF", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const clipHeight = ref(4);
     const onScroll = vi.fn();
     const App = defineComponent({
@@ -1125,37 +999,24 @@ describe("TVirtualList", () => {
       app.scheduler.flushNow();
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 1000, time: 1_000 });
-      expect(callbacks.size).toBe(1);
+      expect(raf.pending()).toBe(1);
 
       clipHeight.value = 0;
       await nextTick();
       app.scheduler.flushNow();
-      Array.from(callbacks.values())[0]?.(0);
+      raf.runNext();
       await nextTick();
       app.scheduler.flushNow();
 
       expect(onScroll).not.toHaveBeenCalled();
     } finally {
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
   it("does not let pending wheel overwrite controlled scrollTop", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const controlledTop = ref(10);
     const onScroll = vi.fn();
     const onUpdateScrollTop = vi.fn();
@@ -1187,13 +1048,13 @@ describe("TVirtualList", () => {
       expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-10");
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
-      expect(callbacks.size).toBe(1);
+      expect(raf.pending()).toBe(1);
       expect(onUpdateScrollTop).not.toHaveBeenCalled();
 
       controlledTop.value = 20;
       await nextTick();
       app.scheduler.flushNow();
-      Array.from(callbacks.values())[0]?.(0);
+      raf.runNext();
       await nextTick();
       app.scheduler.flushNow();
 
@@ -1202,25 +1063,12 @@ describe("TVirtualList", () => {
       expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-20");
     } finally {
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
   it("waits for controlled wheel scrollTop updates before repainting", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const controlledTop = ref(0);
     const onScroll = vi.fn();
     const onUpdateScrollTop = vi.fn((value: number) => {
@@ -1256,9 +1104,9 @@ describe("TVirtualList", () => {
       const commits: Array<readonly number[] | null> = [];
       const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
-      expect(callbacks.size).toBe(1);
+      expect(raf.pending()).toBe(1);
 
-      Array.from(callbacks.values())[0]?.(0);
+      raf.runNext();
       expect(onUpdateScrollTop).toHaveBeenCalledWith(1);
       expect(onScroll).toHaveBeenCalledWith(1);
       expect(commits).toEqual([]);
@@ -1273,8 +1121,7 @@ describe("TVirtualList", () => {
       expect(onScroll.mock.calls.map((call) => call[0])).toEqual([1]);
     } finally {
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
@@ -1472,19 +1319,7 @@ describe("TVirtualList", () => {
   });
 
   it("clamps pending wheel scroll when itemCount shrinks before the frame", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const itemCount = ref(100);
     const getItem = vi.fn((index: number) => {
       if (index >= itemCount.value) throw new Error(`out of range ${index}`);
@@ -1535,11 +1370,11 @@ describe("TVirtualList", () => {
       getItem.mockClear();
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 6000, time: Date.now() });
-      expect(callbacks.size).toBe(1);
+      expect(raf.pending()).toBe(1);
 
       itemCount.value = 20;
       await nextTick();
-      Array.from(callbacks.values())[0]?.(0);
+      raf.runNext();
       await nextTick();
 
       restoreInvalidate?.();
@@ -1556,8 +1391,7 @@ describe("TVirtualList", () => {
     } finally {
       restoreInvalidate?.();
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
@@ -1661,19 +1495,7 @@ describe("TVirtualList", () => {
   });
 
   it("does not emit scroll when pending wheel frame resolves to unchanged scrollTop", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const itemCount = ref(20);
     const onScroll = vi.fn();
     const App = defineComponent({
@@ -1700,18 +1522,17 @@ describe("TVirtualList", () => {
       app.scheduler.flushNow();
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
-      expect(callbacks.size).toBe(1);
+      expect(raf.pending()).toBe(1);
 
       itemCount.value = 4;
       await nextTick();
-      Array.from(callbacks.values())[0]?.(0);
+      raf.runNext();
       await nextTick();
 
       expect(onScroll).not.toHaveBeenCalled();
     } finally {
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
@@ -2637,19 +2458,7 @@ describe("TVirtualList", () => {
   });
 
   it("repaints viewport when itemVersion changes with pending wheel rows", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const version = ref(1);
     const getItem = vi.fn((index: number) => `v${version.value}-item-${index}`);
     let restoreInvalidate: (() => void) | null = null;
@@ -2701,8 +2510,8 @@ describe("TVirtualList", () => {
       });
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
-      expect(callbacks.size).toBe(1);
-      Array.from(callbacks.values())[0]?.(0);
+      expect(raf.pending()).toBe(1);
+      raf.runNext();
       await nextTick();
 
       version.value++;
@@ -2721,25 +2530,12 @@ describe("TVirtualList", () => {
     } finally {
       restoreInvalidate?.();
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 
   it("repaints viewport when style changes with pending wheel rows", async () => {
-    const previousRaf = globalThis.requestAnimationFrame;
-    const previousCancel = globalThis.cancelAnimationFrame;
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let rafId = 0;
-    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      const id = ++rafId;
-      callbacks.set(id, cb);
-      return id;
-    }) as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = ((id: number) => {
-      callbacks.delete(id);
-    }) as typeof cancelAnimationFrame;
-
+    const raf = installManualRaf();
     const style = ref<{ fg: "redBright" | "greenBright" }>({ fg: "redBright" });
     let restoreInvalidate: (() => void) | null = null;
 
@@ -2791,8 +2587,8 @@ describe("TVirtualList", () => {
       });
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
-      expect(callbacks.size).toBe(1);
-      Array.from(callbacks.values())[0]?.(0);
+      expect(raf.pending()).toBe(1);
+      raf.runNext();
       await nextTick();
 
       style.value = { fg: "greenBright" };
@@ -2817,8 +2613,7 @@ describe("TVirtualList", () => {
     } finally {
       restoreInvalidate?.();
       app.dispose();
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
+      raf.restore();
     }
   });
 

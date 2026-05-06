@@ -25,55 +25,16 @@ import {
   vShow,
   withDirectives,
 } from "./ui-regressions-support.js";
-
-function rowText(
-  mounted: { terminal: ReturnType<typeof createTerminalApp>["terminal"] },
-  y: number,
-): string {
-  return mounted.terminal
-    .getRow(y)
-    .map((cell) => cell.ch)
-    .join("")
-    .trimEnd();
-}
+import { createFramePerfProbe, expectScrollMailboxFrame } from "./helpers/frame-perf.js";
+import { installManualRaf } from "./helpers/manual-raf.js";
+import { rowText } from "./helpers/terminal-rows.js";
+import { dispatchWheelBurst } from "./helpers/wheel.js";
 
 function rowStyles(
   mounted: { terminal: ReturnType<typeof createTerminalApp>["terminal"] },
   y: number,
 ) {
   return mounted.terminal.getRow(y).map((cell) => cell.style);
-}
-
-function installManualRaf(): Readonly<{
-  pending: () => number;
-  flush: () => void;
-  restore: () => void;
-}> {
-  const previousRaf = globalThis.requestAnimationFrame;
-  const previousCancel = globalThis.cancelAnimationFrame;
-  const callbacks = new Map<number, FrameRequestCallback>();
-  let id = 0;
-  globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-    const nextId = ++id;
-    callbacks.set(nextId, cb);
-    return nextId;
-  }) as typeof requestAnimationFrame;
-  globalThis.cancelAnimationFrame = ((rafId: number) => {
-    callbacks.delete(rafId);
-  }) as typeof cancelAnimationFrame;
-
-  return {
-    pending: () => callbacks.size,
-    flush: () => {
-      const pending = Array.from(callbacks.values());
-      callbacks.clear();
-      for (const cb of pending) cb(0);
-    },
-    restore: () => {
-      globalThis.requestAnimationFrame = previousRaf;
-      globalThis.cancelAnimationFrame = previousCancel;
-    },
-  };
 }
 
 async function flushSearch(
@@ -355,21 +316,12 @@ describe("TLogView", () => {
       getLine: (index) => `line-${index}`,
     };
     const onScroll = vi.fn();
-    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
-
-    const Probe = defineComponent({
-      name: "TLogViewWheelMailboxProbe",
-      setup() {
-        framePerf = useTerminal().observability.framePerf;
-        framePerf.enabled.value = true;
-        return () => null;
-      },
-    });
+    const framePerf = createFramePerfProbe("TLogViewWheelMailboxProbe");
     const App = defineComponent({
       name: "TLogViewWheelMailboxApp",
       setup() {
         return () => [
-          h(Probe),
+          h(framePerf.component),
           h(TLogView, {
             x: 0,
             y: 0,
@@ -392,19 +344,11 @@ describe("TLogView", () => {
       app.mount();
       await nextTick();
       app.scheduler.flushNow();
-      framePerf!.clear();
+      framePerf.clear();
       const commits: unknown[] = [];
       const off = app.terminal.on("commit", (commit) => commits.push(commit));
 
-      for (let i = 0; i < 1_000; i++) {
-        app.events.dispatch({
-          type: "wheel",
-          cellX: 0,
-          cellY: 0,
-          deltaY: -1,
-          time: 1_000 + i * 10,
-        });
-      }
+      dispatchWheelBurst(app.events, { count: 1_000, deltaY: -1 });
 
       expect(onScroll).not.toHaveBeenCalled();
       expect(commits).toEqual([]);
@@ -417,16 +361,12 @@ describe("TLogView", () => {
       const top = onScroll.mock.calls[0]![0].scrollTop;
       expect(rowText(app, 0)).toBe(`line-${top}`);
       expect(commits).toHaveLength(1);
-      expect(framePerf!.latest()).toMatchObject({
-        reason: "scroll",
-        frameTaskCount: 1,
-        coalescedFrameTasks: 0,
+      expectScrollMailboxFrame(framePerf.latest(), {
         droppedUpdates: 999,
-        remainingFrameTasks: 0,
+        viewportHeight: 4,
+        paintedNodes: 1,
+        maxScannedNodes: 20,
       });
-      expect(framePerf!.latest()?.dirtyRows).toBeLessThanOrEqual(4);
-      expect(framePerf!.latest()?.paintedNodes).toBe(1);
-      expect(framePerf!.latest()?.scannedNodes).toBeLessThan(20);
       off();
     } finally {
       app.dispose();
@@ -545,21 +485,12 @@ describe("TLogView", () => {
       getLine: (index) => `line-${index}`,
     };
     const onScroll = vi.fn();
-    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
-
-    const Probe = defineComponent({
-      name: "TLogViewWheelFastPathMailboxProbe",
-      setup() {
-        framePerf = useTerminal().observability.framePerf;
-        framePerf.enabled.value = true;
-        return () => null;
-      },
-    });
+    const framePerf = createFramePerfProbe("TLogViewWheelFastPathMailboxProbe");
     const App = defineComponent({
       name: "TLogViewWheelFastPathMailboxApp",
       setup() {
         return () => [
-          h(Probe),
+          h(framePerf.component),
           h(TLogView, {
             x: 0,
             y: 0,
@@ -580,7 +511,7 @@ describe("TLogView", () => {
       app.mount();
       await nextTick();
       app.scheduler.flushNow();
-      framePerf!.clear();
+      framePerf.clear();
 
       const commits: Array<{
         dirtyRows: readonly number[] | null;
@@ -590,15 +521,7 @@ describe("TLogView", () => {
         commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
       });
 
-      for (let i = 0; i < 3; i++) {
-        app.events.dispatch({
-          type: "wheel",
-          cellX: 0,
-          cellY: 0,
-          deltaY: -100,
-          time: 1_000 + i * 10,
-        });
-      }
+      dispatchWheelBurst(app.events, { count: 3, deltaY: -100 });
 
       expect(onScroll).not.toHaveBeenCalled();
       expect(commits).toEqual([]);
@@ -615,12 +538,8 @@ describe("TLogView", () => {
           scrollOperations: [{ startY: 0, endY: 4, delta: -3 }],
         },
       ]);
-      expect(framePerf!.latest()).toMatchObject({
-        reason: "scroll",
-        dirtyRows: 3,
-        frameTaskCount: 1,
-        droppedUpdates: 2,
-      });
+      expectScrollMailboxFrame(framePerf.latest(), { droppedUpdates: 2, viewportHeight: 4 });
+      expect(framePerf.latest()?.dirtyRows).toBe(3);
     } finally {
       app.dispose();
       raf.restore();
@@ -6856,14 +6775,13 @@ describe("TLogView", () => {
     const raf = installManualRaf();
     const log = createAppendOnlyLogStore();
     log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
-    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+    const framePerf = createFramePerfProbe("TLogViewBurstAppendProbe");
 
     const App = defineComponent({
       name: "TLogViewBurstAppendApp",
       setup() {
-        framePerf = useTerminal().observability.framePerf;
-        framePerf.enabled.value = true;
-        return () =>
+        return () => [
+          h(framePerf.component),
           h(TLogView, {
             x: 0,
             y: 0,
@@ -6871,7 +6789,8 @@ describe("TLogView", () => {
             h: 4,
             source: log.source,
             version: log.version.value,
-          });
+          }),
+        ];
       },
     });
 
@@ -6880,7 +6799,7 @@ describe("TLogView", () => {
       app.mount();
       await nextTick();
       app.scheduler.flushNow();
-      framePerf!.clear();
+      framePerf.clear();
 
       for (let i = 20; i < 1_020; i++) {
         log.appendLine(`line-${i}`);
@@ -6892,15 +6811,12 @@ describe("TLogView", () => {
       await nextTick();
 
       expect(rowText(app, 3)).toBe("line-1019");
-      expect(framePerf!.latest()).toMatchObject({
+      expectScrollMailboxFrame(framePerf.latest(), {
         reason: "data",
-        frameTaskCount: 1,
-        coalescedFrameTasks: 0,
         droppedUpdates: 999,
-        remainingFrameTasks: 0,
+        viewportHeight: 4,
+        paintedNodes: 1,
       });
-      expect(framePerf!.latest()?.dirtyRows).toBeLessThanOrEqual(4);
-      expect(framePerf!.latest()?.paintedNodes).toBe(1);
     } finally {
       app.dispose();
       raf.restore();
@@ -6912,22 +6828,14 @@ describe("TLogView", () => {
     const log = createAppendOnlyLogStore();
     log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
     const logView = ref<TLogViewHandle | null>(null);
-    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+    const framePerf = createFramePerfProbe("TLogViewHiddenDataBurstProbe");
 
-    const Probe = defineComponent({
-      name: "TLogViewHiddenDataBurstProbe",
-      setup() {
-        framePerf = useTerminal().observability.framePerf;
-        framePerf.enabled.value = true;
-        return () => null;
-      },
-    });
     const App = defineComponent({
       name: "TLogViewHiddenDataBurstApp",
       setup() {
         const visible = ref(false);
         return () => [
-          h(Probe),
+          h(framePerf.component),
           h(TText, { x: 0, y: 0, w: 20, value: "hidden-placeholder" }),
           withDirectives(
             h(TLogView, {
@@ -6951,7 +6859,7 @@ describe("TLogView", () => {
       app.mount();
       await nextTick();
       app.scheduler.flushNow();
-      framePerf!.clear();
+      framePerf.clear();
       const commits: unknown[] = [];
       const off = app.terminal.on("commit", (commit) => commits.push(commit));
 
@@ -6971,7 +6879,7 @@ describe("TLogView", () => {
       expect(rowText(app, 0)).toBe("hidden-placeholder");
       expect(rowText(app, 6)).toBe("same-plane-sibling");
       expect(commits).toEqual([]);
-      expect(framePerf!.latest()).toBeNull();
+      expect(framePerf.latest()).toBeNull();
       off();
     } finally {
       app.dispose();
@@ -7035,21 +6943,13 @@ describe("TLogView", () => {
     const raf = installManualRaf();
     const log = createAppendOnlyLogStore();
     log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
-    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+    const framePerf = createFramePerfProbe("TLogViewDataDirtyRowsProbe");
 
-    const Probe = defineComponent({
-      name: "TLogViewDataDirtyRowsProbe",
-      setup() {
-        framePerf = useTerminal().observability.framePerf;
-        framePerf.enabled.value = true;
-        return () => null;
-      },
-    });
     const App = defineComponent({
       name: "TLogViewDataDirtyRowsApp",
       setup() {
         return () => [
-          h(Probe),
+          h(framePerf.component),
           h(TLogView, {
             x: 0,
             y: 0,
@@ -7070,7 +6970,7 @@ describe("TLogView", () => {
       app.mount();
       await nextTick();
       app.scheduler.flushNow();
-      framePerf!.clear();
+      framePerf.clear();
 
       log.appendLine("line-20");
       await nextTick();
@@ -7079,13 +6979,13 @@ describe("TLogView", () => {
 
       expect(rowText(app, 3)).toBe("line-20");
       expect(rowText(app, 10)).toBe("sibling-0");
-      expect(framePerf!.latest()).toMatchObject({
+      expect(framePerf.latest()).toMatchObject({
         reason: "data",
         frameTaskCount: 1,
         dirtyRows: 4,
         paintedNodes: 1,
       });
-      expect(framePerf!.latest()?.scannedNodes).toBeLessThan(20);
+      expect(framePerf.latest()?.scannedNodes).toBeLessThan(20);
     } finally {
       app.dispose();
       raf.restore();
