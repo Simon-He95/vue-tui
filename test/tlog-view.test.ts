@@ -434,14 +434,207 @@ describe("TLogView", () => {
     }
   });
 
-  it("uses exposed dirty row for full-row unsafe wheel scroll", async () => {
+  it("uses exposed dirty rows for full-row unsafe wheel scroll", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TLogViewWheelScrollFastPathProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
+
+    const App = defineComponent({
+      name: "TLogViewWheelScrollFastPathApp",
+      setup() {
+        return () => [
+          h(Probe),
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            rowScrollMode: "unsafe-full-row",
+          }),
+          h(TText, { x: 0, y: 6, w: 20, value: "same-plane-sibling" }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_000 });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(commits).toEqual([
+        {
+          dirtyRows: [0],
+          scrollOperations: [{ startY: 0, endY: 4, delta: -1 }],
+        },
+      ]);
+      expect(commits[0]!.dirtyRows).toHaveLength(1);
+      expect(framePerf!.list()).toContainEqual(
+        expect.objectContaining({
+          reason: "scroll",
+          dirtyRows: 1,
+          paintedNodes: 1,
+        }),
+      );
+      expect(rowText(app, 6)).toBe("same-plane-sibling");
+
+      commits.length = 0;
+      framePerf!.clear();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -300, time: 1_120 });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      off();
+      expect(commits).toEqual([
+        {
+          dirtyRows: [0, 1, 2],
+          scrollOperations: [{ startY: 0, endY: 4, delta: -3 }],
+        },
+      ]);
+      expect(commits[0]!.dirtyRows).toHaveLength(3);
+      expect(framePerf!.list()).toContainEqual(
+        expect.objectContaining({
+          reason: "scroll",
+          dirtyRows: 3,
+          paintedNodes: 1,
+        }),
+      );
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
+        "line-92",
+        "line-93",
+        "line-94",
+        "line-95",
+      ]);
+      expect(rowText(app, 6)).toBe("same-plane-sibling");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("coalesces unsafe full-row wheel bursts before using exposed dirty rows", async () => {
+    const raf = installManualRaf();
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const onScroll = vi.fn();
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TLogViewWheelFastPathMailboxProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
+    const App = defineComponent({
+      name: "TLogViewWheelFastPathMailboxApp",
+      setup() {
+        return () => [
+          h(Probe),
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            rowScrollMode: "unsafe-full-row",
+            onScroll,
+          }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      for (let i = 0; i < 3; i++) {
+        app.events.dispatch({
+          type: "wheel",
+          cellX: 0,
+          cellY: 0,
+          deltaY: -100,
+          time: 1_000 + i * 10,
+        });
+      }
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(commits).toEqual([]);
+      expect(raf.pending()).toBe(1);
+
+      raf.flush();
+      await nextTick();
+
+      off();
+      expect(onScroll).toHaveBeenCalledTimes(1);
+      expect(commits).toEqual([
+        {
+          dirtyRows: [0, 1, 2],
+          scrollOperations: [{ startY: 0, endY: 4, delta: -3 }],
+        },
+      ]);
+      expect(framePerf!.latest()).toMatchObject({
+        reason: "scroll",
+        dirtyRows: 3,
+        frameTaskCount: 1,
+        droppedUpdates: 2,
+      });
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("repaints the viewport for full-row unsafe large wheel jumps", async () => {
     const source: TLogDataSource = {
       lineCount: () => 100,
       getLine: (index) => `line-${index}`,
     };
 
     const App = defineComponent({
-      name: "TLogViewWheelScrollFastPathApp",
+      name: "TLogViewWheelLargeJumpRepaintApp",
       setup() {
         return () =>
           h(TLogView, {
@@ -471,23 +664,124 @@ describe("TLogView", () => {
         commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
       });
 
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -400, time: 1_000 });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      off();
+      expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
+        "line-92",
+        "line-93",
+        "line-94",
+        "line-95",
+      ]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints the viewport for full-row unsafe wrapped wheel scroll", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}-xxxxxxxxxxxxxxxxxxxxxxxx`,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWheelWrappedRepaintApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            rowScrollMode: "unsafe-full-row",
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_000 });
       await nextTick();
       app.scheduler.flushNow();
 
       off();
-      expect(commits).toEqual([
-        {
-          dirtyRows: [0],
-          scrollOperations: [{ startY: 0, endY: 4, delta: -1 }],
-        },
-      ]);
+      expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
       expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
-        "line-95",
-        "line-96",
-        "line-97",
-        "line-98",
+        "xxxxxxxxxxxx",
+        "line-98-xxxxxxxxxxxx",
+        "xxxxxxxxxxxx",
+        "line-99-xxxxxxxxxxxx",
       ]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints the viewport for full-row unsafe clipped wheel scroll", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWheelClippedRepaintApp",
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: 20, h: 3 }, () =>
+            h(TLogView, {
+              x: 0,
+              y: 0,
+              w: 20,
+              h: 4,
+              source,
+              version: 1,
+              autoFocus: true,
+              rowScrollMode: "unsafe-full-row",
+            }),
+          );
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_000 });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      off();
+      expect(commits).toEqual([{ dirtyRows: [0, 1, 2], scrollOperations: null }]);
+      expect([0, 1, 2].map((y) => rowText(app, y))).toEqual(["line-96", "line-97", "line-98"]);
     } finally {
       app.dispose();
     }
@@ -5461,7 +5755,7 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
-  it("scrolls by wrapped visual rows when appending at bottom", async () => {
+  it("repaints wrapped visual rows when appending at bottom in full-row unsafe mode", async () => {
     const log = createAppendOnlyLogStore();
     log.appendLines(["line-0", "line-1", "line-2", "line-3"]);
 
@@ -5501,10 +5795,7 @@ describe("TLogView", () => {
       await nextTick();
 
       off();
-      expect(commits).toContainEqual({
-        dirtyRows: [2, 3],
-        scrollOperations: [{ startY: 0, endY: 4, delta: 2 }],
-      });
+      expect(commits).toContainEqual({ dirtyRows: [0, 1, 2, 3], scrollOperations: null });
       expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
         "line-2",
         "line-3",
