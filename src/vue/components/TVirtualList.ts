@@ -63,6 +63,13 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
 
 export type RowScrollMode = "off" | "unsafe-full-row";
 
+type ScrollApplyResult = Readonly<{
+  changed: boolean;
+  dirty: boolean;
+  top: number;
+  controlled: boolean;
+}>;
+
 let virtualListInstanceSeq = 0;
 
 export const TVirtualList = defineComponent({
@@ -209,10 +216,13 @@ export const TVirtualList = defineComponent({
         priority?: "low" | "normal" | "high";
         reason?: FramePerfReason;
       }>,
-    ): boolean {
+    ): ScrollApplyResult {
+      const controlled = isScrollControlled();
       const clip = normalizedRect();
       const full = normalizedFullRect();
-      if (clip.h <= 0 || full.h <= 0) return false;
+      if (clip.h <= 0 || full.h <= 0) {
+        return { changed: false, dirty: false, top: scrollTop.value, controlled };
+      }
       const { y: clipY } = clipOffsets();
       const maxTop = maxScrollTop();
       let nextTop = clamp(scrollTop.value, 0, maxTop);
@@ -244,11 +254,11 @@ export const TVirtualList = defineComponent({
           emitScroll: true,
           emitUpdate: true,
         });
-        if (!changed) {
+        if (!changed.changed) {
           resetWheelScrollState(wheelState);
           return;
         }
-        ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
+        if (changed.dirty) ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
       },
     });
 
@@ -315,7 +325,7 @@ export const TVirtualList = defineComponent({
         active.value = normalizedModelValue();
         const nextTop = clampScrollTop(scrollTop.value);
         const changed = applyScrollTop(nextTop, { emitScroll });
-        if (!changed) markViewportDirty();
+        if (!changed.changed) markViewportDirty();
         if (pendingWheelTop !== null && !hasPaintableViewport()) {
           cancelWheelScrollFrame();
         } else if (pendingWheelTop !== null) {
@@ -400,8 +410,9 @@ export const TVirtualList = defineComponent({
       active.value = clamp(index, 0, Math.max(0, itemCount.value - 1));
       emit("update:modelValue", active.value);
       const scrolled = ensureActiveVisible();
-      if (scrolled) emit("scroll", scrollTop.value);
-      if (!scrolled || scrollTop.value === prevTop) markViewportDirty();
+      if (scrolled.changed) emit("scroll", scrolled.top);
+      if (scrolled.changed && scrolled.controlled) return;
+      if (!scrolled.changed || scrollTop.value === prevTop) markViewportDirty();
       invalidateSelf("high", "input");
     }
 
@@ -568,20 +579,28 @@ export const TVirtualList = defineComponent({
         priority?: "low" | "normal" | "high";
         reason?: FramePerfReason;
       }>,
-    ): boolean {
+    ): ScrollApplyResult {
+      const controlled = isScrollControlled();
       const r = normalizedRect();
       const full = normalizedFullRect();
       const h = r.h;
-      if (h <= 0 || full.h <= 0) return false;
+      if (h <= 0 || full.h <= 0) {
+        return { changed: false, dirty: false, top: scrollTop.value, controlled };
+      }
       const clampedTop = clampScrollTop(nextTop);
       const delta = clampedTop - scrollTop.value;
-      if (!delta) return false;
-      if (!isScrollControlled()) scrollTop.value = clampedTop;
-      if (options?.emitUpdate ?? isScrollControlled()) emit("update:scrollTop", clampedTop);
+      if (!delta) return { changed: false, dirty: false, top: scrollTop.value, controlled };
+      if (controlled) {
+        if (options?.emitUpdate ?? true) emit("update:scrollTop", clampedTop);
+        if (options?.emitScroll) emit("scroll", clampedTop);
+        return { changed: true, dirty: false, top: clampedTop, controlled };
+      }
+      scrollTop.value = clampedTop;
+      if (options?.emitUpdate) emit("update:scrollTop", clampedTop);
       const dirty = markViewportDirty();
       if (options?.emitScroll) emit("scroll", clampedTop);
       if (options?.priority && dirty) invalidateSelf(options.priority, options.reason ?? "scroll");
-      return true;
+      return { changed: true, dirty, top: clampedTop, controlled };
     }
 
     const renderNode = useRenderNode(() => ({

@@ -1207,6 +1207,140 @@ describe("TVirtualList", () => {
     }
   });
 
+  it("waits for controlled wheel scrollTop updates before repainting", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const controlledTop = ref(0);
+    const onScroll = vi.fn();
+    const onUpdateScrollTop = vi.fn((value: number) => {
+      controlledTop.value = value;
+    });
+    const App = defineComponent({
+      name: "VirtualListControlledWheelApp",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 200,
+            itemVersion: 1,
+            getItem: (index: number) => `item-${index}`,
+            scrollTop: controlledTop.value,
+            autoFocus: true,
+            onScroll,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-0");
+
+      const commits: Array<readonly number[] | null> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      expect(callbacks.size).toBe(1);
+
+      Array.from(callbacks.values())[0]?.(0);
+      expect(onUpdateScrollTop).toHaveBeenCalledWith(1);
+      expect(onScroll).toHaveBeenCalledWith(1);
+      expect(commits).toEqual([]);
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-0");
+
+      await nextTick();
+
+      off();
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-1");
+      expect(commits).toEqual([[0, 1, 2, 3]]);
+      expect(onUpdateScrollTop.mock.calls.map((call) => call[0])).toEqual([1]);
+      expect(onScroll.mock.calls.map((call) => call[0])).toEqual([1]);
+    } finally {
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("waits for controlled keyboard scrollTop updates before repainting", async () => {
+    const controlledTop = ref(0);
+    const modelValue = ref(0);
+    const onScroll = vi.fn();
+    const onUpdateScrollTop = vi.fn((value: number) => {
+      controlledTop.value = value;
+    });
+    const onUpdateModelValue = vi.fn((value: number) => {
+      modelValue.value = value;
+    });
+    const App = defineComponent({
+      name: "VirtualListControlledKeyboardApp",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 20,
+            itemVersion: 1,
+            getItem: (index: number) => `item-${index}`,
+            modelValue: modelValue.value,
+            scrollTop: controlledTop.value,
+            autoFocus: true,
+            onScroll,
+            "onUpdate:modelValue": onUpdateModelValue,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-0");
+
+      const commits: Array<readonly number[] | null> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+      app.events.dispatch({ type: "keydown", key: "End", code: "End", time: 1_000 });
+
+      expect(onUpdateModelValue).toHaveBeenCalledWith(19);
+      expect(onUpdateScrollTop).toHaveBeenCalledWith(16);
+      expect(onScroll).toHaveBeenCalledWith(16);
+      expect(commits).toEqual([]);
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-0");
+
+      await nextTick();
+
+      off();
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-16");
+      expect(rowText({ terminal: app.terminal } as any, 3)).toBe("item-19");
+      expect(commits).toEqual([[0, 1, 2, 3]]);
+      expect(onUpdateModelValue.mock.calls.map((call) => call[0])).toEqual([19]);
+      expect(onUpdateScrollTop.mock.calls.map((call) => call[0])).toEqual([16]);
+      expect(onScroll.mock.calls.map((call) => call[0])).toEqual([16]);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("clears pending wheel state when queueFrameTask is rejected", async () => {
     const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
     const onScroll = vi.fn();
