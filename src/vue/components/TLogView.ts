@@ -2797,6 +2797,7 @@ export const TLogView = defineComponent({
         strategy === "auto" &&
         props.rowScrollMode === "unsafe-full-row" &&
         rendererCapabilities.value.scrollOperations &&
+        !props.wrap &&
         ownsFullRows &&
         withinTerminalRows &&
         !isClipped() &&
