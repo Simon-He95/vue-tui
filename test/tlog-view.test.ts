@@ -20,7 +20,10 @@ import {
   onMounted,
   ref,
   TText,
+  TView,
   useTerminal,
+  vShow,
+  withDirectives,
 } from "./ui-regressions-support.js";
 
 function rowText(
@@ -342,6 +345,372 @@ describe("TLogView", () => {
       expect(rowText(app, 0)).toBe("line-95");
     } finally {
       app.dispose();
+    }
+  });
+
+  it("coalesces consecutive wheel events into one frame scroll update", async () => {
+    const raf = installManualRaf();
+    const source: TLogDataSource = {
+      lineCount: () => 1_000_000,
+      getLine: (index) => `line-${index}`,
+    };
+    const onScroll = vi.fn();
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TLogViewWheelMailboxProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
+    const App = defineComponent({
+      name: "TLogViewWheelMailboxApp",
+      setup() {
+        return () => [
+          h(Probe),
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            onScroll,
+          }),
+          ...Array.from({ length: 50 }, (_, index) =>
+            h(TText, { x: 0, y: 10 + index, w: 20, value: `sibling-${index}` }),
+          ),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 80, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+      const commits: unknown[] = [];
+      const off = app.terminal.on("commit", (commit) => commits.push(commit));
+
+      for (let i = 0; i < 1_000; i++) {
+        app.events.dispatch({
+          type: "wheel",
+          cellX: 0,
+          cellY: 0,
+          deltaY: -1,
+          time: 1_000 + i * 10,
+        });
+      }
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(commits).toEqual([]);
+      expect(raf.pending()).toBe(1);
+
+      raf.flush();
+      await nextTick();
+
+      expect(onScroll).toHaveBeenCalledTimes(1);
+      const top = onScroll.mock.calls[0]![0].scrollTop;
+      expect(rowText(app, 0)).toBe(`line-${top}`);
+      expect(commits).toHaveLength(1);
+      expect(framePerf!.latest()).toMatchObject({
+        reason: "scroll",
+        frameTaskCount: 1,
+        coalescedFrameTasks: 0,
+        droppedUpdates: 999,
+        remainingFrameTasks: 0,
+      });
+      expect(framePerf!.latest()?.dirtyRows).toBeLessThanOrEqual(4);
+      expect(framePerf!.latest()?.paintedNodes).toBe(1);
+      expect(framePerf!.latest()?.scannedNodes).toBeLessThan(20);
+      off();
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("uses exposed dirty row for full-row unsafe wheel scroll", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWheelScrollFastPathApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            rowScrollMode: "unsafe-full-row",
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_000 });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      off();
+      expect(commits).toEqual([
+        {
+          dirtyRows: [0],
+          scrollOperations: [{ startY: 0, endY: 4, delta: -1 }],
+        },
+      ]);
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
+        "line-95",
+        "line-96",
+        "line-97",
+        "line-98",
+      ]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("drops a pending wheel frame when unmounted before RAF", async () => {
+    const raf = installManualRaf();
+    const onScroll = vi.fn();
+    let hide!: () => void;
+    const source: TLogDataSource = {
+      lineCount: () => 200,
+      getLine: (index) => `line-${index}`,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewPendingWheelUnmountApp",
+      setup() {
+        const shown = ref(true);
+        hide = () => {
+          shown.value = false;
+        };
+        return () =>
+          shown.value
+            ? h(TLogView, {
+                x: 0,
+                y: 0,
+                w: 20,
+                h: 4,
+                source,
+                version: 1,
+                autoFocus: true,
+                onScroll,
+              })
+            : null;
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_000 });
+      expect(raf.pending()).toBe(1);
+
+      hide();
+      await nextTick();
+      app.scheduler.flushNow();
+      raf.flush();
+      await nextTick();
+
+      expect(onScroll).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("cancels pending wheel scroll when hidden before RAF", async () => {
+    const raf = installManualRaf();
+    const visible = ref(true);
+    const onScroll = vi.fn();
+    const source: TLogDataSource = {
+      lineCount: () => 200,
+      getLine: (index) => `line-${index}`,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewPendingWheelHiddenApp",
+      setup() {
+        return () => [
+          h(TText, { x: 0, y: 0, w: 20, value: "hidden-placeholder" }),
+          withDirectives(
+            h(TLogView, {
+              x: 0,
+              y: 0,
+              w: 20,
+              h: 4,
+              source,
+              version: 1,
+              autoFocus: true,
+              onScroll,
+            }),
+            [[vShow, visible.value]],
+          ),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_000 });
+      expect(raf.pending()).toBe(1);
+
+      visible.value = false;
+      await nextTick();
+      app.scheduler.flushNow();
+      raf.flush();
+      await nextTick();
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(rowText(app, 0)).toBe("hidden-placeholder");
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("cancels pending wheel scroll when clipped before RAF", async () => {
+    const raf = installManualRaf();
+    const clipHeight = ref(4);
+    const onScroll = vi.fn();
+    const source: TLogDataSource = {
+      lineCount: () => 200,
+      getLine: (index) => `line-${index}`,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewPendingWheelClippedApp",
+      setup() {
+        return () =>
+          h(
+            TView,
+            { x: 0, y: 0, w: 20, h: clipHeight.value },
+            {
+              default: () =>
+                h(TLogView, {
+                  x: 0,
+                  y: 0,
+                  w: 20,
+                  h: 4,
+                  source,
+                  version: 1,
+                  autoFocus: true,
+                  onScroll,
+                }),
+            },
+          );
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_000 });
+      expect(raf.pending()).toBe(1);
+
+      clipHeight.value = 0;
+      await nextTick();
+      app.scheduler.flushNow();
+      raf.flush();
+      await nextTick();
+
+      expect(onScroll).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("cancels pending wheel scroll when controlled scrollTop changes before RAF", async () => {
+    const raf = installManualRaf();
+    const controlledTop = ref(96);
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const onScroll = vi.fn();
+    const onUpdateScrollTop = vi.fn((nextTop: number) => {
+      controlledTop.value = nextTop;
+    });
+
+    const App = defineComponent({
+      name: "TLogViewPendingWheelControlledScrollApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            scrollTop: controlledTop.value,
+            autoFocus: true,
+            onScroll,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("line-96");
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_000 });
+      expect(raf.pending()).toBe(1);
+      expect(onUpdateScrollTop).not.toHaveBeenCalled();
+
+      controlledTop.value = 80;
+      await nextTick();
+      raf.flush();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(controlledTop.value).toBe(80);
+      expect(onUpdateScrollTop).not.toHaveBeenCalled();
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(rowText(app, 0)).toBe("line-80");
+    } finally {
+      app.dispose();
+      raf.restore();
     }
   });
 
@@ -908,7 +1277,7 @@ describe("TLogView", () => {
         "line-20",
       ]);
       expect(framePerf!.latest()).toMatchObject({
-        reason: "stream",
+        reason: "data",
         dirtyRows: 1,
         frameTaskCount: 1,
       });
@@ -1527,14 +1896,14 @@ describe("TLogView", () => {
     }
   });
 
-  it("does not coalesce stream tasks across multiple TLogView instances", async () => {
+  it("does not coalesce data tasks across multiple TLogView instances", async () => {
     const raf = installManualRaf();
     const logA = createAppendOnlyLogStore();
     const logB = createAppendOnlyLogStore();
     let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
 
     const App = defineComponent({
-      name: "TLogViewMultipleStreamTasksApp",
+      name: "TLogViewMultipleDataTasksApp",
       setup() {
         framePerf = useTerminal().observability.framePerf;
         framePerf.enabled.value = true;
@@ -1577,7 +1946,7 @@ describe("TLogView", () => {
       expect(rowText(app, 0)).toBe("a");
       expect(rowText(app, 2)).toBe("b");
       expect(framePerf!.latest()).toMatchObject({
-        reason: "stream",
+        reason: "data",
         frameTaskCount: 2,
         remainingFrameTasks: 0,
       });
@@ -6192,7 +6561,7 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
-  it("coalesces burst append through one stream frame task", async () => {
+  it("coalesces burst append through one data mailbox frame task", async () => {
     const raf = installManualRaf();
     const log = createAppendOnlyLogStore();
     log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
@@ -6222,19 +6591,210 @@ describe("TLogView", () => {
       app.scheduler.flushNow();
       framePerf!.clear();
 
-      for (let i = 20; i < 120; i++) log.appendLine(`line-${i}`);
+      for (let i = 20; i < 1_020; i++) {
+        log.appendLine(`line-${i}`);
+        await nextTick();
+      }
+
+      expect(raf.pending()).toBe(1);
+      raf.flush();
+      await nextTick();
+
+      expect(rowText(app, 3)).toBe("line-1019");
+      expect(framePerf!.latest()).toMatchObject({
+        reason: "data",
+        frameTaskCount: 1,
+        coalescedFrameTasks: 0,
+        droppedUpdates: 999,
+        remainingFrameTasks: 0,
+      });
+      expect(framePerf!.latest()?.dirtyRows).toBeLessThanOrEqual(4);
+      expect(framePerf!.latest()?.paintedNodes).toBe(1);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("does not repaint visible rows for hidden data bursts", async () => {
+    const raf = installManualRaf();
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
+    const logView = ref<TLogViewHandle | null>(null);
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TLogViewHiddenDataBurstProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
+    const App = defineComponent({
+      name: "TLogViewHiddenDataBurstApp",
+      setup() {
+        const visible = ref(false);
+        return () => [
+          h(Probe),
+          h(TText, { x: 0, y: 0, w: 20, value: "hidden-placeholder" }),
+          withDirectives(
+            h(TLogView, {
+              ref: logView,
+              x: 0,
+              y: 0,
+              w: 20,
+              h: 4,
+              source: log.source,
+              version: log.version.value,
+            }),
+            [[vShow, visible.value]],
+          ),
+          h(TText, { x: 0, y: 6, w: 20, value: "same-plane-sibling" }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 10, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+      const commits: unknown[] = [];
+      const off = app.terminal.on("commit", (commit) => commits.push(commit));
+
+      for (let i = 20; i < 1_020; i++) {
+        log.appendLine(`line-${i}`);
+        await nextTick();
+      }
+
+      expect(raf.pending()).toBe(1);
+      raf.flush();
+      await nextTick();
+
+      expect(logView.value!.getScrollMetrics()).toMatchObject({
+        scrollTop: 1016,
+        lineCount: 1020,
+      });
+      expect(rowText(app, 0)).toBe("hidden-placeholder");
+      expect(rowText(app, 6)).toBe("same-plane-sibling");
+      expect(commits).toEqual([]);
+      expect(framePerf!.latest()).toBeNull();
+      off();
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("keeps bottom append high priority under frame task pressure", async () => {
+    const raf = installManualRaf();
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
+    let pressureRuns = 0;
+
+    const App = defineComponent({
+      name: "TLogViewBottomAppendPriorityApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      app.scheduler.configure({ frameBudgetMs: 0 });
+
+      app.scheduler.queueFrameTask({
+        id: "test:high-pressure",
+        reason: "input",
+        priority: "high",
+        sync: true,
+        run() {
+          pressureRuns++;
+        },
+      });
+      log.appendLine("line-20");
       await nextTick();
 
       expect(raf.pending()).toBe(1);
       raf.flush();
       await nextTick();
 
-      expect(rowText(app, 3)).toBe("line-119");
+      expect(pressureRuns).toBe(1);
+      expect(rowText(app, 3)).toBe("line-20");
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("keeps data dirty repaint scoped away from same-plane siblings", async () => {
+    const raf = installManualRaf();
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TLogViewDataDirtyRowsProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
+    const App = defineComponent({
+      name: "TLogViewDataDirtyRowsApp",
+      setup() {
+        return () => [
+          h(Probe),
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+          }),
+          ...Array.from({ length: 60 }, (_, index) =>
+            h(TText, { x: 0, y: 10 + index, w: 20, value: `sibling-${index}` }),
+          ),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 80, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+
+      log.appendLine("line-20");
+      await nextTick();
+      raf.flush();
+      await nextTick();
+
+      expect(rowText(app, 3)).toBe("line-20");
+      expect(rowText(app, 10)).toBe("sibling-0");
       expect(framePerf!.latest()).toMatchObject({
-        reason: "stream",
+        reason: "data",
         frameTaskCount: 1,
-        remainingFrameTasks: 0,
+        dirtyRows: 4,
+        paintedNodes: 1,
       });
+      expect(framePerf!.latest()?.scannedNodes).toBeLessThan(20);
     } finally {
       app.dispose();
       raf.restore();

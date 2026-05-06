@@ -27,6 +27,7 @@ import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
+import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import {
   forEachTextCellSegment,
@@ -108,6 +109,10 @@ type LocatedVisualRow = {
   lineIndex: number;
   partIndex: number;
 };
+type TLogDataUpdatePayload = Readonly<{
+  version: number;
+  lineCount: number;
+}>;
 export type TLogViewSearchMode = "text" | "regex";
 export type TLogViewSearchError = Readonly<{
   kind: "invalid-regex";
@@ -878,6 +883,12 @@ export const TLogView = defineComponent({
       const full = normalizedFullRect();
       const clip = normalizedRect();
       return full.x !== clip.x || full.y !== clip.y || full.w !== clip.w || full.h !== clip.h;
+    }
+
+    function hasPaintableViewport(): boolean {
+      if (!visible.value) return false;
+      const r = normalizedRect();
+      return r.w > 0 && r.h > 0;
     }
 
     function lineCount(): number {
@@ -2584,8 +2595,30 @@ export const TLogView = defineComponent({
       scheduler.invalidate({ priority, plane: plane.value, reason });
     }
 
+    const wheelMailbox = createFrameMailbox<number>({
+      scheduler,
+      id: `${frameTaskId}:wheel`,
+      reason: "scroll",
+      priority: "high",
+      sync: true,
+      apply(nextTop, ctx) {
+        pendingWheelTop = null;
+        if (!alive || !hasPaintableViewport()) {
+          resetWheelScrollState(wheelState);
+          return;
+        }
+        const changed = applyScrollTop(nextTop, "auto", { emitScroll: true });
+        if (!changed) {
+          resetWheelScrollState(wheelState);
+          return;
+        }
+        ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
+      },
+    });
+
     function cancelWheelScrollFrame(): void {
       pendingWheelTop = null;
+      wheelMailbox.cancel();
       resetWheelScrollState(wheelState);
     }
 
@@ -2645,13 +2678,17 @@ export const TLogView = defineComponent({
       return Array.from(rows).sort((a, b) => a - b);
     }
 
-    function markRowsDirty(nextRows: readonly number[]): void {
+    function markRowsDirty(nextRows: readonly number[]): boolean {
+      if (!hasPaintableViewport()) return false;
       dirtyRowsHint = unionDirtyRows(nextRows);
-      if (renderNodeId) render.update(renderNodeId, { dirtyRowsHint });
+      if (!renderNodeId) return false;
+      if (render.markDirtyRows(renderNodeId, dirtyRowsHint)) return true;
+      dirtyRowsHint = undefined;
+      return false;
     }
 
-    function markViewportDirty(): void {
-      markRowsDirty(viewportRows());
+    function markViewportDirty(): boolean {
+      return markRowsDirty(viewportRows());
     }
 
     function applyLinkFocusToSegments(
@@ -2805,9 +2842,9 @@ export const TLogView = defineComponent({
       return startIndex < visible.end && endIndex > visible.start;
     }
 
-    function handleSourceVersionChanged(): boolean {
+    function handleSourceVersionChanged(payload?: TLogDataUpdatePayload): boolean {
       const prevCount = lastLineCount;
-      const nextCount = lineCount();
+      const nextCount = payload?.lineCount ?? lineCount();
       const prevFirst = lastFirstLineIndex;
       const nextFirst = firstLineIndex();
       const droppedHeadLines = Math.max(0, nextFirst - prevFirst);
@@ -2918,57 +2955,69 @@ export const TLogView = defineComponent({
       return false;
     }
 
-    function requestStreamFrame(): void {
-      const shouldStick = shouldStickForAppend();
-      scheduler.queueFrameTask({
-        id: `${frameTaskId}:stream`,
-        reason: "stream",
-        priority: shouldStick ? "high" : "normal",
-        sync: shouldStick,
-        run(ctx) {
-          if (!alive) return;
-          const invalidated = handleSourceVersionChanged();
-          if (!invalidated) return;
-          const nextShouldStick = shouldStickForAppend();
-          ctx.invalidate({
-            priority: nextShouldStick ? "high" : "normal",
-            plane: plane.value,
-            reason: "stream",
-          });
-        },
+    function applyDataUpdate(payload: TLogDataUpdatePayload, ctx: TerminalFrameContext): void {
+      if (!alive) return;
+      const invalidated = handleSourceVersionChanged(payload);
+      if (!invalidated || !hasPaintableViewport()) return;
+      const nextShouldStick = shouldStickForAppend();
+      ctx.invalidate({
+        priority: nextShouldStick ? "high" : "normal",
+        plane: plane.value,
+        reason: "data",
       });
+    }
+
+    const dataHighMailbox = createFrameMailbox<TLogDataUpdatePayload>({
+      scheduler,
+      id: `${frameTaskId}:data-high`,
+      reason: "data",
+      priority: "high",
+      sync: true,
+      apply: applyDataUpdate,
+    });
+
+    const dataNormalMailbox = createFrameMailbox<TLogDataUpdatePayload>({
+      scheduler,
+      id: `${frameTaskId}:data-normal`,
+      reason: "data",
+      priority: "normal",
+      apply: applyDataUpdate,
+    });
+
+    function requestDataFrame(): void {
+      const payload = { version: props.version, lineCount: lineCount() };
+      if (shouldStickForAppend()) {
+        dataNormalMailbox.cancel();
+        if (!dataHighMailbox.queue(payload)) return;
+        return;
+      }
+      if (dataHighMailbox.hasPending()) {
+        if (!dataHighMailbox.queue(payload)) return;
+        return;
+      }
+      if (!dataNormalMailbox.queue(payload)) return;
     }
 
     function requestWheelScroll(nextTop: number): boolean {
       pendingWheelTop = nextTop;
-      let accepted: boolean | void;
       try {
-        accepted = scheduler.queueFrameTask({
-          id: `${frameTaskId}:wheel`,
-          reason: "scroll",
-          priority: "high",
-          sync: true,
-          run(ctx) {
-            if (!alive) return;
-            const top = pendingWheelTop;
-            pendingWheelTop = null;
-            if (top == null) return;
-            const changed = applyScrollTop(top, "viewport-repaint", { emitScroll: true });
-            if (!changed) return;
-            ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
-          },
-        });
+        if (wheelMailbox.queue(nextTop)) return true;
       } catch (error) {
         pendingWheelTop = null;
         resetWheelScrollState(wheelState);
         throw error;
       }
-      if (accepted === false) {
-        pendingWheelTop = null;
-        resetWheelScrollState(wheelState);
-        return false;
-      }
-      return true;
+      pendingWheelTop = null;
+      resetWheelScrollState(wheelState);
+      return false;
+    }
+
+    function replacePendingWheelTop(nextTop: number): boolean {
+      pendingWheelTop = nextTop;
+      if (wheelMailbox.replacePending(nextTop)) return true;
+      pendingWheelTop = null;
+      resetWheelScrollState(wheelState);
+      return false;
     }
 
     function keyboardScroll(nextTop: number, nextStick?: boolean): void {
@@ -3360,10 +3409,35 @@ export const TLogView = defineComponent({
     });
 
     watch(
+      [
+        () => visible.value,
+        () => absRect.value.x,
+        () => absRect.value.y,
+        () => absRect.value.w,
+        () => absRect.value.h,
+        () => fullRect.value.w,
+        () => fullRect.value.h,
+      ],
+      () => {
+        if (pendingWheelTop === null) return;
+        if (!hasPaintableViewport()) {
+          cancelWheelScrollFrame();
+          return;
+        }
+        const nextPendingTop = normalizeScrollTop(pendingWheelTop);
+        if (nextPendingTop === currentScrollTop()) {
+          cancelWheelScrollFrame();
+        } else if (nextPendingTop !== pendingWheelTop) {
+          replacePendingWheelTop(nextPendingTop);
+        }
+      },
+    );
+
+    watch(
       () => props.version,
       () => {
         resetWheelScrollState(wheelState);
-        requestStreamFrame();
+        requestDataFrame();
         requestSearchScan();
       },
     );
@@ -3379,7 +3453,7 @@ export const TLogView = defineComponent({
     watch(
       () => props.scrollTop,
       () => {
-        resetWheelScrollState(wheelState);
+        cancelWheelScrollFrame();
         syncStickFromCurrentScrollTop();
         markViewportDirty();
         invalidateSelf("high", "scroll");
@@ -3399,6 +3473,8 @@ export const TLogView = defineComponent({
         () => fullRect.value.w,
       ],
       () => {
+        dataHighMailbox.cancel();
+        dataNormalMailbox.cancel();
         clearLineCaches();
         resetVisualIndex(lineCount(), currentWrapWidth());
         if (props.wrap && props.visualIndexMode === "exact") {
@@ -3487,6 +3563,9 @@ export const TLogView = defineComponent({
       searchGeneration++;
       visualMeasureGeneration++;
       cancelWheelScrollFrame();
+      wheelMailbox.dispose();
+      dataHighMailbox.dispose();
+      dataNormalMailbox.dispose();
     });
 
     const renderNode = useRenderNode(() => ({
