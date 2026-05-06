@@ -927,6 +927,64 @@ describe("TList wheel mailbox", () => {
     }
   });
 
+  it("clears pending wheel state when queueFrameTask throws", () => {
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 20 }, (_, index) => `item-${index}`),
+        autoFocus: true,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      const originalQueue = app.scheduler.queueFrameTask.bind(app.scheduler);
+      const throwingQueue = vi.fn(() => {
+        throw new Error("queue failed");
+      });
+      try {
+        (app.scheduler as any).queueFrameTask = throwingQueue;
+
+        const prevented = app.events.dispatch({
+          type: "wheel",
+          cellX: 0,
+          cellY: 0,
+          deltaY: 100,
+          time: 1_000,
+        });
+
+        expect(prevented).toBe(false);
+        expect(throwingQueue).toHaveBeenCalledTimes(1);
+        expect(onScroll).not.toHaveBeenCalled();
+      } finally {
+        (app.scheduler as any).queueFrameTask = originalQueue;
+      }
+
+      const nextPrevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: 100,
+        time: 1_010,
+      });
+      app.scheduler.flushNow();
+
+      expect(nextPrevented).toBe(true);
+      expect(onScroll).toHaveBeenLastCalledWith(1);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not leave a stale pending wheel base when queueFrameTask runs synchronously", async () => {
     const onScroll = vi.fn();
     let bumpVersion!: () => void;

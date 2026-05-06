@@ -341,6 +341,20 @@ export const TList = defineComponent({
       resetWheelScrollState(wheelState);
     }
 
+    function queueWheelTop(nextTop: number): boolean {
+      pendingWheelTop = nextTop;
+      try {
+        if (wheelMailbox.queue(nextTop)) return true;
+      } catch (error) {
+        pendingWheelTop = null;
+        resetWheelScrollState(wheelState);
+        throw error;
+      }
+      pendingWheelTop = null;
+      resetWheelScrollState(wheelState);
+      return false;
+    }
+
     function reattachSelection(): void {
       detachedByWheel = false;
       cancelWheelScrollFrame();
@@ -560,13 +574,7 @@ export const TList = defineComponent({
             return;
           }
 
-          pendingWheelTop = nextTop;
-          const queued = wheelMailbox.queue(nextTop);
-          if (!queued) {
-            pendingWheelTop = null;
-            resetWheelScrollState(wheelState);
-            return;
-          }
+          if (!queueWheelTop(nextTop)) return;
           e.preventDefault?.();
         },
         focus: () => {

@@ -286,21 +286,28 @@ export const TVirtualList = defineComponent({
       // TODO(perf): Convert TVirtualList wheel scheduling to createFrameMailbox
       // so wheel burst metrics match TList: producer-level droppedUpdates instead
       // of scheduler-level coalescedFrameTasks.
-      const accepted = scheduler.queueFrameTask({
-        id: wheelTaskId,
-        reason: "scroll",
-        priority: "high",
-        sync: true,
-        run(ctx) {
-          if (!alive) return;
-          const top = pendingWheelTop;
-          pendingWheelTop = null;
-          if (top == null) return;
-          const changed = applyScrollTop(top, "auto", { emitScroll: true });
-          if (!changed) return;
-          ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
-        },
-      });
+      let accepted: boolean | void;
+      try {
+        accepted = scheduler.queueFrameTask({
+          id: wheelTaskId,
+          reason: "scroll",
+          priority: "high",
+          sync: true,
+          run(ctx) {
+            if (!alive) return;
+            const top = pendingWheelTop;
+            pendingWheelTop = null;
+            if (top == null) return;
+            const changed = applyScrollTop(top, "auto", { emitScroll: true });
+            if (!changed) return;
+            ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
+          },
+        });
+      } catch (error) {
+        pendingWheelTop = null;
+        resetWheelScrollState(wheelState);
+        throw error;
+      }
       if (accepted === false) {
         pendingWheelTop = null;
         resetWheelScrollState(wheelState);

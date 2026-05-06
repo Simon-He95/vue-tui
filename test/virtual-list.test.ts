@@ -1012,6 +1012,74 @@ describe("TVirtualList", () => {
     }
   });
 
+  it("clears pending wheel state when queueFrameTask throws", async () => {
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    const onScroll = vi.fn();
+    const commits: unknown[] = [];
+    let offCommit: (() => void) | null = null;
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: items.length,
+        itemVersion: 1,
+        getItem: (index: number) => items[index],
+        autoFocus: true,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      offCommit = app.terminal.on("commit", (commit) => commits.push(commit));
+
+      const originalQueue = app.scheduler.queueFrameTask.bind(app.scheduler);
+      const throwingQueue = vi.fn(() => {
+        throw new Error("queue failed");
+      });
+      try {
+        (app.scheduler as any).queueFrameTask = throwingQueue;
+
+        const prevented = app.events.dispatch({
+          type: "wheel",
+          cellX: 0,
+          cellY: 0,
+          deltaY: 100,
+          time: 1_000,
+        });
+
+        expect(prevented).toBe(false);
+        expect(throwingQueue).toHaveBeenCalledTimes(1);
+        expect(onScroll).not.toHaveBeenCalled();
+        expect(commits).toHaveLength(0);
+      } finally {
+        (app.scheduler as any).queueFrameTask = originalQueue;
+      }
+
+      const nextPrevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: 100,
+        time: 1_010,
+      });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(nextPrevented).toBe(true);
+      expect(onScroll).toHaveBeenLastCalledWith(1);
+    } finally {
+      offCommit?.();
+      app.dispose();
+    }
+  });
+
   it("clamps pending wheel scroll when itemCount shrinks before the frame", async () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;
