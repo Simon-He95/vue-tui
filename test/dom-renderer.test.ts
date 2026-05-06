@@ -449,4 +449,138 @@ describe("DomRenderer row rendering", () => {
       container.remove();
     }
   });
+
+  it("invalidates the plain row cache when text changes", () => {
+    const { terminal, container, renderer } = setup(4);
+
+    try {
+      terminal.fill(0, 0, 4, 1, "A");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      const textNode = line.firstChild;
+
+      terminal.fill(0, 0, 4, 1, "B");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(line.firstChild).toBe(textNode);
+      expect(line.textContent).toBe("BBBB");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 0,
+        plainTextRows: 1,
+        textNodeUpdates: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("invalidates the single styled row cache when style changes", () => {
+    const { terminal, container, renderer } = setup(3);
+
+    try {
+      terminal.fill(0, 0, 3, 1, "A", { fg: "red" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const span = lineEl(container).firstChild as HTMLSpanElement;
+
+      terminal.fill(0, 0, 3, 1, "A", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).firstChild).toBe(span);
+      expect(span.style.color).toBe("var(--vt-color-blue)");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 0,
+        singleStyledRows: 1,
+        spansReused: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("skips single styled DOM writes when the row cache matches", () => {
+    const { terminal, container, renderer } = setup(3);
+
+    try {
+      terminal.fill(0, 0, 3, 1, "A", { fg: "red" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const span = lineEl(container).firstChild;
+
+      terminal.fill(0, 0, 3, 1, "A", { fg: "red" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).firstChild).toBe(span);
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 1,
+        singleStyledRows: 0,
+        fragmentRows: 0,
+        replaceChildren: 0,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("keeps multi-segment order in the row cache key", () => {
+    const { terminal, container, renderer } = setup(4);
+
+    try {
+      terminal.fill(0, 0, 2, 1, "A", { fg: "red" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      const firstSpan = line.childNodes[0] as HTMLSpanElement;
+      const secondSpan = line.childNodes[1] as HTMLSpanElement;
+
+      terminal.fill(0, 0, 2, 1, "A", { fg: "blue" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "red" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(line.childNodes[0]).toBe(firstSpan);
+      expect(line.childNodes[1]).toBe(secondSpan);
+      expect(firstSpan.style.color).toBe("var(--vt-color-blue)");
+      expect(secondSpan.style.color).toBe("var(--vt-color-red)");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 0,
+        segmentReuseRows: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("invalidates the row cache when a plain row becomes wide", () => {
+    const { terminal, container, renderer } = setup(2);
+
+    try {
+      terminal.fill(0, 0, 2, 1, "A");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      terminal.write("中", { x: 0, y: 0 });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
+      expect(line.textContent).toContain("中");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 0,
+        fragmentRows: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
 });

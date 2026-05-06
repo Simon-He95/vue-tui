@@ -358,8 +358,23 @@ function nowMs(): number {
   return Date.now();
 }
 
-function segmentsToKey(segments: RowSegment[]): string {
-  return segments.map((s) => `${s.key}:${s.text}:${s.cols}:${s.wide}`).join("|");
+function segmentsToKey(segments: readonly RowSegment[]): string {
+  if (segments.length === 0) return "0";
+
+  if (segments.length === 1) {
+    const s = segments[0]!;
+    const plain = isPlainStyle(s.style);
+    if (!s.wide && plain) return `p:${s.text}:${s.cols}`;
+    if (!s.wide && !s.style.href && !plain) return `s:${s.key}:${s.text}:${s.cols}`;
+    return `1:${s.key}:${s.text}:${s.cols}:${s.wide ? 1 : 0}`;
+  }
+
+  let out = String(segments.length);
+  for (let i = 0; i < segments.length; i++) {
+    const s = segments[i]!;
+    out += `|${s.key}:${s.text}:${s.cols}:${s.wide ? 1 : 0}`;
+  }
+  return out;
 }
 
 function isPlainStyle(style: Style): boolean {
