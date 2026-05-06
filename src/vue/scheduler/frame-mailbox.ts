@@ -85,8 +85,16 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
     const wasPending = hasPending;
     const taskId = wasPending ? pendingTaskId! : currentTaskId();
 
-    if (hasPending && options.merge) pending = options.merge(pending as T, value);
-    else pending = value;
+    let nextPending: T;
+    try {
+      nextPending = hasPending && options.merge ? options.merge(pending as T, value) : value;
+    } catch (error) {
+      clearPending();
+      if (wasPending) options.scheduler.cancelFrameTask?.(taskId);
+      throw error;
+    }
+
+    pending = nextPending;
 
     hasPending = true;
     queued++;

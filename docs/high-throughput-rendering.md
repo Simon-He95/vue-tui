@@ -206,7 +206,9 @@ wheel 行为：
 
 Frame mailbox 语义：
 
-`createFrameMailbox()` 是 at-most-once 的 frame coalescing primitive，不是 durable queue。它适合 wheel `scrollTop`、resize sample、cursor blink、latest-only highlight 这类只关心最新状态的渲染工作。`apply()` 抛错时，pending payload 已被清空，不会重试，也不会上报这次 coalesced `droppedUpdates`；需要可靠处理的数据必须保存在 owner/source/store 里，mailbox 只合并“下一帧要 repaint 到哪个状态”。如果某类任务需要 retry，调用方应在 `apply()` 内捕获错误并保留可重试状态。
+`createFrameMailbox()` 是 at-most-once 的 frame coalescing primitive，不是 durable queue。它适合 wheel `scrollTop`、resize sample、cursor blink、latest-only highlight 这类只关心最新状态的渲染工作。`merge()` 或 `apply()` 抛错时，pending payload 已被清空，不会重试，也不会上报这次 coalesced `droppedUpdates`；需要可靠处理的数据必须保存在 owner/source/store 里，mailbox 只合并“下一帧要 repaint 到哪个状态”。如果某类任务需要 retry，调用方应在 `merge()` / `apply()` 内捕获错误并保留可重试状态。
+
+高优先级 frame task 只用于 input、wheel、焦点这类必须尽快反映到屏幕的有限工作。stream/data producer 应使用稳定 task id 或 `createFrameMailbox()`；在 `globalThis.__VT_DEBUG_PERF__` 开启时，大量 unique high-priority task 会触发 warning，帮助定位错误 producer。
 
 键盘和点击行为：
 
@@ -350,6 +352,8 @@ type FramePerf = {
 - `coalescedInvalidates`
 - `droppedUpdates`
 
+高优先级 task 可能压过 normal/low task。无限 high-priority pressure 无法保证 low task 及时执行；有限 pressure 停止后，deferred low task 必须继续 drain。调试时看 `frameTaskQueueDepthBeforeRun` / `frameTaskQueueDepthAfterRun`，并处理 high-priority queue warning。
+
 验收测试：
 
 - profiler 接收 `RenderStats` 并输出 `scannedNodes/paintedNodes`。
@@ -400,6 +404,8 @@ pnpm exec vitest run \
   test/render-manager.test.ts \
   test/render-plane-frame-mailbox.test.ts \
   test/scheduler-frame-tasks.test.ts \
+  test/frame-perf.test.ts \
+  test/debug-overlay.test.ts \
   test/style-cache.test.ts \
   test/text-utils.test.ts \
   test/tlog-view.test.ts \

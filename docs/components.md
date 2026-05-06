@@ -335,6 +335,8 @@ visible viewport.
 `TList` uses the same full-rect clipping model as `TText`/`TVirtualList`: when
 the list is clipped from the top or left, paint and hit testing keep the source
 row/column offset instead of rebasing the clipped area to a new viewport origin.
+x/y/w/h are cell coordinates. Fractional geometry is normalized by flooring the
+start and end cell edges; pass integers for deterministic layout.
 When changing styles, replace the style object instead of mutating it in place.
 Replace the `items` array reference when item text changes without changing
 length, or bump `itemVersion`. For large mutable data sources, prefer

@@ -52,6 +52,7 @@ type ScheduledFrameHandle =
   | Readonly<{ kind: "timer"; id: ReturnType<typeof setTimeout> }>;
 
 const SCHEDULED_SENTINEL = Symbol("scheduled-frame-task");
+const HIGH_TASK_WARN_THRESHOLD = 128;
 
 const PRIORITY_RANK: Record<TerminalFrameTaskPriority, number> = {
   low: 0,
@@ -97,6 +98,14 @@ function orderedQueuedTasks(tasks: readonly QueuedFrameTask[]): QueuedFrameTask[
     else normal.push(entry);
   }
   return [...high, ...normal, ...low];
+}
+
+function highPriorityTaskCount(tasks: readonly QueuedFrameTask[]): number {
+  let count = 0;
+  for (const entry of tasks) {
+    if (normalizePriority(entry.task.priority) === "high") count++;
+  }
+  return count;
 }
 
 export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
@@ -225,6 +234,14 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     const frameTaskQueueDepthBeforeRun = remainingFrameTasks();
     const tasks = takeOrderedTasks();
     if (!tasks.length) return EMPTY_FRAME_TASK_RUN_STATS;
+
+    const highTaskCount = highPriorityTaskCount(tasks);
+    if ((globalThis as any).__VT_DEBUG_PERF__ && highTaskCount > HIGH_TASK_WARN_THRESHOLD) {
+      console.warn(
+        `[vue-tui] high-priority frame task queue is large (${highTaskCount}/${frameTaskQueueDepthBeforeRun}). ` +
+          `Use stable task ids or createFrameMailbox() for latest-only producers.`,
+      );
+    }
 
     const startedAt = framePerfNow();
     const currentFrameId = ++frameTaskFrameId;

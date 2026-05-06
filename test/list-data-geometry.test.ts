@@ -850,6 +850,85 @@ describe("TList data geometry", () => {
     }
   });
 
+  it("cancels pending wheel when data shrink clamps it to the clamped scrollTop", async () => {
+    const raf = installRaf();
+    let shrink!: () => void;
+    const onScroll = vi.fn();
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TListClampPendingWheelPerfProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
+
+    const App = defineComponent({
+      name: "TListClampPendingWheelApp",
+      setup() {
+        const items = ref(Array.from({ length: 200 }, (_, index) => `item-${index}`));
+        shrink = () => {
+          items.value = items.value.slice(0, 84);
+        };
+        return () => [
+          h(Probe),
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: items.value,
+            modelValue: 0,
+            autoFocus: true,
+            onScroll,
+          }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+      expect(onScroll).toHaveBeenLastCalledWith(100);
+
+      framePerf!.clear();
+      raf.callbacks.clear();
+
+      const prevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: 5000,
+        time: 2_000,
+      });
+      expect(prevented).toBe(true);
+      expect(raf.callbacks.size).toBe(1);
+
+      shrink();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).toHaveBeenLastCalledWith(80);
+      expect(framePerf!.latest()).toMatchObject({
+        reason: "data",
+        frameTaskCount: 0,
+      });
+      expect(
+        framePerf!.list().some((sample) => sample.reason === "scroll" && sample.frameTaskCount > 0),
+      ).toBe(false);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
   it("repaints when items are mutated in place", async () => {
     let pushItem!: () => void;
     const App = defineComponent({

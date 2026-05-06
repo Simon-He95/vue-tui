@@ -281,7 +281,7 @@ export const TVirtualList = defineComponent({
       resetWheelScrollState(wheelState);
     }
 
-    function requestWheelScroll(nextTop: number): void {
+    function requestWheelScroll(nextTop: number): boolean {
       pendingWheelTop = nextTop;
       // TODO(perf): Convert TVirtualList wheel scheduling to createFrameMailbox
       // so wheel burst metrics match TList: producer-level droppedUpdates instead
@@ -304,8 +304,9 @@ export const TVirtualList = defineComponent({
       if (accepted === false) {
         pendingWheelTop = null;
         resetWheelScrollState(wheelState);
-        return;
+        return false;
       }
+      return true;
     }
 
     function invalidateSelf(
@@ -429,8 +430,8 @@ export const TVirtualList = defineComponent({
           );
           if (!dir || nextTop === baseTop) return;
 
+          if (!requestWheelScroll(nextTop)) return;
           e.preventDefault?.();
-          requestWheelScroll(nextTop);
         },
         focus: () => {
           focused.value = true;

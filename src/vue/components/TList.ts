@@ -773,6 +773,10 @@ export const TList = defineComponent({
           needsInvalidate = scroll.dirty || needsInvalidate;
         }
 
+        if (pendingWheelTop !== null && pendingWheelTop === scrollTop.value) {
+          cancelWheelScrollFrame();
+        }
+
         if (structureChanged) {
           needsInvalidate = markViewportDirty() || needsInvalidate;
         }

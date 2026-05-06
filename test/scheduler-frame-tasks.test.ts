@@ -473,6 +473,58 @@ describe("scheduler frame tasks", () => {
     }
   });
 
+  it("warns about large high-priority queues and drains finite pressure", async () => {
+    const raf = installRaf();
+    const probe = createSchedulerProbeApp();
+    const order: string[] = [];
+    const previousDebugPerf = (globalThis as any).__VT_DEBUG_PERF__;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      (globalThis as any).__VT_DEBUG_PERF__ = true;
+      probe.app.mount();
+      await nextTick();
+      probe.scheduler.flushNow();
+      probe.scheduler.configure({ frameBudgetMs: 0 });
+
+      for (let i = 0; i < 129; i++) {
+        probe.scheduler.queueFrameTask({
+          id: `high-${i}`,
+          priority: "high",
+          reason: "scroll",
+          run(ctx) {
+            order.push(`high-${i}`);
+            ctx.invalidate({ priority: "high", plane: "default", reason: "scroll" });
+          },
+        });
+      }
+      probe.scheduler.queueFrameTask({
+        id: "low-after-high-pressure",
+        priority: "low",
+        reason: "data",
+        run(ctx) {
+          order.push("low");
+          ctx.invalidate({ plane: "default", reason: "data" });
+        },
+      });
+
+      raf.runNext();
+      expect(order).toHaveLength(129);
+      expect(order).not.toContain("low");
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain("high-priority frame task queue is large");
+
+      raf.runNext();
+      expect(order.at(-1)).toBe("low");
+    } finally {
+      if (previousDebugPerf === undefined) delete (globalThis as any).__VT_DEBUG_PERF__;
+      else (globalThis as any).__VT_DEBUG_PERF__ = previousDebugPerf;
+      warn.mockRestore();
+      probe.app.dispose();
+      raf.restore();
+    }
+  });
+
   it("keeps the latest same-id task when a deferred task is replaced during drain", async () => {
     const raf = installRaf();
     const probe = createSchedulerProbeApp();

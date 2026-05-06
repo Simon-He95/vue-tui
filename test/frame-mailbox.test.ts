@@ -407,6 +407,53 @@ describe("frame mailbox", () => {
     expect(apply.mock.calls[0]![2]).toEqual({ queued: 3, dropped: 2 });
   });
 
+  it("clears pending payload when merge throws", () => {
+    const probe = createScheduler();
+    const apply = vi.fn();
+    const mailbox = createFrameMailbox({
+      scheduler: probe.scheduler,
+      id: "probe",
+      merge: () => {
+        throw new Error("merge failed");
+      },
+      apply,
+    });
+
+    mailbox.queue(1);
+    expect(() => mailbox.queue(2)).toThrow("merge failed");
+
+    expect(mailbox.hasPending()).toBe(false);
+    expect(mailbox.peek()).toBeUndefined();
+    expect(probe.scheduler.cancelFrameTask).toHaveBeenCalledWith("probe");
+
+    probe.flush();
+    expect(apply).not.toHaveBeenCalled();
+
+    mailbox.queue(3);
+    probe.flush();
+
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledWith(3, expect.anything(), { queued: 1, dropped: 0 });
+  });
+
+  it("does not report dropped updates when merge throws before apply", () => {
+    const probe = createScheduler();
+    const mailbox = createFrameMailbox({
+      scheduler: probe.scheduler,
+      id: "probe",
+      merge: () => {
+        throw new Error("merge failed");
+      },
+      apply: vi.fn(),
+    });
+
+    mailbox.queue(1);
+    expect(() => mailbox.queue(2)).toThrow("merge failed");
+    probe.flush();
+
+    expect(probe.ctx.reportDroppedUpdates).not.toHaveBeenCalled();
+  });
+
   it("clears pending payload when apply throws and does not retry", () => {
     const probe = createScheduler();
     const apply = vi.fn((value: number) => {

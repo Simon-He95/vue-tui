@@ -3850,6 +3850,65 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
+  it("preserves ANSI style on wide-character clip placeholders", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "a\x1b[31m你\x1b[0mb",
+      getLineKey: () => "wide-clip-style",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: -2,
+          y: 0,
+          w: 4,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+        }),
+      4,
+      2,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe(" ");
+    expect(mounted.terminal.getCell(0, 0).style.fg).toBe("red");
+    expect(mounted.terminal.getCell(1, 0).ch).toBe("b");
+    expect(mounted.terminal.getCell(1, 0).style.fg).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it("does not leak OSC8 href from wide-character clip placeholders", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "a\x1b]8;;https://example.com\x07你\x1b]8;;\x07b",
+      getLineKey: () => "wide-clip-link",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: -2,
+          y: 0,
+          w: 4,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+        }),
+      4,
+      2,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe(" ");
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://example.com");
+    expect(mounted.terminal.getCell(1, 0).ch).toBe("b");
+    expect(mounted.terminal.getCell(1, 0).style.href).toBeUndefined();
+    mounted.unmount();
+  });
+
   it("wraps a long logical line into visual rows", async () => {
     const source: TLogDataSource = {
       lineCount: () => 1,

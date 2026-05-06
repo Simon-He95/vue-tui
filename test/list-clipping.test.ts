@@ -1,9 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref, vShow, withDirectives } from "vue";
 import { createTerminalApp, TList, TRenderPlane, TText, TView, useTerminal } from "../src/index.js";
+import { normalizeCellRect } from "../src/vue/utils/rect.js";
 import { disableRaf, installRaf, rowText } from "./helpers/list.js";
 
 describe("TList clipping", () => {
+  it("normalizes fractional cell rects by flooring start and end edges", () => {
+    expect(normalizeCellRect({ x: 0.2, y: 1.2, w: 0.7, h: 0.7 })).toEqual({
+      x: 0,
+      y: 1,
+      w: 0,
+      h: 0,
+    });
+    expect(normalizeCellRect({ x: 0.2, y: 0.2, w: 0.9, h: 1.9 })).toEqual({
+      x: 0,
+      y: 0,
+      w: 1,
+      h: 2,
+    });
+  });
+
   it("uses clipped viewport height for wheel scroll range", async () => {
     const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
     const App = defineComponent({
