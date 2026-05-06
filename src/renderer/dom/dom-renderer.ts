@@ -38,9 +38,29 @@ export type DomRendererFlushStats = Readonly<{
   last: DomRendererFlushSample | null;
 }>;
 
+export type DomRendererRowRenderStats = Readonly<{
+  rows: number;
+  cacheHits: number;
+  transparentBlankRows: number;
+  plainTextRows: number;
+  singleStyledRows: number;
+  segmentReuseRows: number;
+  fragmentRows: number;
+  spansCreated: number;
+  spansReused: number;
+  textNodeUpdates: number;
+  replaceChildren: number;
+}>;
+
+export type DomRendererRowRenderDebugStats = Readonly<{
+  total: DomRendererRowRenderStats;
+  lastFlush: DomRendererRowRenderStats | null;
+}>;
+
 export type DomRendererDebugStats = Readonly<{
   syncFlush: DomRendererSyncFlushStats;
   flush: DomRendererFlushStats;
+  rowRender: DomRendererRowRenderDebugStats;
 }>;
 
 export interface DomRenderer {
@@ -100,6 +120,44 @@ const DEFAULT_SYNC_FLUSH_MAX_ROWS = 32;
 const DEFAULT_SYNC_FLUSH_CELL_BUDGET = 4096;
 
 const styleKeyCache = new WeakMap<object, string>();
+
+type RowRenderMutableStats = {
+  -readonly [K in keyof DomRendererRowRenderStats]: DomRendererRowRenderStats[K];
+};
+
+function createEmptyRowStats(): RowRenderMutableStats {
+  return {
+    rows: 0,
+    cacheHits: 0,
+    transparentBlankRows: 0,
+    plainTextRows: 0,
+    singleStyledRows: 0,
+    segmentReuseRows: 0,
+    fragmentRows: 0,
+    spansCreated: 0,
+    spansReused: 0,
+    textNodeUpdates: 0,
+    replaceChildren: 0,
+  };
+}
+
+function freezeRowStats(stats: RowRenderMutableStats): DomRendererRowRenderStats {
+  return Object.freeze({ ...stats });
+}
+
+function addRowStats(target: RowRenderMutableStats, source: RowRenderMutableStats): void {
+  target.rows += source.rows;
+  target.cacheHits += source.cacheHits;
+  target.transparentBlankRows += source.transparentBlankRows;
+  target.plainTextRows += source.plainTextRows;
+  target.singleStyledRows += source.singleStyledRows;
+  target.segmentReuseRows += source.segmentReuseRows;
+  target.fragmentRows += source.fragmentRows;
+  target.spansCreated += source.spansCreated;
+  target.spansReused += source.spansReused;
+  target.textNodeUpdates += source.textNodeUpdates;
+  target.replaceChildren += source.replaceChildren;
+}
 
 function styleKey(style: Style): string {
   const cached = styleKeyCache.get(style as any);
@@ -378,22 +436,31 @@ function renderRow(
   wideScaleX: number,
   y: number,
   lineEl: HTMLElement,
+  stats: RowRenderMutableStats,
 ): void {
+  stats.rows++;
   const segments = computeRowSegments(terminal, y);
   const newKey = segmentsToKey(segments);
 
   // Skip DOM update if content hasn't changed
   const cachedKey = rowCache.get(lineEl);
-  if (cachedKey === newKey) return;
+  if (cachedKey === newKey) {
+    stats.cacheHits++;
+    return;
+  }
 
   rowCache.set(lineEl, newKey);
 
   if (isTransparentBlankRow(segments)) {
+    stats.transparentBlankRows++;
+    stats.replaceChildren++;
     lineEl.replaceChildren();
     return;
   }
 
   if (isPlainTextRow(segments)) {
+    stats.plainTextRows++;
+    stats.textNodeUpdates++;
     const text = segments[0]!.text;
     const firstChild = lineEl.firstChild;
     if (lineEl.childNodes.length === 1 && firstChild?.nodeType === Node.TEXT_NODE) {
@@ -415,11 +482,15 @@ function renderRow(
       firstChild.dataset.vtFastRow === "styled"
     ) {
       span = firstChild;
+      stats.spansReused++;
     } else {
       span = document.createElement("span");
       span.dataset.vtFastRow = "styled";
+      stats.spansCreated++;
+      stats.replaceChildren++;
       lineEl.replaceChildren(span);
     }
+    stats.singleStyledRows++;
 
     span.textContent = seg.text;
     resetSpanStyle(span);
@@ -429,7 +500,15 @@ function renderRow(
   }
 
   const canReuseSpans = canReuseSegmentSpans(segments);
-  if (canReuseSpans && tryUpdateSegmentSpans(lineEl, segments, metrics)) return;
+  if (canReuseSpans && tryUpdateSegmentSpans(lineEl, segments, metrics)) {
+    stats.segmentReuseRows++;
+    stats.spansReused += segments.length;
+    return;
+  }
+
+  stats.fragmentRows++;
+  stats.spansCreated += segments.length;
+  stats.replaceChildren++;
 
   // Use DocumentFragment to batch DOM operations and avoid layout thrashing
   const fragment = document.createDocumentFragment();
@@ -501,6 +580,8 @@ export function createDomRenderer(
   let lastSyncFlushDecision: DomRendererSyncFlushDecision | null = null;
   let domFlushCount = 0;
   let lastDomFlush: DomRendererFlushSample | null = null;
+  const rowRenderTotal = createEmptyRowStats();
+  let lastRowRenderStats: DomRendererRowRenderStats | null = null;
   const debugStats: DomRendererDebugStats = {
     get syncFlush() {
       return {
@@ -516,7 +597,19 @@ export function createDomRenderer(
         last: lastDomFlush,
       };
     },
+    get rowRender() {
+      return {
+        total: freezeRowStats(rowRenderTotal),
+        lastFlush: lastRowRenderStats,
+      };
+    },
   };
+
+  function recordRowRenderStats(stats: RowRenderMutableStats): void {
+    if (stats.rows === 0) return;
+    addRowStats(rowRenderTotal, stats);
+    lastRowRenderStats = freezeRowStats(stats);
+  }
 
   function applyPlaneOffset(plane: TerminalRenderPlane, offsetPx: number): void {
     const layer = planeLayers.get(plane);
@@ -628,12 +721,14 @@ export function createDomRenderer(
     wideScaleX = wideW > 0 ? Math.max(1, Math.min(2, (metrics.cellWidth * 2) / wideW)) : 1;
     rebuildLines();
     const size = terminal.size();
+    const rowStats = createEmptyRowStats();
     for (const plane of TERMINAL_RENDER_PLANES) {
       const layer = planeLayers.get(plane);
       if (!layer) continue;
       for (let y = 0; y < size.rows; y++)
-        renderRow(layer.terminal, metrics, wideScaleX, y, layer.lines[y]!);
+        renderRow(layer.terminal, metrics, wideScaleX, y, layer.lines[y]!, rowStats);
     }
+    recordRowRenderStats(rowStats);
   }
 
   interface FlushScope {
@@ -917,6 +1012,7 @@ export function createDomRenderer(
     const startedAt = nowMs();
     const planesToFlush = scope?.planes ?? TERMINAL_RENDER_PLANES;
     let flushedRows = 0;
+    const rowStats = createEmptyRowStats();
 
     for (const plane of planesToFlush) {
       const layer = planeLayers.get(plane);
@@ -926,7 +1022,7 @@ export function createDomRenderer(
       const flushRow = (y: number): void => {
         if (!rows.has(y)) return;
         const line = layer.lines[y];
-        if (line) renderRow(layer.terminal, metrics, wideScaleX, y, line);
+        if (line) renderRow(layer.terminal, metrics, wideScaleX, y, line, rowStats);
         deletePendingRow(plane, rows, y);
         flushedRows++;
       };
@@ -941,6 +1037,7 @@ export function createDomRenderer(
     }
 
     if (flushedRows > 0) {
+      recordRowRenderStats(rowStats);
       domFlushCount++;
       lastDomFlush = {
         mode: options?.mode ?? "deferred",

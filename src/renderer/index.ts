@@ -10,6 +10,8 @@ export type {
   DomRendererFlushSample,
   DomRendererFlushStats,
   DomRendererOptions,
+  DomRendererRowRenderDebugStats,
+  DomRendererRowRenderStats,
   DomRendererSyncFlushDecision,
   DomRendererSyncFlushStats,
 } from "./dom/dom-renderer.js";

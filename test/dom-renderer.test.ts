@@ -16,7 +16,27 @@ function lineEl(container: HTMLElement, y = 0): HTMLElement {
   return line!;
 }
 
+function lastRowStats(renderer: ReturnType<typeof createDomRenderer>) {
+  const stats = renderer.debugStats.rowRender.lastFlush;
+  expect(stats).not.toBeNull();
+  return stats!;
+}
+
 describe("DomRenderer row rendering", () => {
+  it("records row stats during refresh", () => {
+    const { container, renderer } = setup(4, 2);
+
+    try {
+      const stats = lastRowStats(renderer);
+      expect(stats.rows).toBeGreaterThan(0);
+      expect(stats.transparentBlankRows).toBe(stats.rows);
+      expect(stats.replaceChildren).toBe(stats.rows);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("renders plain rows as a text node", () => {
     const { terminal, container, renderer } = setup();
 
@@ -29,6 +49,12 @@ describe("DomRenderer row rendering", () => {
       expect(line.firstChild?.nodeType).toBe(Node.TEXT_NODE);
       expect(line.querySelector("span")).toBeNull();
       expect(line.textContent).toBe("hello   ");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        plainTextRows: 1,
+        textNodeUpdates: 1,
+        fragmentRows: 0,
+      });
     } finally {
       renderer.dispose();
       container.remove();
@@ -67,6 +93,12 @@ describe("DomRenderer row rendering", () => {
       expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
       expect((line.firstChild as HTMLSpanElement).textContent).toBe("red");
       expect((line.firstChild as HTMLSpanElement).dataset.vtFastRow).toBe("styled");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        singleStyledRows: 1,
+        spansCreated: 1,
+        replaceChildren: 1,
+      });
     } finally {
       renderer.dispose();
       container.remove();
@@ -138,6 +170,12 @@ describe("DomRenderer row rendering", () => {
       expect(line.childNodes[0]).toBe(firstSpan);
       expect(line.childNodes[1]).toBe(secondSpan);
       expect(line.textContent).toBe("CCDD");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        segmentReuseRows: 1,
+        fragmentRows: 0,
+        spansReused: 2,
+      });
     } finally {
       renderer.dispose();
       container.remove();
@@ -191,6 +229,13 @@ describe("DomRenderer row rendering", () => {
       expect(line.childNodes[0]).not.toBe(firstSpan);
       expect(line.childNodes[1]).not.toBe(secondSpan);
       expect(line.textContent).toBe("CCDDEE");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        segmentReuseRows: 0,
+        fragmentRows: 1,
+        spansCreated: 3,
+        replaceChildren: 1,
+      });
     } finally {
       renderer.dispose();
       container.remove();
@@ -287,6 +332,11 @@ describe("DomRenderer row rendering", () => {
       expect(line.childNodes).toHaveLength(1);
       expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
       expect((line.firstChild as HTMLSpanElement).dataset.vtFastRow).toBeUndefined();
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        fragmentRows: 1,
+        spansCreated: 1,
+      });
     } finally {
       renderer.dispose();
       container.remove();
@@ -305,6 +355,11 @@ describe("DomRenderer row rendering", () => {
       expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
       expect((line.firstChild as HTMLSpanElement).dataset.vtFastRow).toBeUndefined();
       expect(line.textContent).toContain("中");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        fragmentRows: 1,
+        spansCreated: 1,
+      });
     } finally {
       renderer.dispose();
       container.remove();
@@ -379,6 +434,16 @@ describe("DomRenderer row rendering", () => {
       expect(line.firstChild).toBe(textNode);
       expect(nodeValueWrites).toBe(0);
       expect(line.textContent).toBe("AAAAAAAA");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 1,
+        plainTextRows: 0,
+        singleStyledRows: 0,
+        segmentReuseRows: 0,
+        fragmentRows: 0,
+        textNodeUpdates: 0,
+        replaceChildren: 0,
+      });
     } finally {
       renderer.dispose();
       container.remove();

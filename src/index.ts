@@ -92,6 +92,8 @@ export type {
   DomRendererFlushSample,
   DomRendererFlushStats,
   DomRendererOptions,
+  DomRendererRowRenderDebugStats,
+  DomRendererRowRenderStats,
   DomRendererSyncFlushDecision,
   DomRendererSyncFlushStats,
   TerminalRendererLike,
