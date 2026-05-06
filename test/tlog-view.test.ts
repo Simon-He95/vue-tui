@@ -6499,6 +6499,58 @@ describe("TLogView", () => {
     }
   });
 
+  it("keeps bottom append high priority under frame task pressure", async () => {
+    const raf = installManualRaf();
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
+    let pressureRuns = 0;
+
+    const App = defineComponent({
+      name: "TLogViewBottomAppendPriorityApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      app.scheduler.configure({ frameBudgetMs: 0 });
+
+      app.scheduler.queueFrameTask({
+        id: "test:high-pressure",
+        reason: "input",
+        priority: "high",
+        sync: true,
+        run() {
+          pressureRuns++;
+        },
+      });
+      log.appendLine("line-20");
+      await nextTick();
+
+      expect(raf.pending()).toBe(1);
+      raf.flush();
+      await nextTick();
+
+      expect(pressureRuns).toBe(1);
+      expect(rowText(app, 3)).toBe("line-20");
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
   it("keeps data dirty repaint scoped away from same-plane siblings", async () => {
     const raf = installManualRaf();
     const log = createAppendOnlyLogStore();

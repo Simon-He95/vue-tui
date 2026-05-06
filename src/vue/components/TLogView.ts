@@ -2955,26 +2955,47 @@ export const TLogView = defineComponent({
       return false;
     }
 
-    const dataMailbox = createFrameMailbox<TLogDataUpdatePayload>({
+    function applyDataUpdate(payload: TLogDataUpdatePayload, ctx: TerminalFrameContext): void {
+      if (!alive) return;
+      const invalidated = handleSourceVersionChanged(payload);
+      if (!invalidated) return;
+      const nextShouldStick = shouldStickForAppend();
+      ctx.invalidate({
+        priority: nextShouldStick ? "high" : "normal",
+        plane: plane.value,
+        reason: "data",
+      });
+    }
+
+    const dataHighMailbox = createFrameMailbox<TLogDataUpdatePayload>({
       scheduler,
-      id: `${frameTaskId}:data`,
+      id: `${frameTaskId}:data-high`,
       reason: "data",
-      priority: "low",
-      apply(payload, ctx) {
-        if (!alive) return;
-        const invalidated = handleSourceVersionChanged(payload);
-        if (!invalidated) return;
-        const nextShouldStick = shouldStickForAppend();
-        ctx.invalidate({
-          priority: nextShouldStick ? "high" : "normal",
-          plane: plane.value,
-          reason: "data",
-        });
-      },
+      priority: "high",
+      sync: true,
+      apply: applyDataUpdate,
+    });
+
+    const dataNormalMailbox = createFrameMailbox<TLogDataUpdatePayload>({
+      scheduler,
+      id: `${frameTaskId}:data-normal`,
+      reason: "data",
+      priority: "normal",
+      apply: applyDataUpdate,
     });
 
     function requestDataFrame(): void {
-      dataMailbox.queue({ version: props.version, lineCount: lineCount() });
+      const payload = { version: props.version, lineCount: lineCount() };
+      if (shouldStickForAppend()) {
+        dataNormalMailbox.cancel();
+        dataHighMailbox.queue(payload);
+        return;
+      }
+      if (dataHighMailbox.hasPending()) {
+        dataHighMailbox.queue(payload);
+        return;
+      }
+      dataNormalMailbox.queue(payload);
     }
 
     function requestWheelScroll(nextTop: number): boolean {
@@ -3452,7 +3473,8 @@ export const TLogView = defineComponent({
         () => fullRect.value.w,
       ],
       () => {
-        dataMailbox.cancel();
+        dataHighMailbox.cancel();
+        dataNormalMailbox.cancel();
         clearLineCaches();
         resetVisualIndex(lineCount(), currentWrapWidth());
         if (props.wrap && props.visualIndexMode === "exact") {
@@ -3542,7 +3564,8 @@ export const TLogView = defineComponent({
       visualMeasureGeneration++;
       cancelWheelScrollFrame();
       wheelMailbox.dispose();
-      dataMailbox.dispose();
+      dataHighMailbox.dispose();
+      dataNormalMailbox.dispose();
     });
 
     const renderNode = useRenderNode(() => ({
