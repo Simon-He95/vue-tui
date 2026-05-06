@@ -127,7 +127,8 @@ t.mount();
 plane 相关：
 
 - `scheduler.invalidate({ plane })`：把本轮刷新归到指定 plane
-- `scheduler.queueFrameTask(task)`：下一帧先执行 task，再根据 task 内的 `ctx.invalidate()` render/commit；`flushNow()` 会先 drain pending frame tasks；返回 `false` 表示 scheduler 显式拒绝，返回 `true` 或 `undefined` 都表示已接受
+- `scheduler.queueFrameTask(task)`：下一帧先执行 task，再根据 task 内的 `ctx.invalidate()` render/commit；`flushNow()` 会先 drain pending frame tasks；返回 `false` 表示 scheduler 显式拒绝，producer 必须清理本地 pending state；返回 `true` 或 `undefined` 都表示已接受，其中 `undefined` 用于兼容旧 scheduler
+- `scheduler.cancelFrameTask(id)`：best-effort 取消。task 可能已被当前 frame snapshot 取走，所以 `run()` 内仍要 guard stale/disposed state。
 - `queueFrameTask()` 的 `task.id` 是整个 `TerminalProvider` / `createTerminalApp` scheduler 级别的全局 coalescing key，不会因为 `TRenderPlane` 自动加 namespace。跨 plane 使用相同 id 会互相覆盖；如需 plane-local coalescing，请自行把 plane 写入 id。
 - `runtime.mount(Component, props, { plane })`：命令式挂载到指定 plane
 - `terminal.commit({ planes })`：只提交某些 plane 的变化

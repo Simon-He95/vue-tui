@@ -331,6 +331,9 @@ Behavior change for the wheel-mailbox release:
 but it does not update `modelValue` and does not move the active selection.
 Keyboard navigation, click, double click, and Enter reattach selection to the
 visible viewport.
+If existing code depended on wheel scrolling to update `modelValue`, listen to
+`scroll` instead. If selection should follow scroll, synchronize that explicitly
+from `onScroll`; `onScroll` is a result notification, not a veto/cancel hook.
 
 `TList` uses the same full-rect clipping model as `TText`/`TVirtualList`: when
 the list is clipped from the top or left, paint and hit testing keep the source
@@ -353,7 +356,9 @@ viewport-top mutation.
 Hidden `v-show=false` lists still emit `scroll(top)` when item-count changes
 force a real internal `scrollTop` clamp, but they do not dirty terminal rows or
 commit visible output. A fully clipped viewport keeps detached `scrollTop`
-without clamping to `0` until a finite viewport height is restored.
+without clamping to `0` until a finite viewport height is restored. If a wheel
+frame is still pending when the viewport becomes hidden or fully clipped, that
+pending wheel is canceled and does not emit `scroll`.
 
 `scroll(top)` is not emitted when:
 

@@ -158,6 +158,12 @@ export const TList = defineComponent({
       return normalizeCellRect(fullRect.value);
     }
 
+    function hasPaintableViewport(): boolean {
+      if (!visible.value) return false;
+      const r = normalizedRect();
+      return r.w > 0 && r.h > 0;
+    }
+
     function clipOffsets(): { x: number; y: number } {
       const full = normalizedFullRect();
       const clip = normalizedRect();
@@ -208,11 +214,10 @@ export const TList = defineComponent({
     }
 
     function markViewportDirty(): boolean {
-      if (!visible.value) return false;
+      if (!hasPaintableViewport()) return false;
       const nodeId = renderNode.id.value;
       if (!nodeId) return false;
       const r = normalizedRect();
-      if (r.w <= 0 || r.h <= 0) return false;
       dirtyRowsScratch.length = 0;
       for (let y = r.y; y < r.y + r.h; y++) dirtyRowsScratch.push(y);
       return render.markDirtyRows(nodeId, dirtyRowsScratch);
@@ -230,11 +235,10 @@ export const TList = defineComponent({
     }
 
     function markIndexRowsDirty(...indexes: number[]): boolean {
-      if (!visible.value) return false;
+      if (!hasPaintableViewport()) return false;
       const nodeId = renderNode.id.value;
       if (!nodeId) return false;
       const r = normalizedRect();
-      if (r.w <= 0 || r.h <= 0) return false;
 
       indexDirtyRowsScratch.length = 0;
       const { start, h } = visibleRange();
@@ -322,6 +326,10 @@ export const TList = defineComponent({
       sync: true,
       apply(nextTop, ctx) {
         pendingWheelTop = null;
+        if (!hasPaintableViewport()) {
+          resetWheelScrollState(wheelState);
+          return;
+        }
         const clampedTop = clampScrollTop(nextTop);
         if (clampedTop === scrollTop.value) {
           resetWheelScrollState(wheelState);
@@ -761,7 +769,9 @@ export const TList = defineComponent({
           needsInvalidate = modelSync.dirty || needsInvalidate;
         }
 
-        if (pendingWheelTop !== null) {
+        if (pendingWheelTop !== null && !hasPaintableViewport()) {
+          cancelWheelScrollFrame();
+        } else if (pendingWheelTop !== null) {
           const maxPendingTop = maxScrollTopForClamp();
           if (maxPendingTop != null) {
             const nextPendingTop = clamp(pendingWheelTop, 0, maxPendingTop);

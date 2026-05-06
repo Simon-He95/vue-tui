@@ -10,5 +10,6 @@
 - `TList` Enter and double click emit `change`; they do not emit `update:modelValue` when committing the already-active item.
 - `TList` keyboard-driven and external-model-driven viewport changes no longer emit `scroll`.
 - `TList` `scroll` now represents viewport-driven scroll changes, especially wheel scrolling and programmatic clamp.
+- `TList` cancels a pending wheel frame if the viewport is hidden or fully clipped before the frame runs.
 - `TRenderPlane.plane` is immutable after mount. Use `:key="plane"` to move a subtree to another plane.
 - `scheduler.queueFrameTask()` may return `false` when rejected; `true` or `undefined` means accepted.

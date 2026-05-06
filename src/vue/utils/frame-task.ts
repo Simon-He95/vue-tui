@@ -4,8 +4,10 @@ export interface FrameCoalescer<T> {
   latest(): T | undefined;
 }
 
-// Legacy internal Phase 1 helper; new high-frequency components should use
-// scheduler.queueFrameTask() instead of copying this component-local queue.
+// Legacy internal Phase 1 helper.
+// New high-frequency producers should use createFrameMailbox() so latest-only
+// payloads, cancellation, scheduler rejection, and droppedUpdates metrics are
+// handled consistently.
 export function createFrameCoalescer<T>(apply: (latest: T) => void): FrameCoalescer<T> {
   let queued = false;
   let latestValue: T | undefined;

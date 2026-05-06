@@ -99,64 +99,81 @@ describe("TList data geometry", () => {
     }
   });
 
-  it("preserves a pending detached wheel target when the list becomes fully clipped before the frame", async () => {
-    const raf = installRaf();
-    const items = Array.from({ length: 200 }, (_, index) => `item-${index}`);
-    const onScroll = vi.fn();
-    let viewportH!: { value: number };
+  for (const clippedAxis of ["height", "width"] as const) {
+    it(`cancels pending wheel when the list becomes fully clipped by ${clippedAxis} before the frame`, async () => {
+      const raf = installRaf();
+      const items = Array.from({ length: 200 }, (_, index) => `item-${index}`);
+      const onScroll = vi.fn();
+      const onUpdateModelValue = vi.fn();
+      const commits: unknown[] = [];
+      let viewportW!: { value: number };
+      let viewportH!: { value: number };
 
-    const App = defineComponent({
-      name: "TListPendingWheelFullClipApp",
-      setup() {
-        viewportH = ref(4);
-        return () =>
-          h(
-            TView,
-            { x: 0, y: 0, w: 12, h: viewportH.value },
-            {
-              default: () =>
-                h(TList, {
-                  x: 0,
-                  y: 0,
-                  w: 12,
-                  h: 10,
-                  items,
-                  modelValue: 0,
-                  autoFocus: true,
-                  onScroll,
-                }),
-            },
-          );
-      },
+      const App = defineComponent({
+        name: "TListPendingWheelFullClipApp",
+        setup() {
+          viewportW = ref(12);
+          viewportH = ref(4);
+          return () =>
+            h(
+              TView,
+              { x: 0, y: 0, w: viewportW.value, h: viewportH.value },
+              {
+                default: () =>
+                  h(TList, {
+                    x: 0,
+                    y: 0,
+                    w: 12,
+                    h: 10,
+                    items,
+                    modelValue: 0,
+                    autoFocus: true,
+                    onScroll,
+                    "onUpdate:modelValue": onUpdateModelValue,
+                  }),
+              },
+            );
+        },
+      });
+      const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+      const offCommit = app.terminal.on("commit", (commit) => commits.push(commit));
+
+      try {
+        app.mount();
+        app.scheduler.flushNow();
+
+        app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
+        expect(raf.callbacks.size).toBe(1);
+
+        if (clippedAxis === "height") viewportH.value = 0;
+        else viewportW.value = 0;
+        await nextTick();
+        app.scheduler.flushNow();
+
+        commits.length = 0;
+        onScroll.mockClear();
+        onUpdateModelValue.mockClear();
+
+        raf.runNext();
+        await nextTick();
+        app.scheduler.flushNow();
+        expect(onScroll).not.toHaveBeenCalled();
+        expect(onUpdateModelValue).not.toHaveBeenCalled();
+        expect(commits).toHaveLength(0);
+
+        viewportW.value = 12;
+        viewportH.value = 4;
+        await nextTick();
+        app.scheduler.flushNow();
+
+        expect(rowText(app, 0)).toBe("item-0");
+      } finally {
+        offCommit();
+        app.dispose();
+        raf.restore();
+      }
     });
-    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
-
-    try {
-      app.mount();
-      app.scheduler.flushNow();
-
-      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 10000, time: 1_000 });
-      expect(raf.callbacks.size).toBe(1);
-
-      viewportH.value = 0;
-      await nextTick();
-      app.scheduler.flushNow();
-
-      raf.runNext();
-      await nextTick();
-      expect(onScroll).toHaveBeenCalledWith(100);
-      expect(onScroll.mock.calls.some(([top]) => top === 0)).toBe(false);
-
-      viewportH.value = 4;
-      await nextTick();
-      app.scheduler.flushNow();
-
-      expect(rowText(app, 0)).toBe("item-100");
-    } finally {
-      app.dispose();
-      raf.restore();
-    }
-  });
+  }
 
   it("repaints items replaced synchronously from onScroll", async () => {
     const App = defineComponent({

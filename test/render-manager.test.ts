@@ -134,6 +134,30 @@ describe("render-manager", () => {
     expect(paints).toEqual(["n0"]);
   });
 
+  it("treats markDirtyRows rows as absolute terminal Y coordinates", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 20 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 10, w: 10, h: 3 },
+      paint: () => paints.push("node"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    expect(rm.markDirtyRows(node.id, [0])).toBe(false);
+    expect(rm.render()).toBeNull();
+    expect(paints).toEqual([]);
+
+    expect(rm.markDirtyRows(node.id, [10])).toBe(true);
+    const stats = rm.render();
+
+    expect(stats?.paintedNodes).toBe(1);
+    expect(paints).toEqual(["node"]);
+  });
+
   it("repaints overlapping same-plane nodes in z-order for dirty rows", () => {
     const paints: string[] = [];
     const terminal = createTerminal({ cols: 10, rows: 6 });

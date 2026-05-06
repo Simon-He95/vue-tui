@@ -67,6 +67,12 @@ export type TerminalScheduler = Readonly<{
    */
   flushNow: () => void;
   configure: (options: TerminalSchedulerConfig) => void;
+  /**
+   * Queues a frame task for the next scheduler frame.
+   * false means the scheduler explicitly rejected the task; producers must clear
+   * local pending state. true or undefined means accepted so legacy schedulers
+   * that do not return a value remain valid.
+   */
   queueFrameTask: (task: TerminalFrameTask) => boolean | void;
   /**
    * Best-effort cancellation for a pending id task.
