@@ -276,6 +276,75 @@ describe("TLogView", () => {
     }
   });
 
+  it("clears pending wheel state when queueFrameTask throws", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const onScroll = vi.fn();
+
+    const App = defineComponent({
+      name: "TLogViewThrowingWheelQueueApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            onScroll,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      const originalQueue = app.scheduler.queueFrameTask.bind(app.scheduler);
+      const throwingQueue = vi.fn(() => {
+        throw new Error("queue failed");
+      });
+      try {
+        (app.scheduler as any).queueFrameTask = throwingQueue;
+
+        const prevented = app.events.dispatch({
+          type: "wheel",
+          cellX: 0,
+          cellY: 0,
+          deltaY: -100,
+          time: Date.now(),
+        });
+
+        expect(prevented).toBe(false);
+        expect(throwingQueue).toHaveBeenCalledTimes(1);
+        expect(onScroll).not.toHaveBeenCalled();
+      } finally {
+        (app.scheduler as any).queueFrameTask = originalQueue;
+      }
+
+      const nextPrevented = app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: -100,
+        time: Date.now() + 10,
+      });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(nextPrevented).toBe(true);
+      expect(onScroll.mock.calls.at(-1)?.[0]).toMatchObject({ scrollTop: 95 });
+      expect(rowText(app, 0)).toBe("line-95");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("waits for controlled scrollTop prop updates before changing rendered rows", async () => {
     const controlledTop = ref(96);
     const source: TLogDataSource = {
