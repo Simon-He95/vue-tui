@@ -338,8 +338,38 @@ function isSingleStyledTextRow(segments: readonly RowSegment[]): boolean {
   );
 }
 
+function canReuseSegmentSpans(segments: readonly RowSegment[]): boolean {
+  return segments.length > 1 && segments.every((segment) => !segment.wide && !segment.style.href);
+}
+
 function resetSpanStyle(span: HTMLSpanElement): void {
   span.removeAttribute("style");
+}
+
+function tryUpdateSegmentSpans(
+  lineEl: HTMLElement,
+  segments: readonly RowSegment[],
+  metrics: CellMetrics,
+): boolean {
+  if (lineEl.childNodes.length !== segments.length) return false;
+
+  for (let i = 0; i < segments.length; i++) {
+    const node = lineEl.childNodes[i];
+    if (!(node instanceof HTMLSpanElement)) return false;
+    if (node.dataset.vtFastRow !== "segment") return false;
+    if (node.dataset.vtSegmentIndex !== String(i)) return false;
+  }
+
+  for (let i = 0; i < segments.length; i++) {
+    const span = lineEl.childNodes[i] as HTMLSpanElement;
+    const seg = segments[i]!;
+    span.textContent = seg.text;
+    resetSpanStyle(span);
+    span.style.cssText = `display:inline-block;width:${seg.cols * metrics.cellWidth}px;height:${metrics.cellHeight}px;overflow:hidden;white-space:pre;vertical-align:top`;
+    applyStyle(span, seg.style);
+  }
+
+  return true;
 }
 
 function renderRow(
@@ -398,11 +428,19 @@ function renderRow(
     return;
   }
 
+  const canReuseSpans = canReuseSegmentSpans(segments);
+  if (canReuseSpans && tryUpdateSegmentSpans(lineEl, segments, metrics)) return;
+
   // Use DocumentFragment to batch DOM operations and avoid layout thrashing
   const fragment = document.createDocumentFragment();
 
-  for (const seg of segments) {
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i]!;
     const span = document.createElement("span");
+    if (canReuseSpans) {
+      span.dataset.vtFastRow = "segment";
+      span.dataset.vtSegmentIndex = String(i);
+    }
     if (seg.wide && wideScaleX > 1.01) {
       const inner = document.createElement("span");
       inner.textContent = seg.text;
