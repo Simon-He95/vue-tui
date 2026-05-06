@@ -204,6 +204,10 @@ wheel 行为：
 
 > **`rowScrollMode` 语义**：`unsafeScrollPlaneRows()` 会 shift 该 plane 的完整 row region，只适合 TVirtualList 独占这些 rows 的 full-row 场景；如果同一 plane 上还有其它内容覆盖这些 rows，请保持默认 `rowScrollMode: "off"`（repaint viewport）。调用 `render.unsafeScrollPlaneRows()` 前也必须确认当前 renderer 会消费 terminal `scrollOperations`；DOM renderer 会通过移动 line nodes 消费该 hint，但这仍然不是组件内部的局部 rect scroll。
 
+Frame mailbox 语义：
+
+`createFrameMailbox()` 是 at-most-once 的 frame coalescing primitive，不是 durable queue。它适合 wheel `scrollTop`、resize sample、cursor blink、latest-only highlight 这类只关心最新状态的渲染工作。`apply()` 抛错时，pending payload 已被清空，不会重试，也不会上报这次 coalesced `droppedUpdates`；需要可靠处理的数据必须保存在 owner/source/store 里，mailbox 只合并“下一帧要 repaint 到哪个状态”。如果某类任务需要 retry，调用方应在 `apply()` 内捕获错误并保留可重试状态。
+
 键盘和点击行为：
 
 - 键盘导航改变 active，并保证 active visible。
@@ -380,12 +384,35 @@ type FramePerf = {
 验收命令：
 
 ```bash
-pnpm vitest run test/frame-mailbox.test.ts test/list-wheel-mailbox.test.ts test/list-selection-semantics.test.ts test/list-data-geometry.test.ts test/list-clipping.test.ts test/render-plane-frame-mailbox.test.ts test/scheduler-frame-tasks.test.ts test/virtual-list.test.ts test/render-manager.test.ts test/style-cache.test.ts test/text-utils.test.ts test/tlog-view.test.ts test/tmarkdown-layout.test.ts test/tmarkdown-components.test.ts test/tvirtual-markdown-perf.test.ts test/tvirtual-markdown-streaming.test.ts test/ui-regressions.test.ts test/index.test.ts
-pnpm run bench:scroll-mailbox
-pnpm run bench:phase2
 pnpm run typecheck
 pnpm run lint
+pnpm run format:check
+pnpm exec vitest run \
+  test/frame-mailbox.test.ts \
+  test/list-wheel-mailbox.test.ts \
+  test/list-selection-semantics.test.ts \
+  test/list-data-geometry.test.ts \
+  test/list-clipping.test.ts \
+  test/render-manager.test.ts \
+  test/render-plane-frame-mailbox.test.ts \
+  test/scheduler-frame-tasks.test.ts \
+  test/style-cache.test.ts \
+  test/text-utils.test.ts \
+  test/tlog-view.test.ts \
+  test/tmarkdown-layout.test.ts \
+  test/tmarkdown-components.test.ts \
+  test/tvirtual-markdown-perf.test.ts \
+  test/tvirtual-markdown-streaming.test.ts \
+  test/virtual-list.test.ts \
+  test/ui-regressions.test.ts \
+  test/index.test.ts
+pnpm run bench:scroll-mailbox
+pnpm run bench:phase2
+pnpm run check:hidden-unicode
+pnpm exec tsx scripts/generate-component-api-docs.ts
+git diff --exit-code docs/generated/components-api.md
 pnpm run build
+pnpm run test:package-exports
 ```
 
 ### Phase 2: 一个月内

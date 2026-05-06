@@ -576,7 +576,12 @@ describe("render-manager", () => {
     paints.length = 0;
     rm.update(node.id, { dirtyRowsHint: [1] });
     rm.render();
-    expect(paints).toEqual(["global"]);
+    expect(paints).toEqual([]);
+
+    paints.length = 0;
+    rm.update(node.id, { dirtyRowsHint: [5] });
+    rm.render();
+    expect(paints).toEqual(["global", "node"]);
 
     paints.length = 0;
     rm.update(mover.id, { plane: "overlay", dirtyRowsHint: [2] });
@@ -1012,7 +1017,7 @@ describe("render-manager", () => {
     expect(paints).toEqual(["target"]);
   });
 
-  it("keeps dirtyRowsHint plane-scoped for non-contiguous dirty rows", () => {
+  it("filters dirtyRowsHint to the node rect", () => {
     const paints: string[] = [];
     const terminal = createTerminal({ cols: 10, rows: 100 });
     const rm = createRenderManager(terminal);
@@ -1041,11 +1046,11 @@ describe("render-manager", () => {
     rm.update(first.id, { dirtyRowsHint: [0, 99] });
     const stats = rm.render();
 
-    expect(stats?.scannedNodes).toBe(3);
-    expect(paints).toContain("first");
-    expect(paints).toContain("last");
+    expect(stats?.scannedNodes).toBe(1);
+    expect(paints).toEqual(["first"]);
     expect(paints).not.toContain("middle");
-    expect(stats?.paintedNodes).toBe(2);
+    expect(paints).not.toContain("last");
+    expect(stats?.paintedNodes).toBe(1);
   });
 
   it("rebuilds row buckets after terminal resize shrink", () => {
