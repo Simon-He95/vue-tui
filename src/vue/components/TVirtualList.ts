@@ -6,6 +6,7 @@ import type { FramePerfReason } from "../../observability/frame-perf.js";
 import {
   computed,
   defineComponent,
+  getCurrentInstance,
   h,
   inject,
   onBeforeUnmount,
@@ -19,6 +20,7 @@ import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
+import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import { defaultActiveStyle } from "../utils/style-cache.js";
 import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
@@ -59,7 +61,6 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
   return { deltaY, mode: "auto" };
 }
 
-type ScrollStrategy = "auto" | "viewport-repaint";
 export type RowScrollMode = "off" | "unsafe-full-row";
 
 let virtualListInstanceSeq = 0;
@@ -80,6 +81,7 @@ export const TVirtualList = defineComponent({
       default: undefined,
     },
     modelValue: { type: Number, default: 0 },
+    scrollTop: { type: Number, default: undefined },
     style: { type: Object as PropType<Style>, default: undefined },
     activeStyle: { type: Object as PropType<Style>, default: undefined },
     autoFocus: { type: Boolean, default: false },
@@ -88,10 +90,19 @@ export const TVirtualList = defineComponent({
       default: "off",
     },
   },
-  emits: ["update:modelValue", "change", "itemClick", "scroll", "focus", "blur", "keydown"],
+  emits: [
+    "update:modelValue",
+    "update:scrollTop",
+    "change",
+    "itemClick",
+    "scroll",
+    "focus",
+    "blur",
+    "keydown",
+  ],
   setup(props, { emit }) {
-    const { terminal, scheduler, render, rendererCapabilities, defaultStyle, events } =
-      useTerminal();
+    const { terminal, scheduler, render, defaultStyle, events } = useTerminal();
+    const instance = getCurrentInstance();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const plane = inject(RenderPlaneContextKey, ref<TerminalRenderPlane>("default"));
@@ -107,8 +118,6 @@ export const TVirtualList = defineComponent({
     // Reactive deps and rect changes repaint through useRenderNode normally.
     let dirtyRowsHint: readonly number[] | undefined;
     let renderNodeId: string | null = null;
-    const warnedIgnoredRowScrollReasons = new Set<string>();
-    let warnedEnabledRowScroll = false;
     let warnedGetItemIdentity = false;
     let warnedRenderItemIdentity = false;
     let alive = true;
@@ -148,22 +157,41 @@ export const TVirtualList = defineComponent({
       };
     }
 
-    function isClipped(): boolean {
-      const full = normalizedFullRect();
-      const clip = normalizedRect();
-      return full.x !== clip.x || full.y !== clip.y || full.w !== clip.w || full.h !== clip.h;
-    }
-
     function maxScrollTop(): number {
       const clip = normalizedRect();
       const { y: clipY } = clipOffsets();
       return Math.max(0, itemCount.value - (clipY + clip.h));
     }
 
+    function maxScrollTopForClamp(): number | null {
+      const full = normalizedFullRect();
+      const clip = normalizedRect();
+      if (full.h <= 0) return 0;
+      if (clip.h <= 0) return null;
+      return maxScrollTop();
+    }
+
+    function clampScrollTop(value: unknown): number {
+      const n = Math.floor(Number(value));
+      if (!Number.isFinite(n)) return 0;
+      const maxTop = maxScrollTopForClamp();
+      if (maxTop == null) return Math.max(0, n);
+      return clamp(n, 0, maxTop);
+    }
+
+    function hasPaintableViewport(): boolean {
+      const r = normalizedRect();
+      return visible.value && r.w > 0 && r.h > 0;
+    }
+
+    function isScrollControlled(): boolean {
+      return Object.prototype.hasOwnProperty.call(instance?.vnode.props ?? {}, "scrollTop");
+    }
+
     const visibleWindow = computed(() => {
       const clip = normalizedRect();
       const { y: clipY } = clipOffsets();
-      const top = clamp(scrollTop.value, 0, maxScrollTop());
+      const top = clampScrollTop(scrollTop.value);
       return {
         top,
         end: Math.min(itemCount.value, top + clipY + clip.h),
@@ -176,7 +204,6 @@ export const TVirtualList = defineComponent({
     }
 
     function ensureActiveVisible(
-      strategy: ScrollStrategy = "viewport-repaint",
       options?: Readonly<{
         emitScroll?: boolean;
         priority?: "low" | "normal" | "high";
@@ -194,15 +221,68 @@ export const TVirtualList = defineComponent({
       if (active.value < visibleStart) nextTop = clamp(active.value - clipY, 0, maxTop);
       else if (active.value > visibleEnd)
         nextTop = clamp(active.value - (clipY + clip.h - 1), 0, maxTop);
-      return applyScrollTop(nextTop, strategy, options);
+      return applyScrollTop(nextTop, options);
     }
 
     function normalizedModelValue(): number {
       return normalizeIndex(props.modelValue, itemCount.value);
     }
 
+    const wheelMailbox = createFrameMailbox<number>({
+      scheduler,
+      id: wheelTaskId,
+      reason: "scroll",
+      priority: "high",
+      sync: true,
+      apply(nextTop, ctx) {
+        pendingWheelTop = null;
+        if (!alive || !hasPaintableViewport()) {
+          resetWheelScrollState(wheelState);
+          return;
+        }
+        const changed = applyScrollTop(nextTop, {
+          emitScroll: true,
+          emitUpdate: true,
+        });
+        if (!changed) {
+          resetWheelScrollState(wheelState);
+          return;
+        }
+        ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
+      },
+    });
+
+    function cancelWheelScrollFrame(): void {
+      pendingWheelTop = null;
+      wheelMailbox.cancel();
+      resetWheelScrollState(wheelState);
+    }
+
+    function requestWheelScroll(nextTop: number): boolean {
+      pendingWheelTop = nextTop;
+      try {
+        if (wheelMailbox.queue(nextTop)) return true;
+      } catch (error) {
+        pendingWheelTop = null;
+        resetWheelScrollState(wheelState);
+        throw error;
+      }
+      pendingWheelTop = null;
+      resetWheelScrollState(wheelState);
+      return false;
+    }
+
+    function replacePendingWheelTop(nextTop: number): boolean {
+      pendingWheelTop = nextTop;
+      if (wheelMailbox.replacePending(nextTop)) return true;
+      pendingWheelTop = null;
+      resetWheelScrollState(wheelState);
+      return false;
+    }
+
     let initializedModel = false;
     let initializedGeometry = false;
+    let initializedScrollTop = false;
 
     watch(
       () => props.modelValue,
@@ -211,7 +291,11 @@ export const TVirtualList = defineComponent({
         initializedModel = true;
         resetWheelScrollState(wheelState);
         active.value = normalizedModelValue();
-        ensureActiveVisible("viewport-repaint", { emitScroll });
+        if (isScrollControlled()) {
+          if (emitScroll) markViewportDirty();
+          return;
+        }
+        ensureActiveVisible({ emitScroll });
       },
       { immediate: true },
     );
@@ -229,10 +313,37 @@ export const TVirtualList = defineComponent({
         initializedGeometry = true;
         resetWheelScrollState(wheelState);
         active.value = normalizedModelValue();
-        const nextTop = clamp(scrollTop.value, 0, maxScrollTop());
-        const changed = applyScrollTop(nextTop, "viewport-repaint", { emitScroll });
+        const nextTop = clampScrollTop(scrollTop.value);
+        const changed = applyScrollTop(nextTop, { emitScroll });
         if (!changed) markViewportDirty();
+        if (pendingWheelTop !== null && !hasPaintableViewport()) {
+          cancelWheelScrollFrame();
+        } else if (pendingWheelTop !== null) {
+          const nextPendingTop = clampScrollTop(pendingWheelTop);
+          if (nextPendingTop === scrollTop.value) {
+            cancelWheelScrollFrame();
+          } else if (nextPendingTop !== pendingWheelTop) {
+            replacePendingWheelTop(nextPendingTop);
+          }
+        }
         invalidateSelf();
+      },
+      { immediate: true },
+    );
+
+    watch(
+      () => props.scrollTop,
+      () => {
+        if (!isScrollControlled()) return;
+        const wasInitialized = initializedScrollTop;
+        initializedScrollTop = true;
+        cancelWheelScrollFrame();
+        const nextTop = clampScrollTop(props.scrollTop);
+        const changed = scrollTop.value !== nextTop;
+        scrollTop.value = nextTop;
+        if (!wasInitialized || !changed) return;
+        markViewportDirty();
+        invalidateSelf("high", "scroll");
       },
       { immediate: true },
     );
@@ -275,67 +386,11 @@ export const TVirtualList = defineComponent({
       emit("change", { index: next, value: props.getItem(next) });
     }
 
-    function cancelWheelScrollFrame(): void {
-      pendingWheelTop = null;
-      scheduler.cancelFrameTask?.(wheelTaskId);
-      resetWheelScrollState(wheelState);
-    }
-
-    function requestWheelScroll(nextTop: number): boolean {
-      pendingWheelTop = nextTop;
-      // TODO(perf): Convert TVirtualList wheel scheduling to createFrameMailbox
-      // so wheel burst metrics match TList: producer-level droppedUpdates instead
-      // of scheduler-level coalescedFrameTasks.
-      let accepted: boolean | void;
-      try {
-        accepted = scheduler.queueFrameTask({
-          id: wheelTaskId,
-          reason: "scroll",
-          priority: "high",
-          sync: true,
-          run(ctx) {
-            if (!alive) return;
-            const top = pendingWheelTop;
-            pendingWheelTop = null;
-            if (top == null) return;
-            const changed = applyScrollTop(top, "auto", { emitScroll: true });
-            if (!changed) return;
-            ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
-          },
-        });
-      } catch (error) {
-        pendingWheelTop = null;
-        resetWheelScrollState(wheelState);
-        throw error;
-      }
-      if (accepted === false) {
-        pendingWheelTop = null;
-        resetWheelScrollState(wheelState);
-        return false;
-      }
-      return true;
-    }
-
     function invalidateSelf(
       priority: "low" | "normal" | "high" = "normal",
       reason?: FramePerfReason,
     ): void {
       scheduler.invalidate({ priority, plane: plane.value, reason });
-    }
-
-    function warnIgnoredRowScroll(reason: string): void {
-      if (warnedIgnoredRowScrollReasons.has(reason) || !(globalThis as any).__VT_DEBUG_PERF__)
-        return;
-      warnedIgnoredRowScrollReasons.add(reason);
-      console.warn(`[vue-tui] TVirtualList.rowScrollMode="unsafe-full-row" ignored: ${reason}`);
-    }
-
-    function warnEnabledRowScroll(): void {
-      if (warnedEnabledRowScroll || !(globalThis as any).__VT_DEBUG_PERF__) return;
-      warnedEnabledRowScroll = true;
-      console.warn(
-        '[vue-tui] TVirtualList.rowScrollMode="unsafe-full-row" shifts whole plane rows. Use only when these rows are exclusively owned by this component.',
-      );
     }
 
     function moveActive(index: number): void {
@@ -344,7 +399,7 @@ export const TVirtualList = defineComponent({
       const prevTop = scrollTop.value;
       active.value = clamp(index, 0, Math.max(0, itemCount.value - 1));
       emit("update:modelValue", active.value);
-      const scrolled = ensureActiveVisible("viewport-repaint");
+      const scrolled = ensureActiveVisible();
       if (scrolled) emit("scroll", scrollTop.value);
       if (!scrolled || scrollTop.value === prevTop) markViewportDirty();
       invalidateSelf("high", "input");
@@ -464,20 +519,19 @@ export const TVirtualList = defineComponent({
       manager.focus(nodeId);
     });
 
+    watch(
+      () => visible.value,
+      (nextVisible) => {
+        if (!nextVisible) cancelWheelScrollFrame();
+      },
+    );
+
     onBeforeUnmount(() => {
       alive = false;
-      cancelWheelScrollFrame();
+      pendingWheelTop = null;
+      resetWheelScrollState(wheelState);
+      wheelMailbox.dispose();
     });
-
-    function exposedRowsForDelta(y0: number, h: number, delta: number): number[] {
-      const rows: number[] = [];
-      if (delta > 0) {
-        for (let i = h - delta; i < h; i++) rows.push(y0 + i);
-      } else {
-        for (let i = 0; i < -delta; i++) rows.push(y0 + i);
-      }
-      return rows;
-    }
 
     function viewportRows(): number[] {
       const r = normalizedRect();
@@ -493,21 +547,24 @@ export const TVirtualList = defineComponent({
       return Array.from(rows).sort((a, b) => a - b);
     }
 
-    function markRowsDirty(nextRows: readonly number[]): void {
-      if (!visible.value) return;
+    function markRowsDirty(nextRows: readonly number[]): boolean {
+      if (!hasPaintableViewport()) return false;
       dirtyRowsHint = unionDirtyRows(nextRows);
-      if (renderNodeId) render.markDirtyRows(renderNodeId, dirtyRowsHint);
+      if (!renderNodeId) return false;
+      if (render.markDirtyRows(renderNodeId, dirtyRowsHint)) return true;
+      dirtyRowsHint = undefined;
+      return false;
     }
 
-    function markViewportDirty(): void {
-      markRowsDirty(viewportRows());
+    function markViewportDirty(): boolean {
+      return markRowsDirty(viewportRows());
     }
 
     function applyScrollTop(
       nextTop: number,
-      strategy: ScrollStrategy = "auto",
       options?: Readonly<{
         emitScroll?: boolean;
+        emitUpdate?: boolean;
         priority?: "low" | "normal" | "high";
         reason?: FramePerfReason;
       }>,
@@ -516,44 +573,14 @@ export const TVirtualList = defineComponent({
       const full = normalizedFullRect();
       const h = r.h;
       if (h <= 0 || full.h <= 0) return false;
-      const clampedTop = clamp(nextTop, 0, maxScrollTop());
+      const clampedTop = clampScrollTop(nextTop);
       const delta = clampedTop - scrollTop.value;
       if (!delta) return false;
-      scrollTop.value = clampedTop;
-      const size = terminal.size();
-      const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= size.cols;
-      const withinTerminalRows = r.y >= 0 && r.y + h <= size.rows;
-      const wantsUnsafeRowScroll = props.rowScrollMode === "unsafe-full-row";
-      const supportsScrollOperations = rendererCapabilities.value.scrollOperations;
-      if (strategy === "auto" && wantsUnsafeRowScroll) {
-        if (!supportsScrollOperations)
-          warnIgnoredRowScroll("renderer does not support scroll operations");
-        else if (!ownsFullRows) warnIgnoredRowScroll("list does not own full terminal rows");
-        else if (isClipped()) warnIgnoredRowScroll("list rect is clipped");
-        else if (!withinTerminalRows) warnIgnoredRowScroll("list rows are outside terminal bounds");
-      }
-      // Row-scroll requires a renderer that consumes terminal scrollOperations.
-      // It also requires unsafe opt-in so consumers acknowledge plane row-shift semantics.
-      const canUseScrollPlane =
-        strategy === "auto" &&
-        wantsUnsafeRowScroll &&
-        supportsScrollOperations &&
-        ownsFullRows &&
-        withinTerminalRows &&
-        !isClipped() &&
-        Math.abs(delta) < h &&
-        !dirtyRowsHint?.length;
-      if (canUseScrollPlane) {
-        warnEnabledRowScroll();
-        render.unsafeScrollPlaneRows(plane.value, r.y, r.y + h, delta);
-        markRowsDirty(exposedRowsForDelta(r.y, h, delta));
-        if (options?.emitScroll) emit("scroll", scrollTop.value);
-        if (options?.priority) invalidateSelf(options.priority, options.reason ?? "scroll");
-        return true;
-      }
-      markViewportDirty();
-      if (options?.emitScroll) emit("scroll", scrollTop.value);
-      if (options?.priority) invalidateSelf(options.priority, options.reason ?? "scroll");
+      if (!isScrollControlled()) scrollTop.value = clampedTop;
+      if (options?.emitUpdate ?? isScrollControlled()) emit("update:scrollTop", clampedTop);
+      const dirty = markViewportDirty();
+      if (options?.emitScroll) emit("scroll", clampedTop);
+      if (options?.priority && dirty) invalidateSelf(options.priority, options.reason ?? "scroll");
       return true;
     }
 

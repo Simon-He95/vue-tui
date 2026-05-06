@@ -13,6 +13,8 @@ import {
   TView,
   TVirtualList,
   useTerminal,
+  vShow,
+  withDirectives,
 } from "./ui-regressions-support.js";
 
 function dispatchWheel(container: HTMLElement): void {
@@ -27,14 +29,18 @@ function dispatchDomWheel(
   container: HTMLElement,
   init: Readonly<{ deltaY: number; deltaMode: number }>,
 ): void {
-  const wheel = new WheelEvent("wheel", {
-    bubbles: true,
-    cancelable: true,
-    clientX: 0,
-    clientY: 0,
-    deltaY: init.deltaY,
-    deltaMode: init.deltaMode,
-  }) as any;
+  const WheelEventCtor = (globalThis as any).WheelEvent;
+  const wheel =
+    typeof WheelEventCtor === "function"
+      ? (new WheelEventCtor("wheel", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 0,
+          clientY: 0,
+          deltaY: init.deltaY,
+          deltaMode: init.deltaMode,
+        }) as any)
+      : (new Event("wheel", { bubbles: true, cancelable: true }) as any);
   Object.defineProperties(wheel, {
     clientX: { value: 0 },
     clientY: { value: 0 },
@@ -94,7 +100,7 @@ describe("TVirtualList", () => {
     mounted.unmount();
   });
 
-  it("uses DOM scrollOperations for full-row unsafe slow wheel scroll", async () => {
+  it("repaints the DOM viewport when rowScrollMode requests unsafe wheel scroll", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const mounted = await mountTerminal(
       () =>
@@ -126,10 +132,7 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    expect(commits).toContainEqual({
-      dirtyRows: [3],
-      scrollOperations: [{ startY: 0, endY: 4, delta: 1 }],
-    });
+    expect(commits).toContainEqual({ dirtyRows: [0, 1, 2, 3], scrollOperations: null });
     expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
       "item-1",
       "item-2",
@@ -516,7 +519,7 @@ describe("TVirtualList", () => {
     }
   });
 
-  it("keeps unsafe row-scroll fast path to exposed rows when no DOM renderer is attached", () => {
+  it("keeps render manager unsafe row-scroll exposed rows available", () => {
     const terminal = createTerminal({ cols: 12, rows: 6 });
     const render = createRenderManager(terminal);
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
@@ -545,7 +548,7 @@ describe("TVirtualList", () => {
     expect(terminal.getCell(5, 3).ch).toBe("4");
   });
 
-  it("mounted headless fast path emits only exposed dirty row after wheel", async () => {
+  it("mounted headless wheel scroll repaints the viewport", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
       cols: 12,
@@ -578,9 +581,7 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    expect(commits).toEqual([
-      { dirtyRows: [3], scrollOperations: [{ startY: 0, endY: 4, delta: 1 }] },
-    ]);
+    expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
     expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
       "item-1",
       "item-2",
@@ -590,7 +591,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it('warns in debug perf mode when rowScrollMode="unsafe-full-row" shifts plane rows', async () => {
+  it('does not warn for rowScrollMode="unsafe-full-row" while using viewport repaint', async () => {
     const previousDebugPerf = (globalThis as any).__VT_DEBUG_PERF__;
     (globalThis as any).__VT_DEBUG_PERF__ = true;
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -620,9 +621,7 @@ describe("TVirtualList", () => {
       await nextTick();
       await nextTick();
 
-      expect(warn).toHaveBeenCalledWith(
-        '[vue-tui] TVirtualList.rowScrollMode="unsafe-full-row" shifts whole plane rows. Use only when these rows are exclusively owned by this component.',
-      );
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
       app.dispose();
@@ -686,9 +685,7 @@ describe("TVirtualList", () => {
       await nextTick();
 
       off();
-      expect(commits).toEqual([
-        { dirtyRows: [2, 3], scrollOperations: [{ startY: 0, endY: 4, delta: 2 }] },
-      ]);
+      expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
       expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
         "item-2",
         "item-3",
@@ -717,7 +714,7 @@ describe("TVirtualList", () => {
       callbacks.delete(id);
     }) as typeof cancelAnimationFrame;
 
-    const items = Array.from({ length: 1_000 }, (_, index) => `item-${index}`);
+    const itemCount = 100_000;
     const onScroll = vi.fn();
     const onUpdateModelValue = vi.fn();
     let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
@@ -741,13 +738,14 @@ describe("TVirtualList", () => {
             y: 0,
             w: 12,
             h: 4,
-            itemCount: items.length,
+            itemCount,
             itemVersion: 1,
-            getItem: (index: number) => items[index],
+            getItem: (index: number) => `item-${index}`,
             autoFocus: true,
             onScroll,
             "onUpdate:modelValue": onUpdateModelValue,
           }),
+          h(TText, { x: 0, y: 6, w: 12, value: "sibling" }),
         ];
       },
     });
@@ -761,7 +759,7 @@ describe("TVirtualList", () => {
       framePerf!.clear();
       dateNow.mockReturnValue(1_000);
 
-      for (let i = 0; i < 100; i++) {
+      for (let i = 0; i < 1_000; i++) {
         app.events.dispatch({
           type: "wheel",
           cellX: 0,
@@ -778,12 +776,19 @@ describe("TVirtualList", () => {
       expect(onScroll).toHaveBeenCalledTimes(1);
       expect(onScroll.mock.calls[0]![0]).toBeGreaterThan(0);
       expect(onUpdateModelValue).not.toHaveBeenCalled();
-      expect(framePerf!.latest()).toMatchObject({
+      expect(rowText({ terminal: app.terminal } as any, 6)).toBe("sibling");
+      const scrollSample = [...framePerf!.list()]
+        .reverse()
+        .find((sample) => sample.reason === "scroll");
+      expect(scrollSample).toMatchObject({
         reason: "scroll",
         frameTaskCount: 1,
-        coalescedFrameTasks: 99,
+        coalescedFrameTasks: 0,
+        droppedUpdates: 999,
         remainingFrameTasks: 0,
       });
+      expect(scrollSample?.dirtyRows).toBeLessThanOrEqual(4);
+      expect(scrollSample?.paintedNodes).toBe(1);
     } finally {
       dateNow.mockRestore();
       app.dispose();
@@ -943,6 +948,258 @@ describe("TVirtualList", () => {
       expect(
         framePerf!.list().some((sample) => sample.reason === "scroll" && sample.frameTaskCount > 0),
       ).toBe(false);
+    } finally {
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("drops a pending wheel frame when unmounted before RAF", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    let hide!: () => void;
+    const onScroll = vi.fn();
+    const App = defineComponent({
+      name: "VirtualListPendingWheelUnmountApp",
+      setup() {
+        const shown = ref(true);
+        hide = () => {
+          shown.value = false;
+        };
+        return () =>
+          shown.value
+            ? h(TVirtualList, {
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 4,
+                itemCount: 200,
+                itemVersion: 1,
+                getItem: (index: number) => `item-${index}`,
+                autoFocus: true,
+                onScroll,
+              })
+            : null;
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 1000, time: 1_000 });
+      expect(callbacks.size).toBe(1);
+
+      hide();
+      await nextTick();
+      app.scheduler.flushNow();
+      Array.from(callbacks.values())[0]?.(0);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("cancels pending wheel scroll when hidden before RAF", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const visible = ref(true);
+    const onScroll = vi.fn();
+    const App = defineComponent({
+      name: "VirtualListPendingWheelHiddenApp",
+      setup() {
+        return () => [
+          h(TText, { x: 0, y: 0, w: 12, value: "visible" }),
+          withDirectives(
+            h(TVirtualList, {
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 4,
+              itemCount: 200,
+              itemVersion: 1,
+              getItem: (index: number) => `item-${index}`,
+              autoFocus: true,
+              onScroll,
+            }),
+            [[vShow, visible.value]],
+          ),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 1000, time: 1_000 });
+      expect(callbacks.size).toBe(1);
+
+      visible.value = false;
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("visible");
+
+      Array.from(callbacks.values())[0]?.(0);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("visible");
+    } finally {
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("cancels pending wheel scroll when fully clipped before RAF", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const clipHeight = ref(4);
+    const onScroll = vi.fn();
+    const App = defineComponent({
+      name: "VirtualListPendingWheelClippedApp",
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: 12, h: clipHeight.value }, () =>
+            h(TVirtualList, {
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 4,
+              itemCount: 200,
+              itemVersion: 1,
+              getItem: (index: number) => `item-${index}`,
+              autoFocus: true,
+              onScroll,
+            }),
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 1000, time: 1_000 });
+      expect(callbacks.size).toBe(1);
+
+      clipHeight.value = 0;
+      await nextTick();
+      app.scheduler.flushNow();
+      Array.from(callbacks.values())[0]?.(0);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+      globalThis.requestAnimationFrame = previousRaf;
+      globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("does not let pending wheel overwrite controlled scrollTop", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancel = globalThis.cancelAnimationFrame;
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let rafId = 0;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      const id = ++rafId;
+      callbacks.set(id, cb);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      callbacks.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    const controlledTop = ref(10);
+    const onScroll = vi.fn();
+    const onUpdateScrollTop = vi.fn();
+    const App = defineComponent({
+      name: "VirtualListControlledPendingWheelApp",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 200,
+            itemVersion: 1,
+            getItem: (index: number) => `item-${index}`,
+            scrollTop: controlledTop.value,
+            autoFocus: true,
+            onScroll,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 12, rows: 8, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-10");
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      expect(callbacks.size).toBe(1);
+      expect(onUpdateScrollTop).not.toHaveBeenCalled();
+
+      controlledTop.value = 20;
+      await nextTick();
+      app.scheduler.flushNow();
+      Array.from(callbacks.values())[0]?.(0);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onUpdateScrollTop).not.toHaveBeenCalled();
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-20");
     } finally {
       app.dispose();
       globalThis.requestAnimationFrame = previousRaf;
@@ -1378,7 +1635,7 @@ describe("TVirtualList", () => {
     }
   });
 
-  it("keeps headless full-row slow scroll correct across consecutive wheel ticks", async () => {
+  it("keeps headless viewport repaint correct across consecutive wheel ticks", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
       cols: 12,
@@ -1416,7 +1673,10 @@ describe("TVirtualList", () => {
       off();
     }
 
-    expect(commits).toEqual([[3], [3]]);
+    expect(commits).toEqual([
+      [0, 1, 2, 3],
+      [0, 1, 2, 3],
+    ]);
     expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
       "item-2",
       "item-3",
@@ -1965,7 +2225,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it("normalizes fractional rect values for row-scroll dirty rows", async () => {
+  it("normalizes fractional rect values for viewport dirty rows", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
       cols: 12,
@@ -1993,12 +2253,12 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    expect(commits).toEqual([[4]]);
+    expect(commits).toEqual([[0, 1, 2, 3, 4]]);
     expect(rowText({ terminal: app.terminal } as any, 4)).toBe("item-5");
     app.dispose();
   });
 
-  it('does not use unsafe row-scroll when rowScrollMode="unsafe-full-row" but list does not own full rows', async () => {
+  it('repaints the viewport when rowScrollMode="unsafe-full-row" but list does not own full rows', async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "VirtualListWithSideContent",
@@ -2036,7 +2296,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it('does not use unsafe row-scroll when rowScrollMode="unsafe-full-row" but the list is clipped', async () => {
+  it('repaints the viewport when rowScrollMode="unsafe-full-row" but the list is clipped', async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "ClippedRowScrollVirtualList",
@@ -2097,7 +2357,7 @@ describe("TVirtualList", () => {
             itemVersion: 1,
             getItem: (index: number) => items[index],
             autoFocus: true,
-            // rowScrollMode defaults to off, so this should not use unsafe row-scroll
+            // rowScrollMode defaults to off, so this uses viewport repaint.
           }),
           h(TText, { x: 0, y: 1, w: 6, value: "BADGE", zIndex: 999 }),
         ];
@@ -2114,14 +2374,14 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    // With rowScrollMode=off, unsafe row-scroll is NOT used, so BADGE is not shifted
+    // With viewport repaint, BADGE is not shifted.
     expect(rowText({ terminal: app.terminal } as any, 1)).toContain("BADGE");
-    // Full viewport repaint, not exposed-only
+    // Full viewport repaint, not exposed-only.
     expect(commits).toEqual([[0, 1, 2, 3]]);
     app.dispose();
   });
 
-  it('documents that rowScrollMode="unsafe-full-row" shifts same-plane full-row overlay content', async () => {
+  it('does not shift same-plane full-row overlay content when rowScrollMode="unsafe-full-row"', async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "VirtualListWithUnsafeOverlay",
@@ -2150,12 +2410,12 @@ describe("TVirtualList", () => {
     await nextTick();
     await nextTick();
 
-    expect(rowText({ terminal: app.terminal } as any, 0)).toContain("BADGE");
-    expect(rowText({ terminal: app.terminal } as any, 1)).not.toContain("BADGE");
+    expect(rowText({ terminal: app.terminal } as any, 0)).not.toContain("BADGE");
+    expect(rowText({ terminal: app.terminal } as any, 1)).toContain("BADGE");
     app.dispose();
   });
 
-  it("keeps higher-plane overlay stable while default plane unsafe row-scrolls", async () => {
+  it("keeps higher-plane overlay stable during viewport wheel repaint", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "VirtualListWithHigherPlaneOverlay",
@@ -2195,12 +2455,7 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    expect(commits).toEqual([
-      {
-        dirtyRows: [0, 1, 3],
-        scrollOperations: [{ startY: 2, endY: 4, delta: 1 }],
-      },
-    ]);
+    expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
     expect(rowText({ terminal: app.terminal } as any, 1)).toMatch(/^BADGE/);
     expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-1");
     expect(rowText({ terminal: app.terminal } as any, 3)).toBe("item-4");
@@ -2247,7 +2502,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it("repaints viewport when itemVersion changes with pending exposed scroll rows", async () => {
+  it("repaints viewport when itemVersion changes with pending wheel rows", async () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;
     const callbacks = new Map<number, FrameRequestCallback>();
@@ -2337,7 +2592,7 @@ describe("TVirtualList", () => {
     }
   });
 
-  it("repaints viewport when style changes with pending exposed scroll rows", async () => {
+  it("repaints viewport when style changes with pending wheel rows", async () => {
     const previousRaf = globalThis.requestAnimationFrame;
     const previousCancel = globalThis.cancelAnimationFrame;
     const callbacks = new Map<number, FrameRequestCallback>();
@@ -2519,7 +2774,7 @@ describe("TVirtualList", () => {
     }
   });
 
-  it("active style follows item after rowScrollMode unsafe row-scroll shift", async () => {
+  it("active style follows item after viewport wheel repaint", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
       cols: 12,
@@ -2545,7 +2800,7 @@ describe("TVirtualList", () => {
     expect(app.terminal.getCell(0, 0).style.inverse).toBe(true);
     expect(app.terminal.getCell(0, 1).style.inverse).not.toBe(true);
 
-    // Wheel scroll down by 1 — active stays at item 0 but scrolls out of view
+    // Wheel scroll down by 1: active stays at item 0 but scrolls out of view.
     app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
     await nextTick();
     await nextTick();
