@@ -182,6 +182,28 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("keeps separated style runs as separate segments", () => {
+    const { terminal, container, renderer } = setup(3);
+
+    try {
+      terminal.write("A", { x: 0, y: 0, style: { fg: "red" } });
+      terminal.write("B", { x: 1, y: 0, style: { fg: "blue" } });
+      terminal.write("C", { x: 2, y: 0, style: { fg: "red" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      const spans = Array.from(line.querySelectorAll("span"));
+      expect(spans).toHaveLength(3);
+      expect(spans.map((span) => span.textContent)).toEqual(["A", "B", "C"]);
+      expect(spans[0]!.style.color).toBe("var(--vt-color-red)");
+      expect(spans[1]!.style.color).toBe("var(--vt-color-blue)");
+      expect(spans[2]!.style.color).toBe("var(--vt-color-red)");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("resets reused multi-segment row span styles", () => {
     const { terminal, container, renderer } = setup(4);
 
@@ -360,6 +382,22 @@ describe("DomRenderer row rendering", () => {
         fragmentRows: 1,
         spansCreated: 1,
       });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("skips wide continuation cells", () => {
+    const { terminal, container, renderer } = setup(4);
+
+    try {
+      terminal.write("中", { x: 0, y: 0 });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      expect(line.textContent).toBe("中  ");
+      expect(line.querySelectorAll("span")).toHaveLength(2);
     } finally {
       renderer.dispose();
       container.remove();
