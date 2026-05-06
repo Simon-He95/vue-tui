@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref, vShow, withDirectives } from "vue";
-import { createTerminalApp, TList, TRenderPlane, TText, TView, useTerminal } from "../src/index.js";
+import { createTerminalApp, TList, TRenderPlane, TText, TView } from "../src/index.js";
+import { createFramePerfProbe, expectScrollMailboxFrame } from "./helpers/frame-perf.js";
 import { disableRaf, installRaf, rowText } from "./helpers/list.js";
+import { dispatchWheelBurst } from "./helpers/wheel.js";
 
 describe("TList wheel mailbox", () => {
   it("does not emit update:modelValue when wheel scrolling", async () => {
@@ -44,21 +46,12 @@ describe("TList wheel mailbox", () => {
     const items = Array.from({ length: 1_000 }, (_, index) => `item-${index}`);
     const onScroll = vi.fn();
     const onUpdateModelValue = vi.fn();
-    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
-
-    const Probe = defineComponent({
-      name: "ListWheelFramePerfProbe",
-      setup() {
-        framePerf = useTerminal().observability.framePerf;
-        framePerf.enabled.value = true;
-        return () => null;
-      },
-    });
+    const framePerf = createFramePerfProbe("ListWheelFramePerfProbe");
     const App = defineComponent({
       name: "ListWheelBurstApp",
       setup() {
         return () => [
-          h(Probe),
+          h(framePerf.component),
           h(TList, {
             x: 0,
             y: 0,
@@ -79,17 +72,9 @@ describe("TList wheel mailbox", () => {
       app.mount();
       app.scheduler.flushNow();
       raf.callbacks.clear();
-      framePerf!.clear();
+      framePerf.clear();
 
-      for (let i = 0; i < 50; i++) {
-        app.events.dispatch({
-          type: "wheel",
-          cellX: 0,
-          cellY: 0,
-          deltaY: 100,
-          time: 1_000 + i * 10,
-        });
-      }
+      dispatchWheelBurst(app.events, { count: 50 });
 
       expect(onScroll).not.toHaveBeenCalled();
       expect(raf.callbacks.size).toBe(1);
@@ -99,15 +84,11 @@ describe("TList wheel mailbox", () => {
       expect(onScroll).toHaveBeenCalledTimes(1);
       expect(onUpdateModelValue).not.toHaveBeenCalled();
       expect(rowText(app, 0)).toBe(`item-${onScroll.mock.calls[0]![0]}`);
-      expect(framePerf!.latest()).toMatchObject({
-        reason: "scroll",
-        frameTaskCount: 1,
-        coalescedFrameTasks: 0,
+      expectScrollMailboxFrame(framePerf.latest(), {
         droppedUpdates: 49,
-        remainingFrameTasks: 0,
+        viewportHeight: 4,
+        paintedNodes: 1,
       });
-      expect(framePerf!.latest()?.dirtyRows).toBeLessThanOrEqual(4);
-      expect(framePerf!.latest()?.paintedNodes).toBe(1);
     } finally {
       app.dispose();
       raf.restore();
@@ -759,20 +740,12 @@ describe("TList wheel mailbox", () => {
   });
 
   it("repaints same-plane overlapping nodes for TList dirty rows", async () => {
-    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
-    const Probe = defineComponent({
-      name: "TListOverlayDirtyRowsProbe",
-      setup() {
-        framePerf = useTerminal().observability.framePerf;
-        framePerf.enabled.value = true;
-        return () => null;
-      },
-    });
+    const framePerf = createFramePerfProbe("TListOverlayDirtyRowsProbe");
     const App = defineComponent({
       name: "TListOverlayDirtyRowsApp",
       setup() {
         return () => [
-          h(Probe),
+          h(framePerf.component),
           h(TList, {
             x: 0,
             y: 0,
@@ -791,7 +764,7 @@ describe("TList wheel mailbox", () => {
       app.mount();
       app.scheduler.flushNow();
       expect(rowText(app, 1)).toBe("overlay-row");
-      framePerf!.clear();
+      framePerf.clear();
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
       app.scheduler.flushNow();
@@ -799,7 +772,7 @@ describe("TList wheel mailbox", () => {
 
       expect(rowText(app, 0)).toBe("item-1");
       expect(rowText(app, 1)).toBe("overlay-row");
-      expect(framePerf!.latest()?.paintedNodes).toBeGreaterThanOrEqual(2);
+      expect(framePerf.latest()?.paintedNodes).toBeGreaterThanOrEqual(2);
     } finally {
       app.dispose();
     }
@@ -1085,20 +1058,12 @@ describe("TList wheel mailbox", () => {
 
   it("limits wheel commits to the current render plane for TList", async () => {
     const commits: Array<readonly string[] | null> = [];
-    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
-    const Probe = defineComponent({
-      name: "PlaneScopedTListProbe",
-      setup() {
-        framePerf = useTerminal().observability.framePerf;
-        framePerf.enabled.value = true;
-        return () => null;
-      },
-    });
+    const framePerf = createFramePerfProbe("PlaneScopedTListProbe");
     const App = defineComponent({
       name: "PlaneScopedTListWheelApp",
       setup() {
         return () => [
-          h(Probe),
+          h(framePerf.component),
           h(TText, { x: 0, y: 5, value: "default" }),
           h(TRenderPlane, { plane: "transcript" }, () => [
             h(TList, {
@@ -1121,7 +1086,7 @@ describe("TList wheel mailbox", () => {
       app.mount();
       app.scheduler.flushNow();
       commits.length = 0;
-      framePerf!.clear();
+      framePerf.clear();
 
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
       app.scheduler.flushNow();
@@ -1129,8 +1094,8 @@ describe("TList wheel mailbox", () => {
 
       expect(rowText(app, 0)).toBe("item-1");
       expect(commits.at(-1)).toEqual(["transcript"]);
-      expect(framePerf!.latest()?.dirtyRows).toBeLessThanOrEqual(4);
-      expect(framePerf!.latest()?.paintedNodes).toBe(1);
+      expect(framePerf.latest()?.dirtyRows).toBeLessThanOrEqual(4);
+      expect(framePerf.latest()?.paintedNodes).toBe(1);
     } finally {
       offCommit();
       app.dispose();
@@ -1199,16 +1164,7 @@ describe("TList wheel mailbox", () => {
       app.scheduler.flushNow();
       raf.callbacks.clear();
 
-      for (let i = 0; i < 20; i++) {
-        app.events.dispatch({
-          type: "wheel",
-          cellX: 0,
-          cellY: 0,
-          deltaY: 1,
-          deltaMode: 0,
-          time: 1_000 + i * 10,
-        } as any);
-      }
+      dispatchWheelBurst(app.events, { count: 20, deltaY: 1, deltaMode: 0 });
 
       expect(raf.callbacks.size).toBeLessThanOrEqual(1);
       raf.runNext();
