@@ -434,6 +434,65 @@ describe("TLogView", () => {
     }
   });
 
+  it("uses exposed dirty row for full-row unsafe wheel scroll", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+
+    const App = defineComponent({
+      name: "TLogViewWheelScrollFastPathApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            autoFocus: true,
+            rowScrollMode: "unsafe-full-row",
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_000 });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      off();
+      expect(commits).toEqual([
+        {
+          dirtyRows: [0],
+          scrollOperations: [{ startY: 0, endY: 4, delta: -1 }],
+        },
+      ]);
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
+        "line-95",
+        "line-96",
+        "line-97",
+        "line-98",
+      ]);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("drops a pending wheel frame when unmounted before RAF", async () => {
     const raf = installManualRaf();
     const onScroll = vi.fn();

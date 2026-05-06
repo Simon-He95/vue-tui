@@ -2607,7 +2607,7 @@ export const TLogView = defineComponent({
           resetWheelScrollState(wheelState);
           return;
         }
-        const changed = applyScrollTop(nextTop, "viewport-repaint", { emitScroll: true });
+        const changed = applyScrollTop(nextTop, "auto", { emitScroll: true });
         if (!changed) {
           resetWheelScrollState(wheelState);
           return;
