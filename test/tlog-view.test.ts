@@ -656,6 +656,64 @@ describe("TLogView", () => {
     }
   });
 
+  it("cancels pending wheel scroll when controlled scrollTop changes before RAF", async () => {
+    const raf = installManualRaf();
+    const controlledTop = ref(96);
+    const source: TLogDataSource = {
+      lineCount: () => 100,
+      getLine: (index) => `line-${index}`,
+    };
+    const onScroll = vi.fn();
+    const onUpdateScrollTop = vi.fn((nextTop: number) => {
+      controlledTop.value = nextTop;
+    });
+
+    const App = defineComponent({
+      name: "TLogViewPendingWheelControlledScrollApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source,
+            version: 1,
+            scrollTop: controlledTop.value,
+            autoFocus: true,
+            onScroll,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("line-96");
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_000 });
+      expect(raf.pending()).toBe(1);
+      expect(onUpdateScrollTop).not.toHaveBeenCalled();
+
+      controlledTop.value = 80;
+      await nextTick();
+      raf.flush();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(controlledTop.value).toBe(80);
+      expect(onUpdateScrollTop).not.toHaveBeenCalled();
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(rowText(app, 0)).toBe("line-80");
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
   it("waits for controlled scrollTop prop updates before changing rendered rows", async () => {
     const controlledTop = ref(96);
     const source: TLogDataSource = {
@@ -6552,6 +6610,78 @@ describe("TLogView", () => {
       });
       expect(framePerf!.latest()?.dirtyRows).toBeLessThanOrEqual(4);
       expect(framePerf!.latest()?.paintedNodes).toBe(1);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("does not repaint visible rows for hidden data bursts", async () => {
+    const raf = installManualRaf();
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 20 }, (_, index) => `line-${index}`));
+    const logView = ref<TLogViewHandle | null>(null);
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "TLogViewHiddenDataBurstProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
+    const App = defineComponent({
+      name: "TLogViewHiddenDataBurstApp",
+      setup() {
+        const visible = ref(false);
+        return () => [
+          h(Probe),
+          h(TText, { x: 0, y: 0, w: 20, value: "hidden-placeholder" }),
+          withDirectives(
+            h(TLogView, {
+              ref: logView,
+              x: 0,
+              y: 0,
+              w: 20,
+              h: 4,
+              source: log.source,
+              version: log.version.value,
+            }),
+            [[vShow, visible.value]],
+          ),
+          h(TText, { x: 0, y: 6, w: 20, value: "same-plane-sibling" }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 10, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+      const commits: unknown[] = [];
+      const off = app.terminal.on("commit", (commit) => commits.push(commit));
+
+      for (let i = 20; i < 1_020; i++) {
+        log.appendLine(`line-${i}`);
+        await nextTick();
+      }
+
+      expect(raf.pending()).toBe(1);
+      raf.flush();
+      await nextTick();
+
+      expect(logView.value!.getScrollMetrics()).toMatchObject({
+        scrollTop: 1016,
+        lineCount: 1020,
+      });
+      expect(rowText(app, 0)).toBe("hidden-placeholder");
+      expect(rowText(app, 6)).toBe("same-plane-sibling");
+      expect(commits).toEqual([]);
+      expect(framePerf!.latest()).toBeNull();
+      off();
     } finally {
       app.dispose();
       raf.restore();

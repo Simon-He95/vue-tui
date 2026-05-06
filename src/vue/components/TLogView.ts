@@ -2958,7 +2958,7 @@ export const TLogView = defineComponent({
     function applyDataUpdate(payload: TLogDataUpdatePayload, ctx: TerminalFrameContext): void {
       if (!alive) return;
       const invalidated = handleSourceVersionChanged(payload);
-      if (!invalidated) return;
+      if (!invalidated || !hasPaintableViewport()) return;
       const nextShouldStick = shouldStickForAppend();
       ctx.invalidate({
         priority: nextShouldStick ? "high" : "normal",
@@ -2988,14 +2988,14 @@ export const TLogView = defineComponent({
       const payload = { version: props.version, lineCount: lineCount() };
       if (shouldStickForAppend()) {
         dataNormalMailbox.cancel();
-        dataHighMailbox.queue(payload);
+        if (!dataHighMailbox.queue(payload)) return;
         return;
       }
       if (dataHighMailbox.hasPending()) {
-        dataHighMailbox.queue(payload);
+        if (!dataHighMailbox.queue(payload)) return;
         return;
       }
-      dataNormalMailbox.queue(payload);
+      if (!dataNormalMailbox.queue(payload)) return;
     }
 
     function requestWheelScroll(nextTop: number): boolean {
@@ -3453,7 +3453,7 @@ export const TLogView = defineComponent({
     watch(
       () => props.scrollTop,
       () => {
-        resetWheelScrollState(wheelState);
+        cancelWheelScrollFrame();
         syncStickFromCurrentScrollTop();
         markViewportDirty();
         invalidateSelf("high", "scroll");
