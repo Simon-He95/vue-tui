@@ -342,6 +342,23 @@ If existing code depended on wheel scrolling to update `modelValue`, listen to
 `scroll` instead. If selection should follow scroll, synchronize that explicitly
 from `onScroll`; `onScroll` is a result notification, not a veto/cancel hook.
 
+Migration example:
+
+```vue
+<TList
+  :items="items"
+  :model-value="selectedIndex"
+  @update:model-value="selectedIndex = $event"
+  @scroll="viewportTop = $event"
+  @change="confirmItem"
+/>
+```
+
+Before this release, wheel scrolling could move `selectedIndex`. After this
+release, wheel scrolling only updates `viewportTop`; keyboard navigation and
+click still update `selectedIndex`, while Enter and double click call
+`confirmItem`.
+
 `TList` uses the same full-rect clipping model as `TText`/`TVirtualList`: when
 the list is clipped from the top or left, paint and hit testing keep the source
 row/column offset instead of rebasing the clipped area to a new viewport origin.

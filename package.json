@@ -73,6 +73,7 @@
     "release": "bumpp && pnpm publish --no-git-checks --access public",
     "start": "esno src/index.ts",
     "test": "vitest run",
+    "test:unit": "vitest run --exclude test/package-exports.test.ts",
     "test:package-exports": "pnpm run build && VUE_TUI_REQUIRE_DIST_EXPORTS=1 vitest run test/package-exports.test.ts",
     "typecheck": "tsc --noEmit",
     "e2e": "playwright test",

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-### Breaking / Behavior Changes
+### 0.0.x Breaking Behavior Changes
 
 - `TList` treats `update:modelValue` as selection-change, not selection-confirm.
 - `TList` wheel scrolling is now viewport-only. It emits `scroll`, but no longer mutates active selection or emits `update:modelValue`.

@@ -406,35 +406,18 @@ type FramePerf = {
 pnpm run typecheck
 pnpm run lint
 pnpm run format:check
-pnpm exec vitest run \
-  test/frame-mailbox.test.ts \
-  test/list-wheel-mailbox.test.ts \
-  test/list-selection-semantics.test.ts \
-  test/list-data-geometry.test.ts \
-  test/list-clipping.test.ts \
-  test/render-manager.test.ts \
-  test/render-plane-frame-mailbox.test.ts \
-  test/scheduler-frame-tasks.test.ts \
-  test/frame-perf.test.ts \
-  test/debug-overlay.test.ts \
-  test/style-cache.test.ts \
-  test/text-utils.test.ts \
-  test/tlog-view.test.ts \
-  test/tmarkdown-layout.test.ts \
-  test/tmarkdown-components.test.ts \
-  test/tvirtual-markdown-perf.test.ts \
-  test/tvirtual-markdown-streaming.test.ts \
-  test/virtual-list.test.ts \
-  test/ui-regressions.test.ts \
-  test/index.test.ts
+pnpm run test:unit
 pnpm run bench:scroll-mailbox
-pnpm run bench:phase2
 pnpm run check:hidden-unicode
 pnpm exec tsx scripts/generate-component-api-docs.ts
 git diff --exit-code docs/generated/components-api.md
 pnpm run build
 pnpm run test:package-exports
 ```
+
+`bench:scroll-mailbox` 是 PR CI 的 deterministic smoke bench，只使用行为阈值，
+不按 GitHub runner timing 设门槛。`bench:phase2` 只在 nightly/manual benchmark
+workflow 中运行。
 
 ### Phase 2: 一个月内
 
