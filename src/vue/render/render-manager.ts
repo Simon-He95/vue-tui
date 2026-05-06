@@ -348,7 +348,8 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     warnedLocalDirtyRows.add(node.id);
     warnDev(
       `[vue-tui] RenderManager markDirtyRows()/dirtyRowsHint rows must be absolute terminal rows for the node's plane. ` +
-        `Received rows that look local to a node at y=${node.rectY0}; add the node y offset before marking dirty rows.`,
+        `Received rows that look local to a node at y=${node.rectY0}; these rows will be ignored for this node. ` +
+        `Add the node y offset before marking dirty rows.`,
     );
   }
 

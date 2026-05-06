@@ -109,5 +109,6 @@
   "lint-staged": {
     "*": "oxfmt --write",
     "*.{vue,js,ts,jsx,tsx}": "oxlint --fix"
-  }
+  },
+  "packageManager": "pnpm@10.32.1"
 }

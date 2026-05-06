@@ -298,6 +298,7 @@ export const TerminalProvider = defineComponent({
         frameTaskQueueDepthAfterRun: frameTasks.frameTaskQueueDepthAfterRun,
         remainingFrameTasks: frameTasks.remainingFrameTasks,
         droppedUpdates: frameTasks.droppedUpdates,
+        ...(frameTasks.mailboxFailure ? { mailboxFailure: frameTasks.mailboxFailure } : {}),
         queueDepth: queueDepth(),
         liveReasons: (() => {
           const reasons = frameScheduler.liveReasonList();

@@ -288,7 +288,9 @@ describe("render-plane frame mailbox", () => {
       app.scheduler.flushNow();
 
       expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0]?.[0]).toContain("TRenderPlane.plane is immutable after mount");
+      expect(warn.mock.calls[0]?.[0]).toContain(
+        "TRenderPlane.plane is immutable after mount: transcript -> overlay",
+      );
     } finally {
       app.dispose();
       warn.mockRestore();

@@ -72,6 +72,7 @@ function createScheduler() {
     requestMore: vi.fn(),
     invalidate: vi.fn(),
     reportDroppedUpdates: vi.fn(),
+    reportMailboxDeliveryAttempt: vi.fn(),
   };
   const scheduler: TerminalScheduler = {
     invalidate: vi.fn(),
@@ -190,6 +191,11 @@ describe("frame mailbox", () => {
 
     expect(() => probe.flush()).toThrow("apply failed");
     expect(probe.ctx.reportDroppedUpdates).not.toHaveBeenCalled();
+    expect(probe.ctx.reportMailboxDeliveryAttempt).toHaveBeenCalledWith({
+      id: "probe",
+      queued: 2,
+      dropped: 1,
+    });
   });
 
   it("clears retained payload after apply and cancel", () => {
@@ -491,6 +497,11 @@ describe("frame mailbox", () => {
     expect(mailbox.hasPending()).toBe(false);
     expect(mailbox.peek()).toBeUndefined();
     expect(probe.ctx.reportDroppedUpdates).not.toHaveBeenCalled();
+    expect(probe.ctx.reportMailboxDeliveryAttempt).toHaveBeenCalledWith({
+      id: "probe",
+      queued: 3,
+      dropped: 2,
+    });
 
     expect(() => probe.flush()).not.toThrow();
 
@@ -559,6 +570,7 @@ describe("frame mailbox", () => {
       app.scheduler.flushNow();
       raf.callbacks.clear();
       framePerf!.clear();
+      scheduler!.configure({ frameBudgetMs: 1_000 });
 
       const high = createFrameMailbox<number>({
         scheduler: scheduler!,
@@ -671,6 +683,54 @@ describe("frame mailbox", () => {
     } finally {
       app.dispose();
       raf.restore();
+    }
+  });
+
+  it("records mailbox failure metadata in framePerf without counting successful dropped updates", async () => {
+    let scheduler: ReturnType<typeof useTerminal>["scheduler"] | null = null;
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+
+    const Probe = defineComponent({
+      name: "FrameMailboxFailureMetadataProbe",
+      setup() {
+        const ctx = useTerminal();
+        scheduler = ctx.scheduler;
+        framePerf = ctx.observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => h(TText, { x: 0, y: 0, w: 8, value: "probe" });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 4, component: Probe });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+
+      const mailbox = createFrameMailbox<number>({
+        scheduler: scheduler!,
+        id: "throwing-mailbox",
+        reason: "scroll",
+        apply: (_value, ctx) => {
+          ctx.invalidate({ reason: "scroll" });
+          throw new Error("apply failed");
+        },
+      });
+
+      mailbox.queue(1);
+      mailbox.queue(2);
+
+      expect(() => app.scheduler.flushNow()).toThrow("apply failed");
+      expect(framePerf!.latest()).toMatchObject({
+        droppedUpdates: 0,
+        mailboxFailure: {
+          id: "throwing-mailbox",
+          queued: 2,
+          dropped: 1,
+        },
+      });
+    } finally {
+      app.dispose();
     }
   });
 

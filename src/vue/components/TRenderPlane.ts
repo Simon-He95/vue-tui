@@ -34,7 +34,8 @@ export const TRenderPlane = defineComponent({
         if (next === initialPlane || warnedPlaneMutation) return;
         warnedPlaneMutation = true;
         warnDev(
-          `[vue-tui] TRenderPlane.plane is immutable after mount. Key TRenderPlane by plane if you need to move a subtree.`,
+          `[vue-tui] TRenderPlane.plane is immutable after mount: ${initialPlane} -> ${next}. ` +
+            `Key TRenderPlane by plane if you need to move a subtree.`,
         );
       },
     );
@@ -67,6 +68,8 @@ export const TRenderPlane = defineComponent({
               ...ctx,
               invalidate: (options) => ctx.invalidate(withPlane(queuedPlane, options)),
               reportDroppedUpdates: (count) => ctx.reportDroppedUpdates?.(count),
+              reportMailboxDeliveryAttempt: (attempt) =>
+                ctx.reportMailboxDeliveryAttempt?.(attempt),
             }),
         });
       },

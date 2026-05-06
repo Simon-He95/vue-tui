@@ -8,6 +8,12 @@ import type {
 } from "../context.js";
 import { framePerfNow, mergeFramePerfReason } from "../../observability/frame-perf.js";
 
+export type SchedulerFrameMailboxDeliveryAttempt = Readonly<{
+  id: string;
+  queued: number;
+  dropped: number;
+}>;
+
 export type SchedulerFrameTaskRunStats = Readonly<{
   frameTaskCount: number;
   /**
@@ -27,6 +33,7 @@ export type SchedulerFrameTaskRunStats = Readonly<{
   sync: boolean;
   requestMore: boolean;
   error?: unknown;
+  mailboxFailure?: SchedulerFrameMailboxDeliveryAttempt;
 }>;
 
 export const EMPTY_FRAME_TASK_RUN_STATS: SchedulerFrameTaskRunStats = Object.freeze({
@@ -254,6 +261,8 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     const deferredTasks: QueuedFrameTask[] = [];
     let didThrow = false;
     let error: unknown;
+    let mailboxFailure: SchedulerFrameMailboxDeliveryAttempt | undefined;
+    let currentMailboxAttempt: SchedulerFrameMailboxDeliveryAttempt | undefined;
 
     const ctx: TerminalFrameContext = {
       frameId: currentFrameId,
@@ -273,6 +282,13 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
         if (!Number.isFinite(count) || count <= 0) return;
         droppedUpdates += Math.floor(count);
       },
+      reportMailboxDeliveryAttempt: (attempt) => {
+        currentMailboxAttempt = {
+          id: attempt.id,
+          queued: attempt.queued,
+          dropped: attempt.dropped,
+        };
+      },
     };
 
     insideFrame = true;
@@ -291,11 +307,13 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
         coalescedFrameTasks += entry.coalesced;
         frameReason = mergeFramePerfReason(frameReason, task.reason);
         shouldSync = shouldSync || task.sync === true || priority === "high";
+        currentMailboxAttempt = undefined;
         try {
           task.run(ctx);
         } catch (taskError) {
           didThrow = true;
           error = taskError;
+          mailboxFailure = currentMailboxAttempt;
           if (i < tasks.length - 1) {
             deferredTasks.push(...tasks.slice(i + 1));
             requestMore = true;
@@ -326,6 +344,7 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
       sync: shouldSync,
       requestMore,
       ...(didThrow ? { error } : {}),
+      ...(mailboxFailure ? { mailboxFailure } : {}),
     };
   }
 

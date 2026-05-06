@@ -184,7 +184,7 @@ describe("ui regressions", () => {
 
     expect(invalidatePlanes).toEqual([]);
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("TRenderPlane.plane is immutable after mount"),
+      expect.stringContaining("TRenderPlane.plane is immutable after mount: default -> overlay"),
     );
     mounted.unmount();
     warn.mockRestore();

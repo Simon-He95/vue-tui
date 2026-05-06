@@ -42,6 +42,7 @@ export type TerminalFrameContext = Readonly<{
    * TerminalFrameContext is an exported type, so additions here are public.
    */
   reportDroppedUpdates?: (count: number) => void;
+  reportMailboxDeliveryAttempt?: (attempt: { id: string; queued: number; dropped: number }) => void;
 }>;
 
 export type TerminalFrameTask = Readonly<{

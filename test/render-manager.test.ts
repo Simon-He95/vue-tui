@@ -153,6 +153,7 @@ describe("render-manager", () => {
       expect(rm.render()).toBeNull();
       expect(paints).toEqual([]);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("absolute terminal rows"));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("ignored for this node"));
 
       expect(rm.markDirtyRows(node.id, [10])).toBe(true);
       const stats = rm.render();

@@ -41,8 +41,10 @@ const EMPTY = Symbol("frame-mailbox-empty");
  *
  * droppedUpdates are reported after apply() succeeds. They only appear in
  * framePerf when apply() also invalidates and produces a rendered frame sample.
- * If apply() throws, the pending payload has already been cleared; mailbox
- * delivery is fail-fast and does not retry stale payloads on later frames.
+ * If apply() throws, scheduler error stats include mailbox queued/dropped
+ * metadata for the failed delivery attempt. The pending payload has already
+ * been cleared; mailbox delivery is fail-fast and does not retry stale payloads
+ * on later frames.
  *
  * cancel() is best-effort at scheduler level. The run callback still guards
  * `disposed || !hasPending`, because a scheduler may already have taken a
@@ -115,6 +117,11 @@ export function createFrameMailbox<T>(options: FrameMailboxOptions<T>) {
           const dropped = Math.max(0, count - 1);
 
           clearPending();
+          ctx.reportMailboxDeliveryAttempt?.({
+            id: taskId,
+            queued: count,
+            dropped,
+          });
           options.apply(value, ctx, {
             queued: count,
             dropped,

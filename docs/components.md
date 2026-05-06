@@ -296,6 +296,8 @@ const app = createTerminalApp({
 
 `TList` 适合小数据选择器。大数据选择/浏览场景请使用 `TVirtualList`，日志、streaming transcript、append-only output 场景请使用 experimental `TLogView`，避免把大数组直接传进 Vue deep reactivity。
 
+> Limitation: TList wheel optimization coalesces bursts and repaints viewport rows; it does not reuse shifted rows or repaint only exposed rows. Large datasets should use `TVirtualList` / `TLogView`.
+
 ### Props
 
 - `x`/`y`/`w`/`h` `(number, required)`
