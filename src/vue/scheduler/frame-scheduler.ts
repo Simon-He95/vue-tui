@@ -14,6 +14,8 @@ export type SchedulerFrameTaskRunStats = Readonly<{
    * Number of scheduler-level tasks merged by task id before execution.
    */
   coalescedFrameTasks: number;
+  frameTaskQueueDepthBeforeRun: number;
+  frameTaskQueueDepthAfterRun: number;
   remainingFrameTasks: number;
   /**
    * Number of producer-level values that were not applied individually.
@@ -30,6 +32,8 @@ export type SchedulerFrameTaskRunStats = Readonly<{
 export const EMPTY_FRAME_TASK_RUN_STATS: SchedulerFrameTaskRunStats = Object.freeze({
   frameTaskCount: 0,
   coalescedFrameTasks: 0,
+  frameTaskQueueDepthBeforeRun: 0,
+  frameTaskQueueDepthAfterRun: 0,
   remainingFrameTasks: 0,
   droppedUpdates: 0,
   reason: "unknown",
@@ -218,6 +222,7 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     if (!options.isActive()) return EMPTY_FRAME_TASK_RUN_STATS;
 
     const force = optionsForRun?.force === true;
+    const frameTaskQueueDepthBeforeRun = remainingFrameTasks();
     const tasks = takeOrderedTasks();
     if (!tasks.length) return EMPTY_FRAME_TASK_RUN_STATS;
 
@@ -296,6 +301,8 @@ export function createSchedulerFrameTasks(options: SchedulerFrameTasksOptions) {
     return {
       frameTaskCount,
       coalescedFrameTasks,
+      frameTaskQueueDepthBeforeRun,
+      frameTaskQueueDepthAfterRun: remaining,
       remainingFrameTasks: remaining,
       droppedUpdates,
       reason: frameReason,

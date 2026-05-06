@@ -594,6 +594,13 @@ export const TList = defineComponent({
       manager.focus(nodeId);
     });
 
+    watch(
+      () => visible.value,
+      (nextVisible) => {
+        if (!nextVisible) cancelWheelScrollFrame();
+      },
+    );
+
     onBeforeUnmount(() => {
       pendingWheelTop = null;
       resetWheelScrollState(wheelState);

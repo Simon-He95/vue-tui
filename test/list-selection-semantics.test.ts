@@ -406,6 +406,8 @@ describe("TList selection semantics", () => {
   });
 
   it("external modelValue from synchronous onScroll wins after wheel apply", async () => {
+    const onScroll = vi.fn();
+    const onUpdateModelValue = vi.fn();
     const App = defineComponent({
       name: "ListWheelOnScrollModelValueApp",
       setup() {
@@ -419,10 +421,12 @@ describe("TList selection semantics", () => {
             items: Array.from({ length: 100 }, (_, index) => `item-${index}`),
             modelValue: modelValue.value,
             autoFocus: true,
-            onScroll: () => {
+            onScroll: (top: number) => {
+              onScroll(top);
               modelValue.value = 50;
             },
             "onUpdate:modelValue": (value: number) => {
+              onUpdateModelValue(value);
               modelValue.value = value;
             },
           });
@@ -438,7 +442,19 @@ describe("TList selection semantics", () => {
       await nextTick();
       app.scheduler.flushNow();
 
+      expect(onScroll).toHaveBeenCalledTimes(1);
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
       expect(rowText(app, 0)).toBe("item-47");
+
+      onScroll.mockClear();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_010 });
+      app.scheduler.flushNow();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).toHaveBeenCalledTimes(1);
+      expect(onUpdateModelValue).not.toHaveBeenCalled();
+      expect(rowText(app, 0)).toBe("item-48");
     } finally {
       app.dispose();
     }

@@ -29,6 +29,7 @@ jobs:
 
       - run: pnpm run format:check
 
+      # Curated regression suite for the high-throughput render path.
       - run: pnpm exec vitest run test/frame-mailbox.test.ts test/list-wheel-mailbox.test.ts test/list-selection-semantics.test.ts test/list-data-geometry.test.ts test/list-clipping.test.ts test/render-manager.test.ts test/render-plane-frame-mailbox.test.ts test/scheduler-frame-tasks.test.ts test/style-cache.test.ts test/text-utils.test.ts test/tlog-view.test.ts test/tmarkdown-layout.test.ts test/tmarkdown-components.test.ts test/tvirtual-markdown-perf.test.ts test/tvirtual-markdown-streaming.test.ts test/virtual-list.test.ts test/ui-regressions.test.ts test/index.test.ts
 
       - run: pnpm run bench:scroll-mailbox

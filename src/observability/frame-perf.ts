@@ -42,6 +42,8 @@ export type FramePerfSample = Readonly<{
   coalescedInvalidates: number;
   frameTaskCount: number;
   coalescedFrameTasks: number;
+  frameTaskQueueDepthBeforeRun: number;
+  frameTaskQueueDepthAfterRun: number;
   remainingFrameTasks: number;
   droppedUpdates: number;
   queueDepth: number;

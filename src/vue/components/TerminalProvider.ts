@@ -294,6 +294,8 @@ export const TerminalProvider = defineComponent({
         coalescedInvalidates,
         frameTaskCount: frameTasks.frameTaskCount,
         coalescedFrameTasks: frameTasks.coalescedFrameTasks,
+        frameTaskQueueDepthBeforeRun: frameTasks.frameTaskQueueDepthBeforeRun,
+        frameTaskQueueDepthAfterRun: frameTasks.frameTaskQueueDepthAfterRun,
         remainingFrameTasks: frameTasks.remainingFrameTasks,
         droppedUpdates: frameTasks.droppedUpdates,
         queueDepth: queueDepth(),

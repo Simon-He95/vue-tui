@@ -29,6 +29,8 @@ function sample(frameId: number) {
     coalescedInvalidates: 0,
     frameTaskCount: 0,
     coalescedFrameTasks: 0,
+    frameTaskQueueDepthBeforeRun: 0,
+    frameTaskQueueDepthAfterRun: 0,
     remainingFrameTasks: 0,
     droppedUpdates: 0,
     queueDepth: 0,

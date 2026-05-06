@@ -516,6 +516,57 @@ describe("TList wheel mailbox", () => {
     }
   });
 
+  it("cancels pending wheel scroll when v-show hides the list before RAF", async () => {
+    const raf = installRaf();
+    const visible = ref(true);
+    const onScroll = vi.fn();
+    const App = defineComponent({
+      name: "PendingWheelHiddenApp",
+      setup() {
+        return () => [
+          h(TText, { x: 0, y: 0, w: 12, value: "visible" }),
+          withDirectives(
+            h(TList, {
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 4,
+              items: Array.from({ length: 200 }, (_, index) => `item-${index}`),
+              autoFocus: true,
+              onScroll,
+            }),
+            [[vShow, visible.value]],
+          ),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 1000, time: 1_000 });
+      expect(raf.callbacks.size).toBe(1);
+
+      visible.value = false;
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("visible");
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(rowText(app, 0)).toBe("visible");
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
   it("cancels pending wheel scroll when Escape closes without unmounting", async () => {
     const raf = installRaf();
     const onClose = vi.fn();

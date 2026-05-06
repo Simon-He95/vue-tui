@@ -87,7 +87,7 @@ export const TDebugOverlay = defineComponent({
             `commit: ${perf.commitMs.toFixed(1)}ms`,
             `domFlush: ${perf.domFlushMs == null ? "-" : `${perf.domFlushMs.toFixed(1)}ms`}`,
             `coalescedInvalidates: ${perf.coalescedInvalidates}`,
-            `frameTasks: ${perf.frameTaskCount}`,
+            `frameTasks: ${perf.frameTaskCount} queue:${perf.frameTaskQueueDepthBeforeRun}->${perf.frameTaskQueueDepthAfterRun}`,
             `coalescedTasks: ${perf.coalescedFrameTasks}`,
             `queueDepth: ${perf.queueDepth}`,
           );

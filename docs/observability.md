@@ -81,6 +81,8 @@ DIMCODE_PROFILE_TUI=1
 - `coalescedInvalidates`
 - `frameTaskCount`
 - `coalescedFrameTasks`
+- `frameTaskQueueDepthBeforeRun`
+- `frameTaskQueueDepthAfterRun`
 - `remainingFrameTasks`
 - `liveReasons`
 - `queueDepth`
@@ -92,7 +94,7 @@ DIMCODE_PROFILE_TUI=1
 - `TList`: 使用 frame mailbox，通常表现为 `droppedUpdates > 0` 且 `coalescedFrameTasks = 0`
 - `TVirtualList`: 暂时仍使用 scheduler-level wheel task coalescing，通常表现为 `coalescedFrameTasks > 0`，后续 mailbox 化后会对齐到 `TList`
 
-`frameTaskCount` 是本帧实际执行的 scheduler-owned tasks。`domFlushMs` 只记录与本 scheduler frame 同调用栈完成的 DOM flush；普通 rAF-deferred DOM flush 会体现在 `renderer.debugStats.flush.last`，不会 retroactively 更新已经 push 的 frame sample。DOM renderer flush stats 里的 `planeRows` 是 flushed plane-row line elements，不是去重后的 terminal rows。
+`frameTaskCount` 是本帧实际执行的 scheduler-owned tasks。`frameTaskQueueDepthBeforeRun` / `frameTaskQueueDepthAfterRun` 是本帧运行前后的 scheduler frame task 数量，用来观察 producer/task pressure；`queueDepth` 仍然是 terminal scheduler 还有多少已安排的 flush/timer/frame handles，不能当作 pending producer 数。`domFlushMs` 只记录与本 scheduler frame 同调用栈完成的 DOM flush；普通 rAF-deferred DOM flush 会体现在 `renderer.debugStats.flush.last`，不会 retroactively 更新已经 push 的 frame sample。DOM renderer flush stats 里的 `planeRows` 是 flushed plane-row line elements，不是去重后的 terminal rows。
 
 DOM full-row scroll 优化生效时，FramePerf 的 `dirtyRows` 应接近 exposed rows，而不是 viewport height；`renderer.debugStats.flush.last.planeRows` 表示实际 repaint 的 plane-row line elements。`dirtyRows` 反映 terminal commit 语义，`planeRows` 反映 DOM renderer 实际刷新量；line-node shift 本身不会被计入 dirty row 数。
 

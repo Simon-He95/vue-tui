@@ -3706,6 +3706,56 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
+  it("keeps ANSI OSC8 wide-cell clipping styles inside the clipped link segment", async () => {
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "p \x1b]8;;https://example.com\x07\x1b[31m你A\x1b[0m\x1b]8;;\x07 z",
+      getLineKey: () => "wide-link-clip",
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          ref: logView,
+          x: -3,
+          y: 0,
+          w: 7,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+        }),
+      4,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe(" A z");
+    const row = mounted.terminal.getRow(0);
+    expect(row[0]!.ch).toBe(" ");
+    expect(row[1]!.ch).toBe("A");
+    expect(row[0]!.style.href).toBe("https://example.com");
+    expect(row[1]!.style.href).toBe("https://example.com");
+    expect(row[0]!.style.fg).toBe("red");
+    expect(row[1]!.style.fg).toBe("red");
+    expect(row[2]!.style.href).toBeUndefined();
+    expect(row[2]!.style.fg).toBeUndefined();
+    expect(row[3]!.style.href).toBeUndefined();
+    expect(row[3]!.style.fg).toBeUndefined();
+    expect(logView.value!.getVisibleLinks()).toMatchObject([
+      {
+        href: "https://example.com",
+        text: " A",
+        startX: 0,
+        endX: 2,
+        startCell: 3,
+        endCell: 5,
+      },
+    ]);
+    mounted.unmount();
+  });
+
   it("resets SGR foreground and background to the TLogView base style", async () => {
     const source: TLogDataSource = {
       lineCount: () => 1,

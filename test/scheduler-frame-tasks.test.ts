@@ -106,6 +106,8 @@ describe("scheduler frame tasks", () => {
         reason: "scroll",
         frameTaskCount: 1,
         coalescedFrameTasks: 99,
+        frameTaskQueueDepthBeforeRun: 1,
+        frameTaskQueueDepthAfterRun: 0,
         remainingFrameTasks: 0,
       });
     } finally {
@@ -153,6 +155,8 @@ describe("scheduler frame tasks", () => {
         reason: "input",
         frameTaskCount: 1,
         coalescedFrameTasks: 0,
+        frameTaskQueueDepthBeforeRun: 1,
+        frameTaskQueueDepthAfterRun: 0,
       });
     } finally {
       probe.app.dispose();
@@ -205,6 +209,8 @@ describe("scheduler frame tasks", () => {
       expect(probe.framePerf.latest()).toMatchObject({
         reason: "input",
         frameTaskCount: 3,
+        frameTaskQueueDepthBeforeRun: 3,
+        frameTaskQueueDepthAfterRun: 0,
       });
     } finally {
       probe.app.dispose();
@@ -395,6 +401,8 @@ describe("scheduler frame tasks", () => {
       expect(order).toEqual(["a"]);
       expect(probe.framePerf.latest()).toMatchObject({
         frameTaskCount: 1,
+        frameTaskQueueDepthBeforeRun: 3,
+        frameTaskQueueDepthAfterRun: 2,
         remainingFrameTasks: 2,
       });
       await Promise.resolve();
@@ -404,6 +412,8 @@ describe("scheduler frame tasks", () => {
       expect(order).toEqual(["a", "b"]);
       expect(probe.framePerf.latest()).toMatchObject({
         frameTaskCount: 1,
+        frameTaskQueueDepthBeforeRun: 2,
+        frameTaskQueueDepthAfterRun: 1,
         remainingFrameTasks: 1,
       });
     } finally {

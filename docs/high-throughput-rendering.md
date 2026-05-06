@@ -331,6 +331,8 @@ type FramePerf = {
     candidates?: number;
   }>;
   droppedUpdates: number;
+  frameTaskQueueDepthBeforeRun: number;
+  frameTaskQueueDepthAfterRun: number;
   coalescedInvalidates: number;
   heapUsed?: number;
 };
@@ -343,6 +345,8 @@ type FramePerf = {
 - `scannedNodes`
 - `paintedNodes`
 - `queueDepth`
+- `frameTaskQueueDepthBeforeRun`
+- `frameTaskQueueDepthAfterRun`
 - `coalescedInvalidates`
 - `droppedUpdates`
 
