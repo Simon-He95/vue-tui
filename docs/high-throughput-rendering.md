@@ -408,6 +408,7 @@ pnpm run lint
 pnpm run format:check
 pnpm run test:unit
 pnpm run bench:scroll-mailbox
+pnpm run bench:dom-renderer
 pnpm run check:hidden-unicode
 pnpm exec tsx scripts/generate-component-api-docs.ts
 git diff --exit-code docs/generated/components-api.md
@@ -416,8 +417,8 @@ pnpm run test:package-exports
 ```
 
 `bench:scroll-mailbox` 是 PR CI 的 deterministic smoke bench，只使用行为阈值，
-不按 GitHub runner timing 设门槛。`bench:phase2` 只在 nightly/manual benchmark
-workflow 中运行。
+不按 GitHub runner timing 设门槛。`bench:dom-renderer` 和 `bench:phase2` 只在
+nightly/manual benchmark workflow 中运行。
 
 ### Phase 2: 一个月内
 
