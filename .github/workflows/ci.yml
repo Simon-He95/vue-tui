@@ -70,4 +70,6 @@ jobs:
 
       - run: pnpm run bench:scroll-mailbox
 
+      - run: pnpm run bench:dom-renderer
+
       - run: pnpm run bench:phase2
