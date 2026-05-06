@@ -41,6 +41,8 @@ const EMPTY = Symbol("frame-mailbox-empty");
  *
  * droppedUpdates are reported after apply() succeeds. They only appear in
  * framePerf when apply() also invalidates and produces a rendered frame sample.
+ * If apply() throws, the pending payload has already been cleared; mailbox
+ * delivery is fail-fast and does not retry stale payloads on later frames.
  *
  * cancel() is best-effort at scheduler level. The run callback still guards
  * `disposed || !hasPending`, because a scheduler may already have taken a

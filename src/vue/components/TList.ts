@@ -119,9 +119,12 @@ export const TList = defineComponent({
      * TList render invalidation contract:
      *
      * - scrollTop/active/modelValue are intentionally not render deps.
+     * - items reference/length changes and itemVersion repaint through the
+     *   structure watcher.
      * - paint reads latest refs at render time.
      * - viewport changes must call setScrollTop(), which marks viewport rows dirty.
      * - active-only changes must call setActiveIndex(), which marks old/new rows dirty.
+     * - don't assign scrollTop/active directly outside these helpers.
      * - no manual dirty rows should be marked while visible=false.
      * - initial modelValue sync must not trigger a high-priority flush during setup.
      */
@@ -598,16 +601,15 @@ export const TList = defineComponent({
       rect: visible.value ? normalizedRect() : { x: 0, y: 0, w: 0, h: 0 },
       // Intentionally not in render deps:
       // - scrollTop / active / modelValue repaint through manual dirty-row paths.
-      // - itemVersion is handled by the structure watcher below so same-length
-      //   content updates stay on the viewport dirty-row path instead of the
-      //   more conservative render.update() rect path.
+      // - props.items / itemVersion are handled by the structure watcher below
+      //   so same-length content updates stay on the viewport dirty-row path
+      //   instead of the more conservative render.update() rect path.
       deps: [
         visible.value,
         absRect.value,
         fullRect.value,
         props.w,
         props.h,
-        props.items,
         props.style,
         focused.value,
         defaultStyle.value,
@@ -695,6 +697,7 @@ export const TList = defineComponent({
 
     watch(
       [
+        () => props.items,
         () => props.items.length,
         () => props.itemVersion,
         () => fullRect.value.y,
@@ -703,23 +706,24 @@ export const TList = defineComponent({
         () => absRect.value.h,
       ],
       (
-        [itemsLength, itemVersion, fullY, fullH, clipY, clipH],
-        [prevItemsLength, prevItemVersion, prevFullY, prevFullH, prevClipY, prevClipH] = [
-          itemsLength,
-          itemVersion,
-          fullY,
-          fullH,
-          clipY,
-          clipH,
-        ],
+        [itemsRef, itemsLength, itemVersion, fullY, fullH, clipY, clipH],
+        [
+          prevItemsRef,
+          prevItemsLength,
+          prevItemVersion,
+          prevFullY,
+          prevFullH,
+          prevClipY,
+          prevClipH,
+        ] = [itemsRef, itemsLength, itemVersion, fullY, fullH, clipY, clipH],
       ) => {
-        const structureChanged =
+        const dataChanged =
+          itemsRef !== prevItemsRef ||
           itemsLength !== prevItemsLength ||
-          itemVersion !== prevItemVersion ||
-          fullY !== prevFullY ||
-          fullH !== prevFullH ||
-          clipY !== prevClipY ||
-          clipH !== prevClipH;
+          itemVersion !== prevItemVersion;
+        const geometryChanged =
+          fullY !== prevFullY || fullH !== prevFullH || clipY !== prevClipY || clipH !== prevClipH;
+        const structureChanged = dataChanged || geometryChanged;
         const last = Math.max(0, props.items.length - 1);
         let needsInvalidate = false;
         const wheelDetachedOrPending = detachedByWheel || wheelMailbox.hasPending();

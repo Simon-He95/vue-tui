@@ -375,10 +375,12 @@ type FramePerf = {
 
 > **注意**：`TVirtualList` 的 `rowScrollMode` 默认为 `"off"`。这是危险优化开关，只有显式设置 `rowScrollMode: "unsafe-full-row"`、当前 renderer 支持 `scrollOperations`、且 list 是 unclipped full-row 并独占这些 plane rows 时，才会使用 `unsafeScrollPlaneRows()` + exposed dirty rows。DOM renderer 的优化只移动 line nodes 并 repaint exposed dirty rows，不改变 terminal buffer/compositor 语义。
 
+> **当前范围**：本轮完成 `TList` wheel burst mailbox、RenderManager dirty-row primitive 和 frame task metrics；`TVirtualList` / `TLogView` 的 fast/slow scroll mailbox 化仍是后续工作。
+
 验收命令：
 
 ```bash
-pnpm vitest run test/frame-mailbox.test.ts test/list-wheel.test.ts test/render-plane-frame-mailbox.test.ts test/scheduler-frame-tasks.test.ts test/virtual-list.test.ts test/render-manager.test.ts test/style-cache.test.ts test/text-utils.test.ts test/tlog-view.test.ts test/tmarkdown-layout.test.ts test/tmarkdown-components.test.ts test/tvirtual-markdown-perf.test.ts test/tvirtual-markdown-streaming.test.ts test/ui-regressions.test.ts test/index.test.ts
+pnpm vitest run test/frame-mailbox.test.ts test/list-wheel-mailbox.test.ts test/list-selection-semantics.test.ts test/list-data-geometry.test.ts test/list-clipping.test.ts test/render-plane-frame-mailbox.test.ts test/scheduler-frame-tasks.test.ts test/virtual-list.test.ts test/render-manager.test.ts test/style-cache.test.ts test/text-utils.test.ts test/tlog-view.test.ts test/tmarkdown-layout.test.ts test/tmarkdown-components.test.ts test/tvirtual-markdown-perf.test.ts test/tvirtual-markdown-streaming.test.ts test/ui-regressions.test.ts test/index.test.ts
 pnpm run bench:scroll-mailbox
 pnpm run bench:phase2
 pnpm run typecheck

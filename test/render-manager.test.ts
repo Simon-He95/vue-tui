@@ -967,6 +967,51 @@ describe("render-manager", () => {
     expect(stats?.paintedNodes).toBe(1);
   });
 
+  it("updates and removes large rect candidates without leaking ids", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 100 });
+    const rm = createRenderManager(terminal);
+
+    const large = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 0, w: 10, h: 60 },
+      paint: () => paints.push("large"),
+    });
+    const target = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 90, w: 10, h: 1 },
+      paint: () => paints.push("target"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    expect(rm.markDirtyRows(target.id, [90])).toBe(true);
+    let stats = rm.render();
+    expect(stats?.scannedNodes).toBe(1);
+    expect(paints).toEqual(["target"]);
+
+    paints.length = 0;
+    rm.update(large.id, { rect: { x: 0, y: 80, w: 10, h: 20 } });
+    rm.render();
+
+    paints.length = 0;
+    expect(rm.markDirtyRows(target.id, [90])).toBe(true);
+    stats = rm.render();
+    expect(stats?.scannedNodes).toBe(2);
+    expect(paints.sort()).toEqual(["large", "target"]);
+
+    paints.length = 0;
+    rm.unregister(large.id);
+    rm.render();
+
+    paints.length = 0;
+    expect(rm.markDirtyRows(target.id, [90])).toBe(true);
+    stats = rm.render();
+    expect(stats?.scannedNodes).toBe(1);
+    expect(paints).toEqual(["target"]);
+  });
+
   it("keeps dirtyRowsHint plane-scoped for non-contiguous dirty rows", () => {
     const paints: string[] = [];
     const terminal = createTerminal({ cols: 10, rows: 100 });

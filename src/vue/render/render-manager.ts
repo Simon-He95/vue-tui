@@ -8,6 +8,7 @@ import { clearTextCaches, withTextRenderPass } from "../utils/text.js";
 
 const renderMgrDebugLog = createDebugLogger(isDebugEnabled());
 const ROW_BUCKET_CANDIDATE_RATIO_FALLBACK = 0.6;
+const LARGE_RECT_BUCKET_RATIO = 0.5;
 
 export type RenderRect = Readonly<{
   x: number;
@@ -149,6 +150,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   let sortedDirty = true;
   const rowBuckets: RenderRowBuckets = new Map();
   const globalNodeIdsByPlane = new Map<TerminalRenderPlane, Set<string>>();
+  const largeNodeIdsByPlane = new Map<TerminalRenderPlane, Set<string>>();
 
   const stackPathCache = new WeakMap<RenderStack, readonly PathSegment[]>();
   const profiler = createTuiProfiler("render-manager");
@@ -211,6 +213,10 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   }
 
   function removeFromRowBuckets(node: RenderNode): void {
+    const largeIds = largeNodeIdsByPlane.get(node.plane);
+    largeIds?.delete(node.id);
+    if (largeIds?.size === 0) largeNodeIdsByPlane.delete(node.plane);
+
     if (!node.rect) {
       const globalIds = globalNodeIdsByPlane.get(node.plane);
       globalIds?.delete(node.id);
@@ -244,6 +250,16 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     const startY = Math.max(0, node.rectY0);
     const endY = Math.min(terminalRows, node.rectY1);
     if (endY <= startY) return;
+    if (endY - startY >= terminalRows * LARGE_RECT_BUCKET_RATIO) {
+      let largeIds = largeNodeIdsByPlane.get(node.plane);
+      if (!largeIds) {
+        largeIds = new Set();
+        largeNodeIdsByPlane.set(node.plane, largeIds);
+      }
+      largeIds.add(node.id);
+      return;
+    }
+
     let buckets = rowBuckets.get(node.plane);
     if (!buckets) {
       buckets = new Map();
@@ -262,6 +278,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   function rebuildRowBuckets(): void {
     rowBuckets.clear();
     globalNodeIdsByPlane.clear();
+    largeNodeIdsByPlane.clear();
     for (const node of nodes.values()) addToRowBuckets(node);
   }
 
@@ -609,6 +626,14 @@ export function createRenderManager(terminal: Terminal): RenderManager {
                   const rowIds = buckets?.get(y);
                   if (!rowIds) continue;
                   for (const id of rowIds) ids.add(id);
+                }
+                const largeIds = largeNodeIdsByPlane.get(plane);
+                if (largeIds) {
+                  for (const id of largeIds) {
+                    const node = nodes.get(id);
+                    if (!node) continue;
+                    if (intersectsDirtyRows(node.rectY0, node.rectY1, rows)) ids.add(id);
+                  }
                 }
                 const globalIds = globalNodeIdsByPlane.get(plane);
                 if (globalIds) for (const id of globalIds) ids.add(id);

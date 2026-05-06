@@ -407,6 +407,35 @@ describe("frame mailbox", () => {
     expect(apply.mock.calls[0]![2]).toEqual({ queued: 3, dropped: 2 });
   });
 
+  it("clears pending payload when apply throws and does not retry", () => {
+    const probe = createScheduler();
+    const apply = vi.fn((value: number) => {
+      if (value === 3) throw new Error("boom");
+    });
+    const mailbox = createFrameMailbox({
+      scheduler: probe.scheduler,
+      id: "probe",
+      apply,
+    });
+
+    mailbox.queue(1);
+    mailbox.queue(2);
+    mailbox.queue(3);
+
+    expect(() => probe.flush()).toThrow("boom");
+    expect(mailbox.hasPending()).toBe(false);
+    expect(mailbox.peek()).toBeUndefined();
+    expect(probe.ctx.reportDroppedUpdates).not.toHaveBeenCalled();
+
+    expect(() => probe.flush()).not.toThrow();
+
+    mailbox.queue(4);
+    probe.flush();
+
+    expect(apply).toHaveBeenCalledTimes(2);
+    expect(apply.mock.calls[1]![0]).toBe(4);
+  });
+
   it("keeps a stable task id within one pending cycle", () => {
     const probe = createScheduler();
     const apply = vi.fn();

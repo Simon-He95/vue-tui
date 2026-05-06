@@ -319,7 +319,13 @@ Behavior change for the wheel-mailbox release:
 - `TList` wheel is viewport-only.
 - `TList` wheel no longer updates `modelValue`.
 - `TList` wheel no longer moves the active selection.
-- `TList` `scroll` now represents viewport-driven scroll changes.
+- `TList` treats `update:modelValue` as selection-change, not selection-confirm.
+- Enter and double click emit `change`; they do not emit `update:modelValue`
+  when committing the already-active item.
+- Keyboard-driven and external-model-driven viewport changes no longer emit
+  `scroll`.
+- `TList` `scroll` now represents viewport-driven scroll changes, especially
+  wheel scrolling and programmatic clamp.
 
 `TList` treats wheel scrolling as viewport-only. Wheel scrolling emits `scroll`,
 but it does not update `modelValue` and does not move the active selection.
