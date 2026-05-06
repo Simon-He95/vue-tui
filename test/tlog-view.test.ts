@@ -684,7 +684,7 @@ describe("TLogView", () => {
   it("repaints the viewport for full-row unsafe wrapped wheel scroll", async () => {
     const source: TLogDataSource = {
       lineCount: () => 100,
-      getLine: (index) => `line-${index}`,
+      getLine: (index) => `line-${index}-xxxxxxxxxxxxxxxxxxxxxxxx`,
     };
 
     const App = defineComponent({
@@ -726,10 +726,10 @@ describe("TLogView", () => {
       off();
       expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
       expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
-        "line-95",
-        "line-96",
-        "line-97",
-        "line-98",
+        "xxxxxxxxxxxx",
+        "line-98-xxxxxxxxxxxx",
+        "xxxxxxxxxxxx",
+        "line-99-xxxxxxxxxxxx",
       ]);
     } finally {
       app.dispose();
