@@ -442,6 +442,11 @@ export const TList = defineComponent({
       selectActive(nearestVisibleActive(), { emitChange: true });
     }
 
+    function closeList(): void {
+      reattachSelection();
+      emit("close");
+    }
+
     function syncExternalModelValue(value: number): SyncModelResult {
       const hadPendingWheel = wheelMailbox.hasPending();
       const wasDetached = detachedByWheel;
@@ -502,7 +507,7 @@ export const TList = defineComponent({
       }
       if (e.key === "Escape") {
         e.preventDefault();
-        emit("close");
+        closeList();
       }
     }
 
@@ -518,10 +523,11 @@ export const TList = defineComponent({
           if (idx >= 0 && idx < props.items.length) {
             selectActive(idx);
           } else {
-            emit("close");
+            closeList();
           }
         },
         dblclick: (e: TerminalPointerEvent) => {
+          cancelWheelScrollFrame();
           const r = normalizedRect();
           const idx = visibleRange().start + (e.cellY - r.y);
           if (idx >= 0 && idx < props.items.length) selectActive(idx, { emitChange: true });
@@ -571,7 +577,7 @@ export const TList = defineComponent({
         blur: () => {
           focused.value = false;
           emit("blur");
-          if (props.closeOnBlur) emit("close");
+          if (props.closeOnBlur) closeList();
           scheduler.invalidate({ reason: "input" });
         },
         keydown: onKeydown,

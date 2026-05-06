@@ -516,6 +516,244 @@ describe("TList wheel mailbox", () => {
     }
   });
 
+  it("cancels pending wheel scroll when Escape closes without unmounting", async () => {
+    const raf = installRaf();
+    const onClose = vi.fn();
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items: Array.from({ length: 100 }, (_, index) => `item-${index}`),
+        autoFocus: true,
+        onClose,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      expect(raf.callbacks.size).toBe(1);
+
+      app.events.dispatch({ type: "keydown", key: "Escape", code: "Escape", time: 1_010 });
+      expect(onClose).toHaveBeenCalledTimes(1);
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(rowText(app, 0)).toBe("item-0");
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("cancels pending wheel scroll when an invalid click closes without unmounting", async () => {
+    const raf = installRaf();
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    const onClose = vi.fn();
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items,
+        autoFocus: true,
+        onClose,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 1000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onScroll).toHaveBeenCalled();
+      onScroll.mockClear();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_010 });
+      expect(raf.callbacks.size).toBe(1);
+
+      items.length = 2;
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 3, time: 1_020 });
+      expect(onClose).toHaveBeenCalledTimes(1);
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("cancels pending wheel scroll when closeOnBlur closes without unmounting", async () => {
+    const raf = installRaf();
+    const onBlur = vi.fn();
+    const onClose = vi.fn();
+    const onScroll = vi.fn();
+    const App = defineComponent({
+      name: "TListCloseOnBlurPendingWheelApp",
+      setup() {
+        return () => [
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            items: Array.from({ length: 100 }, (_, index) => `item-${index}`),
+            autoFocus: true,
+            closeOnBlur: true,
+            onBlur,
+            onClose,
+            onScroll,
+          }),
+          h(TView, { x: 0, y: 5, w: 12, h: 1, focusable: true }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      expect(raf.callbacks.size).toBe(1);
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 5, time: 1_010 });
+      expect(onBlur).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
+      expect(rowText(app, 0)).toBe("item-0");
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("cancels pending wheel scroll before double click even on an invalid row", async () => {
+    const raf = installRaf();
+    const items = Array.from({ length: 100 }, (_, index) => `item-${index}`);
+    const onScroll = vi.fn();
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: TList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        items,
+        autoFocus: true,
+        onScroll,
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 1000, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onScroll).toHaveBeenCalled();
+      onScroll.mockClear();
+      raf.callbacks.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_010 });
+      expect(raf.callbacks.size).toBe(1);
+
+      items.length = 2;
+      app.events.dispatch({ type: "dblclick", cellX: 0, cellY: 3, time: 1_020 });
+
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScroll).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("repaints same-plane overlapping nodes for TList dirty rows", async () => {
+    let framePerf: ReturnType<typeof useTerminal>["observability"]["framePerf"] | null = null;
+    const Probe = defineComponent({
+      name: "TListOverlayDirtyRowsProbe",
+      setup() {
+        framePerf = useTerminal().observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => null;
+      },
+    });
+    const App = defineComponent({
+      name: "TListOverlayDirtyRowsApp",
+      setup() {
+        return () => [
+          h(Probe),
+          h(TList, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            items: Array.from({ length: 100 }, (_, index) => `item-${index}`),
+            autoFocus: true,
+          }),
+          h(TText, { x: 0, y: 1, w: 20, value: "overlay-row", zIndex: 10 }),
+        ];
+      },
+    });
+    const app = createTerminalApp({ cols: 24, rows: 8, component: App });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+      expect(rowText(app, 1)).toBe("overlay-row");
+      framePerf!.clear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(rowText(app, 0)).toBe("item-1");
+      expect(rowText(app, 1)).toBe("overlay-row");
+      expect(framePerf!.latest()?.paintedNodes).toBeGreaterThanOrEqual(2);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not prevent default or scroll when wheel cannot change scrollTop", () => {
     const onScroll = vi.fn();
     const app = createTerminalApp({
