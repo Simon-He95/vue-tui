@@ -493,7 +493,7 @@ Experimental Markdown renderer / virtual scroller。它们走独立的 `parser -
 >
 > `TVirtualMarkdown` 当前仍是 **viewport-level repaint**，不是 row-local dirty diff；streaming append 也不会自动 follow tail，默认保持 absolute `scrollTop` / absolute visual-row index 语义。
 >
-> `@simon_he/vue-tui/markdown` 当前只公开 Markdown 组件和相关类型/theme；parser/layout/render internals 还不是稳定公共 API。
+> `@simon_he/vue-tui/markdown` 公开 `createTuiMarkdownParser()`、`buildMarkdownBlocks()`、`buildMarkdownVisualRows()` 与 `layoutMarkdownBlocks()`，用于需要直接消费 parsed type/block/visual row 的宿主渲染器。
 
 ## TLogView
 

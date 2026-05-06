@@ -39,6 +39,10 @@ describe("package exports", () => {
     expect("TVirtualMarkdown" in experimental).toBe(false);
     expect(markdown.TMarkdownText).toBeTruthy();
     expect(markdown.TVirtualMarkdown).toBeTruthy();
+    expect(markdown.createTuiMarkdownParser).toBeTruthy();
+    expect(markdown.buildMarkdownBlocks).toBeTruthy();
+    expect(markdown.buildMarkdownVisualRows).toBeTruthy();
+    expect(markdown.layoutMarkdownBlocks).toBeTruthy();
     expect(experimental.TLogView).toBeTruthy();
     expect(experimental.TLogScrollbar).toBeTruthy();
     expect(experimental.TLogMinimap).toBeTruthy();
@@ -147,8 +151,16 @@ describe("package exports", () => {
     expect(rootCjs.framePerfNow).toBeTruthy();
     expect(markdown.TMarkdownText).toBeTruthy();
     expect(markdown.TVirtualMarkdown).toBeTruthy();
+    expect(markdown.createTuiMarkdownParser).toBeTruthy();
+    expect(markdown.buildMarkdownBlocks).toBeTruthy();
+    expect(markdown.buildMarkdownVisualRows).toBeTruthy();
+    expect(markdown.layoutMarkdownBlocks).toBeTruthy();
     expect(markdownCjs.TMarkdownText).toBeTruthy();
     expect(markdownCjs.TVirtualMarkdown).toBeTruthy();
+    expect(markdownCjs.createTuiMarkdownParser).toBeTruthy();
+    expect(markdownCjs.buildMarkdownBlocks).toBeTruthy();
+    expect(markdownCjs.buildMarkdownVisualRows).toBeTruthy();
+    expect(markdownCjs.layoutMarkdownBlocks).toBeTruthy();
     expect(experimental.TVirtualList).toBeTruthy();
     expect(experimental.TLogView).toBeTruthy();
     expect(experimental.TLogScrollbar).toBeTruthy();
