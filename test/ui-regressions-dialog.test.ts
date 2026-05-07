@@ -748,6 +748,132 @@ describe("ui regressions dialog", () => {
     mounted.unmount();
   });
 
+  it("TDialog click, Enter, and Escape paths dispatch once per action", async () => {
+    const open = ref(true);
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    const onUpdateModelValue = vi.fn((v: boolean) => {
+      open.value = v;
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": onUpdateModelValue,
+            w: 24,
+            h: 7,
+            title: "Confirm",
+            placement: "center",
+            teleport: true,
+            closeOnConfirm: false,
+            buttons: [{ label: "OK", value: "ok", default: true }],
+            onConfirm,
+            onClose,
+          },
+          () => h(TText, { x: 0, y: 0, w: 20, value: "Hi" }),
+        ),
+      40,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    const lines = mounted.terminal.snapshot().lines;
+    const buttonY = lines.findIndex((line) => line.includes("[ OK ]"));
+    const okX = lines[buttonY]!.indexOf("[ OK ]") + 2;
+
+    container.dispatchEvent(
+      new MouseEvent("click", { clientX: okX, clientY: buttonY, bubbles: true }),
+    );
+    await nextTick();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }),
+    );
+    await nextTick();
+    expect(onConfirm).toHaveBeenCalledTimes(2);
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }),
+    );
+    await nextTick();
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }),
+    );
+    await nextTick();
+
+    expect(onUpdateModelValue).toHaveBeenCalledTimes(1);
+    expect(onUpdateModelValue).toHaveBeenLastCalledWith(false);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    mounted.unmount();
+  });
+
+  it("TDialog reopen does not leave stale footer handlers", async () => {
+    const open = ref(true);
+    const onConfirm = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 24,
+            h: 7,
+            title: "Confirm",
+            placement: "center",
+            teleport: true,
+            buttons: [{ label: "OK", value: "ok", default: true }],
+            onConfirm,
+          },
+          () => h(TText, { x: 0, y: 0, w: 20, value: "Hi" }),
+        ),
+      40,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    let lines = mounted.terminal.snapshot().lines;
+    let buttonY = lines.findIndex((line) => line.includes("[ OK ]"));
+    let okX = lines[buttonY]!.indexOf("[ OK ]") + 2;
+
+    container.dispatchEvent(
+      new MouseEvent("click", { clientX: okX, clientY: buttonY, bubbles: true }),
+    );
+    await nextTick();
+    expect(open.value).toBe(false);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+
+    container.dispatchEvent(
+      new MouseEvent("click", { clientX: okX, clientY: buttonY, bubbles: true }),
+    );
+    await nextTick();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+
+    open.value = true;
+    await nextTick();
+    await nextTick();
+
+    lines = mounted.terminal.snapshot().lines;
+    buttonY = lines.findIndex((line) => line.includes("[ OK ]"));
+    okX = lines[buttonY]!.indexOf("[ OK ]") + 2;
+
+    container.dispatchEvent(
+      new MouseEvent("click", { clientX: okX, clientY: buttonY, bubbles: true }),
+    );
+    await nextTick();
+    expect(onConfirm).toHaveBeenCalledTimes(2);
+    mounted.unmount();
+  });
+
   it("TDialog keeps Tab order in sync after ArrowLeft/Right button navigation", async () => {
     const open = ref(true);
     const confirmed = ref("");

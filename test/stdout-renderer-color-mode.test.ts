@@ -3,6 +3,7 @@ import {
   createStdoutRenderer,
   createTerminal,
   detectTerminalColorCapability,
+  rgbToAnsi256,
 } from "../src/index.js";
 
 const getFrameDelayMs = () => ("GHOSTTY_RESOURCES_DIR" in process.env ? 24 : 16);
@@ -166,6 +167,77 @@ describe("stdoutRenderer color mode", () => {
     expect(out).toContain("\u001B[48;2;68;85;102m");
   });
 
+  it("uses custom palettes for ansi names in ansi256 output", () => {
+    const terminal = createTerminal({ cols: 3, rows: 1 });
+    const cap = createCapture(false);
+    createStdoutRenderer(terminal, {
+      output: cap.output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      colorMode: "ansi256",
+      palette: {
+        red: "#112233",
+        blue: "#445566",
+      },
+    });
+
+    terminal.put(0, 0, "X", { fg: "red", bg: "blue" });
+    terminal.commit();
+
+    const out = cap.getOut();
+    expect(out).toContain(`\u001B[38;5;${rgbToAnsi256({ r: 17, g: 34, b: 51 })}m`);
+    expect(out).toContain(`\u001B[48;5;${rgbToAnsi256({ r: 68, g: 85, b: 102 })}m`);
+    expect(out).not.toContain("\u001B[38;2;");
+    expect(out).not.toContain("\u001B[48;2;");
+  });
+
+  it("keeps ansi16 and ansi8 named-color output independent from custom palettes", () => {
+    const cases = [
+      {
+        colorMode: "ansi16" as const,
+        fg: "redBright",
+        bg: "blueBright",
+        fgOpen: "\u001B[91m",
+        bgOpen: "\u001B[104m",
+      },
+      {
+        colorMode: "ansi8" as const,
+        fg: "redBright",
+        bg: "blueBright",
+        fgOpen: "\u001B[31m",
+        bgOpen: "\u001B[44m",
+      },
+    ];
+
+    for (const c of cases) {
+      const terminal = createTerminal({ cols: 3, rows: 1 });
+      const cap = createCapture(false);
+      createStdoutRenderer(terminal, {
+        output: cap.output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        colorMode: c.colorMode,
+        palette: {
+          redBright: "#112233",
+          blueBright: "#445566",
+        },
+      });
+
+      terminal.put(0, 0, "X", { fg: c.fg, bg: c.bg });
+      terminal.commit();
+
+      const out = cap.getOut();
+      expect(out).toContain(c.fgOpen);
+      expect(out).toContain(c.bgOpen);
+      expect(out).not.toContain("\u001B[38;2;");
+      expect(out).not.toContain("\u001B[48;2;");
+      expect(out).not.toContain("\u001B[38;5;");
+      expect(out).not.toContain("\u001B[48;5;");
+    }
+  });
+
   it("updates custom palettes without recreating the stdout renderer", () => {
     const terminal = createTerminal({ cols: 3, rows: 1 });
     const cap = createCapture(false);
@@ -191,6 +263,76 @@ describe("stdoutRenderer color mode", () => {
     });
 
     expect(cap.getOut()).toContain("\u001B[38;2;1;2;3m");
+    renderer.dispose();
+  });
+
+  it("resets to the built-in palette when updateTheme receives undefined palette", () => {
+    const terminal = createTerminal({ cols: 3, rows: 1 });
+    const cap = createCapture(false);
+    const renderer = createStdoutRenderer(terminal, {
+      output: cap.output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      colorMode: "truecolor",
+      palette: {
+        red: "#112233",
+      },
+    });
+
+    terminal.put(0, 0, "X", { fg: "red" });
+    terminal.commit();
+    expect(cap.getOut()).toContain("\u001B[38;2;17;34;51m");
+
+    const beforeResetLength = cap.getOut().length;
+    renderer.updateTheme?.({ palette: undefined });
+    const resetOut = cap.getOut().slice(beforeResetLength);
+    expect(resetOut).toContain("\u001B[38;2;201;27;0m");
+    renderer.dispose();
+  });
+
+  it("falls back to default output for unknown color names", () => {
+    const terminal = createTerminal({ cols: 3, rows: 1 });
+    const cap = createCapture(false);
+    createStdoutRenderer(terminal, {
+      output: cap.output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      colorMode: "truecolor",
+    });
+
+    terminal.put(0, 0, "X", { fg: "unknown" as any });
+    terminal.commit();
+
+    const out = cap.getOut();
+    expect(out).toContain("X");
+    expect(out).not.toContain("\u001B[38;2;");
+    expect(out).not.toContain("\u001B[38;5;");
+  });
+
+  it("does not mutate caller palette objects", () => {
+    const terminal = createTerminal({ cols: 3, rows: 1 });
+    const cap = createCapture(false);
+    const palette = {
+      red: "#112233",
+      blue: "#445566",
+    };
+    const snapshot = { ...palette };
+    const renderer = createStdoutRenderer(terminal, {
+      output: cap.output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      colorMode: "truecolor",
+      palette,
+    });
+
+    terminal.put(0, 0, "X", { fg: "red", bg: "blue" });
+    terminal.commit();
+    renderer.updateTheme?.({ palette });
+
+    expect(palette).toEqual(snapshot);
     renderer.dispose();
   });
 
