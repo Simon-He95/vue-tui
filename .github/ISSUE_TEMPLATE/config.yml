@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Search existing issues
+    url: https://github.com/Simon-He95/vue-tui/issues?q=is%3Aissue
+    about: Check whether the bug, request, or docs gap is already tracked.
+  - name: Read the docs
+    url: https://github.com/Simon-He95/vue-tui/tree/main/docs
+    about: Start with the docs when the question is about expected behavior or supported APIs.

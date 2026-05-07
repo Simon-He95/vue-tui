@@ -1,0 +1,45 @@
+name: Feature request
+description: Propose a focused API, component, renderer, docs, or tooling improvement.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What are you trying to build, and where does the current API fall short?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - root entrypoint
+        - markdown entrypoint
+        - experimental entrypoint
+        - DOM renderer
+        - stdout renderer
+        - scheduler / performance
+        - events / input
+        - examples / docs
+        - package / release
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the smallest API or behavior change that would solve the use case.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing APIs, app-level workarounds, or smaller changes you considered.
+  - type: textarea
+    id: migration
+    attributes:
+      label: Compatibility / migration notes
+      description: Mention whether this affects root, markdown, or experimental imports.

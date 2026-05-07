@@ -8,9 +8,29 @@ function shim(path: string): string {
 export default defineConfig({
   lang: "zh-CN",
   title: "Vue TUI",
-  description: "Vue 3 terminal UI component library",
+  description: "Vue 3 terminal UI toolkit for browser DOM and CLI stdout renderers",
   cleanUrls: true,
   lastUpdated: true,
+  head: [
+    [
+      "meta",
+      {
+        name: "keywords",
+        content:
+          "Vue, Vue 3, terminal UI, TUI, CLI, stdout renderer, DOM renderer, ANSI, markdown, virtual list, log viewer",
+      },
+    ],
+    ["meta", { property: "og:title", content: "Vue TUI" }],
+    [
+      "meta",
+      {
+        property: "og:description",
+        content: "Vue 3 terminal UI toolkit for browser DOM and CLI stdout renderers.",
+      },
+    ],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { name: "twitter:card", content: "summary" }],
+  ],
   vite: {
     resolve: {
       alias: [
@@ -44,6 +64,17 @@ export default defineConfig({
       { text: "Planes", link: "/planes-and-compositor" },
       { text: "扩展性", link: "/extensibility" },
       { text: "组件 API（生成）", link: "/generated/components-api" },
+      {
+        text: "GitHub",
+        items: [
+          { text: "Repository", link: "https://github.com/Simon-He95/vue-tui" },
+          { text: "Issues", link: "https://github.com/Simon-He95/vue-tui/issues" },
+          {
+            text: "New issue",
+            link: "https://github.com/Simon-He95/vue-tui/issues/new/choose",
+          },
+        ],
+      },
     ],
     sidebar: [
       {
@@ -77,14 +108,23 @@ export default defineConfig({
         ],
       },
       {
-        text: "验收与评审",
+        text: "验收",
         items: [
-          { text: "Components Acceptance", link: "/components-acceptance" },
-          { text: "Design Review", link: "/design-review" },
           { text: "Overflow", link: "/overflow" },
+          { text: "Examples Index", link: "/examples" },
+          { text: "0.x Release Candidate", link: "/release-candidate" },
         ],
       },
     ],
+    editLink: {
+      pattern: "https://github.com/Simon-He95/vue-tui/edit/main/docs/:path",
+      text: "在 GitHub 上编辑此页",
+    },
+    footer: {
+      message:
+        "Bug reports, feature requests, and documentation issues are tracked on GitHub Issues.",
+      copyright: "Released under the MIT License.",
+    },
     socialLinks: [{ icon: "github", link: "https://github.com/Simon-He95/vue-tui" }],
   },
 });
