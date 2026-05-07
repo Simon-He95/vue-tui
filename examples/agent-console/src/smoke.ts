@@ -276,6 +276,66 @@ try {
   app.scheduler.flushNow();
   const markdownHasStyledBackground = transcriptHasStyledBackground(app);
 
+  api.mode.value = "log";
+  api.seed(18);
+  await nextTick();
+  app.scheduler.flushNow();
+  api.jumpToBottom();
+  await nextTick();
+  app.scheduler.flushNow();
+
+  api.openPalette("copy");
+  await nextTick();
+  app.scheduler.flushNow();
+  const paletteFilterMatchesCopy = api.getCommandRows()[0]?.startsWith("/copy") === true;
+  api.closeOverlay();
+  await nextTick();
+  app.scheduler.flushNow();
+
+  api.openPalette("no-such-command");
+  await nextTick();
+  app.scheduler.flushNow();
+  const paletteNoResultBeforeEnter = api.getCommandRows().length === 0;
+  await dispatchKey(app, "Enter");
+  app.scheduler.flushNow();
+  const paletteNoResultEnterSafe = paletteNoResultBeforeEnter && api.getCommandRows().length === 0;
+  api.closeOverlay();
+  await nextTick();
+  app.scheduler.flushNow();
+
+  api.runCommand("/copy");
+  app.scheduler.flushNow();
+  const slashCopyWorked = api.getCopiedText().length > 0;
+
+  api.runCommand("/toggle markdown");
+  app.scheduler.flushNow();
+  const slashToggleMarkdown = api.mode.value === "markdown";
+
+  api.runCommand("/toggle log");
+  app.scheduler.flushNow();
+  const slashToggleLog = api.mode.value === "log";
+
+  api.runCommand("/search dirtyRows");
+  await settleSearch(api, app, raf);
+  const slashSearchWorked =
+    api.searchQuery.value === "dirtyRows" && api.searchState.value.matchCount > 0;
+  api.closeOverlay();
+  await nextTick();
+  app.scheduler.flushNow();
+
+  dispatchWheelBurst(app.events, 8, -1);
+  await flushFrame(raf);
+  api.runCommand("/jump bottom");
+  app.scheduler.flushNow();
+  const slashJumpBottom = api.metrics.value?.atBottom === true;
+
+  api.runCommand("/clear");
+  app.scheduler.flushNow();
+  await nextTick();
+  await flushFrame(raf);
+  const slashClearWorked = api.getTranscriptRows().join("").trim() === "";
+  const slashClearReplayReset = api.replayCursor.value === 0 && api.replayTotal.value === 0;
+
   const output = {
     chunks: 1000,
     frames: scenarioSamples.length,
@@ -297,6 +357,15 @@ try {
     visibleLinks,
     logHasStyledBackground,
     markdownHasStyledBackground,
+    paletteFilterMatchesCopy,
+    paletteNoResultEnterSafe,
+    slashCopyWorked,
+    slashToggleMarkdown,
+    slashToggleLog,
+    slashSearchWorked,
+    slashJumpBottom,
+    slashClearWorked,
+    slashClearReplayReset,
     overlayMaxDirtyRows: maxSampleValue(overlaySamples, "dirtyRows"),
     overlayMaxPaintedNodes: maxSampleValue(overlaySamples, "paintedNodes"),
     overlayInputStable,
@@ -327,6 +396,15 @@ try {
   assert.ok(output.searchMatches > 0, "expected dirtyRows search matches");
   assert.equal(output.logHasStyledBackground, true);
   assert.equal(output.markdownHasStyledBackground, true);
+  assert.equal(output.paletteFilterMatchesCopy, true);
+  assert.equal(output.paletteNoResultEnterSafe, true);
+  assert.equal(output.slashCopyWorked, true);
+  assert.equal(output.slashToggleMarkdown, true);
+  assert.equal(output.slashToggleLog, true);
+  assert.equal(output.slashSearchWorked, true);
+  assert.equal(output.slashJumpBottom, true);
+  assert.equal(output.slashClearWorked, true);
+  assert.equal(output.slashClearReplayReset, true);
   assert.equal(output.overlayInputStable, true);
   assert.ok(output.replayEvents > 0, "expected replay event log");
   assert.equal(output.replayFullLoaded, true);

@@ -5,7 +5,7 @@ export type AgentConsoleKeymapActions = Readonly<{
   overlayOpen: () => boolean;
   closeOverlay: () => void;
   openSearch: () => void;
-  openPalette: () => void;
+  openPalette: (query?: string) => void;
   openLinks: () => void;
   jumpToBottom: () => void;
   toggleMode: () => void;
@@ -42,7 +42,7 @@ export function handleAgentConsoleKeymap(
 
   if (event.key === "/" && !event.ctrlKey && !event.metaKey && !actions.inputFocused()) {
     event.preventDefault();
-    actions.openSearch();
+    actions.openPalette("/");
     return;
   }
 

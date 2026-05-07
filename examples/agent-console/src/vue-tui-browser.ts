@@ -7,6 +7,7 @@ export { TBox } from "../../../src/vue/components/TBox.js";
 export { TDialog } from "../../../src/vue/components/TDialog.js";
 export { TInputBox } from "../../../src/vue/components/TInputBox.js";
 export { TRenderPlane } from "../../../src/vue/components/TRenderPlane.js";
+export { TSelect } from "../../../src/vue/components/TSelect.js";
 export { TText } from "../../../src/vue/components/TText.js";
 export { TView } from "../../../src/vue/components/TView.js";
 export { TerminalProvider } from "../../../src/vue/components/TerminalProvider.js";
