@@ -232,6 +232,19 @@ pnpm run docs:dev
 pnpm run docs:build
 ```
 
+Release candidate checks:
+
+```bash
+pnpm run format:check
+pnpm run lint
+pnpm run typecheck
+pnpm run test
+pnpm run test:package-exports
+pnpm run docs:build
+```
+
+See [docs/release-candidate.md](./docs/release-candidate.md) for the full validation matrix, package export checks, examples index, and migration notes.
+
 ## License
 
 [MIT](./license)

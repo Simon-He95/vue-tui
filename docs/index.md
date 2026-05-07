@@ -26,11 +26,13 @@ import DocsLandingTerminal from './.vitepress/components/DocsLandingTerminal.vue
 ## 快速入口
 
 - [Live Showcase](/showcase)
+- [Examples Index](/examples)
 - [Agent Console 示例](/agent-console)
 - [组件总览](/components)
 - [组件 API（自动生成）](/generated/components-api)
 - [核心 API](/api)
 - [Planes 与 Compositor](/planes-and-compositor)
+- [0.x Release Candidate](/release-candidate)
 - [扩展性与插件化](/extensibility)
 
 ## 架构速览
@@ -47,4 +49,5 @@ import DocsLandingTerminal from './.vitepress/components/DocsLandingTerminal.vue
 2. 再看 [组件总览](/components) 和 [组件 API（自动生成）](/generated/components-api)，查 props / events / usage。
 3. 如果你关心 CLI 级性能和分层渲染，接着看 [Planes 与 Compositor](/planes-and-compositor)。
 4. 如果你关心大列表、日志和 streaming 输出，看 [Agent Console 示例](/agent-console) 和 [高吞吐渲染架构规格](/high-throughput-rendering)。
-5. 最后看 [扩展性与插件化](/extensibility)，判断哪些能力已经能注入，哪些还值得继续抽象。
+5. 准备发布前看 [Examples Index](/examples) 和 [0.x Release Candidate](/release-candidate)，确认 smoke、bench、docs、exports 都走通。
+6. 最后看 [扩展性与插件化](/extensibility)，判断哪些能力已经能注入，哪些还值得继续抽象。

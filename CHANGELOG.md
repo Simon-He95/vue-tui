@@ -25,6 +25,13 @@
 - Agent Console example covering streaming transcript, log/markdown modes, split render planes, input stability, search, links, command palette overlay, browser smoke, and stdout smoke.
 - `createMarkdownBlockSource()` in the markdown entrypoint lets streaming transcript apps finalize markdown blocks and pass `blocks` to `TVirtualMarkdown` without reparsing finalized history.
 - `TVirtualMarkdown` accepts external markdown `blocks` in addition to the existing `content` string path.
+- 0.x release candidate docs covering validation commands, package export boundaries, examples, migration notes, and experimental API warnings.
+
+### Migration Notes
+
+- Treat `@simon_he/vue-tui/experimental` as an opt-in boundary. Keep `TVirtualList`, `TLogView`, log companions, and log plugins isolated from root-entry application code.
+- For `TLogView`, custom mutable sources should bump `version` or return changing `getLineKey(index)` values for rows whose content changes.
+- Browser and terminal examples now have separate smoke paths; release validation should run headless smoke in CI and reserve real terminal runners for manual checks.
 
 ### Fixed
 
