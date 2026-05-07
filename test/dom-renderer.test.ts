@@ -204,6 +204,26 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("merges continuous same-style runs", () => {
+    const { terminal, container, renderer } = setup(3);
+
+    try {
+      terminal.write("A", { x: 0, y: 0, style: { fg: "red" } });
+      terminal.write("B", { x: 1, y: 0, style: { fg: "red" } });
+      terminal.write("C", { x: 2, y: 0, style: { fg: "blue" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const spans = Array.from(lineEl(container).querySelectorAll("span"));
+      expect(spans).toHaveLength(2);
+      expect(spans.map((span) => span.textContent)).toEqual(["AB", "C"]);
+      expect(spans[0]!.style.color).toBe("var(--vt-color-red)");
+      expect(spans[1]!.style.color).toBe("var(--vt-color-blue)");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("resets reused multi-segment row span styles", () => {
     const { terminal, container, renderer } = setup(4);
 
@@ -358,6 +378,27 @@ describe("DomRenderer row rendering", () => {
         rows: 1,
         fragmentRows: 1,
         spansCreated: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("invalidates the row cache when href changes", () => {
+    const { terminal, container, renderer } = setup(3);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://a.example" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://b.example" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 0,
+        fragmentRows: 1,
       });
     } finally {
       renderer.dispose();

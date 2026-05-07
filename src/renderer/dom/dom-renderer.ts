@@ -293,14 +293,32 @@ interface RowSegment {
   key: string;
 }
 
-function computeRowSegments(terminal: Terminal, y: number): RowSegment[] {
+type RowSegmentsResult = Readonly<{
+  segments: RowSegment[];
+  key: string;
+}>;
+
+function computeRowSegmentsWithKey(terminal: Terminal, y: number): RowSegmentsResult {
   const cells = terminal.getRow(y);
   let currentKey: string | null = null;
   let currentStyle: Style | null = null;
   let currentText = "";
   let currentCols = 0;
   let currentWide = false;
-  const spans: RowSegment[] = [];
+  const segments: RowSegment[] = [];
+  let keyBody = "";
+  let segmentCount = 0;
+
+  function pushSegment(segment: RowSegment): void {
+    if (segmentCount === 1) {
+      const first = segments[0]!;
+      keyBody += `|${first.key}:${first.text}:${first.cols}:${first.wide ? 1 : 0}`;
+    }
+    segments.push(segment);
+    segmentCount++;
+    if (segmentCount > 1)
+      keyBody += `|${segment.key}:${segment.text}:${segment.cols}:${segment.wide ? 1 : 0}`;
+  }
 
   for (const cell of cells as Cell[]) {
     if (cell.continuation) continue;
@@ -323,7 +341,7 @@ function computeRowSegments(terminal: Terminal, y: number): RowSegment[] {
       currentCols += cols;
       continue;
     }
-    spans.push({
+    pushSegment({
       text: currentText,
       cols: currentCols,
       wide: currentWide,
@@ -337,7 +355,7 @@ function computeRowSegments(terminal: Terminal, y: number): RowSegment[] {
     currentWide = wide;
   }
   if (currentKey != null) {
-    spans.push({
+    pushSegment({
       text: currentText,
       cols: currentCols,
       wide: currentWide,
@@ -346,7 +364,18 @@ function computeRowSegments(terminal: Terminal, y: number): RowSegment[] {
     });
   }
 
-  return spans;
+  if (segmentCount === 0) return { segments, key: "0" };
+
+  if (segmentCount === 1) {
+    const s = segments[0]!;
+    const plain = isPlainStyle(s.style);
+    if (!s.wide && plain) return { segments, key: `p:${s.text}:${s.cols}` };
+    if (!s.wide && !s.style.href && !plain)
+      return { segments, key: `s:${s.key}:${s.text}:${s.cols}` };
+    return { segments, key: `1:${s.key}:${s.text}:${s.cols}:${s.wide ? 1 : 0}` };
+  }
+
+  return { segments, key: `${segmentCount}${keyBody}` };
 }
 
 // Cache for row content comparison - avoids unnecessary DOM updates
@@ -356,25 +385,6 @@ function nowMs(): number {
   const p = (globalThis as any).performance;
   if (p && typeof p.now === "function") return p.now();
   return Date.now();
-}
-
-function segmentsToKey(segments: readonly RowSegment[]): string {
-  if (segments.length === 0) return "0";
-
-  if (segments.length === 1) {
-    const s = segments[0]!;
-    const plain = isPlainStyle(s.style);
-    if (!s.wide && plain) return `p:${s.text}:${s.cols}`;
-    if (!s.wide && !s.style.href && !plain) return `s:${s.key}:${s.text}:${s.cols}`;
-    return `1:${s.key}:${s.text}:${s.cols}:${s.wide ? 1 : 0}`;
-  }
-
-  let out = String(segments.length);
-  for (let i = 0; i < segments.length; i++) {
-    const s = segments[i]!;
-    out += `|${s.key}:${s.text}:${s.cols}:${s.wide ? 1 : 0}`;
-  }
-  return out;
 }
 
 function isPlainStyle(style: Style): boolean {
@@ -454,8 +464,7 @@ function renderRow(
   stats: RowRenderMutableStats,
 ): void {
   stats.rows++;
-  const segments = computeRowSegments(terminal, y);
-  const newKey = segmentsToKey(segments);
+  const { segments, key: newKey } = computeRowSegmentsWithKey(terminal, y);
 
   // Skip DOM update if content hasn't changed
   const cachedKey = rowCache.get(lineEl);
