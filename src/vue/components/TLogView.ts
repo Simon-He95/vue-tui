@@ -259,6 +259,9 @@ export type TLogViewHandle = Readonly<{
       align?: "start" | "center" | "end";
     }>,
   ) => void;
+  refreshViewport: () => void;
+  invalidateLine: (index: number) => void;
+  invalidateRange: (start: number, end: number) => void;
   findNext: () => void;
   findPrevious: () => void;
   clearSearch: () => void;
@@ -3146,6 +3149,58 @@ export const TLogView = defineComponent({
       scrollToVisualRow(target);
     }
 
+    function repaintInvalidatedViewport(): void {
+      const nextTop = stickToBottom.value ? bottomScrollTop() : currentScrollTop();
+      const changed = applyScrollTop(nextTop, "viewport-repaint", {
+        emitScroll: true,
+        stickToBottom: stickToBottom.value && nextTop >= maxScrollTop(),
+      });
+      if (!changed) markViewportDirty();
+      invalidateSelf("normal", "data");
+    }
+
+    function refreshViewport(): void {
+      clearLineCaches();
+      lastPaintedBottom = null;
+      resetVisualIndex(lineCount(), currentWrapWidth());
+      lastLineCount = lineCount();
+      lastFirstLineIndex = firstLineIndex();
+      if (props.wrap && props.visualIndexMode === "exact") requestVisualIndexMeasurement(0);
+      requestSearchScan();
+      repaintInvalidatedViewport();
+    }
+
+    function invalidateRange(start: number, end: number): void {
+      const count = lineCount();
+      const rawStart = Math.floor(Number(start));
+      const rawEnd = Math.ceil(Number(end));
+      if (!Number.isFinite(rawStart) || !Number.isFinite(rawEnd)) return;
+
+      const safeStart = clamp(rawStart, 0, count);
+      const safeEnd = clamp(rawEnd, 0, count);
+      if (safeEnd <= safeStart) return;
+
+      clearLineCaches();
+      lastPaintedBottom = null;
+      if (props.wrap) {
+        ensureVisualIndex();
+        for (let index = safeStart; index < safeEnd; index++) visualKeys[index] = undefined;
+        for (let index = safeStart; index < safeEnd; index++) measureVisualLine(index);
+        syncVisualIndexStatus();
+      } else {
+        syncNonWrappedVisualIndexState();
+      }
+      emitVisualIndex();
+      requestSearchScan();
+      repaintInvalidatedViewport();
+    }
+
+    function invalidateLine(index: number): void {
+      const lineIndex = Math.floor(Number(index));
+      if (!Number.isFinite(lineIndex)) return;
+      invalidateRange(lineIndex, lineIndex + 1);
+    }
+
     function visualRowForMatch(match: TLogViewSearchMatch): number {
       if (!props.wrap) return match.index;
       ensureVisualIndex();
@@ -3336,6 +3391,9 @@ export const TLogView = defineComponent({
       scrollToVisualRow,
       scrollBy,
       scrollToLine,
+      refreshViewport,
+      invalidateLine,
+      invalidateRange,
       findNext,
       findPrevious,
       clearSearch,
