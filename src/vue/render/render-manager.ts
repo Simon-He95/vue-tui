@@ -614,7 +614,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     const renderStart = profiler?.now();
     const activePlanes = options?.activePlanes ?? null;
     const requestedPlanes = activePlanes ?? TERMINAL_RENDER_PLANES;
-    const env = process?.env;
+    const env = (globalThis as { process?: { env?: Record<string, string> } }).process?.env;
 
     function intersectsDirtyRows(y0: number, y1: number, rows: readonly number[]): boolean {
       if (y1 <= y0 || rows.length === 0) return false;
