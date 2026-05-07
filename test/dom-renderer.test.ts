@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createDomRenderer, createTerminal } from "../src/index.js";
 
-function setup(cols = 8, rows = 1) {
+function setup(cols = 8, rows = 1, options: Parameters<typeof createDomRenderer>[2] = {}) {
   const terminal = createTerminal({ cols, rows });
   const container = document.createElement("div");
   document.body.appendChild(container);
-  const renderer = createDomRenderer(terminal, container);
+  const renderer = createDomRenderer(terminal, container, options);
   return { terminal, container, renderer };
 }
 
@@ -172,6 +172,7 @@ describe("DomRenderer row rendering", () => {
       expect(line.textContent).toBe("CCDD");
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
+        cacheHits: 0,
         segmentReuseRows: 1,
         fragmentRows: 0,
         spansReused: 2,
@@ -487,8 +488,33 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("skips DOM writes when the row cache matches", () => {
+  it("uses row cache by default after computing segments", () => {
     const { terminal, container, renderer } = setup();
+
+    try {
+      terminal.fill(0, 0, 8, 1, "A");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      terminal.fill(0, 0, 8, 1, "A");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).textContent).toBe("AAAAAAAA");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 1,
+        plainTextRows: 0,
+        fragmentRows: 0,
+        textNodeUpdates: 0,
+        replaceChildren: 0,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("skips DOM writes when the opt-in row cache matches", () => {
+    const { terminal, container, renderer } = setup(8, 1, { enableRowKeyPrepass: true });
 
     try {
       terminal.fill(0, 0, 8, 1, "A");
@@ -520,8 +546,32 @@ describe("DomRenderer row rendering", () => {
         singleStyledRows: 0,
         segmentReuseRows: 0,
         fragmentRows: 0,
+        spansCreated: 0,
+        spansReused: 0,
         textNodeUpdates: 0,
         replaceChildren: 0,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("invalidates the opt-in row prepass when plain text changes", () => {
+    const { terminal, container, renderer } = setup(4, 1, { enableRowKeyPrepass: true });
+
+    try {
+      terminal.fill(0, 0, 4, 1, "A");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      terminal.fill(0, 0, 4, 1, "B");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).textContent).toBe("BBBB");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 0,
+        plainTextRows: 1,
       });
     } finally {
       renderer.dispose();
@@ -583,7 +633,7 @@ describe("DomRenderer row rendering", () => {
   });
 
   it("skips single styled DOM writes when the row cache matches", () => {
-    const { terminal, container, renderer } = setup(3);
+    const { terminal, container, renderer } = setup(3, 1, { enableRowKeyPrepass: true });
 
     try {
       terminal.fill(0, 0, 3, 1, "A", { fg: "red" });
@@ -600,7 +650,68 @@ describe("DomRenderer row rendering", () => {
         cacheHits: 1,
         singleStyledRows: 0,
         fragmentRows: 0,
+        spansCreated: 0,
+        spansReused: 0,
         replaceChildren: 0,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("skips multi-segment DOM writes when the row cache matches", () => {
+    const { terminal, container, renderer } = setup(4, 1, { enableRowKeyPrepass: true });
+
+    try {
+      terminal.fill(0, 0, 2, 1, "A", { fg: "red" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      const firstSpan = line.childNodes[0];
+      const secondSpan = line.childNodes[1];
+
+      terminal.fill(0, 0, 2, 1, "A", { fg: "red" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(line.childNodes[0]).toBe(firstSpan);
+      expect(line.childNodes[1]).toBe(secondSpan);
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 1,
+        segmentReuseRows: 0,
+        fragmentRows: 0,
+        spansCreated: 0,
+        spansReused: 0,
+        replaceChildren: 0,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("invalidates the opt-in row prepass when multi-segment styles change order", () => {
+    const { terminal, container, renderer } = setup(4, 1, { enableRowKeyPrepass: true });
+
+    try {
+      terminal.fill(0, 0, 2, 1, "A", { fg: "red" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      terminal.fill(0, 0, 2, 1, "A", { fg: "blue" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "red" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const spans = Array.from(lineEl(container).querySelectorAll("span"));
+      expect(spans[0]!.style.color).toBe("var(--vt-color-blue)");
+      expect(spans[1]!.style.color).toBe("var(--vt-color-red)");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 0,
+        segmentReuseRows: 1,
       });
     } finally {
       renderer.dispose();

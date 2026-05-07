@@ -91,6 +91,11 @@ export interface DomRendererOptions {
    * Enables DOM line-node shifting for terminal scrollOperations.
    */
   enableScrollOperations?: boolean;
+  /**
+   * Enables a key-only early bailout before row segment allocation.
+   * The normal row cache remains enabled regardless of this option.
+   */
+  enableRowKeyPrepass?: boolean;
 }
 
 interface PlaneLayer {
@@ -298,6 +303,23 @@ type RowSegmentsResult = Readonly<{
   key: string;
 }>;
 
+function formatRowSegmentKeyPart(key: string, text: string, cols: number, wide: boolean): string {
+  return `${key}:${text}:${cols}:${wide ? 1 : 0}`;
+}
+
+function formatSingleRowKey(
+  key: string,
+  text: string,
+  cols: number,
+  wide: boolean,
+  style: Style,
+): string {
+  const plain = isPlainStyle(style);
+  if (!wide && plain) return `p:${text}:${cols}`;
+  if (!wide && !style.href && !plain) return `s:${key}:${text}:${cols}`;
+  return `1:${formatRowSegmentKeyPart(key, text, cols, wide)}`;
+}
+
 function computeRowSegmentsWithKey(terminal: Terminal, y: number): RowSegmentsResult {
   const cells = terminal.getRow(y);
   let currentKey: string | null = null;
@@ -312,12 +334,12 @@ function computeRowSegmentsWithKey(terminal: Terminal, y: number): RowSegmentsRe
   function pushSegment(segment: RowSegment): void {
     if (segmentCount === 1) {
       const first = segments[0]!;
-      keyBody += `|${first.key}:${first.text}:${first.cols}:${first.wide ? 1 : 0}`;
+      keyBody += `|${formatRowSegmentKeyPart(first.key, first.text, first.cols, first.wide)}`;
     }
     segments.push(segment);
     segmentCount++;
     if (segmentCount > 1)
-      keyBody += `|${segment.key}:${segment.text}:${segment.cols}:${segment.wide ? 1 : 0}`;
+      keyBody += `|${formatRowSegmentKeyPart(segment.key, segment.text, segment.cols, segment.wide)}`;
   }
 
   for (const cell of cells as Cell[]) {
@@ -368,14 +390,77 @@ function computeRowSegmentsWithKey(terminal: Terminal, y: number): RowSegmentsRe
 
   if (segmentCount === 1) {
     const s = segments[0]!;
-    const plain = isPlainStyle(s.style);
-    if (!s.wide && plain) return { segments, key: `p:${s.text}:${s.cols}` };
-    if (!s.wide && !s.style.href && !plain)
-      return { segments, key: `s:${s.key}:${s.text}:${s.cols}` };
-    return { segments, key: `1:${s.key}:${s.text}:${s.cols}:${s.wide ? 1 : 0}` };
+    return { segments, key: formatSingleRowKey(s.key, s.text, s.cols, s.wide, s.style) };
   }
 
   return { segments, key: `${segmentCount}${keyBody}` };
+}
+
+function computeRowKey(terminal: Terminal, y: number): string {
+  const cells = terminal.getRow(y);
+  let currentKey: string | null = null;
+  let currentStyle: Style | null = null;
+  let currentText = "";
+  let currentCols = 0;
+  let currentWide = false;
+  let firstKey = "";
+  let firstStyle: Style | null = null;
+  let firstText = "";
+  let firstCols = 0;
+  let firstWide = false;
+  let keyBody = "";
+  let segmentCount = 0;
+
+  function pushSegment(key: string, text: string, cols: number, wide: boolean, style: Style): void {
+    if (segmentCount === 0) {
+      firstKey = key;
+      firstStyle = style;
+      firstText = text;
+      firstCols = cols;
+      firstWide = wide;
+    } else {
+      if (segmentCount === 1)
+        keyBody += `|${formatRowSegmentKeyPart(firstKey, firstText, firstCols, firstWide)}`;
+      keyBody += `|${formatRowSegmentKeyPart(key, text, cols, wide)}`;
+    }
+    segmentCount++;
+  }
+
+  for (const cell of cells as Cell[]) {
+    if (cell.continuation) continue;
+    const ch = cell.ch || " ";
+    const cols = cell.width || 1;
+    const wide = cols === 2;
+    const nextStyle = cell.style;
+    const key: string =
+      nextStyle === currentStyle && currentKey != null ? currentKey : styleKey(nextStyle);
+    if (currentKey == null) {
+      currentKey = key;
+      currentStyle = nextStyle;
+      currentText = ch;
+      currentCols = cols;
+      currentWide = wide;
+      continue;
+    }
+    if (key === currentKey && wide === currentWide) {
+      currentText += ch;
+      currentCols += cols;
+      continue;
+    }
+    pushSegment(currentKey, currentText, currentCols, currentWide, currentStyle!);
+    currentKey = key;
+    currentStyle = nextStyle;
+    currentText = ch;
+    currentCols = cols;
+    currentWide = wide;
+  }
+  if (currentKey != null)
+    pushSegment(currentKey, currentText, currentCols, currentWide, currentStyle!);
+
+  if (segmentCount === 0) return "0";
+  if (segmentCount === 1)
+    return formatSingleRowKey(firstKey, firstText, firstCols, firstWide, firstStyle!);
+  return `${segmentCount}${keyBody}`;
 }
 
 // Cache for row content comparison - avoids unnecessary DOM updates
@@ -462,12 +547,19 @@ function renderRow(
   y: number,
   lineEl: HTMLElement,
   stats: RowRenderMutableStats,
+  enableRowKeyPrepass: boolean,
 ): void {
   stats.rows++;
-  const { segments, key: newKey } = computeRowSegmentsWithKey(terminal, y);
-
-  // Skip DOM update if content hasn't changed
   const cachedKey = rowCache.get(lineEl);
+  if (enableRowKeyPrepass && cachedKey != null) {
+    const prepassKey = computeRowKey(terminal, y);
+    if (cachedKey === prepassKey) {
+      stats.cacheHits++;
+      return;
+    }
+  }
+
+  const { segments, key: newKey } = computeRowSegmentsWithKey(terminal, y);
   if (cachedKey === newKey) {
     stats.cacheHits++;
     return;
@@ -594,6 +686,7 @@ export function createDomRenderer(
     0,
     Math.floor(options.syncFlushCellBudget ?? DEFAULT_SYNC_FLUSH_CELL_BUDGET),
   );
+  const enableRowKeyPrepass = options.enableRowKeyPrepass === true;
   const capabilities: RendererCapabilities = Object.freeze({
     ...DOM_RENDERER_CAPABILITIES,
     scrollOperations: options.enableScrollOperations !== false,
@@ -750,7 +843,15 @@ export function createDomRenderer(
       const layer = planeLayers.get(plane);
       if (!layer) continue;
       for (let y = 0; y < size.rows; y++)
-        renderRow(layer.terminal, metrics, wideScaleX, y, layer.lines[y]!, rowStats);
+        renderRow(
+          layer.terminal,
+          metrics,
+          wideScaleX,
+          y,
+          layer.lines[y]!,
+          rowStats,
+          enableRowKeyPrepass,
+        );
     }
     recordRowRenderStats(rowStats);
   }
@@ -1046,7 +1147,8 @@ export function createDomRenderer(
       const flushRow = (y: number): void => {
         if (!rows.has(y)) return;
         const line = layer.lines[y];
-        if (line) renderRow(layer.terminal, metrics, wideScaleX, y, line, rowStats);
+        if (line)
+          renderRow(layer.terminal, metrics, wideScaleX, y, line, rowStats, enableRowKeyPrepass);
         deletePendingRow(plane, rows, y);
         flushedRows++;
       };
