@@ -1,0 +1,34 @@
+name: Documentation issue
+description: Report missing, stale, confusing, or broken documentation.
+title: "docs: "
+labels: ["documentation"]
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Page or section
+      description: Link to the page or name the README/docs section.
+      placeholder: "README.md, docs/performance.md, docs/generated/components-api.md"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is missing, stale, confusing, or broken?
+    validations:
+      required: true
+  - type: textarea
+    id: suggested-change
+    attributes:
+      label: Suggested change
+      description: Optional wording, examples, links, or commands that should be added.
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Blocks adoption
+        - Causes wrong usage
+        - Minor confusion
+        - Broken link or typo

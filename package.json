@@ -1,10 +1,26 @@
 {
   "name": "@simon_he/vue-tui",
   "version": "0.0.7",
-  "description": "A Vue 3 terminal UI component library",
-  "keywords": [],
+  "description": "Vue 3 terminal UI toolkit for browser DOM and CLI stdout renderers",
+  "keywords": [
+    "ansi",
+    "cli",
+    "component-library",
+    "dom-renderer",
+    "log-viewer",
+    "markdown",
+    "stdout",
+    "terminal",
+    "terminal-ui",
+    "tui",
+    "virtual-list",
+    "vue",
+    "vue3"
+  ],
   "homepage": "https://github.com/Simon-He95/vue-tui#readme",
-  "bugs": "https://github.com/Simon-He95/vue-tui/issues",
+  "bugs": {
+    "url": "https://github.com/Simon-He95/vue-tui/issues"
+  },
   "license": "MIT",
   "author": "Simon He",
   "repository": {

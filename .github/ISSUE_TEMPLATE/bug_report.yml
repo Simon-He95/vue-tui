@@ -1,0 +1,69 @@
+name: Bug report
+description: Report incorrect renderer, runtime, event, component, or package behavior.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please include a small reproduction or the narrowest command that shows the problem.
+  - type: input
+    id: package-version
+    attributes:
+      label: Package version
+      description: The installed `@simon_he/vue-tui` version or commit SHA.
+      placeholder: "0.0.7 or commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: renderer
+    attributes:
+      label: Renderer / runtime
+      options:
+        - Browser DOM renderer
+        - stdout renderer
+        - headless createTerminalApp
+        - core terminal API
+        - docs / package
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Link to a repo, paste a minimal snippet, or list the exact command and example used.
+      placeholder: "pnpm run example:agent-console:smoke"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened? Include terminal/browser output, screenshots, or failing assertion text when useful.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, package manager, Vue version, browser or terminal, and Node version if relevant.
+      placeholder: |
+        OS:
+        Node:
+        Vue:
+        Browser or terminal:
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation tried
+      description: Commands or checks you already ran.
+      placeholder: |
+        pnpm run test
+        pnpm run docs:build

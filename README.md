@@ -1,31 +1,31 @@
-# Vue TUI
+# @simon_he/vue-tui
 
-Vue TUI is a Vue 3 terminal UI toolkit. It lets you render the same component model to a browser DOM surface or to a real terminal through stdout.
+Vue TUI is a Vue 3 terminal UI toolkit for building terminal-style interfaces that can render in a browser or in a real CLI. It gives you Vue components, terminal cell rendering, event dispatch, markdown rendering, and high-throughput primitives for lists, logs, and streaming transcripts.
 
-The package is useful for:
+Use it when you want:
 
-- browser-hosted terminal interfaces and playgrounds
-- CLI apps that want Vue component composition
-- high-throughput views such as virtual lists, streaming logs, and markdown transcripts
-- renderer and terminal experiments that need deterministic tests
+- Browser-hosted terminal interfaces, dashboards, demos, and playgrounds.
+- CLI apps that use Vue component composition instead of imperative stdout drawing.
+- Shared UI code that can run against a DOM renderer, a stdout renderer, or headless tests.
+- Large terminal surfaces such as virtual lists, append-only logs, markdown transcripts, and agent console UIs.
 
-## Installation
+## Install
 
 ```bash
 pnpm add @simon_he/vue-tui vue
 ```
 
-Vue is a peer dependency. The published package supports Vue `>=3.3.0 <4`.
+Vue is a peer dependency. The current package supports Vue `>=3.3.0 <4`.
 
 ## Entry Points
 
-| Import                           | Stability         | Main exports                                                                                                                                                                    |
-| -------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@simon_he/vue-tui`              | Stable            | `TerminalProvider`, `TText`, `TBox`, `TInput`, `createTerminal`, `createDomRenderer`, `createStdoutRenderer`, `createTerminalApp`, event managers, runtime/router/input helpers |
-| `@simon_he/vue-tui/markdown`     | Focused sub-entry | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers                                                                                                         |
-| `@simon_he/vue-tui/experimental` | Experimental      | `TVirtualList`, `TLogView`, log search/link/minimap components, append-only log store, TLog plugins                                                                             |
+| Import                           | Stability    | Use it for                                                                                                       |
+| -------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `@simon_he/vue-tui`              | Core         | Terminal runtime, root Vue components, DOM/stdout renderers, events, layout, inputs, router, and runtime helpers |
+| `@simon_he/vue-tui/markdown`     | Focused      | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources        |
+| `@simon_he/vue-tui/experimental` | Experimental | `TVirtualList`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins         |
 
-High-throughput log and virtualized APIs are intentionally kept out of the root entrypoint until their API surface settles.
+High-throughput log and virtualization APIs stay under `/experimental` until their public surface settles. Keep those imports isolated in application code.
 
 ## Browser Usage
 
@@ -47,7 +47,9 @@ const input = ref("");
 </template>
 ```
 
-## Terminal Usage
+`TerminalProvider` wires the terminal buffer, DOM renderer, event manager, scheduler, runtime, layout context, and input plugins for browser Vue apps.
+
+## CLI Usage
 
 For a real terminal, mount a headless Vue app and attach stdout/stdin:
 
@@ -90,128 +92,46 @@ const driver = createStdinDriver({
 
 ## Core Concepts
 
-- `createTerminal({ cols, rows })` creates the cell buffer, cursor, planes, scrollback, and commit events.
-- `createDomRenderer(terminal, container)` renders terminal cells to DOM with row caching and optional DOM scroll operations.
+- `createTerminal({ cols, rows })` owns the cell buffer, cursor, planes, scrollback, and commit events.
+- `createDomRenderer(terminal, container)` renders terminal cells to DOM with row caching and fast paths for plain and styled rows.
 - `createStdoutRenderer(terminal, options)` emits ANSI output for real terminal UIs.
-- `TerminalProvider` wires terminal, renderer, events, scheduler, runtime, layout, and input plugins for browser Vue usage.
-- `createTerminalApp()` provides the same runtime wiring without a DOM renderer, for CLI apps and tests.
-- `TRenderPlane` separates transcript, chrome, and overlay surfaces so small UI updates do not repaint large content panes.
+- `TerminalProvider` is the browser-facing Vue runtime provider.
+- `createTerminalApp()` is the headless runtime for CLI apps and deterministic tests.
+- `TRenderPlane` separates transcript, chrome, input, and overlay surfaces so small updates do not repaint large panes.
 
-## API Surface
+## Components
 
-### Root Components
+| Area          | Components                                                                                     |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| Layout        | `TBox`, `TView`, `TAnchor`, `TFlow`, `TRenderPlane`, `TRenderLayer`                            |
+| Text          | `TText`, `TTransition`, `TMarkdownText`, `TVirtualMarkdown`                                    |
+| Input         | `TInput`, `TInputBox`, `TSelect`, `TPathPicker`, `TJsonEditor`                                 |
+| Overlay       | `TDialog`, `TMultilineModal`, `TDebugOverlay`                                                  |
+| Experimental  | `TVirtualList`, `TLogView`, `TLogSearchBar`, `TLogLinksPanel`, `TLogScrollbar`, `TLogMinimap`  |
+| Runtime tools | `createTerminal`, `createDomRenderer`, `createStdoutRenderer`, `createTerminalApp`, event APIs |
 
-| Component                                                                 | Purpose                                          |
-| ------------------------------------------------------------------------- | ------------------------------------------------ |
-| `TerminalProvider`                                                        | Browser terminal runtime provider                |
-| `TText`                                                                   | Fixed-position text drawing                      |
-| `TBox`                                                                    | Border, title, padding, and clipped content area |
-| `TView`, `TAnchor`, `TFlow`                                               | Layout containers                                |
-| `TInput`, `TInputBox`, `TSelect`, `TDialog`, `TPathPicker`, `TJsonEditor` | Interactive terminal widgets                     |
-| `TRenderPlane`, `TRenderLayer`                                            | Plane/layer routing                              |
-| `TTransition`                                                             | Time-based mount/unmount transitions             |
+See [docs/components.md](./docs/components.md) and [docs/generated/components-api.md](./docs/generated/components-api.md) for props and events.
 
-### Core And Renderer APIs
+## Documentation
 
-| API                                           | Purpose                                     |
-| --------------------------------------------- | ------------------------------------------- |
-| `createTerminal`                              | In-memory terminal and planes               |
-| `createDomRenderer`                           | Browser DOM renderer                        |
-| `createStdoutRenderer`                        | CLI/stdout renderer                         |
-| `createEventManager`, `createCliEventManager` | Pointer/keyboard dispatch to terminal nodes |
-| `createTerminalApp`                           | Headless Vue app for CLI/tests              |
-| `createRuntime`                               | Imperative component mounting               |
-| `createTerminalRouter`                        | Terminal route state                        |
+| Page                                                             | Purpose                                                              |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [Docs home](./docs/index.md)                                     | Product overview and reading path                                    |
+| [Examples index](./docs/examples.md)                             | Browser, terminal, and smoke example commands                        |
+| [Core API](./docs/api.md)                                        | Terminal, renderer, events, runtime, planes, and scheduler contracts |
+| [Performance](./docs/performance.md)                             | Practical performance guidance                                       |
+| [High-throughput rendering](./docs/high-throughput-rendering.md) | Scheduler, dirty rows, mailbox, log, and renderer architecture       |
+| [Agent Console](./docs/agent-console.md)                         | Streaming transcript example stack                                   |
+| [Release candidate](./docs/release-candidate.md)                 | 0.x validation, package export checks, and migration notes           |
 
-### Markdown Entry
-
-| API                                                                      | Purpose                                                  |
-| ------------------------------------------------------------------------ | -------------------------------------------------------- |
-| `TMarkdownText`                                                          | Markdown text block                                      |
-| `TVirtualMarkdown`                                                       | Virtualized markdown viewport for long/streaming content |
-| `createMarkdownBlockSource`                                              | Incremental block source for streaming markdown history  |
-| `createTuiMarkdownParser`                                                | Parser wrapper around `stream-markdown-parser`           |
-| `buildMarkdownBlocks`, `buildMarkdownVisualRows`, `layoutMarkdownBlocks` | Markdown pipeline helpers                                |
-
-### Experimental Entry
-
-| API                                                                                 | Purpose                                              |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `TVirtualList`                                                                      | Virtual list with dirty-row and scroll optimizations |
-| `TLogView`                                                                          | Append-only / retained-window log viewport           |
-| `createAppendOnlyLogStore`                                                          | Streaming log source for `TLogView`                  |
-| `TLogSearchBar`, `TLogSearchResults`, `TLogVirtualSearchResults`, `TLogSearchPager` | Log search UI                                        |
-| `TLogLinksPanel`, `TLogVirtualLinksPanel`                                           | Link navigation UI                                   |
-| `TLogScrollbar`, `TLogMinimap`                                                      | Log navigation affordances                           |
-
-## Performance Guide
-
-Use the renderer features that match the workload:
-
-- Split large transcript content and frequently changing chrome into different `TRenderPlane`s.
-- Use `TVirtualList` for large lists rather than rendering all rows as components.
-- Use `TLogView` with `createAppendOnlyLogStore({ maxLines })` for streaming logs.
-- Provide stable line keys for custom `TLogView` sources; mutable tail rows should get changing keys.
-- For DOM rendering, row-key prepass defaults to `"auto"` and enables itself only when cached-row hit ratio is useful.
-- For stdout rendering, set `colorMode` or `DIMCODE_COLOR_MODE` when the terminal color capability is known.
-- Reuse style objects on hot paths instead of creating new object literals every frame.
-
-Useful checks:
+Run the docs locally:
 
 ```bash
-pnpm run bench:dom-renderer
-pnpm run bench:scroll-mailbox
-pnpm run bench:phase2
+pnpm run docs:dev
+pnpm run docs:build
 ```
 
-More detail: [docs/performance.md](./docs/performance.md) and [docs/high-throughput-rendering.md](./docs/high-throughput-rendering.md).
-
-## Colors And Themes
-
-Styles support ANSI color names, hex colors, and terminal text attributes:
-
-```ts
-type Style = {
-  fg?: string;
-  bg?: string;
-  bold?: boolean;
-  dim?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  inverse?: boolean;
-  href?: string;
-};
-```
-
-DOM and stdout renderers share the same ANSI palette resolver. `createDomRenderer` exposes palette values as CSS variables, while `createStdoutRenderer` maps them to truecolor or downgraded ANSI sequences depending on `colorMode`.
-
-## Package And Release Notes
-
-- The published package ships `dist` only. Export targets point to built ESM/CJS/types files.
-- Root, markdown, and experimental entrypoints are available as both ESM and CJS after build.
-- The package does not declare a Node engine for the root browser/core API. CLI usage requires a Node-like process/stdout/stdin environment.
-- The markdown sub-entry depends on `stream-markdown-parser`; check that dependency chain if your runtime has strict engine policies.
-- Experimental APIs can change before the next stable release. Keep imports from `/experimental` isolated in application code.
-
-## Known Limitations
-
-- `TVirtualMarkdown` reuses block-level layout during streaming. The `content` path still parses the current full markdown string; stream-driven apps that can finalize transcript blocks can use `createMarkdownBlockSource` and pass `blocks` to avoid reparsing finalized history.
-- `TLogView` is optimized for append-only and retained-window sources; arbitrary random mutation workloads should provide explicit stable keys and should be tested with the target renderer.
-- Terminal emoji and East Asian width behavior still depends on the user terminal and font.
-- ANSI16 colors follow the terminal theme; use truecolor or ansi256 for more deterministic color output.
-- No canvas renderer is currently shipped.
-
-## Development
-
-```bash
-pnpm install
-pnpm run typecheck
-pnpm run lint
-pnpm run test
-pnpm run build
-```
-
-Examples:
+## Examples
 
 ```bash
 pnpm -C examples/basic dev
@@ -224,23 +144,58 @@ pnpm run example:agent-console:smoke
 pnpm run example:agent-console:terminal:smoke
 ```
 
-Docs:
+The smoke commands are deterministic and avoid real LLM APIs, real TTY dependencies, and timing-only pass/fail gates.
+
+## Performance Notes
+
+- Use `TVirtualList` instead of rendering thousands of row components.
+- Use `TLogView` with `createAppendOnlyLogStore({ maxLines })` for retained streaming logs.
+- Provide stable line keys for custom `TLogView` sources; mutable rows should change keys or call the explicit invalidation APIs.
+- Split high-volume content and frequently changing chrome into different `TRenderPlane`s.
+- Reuse style objects on hot paths instead of creating new object literals every frame.
+
+Useful checks:
 
 ```bash
-pnpm run docs:gen
-pnpm run docs:dev
-pnpm run docs:build
+pnpm run bench:dom-renderer
+pnpm run bench:scroll-mailbox
+pnpm run bench:phase2
+```
+
+## Issues And Feedback
+
+- Report bugs: [new bug report](https://github.com/Simon-He95/vue-tui/issues/new?template=bug_report.yml)
+- Request features: [new feature request](https://github.com/Simon-He95/vue-tui/issues/new?template=feature_request.yml)
+- Report documentation issues: [new docs issue](https://github.com/Simon-He95/vue-tui/issues/new?template=docs.yml)
+- Browse existing issues: [GitHub issues](https://github.com/Simon-He95/vue-tui/issues)
+
+For renderer, scheduler, or terminal behavior bugs, include the renderer target (`DOM`, `stdout`, or headless), the relevant command, and a minimal reproduction when possible.
+
+## Development
+
+```bash
+pnpm install
+pnpm run format:check
+pnpm run lint
+pnpm run typecheck
+pnpm run test
+pnpm run build
 ```
 
 Release validation:
 
 ```bash
-pnpm run release:check
-pnpm run release:bench
-pnpm run release:smoke
+pnpm run release:dry-run
 ```
 
-See [docs/release-candidate.md](./docs/release-candidate.md) for the expanded validation matrix, package export checks, examples index, and migration notes.
+`release:dry-run` runs checks, tests, docs build, benchmarks, examples smoke, and packed package install smoke.
+
+## Package Notes
+
+- The published package ships `dist` only.
+- Root, markdown, and experimental entrypoints are available as ESM, CJS, and type declarations after build.
+- The root browser/core API does not require a Node runtime, but CLI usage expects a Node-like stdout/stdin environment.
+- Terminal emoji and East Asian width behavior still depends on the user terminal and font.
 
 ## License
 
