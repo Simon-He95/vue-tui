@@ -18,6 +18,16 @@
 
 ## Recommended validation
 
+Release candidate shortcuts:
+
+```bash
+pnpm run release:check
+pnpm run release:bench
+pnpm run release:smoke
+```
+
+Focused TLogView stack validation:
+
 ```bash
 pnpm vitest run \
   test/tlog-view-lab-smoke.test.ts \

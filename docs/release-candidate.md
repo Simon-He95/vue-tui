@@ -32,9 +32,18 @@
 
 ## Validation
 
-建议 release candidate 分支至少跑：
+快捷入口：
 
 ```bash
+pnpm run release:check
+pnpm run release:bench
+pnpm run release:smoke
+```
+
+展开命令：
+
+```bash
+pnpm run check:hidden-unicode
 pnpm run format:check
 pnpm run lint
 pnpm run typecheck
