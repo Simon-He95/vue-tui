@@ -125,6 +125,42 @@ function writeFallbackRows(scenario: Scenario): void {
   }
 }
 
+function writeMixedRows(scenario: Scenario, phase: "initial" | "updated"): void {
+  for (let y = 0; y < 40; y++) {
+    scenario.terminal.fill(0, y, COLS, 1, " ");
+    scenario.terminal.write(`stable-plain-${y}`, { x: 0, y });
+  }
+  for (let y = 40; y < 60; y++) {
+    scenario.terminal.fill(0, y, COLS, 1, " ");
+    scenario.terminal.write(`${phase}-plain-${y}`, { x: 0, y });
+  }
+  for (let y = 60; y < 75; y++) {
+    scenario.terminal.fill(0, y, COLS, 1, "S", { fg: "green" });
+  }
+  for (let y = 75; y < 85; y++) {
+    scenario.terminal.fill(0, y, COLS, 1, phase === "initial" ? "A" : "B", { fg: "red" });
+  }
+  for (let y = 85; y < 95; y++) {
+    const half = COLS / 2;
+    scenario.terminal.fill(0, y, half, 1, phase === "initial" ? "A" : "C", { fg: "red" });
+    scenario.terminal.fill(half, y, COLS - half, 1, phase === "initial" ? "B" : "D", {
+      fg: "blue",
+    });
+  }
+  for (let y = 95; y < 98; y++) {
+    scenario.terminal.fill(0, y, COLS, 1, phase === "initial" ? "H" : "I", {
+      href: `https://example.com/${phase}/${y}`,
+    });
+  }
+  for (let y = 98; y < 100; y++) {
+    scenario.terminal.fill(0, y, COLS, 1, " ");
+    scenario.terminal.write(phase === "initial" ? "中" : "文", { x: 0, y, style: { fg: "red" } });
+    scenario.terminal.fill(2, y, COLS - 2, 1, phase === "initial" ? "W" : "V", {
+      fg: "blue",
+    });
+  }
+}
+
 function runScenario<T>(
   fn: (scenario: Scenario) => T,
   options?: Parameters<typeof createDomRenderer>[2],
@@ -256,6 +292,37 @@ function benchFallbackRows(): RowRenderSnapshot {
   });
 }
 
+function benchMixedRowKeyPrepass(options: PrepassOptions): RoundSnapshot {
+  return runScenario((scenario) => {
+    writeMixedRows(scenario, "initial");
+    const firstFlush = commit(scenario);
+
+    writeMixedRows(scenario, "updated");
+    const secondFlush = commit(scenario);
+
+    if (options.enableRowKeyPrepass) {
+      assert.ok(secondFlush.rowKeyPrepassChecks > 0);
+      assert.ok(secondFlush.rowKeyPrepassHits > 0);
+      assert.ok(secondFlush.rowKeyPrepassMisses > 0);
+      assert.equal(secondFlush.cacheHits, secondFlush.rowKeyPrepassHits);
+      assert.ok(secondFlush.plainTextRows > 0);
+      assert.ok(secondFlush.singleStyledRows > 0);
+      assert.ok(secondFlush.segmentReuseRows > 0);
+      assert.ok(secondFlush.fragmentRows > 0);
+    } else {
+      assert.equal(secondFlush.rowKeyPrepassChecks, 0);
+      assert.equal(secondFlush.rowKeyPrepassHits, 0);
+      assert.equal(secondFlush.rowKeyPrepassMisses, 0);
+    }
+
+    return {
+      firstFlush,
+      secondFlush,
+      total: scenario.renderer.debugStats.rowRender.total,
+    };
+  }, options);
+}
+
 function benchCacheHits(options: PrepassOptions): RoundSnapshot {
   return runScenario((scenario) => {
     writePlainRows(scenario, "cached");
@@ -338,6 +405,9 @@ const results = {
   ),
   changedMultiSegment: runPrepassModes((enableRowKeyPrepass) =>
     benchChangedMultiSegmentRows({ enableRowKeyPrepass }),
+  ),
+  mixedRowKeyPrepass: runPrepassModes((enableRowKeyPrepass) =>
+    benchMixedRowKeyPrepass({ enableRowKeyPrepass }),
   ),
   fallback: benchFallbackRows(),
 };
