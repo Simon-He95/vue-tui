@@ -14,7 +14,8 @@ import {
   watch,
   watchEffect,
 } from "vue";
-import { buildMarkdownVisualRows } from "../markdown/document.js";
+import { buildMarkdownBlocks } from "../markdown/document.js";
+import { layoutMarkdownBlocksCached, type TuiMarkdownLayoutCache } from "../markdown/layout.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
 import { paintMarkdownVisualRow } from "../markdown/render.js";
 import { markdownThemeSignature, type TuiMarkdownThemeOverrides } from "../markdown/theme.js";
@@ -122,6 +123,7 @@ export const TVirtualMarkdown = defineComponent({
     const wheelState = createWheelScrollState();
     let builtOnce = false;
     let rebuildVersion = 0;
+    let layoutCache: TuiMarkdownLayoutCache | undefined;
     let alive = true;
     const parser = shallowRef(
       markRaw(
@@ -147,10 +149,13 @@ export const TVirtualMarkdown = defineComponent({
     function rebuildRows(): void {
       const prevScrollTop = internalScrollTop.value;
       const prevVisibleRows = visibleRowSignatures(rows.value, prevScrollTop);
-      const nextRows = buildMarkdownVisualRows(props.content, props.w, parser.value, {
+      const { blocks } = buildMarkdownBlocks(props.content, parser.value, {
         final: props.final,
         theme: props.theme,
       });
+      const nextLayout = layoutMarkdownBlocksCached(blocks, props.w, layoutCache);
+      layoutCache = markRaw(nextLayout.cache);
+      const nextRows = nextLayout.rows;
       rows.value = markRaw(nextRows);
       reconcileScrollTop();
       const nextScrollTop = internalScrollTop.value;

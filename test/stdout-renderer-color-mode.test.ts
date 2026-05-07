@@ -311,6 +311,31 @@ describe("stdoutRenderer color mode", () => {
     expect(out).not.toContain("\u001B[38;5;");
   });
 
+  it("does not emit invalid SGR for unknown color names in downgraded color modes", () => {
+    for (const colorMode of ["ansi256", "ansi16", "ansi8"] as const) {
+      const terminal = createTerminal({ cols: 3, rows: 1 });
+      const cap = createCapture(false);
+      createStdoutRenderer(terminal, {
+        output: cap.output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        colorMode,
+      });
+
+      terminal.put(0, 0, "X", { fg: "unknown" as any, bg: "missing" as any });
+      terminal.commit();
+
+      const out = cap.getOut();
+      expect(out).toContain("X");
+      expect(out).not.toContain("undefined");
+      expect(out).not.toContain("\u001B[38;2;");
+      expect(out).not.toContain("\u001B[48;2;");
+      expect(out).not.toContain("\u001B[38;5;");
+      expect(out).not.toContain("\u001B[48;5;");
+    }
+  });
+
   it("does not mutate caller palette objects", () => {
     const terminal = createTerminal({ cols: 3, rows: 1 });
     const cap = createCapture(false);

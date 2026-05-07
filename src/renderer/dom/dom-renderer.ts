@@ -1,7 +1,13 @@
 import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { Cell, Style, Terminal, TerminalScrollOperation } from "../../core/types.js";
 import type { RendererCapabilities } from "../capabilities.js";
-import { ansiColorHex, ansiCssVar, installAnsiPaletteCssVars } from "../../core/ansi-palette.js";
+import type { ThemePalette } from "../../core/ansi-palette.js";
+import {
+  ansiColorHex,
+  ansiCssVar,
+  installAnsiPaletteCssVars,
+  isAnsiColorName,
+} from "../../core/ansi-palette.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
 import { DOM_RENDERER_CAPABILITIES } from "../capabilities.js";
@@ -60,10 +66,31 @@ export type DomRendererRowRenderDebugStats = Readonly<{
   lastFlush: DomRendererRowRenderStats | null;
 }>;
 
+export type DomRendererRowKeyPrepassMode = boolean | "auto";
+
+export type DomRendererRowKeyPrepassDecision =
+  | "forced-enabled"
+  | "forced-disabled"
+  | "sampling"
+  | "enabled"
+  | "disabled";
+
+export type DomRendererRowKeyPrepassDebugStats = Readonly<{
+  mode: DomRendererRowKeyPrepassMode;
+  decision: DomRendererRowKeyPrepassDecision;
+  sampleRows: number;
+  sampleHits: number;
+  sampleMisses: number;
+  sampleHitRatio: number | null;
+  lastSampleRows: number;
+  lastSampleHitRatio: number | null;
+}>;
+
 export type DomRendererDebugStats = Readonly<{
   syncFlush: DomRendererSyncFlushStats;
   flush: DomRendererFlushStats;
   rowRender: DomRendererRowRenderDebugStats;
+  rowKeyPrepass: DomRendererRowKeyPrepassDebugStats;
 }>;
 
 export interface DomRenderer {
@@ -73,6 +100,11 @@ export interface DomRenderer {
   readonly metrics: CellMetrics;
   dispose: () => void;
   refresh: () => void;
+  updateTheme: (
+    next: Readonly<{
+      palette?: ThemePalette | null;
+    }>,
+  ) => void;
   setPlaneOffset: (plane: TerminalRenderPlane, offsetPx: number) => void;
   setPlaneViewport: (
     plane: TerminalRenderPlane,
@@ -94,11 +126,15 @@ export interface DomRendererOptions {
    * Enables DOM line-node shifting for terminal scrollOperations.
    */
   enableScrollOperations?: boolean;
+  /** Optional ANSI-name palette exposed as DOM CSS variables. */
+  palette?: ThemePalette | null;
   /**
-   * Enables a key-only early bailout before row segment allocation.
+   * Controls a key-only early bailout before row segment allocation.
    * The normal row cache remains enabled regardless of this option.
+   * Defaults to "auto": sample cached-row hit ratio and keep prepass enabled only
+   * when it pays for itself.
    */
-  enableRowKeyPrepass?: boolean;
+  enableRowKeyPrepass?: DomRendererRowKeyPrepassMode;
 }
 
 interface PlaneLayer {
@@ -126,6 +162,9 @@ const DEFAULT_FONT_FAMILY = [
 ].join(", ");
 const DEFAULT_SYNC_FLUSH_MAX_ROWS = 32;
 const DEFAULT_SYNC_FLUSH_CELL_BUDGET = 4096;
+const PREPASS_SAMPLE_ROWS = 512;
+const PREPASS_ENABLE_HIT_RATIO = 0.5;
+const PREPASS_DISABLE_HIT_RATIO = 0.25;
 
 const styleKeyCache = new WeakMap<object, string>();
 
@@ -190,23 +229,27 @@ function styleKey(style: Style): string {
   return key;
 }
 
-function resolveColorHex(color: string | undefined): string | undefined {
+function resolveColorHex(
+  color: string | undefined,
+  palette?: ThemePalette | null,
+): string | undefined {
   if (!color) return undefined;
   if (color === "transparent") return undefined;
   if (color.startsWith("#")) return color;
-  return ansiColorHex(color as any);
+  return ansiColorHex(color, palette);
 }
 
 function resolveColorCss(color: string | undefined): string | undefined {
   if (!color) return undefined;
   if (color === "transparent") return undefined;
   if (color.startsWith("#")) return color;
-  return ansiCssVar(color as any);
+  if (!isAnsiColorName(color)) return undefined;
+  return ansiCssVar(color);
 }
 
-function applyStyle(span: HTMLSpanElement, style: Style): void {
-  const fgHex = resolveColorHex(style.fg);
-  const bgHex = resolveColorHex(style.bg);
+function applyStyle(span: HTMLSpanElement, style: Style, palette?: ThemePalette | null): void {
+  const fgHex = resolveColorHex(style.fg, palette);
+  const bgHex = resolveColorHex(style.bg, palette);
   const fgCss = resolveColorCss(style.fg);
   const bgCss = resolveColorCss(style.bg);
 
@@ -527,6 +570,7 @@ function tryUpdateSegmentSpans(
   lineEl: HTMLElement,
   segments: readonly RowSegment[],
   metrics: CellMetrics,
+  palette: ThemePalette | null,
 ): boolean {
   if (lineEl.childNodes.length !== segments.length) return false;
 
@@ -543,7 +587,7 @@ function tryUpdateSegmentSpans(
     span.textContent = seg.text;
     resetSpanStyle(span);
     span.style.cssText = `display:inline-block;width:${seg.cols * metrics.cellWidth}px;height:${metrics.cellHeight}px;overflow:hidden;white-space:pre;vertical-align:top`;
-    applyStyle(span, seg.style);
+    applyStyle(span, seg.style, palette);
   }
 
   return true;
@@ -557,6 +601,7 @@ function renderRow(
   lineEl: HTMLElement,
   stats: RowRenderMutableStats,
   enableRowKeyPrepass: boolean,
+  palette: ThemePalette | null,
 ): void {
   stats.rows++;
   const cachedKey = rowCache.get(lineEl);
@@ -624,12 +669,12 @@ function renderRow(
     span.textContent = seg.text;
     resetSpanStyle(span);
     span.style.cssText = `display:inline-block;width:${seg.cols * metrics.cellWidth}px;height:${metrics.cellHeight}px;overflow:hidden;white-space:pre;vertical-align:top`;
-    applyStyle(span, seg.style);
+    applyStyle(span, seg.style, palette);
     return;
   }
 
   const canReuseSpans = canReuseSegmentSpans(segments);
-  if (canReuseSpans && tryUpdateSegmentSpans(lineEl, segments, metrics)) {
+  if (canReuseSpans && tryUpdateSegmentSpans(lineEl, segments, metrics, palette)) {
     stats.segmentReuseRows++;
     stats.spansReused += segments.length;
     return;
@@ -658,7 +703,7 @@ function renderRow(
       span.textContent = seg.text;
     }
     span.style.cssText = `display:inline-block;width:${seg.cols * metrics.cellWidth}px;height:${metrics.cellHeight}px;overflow:hidden;white-space:pre;vertical-align:top`;
-    applyStyle(span, seg.style);
+    applyStyle(span, seg.style, palette);
     fragment.appendChild(span);
   }
 
@@ -683,7 +728,8 @@ export function createDomRenderer(
   // Prevent layout shifts during updates
   container.style.contain = "layout style";
   container.tabIndex = 0;
-  installAnsiPaletteCssVars(container);
+  let palette: ThemePalette | null = options.palette ?? null;
+  installAnsiPaletteCssVars(container, palette);
 
   let metrics = measureCell(container);
   let wideScaleX = 1;
@@ -699,7 +745,7 @@ export function createDomRenderer(
     0,
     Math.floor(options.syncFlushCellBudget ?? DEFAULT_SYNC_FLUSH_CELL_BUDGET),
   );
-  const enableRowKeyPrepass = options.enableRowKeyPrepass === true;
+  const rowKeyPrepassMode = options.enableRowKeyPrepass ?? "auto";
   const capabilities: RendererCapabilities = Object.freeze({
     ...DOM_RENDERER_CAPABILITIES,
     scrollOperations: options.enableScrollOperations !== false,
@@ -712,6 +758,23 @@ export function createDomRenderer(
   let lastDomFlush: DomRendererFlushSample | null = null;
   const rowRenderTotal = createEmptyRowStats();
   let lastRowRenderStats: DomRendererRowRenderStats | null = null;
+  let rowKeyPrepassAutoReady = false;
+  let rowKeyPrepassAutoDecision: Extract<
+    DomRendererRowKeyPrepassDecision,
+    "sampling" | "enabled" | "disabled"
+  > = "sampling";
+  let rowKeyPrepassSampleRows = 0;
+  let rowKeyPrepassSampleHits = 0;
+  let rowKeyPrepassSampleMisses = 0;
+  let rowKeyPrepassLastSampleRows = 0;
+  let rowKeyPrepassLastSampleHitRatio: number | null = null;
+
+  function rowKeyPrepassDecision(): DomRendererRowKeyPrepassDecision {
+    if (rowKeyPrepassMode === true) return "forced-enabled";
+    if (rowKeyPrepassMode === false) return "forced-disabled";
+    return rowKeyPrepassAutoDecision;
+  }
+
   const debugStats: DomRendererDebugStats = {
     get syncFlush() {
       return {
@@ -733,7 +796,54 @@ export function createDomRenderer(
         lastFlush: lastRowRenderStats,
       };
     },
+    get rowKeyPrepass() {
+      const sampleHitRatio =
+        rowKeyPrepassSampleRows > 0 ? rowKeyPrepassSampleHits / rowKeyPrepassSampleRows : null;
+      return {
+        mode: rowKeyPrepassMode,
+        decision: rowKeyPrepassDecision(),
+        sampleRows: rowKeyPrepassSampleRows,
+        sampleHits: rowKeyPrepassSampleHits,
+        sampleMisses: rowKeyPrepassSampleMisses,
+        sampleHitRatio,
+        lastSampleRows: rowKeyPrepassLastSampleRows,
+        lastSampleHitRatio: rowKeyPrepassLastSampleHitRatio,
+      };
+    },
   };
+
+  function shouldUseRowKeyPrepass(): boolean {
+    if (rowKeyPrepassMode === true) return true;
+    if (rowKeyPrepassMode === false) return false;
+    return rowKeyPrepassAutoReady && rowKeyPrepassAutoDecision !== "disabled";
+  }
+
+  function recordRowKeyPrepassAutoStats(stats: RowRenderMutableStats): void {
+    if (rowKeyPrepassMode !== "auto") return;
+    if (stats.rowKeyPrepassChecks === 0) return;
+
+    rowKeyPrepassSampleRows += stats.rowKeyPrepassChecks;
+    rowKeyPrepassSampleHits += stats.rowKeyPrepassHits;
+    rowKeyPrepassSampleMisses += stats.rowKeyPrepassMisses;
+
+    if (rowKeyPrepassSampleRows < PREPASS_SAMPLE_ROWS) return;
+
+    const hitRatio = rowKeyPrepassSampleHits / rowKeyPrepassSampleRows;
+    rowKeyPrepassLastSampleRows = rowKeyPrepassSampleRows;
+    rowKeyPrepassLastSampleHitRatio = hitRatio;
+
+    if (rowKeyPrepassAutoDecision === "enabled") {
+      if (hitRatio < PREPASS_DISABLE_HIT_RATIO) rowKeyPrepassAutoDecision = "disabled";
+    } else if (hitRatio >= PREPASS_ENABLE_HIT_RATIO) {
+      rowKeyPrepassAutoDecision = "enabled";
+    } else {
+      rowKeyPrepassAutoDecision = "disabled";
+    }
+
+    rowKeyPrepassSampleRows = 0;
+    rowKeyPrepassSampleHits = 0;
+    rowKeyPrepassSampleMisses = 0;
+  }
 
   function recordRowRenderStats(stats: RowRenderMutableStats): void {
     if (stats.rows === 0) return;
@@ -863,9 +973,11 @@ export function createDomRenderer(
           y,
           layer.lines[y]!,
           rowStats,
-          enableRowKeyPrepass,
+          shouldUseRowKeyPrepass(),
+          palette,
         );
     }
+    recordRowKeyPrepassAutoStats(rowStats);
     recordRowRenderStats(rowStats);
   }
 
@@ -1151,6 +1263,7 @@ export function createDomRenderer(
     const planesToFlush = scope?.planes ?? TERMINAL_RENDER_PLANES;
     let flushedRows = 0;
     const rowStats = createEmptyRowStats();
+    const useRowKeyPrepass = shouldUseRowKeyPrepass();
 
     for (const plane of planesToFlush) {
       const layer = planeLayers.get(plane);
@@ -1161,7 +1274,16 @@ export function createDomRenderer(
         if (!rows.has(y)) return;
         const line = layer.lines[y];
         if (line)
-          renderRow(layer.terminal, metrics, wideScaleX, y, line, rowStats, enableRowKeyPrepass);
+          renderRow(
+            layer.terminal,
+            metrics,
+            wideScaleX,
+            y,
+            line,
+            rowStats,
+            useRowKeyPrepass,
+            palette,
+          );
         deletePendingRow(plane, rows, y);
         flushedRows++;
       };
@@ -1176,7 +1298,9 @@ export function createDomRenderer(
     }
 
     if (flushedRows > 0) {
+      recordRowKeyPrepassAutoStats(rowStats);
       recordRowRenderStats(rowStats);
+      rowKeyPrepassAutoReady = true;
       domFlushCount++;
       lastDomFlush = {
         mode: options?.mode ?? "deferred",
@@ -1269,6 +1393,18 @@ export function createDomRenderer(
     refresh();
   });
 
+  function updateTheme(
+    next: Readonly<{
+      palette?: ThemePalette | null;
+    }>,
+  ): void {
+    if (disposed) return;
+    if ("palette" in next) {
+      palette = next.palette ?? null;
+      installAnsiPaletteCssVars(container, palette);
+    }
+  }
+
   refresh();
   // Clear initial dirty flags.
   terminal.commit();
@@ -1281,6 +1417,7 @@ export function createDomRenderer(
       return metrics;
     },
     refresh,
+    updateTheme,
     dispose() {
       disposed = true;
       offCommit();

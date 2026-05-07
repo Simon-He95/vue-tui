@@ -1595,6 +1595,169 @@ describe("TLogView", () => {
     }
   });
 
+  it("repaints only the visible tail row when replacing an unwrapped tail", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 19 }, (_, index) => `line-${index}`));
+    log.appendChunk("tail-19");
+    const framePerf = createFramePerfProbe("TLogViewReplaceTailDirtyRowProbe");
+
+    const App = defineComponent({
+      name: "TLogViewReplaceTailDirtyRowApp",
+      setup() {
+        return () => [
+          h(framePerf.component),
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+          }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf.clear();
+
+      const commits: Array<readonly number[] | null> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows }) => {
+        commits.push(dirtyRows);
+      });
+
+      log.replaceTail("tail-19-updated");
+      await nextTick();
+      await nextTick();
+
+      off();
+      expect(rowText(app, 3)).toBe("tail-19-updated");
+      expect(commits).toContainEqual([3]);
+      expect(framePerf.latest()).toMatchObject({
+        reason: "data",
+        dirtyRows: 1,
+        paintedNodes: 1,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints only affected wrapped tail visual rows when replacing same-height tail", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 18 }, (_, index) => `line-${index}`));
+    log.appendChunk("abcdefghijABCDEFGHIJ");
+    const framePerf = createFramePerfProbe("TLogViewReplaceWrappedTailDirtyRowsProbe");
+
+    const App = defineComponent({
+      name: "TLogViewReplaceWrappedTailDirtyRowsApp",
+      setup() {
+        return () => [
+          h(framePerf.component),
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            wrap: true,
+          }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 10, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf.clear();
+
+      const commits: Array<readonly number[] | null> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows }) => {
+        commits.push(dirtyRows);
+      });
+
+      log.replaceTail("1234567890abcdefghij");
+      await nextTick();
+      await nextTick();
+
+      off();
+      expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
+        "line-16",
+        "line-17",
+        "1234567890",
+        "abcdefghij",
+      ]);
+      expect(commits).toContainEqual([2, 3]);
+      expect(framePerf.latest()).toMatchObject({
+        reason: "data",
+        dirtyRows: 2,
+        paintedNodes: 1,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints only the visible ansi tail row when replacing ansi tail", async () => {
+    const log = createAppendOnlyLogStore();
+    log.appendLines(Array.from({ length: 19 }, (_, index) => `line-${index}`));
+    log.appendChunk("\x1B[31mred-tail\x1B[0m");
+    const framePerf = createFramePerfProbe("TLogViewReplaceAnsiTailDirtyRowProbe");
+
+    const App = defineComponent({
+      name: "TLogViewReplaceAnsiTailDirtyRowApp",
+      setup() {
+        return () => [
+          h(framePerf.component),
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            source: log.source,
+            version: log.version.value,
+            ansi: true,
+          }),
+        ];
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf.clear();
+
+      const commits: Array<readonly number[] | null> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows }) => {
+        commits.push(dirtyRows);
+      });
+
+      log.replaceTail("\x1B[34mblue-tail\x1B[0m");
+      await nextTick();
+      await nextTick();
+
+      off();
+      expect(rowText(app, 3)).toBe("blue-tail");
+      expect(commits).toContainEqual([3]);
+      expect(framePerf.latest()).toMatchObject({
+        reason: "data",
+        dirtyRows: 1,
+        paintedNodes: 1,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("keeps bottom stickiness when retention trims the head", async () => {
     const log = createAppendOnlyLogStore({ maxLines: 5 });
     log.appendLines(Array.from({ length: 5 }, (_, index) => `line-${index}`));
@@ -1948,10 +2111,18 @@ describe("TLogView", () => {
       await nextTick();
       expect(rowText(app, 0)).toBe("hello");
 
+      const commits: Array<readonly number[] | null> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows }) => {
+        commits.push(dirtyRows);
+      });
+
       log.appendChunk(" world");
       await nextTick();
       await nextTick();
+
+      off();
       expect(rowText(app, 0)).toBe("hello world");
+      expect(commits).toContainEqual([0]);
     } finally {
       app.dispose();
     }
@@ -5891,11 +6062,18 @@ describe("TLogView", () => {
       await nextTick();
       expect(rowText(app, 0)).toBe("abc");
 
+      const commits: Array<readonly number[] | null> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows }) => {
+        commits.push(dirtyRows);
+      });
+
       log.appendChunk("de");
       await nextTick();
       await nextTick();
 
+      off();
       expect([0, 1].map((y) => rowText(app, y))).toEqual(["abcd", "e"]);
+      expect(commits).toContainEqual([0, 1]);
     } finally {
       app.dispose();
     }

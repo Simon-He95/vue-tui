@@ -5,6 +5,7 @@ vi.mock("../src/vue/markdown/document.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/vue/markdown/document.js")>();
   return {
     ...actual,
+    buildMarkdownBlocks: vi.fn(actual.buildMarkdownBlocks),
     buildMarkdownVisualRows: vi.fn(actual.buildMarkdownVisualRows),
   };
 });
@@ -39,7 +40,7 @@ describe("TVirtualMarkdown performance", () => {
       10,
     );
 
-    const buildSpy = vi.mocked(markdownDocument.buildMarkdownVisualRows);
+    const buildSpy = vi.mocked(markdownDocument.buildMarkdownBlocks);
     await nextTick();
     await nextTick();
     const beforeScrollCalls = buildSpy.mock.calls.length;
@@ -79,7 +80,7 @@ describe("TVirtualMarkdown performance", () => {
       8,
     );
 
-    const buildSpy = vi.mocked(markdownDocument.buildMarkdownVisualRows);
+    const buildSpy = vi.mocked(markdownDocument.buildMarkdownBlocks);
     await nextTick();
     await nextTick();
     const before = buildSpy.mock.calls.length;
@@ -216,7 +217,7 @@ describe("TVirtualMarkdown performance", () => {
       8,
     );
 
-    const buildSpy = vi.mocked(markdownDocument.buildMarkdownVisualRows);
+    const buildSpy = vi.mocked(markdownDocument.buildMarkdownBlocks);
     await nextTick();
     await nextTick();
     const beforeBuilds = buildSpy.mock.calls.length;

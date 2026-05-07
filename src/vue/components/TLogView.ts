@@ -2691,6 +2691,45 @@ export const TLogView = defineComponent({
       return markRowsDirty(viewportRows());
     }
 
+    type TailVisualSnapshot = Readonly<{
+      start: number;
+      rows: number;
+    }>;
+
+    function visualRangeDirtyRows(start: number, end: number): readonly number[] {
+      if (end <= start) return [];
+      const r = normalizedRect();
+      const { y: clipY } = clipOffsets();
+      const visibleStart = currentScrollTop() + clipY;
+      const rows: number[] = [];
+      for (let y = r.y; y < r.y + r.h; y++) {
+        const visualRow = visibleStart + (y - r.y);
+        if (visualRow >= start && visualRow < end) rows.push(y);
+      }
+      return rows;
+    }
+
+    function tailVisualSnapshot(index: number): TailVisualSnapshot {
+      if (!props.wrap) return { start: index, rows: 1 };
+      ensureVisualIndex();
+      return {
+        start: visualStartForLine(index),
+        rows: Math.max(1, visualCounts[index] ?? 1),
+      };
+    }
+
+    function tailMutationDirtyRows(
+      index: number,
+      previous: TailVisualSnapshot | null,
+    ): readonly number[] {
+      if (index < 0) return [];
+      const next = tailVisualSnapshot(index);
+      const prev = previous ?? next;
+      const start = Math.min(prev.start, next.start);
+      const end = Math.max(prev.start + prev.rows, next.start + next.rows);
+      return visualRangeDirtyRows(start, end);
+    }
+
     function applyLinkFocusToSegments(
       segments: readonly TLogVisualSegment[],
       lineIndex: number,
@@ -2855,6 +2894,10 @@ export const TLogView = defineComponent({
         if (shouldAutoMeasureVisualIndex()) requestVisualIndexMeasurement(measuredLineCount);
         else emitVisualIndex();
       };
+      const sameCountTailIndex =
+        droppedHeadLines === 0 && nextCount === prevCount && nextCount > 0 ? nextCount - 1 : -1;
+      const previousTailSnapshot =
+        sameCountTailIndex >= 0 ? tailVisualSnapshot(sameCountTailIndex) : null;
       let wrapExistingMutation = false;
 
       if (props.wrap && droppedHeadLines > 0) {
@@ -2862,6 +2905,11 @@ export const TLogView = defineComponent({
       } else {
         wrapExistingMutation = prepareWrapIndexForSourceChange(prevCount, nextCount);
       }
+
+      const sameCountTailDirtyRows =
+        sameCountTailIndex >= 0
+          ? tailMutationDirtyRows(sameCountTailIndex, previousTailSnapshot)
+          : [];
 
       lastLineCount = nextCount;
       lastFirstLineIndex = nextFirst;
@@ -2918,7 +2966,10 @@ export const TLogView = defineComponent({
             extraDirtyRows: extraDirtyRow == null ? undefined : [extraDirtyRow],
           },
         );
-        if (!changed) markViewportDirty();
+        if (!changed) {
+          if (sameCountTailDirtyRows.length) markRowsDirty(sameCountTailDirtyRows);
+          else markViewportDirty();
+        }
         resumeVisualMeasurement();
         return true;
       }
@@ -2947,7 +2998,8 @@ export const TLogView = defineComponent({
         nextCount > 0 &&
         viewportIntersectsLines(nextCount - 1, nextCount)
       ) {
-        markViewportDirty();
+        if (sameCountTailDirtyRows.length) markRowsDirty(sameCountTailDirtyRows);
+        else markViewportDirty();
         resumeVisualMeasurement();
         return true;
       }

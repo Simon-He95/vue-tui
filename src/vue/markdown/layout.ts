@@ -4,12 +4,23 @@ import {
   sliceByCellsRange,
   textCellWidth,
 } from "../utils/text.js";
+import type { Style } from "../../core/types.js";
 import type {
   TuiMarkdownBlock,
   TuiMarkdownInlineSegment,
   TuiMarkdownVisualRow,
   TuiMarkdownVisualSegment,
 } from "./types.js";
+
+export type TuiMarkdownLayoutCache = Readonly<{
+  width: number;
+  entries: ReadonlyMap<string, TuiMarkdownLayoutCacheEntry>;
+}>;
+
+type TuiMarkdownLayoutCacheEntry = Readonly<{
+  signature: string;
+  rows: readonly TuiMarkdownVisualRow[];
+}>;
 
 function toVisualSegment(segment: TuiMarkdownInlineSegment): TuiMarkdownVisualSegment | null {
   if (!segment.text) return null;
@@ -264,36 +275,130 @@ function thematicBreakRows(
   ];
 }
 
-export function layoutMarkdownBlocks(
-  blocks: readonly TuiMarkdownBlock[],
+function styleSignature(style?: Style): string {
+  if (!style) return "";
+  return [
+    style.fg ?? "",
+    style.bg ?? "",
+    style.bold ? "1" : "0",
+    style.dim ? "1" : "0",
+    style.italic ? "1" : "0",
+    style.underline ? "1" : "0",
+    style.inverse ? "1" : "0",
+    style.href ?? "",
+  ].join("\u0001");
+}
+
+function inlineSegmentSignature(segment: TuiMarkdownInlineSegment): string {
+  return [segment.text, segment.hardBreak ? "1" : "0", styleSignature(segment.style)].join(
+    "\u0002",
+  );
+}
+
+function inlineSegmentsSignature(segments?: readonly TuiMarkdownInlineSegment[]): string {
+  return (segments ?? []).map(inlineSegmentSignature).join("\u0003");
+}
+
+function blockLayoutSignature(block: TuiMarkdownBlock): string {
+  switch (block.type) {
+    case "inline":
+      return [
+        block.type,
+        inlineSegmentsSignature(block.segments),
+        inlineSegmentsSignature(block.prefixSegments),
+        inlineSegmentsSignature(block.continuationPrefixSegments),
+      ].join("\u0004");
+    case "code_block":
+      return [
+        block.type,
+        block.lines.join("\u0002"),
+        styleSignature(block.style),
+        inlineSegmentsSignature(block.prefixSegments),
+        inlineSegmentsSignature(block.continuationPrefixSegments),
+      ].join("\u0004");
+    case "thematic_break":
+      return [
+        block.type,
+        block.char ?? "",
+        styleSignature(block.style),
+        inlineSegmentsSignature(block.prefixSegments),
+      ].join("\u0004");
+    case "blank":
+      return block.type;
+  }
+}
+
+export function layoutMarkdownBlock(
+  block: TuiMarkdownBlock,
   width: number,
 ): readonly TuiMarkdownVisualRow[] {
-  const normalizedWidth = Math.max(0, Math.floor(width));
-  if (normalizedWidth <= 0) return [];
-  const rows: TuiMarkdownVisualRow[] = [];
-  for (const block of blocks) {
-    switch (block.type) {
-      case "inline":
-        rows.push(...inlineBlockRows(block, normalizedWidth));
-        break;
-      case "code_block":
-        rows.push(...codeBlockRows(block, normalizedWidth));
-        break;
-      case "thematic_break":
-        rows.push(...thematicBreakRows(block, normalizedWidth));
-        break;
-      case "blank":
-        rows.push({
+  switch (block.type) {
+    case "inline":
+      return inlineBlockRows(block, width);
+    case "code_block":
+      return codeBlockRows(block, width);
+    case "thematic_break":
+      return thematicBreakRows(block, width);
+    case "blank":
+      return [
+        {
           key: `${block.key}:0`,
           blockKey: block.key,
           rowInBlock: 0,
           plainText: "",
           segments: [],
-        });
-        break;
+        },
+      ];
+  }
+}
+
+export function layoutMarkdownBlocksCached(
+  blocks: readonly TuiMarkdownBlock[],
+  width: number,
+  previous?: TuiMarkdownLayoutCache,
+): Readonly<{
+  rows: readonly TuiMarkdownVisualRow[];
+  cache: TuiMarkdownLayoutCache;
+}> {
+  const normalizedWidth = Math.max(0, Math.floor(width));
+  if (normalizedWidth <= 0) {
+    return { rows: [], cache: { width: normalizedWidth, entries: new Map() } };
+  }
+
+  const rows: TuiMarkdownVisualRow[] = [];
+  const entries = new Map<string, TuiMarkdownLayoutCacheEntry>();
+  const previousEntries = previous?.width === normalizedWidth ? previous.entries : undefined;
+
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index]!;
+    const cacheKey = `${index}\u0000${block.key}`;
+    const signature = blockLayoutSignature(block);
+    const cached = previousEntries?.get(cacheKey);
+    const blockRows =
+      cached?.signature === signature ? cached.rows : layoutMarkdownBlock(block, normalizedWidth);
+    if (blockRows.length) {
+      rows.push(...blockRows);
+      entries.set(cacheKey, { signature, rows: blockRows });
     }
   }
-  return rows.length
-    ? rows
-    : [{ key: "md-empty:0", blockKey: "md-empty", rowInBlock: 0, plainText: "", segments: [] }];
+
+  if (!rows.length) {
+    const emptyRows = [
+      { key: "md-empty:0", blockKey: "md-empty", rowInBlock: 0, plainText: "", segments: [] },
+    ];
+    entries.set("0\u0000md-empty", { signature: "empty", rows: emptyRows });
+    rows.push(...emptyRows);
+  }
+
+  return {
+    rows,
+    cache: { width: normalizedWidth, entries },
+  };
+}
+
+export function layoutMarkdownBlocks(
+  blocks: readonly TuiMarkdownBlock[],
+  width: number,
+): readonly TuiMarkdownVisualRow[] {
+  return layoutMarkdownBlocksCached(blocks, width).rows;
 }

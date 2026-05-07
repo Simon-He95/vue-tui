@@ -57,7 +57,7 @@ type Scenario = Readonly<{
 }>;
 
 type PrepassOptions = Readonly<{
-  enableRowKeyPrepass: boolean;
+  enableRowKeyPrepass: boolean | "auto";
 }>;
 
 function createScenario(options: Parameters<typeof createDomRenderer>[2] = {}): Scenario {
@@ -180,12 +180,14 @@ function runScenario<T>(
   }
 }
 
-function runPrepassModes<T>(run: (enableRowKeyPrepass: boolean) => T): {
+function runPrepassModes<T>(run: (enableRowKeyPrepass: boolean | "auto") => T): {
+  off: T;
   default: T;
   prepass: T;
 } {
   return {
-    default: run(false),
+    off: run(false),
+    default: run("auto"),
     prepass: run(true),
   };
 }
@@ -197,9 +199,10 @@ function assertRowKeyPrepassStats(
   enabledHits: number,
   enabledMisses: number,
 ): void {
-  assert.equal(stats.rowKeyPrepassChecks, options.enableRowKeyPrepass ? enabledChecks : 0);
-  assert.equal(stats.rowKeyPrepassHits, options.enableRowKeyPrepass ? enabledHits : 0);
-  assert.equal(stats.rowKeyPrepassMisses, options.enableRowKeyPrepass ? enabledMisses : 0);
+  const expectPrepass = options.enableRowKeyPrepass !== false;
+  assert.equal(stats.rowKeyPrepassChecks, expectPrepass ? enabledChecks : 0);
+  assert.equal(stats.rowKeyPrepassHits, expectPrepass ? enabledHits : 0);
+  assert.equal(stats.rowKeyPrepassMisses, expectPrepass ? enabledMisses : 0);
 }
 
 function benchPlainRows(): RowRenderSnapshot {
@@ -322,7 +325,7 @@ function benchMixedRowKeyPrepass(options: PrepassOptions): RoundSnapshot {
     });
     const secondFlush = measured.value;
 
-    if (options.enableRowKeyPrepass) {
+    if (options.enableRowKeyPrepass !== false) {
       assert.ok(secondFlush.rowKeyPrepassChecks > 0);
       assert.ok(secondFlush.rowKeyPrepassHits > 0);
       assert.ok(secondFlush.rowKeyPrepassMisses > 0);

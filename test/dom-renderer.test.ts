@@ -488,10 +488,15 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("uses row cache by default after computing segments", () => {
+  it("uses auto row key prepass by default after the first flush", () => {
     const { terminal, container, renderer } = setup();
 
     try {
+      expect(renderer.debugStats.rowKeyPrepass).toMatchObject({
+        mode: "auto",
+        decision: "sampling",
+      });
+
       terminal.fill(0, 0, 8, 1, "A");
       terminal.commit({ planes: ["default"], sync: true });
 
@@ -502,13 +507,48 @@ describe("DomRenderer row rendering", () => {
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
         cacheHits: 1,
-        rowKeyPrepassChecks: 0,
-        rowKeyPrepassHits: 0,
+        rowKeyPrepassChecks: 1,
+        rowKeyPrepassHits: 1,
         rowKeyPrepassMisses: 0,
         plainTextRows: 0,
         fragmentRows: 0,
         textNodeUpdates: 0,
         replaceChildren: 0,
+      });
+      expect(renderer.debugStats.rowKeyPrepass).toMatchObject({
+        decision: "sampling",
+        sampleRows: 1,
+        sampleHits: 1,
+        sampleMisses: 0,
+        sampleHitRatio: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("respects explicit false row key prepass override", () => {
+    const { terminal, container, renderer } = setup(8, 1, { enableRowKeyPrepass: false });
+
+    try {
+      expect(renderer.debugStats.rowKeyPrepass).toMatchObject({
+        mode: false,
+        decision: "forced-disabled",
+      });
+
+      terminal.fill(0, 0, 8, 1, "A");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      terminal.fill(0, 0, 8, 1, "A");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 1,
+        rowKeyPrepassChecks: 0,
+        rowKeyPrepassHits: 0,
+        rowKeyPrepassMisses: 0,
       });
     } finally {
       renderer.dispose();
@@ -520,7 +560,97 @@ describe("DomRenderer row rendering", () => {
     const { container, renderer } = setup(8, 1, { enableRowKeyPrepass: true });
 
     try {
+      expect(renderer.debugStats.rowKeyPrepass).toMatchObject({
+        mode: true,
+        decision: "forced-enabled",
+      });
       expect(lastRowStats(renderer)).toMatchObject({
+        rowKeyPrepassChecks: 0,
+        rowKeyPrepassHits: 0,
+        rowKeyPrepassMisses: 0,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("auto row key prepass enables for cache-heavy rows", () => {
+    const rows = 512;
+    const { terminal, container, renderer } = setup(4, rows, {
+      syncFlushMaxRows: rows,
+      syncFlushCellBudget: rows * 4,
+    });
+
+    try {
+      for (let y = 0; y < rows; y++) terminal.fill(0, y, 4, 1, "A");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lastRowStats(renderer)).toMatchObject({
+        rowKeyPrepassChecks: 0,
+      });
+      expect(renderer.debugStats.rowKeyPrepass.decision).toBe("sampling");
+
+      for (let y = 0; y < rows; y++) terminal.fill(0, y, 4, 1, "A");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows,
+        cacheHits: rows,
+        rowKeyPrepassChecks: rows,
+        rowKeyPrepassHits: rows,
+        rowKeyPrepassMisses: 0,
+      });
+      expect(renderer.debugStats.rowKeyPrepass).toMatchObject({
+        decision: "enabled",
+        sampleRows: 0,
+        sampleHits: 0,
+        sampleMisses: 0,
+        lastSampleRows: rows,
+        lastSampleHitRatio: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("auto row key prepass disables for miss-heavy rows", () => {
+    const rows = 512;
+    const { terminal, container, renderer } = setup(4, rows, {
+      syncFlushMaxRows: rows,
+      syncFlushCellBudget: rows * 4,
+    });
+
+    try {
+      for (let y = 0; y < rows; y++) terminal.fill(0, y, 4, 1, "A");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      for (let y = 0; y < rows; y++) terminal.fill(0, y, 4, 1, "B");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows,
+        cacheHits: 0,
+        rowKeyPrepassChecks: rows,
+        rowKeyPrepassHits: 0,
+        rowKeyPrepassMisses: rows,
+      });
+      expect(renderer.debugStats.rowKeyPrepass).toMatchObject({
+        decision: "disabled",
+        sampleRows: 0,
+        sampleHits: 0,
+        sampleMisses: 0,
+        lastSampleRows: rows,
+        lastSampleHitRatio: 0,
+      });
+
+      for (let y = 0; y < rows; y++) terminal.fill(0, y, 4, 1, "C");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows,
+        cacheHits: 0,
         rowKeyPrepassChecks: 0,
         rowKeyPrepassHits: 0,
         rowKeyPrepassMisses: 0,

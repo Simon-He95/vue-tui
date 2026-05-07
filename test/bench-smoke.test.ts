@@ -22,8 +22,10 @@ describe("bench smoke", () => {
     const results = JSON.parse(output);
 
     expect(results.mixedRowKeyPrepass).toBeDefined();
-    expect(results.mixedRowKeyPrepass.default.secondFlush.rowKeyPrepassChecks).toBe(0);
+    expect(results.mixedRowKeyPrepass.off.secondFlush.rowKeyPrepassChecks).toBe(0);
+    expect(results.mixedRowKeyPrepass.default.secondFlush.rowKeyPrepassChecks).toBeGreaterThan(0);
     expect(results.mixedRowKeyPrepass.prepass.secondFlush.rowKeyPrepassChecks).toBeGreaterThan(0);
+    expect(results.cacheHitPlain.off).toBeDefined();
     expect(results.cacheHitPlain.default).toBeDefined();
     expect(results.cacheHitPlain.prepass).toBeDefined();
   });
