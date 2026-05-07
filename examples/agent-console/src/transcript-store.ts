@@ -24,14 +24,22 @@ export type TranscriptStats = Readonly<{
   approxTokens: number;
 }>;
 
+export type AgentReplayLog = Readonly<{
+  version: 1;
+  events: readonly AgentEvent[];
+}>;
+
 export type AgentTranscriptStore = Readonly<{
   logStore: AppendOnlyLogStore;
   markdown: Ref<string>;
   markdownBlocks: Ref<readonly TuiMarkdownBlock[]>;
   links: Ref<readonly TranscriptLink[]>;
   stats: Ref<TranscriptStats>;
+  eventLog: Ref<readonly AgentEvent[]>;
   apply: (event: AgentEvent) => void;
   appendSyntheticChunk: (index: number) => void;
+  captureReplayLog: () => AgentReplayLog;
+  loadReplayLog: (log: AgentReplayLog, eventIndex?: number) => void;
   seed: (count?: number) => void;
   clear: () => void;
 }>;
@@ -62,6 +70,25 @@ function countApproxTokens(text: string): number {
   return Math.max(1, Math.ceil(text.trim().length / 4));
 }
 
+export function createAgentReplayLog(events: readonly AgentEvent[]): AgentReplayLog {
+  return {
+    version: 1,
+    events: events.slice(),
+  };
+}
+
+export function stringifyAgentReplayLog(log: AgentReplayLog): string {
+  return JSON.stringify(log);
+}
+
+export function parseAgentReplayLog(raw: string): AgentReplayLog {
+  const value = JSON.parse(raw) as AgentReplayLog;
+  if (value.version !== 1 || !Array.isArray(value.events)) {
+    throw new Error("Invalid agent replay log");
+  }
+  return createAgentReplayLog(value.events);
+}
+
 export function createAgentTranscriptStore(): AgentTranscriptStore {
   const logStore = createAppendOnlyLogStore({ maxLines: 8_000 });
   const markdownSource = createMarkdownBlockSource({ theme: markdownTheme });
@@ -75,6 +102,7 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     toolErrors: 0,
     approxTokens: 0,
   });
+  const eventLog = ref<readonly AgentEvent[]>([]);
   let assistantOpen = false;
   let toolFenceOpen = false;
 
@@ -113,6 +141,8 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
   }
 
   function apply(event: AgentEvent): void {
+    eventLog.value = [...eventLog.value, event];
+
     if (event.type === "user") {
       closeAssistantLine();
       closeToolFence();
@@ -126,6 +156,15 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
         userMessages: stats.value.userMessages + 1,
         approxTokens: stats.value.approxTokens + countApproxTokens(event.text),
       });
+      return;
+    }
+
+    if (event.type === "status") {
+      closeAssistantLine();
+      closeToolFence();
+      logStore.appendLine(`\x1b[30;46m status \x1b[0m ${event.state}`);
+      appendMarkdown(`\n\n_Status: ${event.state}_\n\n`);
+      finalizeMarkdownBlock();
       return;
     }
 
@@ -189,6 +228,7 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     markdownSource.clear();
     markdownBlocks.value = markdownSource.blocks;
     links.value = [];
+    eventLog.value = [];
     assistantOpen = false;
     toolFenceOpen = false;
     stats.value = {
@@ -205,16 +245,27 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     for (const event of createMockAgentEvents(count)) apply(event);
   }
 
+  function loadReplayLog(log: AgentReplayLog, eventIndex = log.events.length): void {
+    clear();
+    const end = Math.max(0, Math.min(eventIndex, log.events.length));
+    for (const event of log.events.slice(0, end)) apply(event);
+  }
+
   return {
     logStore,
     markdown,
     markdownBlocks,
     links,
     stats,
+    eventLog,
     apply,
     appendSyntheticChunk(index) {
       apply(createSyntheticAgentEvent(index));
     },
+    captureReplayLog() {
+      return createAgentReplayLog(eventLog.value);
+    },
+    loadReplayLog,
     seed,
     clear,
   };

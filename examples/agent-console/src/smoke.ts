@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { nextTick } from "vue";
 import { createTerminalApp } from "@simon_he/vue-tui";
 import { AgentConsoleSurface, AGENT_CONSOLE_LAYOUT } from "./AgentConsoleSurface";
+import { parseAgentReplayLog, stringifyAgentReplayLog } from "./transcript-store";
 
 type ManualRaf = Readonly<{
   pending: () => number;
@@ -238,6 +239,34 @@ try {
     overlayVisibleBeforeEscape && !rowsText(app).includes("Command Palette");
   const inputStillVisibleAfterResize = inputBorderVisible(app);
   const overlayChrome = api.getChromeRows().join("\n");
+  const replayLog = api.captureReplayLog();
+  const replayPayload = stringifyAgentReplayLog(replayLog);
+  const parsedReplayLog = parseAgentReplayLog(replayPayload);
+  const replaySeekIndex = Math.max(1, Math.floor(parsedReplayLog.events.length / 3));
+  api.loadReplayLog(parsedReplayLog);
+  await nextTick();
+  app.scheduler.flushNow();
+  await flushFrame(raf);
+  const replayFinalSnapshot = api.getTerminalSnapshot().join("\n");
+  const replayFullLoaded =
+    api.replayCursor.value === parsedReplayLog.events.length &&
+    api.replayTotal.value === parsedReplayLog.events.length;
+  api.seekReplay(replaySeekIndex);
+  await nextTick();
+  app.scheduler.flushNow();
+  await flushFrame(raf);
+  const replaySeekSnapshot = api.getTerminalSnapshot().join("\n");
+  const replaySeekLoaded =
+    api.replayCursor.value === replaySeekIndex &&
+    api.captureReplayLog().events.length === replaySeekIndex;
+  api.seekReplay(parsedReplayLog.events.length);
+  await nextTick();
+  app.scheduler.flushNow();
+  await flushFrame(raf);
+  const replayRestoredSnapshot = api.getTerminalSnapshot().join("\n");
+  const replayRestored =
+    api.replayCursor.value === parsedReplayLog.events.length &&
+    replayRestoredSnapshot.includes("dirtyRows");
   api.mode.value = "markdown";
   api.seed(18);
   await nextTick();
@@ -271,6 +300,13 @@ try {
     overlayMaxDirtyRows: maxSampleValue(overlaySamples, "dirtyRows"),
     overlayMaxPaintedNodes: maxSampleValue(overlaySamples, "paintedNodes"),
     overlayInputStable,
+    replayEvents: parsedReplayLog.events.length,
+    replayFullLoaded,
+    replaySeekLoaded,
+    replaySnapshotChanged: replaySeekSnapshot !== replayFinalSnapshot,
+    replayRestored,
+    replayFinalSnapshotRows: replayFinalSnapshot.split("\n").length,
+    terminalRows: resizedSize.rows,
     expandableRowsRendered:
       overlayChrome.includes("▸ Thinking") && overlayChrome.includes("▸ Run 3"),
     bestAgentFixtureRowsRendered,
@@ -292,6 +328,12 @@ try {
   assert.equal(output.logHasStyledBackground, true);
   assert.equal(output.markdownHasStyledBackground, true);
   assert.equal(output.overlayInputStable, true);
+  assert.ok(output.replayEvents > 0, "expected replay event log");
+  assert.equal(output.replayFullLoaded, true);
+  assert.equal(output.replaySeekLoaded, true);
+  assert.equal(output.replaySnapshotChanged, true);
+  assert.equal(output.replayRestored, true);
+  assert.equal(output.replayFinalSnapshotRows, output.terminalRows);
   assert.equal(output.expandableRowsRendered, true);
   assert.equal(output.bestAgentFixtureRowsRendered, true);
   assert.ok(output.overlayMaxDirtyRows <= AGENT_CONSOLE_LAYOUT.rows);
