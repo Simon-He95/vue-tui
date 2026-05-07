@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createCliEventManager,
   createEventManager,
@@ -587,6 +587,164 @@ describe("ui regressions dialog", () => {
 
     expect(mounted.terminal.getCell(applyX, buttonY).style.underline).not.toBe(true);
     expect(mounted.terminal.getCell(cancelX, buttonY).style.underline).toBe(true);
+    mounted.unmount();
+  });
+
+  it("TDialog suppresses click after pointerup confirms a footer button", async () => {
+    const open = ref(true);
+    const onConfirm = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 24,
+            h: 7,
+            title: "Confirm",
+            placement: "center",
+            teleport: true,
+            closeOnConfirm: false,
+            buttons: [{ label: "OK", value: "ok", default: true }],
+            onConfirm,
+          },
+          () => h(TText, { x: 0, y: 0, w: 20, value: "Hi" }),
+        ),
+      40,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    const lines = mounted.terminal.snapshot().lines;
+    const buttonY = lines.findIndex((line) => line.includes("[ OK ]"));
+    const okX = lines[buttonY]!.indexOf("[ OK ]") + 2;
+
+    container.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: okX, clientY: buttonY, bubbles: true }),
+    );
+    container.dispatchEvent(
+      new MouseEvent("pointerup", { clientX: okX, clientY: buttonY, bubbles: true }),
+    );
+    container.dispatchEvent(
+      new MouseEvent("click", { clientX: okX, clientY: buttonY, bubbles: true }),
+    );
+    await nextTick();
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm).toHaveBeenLastCalledWith({
+      label: "OK",
+      value: "ok",
+      default: true,
+      index: 0,
+    });
+    mounted.unmount();
+  });
+
+  it("TDialog pointerup on another footer button cell waits for click confirmation", async () => {
+    const open = ref(true);
+    const onConfirm = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 24,
+            h: 7,
+            title: "Confirm",
+            placement: "center",
+            teleport: true,
+            closeOnConfirm: false,
+            buttons: [{ label: "OK", value: "ok", default: true }],
+            onConfirm,
+          },
+          () => h(TText, { x: 0, y: 0, w: 20, value: "Hi" }),
+        ),
+      40,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    const lines = mounted.terminal.snapshot().lines;
+    const buttonY = lines.findIndex((line) => line.includes("[ OK ]"));
+    const okX = lines[buttonY]!.indexOf("[ OK ]") + 2;
+    const otherOkCellX = okX + 1;
+
+    container.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: okX, clientY: buttonY, bubbles: true }),
+    );
+    container.dispatchEvent(
+      new MouseEvent("pointerup", { clientX: otherOkCellX, clientY: buttonY, bubbles: true }),
+    );
+    await nextTick();
+    expect(onConfirm).not.toHaveBeenCalled();
+
+    container.dispatchEvent(
+      new MouseEvent("click", { clientX: otherOkCellX, clientY: buttonY, bubbles: true }),
+    );
+    await nextTick();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    mounted.unmount();
+  });
+
+  it("TDialog Enter still confirms after a suppressed pointer click", async () => {
+    const open = ref(true);
+    const onConfirm = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 24,
+            h: 7,
+            title: "Confirm",
+            placement: "center",
+            teleport: true,
+            closeOnConfirm: false,
+            buttons: [{ label: "OK", value: "ok", default: true }],
+            onConfirm,
+          },
+          () => h(TText, { x: 0, y: 0, w: 20, value: "Hi" }),
+        ),
+      40,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    const lines = mounted.terminal.snapshot().lines;
+    const buttonY = lines.findIndex((line) => line.includes("[ OK ]"));
+    const okX = lines[buttonY]!.indexOf("[ OK ]") + 2;
+
+    container.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: okX, clientY: buttonY, bubbles: true }),
+    );
+    container.dispatchEvent(
+      new MouseEvent("pointerup", { clientX: okX, clientY: buttonY, bubbles: true }),
+    );
+    container.dispatchEvent(
+      new MouseEvent("click", { clientX: okX, clientY: buttonY, bubbles: true }),
+    );
+    await nextTick();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }),
+    );
+    await nextTick();
+    expect(onConfirm).toHaveBeenCalledTimes(2);
     mounted.unmount();
   });
 

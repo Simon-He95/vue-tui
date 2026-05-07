@@ -32,6 +32,10 @@ function area(rect: Rect): number {
   return Math.max(0, rect.w) * Math.max(0, rect.h);
 }
 
+function sameRect(a: Rect, b: Rect): boolean {
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
 function now(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
@@ -262,14 +266,21 @@ export function createEventManager(
     let target: TerminalNode = list[0]!;
     for (const n of list) {
       if (n.zIndex > target.zIndex) target = n;
-      else if (n.zIndex === target.zIndex && area(n.rect) < area(target.rect)) target = n;
+      else if (n.zIndex === target.zIndex && area(n.rect) <= area(target.rect)) target = n;
     }
     return target;
   }
 
   function pathOuterToInner(list: TerminalNode[], target: TerminalNode | null): TerminalNode[] {
     if (!target) return [];
-    const filtered = list.filter((n) => n.id !== target.id);
+    const filtered = list.filter(
+      (n) =>
+        n.id !== target.id &&
+        (!n.focusable ||
+          !target.focusable ||
+          n.zIndex !== target.zIndex ||
+          !sameRect(n.rect, target.rect)),
+    );
     return [...filtered, target];
   }
 

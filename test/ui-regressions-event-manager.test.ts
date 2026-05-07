@@ -227,6 +227,65 @@ describe("ui regressions event manager", () => {
     events.dispose();
   });
 
+  it("EventManager does not bubble through equal hitboxes from stale remount nodes", async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        pointerup: () => calls.push("stale"),
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        pointerup: () => calls.push("current"),
+      },
+    });
+
+    el.dispatchEvent(new MouseEvent("pointerdown", { clientX: 0, clientY: 0, bubbles: true }));
+    el.dispatchEvent(new MouseEvent("pointerup", { clientX: 0, clientY: 0, bubbles: true }));
+
+    expect(calls).toEqual(["current"]);
+    events.dispose();
+    el.remove();
+  });
+
+  it("CliEventManager does not bubble through equal hitboxes from stale remount nodes", async () => {
+    const events = createCliEventManager();
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        pointerup: () => calls.push("stale"),
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        pointerup: () => calls.push("current"),
+      },
+    });
+
+    events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 });
+    events.dispatch({ type: "pointerup", cellX: 0, cellY: 0, button: 0 });
+
+    expect(calls).toEqual(["current"]);
+    events.dispose();
+  });
+
   it("EventManager prevents click-through via bubble ordering across zIndex", async () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
