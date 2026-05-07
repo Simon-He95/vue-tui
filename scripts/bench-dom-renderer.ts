@@ -55,6 +55,10 @@ type Scenario = Readonly<{
   container: HTMLElement;
 }>;
 
+type PrepassOptions = Readonly<{
+  enableRowKeyPrepass: boolean;
+}>;
+
 function createScenario(options: Parameters<typeof createDomRenderer>[2] = {}): Scenario {
   const terminal = createTerminal({ cols: COLS, rows: ROWS });
   const container = document.createElement("div");
@@ -133,6 +137,16 @@ function runScenario<T>(
   }
 }
 
+function runPrepassModes<T>(run: (enableRowKeyPrepass: boolean) => T): {
+  default: T;
+  prepass: T;
+} {
+  return {
+    default: run(false),
+    prepass: run(true),
+  };
+}
+
 function benchPlainRows(): RowRenderSnapshot {
   return runScenario((scenario) => {
     writePlainRows(scenario, "line");
@@ -146,7 +160,7 @@ function benchPlainRows(): RowRenderSnapshot {
   });
 }
 
-function benchChangedPlainRows(): RoundSnapshot {
+function benchChangedPlainRows(options: PrepassOptions): RoundSnapshot {
   return runScenario((scenario) => {
     writePlainRows(scenario, "plain-a");
     const firstFlush = commit(scenario);
@@ -163,10 +177,10 @@ function benchChangedPlainRows(): RoundSnapshot {
       secondFlush,
       total: scenario.renderer.debugStats.rowRender.total,
     };
-  });
+  }, options);
 }
 
-function benchSingleStyledRows(): RoundSnapshot {
+function benchSingleStyledRows(options: PrepassOptions): RoundSnapshot {
   return runScenario((scenario) => {
     writeSingleStyledRows(scenario, "A", { fg: "red" });
     const firstFlush = commit(scenario);
@@ -188,10 +202,10 @@ function benchSingleStyledRows(): RoundSnapshot {
       secondFlush,
       total: scenario.renderer.debugStats.rowRender.total,
     };
-  });
+  }, options);
 }
 
-function benchMultiSegmentRows(): RoundSnapshot {
+function benchChangedMultiSegmentRows(options: PrepassOptions): RoundSnapshot {
   return runScenario((scenario) => {
     writeMultiSegmentRows(scenario, "A", "B");
     const firstFlush = commit(scenario);
@@ -202,6 +216,7 @@ function benchMultiSegmentRows(): RoundSnapshot {
     writeMultiSegmentRows(scenario, "C", "D");
     const secondFlush = commit(scenario);
 
+    assert.equal(secondFlush.cacheHits, 0);
     assert.ok(secondFlush.segmentReuseRows > 0);
     assert.ok(secondFlush.spansReused > 0);
     assert.equal(secondFlush.fragmentRows, 0);
@@ -211,7 +226,7 @@ function benchMultiSegmentRows(): RoundSnapshot {
       secondFlush,
       total: scenario.renderer.debugStats.rowRender.total,
     };
-  });
+  }, options);
 }
 
 function benchFallbackRows(): RowRenderSnapshot {
@@ -226,36 +241,89 @@ function benchFallbackRows(): RowRenderSnapshot {
   });
 }
 
-function benchCacheHits(): RoundSnapshot {
-  return runScenario(
-    (scenario) => {
-      writePlainRows(scenario, "cached");
-      const firstFlush = commit(scenario);
+function benchCacheHits(options: PrepassOptions): RoundSnapshot {
+  return runScenario((scenario) => {
+    writePlainRows(scenario, "cached");
+    const firstFlush = commit(scenario);
 
-      writePlainRows(scenario, "cached");
-      const secondFlush = commit(scenario);
+    writePlainRows(scenario, "cached");
+    const secondFlush = commit(scenario);
 
-      assert.ok(secondFlush.cacheHits > 0);
-      assert.equal(secondFlush.plainTextRows, 0);
-      assert.equal(secondFlush.fragmentRows, 0);
+    assert.ok(secondFlush.cacheHits > 0);
+    assert.equal(secondFlush.plainTextRows, 0);
+    assert.equal(secondFlush.fragmentRows, 0);
 
-      return {
-        firstFlush,
-        secondFlush,
-        total: scenario.renderer.debugStats.rowRender.total,
-      };
-    },
-    { enableRowKeyPrepass: true },
-  );
+    return {
+      firstFlush,
+      secondFlush,
+      total: scenario.renderer.debugStats.rowRender.total,
+    };
+  }, options);
+}
+
+function benchSingleStyledCacheHits(options: PrepassOptions): RoundSnapshot {
+  return runScenario((scenario) => {
+    writeSingleStyledRows(scenario, "A", { fg: "red" });
+    const firstFlush = commit(scenario);
+
+    writeSingleStyledRows(scenario, "A", { fg: "red" });
+    const secondFlush = commit(scenario);
+
+    assert.ok(secondFlush.cacheHits > 0);
+    assert.equal(secondFlush.singleStyledRows, 0);
+    assert.equal(secondFlush.spansReused, 0);
+    assert.equal(secondFlush.replaceChildren, 0);
+
+    return {
+      firstFlush,
+      secondFlush,
+      total: scenario.renderer.debugStats.rowRender.total,
+    };
+  }, options);
+}
+
+function benchMultiSegmentCacheHits(options: PrepassOptions): RoundSnapshot {
+  return runScenario((scenario) => {
+    writeMultiSegmentRows(scenario, "A", "B");
+    const firstFlush = commit(scenario);
+
+    writeMultiSegmentRows(scenario, "A", "B");
+    const secondFlush = commit(scenario);
+
+    assert.ok(secondFlush.cacheHits > 0);
+    assert.equal(secondFlush.segmentReuseRows, 0);
+    assert.equal(secondFlush.spansReused, 0);
+    assert.equal(secondFlush.fragmentRows, 0);
+
+    return {
+      firstFlush,
+      secondFlush,
+      total: scenario.renderer.debugStats.rowRender.total,
+    };
+  }, options);
 }
 
 const results = {
   plain: benchPlainRows(),
-  changedPlain: benchChangedPlainRows(),
-  singleStyled: benchSingleStyledRows(),
-  multiSegment: benchMultiSegmentRows(),
+  cacheHitPlain: runPrepassModes((enableRowKeyPrepass) =>
+    benchCacheHits({ enableRowKeyPrepass }),
+  ),
+  cacheHitSingleStyled: runPrepassModes((enableRowKeyPrepass) =>
+    benchSingleStyledCacheHits({ enableRowKeyPrepass }),
+  ),
+  cacheHitMultiSegment: runPrepassModes((enableRowKeyPrepass) =>
+    benchMultiSegmentCacheHits({ enableRowKeyPrepass }),
+  ),
+  changedPlain: runPrepassModes((enableRowKeyPrepass) =>
+    benchChangedPlainRows({ enableRowKeyPrepass }),
+  ),
+  singleStyled: runPrepassModes((enableRowKeyPrepass) =>
+    benchSingleStyledRows({ enableRowKeyPrepass }),
+  ),
+  changedMultiSegment: runPrepassModes((enableRowKeyPrepass) =>
+    benchChangedMultiSegmentRows({ enableRowKeyPrepass }),
+  ),
   fallback: benchFallbackRows(),
-  cacheHit: benchCacheHits(),
 };
 
 console.log(JSON.stringify(results, null, 2));
