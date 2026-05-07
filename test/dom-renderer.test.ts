@@ -672,6 +672,9 @@ describe("DomRenderer row rendering", () => {
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
         cacheHits: 1,
+        rowKeyPrepassChecks: 1,
+        rowKeyPrepassHits: 1,
+        rowKeyPrepassMisses: 0,
         singleStyledRows: 0,
         fragmentRows: 0,
         spansCreated: 0,
@@ -705,11 +708,43 @@ describe("DomRenderer row rendering", () => {
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
         cacheHits: 1,
+        rowKeyPrepassChecks: 1,
+        rowKeyPrepassHits: 1,
+        rowKeyPrepassMisses: 0,
         segmentReuseRows: 0,
         fragmentRows: 0,
         spansCreated: 0,
         spansReused: 0,
         replaceChildren: 0,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("invalidates the opt-in row prepass when a single styled row changes", () => {
+    const { terminal, container, renderer } = setup(3, 1, { enableRowKeyPrepass: true });
+
+    try {
+      terminal.fill(0, 0, 3, 1, "A", { fg: "red" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const span = lineEl(container).firstChild as HTMLSpanElement;
+
+      terminal.fill(0, 0, 3, 1, "A", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).firstChild).toBe(span);
+      expect(span.style.color).toBe("var(--vt-color-blue)");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 0,
+        rowKeyPrepassChecks: 1,
+        rowKeyPrepassHits: 0,
+        rowKeyPrepassMisses: 1,
+        singleStyledRows: 1,
+        spansReused: 1,
       });
     } finally {
       renderer.dispose();
@@ -735,6 +770,9 @@ describe("DomRenderer row rendering", () => {
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
         cacheHits: 0,
+        rowKeyPrepassChecks: 1,
+        rowKeyPrepassHits: 0,
+        rowKeyPrepassMisses: 1,
         segmentReuseRows: 1,
       });
     } finally {
@@ -774,8 +812,33 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("invalidates the opt-in row prepass when href changes", () => {
+    const { terminal, container, renderer } = setup(3, 1, { enableRowKeyPrepass: true });
+
+    try {
+      terminal.fill(0, 0, 3, 1, "A", { href: "https://example.com/a" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      terminal.fill(0, 0, 3, 1, "A", { href: "https://example.com/b" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).textContent).toBe("AAA");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 0,
+        rowKeyPrepassChecks: 1,
+        rowKeyPrepassHits: 0,
+        rowKeyPrepassMisses: 1,
+        fragmentRows: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("invalidates the row cache when a plain row becomes wide", () => {
-    const { terminal, container, renderer } = setup(2);
+    const { terminal, container, renderer } = setup(2, 1, { enableRowKeyPrepass: true });
 
     try {
       terminal.fill(0, 0, 2, 1, "A");
@@ -790,6 +853,9 @@ describe("DomRenderer row rendering", () => {
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
         cacheHits: 0,
+        rowKeyPrepassChecks: 1,
+        rowKeyPrepassHits: 0,
+        rowKeyPrepassMisses: 1,
         fragmentRows: 1,
       });
     } finally {

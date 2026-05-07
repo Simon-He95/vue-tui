@@ -595,6 +595,78 @@ describe("ui regressions event manager", () => {
     events.dispose();
   });
 
+  it("EventManager replaces stale same-rect focus before key dispatch", async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    const calls: string[] = [];
+
+    const stale = events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        keydown: () => calls.push("stale"),
+      },
+    });
+    events.focus(stale.id);
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        pointerdown: () => calls.push("current-pointerdown"),
+        keydown: () => calls.push("current-keydown"),
+      },
+    });
+
+    el.dispatchEvent(new MouseEvent("pointerdown", { clientX: 0, clientY: 0, bubbles: true }));
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
+
+    expect(calls).toEqual(["current-pointerdown", "current-keydown"]);
+    events.dispose();
+    el.remove();
+  });
+
+  it("CliEventManager replaces stale same-rect focus before key dispatch", async () => {
+    const events = createCliEventManager();
+    const calls: string[] = [];
+
+    const stale = events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        keydown: () => calls.push("stale"),
+      },
+    });
+    events.focus(stale.id);
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        pointerdown: () => calls.push("current-pointerdown"),
+        keydown: () => calls.push("current-keydown"),
+      },
+    });
+
+    events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 });
+    events.dispatch({
+      type: "keydown",
+      key: "Enter",
+      code: "Enter",
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      metaKey: false,
+      repeat: false,
+    });
+
+    expect(calls).toEqual(["current-pointerdown", "current-keydown"]);
+    events.dispose();
+  });
+
   it("EventManager prevents click-through via bubble ordering across zIndex", async () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
