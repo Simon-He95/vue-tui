@@ -7,7 +7,8 @@ import type {
 } from "../../core/types.js";
 import { Buffer } from "node:buffer";
 import process from "node:process";
-import { ansiColorRgb, ansiHexToRgb } from "../../core/ansi-palette.js";
+import type { ThemePalette } from "../../core/ansi-palette.js";
+import { ansiColorRgb, ansiHexToRgb, isAnsiColorName } from "../../core/ansi-palette.js";
 import { detectTerminalColorCapability } from "../../core/ansi/capability.js";
 import {
   ansi8BgOpen,
@@ -88,7 +89,7 @@ export type StdoutRenderer = Readonly<{
 }>;
 
 export type StdoutColorMode = "auto" | "truecolor" | "ansi256" | "ansi16" | "ansi8";
-export type ThemePalette = Partial<Record<AnsiColorName, string>>;
+export type { ThemePalette } from "../../core/ansi-palette.js";
 
 export function createStdoutRenderer(
   terminal: Terminal,
@@ -354,10 +355,8 @@ export function createStdoutRenderer(
     return typeof value === "string" && value ? value : null;
   }
 
-  function resolveAnsiColorRgb(name: AnsiColorName) {
-    const hex = palette?.[name];
-    if (hex) return ansiHexToRgb(hex) ?? ansiColorRgb(name);
-    return ansiColorRgb(name);
+  function resolveAnsiColorRgb(name: string) {
+    return ansiColorRgb(name, palette);
   }
 
   function openColor(fg?: string): string {
@@ -374,9 +373,10 @@ export function createStdoutRenderer(
       return truecolorFgOpen(rgb);
     }
     // AnsiColorName path (fallback layer + legacy themes)
+    if (!isAnsiColorName(fg)) return "";
     if (colorMode === "ansi8") return ansi8FgOpen(fg as AnsiColorName);
     if (colorMode === "ansi16") return ansi16FgOpen(fg as AnsiColorName);
-    const rgb = resolveAnsiColorRgb(fg as AnsiColorName);
+    const rgb = resolveAnsiColorRgb(fg);
     if (!rgb) return "";
     if (colorMode === "ansi256") return ansi256FgOpen(rgbToAnsi256(rgb));
     return truecolorFgOpen(rgb);
@@ -396,9 +396,10 @@ export function createStdoutRenderer(
       return truecolorBgOpen(rgb);
     }
     // AnsiColorName path (fallback layer + legacy themes)
+    if (!isAnsiColorName(bg)) return "";
     if (colorMode === "ansi8") return ansi8BgOpen(bg as AnsiColorName);
     if (colorMode === "ansi16") return ansi16BgOpen(bg as AnsiColorName);
-    const rgb = resolveAnsiColorRgb(bg as AnsiColorName);
+    const rgb = resolveAnsiColorRgb(bg);
     if (!rgb) return "";
     if (colorMode === "ansi256") return ansi256BgOpen(rgbToAnsi256(rgb));
     return truecolorBgOpen(rgb);

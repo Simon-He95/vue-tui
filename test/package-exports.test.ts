@@ -11,8 +11,47 @@ const distTypes = resolve("dist/index.d.ts");
 const distMarkdownTypes = resolve("dist/markdown.d.ts");
 const distExperimentalTypes = resolve("dist/experimental.d.ts");
 const requireDistExports = process.env.VUE_TUI_REQUIRE_DIST_EXPORTS === "1";
+const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as {
+  files?: string[];
+  main?: string;
+  module?: string;
+  types?: string;
+  exports?: Record<string, unknown>;
+  peerDependencies?: Record<string, string>;
+};
+
+function collectExportTargets(value: unknown, out: string[] = []): string[] {
+  if (typeof value === "string") {
+    out.push(value);
+    return out;
+  }
+  if (value && typeof value === "object") {
+    for (const child of Object.values(value)) collectExportTargets(child, out);
+  }
+  return out;
+}
 
 describe("package exports", () => {
+  it("publishes every package export target through the files allowlist", () => {
+    expect(packageJson.files).toEqual(["dist"]);
+
+    const targets = [
+      packageJson.main,
+      packageJson.module,
+      packageJson.types,
+      ...collectExportTargets(packageJson.exports),
+    ].filter((target): target is string => typeof target === "string" && target.startsWith("./"));
+
+    expect(targets.length).toBeGreaterThan(0);
+    for (const target of targets) {
+      expect(target).toMatch(/^\.\/dist\//);
+    }
+  });
+
+  it("does not pin Vue consumers to a single patch line", () => {
+    expect(packageJson.peerDependencies?.vue).toBe(">=3.3.0 <4");
+  });
+
   it("keeps high-throughput components behind the experimental entrypoint", async () => {
     const root = await import("../src/index.js");
     const markdown = await import("../src/markdown.js");

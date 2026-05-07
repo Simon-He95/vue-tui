@@ -29,6 +29,7 @@ export {
   detectTerminalColorCapability,
   type TerminalColorCapability,
 } from "./core/ansi/capability.js";
+export type { ThemePalette } from "./core/ansi-palette.js";
 export { parseAnsiSgr } from "./core/ansi/sgr.js";
 export { charCellWidth } from "./core/buffer/width.js";
 export type {
@@ -92,6 +93,9 @@ export type {
   DomRendererFlushSample,
   DomRendererFlushStats,
   DomRendererOptions,
+  DomRendererRowKeyPrepassDebugStats,
+  DomRendererRowKeyPrepassDecision,
+  DomRendererRowKeyPrepassMode,
   DomRendererRowRenderDebugStats,
   DomRendererRowRenderStats,
   DomRendererSyncFlushDecision,

@@ -1,6 +1,7 @@
 import type { AnsiColorName } from "./types.js";
 
 export type AnsiRgb = Readonly<{ r: number; g: number; b: number }>;
+export type ThemePalette = Partial<Record<AnsiColorName, string>>;
 
 export const ANSI_PALETTE_HEX: Readonly<Record<AnsiColorName, string>> = Object.freeze({
   black: "#000000",
@@ -37,13 +38,21 @@ const ANSI_PALETTE_RGB: Readonly<Record<AnsiColorName, AnsiRgb>> = Object.freeze
   ) as any,
 );
 
-export function ansiColorHex(name?: AnsiColorName): string | undefined {
-  if (!name) return undefined;
+export function isAnsiColorName(name: string | undefined): name is AnsiColorName {
+  return typeof name === "string" && Object.prototype.hasOwnProperty.call(ANSI_PALETTE_HEX, name);
+}
+
+export function ansiColorHex(name?: string, palette?: ThemePalette | null): string | undefined {
+  if (!isAnsiColorName(name)) return undefined;
+  const custom = palette?.[name];
+  if (custom && ansiHexToRgb(custom)) return custom;
   return ANSI_PALETTE_HEX[name];
 }
 
-export function ansiColorRgb(name?: AnsiColorName): AnsiRgb | undefined {
-  if (!name) return undefined;
+export function ansiColorRgb(name?: string, palette?: ThemePalette | null): AnsiRgb | undefined {
+  if (!isAnsiColorName(name)) return undefined;
+  const custom = palette?.[name];
+  if (custom) return ansiHexToRgb(custom) ?? ANSI_PALETTE_RGB[name];
   return ANSI_PALETTE_RGB[name];
 }
 
@@ -51,7 +60,10 @@ export function ansiCssVar(name: AnsiColorName): string {
   return `var(--vt-color-${name})`;
 }
 
-export function installAnsiPaletteCssVars(container: HTMLElement): void {
+export function installAnsiPaletteCssVars(
+  container: HTMLElement,
+  palette?: ThemePalette | null,
+): void {
   for (const [name, hex] of Object.entries(ANSI_PALETTE_HEX))
-    container.style.setProperty(`--vt-color-${name}`, hex);
+    container.style.setProperty(`--vt-color-${name}`, ansiColorHex(name, palette) ?? hex);
 }

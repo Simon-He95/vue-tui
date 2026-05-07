@@ -7,9 +7,8 @@ import type { TuiMarkdownBlock, TuiMarkdownVisualRow } from "./types.js";
 import { sanitizeInlineText, sanitizeTextBlock } from "../utils/text.js";
 
 /**
- * Markdown currently rebuilds from the full source string on every scheduled update.
- * Streaming components coalesce burst updates to at most one rebuild per frame,
- * but the rebuild itself is still full-document parse -> block -> visual-row layout.
+ * This helper always builds visual rows from the full source string. Components
+ * that need streaming reuse can call buildMarkdownBlocks and cache block layout.
  */
 export function buildMarkdownBlocks(
   content: string,

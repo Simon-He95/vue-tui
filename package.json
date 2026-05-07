@@ -30,19 +30,16 @@
   },
   "exports": {
     ".": {
-      "bun": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./markdown": {
-      "bun": "./src/markdown.ts",
       "types": "./dist/markdown.d.ts",
       "import": "./dist/markdown.js",
       "require": "./dist/markdown.cjs"
     },
     "./experimental": {
-      "bun": "./src/experimental.ts",
       "types": "./dist/experimental.d.ts",
       "import": "./dist/experimental.js",
       "require": "./dist/experimental.cjs"
@@ -105,7 +102,7 @@
     "vue": "^3.5.33"
   },
   "peerDependencies": {
-    "vue": "^3.5.27"
+    "vue": ">=3.3.0 <4"
   },
   "lint-staged": {
     "*": "oxfmt --write",

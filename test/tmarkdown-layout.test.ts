@@ -3,7 +3,7 @@ import type { ParsedNode } from "stream-markdown-parser";
 import type { Style, Terminal } from "../src/index.js";
 import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
 import { buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
-import { layoutMarkdownBlocks } from "../src/vue/markdown/layout.js";
+import { layoutMarkdownBlocks, layoutMarkdownBlocksCached } from "../src/vue/markdown/layout.js";
 import { createTuiMarkdownParser, type TuiMarkdownParser } from "../src/vue/markdown/parser.js";
 import { paintMarkdownVisualRow } from "../src/vue/markdown/render.js";
 import { DEFAULT_TUI_MARKDOWN_THEME } from "../src/vue/markdown/theme.js";
@@ -176,6 +176,51 @@ describe("markdown layout", () => {
   it("does not insert an extra blank row before nested list items", () => {
     const rows = buildMarkdownVisualRows("- parent\n  - child", 40, createTuiMarkdownParser());
     expect(rows.map((row) => row.plainText)).toEqual(["- parent", "  - child"]);
+  });
+
+  it("reuses finalized paragraph rows when only the streaming tail paragraph changes", () => {
+    const parser = createTuiMarkdownParser({ streaming: true });
+    const firstBlocks = markdownAstToBlocks(
+      parser.parse("first paragraph\n\nsecond", false),
+      DEFAULT_TUI_MARKDOWN_THEME,
+    );
+    const first = layoutMarkdownBlocksCached(firstBlocks, 20);
+    const nextBlocks = markdownAstToBlocks(
+      parser.parse("first paragraph\n\nsecond updated", false),
+      DEFAULT_TUI_MARKDOWN_THEME,
+    );
+
+    const next = layoutMarkdownBlocksCached(nextBlocks, 20, first.cache);
+
+    expect(next.rows.map((row) => row.plainText)).toEqual([
+      "first paragraph",
+      "",
+      "second updated",
+    ]);
+    expect(next.rows[0]).toBe(first.rows[0]);
+    expect(next.rows[1]).toBe(first.rows[1]);
+    expect(next.rows[2]).not.toBe(first.rows[2]);
+  });
+
+  it("reuses closed code fence rows when appending a following markdown block", () => {
+    const parser = createTuiMarkdownParser({ streaming: true });
+    const code = "intro\n\n```ts\nconst a = 1\n```";
+    const firstBlocks = markdownAstToBlocks(parser.parse(code, false), DEFAULT_TUI_MARKDOWN_THEME);
+    const first = layoutMarkdownBlocksCached(firstBlocks, 20);
+    const nextBlocks = markdownAstToBlocks(
+      parser.parse(`${code}\n\nnext paragraph`, false),
+      DEFAULT_TUI_MARKDOWN_THEME,
+    );
+
+    const next = layoutMarkdownBlocksCached(nextBlocks, 20, first.cache);
+
+    expect(next.rows.slice(0, first.rows.length).map((row) => row.plainText)).toEqual(
+      first.rows.map((row) => row.plainText),
+    );
+    for (let index = 0; index < first.rows.length; index++) {
+      expect(next.rows[index]).toBe(first.rows[index]);
+    }
+    expect(next.rows.at(-1)?.plainText).toBe("next paragraph");
   });
 
   it("keeps streaming strong parsing strict only when final rendering is non-streaming", () => {
