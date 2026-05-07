@@ -30,6 +30,7 @@ import {
   TDialog,
   TInputBox,
   TRenderPlane,
+  TSelect,
   TText,
   TView,
   useTerminal,
@@ -61,6 +62,15 @@ export const AGENT_CONSOLE_LAYOUT = Object.freeze({
 
 type OverlayName = "search" | "palette" | "links";
 
+type CommandRow = Readonly<{
+  id: string;
+  label: string;
+  command: string;
+  detail: string;
+  run: () => void;
+  keepOpen?: boolean;
+}>;
+
 export type AgentConsoleApi = Readonly<{
   mode: Ref<TranscriptMode>;
   input: Ref<string>;
@@ -78,14 +88,17 @@ export type AgentConsoleApi = Readonly<{
   jumpToBottom: () => void;
   openSearch: (query?: string) => void;
   openLinks: () => void;
-  openPalette: () => void;
+  openPalette: (query?: string) => void;
   closeOverlay: () => void;
+  runCommand: (commandLine: string) => boolean;
   toggleThinking: () => void;
   toggleToolCall: () => void;
   focusNextLink: () => boolean;
   getVisibleLinks: () => readonly TLogViewVisibleLink[];
   getFramePerfSamples: () => readonly FramePerfSample[];
   clearFramePerf: () => void;
+  getCommandRows: () => readonly string[];
+  getCopiedText: () => string;
   getInputValue: () => string;
   getTranscriptRows: () => readonly string[];
   getChromeRows: () => readonly string[];
@@ -136,6 +149,8 @@ export const AgentConsoleSurface = defineComponent({
     const overlay = ref<OverlayName | null>(null);
     const input = ref("");
     const inputFocused = ref(false);
+    const paletteQuery = ref("");
+    const paletteIndex = ref(0);
     const searchQuery = ref("");
     const searchDraft = ref("ERROR");
     const markdownScrollTop = ref(1_000_000);
@@ -145,6 +160,8 @@ export const AgentConsoleSurface = defineComponent({
     const visibleLinks = ref<readonly TLogViewVisibleLink[]>([]);
     const focusedLink = ref<TLogViewVisibleLink | null>(null);
     const lastActivatedLink = ref("");
+    const lastCommand = ref("none");
+    const copiedText = ref("");
     const thinkingExpanded = ref(true);
     const toolCallExpanded = ref(true);
     const streamState = ref<"connected" | "paused">("paused");
@@ -213,7 +230,9 @@ export const AgentConsoleSurface = defineComponent({
       void nextTick(refreshSearchState);
     }
 
-    function openPalette(): void {
+    function openPalette(query = ""): void {
+      paletteQuery.value = query;
+      paletteIndex.value = 0;
       overlay.value = "palette";
     }
 
@@ -247,6 +266,202 @@ export const AgentConsoleSurface = defineComponent({
         refreshMetrics();
         refreshLinks();
       });
+    }
+
+    function copyVisibleTranscript(): void {
+      copiedText.value = Array.from({ length: AGENT_CONSOLE_LAYOUT.transcript.h }, (_, index) =>
+        rowTextFromTerminal(terminalContext.terminal, AGENT_CONSOLE_LAYOUT.transcript.y + index),
+      )
+        .join("\n")
+        .trimEnd();
+      lastCommand.value = `/copy:${copiedText.value ? "visible" : "empty"}`;
+    }
+
+    function clearTranscript(): void {
+      stopStream();
+      stream.reset();
+      streamIndex.value = 0;
+      transcript.clear();
+      syncReplayCursor();
+      searchQuery.value = "";
+      searchState.value = searchStateFor("");
+      visibleLinks.value = [];
+      focusedLink.value = null;
+      lastActivatedLink.value = "";
+      markdownScrollTop.value = 1_000_000;
+      markdownStickToBottom.value = true;
+      lastCommand.value = "/clear";
+      void nextTick(() => {
+        refreshMetrics();
+        refreshLinks();
+      });
+    }
+
+    function setMode(nextMode: TranscriptMode): void {
+      if (mode.value !== nextMode) toggleMode();
+      else {
+        lastCommand.value = `/toggle ${nextMode}`;
+      }
+    }
+
+    function runCommand(commandLine: string): boolean {
+      const text = commandLine.trim();
+      if (!text.startsWith("/")) return false;
+      const [rawName = "", ...args] = text.slice(1).trim().split(/\s+/g);
+      const name = rawName.toLowerCase();
+      const arg = args.join(" ").trim();
+
+      if (name === "search") {
+        lastCommand.value = "/search";
+        openSearch(arg || searchDraft.value);
+        return true;
+      }
+      if (name === "copy") {
+        copyVisibleTranscript();
+        return true;
+      }
+      if (name === "clear") {
+        clearTranscript();
+        return true;
+      }
+      if (name === "toggle") {
+        if (arg === "markdown" || arg === "log") setMode(arg);
+        else toggleMode();
+        lastCommand.value = arg ? `/toggle ${arg}` : "/toggle";
+        return true;
+      }
+      if (name === "jump" || name === "bottom") {
+        if (name === "jump" && arg && arg !== "bottom") return false;
+        jumpToBottom();
+        lastCommand.value = "/jump bottom";
+        return true;
+      }
+      if (name === "links") {
+        lastCommand.value = "/links";
+        openLinks();
+        return true;
+      }
+      if (name === "stream") {
+        if (timer) stopStream();
+        else startStream();
+        lastCommand.value = timer ? "/stream resume" : "/stream pause";
+        return true;
+      }
+      if (name === "thinking") {
+        toggleThinking();
+        lastCommand.value = "/thinking";
+        return true;
+      }
+      if (name === "tool") {
+        toggleToolCall();
+        lastCommand.value = "/tool";
+        return true;
+      }
+      if (name === "append") {
+        void appendBurst(arg === "1000" ? 1_000 : 200);
+        lastCommand.value = arg === "1000" ? "/append 1000" : "/append";
+        return true;
+      }
+      if (name === "palette") {
+        lastCommand.value = "/palette";
+        openPalette(arg);
+        return true;
+      }
+
+      return false;
+    }
+
+    function commandRows(): readonly CommandRow[] {
+      return [
+        {
+          id: "search",
+          label: "Search transcript",
+          command: "/search",
+          detail: "Open search overlay",
+          run: () => runCommand(`/search ${paletteQuery.value}`),
+          keepOpen: true,
+        },
+        {
+          id: "copy",
+          label: "Copy visible transcript",
+          command: "/copy",
+          detail: "Store visible transcript text",
+          run: () => runCommand("/copy"),
+        },
+        {
+          id: "clear",
+          label: "Clear transcript",
+          command: "/clear",
+          detail: "Reset transcript rows",
+          run: () => runCommand("/clear"),
+        },
+        {
+          id: "toggle",
+          label: mode.value === "log" ? "Toggle markdown" : "Toggle log",
+          command: mode.value === "log" ? "/toggle markdown" : "/toggle log",
+          detail: "Switch transcript renderer",
+          run: () => runCommand(mode.value === "log" ? "/toggle markdown" : "/toggle log"),
+        },
+        {
+          id: "stream",
+          label: streamState.value === "connected" ? "Pause stream" : "Resume stream",
+          command: "/stream",
+          detail: "Toggle deterministic stream",
+          run: () => runCommand("/stream"),
+        },
+        {
+          id: "jump",
+          label: "Jump bottom",
+          command: "/jump bottom",
+          detail: "Stick transcript to bottom",
+          run: () => runCommand("/jump bottom"),
+        },
+        {
+          id: "links",
+          label: "Open links",
+          command: "/links",
+          detail: "Show visible links",
+          run: () => runCommand("/links"),
+          keepOpen: true,
+        },
+        {
+          id: "thinking",
+          label: "Toggle thinking",
+          command: "/thinking",
+          detail: "Expand or collapse thinking rows",
+          run: () => runCommand("/thinking"),
+        },
+        {
+          id: "tool",
+          label: "Toggle tool call",
+          command: "/tool",
+          detail: "Expand or collapse tool rows",
+          run: () => runCommand("/tool"),
+        },
+        {
+          id: "append",
+          label: "Append 1000 chunks",
+          command: "/append 1000",
+          detail: "Stress streaming transcript",
+          run: () => runCommand("/append 1000"),
+        },
+      ];
+    }
+
+    function filteredCommandRows(): readonly CommandRow[] {
+      const query = paletteQuery.value.trim().replace(/^\//, "").toLowerCase();
+      if (!query) return commandRows();
+      return commandRows().filter((row) =>
+        `${row.label} ${row.command} ${row.detail}`.toLowerCase().includes(query),
+      );
+    }
+
+    function runPaletteSelection(): void {
+      const rows = filteredCommandRows();
+      const row = rows[Math.max(0, Math.min(paletteIndex.value, rows.length - 1))];
+      if (!row) return;
+      row.run();
+      if (!row.keepOpen) closeOverlay();
     }
 
     function applyNextEvent(): void {
@@ -390,6 +605,10 @@ export const AgentConsoleSurface = defineComponent({
     function submitInput(value: string): void {
       const text = value.trim();
       if (!text) return;
+      if (runCommand(text)) {
+        input.value = "";
+        return;
+      }
       transcript.apply({ type: "user", text });
       input.value = "";
       syncReplayCursor();
@@ -570,7 +789,7 @@ export const AgentConsoleSurface = defineComponent({
           key: "footer",
           ...AGENT_CONSOLE_LAYOUT.footer,
           value: fit(
-            `last=${lastActivatedLink.value || "none"} input=${inputFocused.value ? "focus" : "idle"}`,
+            `last=${lastActivatedLink.value || "none"} cmd=${lastCommand.value} input=${inputFocused.value ? "focus" : "idle"}`,
             118,
           ),
           style: styles.muted,
@@ -659,19 +878,14 @@ export const AgentConsoleSurface = defineComponent({
     }
 
     function renderPaletteOverlay() {
-      const rows = [
-        ["Switch transcript mode", toggleMode],
-        [
-          streamState.value === "connected" ? "Pause stream" : "Resume stream",
-          () => (timer ? stopStream() : startStream()),
-        ],
-        ["Jump to bottom", jumpToBottom],
-        ["Open search", () => openSearch()],
-        ["Open links", openLinks],
-        ["Toggle thinking", toggleThinking],
-        ["Toggle tool_call", toggleToolCall],
-        ["Append 1000 chunks", () => void appendBurst(1_000)],
-      ] as const;
+      const rows = filteredCommandRows();
+      const selected = Math.max(0, Math.min(paletteIndex.value, Math.max(0, rows.length - 1)));
+      const options = rows.length
+        ? rows.map((row) => ({
+            label: row.label,
+            detail: `${row.command}  ${row.detail}`,
+          }))
+        : [{ kind: "separator" as const, label: "No commands" }];
       return h(
         TDialog,
         {
@@ -687,38 +901,59 @@ export const AgentConsoleSurface = defineComponent({
           closeOnEsc: true,
         },
         {
-          default: () =>
-            rows.map(([label, action], index) =>
-              h(
-                TView,
-                {
-                  key: label,
-                  x: 0,
-                  y: index,
-                  w: 66,
-                  h: 1,
-                  focusable: true,
-                  onClick: () => {
-                    action();
-                    if (label !== "Open search" && label !== "Open links") closeOverlay();
-                  },
-                  onKeydown: (event: TerminalKeyboardEvent) => {
-                    if (event.key !== "Enter") return;
-                    event.preventDefault();
-                    action();
-                    if (label !== "Open search" && label !== "Open links") closeOverlay();
-                  },
-                },
-                () =>
-                  h(TText, {
-                    x: 0,
-                    y: 0,
-                    w: 66,
-                    value: fit(label, 66),
-                    style: index === 0 ? styles.button : styles.buttonMuted,
-                  }),
-              ),
-            ),
+          default: () => [
+            h(TInputBox, {
+              x: 0,
+              y: 0,
+              w: 66,
+              h: 3,
+              title: "Command",
+              modelValue: paletteQuery.value,
+              placeholder: "/search, /copy, /clear...",
+              autoFocus: true,
+              style: styles.input,
+              cursorShape: "bar",
+              "onUpdate:modelValue": (value: string) => {
+                paletteQuery.value = value;
+                paletteIndex.value = 0;
+              },
+              onKeydown: (event: TerminalKeyboardEvent) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  paletteIndex.value = Math.min(selected + 1, Math.max(0, rows.length - 1));
+                  return;
+                }
+                if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  paletteIndex.value = Math.max(0, selected - 1);
+                  return;
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  if (runCommand(paletteQuery.value)) {
+                    if (overlay.value === "palette") closeOverlay();
+                    return;
+                  }
+                  runPaletteSelection();
+                }
+              },
+            }),
+            h(TSelect, {
+              x: 0,
+              y: 4,
+              w: 66,
+              h: 7,
+              options,
+              modelValue: selected,
+              style: styles.buttonMuted,
+              highlightStyle: styles.button,
+              "onUpdate:modelValue": (value: number) => {
+                paletteIndex.value = value;
+              },
+              onConfirm: runPaletteSelection,
+              onClose: closeOverlay,
+            }),
+          ],
         },
       );
     }
@@ -793,12 +1028,15 @@ export const AgentConsoleSurface = defineComponent({
       openLinks,
       openPalette,
       closeOverlay,
+      runCommand,
       toggleThinking,
       toggleToolCall,
       focusNextLink,
       getVisibleLinks: () => logView.value?.getVisibleLinks() ?? [],
       getFramePerfSamples: () => terminalContext.observability.framePerf.list(),
       clearFramePerf: () => terminalContext.observability.framePerf.clear(),
+      getCommandRows: () => filteredCommandRows().map((row) => `${row.command} ${row.label}`),
+      getCopiedText: () => copiedText.value,
       getInputValue: () => input.value,
       getTranscriptRows: () =>
         Array.from({ length: AGENT_CONSOLE_LAYOUT.transcript.h }, (_, index) =>
