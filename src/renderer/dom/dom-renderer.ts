@@ -566,6 +566,20 @@ function resetSpanStyle(span: HTMLSpanElement): void {
   span.removeAttribute("style");
 }
 
+function isSpanNode(
+  node: ChildNode | null | undefined,
+  lineEl: HTMLElement,
+): node is HTMLSpanElement {
+  const SpanCtor =
+    lineEl.ownerDocument.defaultView?.HTMLSpanElement ??
+    ((globalThis as any).HTMLSpanElement as typeof HTMLSpanElement | undefined);
+  return typeof SpanCtor === "function" && node instanceof SpanCtor;
+}
+
+function textNodeType(lineEl: HTMLElement): number {
+  return lineEl.ownerDocument.defaultView?.Node.TEXT_NODE ?? 3;
+}
+
 function tryUpdateSegmentSpans(
   lineEl: HTMLElement,
   segments: readonly RowSegment[],
@@ -576,7 +590,7 @@ function tryUpdateSegmentSpans(
 
   for (let i = 0; i < segments.length; i++) {
     const node = lineEl.childNodes[i];
-    if (!(node instanceof HTMLSpanElement)) return false;
+    if (!isSpanNode(node, lineEl)) return false;
     if (node.dataset.vtFastRow !== "segment") return false;
     if (node.dataset.vtSegmentIndex !== String(i)) return false;
   }
@@ -637,7 +651,7 @@ function renderRow(
     stats.textNodeUpdates++;
     const text = segments[0]!.text;
     const firstChild = lineEl.firstChild;
-    if (lineEl.childNodes.length === 1 && firstChild?.nodeType === Node.TEXT_NODE) {
+    if (lineEl.childNodes.length === 1 && firstChild?.nodeType === textNodeType(lineEl)) {
       firstChild.nodeValue = text;
     } else {
       lineEl.textContent = text;
@@ -652,7 +666,7 @@ function renderRow(
 
     if (
       lineEl.childNodes.length === 1 &&
-      firstChild instanceof HTMLSpanElement &&
+      isSpanNode(firstChild, lineEl) &&
       firstChild.dataset.vtFastRow === "styled"
     ) {
       span = firstChild;

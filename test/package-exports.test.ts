@@ -78,6 +78,7 @@ describe("package exports", () => {
     expect("TVirtualMarkdown" in experimental).toBe(false);
     expect(markdown.TMarkdownText).toBeTruthy();
     expect(markdown.TVirtualMarkdown).toBeTruthy();
+    expect(markdown.createMarkdownBlockSource).toBeTruthy();
     expect(markdown.createTuiMarkdownParser).toBeTruthy();
     expect(markdown.buildMarkdownBlocks).toBeTruthy();
     expect(markdown.buildMarkdownVisualRows).toBeTruthy();
@@ -190,12 +191,14 @@ describe("package exports", () => {
     expect(rootCjs.framePerfNow).toBeTruthy();
     expect(markdown.TMarkdownText).toBeTruthy();
     expect(markdown.TVirtualMarkdown).toBeTruthy();
+    expect(markdown.createMarkdownBlockSource).toBeTruthy();
     expect(markdown.createTuiMarkdownParser).toBeTruthy();
     expect(markdown.buildMarkdownBlocks).toBeTruthy();
     expect(markdown.buildMarkdownVisualRows).toBeTruthy();
     expect(markdown.layoutMarkdownBlocks).toBeTruthy();
     expect(markdownCjs.TMarkdownText).toBeTruthy();
     expect(markdownCjs.TVirtualMarkdown).toBeTruthy();
+    expect(markdownCjs.createMarkdownBlockSource).toBeTruthy();
     expect(markdownCjs.createTuiMarkdownParser).toBeTruthy();
     expect(markdownCjs.buildMarkdownBlocks).toBeTruthy();
     expect(markdownCjs.buildMarkdownVisualRows).toBeTruthy();

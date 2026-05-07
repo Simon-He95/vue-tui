@@ -19,7 +19,7 @@ import { layoutMarkdownBlocksCached, type TuiMarkdownLayoutCache } from "../mark
 import { createTuiMarkdownParser } from "../markdown/parser.js";
 import { paintMarkdownVisualRow } from "../markdown/render.js";
 import { markdownThemeSignature, type TuiMarkdownThemeOverrides } from "../markdown/theme.js";
-import type { TuiMarkdownVisualRow } from "../markdown/types.js";
+import type { TuiMarkdownBlock, TuiMarkdownVisualRow } from "../markdown/types.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminalNode } from "../composables/use-terminal-node.js";
@@ -93,7 +93,11 @@ export const TVirtualMarkdown = defineComponent({
     w: { type: Number, required: true },
     h: { type: Number, required: true },
     zIndex: { type: Number, default: 0 },
-    content: { type: String, required: true },
+    content: { type: String, default: "" },
+    blocks: {
+      type: Array as PropType<readonly TuiMarkdownBlock[]>,
+      default: undefined,
+    },
     scrollTop: { type: Number, default: 0 },
     style: { type: Object as PropType<Style>, default: undefined },
     final: { type: Boolean, default: true },
@@ -149,10 +153,12 @@ export const TVirtualMarkdown = defineComponent({
     function rebuildRows(): void {
       const prevScrollTop = internalScrollTop.value;
       const prevVisibleRows = visibleRowSignatures(rows.value, prevScrollTop);
-      const { blocks } = buildMarkdownBlocks(props.content, parser.value, {
-        final: props.final,
-        theme: props.theme,
-      });
+      const blocks =
+        props.blocks ??
+        buildMarkdownBlocks(props.content, parser.value, {
+          final: props.final,
+          theme: props.theme,
+        }).blocks;
       const nextLayout = layoutMarkdownBlocksCached(blocks, props.w, layoutCache);
       layoutCache = markRaw(nextLayout.cache);
       const nextRows = nextLayout.rows;
@@ -284,6 +290,7 @@ export const TVirtualMarkdown = defineComponent({
     watch(
       [
         () => props.content,
+        () => props.blocks,
         () => props.w,
         () => parser.value,
         () => props.final,

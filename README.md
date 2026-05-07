@@ -129,6 +129,7 @@ const driver = createStdinDriver({
 | ------------------------------------------------------------------------ | -------------------------------------------------------- |
 | `TMarkdownText`                                                          | Markdown text block                                      |
 | `TVirtualMarkdown`                                                       | Virtualized markdown viewport for long/streaming content |
+| `createMarkdownBlockSource`                                              | Incremental block source for streaming markdown history  |
 | `createTuiMarkdownParser`                                                | Parser wrapper around `stream-markdown-parser`           |
 | `buildMarkdownBlocks`, `buildMarkdownVisualRows`, `layoutMarkdownBlocks` | Markdown pipeline helpers                                |
 
@@ -194,7 +195,7 @@ DOM and stdout renderers share the same ANSI palette resolver. `createDomRendere
 
 ## Known Limitations
 
-- `TVirtualMarkdown` reuses block-level layout during streaming, but parsing still starts from the current full markdown string because the parser dependency exposes full-buffer parsing.
+- `TVirtualMarkdown` reuses block-level layout during streaming. The `content` path still parses the current full markdown string; stream-driven apps that can finalize transcript blocks can use `createMarkdownBlockSource` and pass `blocks` to avoid reparsing finalized history.
 - `TLogView` is optimized for append-only and retained-window sources; arbitrary random mutation workloads should provide explicit stable keys and should be tested with the target renderer.
 - Terminal emoji and East Asian width behavior still depends on the user terminal and font.
 - ANSI16 colors follow the terminal theme; use truecolor or ansi256 for more deterministic color output.
@@ -218,6 +219,9 @@ pnpm run build:examples
 pnpm run build:examples:terminal
 pnpm run run:basic:terminal
 pnpm run example:tlog-view-lab
+pnpm run example:agent-console
+pnpm run example:agent-console:smoke
+pnpm run example:agent-console:terminal:smoke
 ```
 
 Docs:

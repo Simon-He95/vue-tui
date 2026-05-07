@@ -18,6 +18,8 @@ import DocsShowcaseTerminal from './.vitepress/components/DocsShowcaseTerminal.v
   重点看 `TInput`、`TInputBox`、`TSelect`、`TList`、`TJsonEditor` 这类交互组件。
 - `Overlay + focus`
   重点看 `TDialog`、`TTransition` 这类需要 runtime / focus / layering 支撑的组件。
+- `Agent console`
+  真实复合场景在 [Agent Console 示例](/agent-console) 中覆盖 streaming transcript、输入响应、搜索、链接和 overlay plane。
 
 ## 组件导航
 
@@ -41,4 +43,5 @@ import DocsShowcaseTerminal from './.vitepress/components/DocsShowcaseTerminal.v
 
 - 参数和事件请看 [组件 API（自动生成）](/generated/components-api)
 - 组件分层、适用场景和限制请看 [组件总览](/components)
+- Agent / chat / log console 场景请看 [Agent Console 示例](/agent-console)
 - 是否适合脱离当前 CLI 继续扩展，请看 [扩展性与插件化](/extensibility)

@@ -12,6 +12,7 @@ vi.mock("../src/vue/markdown/document.js", async (importOriginal) => {
 
 import * as markdownDocument from "../src/vue/markdown/document.js";
 import { TMarkdownText } from "../src/markdown.js";
+import type { TuiMarkdownBlock } from "../src/markdown.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
 function dispatchWheel(container: HTMLElement): void {
@@ -274,6 +275,41 @@ describe("TVirtualMarkdown performance", () => {
         .lines.slice(0, 4)
         .map((line) => line.trimEnd()),
     ).toEqual(["- row-4", "- row-5", "- row-6", "- row-7"]);
+    mounted.unmount();
+  });
+
+  it("renders external markdown blocks without rebuilding from full content", async () => {
+    const blocks = ref<readonly TuiMarkdownBlock[]>([
+      { type: "inline", key: "source", segments: [{ text: "alpha" }] },
+    ]);
+    const buildSpy = vi.mocked(markdownDocument.buildMarkdownBlocks);
+    const beforeMount = buildSpy.mock.calls.length;
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          blocks: blocks.value,
+          streaming: true,
+        }),
+      24,
+      8,
+    );
+
+    await nextTick();
+    await nextTick();
+    expect(buildSpy.mock.calls.length).toBe(beforeMount);
+    expect(mounted.terminal.snapshot().lines[0]?.trimEnd()).toBe("alpha");
+
+    blocks.value = [{ type: "inline", key: "source", segments: [{ text: "beta" }] }];
+    await nextTick();
+    await nextTick();
+
+    expect(buildSpy.mock.calls.length).toBe(beforeMount);
+    expect(mounted.terminal.snapshot().lines[0]?.trimEnd()).toBe("beta");
     mounted.unmount();
   });
 

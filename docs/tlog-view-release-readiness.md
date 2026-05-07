@@ -13,6 +13,7 @@
 | Tests           | unit / smoke / package exports 全链路继续通过                                                                                                 |
 | Bench           | `pnpm run bench:phase2` 继续覆盖 stream / retention / wrap / ansi / links / search / regex / exact-index / UI companion 这些 Phase 2 关键场景 |
 | Demo            | `pnpm run example:tlog-view-lab` 可做 smoke mount；`pnpm run run:tlog-view-lab` 可在真实终端交互运行                                          |
+| Agent console   | `pnpm run example:agent-console:smoke` 与 `pnpm run example:agent-console:terminal:smoke` 覆盖真实 transcript/input/overlay 组合场景          |
 | Scope control   | 不在这个阶段继续扩展 search engine、URL auto-detect、saved search persistence、result virtualization 或 global link index                     |
 
 ## Recommended validation
@@ -39,6 +40,8 @@ pnpm run test:package-exports
 pnpm run bench:phase2
 pnpm run docs:build
 pnpm run example:tlog-view-lab
+pnpm run example:agent-console:smoke
+pnpm run example:agent-console:terminal:smoke
 ```
 
 ## Known limitations
@@ -50,3 +53,4 @@ pnpm run example:tlog-view-lab
 - no saved search persistence
 - exact visual index is retained-window scoped
 - regex evaluation can still block on one pathological long line
+- `TVirtualMarkdown` 的 `content` path 仍是 full-string parse；真实 agent transcript 应优先使用 `createMarkdownBlockSource()` + `blocks`

@@ -485,7 +485,7 @@ Experimental Markdown renderer / virtual scroller。它们走独立的 `parser -
 
 > Experimental markdown import: `@simon_he/vue-tui/markdown`
 >
-> 当前 streaming Markdown 只做 **per-frame coalescing**：一帧内多次 append 会合并成一次 rebuild，但 rebuild 本身仍然是 **full-document parse + layout**，还不是增量解析/增量布局。长文档 streaming transcript 场景请按这个成本模型评估。
+> `content` string 路径仍然只做 **per-frame coalescing**：一帧内多次 append 会合并成一次 rebuild，但 rebuild 本身仍然会从当前 full markdown string parse。长文档 streaming transcript 场景可以使用 `createMarkdownBlockSource()`，在消息、tool fence 或代码块完成时 `finalizeBlock()`，再把 `blocks` 传给 `TVirtualMarkdown`，避免反复重 parse 已 finalize 的历史。
 >
 > `TVirtualMarkdown` 默认保持文本可选中复制，即使它自身是 focusable 节点；如需列表式交互，可传 `selectable=false`。
 >
@@ -493,7 +493,7 @@ Experimental Markdown renderer / virtual scroller。它们走独立的 `parser -
 >
 > `TVirtualMarkdown` 当前仍是 **viewport-level repaint**，不是 row-local dirty diff；streaming append 也不会自动 follow tail，默认保持 absolute `scrollTop` / absolute visual-row index 语义。
 >
-> `@simon_he/vue-tui/markdown` 公开 `createTuiMarkdownParser()`、`buildMarkdownBlocks()`、`buildMarkdownVisualRows()` 与 `layoutMarkdownBlocks()`，用于需要直接消费 parsed type/block/visual row 的宿主渲染器。
+> `@simon_he/vue-tui/markdown` 公开 `createMarkdownBlockSource()`、`createTuiMarkdownParser()`、`buildMarkdownBlocks()`、`buildMarkdownVisualRows()` 与 `layoutMarkdownBlocks()`，用于需要直接消费 block/visual row 或流式 transcript block source 的宿主渲染器。
 
 ## TLogView
 

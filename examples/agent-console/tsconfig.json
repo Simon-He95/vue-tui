@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "lib": ["ES2020", "DOM"],
+    "types": ["vite/client"],
+    "paths": {
+      "@simon_he/vue-tui": ["../../src/index.ts"],
+      "@simon_he/vue-tui/experimental": ["../../src/experimental.ts"],
+      "@simon_he/vue-tui/markdown": ["../../src/markdown.ts"]
+    }
+  },
+  "include": ["src"]
+}

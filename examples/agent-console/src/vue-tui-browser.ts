@@ -1,0 +1,13 @@
+export type { ThemePalette } from "../../../src/core/ansi-palette.js";
+export type { TerminalRenderPlane } from "../../../src/core/render-plane.js";
+export type { Style } from "../../../src/core/types.js";
+export type { TerminalKeyboardEvent } from "../../../src/events/index.js";
+export type { FramePerfSample } from "../../../src/observability/frame-perf.js";
+export { TBox } from "../../../src/vue/components/TBox.js";
+export { TDialog } from "../../../src/vue/components/TDialog.js";
+export { TInputBox } from "../../../src/vue/components/TInputBox.js";
+export { TRenderPlane } from "../../../src/vue/components/TRenderPlane.js";
+export { TText } from "../../../src/vue/components/TText.js";
+export { TView } from "../../../src/vue/components/TView.js";
+export { TerminalProvider } from "../../../src/vue/components/TerminalProvider.js";
+export { useTerminal } from "../../../src/vue/composables/use-terminal.js";

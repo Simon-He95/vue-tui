@@ -22,3 +22,11 @@
 
 - Internal `createFrameMailbox()` coalesces latest-only producer updates into one scheduler frame task. It is not exported from the package root or experimental entrypoint.
 - `RenderManager.markDirtyRows(id, rows)` marks absolute terminal rows for the node's plane and repaints same-plane overlapping nodes in z-order.
+- Agent Console example covering streaming transcript, log/markdown modes, split render planes, input stability, search, links, command palette overlay, browser smoke, and stdout smoke.
+- `createMarkdownBlockSource()` in the markdown entrypoint lets streaming transcript apps finalize markdown blocks and pass `blocks` to `TVirtualMarkdown` without reparsing finalized history.
+- `TVirtualMarkdown` accepts external markdown `blocks` in addition to the existing `content` string path.
+
+### Fixed
+
+- DOM renderer span fast paths now work in Node DOM environments that do not expose `HTMLSpanElement` globally.
+- Basic browser example build avoids bundling Node-only terminal/event/profiler modules while keeping terminal builds on the root package entry.

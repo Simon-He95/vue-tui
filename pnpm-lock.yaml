@@ -64,6 +64,25 @@ importers:
         specifier: ^3.5.33
         version: 3.5.33(typescript@5.9.3)
 
+  examples/agent-console:
+    dependencies:
+      '@simon_he/vue-tui':
+        specifier: workspace:*
+        version: link:../..
+      vue:
+        specifier: ^3.5.33
+        version: 3.5.33(typescript@5.8.3)
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^5.2.4
+        version: 5.2.4(vite@5.4.21(@types/node@18.19.130)(lightningcss@1.30.1))(vue@3.5.33(typescript@5.8.3))
+      typescript:
+        specifier: 5.8.3
+        version: 5.8.3
+      vite:
+        specifier: ^5.4.21
+        version: 5.4.21(@types/node@18.19.130)(lightningcss@1.30.1)
+
   examples/basic:
     dependencies:
       '@simon_he/vue-tui':
