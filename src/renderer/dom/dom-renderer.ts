@@ -91,6 +91,10 @@ export interface DomRendererOptions {
    * Enables DOM line-node shifting for terminal scrollOperations.
    */
   enableScrollOperations?: boolean;
+  /**
+   * Enables a key-only row prepass that can skip DOM writes when dirty rows are unchanged.
+   */
+  enableRowKeyPrepass?: boolean;
 }
 
 interface PlaneLayer {
@@ -542,10 +546,11 @@ function renderRow(
   y: number,
   lineEl: HTMLElement,
   stats: RowRenderMutableStats,
+  enableRowKeyPrepass: boolean,
 ): void {
   stats.rows++;
   const cachedKey = rowCache.get(lineEl);
-  if (cachedKey != null) {
+  if (enableRowKeyPrepass && cachedKey != null) {
     const prepassKey = computeRowKey(terminal, y);
     if (cachedKey === prepassKey) {
       stats.cacheHits++;
@@ -675,6 +680,7 @@ export function createDomRenderer(
     0,
     Math.floor(options.syncFlushCellBudget ?? DEFAULT_SYNC_FLUSH_CELL_BUDGET),
   );
+  const enableRowKeyPrepass = options.enableRowKeyPrepass === true;
   const capabilities: RendererCapabilities = Object.freeze({
     ...DOM_RENDERER_CAPABILITIES,
     scrollOperations: options.enableScrollOperations !== false,
@@ -831,7 +837,15 @@ export function createDomRenderer(
       const layer = planeLayers.get(plane);
       if (!layer) continue;
       for (let y = 0; y < size.rows; y++)
-        renderRow(layer.terminal, metrics, wideScaleX, y, layer.lines[y]!, rowStats);
+        renderRow(
+          layer.terminal,
+          metrics,
+          wideScaleX,
+          y,
+          layer.lines[y]!,
+          rowStats,
+          enableRowKeyPrepass,
+        );
     }
     recordRowRenderStats(rowStats);
   }
@@ -1127,7 +1141,8 @@ export function createDomRenderer(
       const flushRow = (y: number): void => {
         if (!rows.has(y)) return;
         const line = layer.lines[y];
-        if (line) renderRow(layer.terminal, metrics, wideScaleX, y, line, rowStats);
+        if (line)
+          renderRow(layer.terminal, metrics, wideScaleX, y, line, rowStats, enableRowKeyPrepass);
         deletePendingRow(plane, rows, y);
         flushedRows++;
       };

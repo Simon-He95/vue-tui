@@ -55,13 +55,14 @@ type Scenario = Readonly<{
   container: HTMLElement;
 }>;
 
-function createScenario(): Scenario {
+function createScenario(options: Parameters<typeof createDomRenderer>[2] = {}): Scenario {
   const terminal = createTerminal({ cols: COLS, rows: ROWS });
   const container = document.createElement("div");
   document.body.appendChild(container);
   const renderer = createDomRenderer(terminal, container, {
     syncFlushMaxRows: ROWS,
     syncFlushCellBudget: ROWS * COLS * 4,
+    ...options,
   });
   return { terminal, renderer, container };
 }
@@ -120,8 +121,11 @@ function writeFallbackRows(scenario: Scenario): void {
   }
 }
 
-function runScenario<T>(fn: (scenario: Scenario) => T): T {
-  const scenario = createScenario();
+function runScenario<T>(
+  fn: (scenario: Scenario) => T,
+  options?: Parameters<typeof createDomRenderer>[2],
+): T {
+  const scenario = createScenario(options);
   try {
     return fn(scenario);
   } finally {
@@ -139,6 +143,26 @@ function benchPlainRows(): RowRenderSnapshot {
     assert.equal(stats.spansCreated, 0);
 
     return snapshot(scenario);
+  });
+}
+
+function benchChangedPlainRows(): RoundSnapshot {
+  return runScenario((scenario) => {
+    writePlainRows(scenario, "plain-a");
+    const firstFlush = commit(scenario);
+
+    writePlainRows(scenario, "plain-b");
+    const secondFlush = commit(scenario);
+
+    assert.ok(secondFlush.plainTextRows > 0);
+    assert.equal(secondFlush.cacheHits, 0);
+    assert.equal(secondFlush.fragmentRows, 0);
+
+    return {
+      firstFlush,
+      secondFlush,
+      total: scenario.renderer.debugStats.rowRender.total,
+    };
   });
 }
 
@@ -203,27 +227,31 @@ function benchFallbackRows(): RowRenderSnapshot {
 }
 
 function benchCacheHits(): RoundSnapshot {
-  return runScenario((scenario) => {
-    writePlainRows(scenario, "cached");
-    const firstFlush = commit(scenario);
+  return runScenario(
+    (scenario) => {
+      writePlainRows(scenario, "cached");
+      const firstFlush = commit(scenario);
 
-    writePlainRows(scenario, "cached");
-    const secondFlush = commit(scenario);
+      writePlainRows(scenario, "cached");
+      const secondFlush = commit(scenario);
 
-    assert.ok(secondFlush.cacheHits > 0);
-    assert.equal(secondFlush.plainTextRows, 0);
-    assert.equal(secondFlush.fragmentRows, 0);
+      assert.ok(secondFlush.cacheHits > 0);
+      assert.equal(secondFlush.plainTextRows, 0);
+      assert.equal(secondFlush.fragmentRows, 0);
 
-    return {
-      firstFlush,
-      secondFlush,
-      total: scenario.renderer.debugStats.rowRender.total,
-    };
-  });
+      return {
+        firstFlush,
+        secondFlush,
+        total: scenario.renderer.debugStats.rowRender.total,
+      };
+    },
+    { enableRowKeyPrepass: true },
+  );
 }
 
 const results = {
   plain: benchPlainRows(),
+  changedPlain: benchChangedPlainRows(),
   singleStyled: benchSingleStyledRows(),
   multiSegment: benchMultiSegmentRows(),
   fallback: benchFallbackRows(),
