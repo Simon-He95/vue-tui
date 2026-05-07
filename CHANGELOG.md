@@ -38,3 +38,4 @@
 
 - DOM renderer span fast paths now work in Node DOM environments that do not expose `HTMLSpanElement` globally.
 - Basic browser example build avoids bundling Node-only terminal/event/profiler modules while keeping terminal builds on the root package entry.
+- CI now runs the VitePress docs build during verification so broken docs links fail before release.

@@ -29,6 +29,8 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - uses: oven-sh/setup-bun@v2
+
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm run check:hidden-unicode
@@ -44,7 +46,7 @@ jobs:
       # Deterministic smoke bench: behavior thresholds only, no runner-timing gate.
       - run: pnpm run bench:scroll-mailbox
 
-      - run: pnpm exec tsx scripts/generate-component-api-docs.ts
+      - run: pnpm run docs:build
 
       - run: git diff --exit-code docs/generated/components-api.md
 
