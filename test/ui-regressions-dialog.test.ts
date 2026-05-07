@@ -539,6 +539,57 @@ describe("ui regressions dialog", () => {
     mounted.unmount();
   });
 
+  it("TDialog only underlines the selected footer button", async () => {
+    const open = ref(true);
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 34,
+            h: 7,
+            title: "Confirm",
+            placement: "center",
+            teleport: true,
+            contentStyle: { bg: "black" },
+            buttons: [
+              { label: "Apply", value: "apply", kind: "primary", default: true },
+              { label: "Cancel", value: "cancel" },
+            ],
+          },
+          () => h(TText, { x: 0, y: 0, w: 28, value: "Hi" }),
+        ),
+      48,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    const initialLines = mounted.terminal.snapshot().lines;
+    const buttonY = initialLines.findIndex((line) => line.includes("[ Apply ]"));
+    const applyX = initialLines[buttonY]!.indexOf("[ Apply ]") + 2;
+    const cancelX = initialLines[buttonY]!.indexOf("[ Cancel ]") + 2;
+    expect(mounted.terminal.getCell(applyX, buttonY).style.underline).toBe(true);
+    expect(mounted.terminal.getCell(cancelX, buttonY).style.underline).not.toBe(true);
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        code: "ArrowRight",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    expect(mounted.terminal.getCell(applyX, buttonY).style.underline).not.toBe(true);
+    expect(mounted.terminal.getCell(cancelX, buttonY).style.underline).toBe(true);
+    mounted.unmount();
+  });
+
   it("TDialog keeps Tab order in sync after ArrowLeft/Right button navigation", async () => {
     const open = ref(true);
     const confirmed = ref("");

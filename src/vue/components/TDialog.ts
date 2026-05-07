@@ -968,6 +968,8 @@ export const TDialog = defineComponent({
       name: "TDialogContent",
       setup() {
         provide(DialogContextKey, true);
+        let pointerDownButton: { index: number; cellX: number; cellY: number } | null = null;
+        let suppressClickButtonIndex: number | null = null;
         return () => {
           const children = slots.default?.() ?? null;
           if (!props.buttons.length) return children;
@@ -991,7 +993,7 @@ export const TDialog = defineComponent({
             const variantStyle: Style =
               b.style ??
               (isPrimary
-                ? { bold: true, underline: true }
+                ? { bold: true }
                 : isDanger
                   ? { bold: true }
                   : isAccent
@@ -1043,8 +1045,27 @@ export const TDialog = defineComponent({
                   e.stopPropagation?.();
                   confirmButton(selectedButtonIndex.value);
                 },
+                onPointerdown: (e: any) => {
+                  e?.stopPropagation?.();
+                  selectedButtonIndex.value = i;
+                  pointerDownButton = { index: i, cellX: e.cellX, cellY: e.cellY };
+                },
+                onPointerup: (e: any) => {
+                  e?.stopPropagation?.();
+                  const down = pointerDownButton;
+                  pointerDownButton = null;
+                  if (!down || down.index !== i || down.cellX !== e.cellX || down.cellY !== e.cellY)
+                    return;
+                  selectedButtonIndex.value = i;
+                  suppressClickButtonIndex = i;
+                  confirmButton(i);
+                },
                 onClick: (e: any) => {
                   e?.stopPropagation?.();
+                  if (suppressClickButtonIndex === i) {
+                    suppressClickButtonIndex = null;
+                    return;
+                  }
                   selectedButtonIndex.value = i;
                   confirmButton(i);
                 },
