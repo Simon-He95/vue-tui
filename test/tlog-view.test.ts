@@ -1149,6 +1149,100 @@ describe("TLogView", () => {
     }
   });
 
+  it("refreshes visible source mutations without a version change", async () => {
+    const lines = ["alpha", "beta", "gamma"];
+    const source: TLogDataSource = {
+      lineCount: () => lines.length,
+      getLine: (index) => lines[index] ?? "",
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewExplicitInvalidationApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            source,
+            version: 1,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 5, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 1)).toBe("beta");
+
+      lines[1] = "BETA";
+      app.scheduler.flushNow();
+      expect(rowText(app, 1)).toBe("beta");
+
+      logView.value!.invalidateLine(1);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 1)).toBe("BETA");
+
+      lines[0] = "ALPHA";
+      lines[2] = "GAMMA";
+      logView.value!.refreshViewport();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect([0, 1, 2].map((y) => rowText(app, y))).toEqual(["ALPHA", "BETA", "GAMMA"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("remeasures wrapped rows for explicit range invalidation", async () => {
+    const lines = ["abcd", "efgh"];
+    const source: TLogDataSource = {
+      lineCount: () => lines.length,
+      getLine: (index) => lines[index] ?? "",
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewWrappedExplicitInvalidationApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 4,
+            source,
+            version: 1,
+            wrap: true,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 5, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect([0, 1].map((y) => rowText(app, y))).toEqual(["abcd", "efgh"]);
+
+      lines[0] = "abcd1234";
+      logView.value!.invalidateRange(0, 1);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect([0, 1, 2].map((y) => rowText(app, y))).toEqual(["abcd", "1234", "efgh"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("exposes visual-row scrollBy", async () => {
     const source: TLogDataSource = {
       lineCount: () => 20,
