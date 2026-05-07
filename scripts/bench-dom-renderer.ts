@@ -45,6 +45,7 @@ type RowRenderSnapshot = Readonly<{
 
 type RoundSnapshot = Readonly<{
   firstFlush: DomRendererRowRenderStats;
+  secondFlushDurationMs: number;
   secondFlush: DomRendererRowRenderStats;
   total: DomRendererRowRenderStats;
 }>;
@@ -93,6 +94,12 @@ function snapshot(scenario: Scenario): RowRenderSnapshot {
 function commit(scenario: Scenario): DomRendererRowRenderStats {
   scenario.terminal.commit({ planes: ["default"], sync: true });
   return lastFlush(scenario);
+}
+
+function measure<T>(fn: () => T): { value: T; durationMs: number } {
+  const start = performance.now();
+  const value = fn();
+  return { value, durationMs: performance.now() - start };
 }
 
 function writePlainRows(scenario: Scenario, prefix: string): void {
@@ -213,8 +220,11 @@ function benchChangedPlainRows(options: PrepassOptions): RoundSnapshot {
     writePlainRows(scenario, "plain-a");
     const firstFlush = commit(scenario);
 
-    writePlainRows(scenario, "plain-b");
-    const secondFlush = commit(scenario);
+    const measured = measure(() => {
+      writePlainRows(scenario, "plain-b");
+      return commit(scenario);
+    });
+    const secondFlush = measured.value;
 
     assert.ok(secondFlush.plainTextRows > 0);
     assert.equal(secondFlush.cacheHits, 0);
@@ -223,6 +233,7 @@ function benchChangedPlainRows(options: PrepassOptions): RoundSnapshot {
 
     return {
       firstFlush,
+      secondFlushDurationMs: measured.durationMs,
       secondFlush,
       total: scenario.renderer.debugStats.rowRender.total,
     };
@@ -238,8 +249,11 @@ function benchSingleStyledRows(options: PrepassOptions): RoundSnapshot {
     assert.ok(firstFlush.spansCreated > 0);
     assert.equal(firstFlush.fragmentRows, 0);
 
-    writeSingleStyledRows(scenario, "B", { fg: "red" });
-    const secondFlush = commit(scenario);
+    const measured = measure(() => {
+      writeSingleStyledRows(scenario, "B", { fg: "red" });
+      return commit(scenario);
+    });
+    const secondFlush = measured.value;
 
     assert.ok(secondFlush.singleStyledRows > 0);
     assert.ok(secondFlush.spansReused > 0);
@@ -249,6 +263,7 @@ function benchSingleStyledRows(options: PrepassOptions): RoundSnapshot {
 
     return {
       firstFlush,
+      secondFlushDurationMs: measured.durationMs,
       secondFlush,
       total: scenario.renderer.debugStats.rowRender.total,
     };
@@ -263,8 +278,11 @@ function benchChangedMultiSegmentRows(options: PrepassOptions): RoundSnapshot {
     assert.ok(firstFlush.fragmentRows > 0);
     assert.ok(firstFlush.spansCreated > 0);
 
-    writeMultiSegmentRows(scenario, "C", "D");
-    const secondFlush = commit(scenario);
+    const measured = measure(() => {
+      writeMultiSegmentRows(scenario, "C", "D");
+      return commit(scenario);
+    });
+    const secondFlush = measured.value;
 
     assert.equal(secondFlush.cacheHits, 0);
     assert.ok(secondFlush.segmentReuseRows > 0);
@@ -274,6 +292,7 @@ function benchChangedMultiSegmentRows(options: PrepassOptions): RoundSnapshot {
 
     return {
       firstFlush,
+      secondFlushDurationMs: measured.durationMs,
       secondFlush,
       total: scenario.renderer.debugStats.rowRender.total,
     };
@@ -297,8 +316,11 @@ function benchMixedRowKeyPrepass(options: PrepassOptions): RoundSnapshot {
     writeMixedRows(scenario, "initial");
     const firstFlush = commit(scenario);
 
-    writeMixedRows(scenario, "updated");
-    const secondFlush = commit(scenario);
+    const measured = measure(() => {
+      writeMixedRows(scenario, "updated");
+      return commit(scenario);
+    });
+    const secondFlush = measured.value;
 
     if (options.enableRowKeyPrepass) {
       assert.ok(secondFlush.rowKeyPrepassChecks > 0);
@@ -317,6 +339,7 @@ function benchMixedRowKeyPrepass(options: PrepassOptions): RoundSnapshot {
 
     return {
       firstFlush,
+      secondFlushDurationMs: measured.durationMs,
       secondFlush,
       total: scenario.renderer.debugStats.rowRender.total,
     };
@@ -328,8 +351,11 @@ function benchCacheHits(options: PrepassOptions): RoundSnapshot {
     writePlainRows(scenario, "cached");
     const firstFlush = commit(scenario);
 
-    writePlainRows(scenario, "cached");
-    const secondFlush = commit(scenario);
+    const measured = measure(() => {
+      writePlainRows(scenario, "cached");
+      return commit(scenario);
+    });
+    const secondFlush = measured.value;
 
     assert.ok(secondFlush.cacheHits > 0);
     assert.equal(secondFlush.plainTextRows, 0);
@@ -338,6 +364,7 @@ function benchCacheHits(options: PrepassOptions): RoundSnapshot {
 
     return {
       firstFlush,
+      secondFlushDurationMs: measured.durationMs,
       secondFlush,
       total: scenario.renderer.debugStats.rowRender.total,
     };
@@ -349,8 +376,11 @@ function benchSingleStyledCacheHits(options: PrepassOptions): RoundSnapshot {
     writeSingleStyledRows(scenario, "A", { fg: "red" });
     const firstFlush = commit(scenario);
 
-    writeSingleStyledRows(scenario, "A", { fg: "red" });
-    const secondFlush = commit(scenario);
+    const measured = measure(() => {
+      writeSingleStyledRows(scenario, "A", { fg: "red" });
+      return commit(scenario);
+    });
+    const secondFlush = measured.value;
 
     assert.ok(secondFlush.cacheHits > 0);
     assert.equal(secondFlush.singleStyledRows, 0);
@@ -360,6 +390,7 @@ function benchSingleStyledCacheHits(options: PrepassOptions): RoundSnapshot {
 
     return {
       firstFlush,
+      secondFlushDurationMs: measured.durationMs,
       secondFlush,
       total: scenario.renderer.debugStats.rowRender.total,
     };
@@ -371,8 +402,11 @@ function benchMultiSegmentCacheHits(options: PrepassOptions): RoundSnapshot {
     writeMultiSegmentRows(scenario, "A", "B");
     const firstFlush = commit(scenario);
 
-    writeMultiSegmentRows(scenario, "A", "B");
-    const secondFlush = commit(scenario);
+    const measured = measure(() => {
+      writeMultiSegmentRows(scenario, "A", "B");
+      return commit(scenario);
+    });
+    const secondFlush = measured.value;
 
     assert.ok(secondFlush.cacheHits > 0);
     assert.equal(secondFlush.segmentReuseRows, 0);
@@ -382,6 +416,7 @@ function benchMultiSegmentCacheHits(options: PrepassOptions): RoundSnapshot {
 
     return {
       firstFlush,
+      secondFlushDurationMs: measured.durationMs,
       secondFlush,
       total: scenario.renderer.debugStats.rowRender.total,
     };
