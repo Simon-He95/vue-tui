@@ -35,10 +35,14 @@
 快捷入口：
 
 ```bash
+pnpm run release:dry-run
 pnpm run release:check
 pnpm run release:bench
 pnpm run release:smoke
+pnpm run release:pack-smoke
 ```
+
+`release:dry-run` 是发布前最后一道本地 gate。它会跑 `release:check`、`release:bench`、`release:smoke` 和 packed package install smoke，确认当前构建可以从 `.tgz` 安装到外部项目后使用。
 
 展开命令：
 
@@ -49,6 +53,7 @@ pnpm run lint
 pnpm run typecheck
 pnpm run test
 pnpm run test:package-exports
+pnpm run release:pack-smoke
 pnpm run bench:scroll-mailbox
 pnpm run bench:dom-renderer
 pnpm run bench:phase2
@@ -75,7 +80,7 @@ pnpm run example:agent-console:terminal
 
 1. 合并目标 feature / fix PR 后，从 `main` 创建 release candidate 分支。
 2. 确认 [Examples Index](/examples) 中的 browser、terminal、smoke 路径仍能运行。
-3. 跑上面的 validation 命令。
+3. 跑 `pnpm run release:dry-run`。
 4. 如果 `docs:build` 更新 generated API，提交 generated docs；否则保持工作区干净。
 5. 更新 `CHANGELOG.md`，把 `Unreleased` 的内容整理成目标版本。
 6. 只在发布验证完成后运行 `pnpm run release`。

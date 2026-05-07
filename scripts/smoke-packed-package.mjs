@@ -1,0 +1,213 @@
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const releaseDir = join(rootDir, ".release");
+const smokeDir = join(rootDir, ".tmp", "pack-smoke");
+const packageJson = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
+const packageName = packageJson.name;
+const packageInstallDir = join(smokeDir, "node_modules", ...packageName.split("/"));
+
+function run(command, args, cwd = rootDir) {
+  console.log(`$ ${[command, ...args].join(" ")}`);
+  execFileSync(command, args, { cwd, stdio: "inherit" });
+}
+
+function readJson(path) {
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function collectExportTargets(value, out = []) {
+  if (typeof value === "string") {
+    out.push(value);
+    return out;
+  }
+
+  if (value && typeof value === "object") {
+    for (const child of Object.values(value)) collectExportTargets(child, out);
+  }
+
+  return out;
+}
+
+function packageTargetPaths(pkg) {
+  return Array.from(
+    new Set(
+      [pkg.main, pkg.module, pkg.types, ...collectExportTargets(pkg.exports)].filter(
+        (target) => typeof target === "string" && target.startsWith("./"),
+      ),
+    ),
+  );
+}
+
+function listTarEntries(tarballPath) {
+  return execFileSync("tar", ["-tf", tarballPath], {
+    encoding: "utf8",
+    env: { ...process.env, LANG: "C", LC_ALL: "C" },
+  })
+    .split("\n")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function assertTarballContents(tarballPath) {
+  const entries = listTarEntries(tarballPath);
+  const requiredEntries = ["package/package.json", "package/README.md", "package/license"];
+  const unexpectedEntries = entries.filter(
+    (entry) =>
+      entry !== "package/package.json" &&
+      entry !== "package/README.md" &&
+      entry !== "package/license" &&
+      entry !== "package/dist/" &&
+      !entry.startsWith("package/dist/"),
+  );
+
+  assert(
+    unexpectedEntries.length === 0,
+    `Unexpected tarball entries:\n${unexpectedEntries.join("\n")}`,
+  );
+  for (const entry of requiredEntries) {
+    assert(entries.includes(entry), `Tarball is missing ${entry}`);
+  }
+  for (const target of packageTargetPaths(packageJson)) {
+    const entry = `package/${target.slice(2)}`;
+    assert(entries.includes(entry), `Tarball is missing export target ${entry}`);
+  }
+
+  const blockedRoots = ["src", "test", "examples", "docs", ".github"];
+  for (const root of blockedRoots) {
+    assert(
+      !entries.some(
+        (entry) => entry === `package/${root}/` || entry.startsWith(`package/${root}/`),
+      ),
+      `Tarball includes package/${root}/`,
+    );
+  }
+}
+
+function findPackedTarball() {
+  const tarballs = readdirSync(releaseDir)
+    .filter((file) => file.endsWith(".tgz"))
+    .map((file) => join(releaseDir, file));
+
+  assert(tarballs.length === 1, `Expected one tarball in .release, found ${tarballs.length}`);
+  return tarballs[0];
+}
+
+function assertInstalledExportTargets() {
+  const installedPackageJson = readJson(join(packageInstallDir, "package.json"));
+  for (const target of packageTargetPaths(installedPackageJson)) {
+    const targetPath = join(packageInstallDir, target.slice(2));
+    assert(existsSync(targetPath), `Installed package is missing ${target}`);
+  }
+}
+
+function writeSmokeFiles() {
+  writeFileSync(
+    join(smokeDir, "package.json"),
+    `${JSON.stringify({ private: true, type: "module" }, null, 2)}\n`,
+  );
+  writeFileSync(
+    join(smokeDir, "smoke-esm.mjs"),
+    `import { createDomRenderer, createTerminal, createTerminalApp } from "${packageName}";
+import * as root from "${packageName}";
+import * as markdown from "${packageName}/markdown";
+import * as experimental from "${packageName}/experimental";
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+assert(typeof createTerminal === "function", "root ESM createTerminal export is missing");
+assert(typeof createTerminalApp === "function", "root ESM createTerminalApp export is missing");
+assert(typeof createDomRenderer === "function", "root ESM createDomRenderer export is missing");
+assert(!("TVirtualList" in root), "root ESM export leaked TVirtualList");
+assert(typeof markdown.TMarkdownText !== "undefined", "markdown ESM TMarkdownText export is missing");
+assert(typeof markdown.TVirtualMarkdown !== "undefined", "markdown ESM TVirtualMarkdown export is missing");
+assert(typeof markdown.createTuiMarkdownParser === "function", "markdown ESM parser export is missing");
+assert(typeof experimental.TVirtualList !== "undefined", "experimental ESM TVirtualList export is missing");
+assert(typeof experimental.TLogView !== "undefined", "experimental ESM TLogView export is missing");
+
+const terminal = createTerminal({ cols: 4, rows: 2 });
+assert(terminal, "createTerminal did not return a terminal");
+terminal.dispose();
+
+const app = createTerminalApp({
+  cols: 4,
+  rows: 2,
+  component: { render: () => null },
+});
+app.mount();
+app.dispose();
+`,
+  );
+  writeFileSync(
+    join(smokeDir, "smoke-cjs.cjs"),
+    `const root = require("${packageName}");
+const markdown = require("${packageName}/markdown");
+const experimental = require("${packageName}/experimental");
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+assert(typeof root.createTerminal === "function", "root CJS createTerminal export is missing");
+assert(typeof root.createTerminalApp === "function", "root CJS createTerminalApp export is missing");
+assert(typeof root.createDomRenderer === "function", "root CJS createDomRenderer export is missing");
+assert(!("TVirtualList" in root), "root CJS export leaked TVirtualList");
+assert(typeof markdown.TMarkdownText !== "undefined", "markdown CJS TMarkdownText export is missing");
+assert(typeof markdown.TVirtualMarkdown !== "undefined", "markdown CJS TVirtualMarkdown export is missing");
+assert(typeof markdown.createTuiMarkdownParser === "function", "markdown CJS parser export is missing");
+assert(typeof experimental.TVirtualList !== "undefined", "experimental CJS TVirtualList export is missing");
+assert(typeof experimental.TLogView !== "undefined", "experimental CJS TLogView export is missing");
+
+const terminal = root.createTerminal({ cols: 4, rows: 2 });
+assert(terminal, "createTerminal did not return a terminal");
+terminal.dispose();
+
+const app = root.createTerminalApp({
+  cols: 4,
+  rows: 2,
+  component: { render: () => null },
+});
+app.mount();
+app.dispose();
+`,
+  );
+}
+
+rmSync(releaseDir, { recursive: true, force: true });
+rmSync(smokeDir, { recursive: true, force: true });
+mkdirSync(releaseDir, { recursive: true });
+mkdirSync(smokeDir, { recursive: true });
+
+run("pnpm", ["run", "build"]);
+run("pnpm", ["pack", "--pack-destination", ".release"]);
+
+const tarballPath = findPackedTarball();
+assertTarballContents(tarballPath);
+writeSmokeFiles();
+
+try {
+  const tarballInstallPath = relative(smokeDir, tarballPath);
+  const vueVersion = packageJson.devDependencies?.vue ?? packageJson.peerDependencies?.vue ?? "vue";
+  run("pnpm", ["add", "--ignore-workspace", tarballInstallPath, `vue@${vueVersion}`], smokeDir);
+  assertInstalledExportTargets();
+  run("node", ["smoke-esm.mjs"], smokeDir);
+
+  if (packageTargetPaths(packageJson).some((target) => target.endsWith(".cjs"))) {
+    run("node", ["smoke-cjs.cjs"], smokeDir);
+  }
+} catch (error) {
+  console.error(`Packed package smoke project left at ${smokeDir}`);
+  throw error;
+}
+
+rmSync(smokeDir, { recursive: true, force: true });
+console.log(`Packed package smoke passed: ${relative(rootDir, tarballPath)}`);

@@ -3,5 +3,7 @@ dist/
 dist-terminal/
 docs/.vitepress/cache/
 test-results/
+.release/
+.tmp/
 .eslintcache
 .DS_Store
