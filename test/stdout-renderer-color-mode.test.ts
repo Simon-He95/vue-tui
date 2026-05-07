@@ -143,6 +143,57 @@ describe("stdoutRenderer color mode", () => {
     expect(out).not.toContain("\u001B[48;5;");
   });
 
+  it("uses custom palettes for ansi names in truecolor output", () => {
+    const terminal = createTerminal({ cols: 3, rows: 1 });
+    const cap = createCapture(false);
+    createStdoutRenderer(terminal, {
+      output: cap.output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      colorMode: "truecolor",
+      palette: {
+        red: "#112233",
+        blue: "#445566",
+      },
+    });
+
+    terminal.put(0, 0, "X", { fg: "red", bg: "blue" });
+    terminal.commit();
+
+    const out = cap.getOut();
+    expect(out).toContain("\u001B[38;2;17;34;51m");
+    expect(out).toContain("\u001B[48;2;68;85;102m");
+  });
+
+  it("updates custom palettes without recreating the stdout renderer", () => {
+    const terminal = createTerminal({ cols: 3, rows: 1 });
+    const cap = createCapture(false);
+    const renderer = createStdoutRenderer(terminal, {
+      output: cap.output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      colorMode: "truecolor",
+      palette: {
+        red: "#112233",
+      },
+    });
+
+    terminal.put(0, 0, "X", { fg: "red" });
+    terminal.commit();
+    expect(cap.getOut()).toContain("\u001B[38;2;17;34;51m");
+
+    renderer.updateTheme?.({
+      palette: {
+        red: "#010203",
+      },
+    });
+
+    expect(cap.getOut()).toContain("\u001B[38;2;1;2;3m");
+    renderer.dispose();
+  });
+
   it("auto mode respects DIMCODE_COLOR_MODE=ansi256", () => {
     withEnv("DIMCODE_COLOR_MODE", "ansi256", () => {
       const terminal = createTerminal({ cols: 3, rows: 1 });

@@ -41,6 +41,9 @@ export type DomRendererFlushStats = Readonly<{
 export type DomRendererRowRenderStats = Readonly<{
   rows: number;
   cacheHits: number;
+  rowKeyPrepassChecks: number;
+  rowKeyPrepassHits: number;
+  rowKeyPrepassMisses: number;
   transparentBlankRows: number;
   plainTextRows: number;
   singleStyledRows: number;
@@ -134,6 +137,9 @@ function createEmptyRowStats(): RowRenderMutableStats {
   return {
     rows: 0,
     cacheHits: 0,
+    rowKeyPrepassChecks: 0,
+    rowKeyPrepassHits: 0,
+    rowKeyPrepassMisses: 0,
     transparentBlankRows: 0,
     plainTextRows: 0,
     singleStyledRows: 0,
@@ -153,6 +159,9 @@ function freezeRowStats(stats: RowRenderMutableStats): DomRendererRowRenderStats
 function addRowStats(target: RowRenderMutableStats, source: RowRenderMutableStats): void {
   target.rows += source.rows;
   target.cacheHits += source.cacheHits;
+  target.rowKeyPrepassChecks += source.rowKeyPrepassChecks;
+  target.rowKeyPrepassHits += source.rowKeyPrepassHits;
+  target.rowKeyPrepassMisses += source.rowKeyPrepassMisses;
   target.transparentBlankRows += source.transparentBlankRows;
   target.plainTextRows += source.plainTextRows;
   target.singleStyledRows += source.singleStyledRows;
@@ -552,11 +561,15 @@ function renderRow(
   stats.rows++;
   const cachedKey = rowCache.get(lineEl);
   if (enableRowKeyPrepass && cachedKey != null) {
+    stats.rowKeyPrepassChecks++;
     const prepassKey = computeRowKey(terminal, y);
     if (cachedKey === prepassKey) {
+      stats.rowKeyPrepassHits++;
       stats.cacheHits++;
       return;
     }
+
+    stats.rowKeyPrepassMisses++;
   }
 
   const { segments, key: newKey } = computeRowSegmentsWithKey(terminal, y);
