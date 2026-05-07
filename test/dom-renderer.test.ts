@@ -557,6 +557,28 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("invalidates the opt-in row prepass when plain text changes", () => {
+    const { terminal, container, renderer } = setup(4, 1, { enableRowKeyPrepass: true });
+
+    try {
+      terminal.fill(0, 0, 4, 1, "A");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      terminal.fill(0, 0, 4, 1, "B");
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).textContent).toBe("BBBB");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 0,
+        plainTextRows: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("invalidates the plain row cache when text changes", () => {
     const { terminal, container, renderer } = setup(4);
 
@@ -664,6 +686,32 @@ describe("DomRenderer row rendering", () => {
         spansCreated: 0,
         spansReused: 0,
         replaceChildren: 0,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("invalidates the opt-in row prepass when multi-segment styles change order", () => {
+    const { terminal, container, renderer } = setup(4, 1, { enableRowKeyPrepass: true });
+
+    try {
+      terminal.fill(0, 0, 2, 1, "A", { fg: "red" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      terminal.fill(0, 0, 2, 1, "A", { fg: "blue" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "red" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const spans = Array.from(lineEl(container).querySelectorAll("span"));
+      expect(spans[0]!.style.color).toBe("var(--vt-color-blue)");
+      expect(spans[1]!.style.color).toBe("var(--vt-color-red)");
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 0,
+        segmentReuseRows: 1,
       });
     } finally {
       renderer.dispose();
