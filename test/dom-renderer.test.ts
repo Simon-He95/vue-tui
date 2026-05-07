@@ -172,6 +172,7 @@ describe("DomRenderer row rendering", () => {
       expect(line.textContent).toBe("CCDD");
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
+        cacheHits: 0,
         segmentReuseRows: 1,
         fragmentRows: 0,
         spansReused: 2,
@@ -520,6 +521,8 @@ describe("DomRenderer row rendering", () => {
         singleStyledRows: 0,
         segmentReuseRows: 0,
         fragmentRows: 0,
+        spansCreated: 0,
+        spansReused: 0,
         textNodeUpdates: 0,
         replaceChildren: 0,
       });
@@ -600,6 +603,41 @@ describe("DomRenderer row rendering", () => {
         cacheHits: 1,
         singleStyledRows: 0,
         fragmentRows: 0,
+        spansCreated: 0,
+        spansReused: 0,
+        replaceChildren: 0,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("skips multi-segment DOM writes when the row cache matches", () => {
+    const { terminal, container, renderer } = setup(4);
+
+    try {
+      terminal.fill(0, 0, 2, 1, "A", { fg: "red" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      const firstSpan = line.childNodes[0];
+      const secondSpan = line.childNodes[1];
+
+      terminal.fill(0, 0, 2, 1, "A", { fg: "red" });
+      terminal.fill(2, 0, 2, 1, "B", { fg: "blue" });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(line.childNodes[0]).toBe(firstSpan);
+      expect(line.childNodes[1]).toBe(secondSpan);
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 1,
+        segmentReuseRows: 0,
+        fragmentRows: 0,
+        spansCreated: 0,
+        spansReused: 0,
         replaceChildren: 0,
       });
     } finally {
