@@ -55,6 +55,7 @@ const out = createStdoutRenderer(
         output: process.stdout,
         hideCursor: true,
         altScreen: true,
+        colorMode: "auto",
         palette: domPalette,
         defaultBg: "black",
         getImeAnchor: () => app.getImeAnchor(),
