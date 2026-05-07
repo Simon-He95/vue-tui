@@ -286,6 +286,315 @@ describe("ui regressions event manager", () => {
     events.dispose();
   });
 
+  it("EventManager lets later registration win when rect and zIndex match", async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("stale"),
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("current"),
+      },
+    });
+
+    el.dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+
+    expect(calls).toEqual(["current"]);
+    events.dispose();
+    el.remove();
+  });
+
+  it("CliEventManager lets later registration win when rect and zIndex match", async () => {
+    const events = createCliEventManager();
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("stale"),
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("current"),
+      },
+    });
+
+    events.dispatch({ type: "click", cellX: 0, cellY: 0, button: 0 });
+
+    expect(calls).toEqual(["current"]);
+    events.dispose();
+  });
+
+  it("EventManager keeps zIndex priority over later same-rect registration", async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: (e: any) => {
+          calls.push("top");
+          e.stopPropagation();
+        },
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 5,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("lower"),
+      },
+    });
+
+    el.dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+
+    expect(calls).toEqual(["top"]);
+    events.dispose();
+    el.remove();
+  });
+
+  it("CliEventManager keeps zIndex priority over later same-rect registration", async () => {
+    const events = createCliEventManager();
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: (e: any) => {
+          calls.push("top");
+          e.stopPropagation();
+        },
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 5,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("lower"),
+      },
+    });
+
+    events.dispatch({ type: "click", cellX: 0, cellY: 0, button: 0 });
+
+    expect(calls).toEqual(["top"]);
+    events.dispose();
+  });
+
+  it("EventManager preserves non-focusable same-rect siblings while filtering stale focusable nodes", async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("stale"),
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      handlers: {
+        click: () => calls.push("container"),
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("current"),
+      },
+    });
+
+    el.dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+
+    expect(calls).toEqual(["current", "container"]);
+    events.dispose();
+    el.remove();
+  });
+
+  it("CliEventManager preserves non-focusable same-rect siblings while filtering stale focusable nodes", async () => {
+    const events = createCliEventManager();
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("stale"),
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      handlers: {
+        click: () => calls.push("container"),
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("current"),
+      },
+    });
+
+    events.dispatch({ type: "click", cellX: 0, cellY: 0, button: 0 });
+
+    expect(calls).toEqual(["current", "container"]);
+    events.dispose();
+  });
+
+  it("EventManager does not treat overlapping non-identical rects as stale", async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 5 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("outer"),
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 4 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("inner"),
+      },
+    });
+
+    el.dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+
+    expect(calls).toEqual(["inner", "outer"]);
+    events.dispose();
+    el.remove();
+  });
+
+  it("CliEventManager does not treat overlapping non-identical rects as stale", async () => {
+    const events = createCliEventManager();
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 5 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("outer"),
+      },
+    });
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 4 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("inner"),
+      },
+    });
+
+    events.dispatch({ type: "click", cellX: 0, cellY: 0, button: 0 });
+
+    expect(calls).toEqual(["inner", "outer"]);
+    events.dispose();
+  });
+
+  it("EventManager restores an older same-rect node after unregistering the newer node", async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("old"),
+      },
+    });
+    const current = events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("current"),
+      },
+    });
+
+    el.dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+    events.unregister(current.id);
+    el.dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+
+    expect(calls).toEqual(["current", "old"]);
+    events.dispose();
+    el.remove();
+  });
+
+  it("CliEventManager restores an older same-rect node after unregistering the newer node", async () => {
+    const events = createCliEventManager();
+    const calls: string[] = [];
+
+    events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("old"),
+      },
+    });
+    const current = events.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 10,
+      focusable: true,
+      handlers: {
+        click: () => calls.push("current"),
+      },
+    });
+
+    events.dispatch({ type: "click", cellX: 0, cellY: 0, button: 0 });
+    events.unregister(current.id);
+    events.dispatch({ type: "click", cellX: 0, cellY: 0, button: 0 });
+
+    expect(calls).toEqual(["current", "old"]);
+    events.dispose();
+  });
+
   it("EventManager prevents click-through via bubble ordering across zIndex", async () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
