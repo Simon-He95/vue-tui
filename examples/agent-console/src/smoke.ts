@@ -49,6 +49,20 @@ function rowText(app: TerminalApp, y: number): string {
     .trimEnd();
 }
 
+function rowsText(app: TerminalApp): string {
+  return Array.from({ length: app.terminal.size().rows }, (_, y) => rowText(app, y)).join("\n");
+}
+
+function inputRowsText(app: TerminalApp): string {
+  return Array.from({ length: AGENT_CONSOLE_LAYOUT.input.h }, (_, index) =>
+    rowText(app, AGENT_CONSOLE_LAYOUT.input.y + index),
+  ).join("\n");
+}
+
+function inputBorderVisible(app: TerminalApp): boolean {
+  return rowText(app, AGENT_CONSOLE_LAYOUT.input.y).startsWith("┌");
+}
+
 function transcriptHasStyledBackground(app: TerminalApp): boolean {
   for (
     let y = AGENT_CONSOLE_LAYOUT.transcript.y;
@@ -98,6 +112,11 @@ async function dispatchText(app: TerminalApp, text: string): Promise<void> {
     app.events.dispatch({ type: "keydown", key: ch, code: `Key${ch.toUpperCase()}` } as any);
     await nextTick();
   }
+}
+
+async function dispatchKey(app: TerminalApp, key: string, code = key): Promise<void> {
+  app.events.dispatch({ type: "keydown", key, code } as any);
+  await nextTick();
 }
 
 async function settleSearch(api: AgentConsoleApi, app: TerminalApp, raf: ManualRaf): Promise<void> {
@@ -169,9 +188,18 @@ try {
   await api.appendBurst(1_000);
   await flushFrame(raf);
   const inputAfter = api.getInputValue();
+  const inputStillVisible = inputBorderVisible(app) && inputRowsText(app).includes("stable input");
   const afterBurstTop = api.metrics.value?.scrollTop ?? -1;
   const transcriptRows = api.getTranscriptRows();
   const scenarioSamples = api.getFramePerfSamples();
+
+  await dispatchKey(app, "Enter");
+  app.scheduler.flushNow();
+  const inputAfterSubmit = api.getInputValue();
+  const submittedTranscriptIncludesInput = api
+    .getTranscriptRows()
+    .join("\n")
+    .includes("stable input");
 
   api.openSearch("dirtyRows");
   await settleSearch(api, app, raf);
@@ -193,11 +221,22 @@ try {
   dispatchWheelBurst(app.events, 40, 1);
   await flushFrame(raf);
   const overlaySamples = api.getFramePerfSamples();
-  const overlayInputStable = api.getInputValue() === inputAfter;
-
-  api.closeOverlay();
+  const overlayInputStable = api.getInputValue() === inputAfterSubmit;
+  const overlayVisibleBeforeEscape = rowsText(app).includes("Command Palette");
+  app.terminal.resize(AGENT_CONSOLE_LAYOUT.cols + 8, AGENT_CONSOLE_LAYOUT.rows + 2);
   await nextTick();
   app.scheduler.flushNow();
+  const resizedSize = app.terminal.size();
+  const resizeMetrics = api.metrics.value;
+  const scrollClampedAfterResize =
+    resizeMetrics != null &&
+    resizeMetrics.scrollTop >= 0 &&
+    resizeMetrics.scrollTop <= resizeMetrics.maxScrollTop;
+  await dispatchKey(app, "Escape");
+  app.scheduler.flushNow();
+  const overlayClosedAfterResize =
+    overlayVisibleBeforeEscape && !rowsText(app).includes("Command Palette");
+  const inputStillVisibleAfterResize = inputBorderVisible(app);
   const overlayChrome = api.getChromeRows().join("\n");
   api.mode.value = "markdown";
   api.seed(18);
@@ -215,8 +254,16 @@ try {
     maxPaintedNodes: maxSampleValue(scenarioSamples, "paintedNodes"),
     droppedUpdates: scenarioSamples.reduce((total, sample) => total + sample.droppedUpdates, 0),
     inputStable: inputBefore === "stable input" && inputAfter === inputBefore,
+    inputSubmitted: inputAfterSubmit === "" && submittedTranscriptIncludesInput,
+    inputStillVisible,
     scrollDetachedPreserved:
       detachedTop >= 0 && afterBurstTop >= 0 && afterBurstTop === detachedTop,
+    resized:
+      resizedSize.cols === AGENT_CONSOLE_LAYOUT.cols + 8 &&
+      resizedSize.rows === AGENT_CONSOLE_LAYOUT.rows + 2,
+    scrollClampedAfterResize,
+    inputStillVisibleAfterResize,
+    overlayClosedAfterResize,
     searchMatches,
     visibleLinks,
     logHasStyledBackground,
@@ -232,7 +279,14 @@ try {
   };
 
   assert.equal(output.inputStable, true);
+  assert.equal(output.inputSubmitted, true);
+  assert.equal(output.inputStillVisible, true);
   assert.equal(output.scrollDetachedPreserved, true);
+  assert.equal(output.resized, true);
+  assert.equal(output.scrollClampedAfterResize, true);
+  assert.equal(output.inputStillVisibleAfterResize, true);
+  assert.equal(output.overlayClosedAfterResize, true);
+  assert.ok(output.maxDirtyRows <= AGENT_CONSOLE_LAYOUT.rows);
   assert.ok(output.droppedUpdates > 0, "expected burst streaming to coalesce updates");
   assert.ok(output.searchMatches > 0, "expected dirtyRows search matches");
   assert.equal(output.logHasStyledBackground, true);
