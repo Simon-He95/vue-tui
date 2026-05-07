@@ -26,6 +26,7 @@
 - `createMarkdownBlockSource()` in the markdown entrypoint lets streaming transcript apps finalize markdown blocks and pass `blocks` to `TVirtualMarkdown` without reparsing finalized history.
 - `TVirtualMarkdown` accepts external markdown `blocks` in addition to the existing `content` string path.
 - 0.x release candidate docs covering validation commands, package export boundaries, examples, migration notes, and experimental API warnings.
+- Release validation scripts split 0.x checks into `release:check`, `release:bench`, and `release:smoke`.
 
 ### Migration Notes
 

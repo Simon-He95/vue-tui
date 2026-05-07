@@ -232,18 +232,15 @@ pnpm run docs:dev
 pnpm run docs:build
 ```
 
-Release candidate checks:
+Release validation:
 
 ```bash
-pnpm run format:check
-pnpm run lint
-pnpm run typecheck
-pnpm run test
-pnpm run test:package-exports
-pnpm run docs:build
+pnpm run release:check
+pnpm run release:bench
+pnpm run release:smoke
 ```
 
-See [docs/release-candidate.md](./docs/release-candidate.md) for the full validation matrix, package export checks, examples index, and migration notes.
+See [docs/release-candidate.md](./docs/release-candidate.md) for the expanded validation matrix, package export checks, examples index, and migration notes.
 
 ## License
 
