@@ -92,7 +92,8 @@ export interface DomRendererOptions {
    */
   enableScrollOperations?: boolean;
   /**
-   * Enables a key-only row prepass that can skip DOM writes when dirty rows are unchanged.
+   * Enables a key-only early bailout before row segment allocation.
+   * The normal row cache remains enabled regardless of this option.
    */
   enableRowKeyPrepass?: boolean;
 }
@@ -559,6 +560,11 @@ function renderRow(
   }
 
   const { segments, key: newKey } = computeRowSegmentsWithKey(terminal, y);
+  if (cachedKey === newKey) {
+    stats.cacheHits++;
+    return;
+  }
+
   rowCache.set(lineEl, newKey);
 
   if (isTransparentBlankRow(segments)) {

@@ -488,7 +488,7 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("does not use the row key prepass by default", () => {
+  it("uses row cache by default after computing segments", () => {
     const { terminal, container, renderer } = setup();
 
     try {
@@ -501,9 +501,11 @@ describe("DomRenderer row rendering", () => {
       expect(lineEl(container).textContent).toBe("AAAAAAAA");
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
-        cacheHits: 0,
-        plainTextRows: 1,
-        textNodeUpdates: 1,
+        cacheHits: 1,
+        plainTextRows: 0,
+        fragmentRows: 0,
+        textNodeUpdates: 0,
+        replaceChildren: 0,
       });
     } finally {
       renderer.dispose();
