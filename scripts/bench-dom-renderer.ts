@@ -147,6 +147,18 @@ function runPrepassModes<T>(run: (enableRowKeyPrepass: boolean) => T): {
   };
 }
 
+function assertRowKeyPrepassStats(
+  stats: DomRendererRowRenderStats,
+  options: PrepassOptions,
+  enabledChecks: number,
+  enabledHits: number,
+  enabledMisses: number,
+): void {
+  assert.equal(stats.rowKeyPrepassChecks, options.enableRowKeyPrepass ? enabledChecks : 0);
+  assert.equal(stats.rowKeyPrepassHits, options.enableRowKeyPrepass ? enabledHits : 0);
+  assert.equal(stats.rowKeyPrepassMisses, options.enableRowKeyPrepass ? enabledMisses : 0);
+}
+
 function benchPlainRows(): RowRenderSnapshot {
   return runScenario((scenario) => {
     writePlainRows(scenario, "line");
@@ -171,6 +183,7 @@ function benchChangedPlainRows(options: PrepassOptions): RoundSnapshot {
     assert.ok(secondFlush.plainTextRows > 0);
     assert.equal(secondFlush.cacheHits, 0);
     assert.equal(secondFlush.fragmentRows, 0);
+    assertRowKeyPrepassStats(secondFlush, options, ROWS, 0, ROWS);
 
     return {
       firstFlush,
@@ -196,6 +209,7 @@ function benchSingleStyledRows(options: PrepassOptions): RoundSnapshot {
     assert.ok(secondFlush.spansReused > 0);
     assert.equal(secondFlush.fragmentRows, 0);
     assert.equal(secondFlush.replaceChildren, 0);
+    assertRowKeyPrepassStats(secondFlush, options, ROWS, 0, ROWS);
 
     return {
       firstFlush,
@@ -220,6 +234,7 @@ function benchChangedMultiSegmentRows(options: PrepassOptions): RoundSnapshot {
     assert.ok(secondFlush.segmentReuseRows > 0);
     assert.ok(secondFlush.spansReused > 0);
     assert.equal(secondFlush.fragmentRows, 0);
+    assertRowKeyPrepassStats(secondFlush, options, ROWS, 0, ROWS);
 
     return {
       firstFlush,
@@ -252,6 +267,7 @@ function benchCacheHits(options: PrepassOptions): RoundSnapshot {
     assert.ok(secondFlush.cacheHits > 0);
     assert.equal(secondFlush.plainTextRows, 0);
     assert.equal(secondFlush.fragmentRows, 0);
+    assertRowKeyPrepassStats(secondFlush, options, ROWS, ROWS, 0);
 
     return {
       firstFlush,
@@ -273,6 +289,7 @@ function benchSingleStyledCacheHits(options: PrepassOptions): RoundSnapshot {
     assert.equal(secondFlush.singleStyledRows, 0);
     assert.equal(secondFlush.spansReused, 0);
     assert.equal(secondFlush.replaceChildren, 0);
+    assertRowKeyPrepassStats(secondFlush, options, ROWS, ROWS, 0);
 
     return {
       firstFlush,
@@ -294,6 +311,7 @@ function benchMultiSegmentCacheHits(options: PrepassOptions): RoundSnapshot {
     assert.equal(secondFlush.segmentReuseRows, 0);
     assert.equal(secondFlush.spansReused, 0);
     assert.equal(secondFlush.fragmentRows, 0);
+    assertRowKeyPrepassStats(secondFlush, options, ROWS, ROWS, 0);
 
     return {
       firstFlush,
@@ -305,9 +323,7 @@ function benchMultiSegmentCacheHits(options: PrepassOptions): RoundSnapshot {
 
 const results = {
   plain: benchPlainRows(),
-  cacheHitPlain: runPrepassModes((enableRowKeyPrepass) =>
-    benchCacheHits({ enableRowKeyPrepass }),
-  ),
+  cacheHitPlain: runPrepassModes((enableRowKeyPrepass) => benchCacheHits({ enableRowKeyPrepass })),
   cacheHitSingleStyled: runPrepassModes((enableRowKeyPrepass) =>
     benchSingleStyledCacheHits({ enableRowKeyPrepass }),
   ),

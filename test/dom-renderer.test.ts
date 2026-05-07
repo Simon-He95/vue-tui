@@ -502,10 +502,28 @@ describe("DomRenderer row rendering", () => {
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
         cacheHits: 1,
+        rowKeyPrepassChecks: 0,
+        rowKeyPrepassHits: 0,
+        rowKeyPrepassMisses: 0,
         plainTextRows: 0,
         fragmentRows: 0,
         textNodeUpdates: 0,
         replaceChildren: 0,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not count the initial opt-in render as a row key prepass check", () => {
+    const { container, renderer } = setup(8, 1, { enableRowKeyPrepass: true });
+
+    try {
+      expect(lastRowStats(renderer)).toMatchObject({
+        rowKeyPrepassChecks: 0,
+        rowKeyPrepassHits: 0,
+        rowKeyPrepassMisses: 0,
       });
     } finally {
       renderer.dispose();
@@ -542,6 +560,9 @@ describe("DomRenderer row rendering", () => {
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
         cacheHits: 1,
+        rowKeyPrepassChecks: 1,
+        rowKeyPrepassHits: 1,
+        rowKeyPrepassMisses: 0,
         plainTextRows: 0,
         singleStyledRows: 0,
         segmentReuseRows: 0,
@@ -571,6 +592,9 @@ describe("DomRenderer row rendering", () => {
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
         cacheHits: 0,
+        rowKeyPrepassChecks: 1,
+        rowKeyPrepassHits: 0,
+        rowKeyPrepassMisses: 1,
         plainTextRows: 1,
       });
     } finally {

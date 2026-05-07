@@ -82,11 +82,13 @@ export type StdoutRenderer = Readonly<{
   updateTheme?: (
     next: Readonly<{
       defaultBg?: string | null;
+      palette?: ThemePalette | null;
     }>,
   ) => void;
 }>;
 
 export type StdoutColorMode = "auto" | "truecolor" | "ansi256" | "ansi16" | "ansi8";
+export type ThemePalette = Partial<Record<AnsiColorName, string>>;
 
 export function createStdoutRenderer(
   terminal: Terminal,
@@ -97,6 +99,8 @@ export function createStdoutRenderer(
     altScreen?: boolean;
     /** Fallback background color when a cell has no explicit bg. `null` = transparent (terminal default). */
     defaultBg?: string | null;
+    /** Optional ANSI-name palette used when emitting ansi256/truecolor sequences. */
+    palette?: ThemePalette | null;
     /** Track TTY resize events (process.stdout 'resize') and call terminal.resize(). */
     trackResize?: boolean;
     /** Color mode for ANSI output (auto detects truecolor via env). */
@@ -117,6 +121,7 @@ export function createStdoutRenderer(
     options?.defaultBg == null || options?.defaultBg === "transparent"
       ? undefined
       : (options?.defaultBg ?? "black");
+  let palette: ThemePalette | null = options?.palette ?? null;
   const trackResize = options?.trackResize ?? true;
   const getImeAnchor = options?.getImeAnchor;
   const cliLatency = getCliLatencyProfiler();
@@ -349,6 +354,12 @@ export function createStdoutRenderer(
     return typeof value === "string" && value ? value : null;
   }
 
+  function resolveAnsiColorRgb(name: AnsiColorName) {
+    const hex = palette?.[name];
+    if (hex) return ansiHexToRgb(hex) ?? ansiColorRgb(name);
+    return ansiColorRgb(name);
+  }
+
   function openColor(fg?: string): string {
     if (!fg) return "";
     // 'transparent' → reset to terminal default foreground
@@ -365,7 +376,7 @@ export function createStdoutRenderer(
     // AnsiColorName path (fallback layer + legacy themes)
     if (colorMode === "ansi8") return ansi8FgOpen(fg as AnsiColorName);
     if (colorMode === "ansi16") return ansi16FgOpen(fg as AnsiColorName);
-    const rgb = ansiColorRgb(fg as AnsiColorName);
+    const rgb = resolveAnsiColorRgb(fg as AnsiColorName);
     if (!rgb) return "";
     if (colorMode === "ansi256") return ansi256FgOpen(rgbToAnsi256(rgb));
     return truecolorFgOpen(rgb);
@@ -387,7 +398,7 @@ export function createStdoutRenderer(
     // AnsiColorName path (fallback layer + legacy themes)
     if (colorMode === "ansi8") return ansi8BgOpen(bg as AnsiColorName);
     if (colorMode === "ansi16") return ansi16BgOpen(bg as AnsiColorName);
-    const rgb = ansiColorRgb(bg as AnsiColorName);
+    const rgb = resolveAnsiColorRgb(bg as AnsiColorName);
     if (!rgb) return "";
     if (colorMode === "ansi256") return ansi256BgOpen(rgbToAnsi256(rgb));
     return truecolorBgOpen(rgb);
@@ -2101,6 +2112,7 @@ export function createStdoutRenderer(
   const updateTheme = (
     next: Readonly<{
       defaultBg?: string | null;
+      palette?: ThemePalette | null;
     }>,
   ): void => {
     if (disposed) return;
@@ -2113,6 +2125,7 @@ export function createStdoutRenderer(
             : next.defaultBg;
       if (nextBg !== defaultBg) defaultBg = nextBg;
     }
+    if ("palette" in next) palette = next.palette ?? null;
     styleKeyCache = new WeakMap<Style, number>();
     // Reset dynamic hex color indices so the new theme's colors get fresh
     // slots.  The 5-bit color index only has 15 dynamic slots (17-31);
