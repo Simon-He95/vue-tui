@@ -1,5 +1,6 @@
 export type AgentEvent =
   | { type: "user"; text: string }
+  | { type: "status"; state: "connected" | "paused" }
   | { type: "assistant-delta"; text: string }
   | { type: "tool-start"; name: string }
   | { type: "tool-log"; text: string }

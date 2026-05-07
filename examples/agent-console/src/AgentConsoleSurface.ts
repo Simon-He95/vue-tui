@@ -37,9 +37,10 @@ import {
 import { TVirtualMarkdown } from "@simon_he/vue-tui/markdown";
 import { TLogView } from "@simon_he/vue-tui/experimental";
 import { handleAgentConsoleKeymap } from "./keymap";
-import { createMockAgentStream } from "./mock-agent-stream";
+import { createMockAgentStream, type AgentEvent } from "./mock-agent-stream";
 import {
   createAgentTranscriptStore,
+  type AgentReplayLog,
   type TranscriptLink,
   type TranscriptMode,
 } from "./transcript-store";
@@ -64,11 +65,16 @@ export type AgentConsoleApi = Readonly<{
   mode: Ref<TranscriptMode>;
   input: Ref<string>;
   searchQuery: Ref<string>;
+  replayCursor: Ref<number>;
+  replayTotal: Ref<number>;
   metrics: Ref<TLogViewScrollMetrics | null>;
   searchState: Ref<TLogViewSearchState>;
   seed: (count?: number) => void;
   appendSyntheticChunk: (index: number) => void;
   appendBurst: (count: number) => Promise<void>;
+  captureReplayLog: () => AgentReplayLog;
+  loadReplayLog: (log: AgentReplayLog, eventIndex?: number) => void;
+  seekReplay: (eventIndex: number) => void;
   jumpToBottom: () => void;
   openSearch: (query?: string) => void;
   openLinks: () => void;
@@ -83,6 +89,7 @@ export type AgentConsoleApi = Readonly<{
   getInputValue: () => string;
   getTranscriptRows: () => readonly string[];
   getChromeRows: () => readonly string[];
+  getTerminalSnapshot: () => readonly string[];
 }>;
 
 function fit(value: string, width: number): string {
@@ -141,8 +148,11 @@ export const AgentConsoleSurface = defineComponent({
     const thinkingExpanded = ref(true);
     const toolCallExpanded = ref(true);
     const streamState = ref<"connected" | "paused">("paused");
+    const replayCursor = ref(0);
+    const replayTotal = ref(0);
     const stream = createMockAgentStream(260);
     const streamIndex = ref(0);
+    let replaySource: readonly AgentEvent[] | null = null;
     let timer: ReturnType<typeof setInterval> | null = null;
     let ready = false;
 
@@ -163,6 +173,20 @@ export const AgentConsoleSurface = defineComponent({
     const activePlaneLabel = computed<TerminalRenderPlane>(() =>
       overlay.value ? "overlay" : inputFocused.value ? "default" : "transcript",
     );
+
+    function syncReplayCursor(): void {
+      replaySource = null;
+      replayCursor.value = transcript.eventLog.value.length;
+      replayTotal.value = transcript.eventLog.value.length;
+    }
+
+    function statusFrom(events: readonly AgentEvent[]): "connected" | "paused" {
+      let state: "connected" | "paused" = "paused";
+      for (const event of events) {
+        if (event.type === "status") state = event.state;
+      }
+      return state;
+    }
 
     function refreshMetrics(): void {
       const handle = logView.value;
@@ -228,6 +252,7 @@ export const AgentConsoleSurface = defineComponent({
     function applyNextEvent(): void {
       transcript.apply(stream.next());
       streamIndex.value++;
+      syncReplayCursor();
       if (mode.value === "markdown" && markdownStickToBottom.value) {
         markdownScrollTop.value = 1_000_000;
       }
@@ -240,6 +265,8 @@ export const AgentConsoleSurface = defineComponent({
     function startStream(): void {
       if (timer) return;
       streamState.value = "connected";
+      transcript.apply({ type: "status", state: "connected" });
+      syncReplayCursor();
       timer = setInterval(applyNextEvent, 12);
     }
 
@@ -248,6 +275,8 @@ export const AgentConsoleSurface = defineComponent({
       clearInterval(timer);
       timer = null;
       streamState.value = "paused";
+      transcript.apply({ type: "status", state: "paused" });
+      syncReplayCursor();
     }
 
     function seed(count = 36): void {
@@ -255,6 +284,7 @@ export const AgentConsoleSurface = defineComponent({
       stream.reset();
       streamIndex.value = 0;
       transcript.seed(count);
+      syncReplayCursor();
       markdownScrollTop.value = 1_000_000;
       markdownStickToBottom.value = true;
       void nextTick(() => {
@@ -266,6 +296,7 @@ export const AgentConsoleSurface = defineComponent({
 
     function appendSyntheticChunk(index: number): void {
       transcript.appendSyntheticChunk(index);
+      syncReplayCursor();
       if (mode.value === "markdown" && markdownStickToBottom.value) {
         markdownScrollTop.value = 1_000_000;
       }
@@ -276,6 +307,27 @@ export const AgentConsoleSurface = defineComponent({
         appendSyntheticChunk(i);
         await nextTick();
       }
+    }
+
+    function loadReplayLog(log: AgentReplayLog, eventIndex = log.events.length): void {
+      stopStream();
+      replaySource = log.events.slice();
+      const cursor = Math.max(0, Math.min(eventIndex, replaySource.length));
+      transcript.loadReplayLog(log, cursor);
+      streamState.value = statusFrom(replaySource.slice(0, cursor));
+      replayCursor.value = cursor;
+      replayTotal.value = replaySource.length;
+      markdownScrollTop.value = 1_000_000;
+      markdownStickToBottom.value = true;
+      void nextTick(() => {
+        jumpToBottom();
+        refreshSearchState();
+        refreshLinks();
+      });
+    }
+
+    function seekReplay(eventIndex: number): void {
+      loadReplayLog({ version: 1, events: replaySource ?? transcript.eventLog.value }, eventIndex);
     }
 
     function focusNextLink(): boolean {
@@ -340,6 +392,7 @@ export const AgentConsoleSurface = defineComponent({
       if (!text) return;
       transcript.apply({ type: "user", text });
       input.value = "";
+      syncReplayCursor();
       jumpToBottom();
     }
 
@@ -410,6 +463,7 @@ export const AgentConsoleSurface = defineComponent({
         `model=gpt-5.3-codex`,
         `state=${streamState.value}`,
         `mode=${mode.value}`,
+        `replay=${replayCursor.value}/${replayTotal.value}`,
         `rate=${tokenRate.value}`,
         `scroll=${scrollLabel.value}`,
         `plane=${activePlaneLabel.value}`,
@@ -724,11 +778,16 @@ export const AgentConsoleSurface = defineComponent({
       mode,
       input,
       searchQuery,
+      replayCursor,
+      replayTotal,
       metrics,
       searchState,
       seed,
       appendSyntheticChunk,
       appendBurst,
+      captureReplayLog: transcript.captureReplayLog,
+      loadReplayLog,
+      seekReplay,
       jumpToBottom,
       openSearch,
       openLinks,
@@ -749,6 +808,7 @@ export const AgentConsoleSurface = defineComponent({
         Array.from({ length: AGENT_CONSOLE_LAYOUT.chrome.h }, (_, index) =>
           rowTextFromTerminal(terminalContext.terminal, AGENT_CONSOLE_LAYOUT.chrome.y + index),
         ),
+      getTerminalSnapshot: () => terminalContext.terminal.snapshot().lines,
     };
 
     watch(
