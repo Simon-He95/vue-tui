@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { TLogView } from "../src/experimental.js";
 import { TVirtualMarkdown } from "../src/markdown.js";
 import { h, mountTerminal, nextTick, TInputBox, TText } from "./ui-regressions-support";
-import { TVirtualList } from "./ui-regressions-support";
+import { TView, TVirtualList } from "./ui-regressions-support";
 
 function installNavigatorClipboard(writes: string[]) {
   const previous = (navigator as any).clipboard;
@@ -234,6 +234,138 @@ describe("TerminalProvider selection", () => {
       await settleClipboard();
 
       expect(writes).toEqual([]);
+    } finally {
+      mounted.unmount();
+      restore();
+    }
+  });
+
+  it("allows a plain click on selectable views without drag", async () => {
+    const onClick = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TView,
+          {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            selectable: true,
+            onClick,
+          },
+          () => h(TText, { x: 0, y: 0, value: "click me", style: { fg: "whiteBright" } }),
+        ),
+      12,
+      2,
+      { selection: true },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 2, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 2, clientY: 0, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("click", { clientX: 2, clientY: 0, bubbles: true }));
+      await settleClipboard();
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("suppresses click events after dragging selection over selectable views", async () => {
+    const onClick = vi.fn();
+    const onDblclick = vi.fn();
+    const onContextmenu = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TView,
+          {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            selectable: true,
+            onClick,
+            onDblclick,
+          },
+          () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+        ),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.addEventListener("contextmenu", onContextmenu);
+
+      for (const type of ["click", "dblclick", "contextmenu"] as const) {
+        container.dispatchEvent(
+          new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+        );
+        container.dispatchEvent(
+          new MouseEvent("mousemove", { clientX: 4, clientY: 0, bubbles: true }),
+        );
+        container.dispatchEvent(
+          new MouseEvent("mouseup", { clientX: 4, clientY: 0, bubbles: true }),
+        );
+        container.dispatchEvent(new MouseEvent(type, { clientX: 2, clientY: 0, bubbles: true }));
+      }
+
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onDblclick).not.toHaveBeenCalled();
+      expect(onContextmenu).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("suppresses TLogView linkClick after dragging selection over link text", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+    const onLinkClick = vi.fn();
+    const source = {
+      lineCount: () => 1,
+      getLine: () => "go \x1b]8;;https://example.com\x07link\x1b]8;;\x07",
+      getLineKey: () => "line",
+    };
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+          onLinkClick,
+        }),
+      10,
+      2,
+      { selection: true },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 3, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 6, clientY: 0, bubbles: true }));
+      await settleClipboard();
+      container.dispatchEvent(new MouseEvent("click", { clientX: 4, clientY: 0, bubbles: true }));
+
+      expect(writes).toEqual(["link"]);
+      expect(onLinkClick).not.toHaveBeenCalled();
     } finally {
       mounted.unmount();
       restore();

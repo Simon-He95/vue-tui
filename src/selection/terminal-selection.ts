@@ -339,6 +339,10 @@ export function createTerminalSelectionController(
     },
     async finish() {
       if (!range) return;
+      if (!state.value.text) {
+        controller.clear();
+        return;
+      }
       const current = readOptions();
       if (current.autoCopy && current.copyOnMouseUp) await controller.copy();
     },

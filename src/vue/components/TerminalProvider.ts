@@ -1030,6 +1030,8 @@ export const TerminalProvider = defineComponent({
         let selectionScrollOrigin: { x: number; y: number } | null = null;
         let selectionLastPoint: { x: number; y: number } | null = null;
         let selectionAutoScrollTimer: ReturnType<typeof setTimeout> | null = null;
+        let selectionDragStarted = false;
+        let suppressNextSelectionClick = false;
 
         const clearSelectionAutoScroll = () => {
           if (selectionAutoScrollTimer == null) return;
@@ -1072,6 +1074,8 @@ export const TerminalProvider = defineComponent({
 
         const onSelectionPointerDown = (event: MouseEvent | PointerEvent) => {
           if (!selectionEnabled()) return;
+          suppressNextSelectionClick = false;
+          selectionDragStarted = false;
           if (selecting) return;
           if (event.button !== 0) return;
           const point = cellPointFromClient(event);
@@ -1097,6 +1101,12 @@ export const TerminalProvider = defineComponent({
           if (!selecting) return;
           const point = cellPointFromClient(event);
           selectionLastPoint = point;
+          if (
+            selectionStartPoint &&
+            (point.x !== selectionStartPoint.x || point.y !== selectionStartPoint.y)
+          ) {
+            selectionDragStarted = true;
+          }
           selection.update(point);
           scheduleSelectionAutoScroll();
           event.preventDefault();
@@ -1112,6 +1122,7 @@ export const TerminalProvider = defineComponent({
           ) {
             selection.update(point);
           }
+          if (selectionDragStarted || selection.state.value.text) suppressNextSelectionClick = true;
           selecting = false;
           selectionStartPoint = null;
           selectionScrollOrigin = null;
@@ -1126,6 +1137,15 @@ export const TerminalProvider = defineComponent({
           }
           event.preventDefault();
           void selection.finish();
+        };
+
+        const onSelectionClickCapture = (event: MouseEvent) => {
+          if (!selectionEnabled()) return;
+          if (!suppressNextSelectionClick) return;
+          suppressNextSelectionClick = false;
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation?.();
         };
 
         const onSelectionKeydown = (event: KeyboardEvent) => {
@@ -1149,6 +1169,9 @@ export const TerminalProvider = defineComponent({
         el.addEventListener("mousemove", onSelectionPointerMove);
         el.addEventListener("mouseup", onSelectionPointerUp);
         el.addEventListener("mouseleave", onSelectionMouseLeave);
+        el.addEventListener("click", onSelectionClickCapture, true);
+        el.addEventListener("dblclick", onSelectionClickCapture, true);
+        el.addEventListener("contextmenu", onSelectionClickCapture, true);
         doc.addEventListener("keydown", onSelectionKeydown, true);
         onScopeDispose(() => {
           el.removeEventListener("pointerdown", onSelectionPointerDown);
@@ -1158,6 +1181,9 @@ export const TerminalProvider = defineComponent({
           el.removeEventListener("mousemove", onSelectionPointerMove);
           el.removeEventListener("mouseup", onSelectionPointerUp);
           el.removeEventListener("mouseleave", onSelectionMouseLeave);
+          el.removeEventListener("click", onSelectionClickCapture, true);
+          el.removeEventListener("dblclick", onSelectionClickCapture, true);
+          el.removeEventListener("contextmenu", onSelectionClickCapture, true);
           doc.removeEventListener("keydown", onSelectionKeydown, true);
           clearSelectionAutoScroll();
         });

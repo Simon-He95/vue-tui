@@ -38,6 +38,24 @@ describe("terminal selection", () => {
     expect(clipboard.writes).toEqual(["2345678"]);
   });
 
+  it("clears an empty click selection on finish", async () => {
+    const terminal = createTerminal({ cols: 12, rows: 3 });
+    terminal.write("0123456789", { x: 0, y: 1, style: { fg: "whiteBright" } });
+    const clipboard = memoryClipboard();
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: getPlaneTerminal(terminal, "overlay"),
+      clipboard: clipboard.api,
+    });
+
+    selection.start({ x: 2, y: 1 });
+    await selection.finish();
+
+    expect(selection.state.value.active).toBe(false);
+    expect(selection.state.value.text).toBe("");
+    expect(clipboard.writes).toEqual([]);
+  });
+
   it("copies multi-line selections without terminal padding", async () => {
     const terminal = createTerminal({ cols: 8, rows: 3 });
     terminal.write("abc", { x: 0, y: 0 });
