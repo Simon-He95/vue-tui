@@ -906,18 +906,19 @@
 
 ### Props
 
-| 名称                    | 类型                 | 默认值                 | 必填 | 说明 |
-| ----------------------- | -------------------- | ---------------------- | ---- | ---- |
-| <code>x</code>          | <code>number</code>  | —                      | 是   | —    |
-| <code>y</code>          | <code>number</code>  | —                      | 是   | —    |
-| <code>w</code>          | <code>number</code>  | —                      | 是   | —    |
-| <code>h</code>          | <code>number</code>  | —                      | 是   | —    |
-| <code>zIndex</code>     | <code>number</code>  | <code>0</code>         | 否   | —    |
-| <code>scrollX</code>    | <code>number</code>  | <code>0</code>         | 否   | —    |
-| <code>scrollY</code>    | <code>number</code>  | <code>0</code>         | 否   | —    |
-| <code>focusable</code>  | <code>boolean</code> | <code>false</code>     | 否   | —    |
-| <code>selectable</code> | <code>boolean</code> | <code>undefined</code> | 否   | —    |
-| <code>autoFocus</code>  | <code>boolean</code> | <code>false</code>     | 否   | —    |
+| 名称                           | 类型                                                       | 默认值                 | 必填 | 说明 |
+| ------------------------------ | ---------------------------------------------------------- | ---------------------- | ---- | ---- |
+| <code>x</code>                 | <code>number</code>                                        | —                      | 是   | —    |
+| <code>y</code>                 | <code>number</code>                                        | —                      | 是   | —    |
+| <code>w</code>                 | <code>number</code>                                        | —                      | 是   | —    |
+| <code>h</code>                 | <code>number</code>                                        | —                      | 是   | —    |
+| <code>zIndex</code>            | <code>number</code>                                        | <code>0</code>         | 否   | —    |
+| <code>scrollX</code>           | <code>number</code>                                        | <code>0</code>         | 否   | —    |
+| <code>scrollY</code>           | <code>number</code>                                        | <code>0</code>         | 否   | —    |
+| <code>focusable</code>         | <code>boolean</code>                                       | <code>false</code>     | 否   | —    |
+| <code>selectable</code>        | <code>boolean</code>                                       | <code>undefined</code> | 否   | —    |
+| <code>selectionScrollBy</code> | <code>(deltaRows: number) =&gt; boolean &#124; void</code> | <code>undefined</code> | 否   | —    |
+| <code>autoFocus</code>         | <code>boolean</code>                                       | <code>false</code>     | 否   | —    |
 
 ### Events
 

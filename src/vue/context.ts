@@ -3,7 +3,10 @@ import type { PathPickerProvider } from "../cli/path-provider.js";
 import type { TerminalRenderPlane } from "../core/render-plane.js";
 import type { Style, Terminal } from "../core/types.js";
 import type { EventManager, Rect } from "../events/index.js";
-import type { SelectionTextProvider } from "../selection/terminal-selection.js";
+import type {
+  SelectionTextProvider,
+  TerminalSelectionCopyPayload,
+} from "../selection/terminal-selection.js";
 import type { RendererCapabilities, TerminalRendererLike } from "../renderer/index.js";
 import type { TraceStore } from "../observability/trace.js";
 import type { FramePerfReason } from "../observability/frame-perf.js";
@@ -103,6 +106,7 @@ export type TerminalRuntime = Readonly<{
 
 export type TerminalSelectionContext = Readonly<{
   registerTextProvider: (provider: SelectionTextProvider) => () => void;
+  onCopy: (handler: (payload: TerminalSelectionCopyPayload) => void) => () => void;
 }>;
 
 export type ImeAnchor = Readonly<{

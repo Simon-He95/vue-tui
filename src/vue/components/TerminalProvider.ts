@@ -279,6 +279,7 @@ export const TerminalProvider = defineComponent({
       },
     };
     const selectionTextProviders = new Map<string, SelectionTextProvider>();
+    const selectionCopyHandlers = new Set<(payload: TerminalSelectionCopyPayload) => void>();
     const selectionContext = {
       registerTextProvider(provider: SelectionTextProvider) {
         selectionTextProviders.set(provider.id, provider);
@@ -286,6 +287,10 @@ export const TerminalProvider = defineComponent({
           if (selectionTextProviders.get(provider.id) === provider)
             selectionTextProviders.delete(provider.id);
         };
+      },
+      onCopy(handler: (payload: TerminalSelectionCopyPayload) => void) {
+        selectionCopyHandlers.add(handler);
+        return () => selectionCopyHandlers.delete(handler);
       },
     } as const;
     const selectionOverlay = getPlaneTerminal(terminal, "overlay");
@@ -311,6 +316,7 @@ export const TerminalProvider = defineComponent({
         invalidate({ plane: "overlay", reason: "selection" });
       },
       onCopy: (payload) => {
+        for (const handler of selectionCopyHandlers) handler(payload);
         emit("selectionCopy", payload);
         if (trace.enabled.value) {
           queueMicrotask(() => {
