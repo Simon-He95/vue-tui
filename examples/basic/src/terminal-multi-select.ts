@@ -4,10 +4,13 @@ import MultiSelectDemo from "./MultiSelectDemo.vue";
 const cols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : 70;
 const rows = Number.isFinite(process.stdout.rows) ? process.stdout.rows : 22;
 
+let exit = () => {};
+
 const app = createTerminalApp({
   cols,
   rows,
   component: MultiSelectDemo as any,
+  props: { exit: () => exit() },
   defaultStyle: { fg: "whiteBright", bg: "black" },
 });
 app.mount();
@@ -39,8 +42,11 @@ const offCommitCursor = app.terminal.on("commit", () => {
 app.scheduler.flush();
 
 let driver: ReturnType<typeof createStdinDriver> | null = null;
+let exiting = false;
 
-const exit = () => {
+exit = () => {
+  if (exiting) return;
+  exiting = true;
   driver?.dispose();
   offCommitCursor();
   out.dispose();

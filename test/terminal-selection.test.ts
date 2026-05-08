@@ -1,5 +1,6 @@
 import type { ClipboardApi } from "../src/runtime/index.js";
-import { describe, expect, it } from "vitest";
+import type { TerminalSelectionRange } from "../src/selection/terminal-selection.js";
+import { describe, expect, it, vi } from "vitest";
 import { createTerminal } from "../src/core/index.js";
 import { getPlaneTerminal } from "../src/core/terminal/create-terminal.js";
 import { createTerminalSelectionController } from "../src/selection/terminal-selection.js";
@@ -32,6 +33,10 @@ describe("terminal selection", () => {
 
     selection.start({ x: 2, y: 1 });
     selection.update({ x: 8, y: 1 });
+
+    expect(selection.state.value.text).toBe("");
+    expect(selection.state.value.hasRange).toBe(true);
+
     await selection.finish();
 
     expect(selection.state.value.text).toBe("2345678");
@@ -74,7 +79,7 @@ describe("terminal selection", () => {
     expect(clipboard.writes).toEqual(["bc\ndef"]);
   });
 
-  it("extends from the existing anchor", () => {
+  it("extends from the existing anchor", async () => {
     const terminal = createTerminal({ cols: 10, rows: 3 });
     terminal.write("0123456789", { x: 0, y: 0 });
     terminal.write("abcdef", { x: 0, y: 1 });
@@ -91,14 +96,24 @@ describe("terminal selection", () => {
 
     expect(selection.state.value.anchor).toEqual({ x: 2, y: 0 });
     expect(selection.state.value.focus).toEqual({ x: 1, y: 1 });
+    expect(selection.state.value.text).toBe("");
+    expect(selection.state.value.hasRange).toBe(true);
+
+    await selection.finish();
+
     expect(selection.state.value.text).toBe("23456789\nab");
   });
 
-  it("uses text provider points when viewport content scrolls during selection", () => {
+  it("uses text provider points when viewport content scrolls during selection", async () => {
     const terminal = createTerminal({ cols: 8, rows: 4 });
     const clipboard = memoryClipboard();
     let sourceTop = 0;
     const sourceRows = Array.from({ length: 10 }, (_, index) => `row-${index}`);
+    const getText = vi.fn((range: TerminalSelectionRange) => {
+      const start = Math.min(range.anchor.y, range.focus.y);
+      const end = Math.max(range.anchor.y, range.focus.y);
+      return sourceRows.slice(start, end + 1).join("\n");
+    });
     const selection = createTerminalSelectionController({
       terminal,
       overlayTerminal: getPlaneTerminal(terminal, "overlay"),
@@ -109,11 +124,7 @@ describe("terminal selection", () => {
           rect: { x: 0, y: 0, w: 8, h: 4 },
           canHandle: () => false,
           pointForCell: (point) => ({ x: point.x, y: sourceTop + point.y }),
-          getText: (range) => {
-            const start = Math.min(range.anchor.y, range.focus.y);
-            const end = Math.max(range.anchor.y, range.focus.y);
-            return sourceRows.slice(start, end + 1).join("\n");
-          },
+          getText,
         },
       ],
     });
@@ -122,7 +133,51 @@ describe("terminal selection", () => {
     sourceTop = 1;
     selection.update({ x: 3, y: 3 });
 
+    expect(getText).not.toHaveBeenCalled();
+
+    await selection.finish();
+
+    expect(getText).toHaveBeenCalledTimes(1);
     expect(selection.state.value.text).toBe("row-1\nrow-2\nrow-3\nrow-4");
+  });
+
+  it("tracks provider ranges even when the viewport cell does not change", async () => {
+    const terminal = createTerminal({ cols: 8, rows: 4 });
+    const clipboard = memoryClipboard();
+    let sourceTop = 0;
+    const getText = vi.fn((range: TerminalSelectionRange) => {
+      const start = Math.min(range.anchor.y, range.focus.y);
+      const end = Math.max(range.anchor.y, range.focus.y);
+      return Array.from({ length: end - start + 1 }, (_, index) => `row-${start + index}`).join(
+        "\n",
+      );
+    });
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: getPlaneTerminal(terminal, "overlay"),
+      clipboard: clipboard.api,
+      getTextProviders: () => [
+        {
+          id: "source",
+          rect: { x: 0, y: 0, w: 8, h: 4 },
+          canHandle: () => false,
+          pointForCell: (point) => ({ x: point.x, y: sourceTop + point.y }),
+          getText,
+        },
+      ],
+    });
+
+    selection.start({ x: 0, y: 1 });
+    sourceTop = 1;
+    selection.update({ x: 0, y: 1 });
+
+    expect(selection.state.value.hasRange).toBe(true);
+    expect(getText).not.toHaveBeenCalled();
+
+    await selection.finish();
+
+    expect(getText).toHaveBeenCalledTimes(1);
+    expect(selection.state.value.text).toBe("row-1\nrow-2");
   });
 
   it("reports unsupported clipboard without throwing", async () => {

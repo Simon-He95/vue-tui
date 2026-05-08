@@ -20,6 +20,7 @@ export type TerminalSelectionState = Readonly<{
   anchor: TerminalSelectionPoint | null;
   focus: TerminalSelectionPoint | null;
   text: string;
+  hasRange: boolean;
 }>;
 
 export type TerminalSelectionCopyPayload = Readonly<{
@@ -95,6 +96,7 @@ const EMPTY_STATE: TerminalSelectionState = Object.freeze({
   anchor: null,
   focus: null,
   text: "",
+  hasRange: false,
 });
 
 function clampPoint(
@@ -114,6 +116,15 @@ function comparePoints(a: TerminalSelectionPoint, b: TerminalSelectionPoint): nu
 
 function pointKey(point: TerminalSelectionPoint): string {
   return `${point.x}:${point.y}`;
+}
+
+function providerPointsDiffer(
+  a: ProviderSelectionPoint | null,
+  b: ProviderSelectionPoint | null,
+): boolean {
+  return Boolean(
+    a && b && a.providerId === b.providerId && pointKey(a.point) !== pointKey(b.point),
+  );
 }
 
 export function terminalSelectionRowSpans(
@@ -165,6 +176,7 @@ export function createTerminalSelectionController(
   const state = shallowRef<TerminalSelectionState>(EMPTY_STATE);
   let range: TerminalSelectionRange | null = null;
   let providerAnchor: ProviderSelectionPoint | null = null;
+  let providerFocus: ProviderSelectionPoint | null = null;
   let overlayRows = new Map<number, readonly SelectionCell[]>();
   let dirtyRows = new Set<number>();
 
@@ -227,29 +239,27 @@ export function createTerminalSelectionController(
     return lines.join("\n");
   };
 
-  const selectedText = (
-    nextRange: TerminalSelectionRange,
-    nextProviderAnchor: ProviderSelectionPoint | null,
-    nextProviderFocus: ProviderSelectionPoint | null,
-  ): string => {
-    if (
-      nextProviderAnchor &&
-      nextProviderFocus &&
-      nextProviderAnchor.providerId === nextProviderFocus.providerId
-    ) {
-      const provider = providerById(nextProviderAnchor.providerId);
+  const selectedText = (): string => {
+    if (!range) return "";
+    if (providerAnchor && providerFocus && providerAnchor.providerId === providerFocus.providerId) {
+      const provider = providerById(providerAnchor.providerId);
       if (provider) {
         return provider.getText({
-          anchor: nextProviderAnchor.point,
-          focus: nextProviderFocus.point,
-          mode: nextRange.mode,
+          anchor: providerAnchor.point,
+          focus: providerFocus.point,
+          mode: range.mode,
         });
       }
     }
 
-    const provider = providers().find((candidate) => candidate.canHandle(nextRange));
-    if (provider) return provider.getText(nextRange);
-    return textFromTerminalBuffer(nextRange);
+    const provider = providers().find((candidate) => candidate.canHandle(range));
+    if (provider) return provider.getText(range);
+    return textFromTerminalBuffer(range);
+  };
+
+  const setResolvedText = (text: string): void => {
+    if (!range || !state.value.active || state.value.text === text) return;
+    state.value = { ...state.value, text };
   };
 
   const rebuild = (
@@ -261,11 +271,12 @@ export function createTerminalSelectionController(
     const size = options.terminal.size();
     const nextOverlayRows = new Map<number, readonly SelectionCell[]>();
     const nextDirtyRows = new Set<number>();
-    let text = "";
+    let hasRange = false;
 
     if (nextRange) {
       const selectionStyle = readOptions().style;
       const spans = terminalSelectionRowSpans(nextRange, size.cols, size.rows);
+      hasRange = spans.length > 0 || providerPointsDiffer(nextProviderAnchor, nextProviderFocus);
       for (const span of spans) {
         const row = options.terminal.getRow(span.y);
         const cells: SelectionCell[] = [];
@@ -282,11 +293,11 @@ export function createTerminalSelectionController(
         nextOverlayRows.set(span.y, cells);
         nextDirtyRows.add(span.y);
       }
-      text = selectedText(nextRange, nextProviderAnchor, nextProviderFocus);
     }
 
     range = nextRange;
     providerAnchor = nextProviderAnchor;
+    providerFocus = nextProviderFocus;
     overlayRows = nextOverlayRows;
     dirtyRows = nextDirtyRows;
     state.value = nextRange
@@ -294,7 +305,8 @@ export function createTerminalSelectionController(
           active: true,
           anchor: nextRange.anchor,
           focus: nextRange.focus,
-          text,
+          text: "",
+          hasRange,
         }
       : EMPTY_STATE;
     markDirty(previousRows, nextDirtyRows);
@@ -339,10 +351,12 @@ export function createTerminalSelectionController(
     },
     async finish() {
       if (!range) return;
-      if (!state.value.text) {
+      const text = selectedText();
+      if (!text) {
         controller.clear();
         return;
       }
+      setResolvedText(text);
       const current = readOptions();
       if (current.autoCopy && current.copyOnMouseUp) await controller.copy();
     },
@@ -351,8 +365,9 @@ export function createTerminalSelectionController(
       rebuild(null, null, null);
     },
     async copy() {
-      const text = state.value.text;
+      const text = state.value.text || selectedText();
       if (!text) return false;
+      setResolvedText(text);
       if (!options.clipboard.supported) {
         options.onCopy?.(copyPayload(text, false, new Error("Clipboard unavailable")));
         return false;

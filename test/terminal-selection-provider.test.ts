@@ -176,6 +176,7 @@ describe("TerminalProvider selection", () => {
   it("extends an existing selection with Shift+mousedown", async () => {
     const writes: string[] = [];
     const restore = installNavigatorClipboard(writes);
+    const onClick = vi.fn();
     const mounted = await mountTerminal(
       () => [
         h(TText, { x: 0, y: 0, value: "0123456789", style: { fg: "whiteBright" } }),
@@ -188,6 +189,7 @@ describe("TerminalProvider selection", () => {
 
     try {
       const container = mounted.container()!;
+      container.addEventListener("click", onClick);
       container.dispatchEvent(
         new MouseEvent("mousedown", { clientX: 2, clientY: 0, bubbles: true }),
       );
@@ -213,9 +215,11 @@ describe("TerminalProvider selection", () => {
           bubbles: true,
         }),
       );
+      container.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 1, bubbles: true }));
       await settleClipboard();
 
       expect(writes).toEqual(["234", "23456789\nab"]);
+      expect(onClick).not.toHaveBeenCalled();
     } finally {
       mounted.unmount();
       restore();

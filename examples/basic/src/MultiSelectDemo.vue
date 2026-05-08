@@ -5,6 +5,9 @@ import { TBox, TSelect, TText, useLayout } from "@simon_he/vue-tui";
 const layout = useLayout();
 const cols = computed(() => layout.clipRect?.w ?? 0);
 const rows = computed(() => layout.clipRect?.h ?? 0);
+const props = defineProps<{
+  exit?: () => void;
+}>();
 
 const options = [
   {
@@ -46,7 +49,7 @@ const selectVisibleH = computed(() => {
 const selectBoxH = computed(() => Math.max(3, selectVisibleH.value + 2));
 
 function onClose() {
-  if (typeof process !== "undefined" && typeof process.exit === "function") process.exit(0);
+  props.exit?.();
 }
 
 function onChange(values: string[]) {

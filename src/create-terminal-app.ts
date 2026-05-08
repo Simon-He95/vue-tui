@@ -678,7 +678,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       ) {
         selection.update(point);
       }
-      const suppressActivation = selectionDragStarted || Boolean(selection.state.value.text);
+      const suppressActivation = selectionDragStarted || selection.state.value.hasRange;
       if (suppressActivation) {
         suppressNextSelectionClick = true;
         (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
