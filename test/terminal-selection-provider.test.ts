@@ -127,6 +127,52 @@ describe("TerminalProvider selection", () => {
     }
   });
 
+  it("reports clipboard write failures without clearing the selection", async () => {
+    const error = new Error("denied");
+    const writeText = vi.fn(async () => {
+      throw error;
+    });
+    const copies: unknown[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TText, {
+          x: 0,
+          y: 0,
+          value: "clipboard failure",
+          style: { fg: "whiteBright" },
+        }),
+      24,
+      2,
+      {
+        selection: true,
+        clipboard: {
+          supported: true,
+          readText: async () => "",
+          writeText,
+        },
+        onSelectionCopy: (payload: unknown) => copies.push(payload),
+      },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 8, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 8, clientY: 0, bubbles: true }));
+      await settleClipboard();
+
+      expect(writeText).toHaveBeenCalledWith("clipboard");
+      expect(copies).toMatchObject([{ text: "clipboard", rows: 1, ok: false, error }]);
+      expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("extends an existing selection with Shift+mousedown", async () => {
     const writes: string[] = [];
     const restore = installNavigatorClipboard(writes);

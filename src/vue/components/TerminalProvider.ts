@@ -7,8 +7,8 @@ import type { DomRenderer, DomRendererOptions } from "../../renderer/index.js";
 import type { ClipboardApi } from "../../runtime/index.js";
 import type {
   SelectionTextProvider,
-  TerminalSelectionConfig,
   TerminalSelectionCopyPayload,
+  TerminalSelectionOptions,
 } from "../../selection/terminal-selection.js";
 import type {
   ImeAnchor,
@@ -116,7 +116,16 @@ type ResolvedTerminalSelectionConfig = Readonly<{
   toast: boolean;
 }>;
 
-function resolveSelectionConfig(config: TerminalSelectionConfig): ResolvedTerminalSelectionConfig {
+export type TerminalProviderSelectionOptions = TerminalSelectionOptions &
+  Readonly<{
+    toast?: boolean;
+  }>;
+
+export type TerminalProviderSelectionConfig = boolean | TerminalProviderSelectionOptions;
+
+function resolveSelectionConfig(
+  config: TerminalProviderSelectionConfig,
+): ResolvedTerminalSelectionConfig {
   if (config === false) {
     return {
       enabled: false,
@@ -175,7 +184,7 @@ export const TerminalProvider = defineComponent({
       default: undefined,
     },
     selection: {
-      type: [Boolean, Object] as PropType<TerminalSelectionConfig>,
+      type: [Boolean, Object] as PropType<TerminalProviderSelectionConfig>,
       default: false,
     },
   },

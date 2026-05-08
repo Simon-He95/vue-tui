@@ -187,7 +187,7 @@
 | <code>debugTrace</code>         | <code>boolean</code>                                                | <code>false</code>                              | 否   | —    |
 | <code>domRendererOptions</code> | <code>DomRendererOptions</code>                                     | <code>undefined</code>                          | 否   | —    |
 | <code>clipboard</code>          | <code>ClipboardApi</code>                                           | <code>undefined</code>                          | 否   | —    |
-| <code>selection</code>          | <code>TerminalSelectionConfig</code>                                | <code>false</code>                              | 否   | —    |
+| <code>selection</code>          | <code>TerminalProviderSelectionConfig</code>                        | <code>false</code>                              | 否   | —    |
 
 ### Events
 

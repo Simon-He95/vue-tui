@@ -34,7 +34,6 @@ export type TerminalSelectionOptions = Readonly<{
   autoCopy?: boolean;
   copyOnMouseUp?: boolean;
   style?: Style;
-  toast?: boolean;
 }>;
 
 export type TerminalSelectionConfig = boolean | TerminalSelectionOptions;

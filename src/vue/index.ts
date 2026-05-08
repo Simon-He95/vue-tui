@@ -21,6 +21,10 @@ export { TAnchor } from "./components/TAnchor.js";
 export { TBox } from "./components/TBox.js";
 export { TDebugOverlay } from "./components/TDebugOverlay.js";
 export { TDialog } from "./components/TDialog.js";
+export type {
+  TerminalProviderSelectionConfig,
+  TerminalProviderSelectionOptions,
+} from "./components/TerminalProvider.js";
 export { TerminalProvider } from "./components/TerminalProvider.js";
 export { TFlow } from "./components/TFlow.js";
 export { TInput } from "./components/TInput.js";

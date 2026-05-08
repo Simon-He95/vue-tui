@@ -136,6 +136,10 @@ export {
   createTerminalSelectionController,
   terminalSelectionRowSpans,
 } from "./selection/terminal-selection.js";
+export type {
+  TerminalProviderSelectionConfig,
+  TerminalProviderSelectionOptions,
+} from "./vue/components/TerminalProvider.js";
 export { normalizeNewlines } from "./utils/newlines.js";
 
 export {

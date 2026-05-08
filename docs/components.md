@@ -58,7 +58,7 @@
 - `autoResize` `(boolean)`: 是否根据容器尺寸自动 resize（默认 `false`）
 - `minCols`/`minRows` `(number)`: autoResize 下最小尺寸
 - `recordEvents` `(fn?)`: 录制事件回调（用于 record/replay）
-- `selection` `(boolean | TerminalSelectionOptions)`: 开启 terminal cell selection；鼠标松开时可自动复制
+- `selection` `(boolean | TerminalProviderSelectionOptions)`: 开启 terminal cell selection；鼠标松开时可自动复制；`toast` 只影响 `TerminalProvider` 的复制提示 UI
 - `clipboard` `(ClipboardApi?)`: 给 selection auto-copy 注入 clipboard；不传时 browser 使用运行时 clipboard
 - `inputPlugins` `(TInputPlugin[])`: 给子树里的 `TInput` / `TInputBox` 注入宿主插件（例如 terminal clipboard、TTY 风格快捷键）
 - `pathPickerProvider` `(PathPickerProvider?)`: 给子树里的 `TPathPicker` 注入宿主路径 provider
