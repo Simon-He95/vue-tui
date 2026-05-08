@@ -111,8 +111,31 @@ export {
   HEADLESS_RENDERER_CAPABILITIES,
 } from "./renderer/index.js";
 
-export type { ClipboardApi, RafApi, Runtime, RuntimeEnv, TimerApi } from "./runtime/index.js";
-export { createRuntime } from "./runtime/index.js";
+export type {
+  ClipboardApi,
+  Osc52ClipboardOptions,
+  RafApi,
+  Runtime,
+  RuntimeEnv,
+  RuntimeOptions,
+  TimerApi,
+} from "./runtime/index.js";
+export { createOsc52ClipboardProvider, createRuntime } from "./runtime/index.js";
+export type {
+  CreateTerminalSelectionControllerOptions,
+  SelectionTextProvider,
+  TerminalSelectionConfig,
+  TerminalSelectionController,
+  TerminalSelectionCopyPayload,
+  TerminalSelectionOptions,
+  TerminalSelectionPoint,
+  TerminalSelectionRange,
+  TerminalSelectionState,
+} from "./selection/terminal-selection.js";
+export {
+  createTerminalSelectionController,
+  terminalSelectionRowSpans,
+} from "./selection/terminal-selection.js";
 export { normalizeNewlines } from "./utils/newlines.js";
 
 export {
@@ -164,6 +187,7 @@ export type {
   TerminalFrameTask,
   TerminalFrameTaskPriority,
   TerminalContext,
+  TerminalSelectionContext,
   TerminalRoute,
   TerminalRouteLocationRaw,
   TerminalRouter,

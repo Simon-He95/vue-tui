@@ -55,6 +55,8 @@ export interface EventManager {
   update: (id: string, next: Partial<Omit<TerminalNode, "id">>) => void;
   unregister: (id: string) => void;
   setMetrics: (next: CellMetrics) => void;
+  canSelectAt: (cellX: number, cellY: number) => boolean;
+  autoScrollSelectionAt: (originCellX: number, originCellY: number, pointerCellY: number) => number;
   focus: (id: string | null) => void;
   getFocused: () => string | null;
   debugNodes: () => TerminalDebugNode[];
@@ -1203,6 +1205,7 @@ export function createEventManager(
         visible: node.visible ?? true,
         focusable,
         selectable: node.selectable ?? !focusable,
+        selectionScrollBy: node.selectionScrollBy,
         handlers: node.handlers ?? {},
       };
       // Replace existing registration safely.
@@ -1241,6 +1244,40 @@ export function createEventManager(
     setMetrics(next) {
       currentMetrics = next;
       markContainerRectDirty();
+    },
+    canSelectAt(cellX, cellY) {
+      const list = candidatesAt(cellX, cellY);
+      const target = pickTarget(list);
+      const lockNode = resolveModalLockNode();
+      if (lockNode) {
+        if (!target) return false;
+        if (!isAllowedModalPointerNode(target, target, lockNode)) return false;
+      }
+      return target ? Boolean(target.selectable) : true;
+    },
+    autoScrollSelectionAt(originCellX, originCellY, pointerCellY) {
+      const target = pickTarget(candidatesAt(originCellX, originCellY));
+      if (!target) return 0;
+      const lockNode = resolveModalLockNode();
+      if (lockNode && !isAllowedModalPointerNode(target, target, lockNode)) return 0;
+      const path = ancestorsForTarget(target);
+      let owner: TerminalNode | null = null;
+      for (let i = path.length - 1; i >= 0; i--) {
+        const node = path[i]!;
+        if (typeof node.selectionScrollBy === "function") {
+          owner = node;
+          break;
+        }
+      }
+      if (!owner) return 0;
+      const rect = owner.rect;
+      const y = Math.floor(pointerCellY);
+      let delta = 0;
+      if (y <= rect.y) delta = -1;
+      else if (y >= rect.y + rect.h - 1) delta = 1;
+      if (!delta) return 0;
+      const scrolled = owner.selectionScrollBy?.(delta);
+      return scrolled === false ? 0 : delta;
     },
     focus(id) {
       setFocus(id);

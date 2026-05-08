@@ -91,6 +91,8 @@ type Style = {
 
 - `cols/rows`：初始尺寸
 - `autoResize/minCols/minRows`：可选，基于 `ResizeObserver` 自动 resize
+- `selection`：开启 DOM terminal cell selection / mouseup auto-copy
+- `clipboard`：为 selection auto-copy 注入自定义 `ClipboardApi`；未传时 browser 使用 `navigator.clipboard`，terminal/runtime 默认不启用
 - `inputPlugins`：给子树中的 `TInput` 统一注入宿主/平台插件
   - 默认 host plugin 只负责 clipboard / TTY / path 这类底层能力；toast 之类 UI 反馈应由宿主通过 `createTInputHostPlugin({ showToast })` 显式补充
 - `pathPickerProvider`：给子树中的 `TPathPicker` 统一注入宿主路径 provider
@@ -107,7 +109,7 @@ type Style = {
 
 提供一个 headless Vue App（用于 CLI / 测试），并注入与 `<TerminalProvider />` 一致的 `terminal/events/scheduler/runtime`：
 
-- `createTerminalApp({ cols, rows, component, props?, defaultStyle?, inputPlugins?, pathPickerProvider? })`
+- `createTerminalApp({ cols, rows, component, props?, defaultStyle?, clipboard?, inputPlugins?, pathPickerProvider? })`
 - 返回：`{ app, terminal, events, scheduler, mount(), dispose() }`
 
 可在 `mount()` 前安装插件（如 Pinia）：
@@ -220,6 +222,23 @@ const app = createTerminalApp({
   ],
 });
 ```
+
+### Clipboard providers
+
+`ClipboardApi` 可由宿主显式注入到 runtime、DOM provider 或 terminal app：
+
+```ts
+import { createOsc52ClipboardProvider, createTerminalApp } from "@simon_he/vue-tui";
+
+const app = createTerminalApp({
+  cols: 80,
+  rows: 24,
+  component: App,
+  clipboard: createOsc52ClipboardProvider(),
+});
+```
+
+默认 terminal runtime 不会自动执行系统剪贴板命令；OSC52 也只有在显式使用 `createOsc52ClipboardProvider()` 时才会写入 stdout。
 
 ### 布局组件
 

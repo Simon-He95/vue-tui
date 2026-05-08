@@ -1,5 +1,6 @@
 import type { ResolveTInputPathInfo, TInputHostAdapter } from "../host.js";
 import type { TInputPlugin } from "./types.js";
+import { createOsc52ClipboardProvider } from "../../../../runtime/index.js";
 import { pathToTerminalFileHref, resolveDefaultTInputPath } from "../host.js";
 
 type SpawnLike = (
@@ -34,30 +35,6 @@ function getHomeDir(): string {
 
 function getPlatform(): string {
   return String(getProcessLike()?.platform || "");
-}
-
-function base64EncodeBytes(bytes: Uint8Array): string {
-  const table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i] ?? 0;
-    const b = bytes[i + 1] ?? 0;
-    const c = bytes[i + 2] ?? 0;
-    const triple = (a << 16) | (b << 8) | c;
-    out += table[(triple >> 18) & 63] ?? "";
-    out += table[(triple >> 12) & 63] ?? "";
-    out += i + 1 < bytes.length ? (table[(triple >> 6) & 63] ?? "") : "=";
-    out += i + 2 < bytes.length ? (table[triple & 63] ?? "") : "=";
-  }
-  return out;
-}
-
-function base64EncodeText(text: string): string {
-  if (typeof TextEncoder !== "undefined") return base64EncodeBytes(new TextEncoder().encode(text));
-  const bin = unescape(encodeURIComponent(text));
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return base64EncodeBytes(bytes);
 }
 
 async function loadNodeSpawn(): Promise<SpawnLike | null> {
@@ -200,10 +177,10 @@ export function createDefaultTInputHostAdapter(): TInputHostAdapter {
     },
     async writeClipboardText(text: string) {
       if (!text) return false;
-      const stdout = getProcessLike()?.stdout;
-      if (!stdout?.write || !stdout?.isTTY) return false;
+      const clipboard = createOsc52ClipboardProvider();
+      if (!clipboard.supported) return false;
       try {
-        stdout.write(`\u001B]52;c;${base64EncodeText(text)}\u0007`);
+        await clipboard.writeText(text);
         return true;
       } catch {
         return false;

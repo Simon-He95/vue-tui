@@ -92,6 +92,7 @@ export const TVirtualList = defineComponent({
     style: { type: Object as PropType<Style>, default: undefined },
     activeStyle: { type: Object as PropType<Style>, default: undefined },
     autoFocus: { type: Boolean, default: false },
+    selectable: { type: Boolean, default: false },
     rowScrollMode: {
       type: String as PropType<RowScrollMode>,
       default: "off",
@@ -455,11 +456,26 @@ export const TVirtualList = defineComponent({
       }
     }
 
+    function scrollSelectionBy(delta: number): boolean {
+      const n = Math.trunc(Number(delta));
+      if (!Number.isFinite(n) || n === 0) return false;
+      cancelWheelScrollFrame();
+      const changed = applyScrollTop(scrollTop.value + n, {
+        emitScroll: true,
+        emitUpdate: true,
+        priority: "high",
+        reason: "scroll",
+      });
+      return changed.changed;
+    }
+
     const eventNode = useTerminalNode(() => ({
       rect: normalizedRect(),
       zIndex: eventZ.value,
       visible: visible.value,
       focusable: true,
+      selectable: props.selectable,
+      selectionScrollBy: scrollSelectionBy,
       handlers: {
         click: (e: TerminalPointerEvent) => {
           cancelWheelScrollFrame();

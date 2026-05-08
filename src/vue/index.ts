@@ -55,6 +55,7 @@ export type {
   TerminalFrameTask,
   TerminalFrameTaskPriority,
   TerminalContext,
+  TerminalSelectionContext,
   TerminalRuntime,
   TerminalRuntimeHandle,
   TerminalScheduler,

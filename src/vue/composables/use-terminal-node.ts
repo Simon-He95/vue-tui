@@ -9,6 +9,7 @@ export interface TerminalNodeOptions {
   visible?: boolean;
   focusable?: boolean;
   selectable?: boolean;
+  selectionScrollBy?: (deltaRows: number) => boolean | void;
   handlers?: TerminalEventHandlerMap;
 }
 
@@ -31,6 +32,7 @@ export function useTerminalNode(getOptions: () => TerminalNodeOptions): {
         visible: opt.visible,
         focusable: opt.focusable,
         selectable: opt.selectable,
+        selectionScrollBy: opt.selectionScrollBy,
         handlers: opt.handlers ?? {},
       });
       id.value = node.id;
@@ -42,6 +44,7 @@ export function useTerminalNode(getOptions: () => TerminalNodeOptions): {
       visible: opt.visible,
       focusable: opt.focusable,
       selectable: opt.selectable,
+      selectionScrollBy: opt.selectionScrollBy,
       handlers: opt.handlers ?? {},
     });
   });

@@ -10,6 +10,7 @@ Instead, use the runtime helpers exported from `vue-terminal`:
 
 - environment flags (`isBrowser/isTerminal`)
 - safe wrappers (`timer`, `raf`, `clipboard`, `getWindow/getDocument`)
+- explicit clipboard providers such as `createOsc52ClipboardProvider()`
 
 ## Why
 
@@ -20,3 +21,5 @@ Instead, use the runtime helpers exported from `vue-terminal`:
 
 - DOM-only code (e.g. `createDomRenderer`) may use `document` directly.
 - Shared UI code should call runtime wrappers or feature-detect via `isBrowser`.
+- Terminal clipboard stays opt-in. `createRuntime("terminal")` returns an unsupported clipboard by default; pass `createRuntime("terminal", { clipboard })`, `createTerminalApp({ clipboard })`, or `<TerminalProvider :clipboard="clipboard" />` when a host wants copy/paste integration.
+- `createOsc52ClipboardProvider()` writes OSC52 sequences only when explicitly configured or used. It does not run `pbcopy`, `wl-copy`, `xclip`, or other system commands.

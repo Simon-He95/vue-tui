@@ -1,6 +1,11 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
+import type {
+  SelectionTextProvider,
+  TerminalSelectionPoint,
+  TerminalSelectionRange,
+} from "../../selection/terminal-selection.js";
 import {
   computed,
   defineComponent,
@@ -15,6 +20,7 @@ import {
   watchEffect,
 } from "vue";
 import { buildMarkdownBlocks } from "../markdown/document.js";
+import { terminalSelectionRowSpans } from "../../selection/terminal-selection.js";
 import { layoutMarkdownBlocksCached, type TuiMarkdownLayoutCache } from "../markdown/layout.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
 import { paintMarkdownVisualRow } from "../markdown/render.js";
@@ -27,6 +33,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey } from "../context.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
+import { sliceByCellsRange } from "../utils/text.js";
 import {
   applyWheelScroll,
   createWheelScrollState,
@@ -116,7 +123,7 @@ export const TVirtualMarkdown = defineComponent({
   emits: ["update:scrollTop", "scroll", "focus", "blur", "keydown"],
   setup(props, { emit }) {
     const instance = getCurrentInstance();
-    const { terminal, defaultStyle, events, scheduler } = useTerminal();
+    const { terminal, defaultStyle, events, scheduler, selection } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
@@ -320,6 +327,42 @@ export const TVirtualMarkdown = defineComponent({
       { immediate: true },
     );
 
+    function scrollSelectionBy(delta: number): boolean {
+      const n = Math.trunc(Number(delta));
+      if (!Number.isFinite(n) || n === 0) return false;
+      const before = internalScrollTop.value;
+      setScrollTop(before + n);
+      return internalScrollTop.value !== before;
+    }
+
+    function selectionPointForCell(point: TerminalSelectionPoint): TerminalSelectionPoint | null {
+      const r = normalizedRect();
+      if (point.x < r.x || point.y < r.y || point.x >= r.x + r.w || point.y >= r.y + r.h) {
+        return null;
+      }
+      const { x: clipX, y: clipY } = clipOffsets();
+      const visualY = internalScrollTop.value + clipY + (point.y - r.y);
+      if (visualY < 0 || visualY >= rows.value.length) return null;
+      return {
+        x: clamp(clipX + (point.x - r.x), 0, Math.max(0, props.w - 1)),
+        y: visualY,
+      };
+    }
+
+    function canHandleSelectionRange(range: TerminalSelectionRange): boolean {
+      return Boolean(selectionPointForCell(range.anchor) && selectionPointForCell(range.focus));
+    }
+
+    function textForSelectionRange(range: TerminalSelectionRange): string {
+      const cols = Math.max(1, Math.floor(props.w));
+      return terminalSelectionRowSpans(range, cols, rows.value.length)
+        .map((span) => {
+          const text = sliceByCellsRange(rows.value[span.y]?.plainText ?? "", span.x0, span.x1);
+          return span.x1 >= cols ? text.trimEnd() : text;
+        })
+        .join("\n");
+    }
+
     function onKeydown(event: TerminalKeyboardEvent): void {
       emit("keydown", event);
       const page = Math.max(1, normalizedRect().h);
@@ -354,12 +397,25 @@ export const TVirtualMarkdown = defineComponent({
       }
     }
 
+    const selectionTextProvider: SelectionTextProvider = {
+      id: `TVirtualMarkdown:${instance?.uid ?? "unknown"}:selection-text`,
+      get rect() {
+        return normalizedRect();
+      },
+      canHandle: canHandleSelectionRange,
+      pointForCell: selectionPointForCell,
+      getText: textForSelectionRange,
+    };
+    const unregisterSelectionTextProvider = selection.registerTextProvider(selectionTextProvider);
+    onBeforeUnmount(unregisterSelectionTextProvider);
+
     const eventNode = useTerminalNode(() => ({
       rect: normalizedRect(),
       zIndex: eventZ.value,
       visible: visible.value,
       focusable: true,
       selectable: props.selectable,
+      selectionScrollBy: scrollSelectionBy,
       handlers: {
         click: (_event: TerminalPointerEvent) => {},
         wheel: (event: any) => {

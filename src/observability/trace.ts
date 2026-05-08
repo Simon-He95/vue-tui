@@ -24,6 +24,14 @@ export type TraceRecord =
       sync?: boolean;
       rendererSyncFlush?: DomRendererSyncFlushDecision | null;
       focusedId: string | null;
+    }>
+  | Readonly<{
+      type: "selection-copy";
+      at: number;
+      rows: number;
+      chars: number;
+      ok: boolean;
+      error?: string;
     }>;
 
 export type TraceStore = Readonly<{

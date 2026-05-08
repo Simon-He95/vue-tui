@@ -4,6 +4,7 @@ export type FramePerfReason =
   | "stream"
   | "resize"
   | "data"
+  | "selection"
   | "manual"
   | "unknown";
 
@@ -11,10 +12,11 @@ const FRAME_PERF_REASON_PRIORITY: Record<FramePerfReason, number> = {
   unknown: 0,
   manual: 1,
   data: 2,
-  stream: 3,
-  resize: 4,
-  scroll: 5,
-  input: 6,
+  selection: 3,
+  stream: 4,
+  resize: 5,
+  scroll: 6,
+  input: 7,
 };
 
 export type FramePerfRowBucketFallback = Readonly<{

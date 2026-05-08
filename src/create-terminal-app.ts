@@ -3,6 +3,8 @@ import type { PathPickerProvider } from "./cli/path-provider.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "./core/render-plane.js";
 import type { Style, Terminal } from "./core/types.js";
 import type { CliEventManager } from "./events/index.js";
+import type { ClipboardApi } from "./runtime/index.js";
+import type { SelectionTextProvider } from "./selection/terminal-selection.js";
 import type { TInputPlugin } from "./vue/components/input/plugins/types.js";
 
 import type {
@@ -26,7 +28,11 @@ import { createFramePerfStore } from "./observability/frame-perf-store.js";
 import { createTraceStore } from "./observability/trace.js";
 import { createTuiProfiler } from "./observability/tui-profiler.js";
 import { HEADLESS_RENDERER_CAPABILITIES } from "./renderer/index.js";
-import { defaultTInputHostPlugin } from "./vue/components/input/plugins/hostPlugin.js";
+import {
+  createDefaultTInputHostAdapter,
+  createTInputHostPlugin,
+  defaultTInputHostPlugin,
+} from "./vue/components/input/plugins/hostPlugin.js";
 import { TRenderPlane } from "./vue/components/TRenderPlane.js";
 import {
   EventZIndexContextKey,
@@ -103,6 +109,7 @@ export type CreateTerminalAppOptions = Readonly<{
   component: Component;
   props?: Record<string, unknown>;
   defaultStyle?: Style;
+  clipboard?: ClipboardApi;
   inputPlugins?: readonly TInputPlugin[];
   pathPickerProvider?: PathPickerProvider;
 }>;
@@ -469,6 +476,43 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     originY: 0,
     clipRect: { x: 0, y: 0, w: options.cols, h: options.rows },
   });
+  const selectionTextProviders = new Map<string, SelectionTextProvider>();
+  const selectionContext = {
+    registerTextProvider(provider: SelectionTextProvider) {
+      selectionTextProviders.set(provider.id, provider);
+      return () => {
+        if (selectionTextProviders.get(provider.id) === provider)
+          selectionTextProviders.delete(provider.id);
+      };
+    },
+  } as const;
+  const inputPlugins =
+    options.inputPlugins ??
+    (options.clipboard
+      ? [
+          createTInputHostPlugin(() => ({
+            ...createDefaultTInputHostAdapter(),
+            isTerminalLike: true,
+            async readClipboardText() {
+              if (!options.clipboard?.supported) return "";
+              try {
+                return await options.clipboard.readText();
+              } catch {
+                return "";
+              }
+            },
+            async writeClipboardText(text: string) {
+              if (!text || !options.clipboard?.supported) return false;
+              try {
+                await options.clipboard.writeText(text);
+                return true;
+              } catch {
+                return false;
+              }
+            },
+          })),
+        ]
+      : [defaultTInputHostPlugin]);
   const offResize = terminal.on("resize", ({ cols, rows }) => {
     rootLayout.clipRect = { x: 0, y: 0, w: cols, h: rows };
     // Ensure resize triggers a re-render even if no other reactive state changes.
@@ -495,6 +539,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     scheduler: schedulerApi,
     runtime,
     observability: { trace, framePerf },
+    selection: selectionContext,
     defaultStyle: ref(options.defaultStyle ?? {}),
     render,
   };
@@ -511,10 +556,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       provide(EventZIndexContextKey, ref(0) as any);
       provide(RenderStackKey, shallowRef(render.rootStack) as any);
       provide(ImeAnchorContextKey, imeAnchor);
-      provide(
-        TInputPluginsContextKey,
-        ref(options.inputPlugins ?? [defaultTInputHostPlugin]) as any,
-      );
+      provide(TInputPluginsContextKey, ref(inputPlugins) as any);
       provide(
         TPathPickerProviderContextKey,
         ref(options.pathPickerProvider ?? createNodePathPickerProvider()) as any,

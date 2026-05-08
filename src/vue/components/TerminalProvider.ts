@@ -4,6 +4,12 @@ import type { TerminalRenderPlane, TerminalRenderPlanes } from "../../core/rende
 import type { Style, Terminal } from "../../core/types.js";
 import type { EventManager, TerminalEventRecord } from "../../events/index.js";
 import type { DomRenderer, DomRendererOptions } from "../../renderer/index.js";
+import type { ClipboardApi } from "../../runtime/index.js";
+import type {
+  SelectionTextProvider,
+  TerminalSelectionConfig,
+  TerminalSelectionCopyPayload,
+} from "../../selection/terminal-selection.js";
 import type {
   ImeAnchor,
   LayoutContext,
@@ -31,12 +37,15 @@ import {
   watchEffect,
 } from "vue";
 import { createTerminal } from "../../core/index.js";
+import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
 import { createEventManager } from "../../events/index.js";
 import { framePerfNow, mergeFramePerfReason } from "../../observability/frame-perf.js";
 import { createFramePerfStore } from "../../observability/frame-perf-store.js";
 import { createTraceStore } from "../../observability/trace.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { createDomRenderer, DOM_RENDERER_CAPABILITIES } from "../../renderer/index.js";
+import { createRuntime } from "../../runtime/index.js";
+import { createTerminalSelectionController } from "../../selection/terminal-selection.js";
 import {
   EventZIndexContextKey,
   ImeAnchorContextKey,
@@ -97,6 +106,41 @@ function shallowEqualRecord(a: Record<string, unknown>, b: Record<string, unknow
 
 let portalId = 0;
 
+type ResolvedTerminalSelectionConfig = Readonly<{
+  enabled: boolean;
+  autoCopy: boolean;
+  copyOnMouseUp: boolean;
+  style: Style;
+  toast: boolean;
+}>;
+
+function resolveSelectionConfig(config: TerminalSelectionConfig): ResolvedTerminalSelectionConfig {
+  if (config === false) {
+    return {
+      enabled: false,
+      autoCopy: true,
+      copyOnMouseUp: true,
+      style: { inverse: true },
+      toast: true,
+    };
+  }
+  const value = config === true ? {} : config;
+  return {
+    enabled: true,
+    autoCopy: value.autoCopy ?? true,
+    copyOnMouseUp: value.copyOnMouseUp ?? true,
+    style: value.style ?? { inverse: true },
+    toast: value.toast ?? true,
+  };
+}
+
+function selectionCopyToastText(payload: TerminalSelectionCopyPayload): string {
+  if (payload.ok) return `Copied ${payload.rows} ${payload.rows === 1 ? "line" : "lines"}`;
+  if (payload.error instanceof Error && /unavailable/i.test(payload.error.message))
+    return "Clipboard unavailable";
+  return "Copy failed";
+}
+
 export const TerminalProvider = defineComponent({
   name: "TerminalProvider",
   props: {
@@ -124,8 +168,17 @@ export const TerminalProvider = defineComponent({
       type: Object as PropType<DomRendererOptions>,
       default: undefined,
     },
+    clipboard: {
+      type: Object as PropType<ClipboardApi>,
+      default: undefined,
+    },
+    selection: {
+      type: [Boolean, Object] as PropType<TerminalSelectionConfig>,
+      default: false,
+    },
   },
-  setup(props, { slots }) {
+  emits: ["selectionCopy"],
+  setup(props, { slots, emit }) {
     const terminal: Terminal = createTerminal({
       cols: props.cols,
       rows: props.rows,
@@ -193,6 +246,98 @@ export const TerminalProvider = defineComponent({
     const profiler = createTuiProfiler("dom-scheduler");
     const scope = effectScope();
     let schedulerApi: TerminalScheduler;
+    let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function clearCopyToastTimer(): void {
+      if (toastTimer == null) return;
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+
+    function showCopyToast(message = "Copied to clipboard"): void {
+      copyToastText.value = message;
+      copyToastVisible.value = true;
+      clearCopyToastTimer();
+      toastTimer = setTimeout(() => {
+        copyToastVisible.value = false;
+        toastTimer = null;
+      }, 1200);
+    }
+
+    const platformRuntime = createRuntime();
+    const selectionClipboard: ClipboardApi = {
+      get supported() {
+        return props.clipboard?.supported ?? platformRuntime.clipboard.supported;
+      },
+      readText() {
+        return (props.clipboard ?? platformRuntime.clipboard).readText();
+      },
+      writeText(text: string) {
+        return (props.clipboard ?? platformRuntime.clipboard).writeText(text);
+      },
+    };
+    const selectionTextProviders = new Map<string, SelectionTextProvider>();
+    const selectionContext = {
+      registerTextProvider(provider: SelectionTextProvider) {
+        selectionTextProviders.set(provider.id, provider);
+        return () => {
+          if (selectionTextProviders.get(provider.id) === provider)
+            selectionTextProviders.delete(provider.id);
+        };
+      },
+    } as const;
+    const selectionOverlay = getPlaneTerminal(terminal, "overlay");
+    let selectionRenderNodeId: string | null = null;
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: selectionOverlay,
+      clipboard: selectionClipboard,
+      getTextProviders: () => Array.from(selectionTextProviders.values()),
+      getOptions: () => {
+        const config = resolveSelectionConfig(props.selection);
+        return {
+          autoCopy: config.autoCopy,
+          copyOnMouseUp: config.copyOnMouseUp,
+          style: config.style,
+        };
+      },
+      onDirtyRows: (rows) => {
+        if (selectionRenderNodeId && render.markDirtyRows(selectionRenderNodeId, rows)) {
+          invalidate({ plane: "overlay", reason: "selection" });
+          return;
+        }
+        invalidate({ plane: "overlay", reason: "selection" });
+      },
+      onCopy: (payload) => {
+        emit("selectionCopy", payload);
+        if (trace.enabled.value) {
+          queueMicrotask(() => {
+            trace.push({
+              type: "selection-copy",
+              at: Date.now(),
+              rows: payload.rows,
+              chars: payload.chars,
+              ok: payload.ok,
+              error: payload.error == null ? undefined : String(payload.error),
+            });
+          });
+        }
+        const config = resolveSelectionConfig(props.selection);
+        if (config.enabled && config.toast) showCopyToast(selectionCopyToastText(payload));
+      },
+    });
+    const selectionRenderNode = render.register({
+      stack: render.rootStack,
+      plane: "overlay",
+      zIndex: -10_000,
+      rect: { x: 0, y: 0, w: props.cols, h: props.rows },
+      paint: selection.paint,
+    });
+    selectionRenderNodeId = selectionRenderNode.id;
+
+    watchEffect(() => {
+      if (!resolveSelectionConfig(props.selection).enabled) selection.clear();
+    });
 
     function queueInvalidatePlane(plane?: TerminalRenderPlane): void {
       if (!plane) {
@@ -488,6 +633,7 @@ export const TerminalProvider = defineComponent({
       scheduler: schedulerApi,
       runtime,
       observability: { trace, framePerf },
+      selection: selectionContext,
       defaultStyle: toRef(props, "defaultStyle"),
       render,
     };
@@ -544,6 +690,10 @@ export const TerminalProvider = defineComponent({
         offResize = terminal.on("resize", ({ cols, rows }) => {
           m.setMetrics(r.metrics);
           rootLayout.clipRect = { x: 0, y: 0, w: cols, h: rows };
+          selection.clear();
+          render.update(selectionRenderNode.id, {
+            rect: { x: 0, y: 0, w: cols, h: rows },
+          });
           clearTextCaches();
           invalidate({ reason: "resize" });
         });
@@ -759,16 +909,6 @@ export const TerminalProvider = defineComponent({
           requestAnimationFrame(() => restoreScrollState(state));
         };
 
-        let toastTimer: number | null = null;
-        const showCopyToast = () => {
-          copyToastVisible.value = true;
-          if (toastTimer != null) clearTimeout(toastTimer);
-          toastTimer = window.setTimeout(() => {
-            copyToastVisible.value = false;
-            toastTimer = null;
-          }, 1200);
-        };
-
         const onCopy = () => {
           const container = containerRef.value;
           if (!container) return;
@@ -787,8 +927,7 @@ export const TerminalProvider = defineComponent({
         doc.addEventListener("copy", onCopy, true);
         onScopeDispose(() => {
           doc.removeEventListener("copy", onCopy, true);
-          if (toastTimer != null) clearTimeout(toastTimer);
-          toastTimer = null;
+          clearCopyToastTimer();
         });
 
         // Keep IME textarea anchored even if scroll/resize happens without caret movement.
@@ -884,6 +1023,143 @@ export const TerminalProvider = defineComponent({
         onScopeDispose(() => {
           el.removeEventListener("pointerdown", focusIme as any);
           el.removeEventListener("mousedown", focusIme as any);
+        });
+
+        let selecting = false;
+        let selectionStartPoint: { x: number; y: number } | null = null;
+        let selectionScrollOrigin: { x: number; y: number } | null = null;
+        let selectionLastPoint: { x: number; y: number } | null = null;
+        let selectionAutoScrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const clearSelectionAutoScroll = () => {
+          if (selectionAutoScrollTimer == null) return;
+          clearTimeout(selectionAutoScrollTimer);
+          selectionAutoScrollTimer = null;
+        };
+
+        const runSelectionAutoScroll = () => {
+          selectionAutoScrollTimer = null;
+          if (!selecting || !selectionScrollOrigin || !selectionLastPoint) return;
+          const delta = m.autoScrollSelectionAt(
+            selectionScrollOrigin.x,
+            selectionScrollOrigin.y,
+            selectionLastPoint.y,
+          );
+          if (!delta) return;
+          selection.update(selectionLastPoint);
+          selectionAutoScrollTimer = setTimeout(runSelectionAutoScroll, 80);
+        };
+
+        const scheduleSelectionAutoScroll = () => {
+          if (selectionAutoScrollTimer != null) return;
+          selectionAutoScrollTimer = setTimeout(runSelectionAutoScroll, 80);
+        };
+
+        const selectionEnabled = () => resolveSelectionConfig(props.selection).enabled;
+        const cellPointFromClient = (event: MouseEvent | PointerEvent) => {
+          const container = containerRef.value;
+          const metrics = renderer.value?.metrics ?? r.metrics;
+          const size = terminal.size();
+          if (!container || size.cols <= 0 || size.rows <= 0) return { x: 0, y: 0 };
+          const rect = container.getBoundingClientRect();
+          const rawX = Math.floor((event.clientX - rect.left) / metrics.cellWidth);
+          const rawY = Math.floor((event.clientY - rect.top) / metrics.cellHeight);
+          return {
+            x: Math.max(0, Math.min(size.cols - 1, rawX)),
+            y: Math.max(0, Math.min(size.rows - 1, rawY)),
+          };
+        };
+
+        const onSelectionPointerDown = (event: MouseEvent | PointerEvent) => {
+          if (!selectionEnabled()) return;
+          if (selecting) return;
+          if (event.button !== 0) return;
+          const point = cellPointFromClient(event);
+          if (!m.canSelectAt(point.x, point.y)) return;
+          selection.start(point, { extend: Boolean(event.shiftKey) });
+          selecting = true;
+          selectionStartPoint = point;
+          selectionScrollOrigin = point;
+          selectionLastPoint = point;
+          el.style.userSelect = "none";
+          if ("pointerId" in event && typeof event.pointerId === "number") {
+            try {
+              el.setPointerCapture?.(event.pointerId);
+            } catch {
+              // Pointer capture is best-effort; selection still works inside the terminal.
+            }
+          }
+          scheduleSelectionAutoScroll();
+          event.preventDefault();
+        };
+
+        const onSelectionPointerMove = (event: MouseEvent | PointerEvent) => {
+          if (!selecting) return;
+          const point = cellPointFromClient(event);
+          selectionLastPoint = point;
+          selection.update(point);
+          scheduleSelectionAutoScroll();
+          event.preventDefault();
+        };
+
+        const onSelectionPointerUp = (event: MouseEvent | PointerEvent) => {
+          if (!selecting) return;
+          const point = cellPointFromClient(event);
+          if (
+            !selectionStartPoint ||
+            point.x !== selectionStartPoint.x ||
+            point.y !== selectionStartPoint.y
+          ) {
+            selection.update(point);
+          }
+          selecting = false;
+          selectionStartPoint = null;
+          selectionScrollOrigin = null;
+          selectionLastPoint = null;
+          clearSelectionAutoScroll();
+          if ("pointerId" in event && typeof event.pointerId === "number") {
+            try {
+              el.releasePointerCapture?.(event.pointerId);
+            } catch {
+              // Pointer capture may not have been acquired.
+            }
+          }
+          event.preventDefault();
+          void selection.finish();
+        };
+
+        const onSelectionKeydown = (event: KeyboardEvent) => {
+          if (!selectionEnabled()) return;
+          if (event.key !== "Escape") return;
+          if (!selection.state.value.active) return;
+          selection.clear();
+          event.preventDefault();
+          event.stopPropagation();
+        };
+
+        const onSelectionMouseLeave = () => {
+          if (!selecting) return;
+          selectionStartPoint = null;
+        };
+
+        el.addEventListener("pointerdown", onSelectionPointerDown);
+        el.addEventListener("pointermove", onSelectionPointerMove);
+        el.addEventListener("pointerup", onSelectionPointerUp);
+        el.addEventListener("mousedown", onSelectionPointerDown);
+        el.addEventListener("mousemove", onSelectionPointerMove);
+        el.addEventListener("mouseup", onSelectionPointerUp);
+        el.addEventListener("mouseleave", onSelectionMouseLeave);
+        doc.addEventListener("keydown", onSelectionKeydown, true);
+        onScopeDispose(() => {
+          el.removeEventListener("pointerdown", onSelectionPointerDown);
+          el.removeEventListener("pointermove", onSelectionPointerMove);
+          el.removeEventListener("pointerup", onSelectionPointerUp);
+          el.removeEventListener("mousedown", onSelectionPointerDown);
+          el.removeEventListener("mousemove", onSelectionPointerMove);
+          el.removeEventListener("mouseup", onSelectionPointerUp);
+          el.removeEventListener("mouseleave", onSelectionMouseLeave);
+          doc.removeEventListener("keydown", onSelectionKeydown, true);
+          clearSelectionAutoScroll();
         });
 
         const input = imeRef.value;
@@ -990,10 +1266,12 @@ export const TerminalProvider = defineComponent({
       unmounting = true;
       offCommit?.();
       clearTimer();
+      clearCopyToastTimer();
       holdReleaseToken++;
       frameScheduler.cancelScheduledFrame();
       if (raf > 0) cancelAnimationFrame(raf);
       raf = 0;
+      render.unregister(selectionRenderNode.id);
       scope.stop();
     });
 

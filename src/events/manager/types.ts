@@ -117,6 +117,7 @@ export interface TerminalNode {
   visible?: boolean;
   focusable?: boolean;
   selectable?: boolean;
+  selectionScrollBy?: (deltaRows: number) => boolean | void;
   handlers: TerminalEventHandlerMap;
 }
 

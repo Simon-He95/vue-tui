@@ -186,10 +186,14 @@
 | <code>debugIme</code>           | <code>boolean</code>                                                | <code>false</code>                              | 否   | —    |
 | <code>debugTrace</code>         | <code>boolean</code>                                                | <code>false</code>                              | 否   | —    |
 | <code>domRendererOptions</code> | <code>DomRendererOptions</code>                                     | <code>undefined</code>                          | 否   | —    |
+| <code>clipboard</code>          | <code>ClipboardApi</code>                                           | <code>undefined</code>                          | 否   | —    |
+| <code>selection</code>          | <code>TerminalSelectionConfig</code>                                | <code>false</code>                              | 否   | —    |
 
 ### Events
 
-—
+| 名称                       | Payload | 说明 |
+| -------------------------- | ------- | ---- |
+| <code>selectionCopy</code> | —       | —    |
 
 ## TFlow
 
@@ -613,6 +617,7 @@
 | <code>defaultScrollTop</code>   | <code>number</code>                                         | <code>undefined</code>                                | 否   | —    |
 | <code>style</code>              | <code>Style</code>                                          | <code>undefined</code>                                | 否   | —    |
 | <code>autoFocus</code>          | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
+| <code>selectable</code>         | <code>boolean</code>                                        | <code>true</code>                                     | 否   | —    |
 | <code>autoStickToBottom</code>  | <code>boolean</code>                                        | <code>true</code>                                     | 否   | —    |
 | <code>overscan</code>           | <code>number</code>                                         | <code>2</code>                                        | 否   | —    |
 | <code>wrap</code>               | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
@@ -967,6 +972,7 @@
 | <code>style</code>         | <code>Style</code>                                        | <code>undefined</code>       | 否   | —    |
 | <code>activeStyle</code>   | <code>Style</code>                                        | <code>undefined</code>       | 否   | —    |
 | <code>autoFocus</code>     | <code>boolean</code>                                      | <code>false</code>           | 否   | —    |
+| <code>selectable</code>    | <code>boolean</code>                                      | <code>false</code>           | 否   | —    |
 | <code>rowScrollMode</code> | <code>RowScrollMode</code>                                | <code>&quot;off&quot;</code> | 否   | —    |
 
 ### Events
