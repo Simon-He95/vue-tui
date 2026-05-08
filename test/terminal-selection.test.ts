@@ -172,4 +172,30 @@ describe("terminal selection", () => {
 
     expect(terminal.getCell(1, 0).style.inverse).toBeUndefined();
   });
+
+  it("does not preserve link href on overlay selection cells", () => {
+    const terminal = createTerminal({ cols: 6, rows: 1 });
+    terminal.write("abcdef", {
+      x: 0,
+      y: 0,
+      style: { fg: "cyanBright", href: "https://example.com", underline: true },
+    });
+    const overlay = getPlaneTerminal(terminal, "overlay");
+    const clipboard = memoryClipboard();
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: overlay,
+      clipboard: clipboard.api,
+    });
+
+    selection.start({ x: 1, y: 0 });
+    selection.update({ x: 3, y: 0 });
+    selection.paint();
+    terminal.commit({ planes: ["overlay"], sync: true });
+
+    expect(terminal.getCell(1, 0).style.href).toBeUndefined();
+    expect(terminal.getCell(1, 0).style.underline).toBe(true);
+    expect(terminal.getCell(1, 0).style.inverse).toBe(true);
+    expect(terminal.getCell(4, 0).style.href).toBe("https://example.com");
+  });
 });

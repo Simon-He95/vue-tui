@@ -273,10 +273,11 @@ export function createTerminalSelectionController(
         for (let x = span.x0; x < span.x1; x++) {
           const cell = row[x];
           if (!cell || cell.continuation) continue;
+          const { href: _href, ...baseStyle } = cell.style;
           cells.push({
             x,
             ch: cell.ch || " ",
-            style: { ...cell.style, ...selectionStyle },
+            style: { ...baseStyle, ...selectionStyle },
           });
         }
         nextOverlayRows.set(span.y, cells);

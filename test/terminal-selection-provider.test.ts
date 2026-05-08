@@ -39,6 +39,12 @@ function rowText(
     .trimEnd();
 }
 
+function pointerEvent(type: string, init: MouseEventInit & { pointerId?: number }): MouseEvent {
+  const event = new MouseEvent(type, { bubbles: true, ...init });
+  Object.defineProperty(event, "pointerId", { value: init.pointerId ?? 1 });
+  return event;
+}
+
 describe("TerminalProvider selection", () => {
   it("drag-selects visible terminal rows and auto-copies on mouseup", async () => {
     const writes: string[] = [];
@@ -320,6 +326,53 @@ describe("TerminalProvider selection", () => {
       expect(onClick).not.toHaveBeenCalled();
       expect(onDblclick).not.toHaveBeenCalled();
       expect(onContextmenu).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not replay pointer selection through compatibility mouse events", async () => {
+    const onPointerdown = vi.fn();
+    const onPointerup = vi.fn();
+    const onClick = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TView,
+          {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            selectable: true,
+            onPointerdown,
+            onPointerup,
+            onClick,
+          },
+          () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+        ),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(pointerEvent("pointerdown", { clientX: 0, clientY: 0, button: 0 }));
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(pointerEvent("pointermove", { clientX: 4, clientY: 0, button: 0 }));
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 4, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(pointerEvent("pointerup", { clientX: 4, clientY: 0, button: 0 }));
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 4, clientY: 0, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("click", { clientX: 4, clientY: 0, bubbles: true }));
+
+      expect(onPointerdown).toHaveBeenCalledTimes(1);
+      expect(onPointerup).not.toHaveBeenCalled();
+      expect(onClick).not.toHaveBeenCalled();
     } finally {
       mounted.unmount();
     }

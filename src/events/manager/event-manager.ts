@@ -40,6 +40,8 @@ function now(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
+const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
+
 type RowRange = Readonly<{ y0: number; y1: number }>;
 
 function rectRowRange(rect: Rect): RowRange | null {
@@ -726,6 +728,11 @@ export function createEventManager(
       altKey: e.altKey,
       metaKey: e.metaKey,
     });
+    if ((e as any)[SUPPRESS_TERMINAL_POINTER_UP]) {
+      capturedId = null;
+      container.style.userSelect = defaultUserSelect;
+      return;
+    }
     if (capturedId) {
       const target = nodes.get(capturedId) ?? null;
       const path = target ? ancestorsForTarget(target) : [];
