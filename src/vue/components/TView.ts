@@ -1,5 +1,6 @@
 import type { Rect } from "../../events/index.js";
 import type { LayoutContext } from "../context.js";
+import type { PropType } from "vue";
 import { computed, defineComponent, h, inject, provide, shallowReactive, watchEffect } from "vue";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderStack } from "../composables/use-render-stack.js";
@@ -24,6 +25,10 @@ export const TView = defineComponent({
     scrollY: { type: Number, default: 0 },
     focusable: { type: Boolean, default: false },
     selectable: { type: Boolean, default: undefined },
+    selectionScrollBy: {
+      type: Function as PropType<(deltaRows: number) => boolean | void>,
+      default: undefined,
+    },
     autoFocus: { type: Boolean, default: false },
   },
   emits: [
@@ -80,6 +85,7 @@ export const TView = defineComponent({
       visible: visible.value,
       focusable: props.focusable,
       selectable: props.selectable,
+      selectionScrollBy: props.selectionScrollBy,
       handlers: {
         clickCapture: (e) => emit("clickCapture", e),
         click: (e) => emit("click", e),

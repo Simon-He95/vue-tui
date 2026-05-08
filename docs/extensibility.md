@@ -95,6 +95,7 @@ import DocsExtensibilityTerminal from './.vitepress/components/DocsExtensibility
 
 - `TInput.ts` 本体不再直接静态 import `node:path` / `node:url` / `node:process` / `node:child_process`
 - terminal clipboard、TTY 判定、copy toast、路径 href 这些宿主行为已经被收进 host plugin
+- runtime / app 层可以通过显式 `ClipboardApi` 或 `createOsc52ClipboardProvider()` 接入 clipboard；terminal runtime 默认仍不启用 clipboard
 - 默认 host plugin 现在只保留底层宿主能力；像 copy toast 这种 UI 反馈需要由宿主显式通过 `createTInputHostPlugin({ showToast })` 注入
 - prompt mention 的路径补全/路径类型识别也已经可以通过 `mentionPathProvider` 注入；Node 宿主可显式接入 `createNodeMentionPathProvider()`
 - `TPathPicker` 也不再在组件本体里兜底 Node provider；宿主可以通过 `TerminalProvider.pathPickerProvider`、`createTerminalApp({ pathPickerProvider })` 或局部 `provider` 显式接入
@@ -102,7 +103,7 @@ import DocsExtensibilityTerminal from './.vitepress/components/DocsExtensibility
 
 但这件事还没有完全收口，残余风险主要转移到了两个地方：
 
-- 默认 host plugin 里的 terminal clipboard 仍然会在 Node 宿主里动态触达 `node:child_process`
+- 默认 host plugin 里的 terminal clipboard 读取仍然会在 Node 宿主里动态触达 `node:child_process`
 - 如果宿主希望保留“复制成功/失败”这类 UI 反馈，需要显式提供 `showToast`，默认实现不会再偷读全局 hook
 - Node/gitignore 语义现在主要收口在宿主侧的 Node provider，而不是组件本体；如果 browser/docs 宿主也想要真实路径选择，仍需要显式注入自己的 provider
 

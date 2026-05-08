@@ -58,6 +58,8 @@
 - `autoResize` `(boolean)`: 是否根据容器尺寸自动 resize（默认 `false`）
 - `minCols`/`minRows` `(number)`: autoResize 下最小尺寸
 - `recordEvents` `(fn?)`: 录制事件回调（用于 record/replay）
+- `selection` `(boolean | TerminalProviderSelectionOptions)`: 开启 terminal cell selection；鼠标松开时可自动复制；`toast` 只影响 `TerminalProvider` 的复制提示 UI
+- `clipboard` `(ClipboardApi?)`: 给 selection auto-copy 注入 clipboard；不传时 browser 使用运行时 clipboard
 - `inputPlugins` `(TInputPlugin[])`: 给子树里的 `TInput` / `TInputBox` 注入宿主插件（例如 terminal clipboard、TTY 风格快捷键）
 - `pathPickerProvider` `(PathPickerProvider?)`: 给子树里的 `TPathPicker` 注入宿主路径 provider
 - `debugIme` `(boolean)`: 输出 IME 调试信息
@@ -216,6 +218,7 @@
 
 - `TerminalProvider.inputPlugins`
 - `createTerminalApp({ inputPlugins })`
+- `createTerminalApp({ clipboard })`：只需要接入 clipboard 时的简化入口；传入 `inputPlugins` 时仍由宿主完全控制插件组合
 
 ### `createTInputHostPlugin()`
 
@@ -227,6 +230,8 @@
 - `isTerminalLike`
 
 默认 host plugin 只负责 Node-like 的 clipboard / path 行为，不会自动附带 UI toast；如果宿主希望保留 `Copied` / `Copy failed` 这类提示，需要显式提供 `showToast`。
+
+`createOsc52ClipboardProvider()` 可作为 terminal clipboard 写入 provider 显式传给 `createTerminalApp({ clipboard })`。它不会默认执行系统剪贴板命令。
 
 一个最小宿主接线示例：
 

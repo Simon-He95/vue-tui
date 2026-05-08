@@ -12,6 +12,7 @@ import { consoleDefaultStyle, domPalette } from "./theme";
         :rows="AGENT_CONSOLE_LAYOUT.rows"
         :default-style="consoleDefaultStyle"
         :dom-renderer-options="{ palette: domPalette }"
+        :selection="{ autoCopy: true, copyOnMouseUp: true }"
       >
         <AgentConsoleSurface auto-start />
       </TerminalProvider>

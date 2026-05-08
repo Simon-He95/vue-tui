@@ -2,7 +2,13 @@ import type { App, Component, Ref } from "vue";
 import type { PathPickerProvider } from "./cli/path-provider.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "./core/render-plane.js";
 import type { Style, Terminal } from "./core/types.js";
-import type { CliEventManager } from "./events/index.js";
+import type { CliEventManager, TerminalEventRecord } from "./events/index.js";
+import type { ClipboardApi } from "./runtime/index.js";
+import type {
+  SelectionTextProvider,
+  TerminalSelectionConfig,
+  TerminalSelectionCopyPayload,
+} from "./selection/terminal-selection.js";
 import type { TInputPlugin } from "./vue/components/input/plugins/types.js";
 
 import type {
@@ -19,6 +25,7 @@ import { defineComponent, h, provide, ref, shallowReactive, shallowRef } from "v
 import { createHeadlessApp, createHeadlessRoot } from "./cli/headless-renderer.js";
 import { createNodePathPickerProvider } from "./cli/path-provider.js";
 import { createTerminal } from "./core/index.js";
+import { getPlaneTerminal } from "./core/terminal/create-terminal.js";
 import { createCliEventManager } from "./events/index.js";
 import { getCliLatencyProfiler } from "./observability/cli-latency.js";
 import { framePerfNow, mergeFramePerfReason } from "./observability/frame-perf.js";
@@ -26,7 +33,12 @@ import { createFramePerfStore } from "./observability/frame-perf-store.js";
 import { createTraceStore } from "./observability/trace.js";
 import { createTuiProfiler } from "./observability/tui-profiler.js";
 import { HEADLESS_RENDERER_CAPABILITIES } from "./renderer/index.js";
-import { defaultTInputHostPlugin } from "./vue/components/input/plugins/hostPlugin.js";
+import { createTerminalSelectionController } from "./selection/terminal-selection.js";
+import {
+  createDefaultTInputHostAdapter,
+  createTInputHostPlugin,
+  defaultTInputHostPlugin,
+} from "./vue/components/input/plugins/hostPlugin.js";
 import { TRenderPlane } from "./vue/components/TRenderPlane.js";
 import {
   EventZIndexContextKey,
@@ -53,6 +65,44 @@ interface Portal {
 }
 
 let portalId = 0;
+const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
+
+type ResolvedTerminalSelectionConfig = Readonly<{
+  enabled: boolean;
+  autoCopy: boolean;
+  copyOnMouseUp: boolean;
+  style: Style;
+}>;
+
+function resolveSelectionConfig(
+  config: TerminalSelectionConfig | undefined,
+): ResolvedTerminalSelectionConfig {
+  if (config == null || config === false) {
+    return {
+      enabled: false,
+      autoCopy: true,
+      copyOnMouseUp: true,
+      style: { inverse: true },
+    };
+  }
+  const value = config === true ? {} : config;
+  return {
+    enabled: true,
+    autoCopy: value.autoCopy ?? true,
+    copyOnMouseUp: value.copyOnMouseUp ?? true,
+    style: value.style ?? { inverse: true },
+  };
+}
+
+const unsupportedClipboard: ClipboardApi = {
+  supported: false,
+  async readText() {
+    return "";
+  },
+  async writeText() {
+    throw new Error("Clipboard unavailable");
+  },
+};
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   if (!v || typeof v !== "object") return false;
@@ -103,6 +153,9 @@ export type CreateTerminalAppOptions = Readonly<{
   component: Component;
   props?: Record<string, unknown>;
   defaultStyle?: Style;
+  clipboard?: ClipboardApi;
+  selection?: TerminalSelectionConfig;
+  onSelectionCopy?: (payload: TerminalSelectionCopyPayload) => void;
   inputPlugins?: readonly TInputPlugin[];
   pathPickerProvider?: PathPickerProvider;
 }>;
@@ -120,7 +173,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   });
   const latency = getCliLatencyProfiler();
   const profiler = createTuiProfiler("cli-scheduler");
-  const events = createCliEventManager({
+  const baseEvents = createCliEventManager({
     record: (event) => {
       if (!trace.enabled.value) return;
       trace.push({ type: "event", at: Date.now(), event });
@@ -140,7 +193,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       dirtyRows,
       planes,
       sync,
-      focusedId: events.getFocused(),
+      focusedId: baseEvents.getFocused(),
     });
   });
 
@@ -469,8 +522,224 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     originY: 0,
     clipRect: { x: 0, y: 0, w: options.cols, h: options.rows },
   });
+  const selectionTextProviders = new Map<string, SelectionTextProvider>();
+  const selectionCopyHandlers = new Set<(payload: TerminalSelectionCopyPayload) => void>();
+  const selectionContext = {
+    registerTextProvider(provider: SelectionTextProvider) {
+      selectionTextProviders.set(provider.id, provider);
+      return () => {
+        if (selectionTextProviders.get(provider.id) === provider)
+          selectionTextProviders.delete(provider.id);
+      };
+    },
+    onCopy(handler: (payload: TerminalSelectionCopyPayload) => void) {
+      selectionCopyHandlers.add(handler);
+      return () => selectionCopyHandlers.delete(handler);
+    },
+  } as const;
+  const selectionOverlay = getPlaneTerminal(terminal, "overlay");
+  let selectionRenderNodeId: string | null = null;
+  const selection = createTerminalSelectionController({
+    terminal,
+    overlayTerminal: selectionOverlay,
+    clipboard: options.clipboard ?? unsupportedClipboard,
+    getTextProviders: () => Array.from(selectionTextProviders.values()),
+    getOptions: () => {
+      const config = resolveSelectionConfig(options.selection);
+      return {
+        autoCopy: config.autoCopy,
+        copyOnMouseUp: config.copyOnMouseUp,
+        style: config.style,
+      };
+    },
+    onDirtyRows: (rows) => {
+      if (selectionRenderNodeId && render.markDirtyRows(selectionRenderNodeId, rows)) {
+        invalidate({ plane: "overlay", reason: "selection" });
+        return;
+      }
+      invalidate({ plane: "overlay", reason: "selection" });
+    },
+    onCopy: (payload) => {
+      options.onSelectionCopy?.(payload);
+      for (const handler of selectionCopyHandlers) handler(payload);
+      if (!trace.enabled.value) return;
+      queueMicrotask(() => {
+        trace.push({
+          type: "selection-copy",
+          at: Date.now(),
+          rows: payload.rows,
+          chars: payload.chars,
+          ok: payload.ok,
+          error: payload.error == null ? undefined : String(payload.error),
+        });
+      });
+    },
+  });
+  if (resolveSelectionConfig(options.selection).enabled) {
+    const selectionRenderNode = render.register({
+      stack: render.rootStack,
+      plane: "overlay",
+      zIndex: -10_000,
+      rect: { x: 0, y: 0, w: options.cols, h: options.rows },
+      paint: selection.paint,
+    });
+    selectionRenderNodeId = selectionRenderNode.id;
+  }
+
+  let selecting = false;
+  let selectionStartPoint: { x: number; y: number } | null = null;
+  let selectionScrollOrigin: { x: number; y: number } | null = null;
+  let selectionLastPoint: { x: number; y: number } | null = null;
+  let selectionAutoScrollTimer: ReturnType<typeof setTimeout> | null = null;
+  let selectionDragStarted = false;
+  let suppressNextSelectionClick = false;
+
+  const clearSelectionAutoScroll = () => {
+    if (selectionAutoScrollTimer == null) return;
+    clearTimeout(selectionAutoScrollTimer);
+    selectionAutoScrollTimer = null;
+  };
+
+  const runSelectionAutoScroll = () => {
+    selectionAutoScrollTimer = null;
+    if (!selecting || !selectionScrollOrigin || !selectionLastPoint) return;
+    const delta = baseEvents.autoScrollSelectionAt(
+      selectionScrollOrigin.x,
+      selectionScrollOrigin.y,
+      selectionLastPoint.y,
+    );
+    if (!delta) return;
+    selection.update(selectionLastPoint);
+    selectionAutoScrollTimer = setTimeout(runSelectionAutoScroll, 80);
+  };
+
+  const scheduleSelectionAutoScroll = () => {
+    if (selectionAutoScrollTimer != null) return;
+    selectionAutoScrollTimer = setTimeout(runSelectionAutoScroll, 80);
+  };
+
+  const selectionEnabled = () => resolveSelectionConfig(options.selection).enabled;
+  const eventPoint = (event: TerminalEventRecord) => ({
+    x: Math.max(0, Math.floor((event as any).cellX ?? 0)),
+    y: Math.max(0, Math.floor((event as any).cellY ?? 0)),
+  });
+
+  const dispatchWithSelection = (event: TerminalEventRecord): boolean => {
+    if (!selectionEnabled()) return baseEvents.dispatch(event);
+
+    if (event.type === "keydown" && event.key === "Escape" && selection.state.value.active) {
+      selection.clear();
+      return true;
+    }
+
+    if (event.type === "click" || event.type === "dblclick" || event.type === "contextmenu") {
+      if (!suppressNextSelectionClick) return baseEvents.dispatch(event);
+      suppressNextSelectionClick = false;
+      return true;
+    }
+
+    if (event.type === "pointerdown") {
+      suppressNextSelectionClick = false;
+      selectionDragStarted = false;
+      if (!selecting && (event.button ?? 0) === 0) {
+        const point = eventPoint(event);
+        if (baseEvents.canSelectAt(point.x, point.y)) {
+          selection.start(point, { extend: Boolean(event.shiftKey) });
+          selecting = true;
+          selectionStartPoint = point;
+          selectionScrollOrigin = point;
+          selectionLastPoint = point;
+          scheduleSelectionAutoScroll();
+        }
+      }
+      return baseEvents.dispatch(event);
+    }
+
+    if (event.type === "pointermove" && selecting) {
+      const point = eventPoint(event);
+      selectionLastPoint = point;
+      if (
+        selectionStartPoint &&
+        (point.x !== selectionStartPoint.x || point.y !== selectionStartPoint.y)
+      ) {
+        selectionDragStarted = true;
+      }
+      selection.update(point);
+      scheduleSelectionAutoScroll();
+      return baseEvents.dispatch(event);
+    }
+
+    if (event.type === "pointerup" && selecting) {
+      const point = eventPoint(event);
+      if (
+        !selectionStartPoint ||
+        point.x !== selectionStartPoint.x ||
+        point.y !== selectionStartPoint.y
+      ) {
+        selection.update(point);
+      }
+      const suppressActivation = selectionDragStarted || selection.state.value.hasRange;
+      if (suppressActivation) {
+        suppressNextSelectionClick = true;
+        (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
+      }
+      selecting = false;
+      selectionStartPoint = null;
+      selectionScrollOrigin = null;
+      selectionLastPoint = null;
+      clearSelectionAutoScroll();
+      const prevented = baseEvents.dispatch(event);
+      void selection.finish();
+      return suppressActivation || prevented;
+    }
+
+    return baseEvents.dispatch(event);
+  };
+
+  const events: CliEventManager = {
+    ...baseEvents,
+    dispatch: dispatchWithSelection,
+    dispose() {
+      clearSelectionAutoScroll();
+      baseEvents.dispose();
+    },
+  };
+
+  const inputPlugins =
+    options.inputPlugins ??
+    (options.clipboard
+      ? [
+          createTInputHostPlugin(() => ({
+            ...createDefaultTInputHostAdapter(),
+            isTerminalLike: true,
+            async readClipboardText() {
+              if (!options.clipboard?.supported) return "";
+              try {
+                return await options.clipboard.readText();
+              } catch {
+                return "";
+              }
+            },
+            async writeClipboardText(text: string) {
+              if (!text || !options.clipboard?.supported) return false;
+              try {
+                await options.clipboard.writeText(text);
+                return true;
+              } catch {
+                return false;
+              }
+            },
+          })),
+        ]
+      : [defaultTInputHostPlugin]);
   const offResize = terminal.on("resize", ({ cols, rows }) => {
     rootLayout.clipRect = { x: 0, y: 0, w: cols, h: rows };
+    selection.clear();
+    if (selectionRenderNodeId) {
+      render.update(selectionRenderNodeId, {
+        rect: { x: 0, y: 0, w: cols, h: rows },
+      });
+    }
     // Ensure resize triggers a re-render even if no other reactive state changes.
     invalidate({ reason: "resize" });
   });
@@ -495,6 +764,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     scheduler: schedulerApi,
     runtime,
     observability: { trace, framePerf },
+    selection: selectionContext,
     defaultStyle: ref(options.defaultStyle ?? {}),
     render,
   };
@@ -511,10 +781,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       provide(EventZIndexContextKey, ref(0) as any);
       provide(RenderStackKey, shallowRef(render.rootStack) as any);
       provide(ImeAnchorContextKey, imeAnchor);
-      provide(
-        TInputPluginsContextKey,
-        ref(options.inputPlugins ?? [defaultTInputHostPlugin]) as any,
-      );
+      provide(TInputPluginsContextKey, ref(inputPlugins) as any);
       provide(
         TPathPickerProviderContextKey,
         ref(options.pathPickerProvider ?? createNodePathPickerProvider()) as any,
@@ -554,6 +821,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       clearScheduledTimer();
       frameScheduler.cancelScheduledFrame();
       if (mounted) app.unmount();
+      if (selectionRenderNodeId) render.unregister(selectionRenderNodeId);
       offResize?.();
       offCommit?.();
       events.dispose();

@@ -3,6 +3,11 @@ import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
 import type { FramePerfReason } from "../../observability/frame-perf.js";
+import type {
+  SelectionTextProvider,
+  TerminalSelectionPoint,
+  TerminalSelectionRange,
+} from "../../selection/terminal-selection.js";
 import type { TerminalFrameContext } from "../context.js";
 import type {
   TLogDataSource,
@@ -11,6 +16,7 @@ import type {
   TLogViewVisualIndexStatus,
 } from "../log/types.js";
 import { applyAnsiSgrStyle, parseAnsiSgr } from "../../core/ansi/sgr.js";
+import { terminalSelectionRowSpans } from "../../selection/terminal-selection.js";
 import {
   computed,
   defineComponent,
@@ -725,6 +731,7 @@ export const TLogView = defineComponent({
       default: undefined,
     },
     autoFocus: { type: Boolean, default: false },
+    selectable: { type: Boolean, default: true },
     autoStickToBottom: { type: Boolean, default: true },
     overscan: { type: Number, default: 2 },
     wrap: { type: Boolean, default: false },
@@ -788,7 +795,7 @@ export const TLogView = defineComponent({
     "keydown",
   ],
   setup(props, { emit, expose }) {
-    const { terminal, scheduler, render, rendererCapabilities, defaultStyle, events } =
+    const { terminal, scheduler, render, rendererCapabilities, defaultStyle, events, selection } =
       useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
@@ -3119,6 +3126,78 @@ export const TLogView = defineComponent({
       scrollToVisualRow(currentScrollTop() + (Number.isFinite(n) ? n : 0));
     }
 
+    function scrollSelectionBy(delta: number): boolean {
+      const n = Math.trunc(Number(delta));
+      if (!Number.isFinite(n) || n === 0) return false;
+      cancelWheelScrollFrame();
+      const target = currentScrollTop() + n;
+      const changed = applyScrollTop(target, "viewport-repaint", {
+        emitScroll: true,
+        stickToBottom: target >= maxScrollTop(),
+      });
+      if (changed) invalidateSelf("high", "scroll");
+      return changed;
+    }
+
+    function selectionPointForCell(point: TerminalSelectionPoint): TerminalSelectionPoint | null {
+      const r = normalizedRect();
+      if (point.x < r.x || point.y < r.y || point.x >= r.x + r.w || point.y >= r.y + r.h) {
+        return null;
+      }
+      const { x: clipX, y: clipY } = clipOffsets();
+      const visualY = currentScrollTop() + clipY + (point.y - r.y);
+      if (visualY < 0 || visualY >= estimatedVisualRowCount()) return null;
+      return {
+        x: clamp(clipX + (point.x - r.x), 0, Math.max(0, currentWrapWidth() - 1)),
+        y: visualY,
+      };
+    }
+
+    function canHandleSelectionRange(range: TerminalSelectionRange): boolean {
+      return Boolean(selectionPointForCell(range.anchor) && selectionPointForCell(range.focus));
+    }
+
+    function textForVisualRow(visualRow: number): string {
+      const count = lineCount();
+      if (!props.wrap) {
+        if (visualRow < 0 || visualRow >= count) return "";
+        if (!props.ansi) return sanitizeInlineText(props.source.getLine(visualRow));
+        const base = props.style ?? defaultStyle.value;
+        return ansiSegmentsForLine(visualRow, count, base, styleCacheKey(base))
+          .map((segment) => segment.text)
+          .join("");
+      }
+
+      const located = locateVisualRow(visualRow);
+      if (!located) return "";
+      if (!props.ansi) {
+        return (
+          wrappedRowsForLine(located.lineIndex, count, currentWrapWidth())[located.partIndex] ?? ""
+        );
+      }
+
+      const base = props.style ?? defaultStyle.value;
+      const rows = ansiWrappedRowsForLine(
+        located.lineIndex,
+        count,
+        currentWrapWidth(),
+        base,
+        styleCacheKey(base),
+      );
+      return (rows[located.partIndex] ?? []).map((segment) => segment.text).join("");
+    }
+
+    function textForSelectionRange(range: TerminalSelectionRange): string {
+      const cols = currentWrapWidth();
+      const rows = estimatedVisualRowCount();
+      return terminalSelectionRowSpans(range, cols, rows)
+        .map((span) => {
+          const text = sliceByCellsRange(textForVisualRow(span.y), span.x0, span.x1);
+          return span.x1 >= cols ? text.trimEnd() : text;
+        })
+        .join("\n");
+    }
+
     function scrollToLine(
       index: number,
       options?: Readonly<{
@@ -3461,11 +3540,25 @@ export const TLogView = defineComponent({
       }
     }
 
+    const selectionTextProvider: SelectionTextProvider = {
+      id: `${frameTaskId}:selection-text`,
+      get rect() {
+        return normalizedRect();
+      },
+      canHandle: canHandleSelectionRange,
+      pointForCell: selectionPointForCell,
+      getText: textForSelectionRange,
+    };
+    const unregisterSelectionTextProvider = selection.registerTextProvider(selectionTextProvider);
+    onBeforeUnmount(unregisterSelectionTextProvider);
+
     const eventNode = useTerminalNode(() => ({
       rect: normalizedRect(),
       zIndex: eventZ.value,
       visible: visible.value,
       focusable: true,
+      selectable: props.selectable,
+      selectionScrollBy: scrollSelectionBy,
       handlers: {
         wheel: (e: any) => {
           const { deltaY, mode } = getWheelScrollInput(e);

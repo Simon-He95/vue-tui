@@ -71,6 +71,8 @@ describe("package exports", () => {
     expect("useTLogSearchResultsPage" in root).toBe(false);
     expect("useTLogLinkController" in root).toBe(false);
     expect("createAppendOnlyLogStore" in root).toBe(false);
+    expect(root.createRuntime).toBeTruthy();
+    expect(root.createOsc52ClipboardProvider).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
     expect("TMarkdownText" in experimental).toBe(false);
@@ -184,9 +186,13 @@ describe("package exports", () => {
 
     expect("TVirtualList" in root).toBe(false);
     expect(root.TerminalProvider).toBeTruthy();
+    expect(root.createRuntime).toBeTruthy();
+    expect(root.createOsc52ClipboardProvider).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
     expect(rootCjs.TerminalProvider).toBeTruthy();
+    expect(rootCjs.createRuntime).toBeTruthy();
+    expect(rootCjs.createOsc52ClipboardProvider).toBeTruthy();
     expect(rootCjs.createFramePerfStore).toBeTruthy();
     expect(rootCjs.framePerfNow).toBeTruthy();
     expect(markdown.TMarkdownText).toBeTruthy();

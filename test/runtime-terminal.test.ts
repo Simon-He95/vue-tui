@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createRuntime } from "../src/runtime/index.js";
+import { createOsc52ClipboardProvider, createRuntime } from "../src/runtime/index.js";
 
 function restoreGlobal(key: string, value: unknown): void {
   if (value === undefined) {
@@ -43,6 +43,40 @@ describe("runtime (terminal/node)", () => {
     const r = createRuntime();
     expect(r.clipboard.supported).toBe(false);
     await expect(r.clipboard.writeText("x")).rejects.toThrow(/Clipboard not available/);
+  });
+
+  it("uses injected terminal clipboard", async () => {
+    const writes: string[] = [];
+    const r = createRuntime("terminal", {
+      clipboard: {
+        supported: true,
+        async readText() {
+          return writes[writes.length - 1] ?? "";
+        },
+        async writeText(text: string) {
+          writes.push(text);
+        },
+      },
+    });
+
+    await r.clipboard.writeText("selected text");
+    expect(await r.clipboard.readText()).toBe("selected text");
+    expect(writes).toEqual(["selected text"]);
+  });
+
+  it("writes OSC52 clipboard sequences when explicitly configured", async () => {
+    const writes: string[] = [];
+    const clipboard = createOsc52ClipboardProvider({
+      supported: true,
+      write: (sequence) => {
+        writes.push(sequence);
+      },
+    });
+
+    await clipboard.writeText("copy me");
+
+    expect(clipboard.supported).toBe(true);
+    expect(writes).toEqual(["\u001B]52;c;Y29weSBtZQ==\u0007"]);
   });
 
   it("raf wrapper runs via timers", () => {
