@@ -1,5 +1,5 @@
 import type { ClipboardApi } from "../src/runtime/index.js";
-import type { TerminalSelectionRange } from "../src/selection/terminal-selection.js";
+import type { SelectionTextProvider, TerminalSelectionRange } from "../src/selection/terminal-selection.js";
 import { describe, expect, it, vi } from "vitest";
 import { createTerminal } from "../src/core/index.js";
 import { getPlaneTerminal } from "../src/core/terminal/create-terminal.js";
@@ -398,5 +398,75 @@ describe("terminal selection", () => {
       anchor: { x: 0, y: 100 },
       focus: { x: 2, y: 101 },
     });
+  });
+
+  it("clears active selection when its provider unregisters", async () => {
+    const terminal = createTerminal({ cols: 10, rows: 4 });
+    const overlay = getPlaneTerminal(terminal, "overlay");
+    const clipboard = memoryClipboard();
+
+    const providers: SelectionTextProvider[] = [
+      {
+        id: "source",
+        rect: { x: 0, y: 0, w: 10, h: 4 },
+        canHandle: () => true,
+        pointForCell: (point) => ({ x: point.x, y: point.y + 100 }),
+        getText: () => "provider text",
+      },
+    ];
+
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: overlay,
+      clipboard: clipboard.api,
+      getTextProviders: () => providers,
+    });
+
+    selection.start({ x: 0, y: 0 });
+    selection.update({ x: 4, y: 1 });
+
+    expect(selection.state.value.active).toBe(true);
+    expect(selection.state.value.hasRange).toBe(true);
+
+    // Simulate provider unregister.
+    providers.length = 0;
+    selection.clearProvider("source");
+
+    expect(selection.state.value.active).toBe(false);
+    expect(selection.state.value.hasRange).toBe(false);
+  });
+
+  it("does not clear selection when an unrelated provider unregisters", async () => {
+    const terminal = createTerminal({ cols: 10, rows: 4 });
+    const overlay = getPlaneTerminal(terminal, "overlay");
+    const clipboard = memoryClipboard();
+
+    const providers: SelectionTextProvider[] = [
+      {
+        id: "source",
+        rect: { x: 0, y: 0, w: 10, h: 4 },
+        canHandle: () => true,
+        pointForCell: (point) => ({ x: point.x, y: point.y + 100 }),
+        getText: () => "provider text",
+      },
+    ];
+
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: overlay,
+      clipboard: clipboard.api,
+      getTextProviders: () => providers,
+    });
+
+    selection.start({ x: 0, y: 0 });
+    selection.update({ x: 4, y: 1 });
+
+    expect(selection.state.value.active).toBe(true);
+
+    // Unregister an unrelated provider.
+    selection.clearProvider("other");
+
+    expect(selection.state.value.active).toBe(true);
+    expect(selection.state.value.hasRange).toBe(true);
   });
 });

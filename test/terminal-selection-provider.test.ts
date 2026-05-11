@@ -728,18 +728,14 @@ describe("TerminalProvider selection", () => {
       // After auto-scroll by 1 row, viewport shows line-1..line-4.
       expect(rowText(mounted, 0)).toBe("line-1");
 
-      // The overlay selection highlight should be present somewhere in the viewport.
-      let hasInverse = false;
-      for (let y = 0; y < 4; y++) {
-        for (let x = 0; x < 12; x++) {
-          if (mounted.terminal.getCell(x, y).style.inverse) {
-            hasInverse = true;
-            break;
-          }
-        }
-        if (hasInverse) break;
-      }
-      expect(hasInverse).toBe(true);
+      // The overlay selection highlight should map to the correct viewport rows.
+      // Selection spans from line-1 to line-4, all rows in the current viewport.
+      expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 2).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.inverse).toBe(true);
+      // Cell beyond selection end should not be highlighted.
+      expect(mounted.terminal.getCell(6, 3).style.inverse).toBeUndefined();
     } finally {
       vi.useRealTimers();
       mounted.unmount();
@@ -864,18 +860,11 @@ describe("TerminalProvider selection", () => {
 
       // The overlay cells should carry the current row characters,
       // not stale pre-scroll characters. Verify that the inverse style
-      // is applied on the current viewport content.
-      let hasInverse = false;
-      for (let y = 0; y < 4; y++) {
-        for (let x = 0; x < 12; x++) {
-          if (mounted.terminal.getCell(x, y).style.inverse) {
-            hasInverse = true;
-            break;
-          }
-        }
-        if (hasInverse) break;
-      }
-      expect(hasInverse).toBe(true);
+      // is applied on the correct viewport rows.
+      expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 2).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.inverse).toBe(true);
     } finally {
       vi.useRealTimers();
       mounted.unmount();

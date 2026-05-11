@@ -108,6 +108,7 @@ export type TerminalSelectionController = Readonly<{
   copy: () => Promise<boolean>;
   paint: (dirtyRows?: readonly number[]) => void;
   refresh: (options?: TerminalSelectionRefreshOptions) => void;
+  clearProvider: (providerId: string) => void;
 }>;
 
 type ProviderSelectionPoint = Readonly<{
@@ -568,6 +569,14 @@ export function createTerminalSelectionController(
       }
 
       rebuild(range, providerAnchor, providerFocus);
+    },
+    clearProvider(providerId) {
+      if (
+        providerAnchor?.providerId === providerId ||
+        providerFocus?.providerId === providerId
+      ) {
+        controller.clear();
+      }
     },
   };
 

@@ -297,8 +297,9 @@ export const TerminalProvider = defineComponent({
       registerTextProvider(provider: SelectionTextProvider) {
         selectionTextProviders.set(provider.id, provider);
         return () => {
-          if (selectionTextProviders.get(provider.id) === provider)
-            selectionTextProviders.delete(provider.id);
+          if (selectionTextProviders.get(provider.id) !== provider) return;
+          selectionTextProviders.delete(provider.id);
+          selection.clearProvider(provider.id);
         };
       },
       onCopy(handler: (payload: TerminalSelectionCopyPayload) => void) {
