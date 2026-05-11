@@ -301,6 +301,12 @@ export const TerminalProvider = defineComponent({
         selectionCopyHandlers.add(handler);
         return () => selectionCopyHandlers.delete(handler);
       },
+      refresh() {
+        selection.refresh();
+      },
+      clear() {
+        selection.clear();
+      },
     } as const;
     const selectionOverlay = getPlaneTerminal(terminal, "overlay");
     let selectionRenderNodeId: string | null = null;
@@ -1051,12 +1057,38 @@ export const TerminalProvider = defineComponent({
         let suppressNextSelectionClick = false;
         let ignoreCompatibilityMouseSelectionEvents = false;
         let compatibilityMouseResetTimer: ReturnType<typeof setTimeout> | null = null;
+        let activeSelectionPointerId: number | null = null;
 
         let suppressDocumentActivation = false;
         let suppressDocumentActivationTimer: ReturnType<typeof setTimeout> | null = null;
 
         const isPointerSelectionEvent = (event: MouseEvent | PointerEvent): event is PointerEvent =>
           "pointerId" in event && typeof event.pointerId === "number";
+
+        // Document-level pointer listeners ensure selection continues even when
+        // the pointer drags outside the terminal and setPointerCapture is
+        // unavailable or unreliable.
+        const onSelectionDocPointerMove = (event: PointerEvent) => {
+          if (!selecting) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId) return;
+          onSelectionPointerMove(event);
+        };
+
+        const onSelectionDocPointerUp = (event: PointerEvent) => {
+          if (!selecting) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId) return;
+          onSelectionPointerUp(event);
+        };
+
+        const addSelectionDocPointerListeners = () => {
+          doc.addEventListener("pointermove", onSelectionDocPointerMove, true);
+          doc.addEventListener("pointerup", onSelectionDocPointerUp, true);
+        };
+
+        const removeSelectionDocPointerListeners = () => {
+          doc.removeEventListener("pointermove", onSelectionDocPointerMove, true);
+          doc.removeEventListener("pointerup", onSelectionDocPointerUp, true);
+        };
 
         const suppressNativeSelectionEvent = (event: MouseEvent | PointerEvent) => {
           event.preventDefault();
@@ -1174,12 +1206,14 @@ export const TerminalProvider = defineComponent({
           selectionLastPoint = point;
           el.style.userSelect = "none";
           if (isPointerSelectionEvent(event)) {
+            activeSelectionPointerId = event.pointerId;
+            addSelectionDocPointerListeners();
             ignoreCompatibilityMouseSelectionEvents = true;
             clearCompatibilityMouseReset();
             try {
               el.setPointerCapture?.(event.pointerId);
             } catch {
-              // Pointer capture is best-effort; selection still works inside the terminal.
+              // Document-level pointer listeners are the fallback.
             }
           }
           // Install document-level listeners so dragging outside the terminal
@@ -1231,10 +1265,12 @@ export const TerminalProvider = defineComponent({
 
         const finishSelection = () => {
           selecting = false;
+          activeSelectionPointerId = null;
           selectionStartPoint = null;
           selectionScrollOrigin = null;
           selectionLastPoint = null;
           clearSelectionAutoScroll();
+          removeSelectionDocPointerListeners();
           removeSelectionDocListeners();
           ignoreCompatibilityMouseSelectionEvents = false;
           void selection.finish();
@@ -1286,10 +1322,12 @@ export const TerminalProvider = defineComponent({
             event.preventDefault();
           }
           selecting = false;
+          activeSelectionPointerId = null;
           selectionStartPoint = null;
           selectionScrollOrigin = null;
           selectionLastPoint = null;
           clearSelectionAutoScroll();
+          removeSelectionDocPointerListeners();
           if (isPointerSelectionEvent(event)) {
             try {
               el.releasePointerCapture?.(event.pointerId);
@@ -1333,6 +1371,8 @@ export const TerminalProvider = defineComponent({
           clearSelectionAutoScroll();
           clearCompatibilityMouseReset();
           clearSuppressDocumentActivationTimer();
+          activeSelectionPointerId = null;
+          removeSelectionDocPointerListeners();
           removeSelectionDocListeners();
           removeSelectionDocActivationListeners();
           suppressDocumentActivation = false;

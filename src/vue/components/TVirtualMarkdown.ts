@@ -279,6 +279,7 @@ export const TVirtualMarkdown = defineComponent({
         emit("update:scrollTop", clamped);
         emit("scroll", clamped);
       }
+      selection.refresh();
     }
 
     watch(
@@ -287,11 +288,13 @@ export const TVirtualMarkdown = defineComponent({
         if (!hasControlledScrollTop()) return;
         const desired = Math.floor(Number(props.scrollTop) || 0);
         const clamped = clamp(desired, 0, maxScrollTop());
+        if (internalScrollTop.value === clamped) return;
         internalScrollTop.value = clamped;
         if (desired !== clamped) {
           emit("update:scrollTop", clamped);
           emit("scroll", clamped);
         }
+        selection.refresh();
       },
     );
 
@@ -402,31 +405,37 @@ export const TVirtualMarkdown = defineComponent({
       if (event.key === "ArrowUp") {
         event.preventDefault();
         setScrollTop(internalScrollTop.value - 1);
+        selection.refresh();
         return;
       }
       if (event.key === "ArrowDown") {
         event.preventDefault();
         setScrollTop(internalScrollTop.value + 1);
+        selection.refresh();
         return;
       }
       if (event.key === "PageUp") {
         event.preventDefault();
         setScrollTop(internalScrollTop.value - page);
+        selection.refresh();
         return;
       }
       if (event.key === "PageDown") {
         event.preventDefault();
         setScrollTop(internalScrollTop.value + page);
+        selection.refresh();
         return;
       }
       if (event.key === "Home") {
         event.preventDefault();
         setScrollTop(0);
+        selection.refresh();
         return;
       }
       if (event.key === "End") {
         event.preventDefault();
         setScrollTop(maxScrollTop());
+        selection.refresh();
       }
     }
 
@@ -473,6 +482,7 @@ export const TVirtualMarkdown = defineComponent({
           if (!dir || nextTop === internalScrollTop.value) return;
           event.preventDefault?.();
           setScrollTop(nextTop);
+          selection.refresh();
         },
         focus: () => {
           emit("focus");

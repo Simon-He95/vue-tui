@@ -536,6 +536,12 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       selectionCopyHandlers.add(handler);
       return () => selectionCopyHandlers.delete(handler);
     },
+    refresh() {
+      selection.refresh();
+    },
+    clear() {
+      selection.clear();
+    },
   } as const;
   const selectionOverlay = getPlaneTerminal(terminal, "overlay");
   let selectionRenderNodeId: string | null = null;

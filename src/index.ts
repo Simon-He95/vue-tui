@@ -138,6 +138,7 @@ export type {
 export {
   createTerminalSelectionController,
   terminalSelectionRowSpans,
+  terminalSelectionVisibleRowSpans,
 } from "./selection/terminal-selection.js";
 export type {
   TerminalProviderSelectionConfig,

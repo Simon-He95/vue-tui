@@ -107,6 +107,8 @@ export type TerminalRuntime = Readonly<{
 export type TerminalSelectionContext = Readonly<{
   registerTextProvider: (provider: SelectionTextProvider) => () => void;
   onCopy: (handler: (payload: TerminalSelectionCopyPayload) => void) => () => void;
+  refresh: () => void;
+  clear: () => void;
 }>;
 
 export type ImeAnchor = Readonly<{

@@ -2623,6 +2623,7 @@ export const TLogView = defineComponent({
           resetWheelScrollState(wheelState);
           return;
         }
+        selection.refresh();
         ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
       },
     });
@@ -2946,6 +2947,7 @@ export const TLogView = defineComponent({
           emitScroll: true,
           stickToBottom: false,
         });
+        if (changed) selection.refresh();
         if (!changed) markViewportDirty();
         resumeVisualMeasurement();
         return true;
@@ -2957,6 +2959,7 @@ export const TLogView = defineComponent({
           emitScroll: true,
           stickToBottom: stickToBottom.value && nextTop >= maxScrollTop(),
         });
+        if (changed) selection.refresh();
         if (!changed) markViewportDirty();
         resumeVisualMeasurement();
         return true;
@@ -2977,6 +2980,7 @@ export const TLogView = defineComponent({
             extraDirtyRows: extraDirtyRow == null ? undefined : [extraDirtyRow],
           },
         );
+        if (changed) selection.refresh();
         if (!changed) {
           if (sameCountTailDirtyRows.length) markRowsDirty(sameCountTailDirtyRows);
           else markViewportDirty();
@@ -2999,6 +3003,7 @@ export const TLogView = defineComponent({
           emitScroll: true,
           stickToBottom: isAtBottom(),
         });
+        if (changed) selection.refresh();
         if (!changed) markViewportDirty();
         resumeVisualMeasurement();
         return true;
@@ -3091,7 +3096,10 @@ export const TLogView = defineComponent({
         stickToBottom: nextStick,
       });
       if (!changed && nextStick != null) stickToBottom.value = nextStick;
-      if (changed) invalidateSelf("high", "input");
+      if (changed) {
+        selection.refresh();
+        invalidateSelf("high", "input");
+      }
     }
 
     function scrollToBottom(): void {
@@ -3100,7 +3108,10 @@ export const TLogView = defineComponent({
         emitScroll: true,
         stickToBottom: true,
       });
-      if (changed) invalidateSelf("high", "scroll");
+      if (changed) {
+        selection.refresh();
+        invalidateSelf("high", "scroll");
+      }
     }
 
     function scrollToTop(): void {
@@ -3109,7 +3120,10 @@ export const TLogView = defineComponent({
         emitScroll: true,
         stickToBottom: false,
       });
-      if (changed) invalidateSelf("high", "scroll");
+      if (changed) {
+        selection.refresh();
+        invalidateSelf("high", "scroll");
+      }
     }
 
     function scrollToVisualRow(row: number): void {
@@ -3119,7 +3133,10 @@ export const TLogView = defineComponent({
         emitScroll: true,
         stickToBottom: target >= maxScrollTop(),
       });
-      if (changed) invalidateSelf("high", "scroll");
+      if (changed) {
+        selection.refresh();
+        invalidateSelf("high", "scroll");
+      }
     }
 
     function scrollBy(delta: number): void {
@@ -3270,6 +3287,7 @@ export const TLogView = defineComponent({
         emitScroll: true,
         stickToBottom: stickToBottom.value && nextTop >= maxScrollTop(),
       });
+      if (changed) selection.refresh();
       if (!changed) markViewportDirty();
       invalidateSelf("normal", "data");
     }
@@ -3793,6 +3811,7 @@ export const TLogView = defineComponent({
           emitUpdate: wasInitialized,
           stickToBottom: nextStick,
         });
+        if (changed) selection.refresh();
         if (!changed) markViewportDirty();
         invalidateSelf("normal", "data");
       },

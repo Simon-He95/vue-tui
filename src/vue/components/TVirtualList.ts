@@ -239,7 +239,9 @@ export const TVirtualList = defineComponent({
       if (active.value < visibleStart) nextTop = clamp(active.value - clipY, 0, maxTop);
       else if (active.value > visibleEnd)
         nextTop = clamp(active.value - (clipY + clip.h - 1), 0, maxTop);
-      return applyScrollTop(nextTop, options);
+      const result = applyScrollTop(nextTop, options);
+      if (result.changed) selection.refresh();
+      return result;
     }
 
     function normalizedModelValue(): number {
@@ -266,6 +268,7 @@ export const TVirtualList = defineComponent({
           resetWheelScrollState(wheelState);
           return;
         }
+        selection.refresh();
         if (changed.dirty)
           ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
       },
@@ -334,6 +337,7 @@ export const TVirtualList = defineComponent({
         active.value = normalizedModelValue();
         const nextTop = clampScrollTop(scrollTop.value);
         const changed = applyScrollTop(nextTop, { emitScroll });
+        if (changed.changed) selection.refresh();
         if (!changed.changed) markViewportDirty();
         if (pendingWheelTop !== null && !hasPaintableViewport()) {
           cancelWheelScrollFrame();

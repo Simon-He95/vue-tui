@@ -47,10 +47,27 @@ export type SelectedRowSpan = Readonly<{
 
 export type SelectionTextProvider = Readonly<{
   id: string;
+
+  /**
+   * Current provider viewport rect in terminal screen coordinates.
+   */
   rect: Rect;
-  canHandle: (range: TerminalSelectionRange) => boolean;
-  pointForCell?: (point: TerminalSelectionPoint) => TerminalSelectionPoint | null;
-  getText: (range: TerminalSelectionRange) => string;
+
+  /**
+   * Receives a terminal screen-space range. Return true when this provider
+   * can resolve the range without relying on the terminal buffer fallback.
+   */
+  canHandle: (screenRange: TerminalSelectionRange) => boolean;
+
+  /**
+   * Maps a terminal screen-space point to provider-space point.
+   */
+  pointForCell?: (screenPoint: TerminalSelectionPoint) => TerminalSelectionPoint | null;
+
+  /**
+   * Receives a provider-space range (i.e. after `pointForCell` mapping).
+   */
+  getText: (providerRange: TerminalSelectionRange) => string;
   /**
    * Return overlay highlight spans for the portion of the selection that is
    * currently visible in the viewport. Coordinates are terminal screen cells.
@@ -82,6 +99,7 @@ export type TerminalSelectionController = Readonly<{
   clear: () => void;
   copy: () => Promise<boolean>;
   paint: (dirtyRows?: readonly number[]) => void;
+  refresh: () => void;
 }>;
 
 type SelectionCell = Readonly<{
@@ -487,6 +505,10 @@ export function createTerminalSelectionController(
         if (!cells) continue;
         for (const cell of cells) options.overlayTerminal.put(cell.x, y, cell.ch, cell.style);
       }
+    },
+    refresh() {
+      if (!range) return;
+      rebuild(range, providerAnchor, providerFocus);
     },
   };
 
