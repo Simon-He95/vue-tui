@@ -21,7 +21,7 @@ import {
   watchEffect,
 } from "vue";
 import { buildMarkdownBlocks } from "../markdown/document.js";
-import { terminalSelectionRowSpans } from "../../selection/terminal-selection.js";
+import { terminalSelectionRowSpans, terminalSelectionVisibleRowSpans } from "../../selection/terminal-selection.js";
 import { layoutMarkdownBlocksCached, type TuiMarkdownLayoutCache } from "../markdown/layout.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
 import { paintMarkdownVisualRow } from "../markdown/render.js";
@@ -373,21 +373,24 @@ export const TVirtualMarkdown = defineComponent({
       const cols = Math.max(1, Math.floor(props.w));
       const top = internalScrollTop.value + clipY;
       const bottom = top + r.h;
-      // Compute spans in provider (visual row) space
-      const providerSpans = terminalSelectionRowSpans(providerRange, cols, rows.value.length);
+
+      const providerSpans = terminalSelectionVisibleRowSpans(
+        providerRange,
+        cols,
+        rows.value.length,
+        top,
+        bottom,
+      );
+
       const result: SelectedRowSpan[] = [];
       for (const span of providerSpans) {
-        // Only include rows that are currently visible
-        if (span.y < top || span.y >= bottom) continue;
         const screenY = r.y + (span.y - top);
         const screenX0 = r.x + span.x0 - clipX;
         const screenX1 = r.x + span.x1 - clipX;
-        if (screenY >= r.y && screenY < r.y + r.h && screenX1 > screenX0) {
-          result.push({
-            y: screenY,
-            x0: Math.max(r.x, screenX0),
-            x1: Math.min(r.x + r.w, screenX1),
-          });
+        const x0 = Math.max(r.x, screenX0);
+        const x1 = Math.min(r.x + r.w, screenX1);
+        if (screenY >= r.y && screenY < r.y + r.h && x1 > x0) {
+          result.push({ y: screenY, x0, x1 });
         }
       }
       return result;

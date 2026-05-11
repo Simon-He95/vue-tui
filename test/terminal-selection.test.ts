@@ -3,7 +3,7 @@ import type { TerminalSelectionRange } from "../src/selection/terminal-selection
 import { describe, expect, it, vi } from "vitest";
 import { createTerminal } from "../src/core/index.js";
 import { getPlaneTerminal } from "../src/core/terminal/create-terminal.js";
-import { createTerminalSelectionController } from "../src/selection/terminal-selection.js";
+import { createTerminalSelectionController, terminalSelectionVisibleRowSpans } from "../src/selection/terminal-selection.js";
 
 function memoryClipboard(options?: { supported?: boolean; fail?: boolean }) {
   const writes: string[] = [];
@@ -346,5 +346,23 @@ describe("terminal selection", () => {
     // Standard terminal buffer overlay should work
     expect(terminal.getCell(0, 0).style.inverse).toBe(true);
     expect(terminal.getCell(0, 1).style.inverse).toBe(true);
+  });
+
+  it("computes visible spans without materializing the full selected range", () => {
+    const spans = terminalSelectionVisibleRowSpans(
+      {
+        anchor: { x: 0, y: 10 },
+        focus: { x: 5, y: 9000 },
+        mode: "linear",
+      },
+      80,
+      10_000,
+      500,
+      524,
+    );
+
+    expect(spans.length).toBeLessThanOrEqual(24);
+    expect(spans[0]?.y).toBe(500);
+    expect(spans.at(-1)?.y).toBe(523);
   });
 });

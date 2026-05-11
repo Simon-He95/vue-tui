@@ -27,7 +27,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
-import { terminalSelectionRowSpans } from "../../selection/terminal-selection.js";
+import { terminalSelectionRowSpans, terminalSelectionVisibleRowSpans } from "../../selection/terminal-selection.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import { defaultActiveStyle } from "../utils/style-cache.js";
 import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
@@ -513,19 +513,24 @@ export const TVirtualList = defineComponent({
       const cols = Math.max(1, Math.floor(props.w));
       const top = scrollTop.value + clipY;
       const bottom = top + r.h;
-      const providerSpans = terminalSelectionRowSpans(providerRange, cols, itemCount.value);
+
+      const providerSpans = terminalSelectionVisibleRowSpans(
+        providerRange,
+        cols,
+        itemCount.value,
+        top,
+        bottom,
+      );
+
       const result: SelectedRowSpan[] = [];
       for (const span of providerSpans) {
-        if (span.y < top || span.y >= bottom) continue;
         const screenY = r.y + (span.y - top);
         const screenX0 = r.x + span.x0 - clipX;
         const screenX1 = r.x + span.x1 - clipX;
-        if (screenY >= r.y && screenY < r.y + r.h && screenX1 > screenX0) {
-          result.push({
-            y: screenY,
-            x0: Math.max(r.x, screenX0),
-            x1: Math.min(r.x + r.w, screenX1),
-          });
+        const x0 = Math.max(r.x, screenX0);
+        const x1 = Math.min(r.x + r.w, screenX1);
+        if (screenY >= r.y && screenY < r.y + r.h && x1 > x0) {
+          result.push({ y: screenY, x0, x1 });
         }
       }
       return result;

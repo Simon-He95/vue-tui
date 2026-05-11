@@ -1052,6 +1052,9 @@ export const TerminalProvider = defineComponent({
         let ignoreCompatibilityMouseSelectionEvents = false;
         let compatibilityMouseResetTimer: ReturnType<typeof setTimeout> | null = null;
 
+        let suppressDocumentActivation = false;
+        let suppressDocumentActivationTimer: ReturnType<typeof setTimeout> | null = null;
+
         const isPointerSelectionEvent = (event: MouseEvent | PointerEvent): event is PointerEvent =>
           "pointerId" in event && typeof event.pointerId === "number";
 
@@ -1072,6 +1075,41 @@ export const TerminalProvider = defineComponent({
           compatibilityMouseResetTimer = setTimeout(() => {
             ignoreCompatibilityMouseSelectionEvents = false;
             compatibilityMouseResetTimer = null;
+          }, 0);
+        };
+
+        const clearSuppressDocumentActivationTimer = () => {
+          if (suppressDocumentActivationTimer == null) return;
+          clearTimeout(suppressDocumentActivationTimer);
+          suppressDocumentActivationTimer = null;
+        };
+
+        const onSelectionDocActivationCapture = (event: MouseEvent) => {
+          if (!suppressDocumentActivation) return;
+          suppressDocumentActivation = false;
+          clearSuppressDocumentActivationTimer();
+          removeSelectionDocActivationListeners();
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation?.();
+        };
+
+        const removeSelectionDocActivationListeners = () => {
+          doc.removeEventListener("click", onSelectionDocActivationCapture, true);
+          doc.removeEventListener("dblclick", onSelectionDocActivationCapture, true);
+          doc.removeEventListener("contextmenu", onSelectionDocActivationCapture, true);
+        };
+
+        const armDocumentActivationSuppression = () => {
+          suppressDocumentActivation = true;
+          doc.addEventListener("click", onSelectionDocActivationCapture, true);
+          doc.addEventListener("dblclick", onSelectionDocActivationCapture, true);
+          doc.addEventListener("contextmenu", onSelectionDocActivationCapture, true);
+          clearSuppressDocumentActivationTimer();
+          suppressDocumentActivationTimer = setTimeout(() => {
+            suppressDocumentActivation = false;
+            removeSelectionDocActivationListeners();
+            suppressDocumentActivationTimer = null;
           }, 0);
         };
 
@@ -1184,6 +1222,7 @@ export const TerminalProvider = defineComponent({
           const suppressActivation = selectionDragStarted || selection.state.value.hasRange;
           if (suppressActivation) {
             suppressNextSelectionClick = true;
+            armDocumentActivationSuppression();
             (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
             event.preventDefault();
           }
@@ -1242,6 +1281,7 @@ export const TerminalProvider = defineComponent({
           const suppressActivation = selectionDragStarted || selection.state.value.hasRange;
           if (suppressActivation) {
             suppressNextSelectionClick = true;
+            armDocumentActivationSuppression();
             (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
             event.preventDefault();
           }
@@ -1292,7 +1332,10 @@ export const TerminalProvider = defineComponent({
         const cleanupSelectionListeners = () => {
           clearSelectionAutoScroll();
           clearCompatibilityMouseReset();
+          clearSuppressDocumentActivationTimer();
           removeSelectionDocListeners();
+          removeSelectionDocActivationListeners();
+          suppressDocumentActivation = false;
         };
 
         el.addEventListener("pointerdown", onSelectionPointerDown, true);

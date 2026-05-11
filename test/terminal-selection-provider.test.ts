@@ -676,9 +676,7 @@ describe("TerminalProvider selection", () => {
       await settleClipboard();
 
       // Should copy item-1 through item-4 (cross-viewport selection via provider)
-      expect(writes.length).toBe(1);
-      expect(writes[0]).toContain("item-1");
-      expect(writes[0]).toContain("item-4");
+      expect(writes).toEqual(["item-1\nitem-2\nitem-3\nitem-4"]);
     } finally {
       mounted.unmount();
       vi.useRealTimers();
@@ -722,25 +720,109 @@ describe("TerminalProvider selection", () => {
       vi.advanceTimersByTime(90);
       await nextTick();
       container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
+      // Restore real timers so the overlay render pipeline can flush
+      vi.useRealTimers();
       await settleClipboard();
+      await nextTick();
 
-      // After auto-scroll + mouseup + settle, the overlay should have been painted
-      // through the selection controller's onDirtyRows → render pipeline.
-      // Verify at least one row has the selection highlight (inverse style).
-      let hasSelectionHighlight = false;
+      // After auto-scroll by 1 row, viewport shows line-1..line-4.
+      expect(rowText(mounted, 0)).toBe("line-1");
+
+      // The overlay selection highlight should be present somewhere in the viewport.
+      let hasInverse = false;
       for (let y = 0; y < 4; y++) {
         for (let x = 0; x < 12; x++) {
           if (mounted.terminal.getCell(x, y).style.inverse) {
-            hasSelectionHighlight = true;
+            hasInverse = true;
             break;
           }
         }
-        if (hasSelectionHighlight) break;
+        if (hasInverse) break;
       }
-      expect(hasSelectionHighlight).toBe(true);
+      expect(hasInverse).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      mounted.unmount();
+    }
+  });
+
+  it("keeps provider selection when drag focus leaves the provider rect", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+
+    const source = {
+      lineCount: () => 100,
+      getLine: (index: number) => `line-${index}`,
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          source,
+          version: 1,
+          defaultScrollTop: 0,
+          autoStickToBottom: false,
+        }),
+      12,
+      8,
+      { selection: true },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }));
+      // y=6 is outside TLogView rect h=4, but still inside terminal.
+      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 5, clientY: 6, bubbles: true }));
+
+      vi.advanceTimersByTime(90);
+      await nextTick();
+
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 6, bubbles: true }));
+      await settleClipboard();
+
+      expect(writes[0]).toContain("line-1");
+      expect(writes[0]).toContain("line-4");
+      expect(writes[0]).not.toBe(rowText(mounted, 0)); // not just screen-buffer fallback
     } finally {
       mounted.unmount();
       vi.useRealTimers();
+      restore();
+    }
+  });
+
+  it("suppresses document click after selection mouseup outside terminal", async () => {
+    const outsideClick = vi.fn();
+
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.addEventListener("click", outsideClick);
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
+
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      expect(outsideClick).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+      button.remove();
     }
   });
 });
