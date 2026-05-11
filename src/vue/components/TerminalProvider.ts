@@ -1144,8 +1144,66 @@ export const TerminalProvider = defineComponent({
               // Pointer capture is best-effort; selection still works inside the terminal.
             }
           }
+          // Install document-level listeners so dragging outside the terminal
+          // element still produces mousemove/mouseup events. Pointer capture
+          // handles this for pointer events, but the mouse fallback needs
+          // explicit document listeners.
+          doc.addEventListener("mousemove", onSelectionDocMouseMove, true);
+          doc.addEventListener("mouseup", onSelectionDocMouseUp, true);
           scheduleSelectionAutoScroll();
           event.preventDefault();
+        };
+
+        const onSelectionDocMouseMove = (event: MouseEvent) => {
+          if (!selecting) return;
+          if (ignoreCompatibilityMouseSelectionEvents) return;
+          const point = cellPointFromClient(event);
+          selectionLastPoint = point;
+          if (
+            selectionStartPoint &&
+            (point.x !== selectionStartPoint.x || point.y !== selectionStartPoint.y)
+          ) {
+            selectionDragStarted = true;
+          }
+          selection.update(point);
+          scheduleSelectionAutoScroll();
+          event.preventDefault();
+        };
+
+        const onSelectionDocMouseUp = (event: MouseEvent) => {
+          if (!selecting) return;
+          if (ignoreCompatibilityMouseSelectionEvents) return;
+          const point = cellPointFromClient(event);
+          if (
+            !selectionStartPoint ||
+            point.x !== selectionStartPoint.x ||
+            point.y !== selectionStartPoint.y
+          ) {
+            selection.update(point);
+          }
+          const suppressActivation = selectionDragStarted || selection.state.value.hasRange;
+          if (suppressActivation) {
+            suppressNextSelectionClick = true;
+            (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
+            event.preventDefault();
+          }
+          finishSelection();
+        };
+
+        const finishSelection = () => {
+          selecting = false;
+          selectionStartPoint = null;
+          selectionScrollOrigin = null;
+          selectionLastPoint = null;
+          clearSelectionAutoScroll();
+          removeSelectionDocListeners();
+          ignoreCompatibilityMouseSelectionEvents = false;
+          void selection.finish();
+        };
+
+        const removeSelectionDocListeners = () => {
+          doc.removeEventListener("mousemove", onSelectionDocMouseMove, true);
+          doc.removeEventListener("mouseup", onSelectionDocMouseUp, true);
         };
 
         const onSelectionPointerMove = (event: MouseEvent | PointerEvent) => {
@@ -1202,6 +1260,7 @@ export const TerminalProvider = defineComponent({
           } else {
             ignoreCompatibilityMouseSelectionEvents = false;
           }
+          removeSelectionDocListeners();
           void selection.finish();
         };
 
@@ -1230,6 +1289,12 @@ export const TerminalProvider = defineComponent({
           selectionStartPoint = null;
         };
 
+        const cleanupSelectionListeners = () => {
+          clearSelectionAutoScroll();
+          clearCompatibilityMouseReset();
+          removeSelectionDocListeners();
+        };
+
         el.addEventListener("pointerdown", onSelectionPointerDown, true);
         el.addEventListener("pointermove", onSelectionPointerMove, true);
         el.addEventListener("pointerup", onSelectionPointerUp, true);
@@ -1253,8 +1318,7 @@ export const TerminalProvider = defineComponent({
           el.removeEventListener("dblclick", onSelectionClickCapture, true);
           el.removeEventListener("contextmenu", onSelectionClickCapture, true);
           doc.removeEventListener("keydown", onSelectionKeydown, true);
-          clearSelectionAutoScroll();
-          clearCompatibilityMouseReset();
+          cleanupSelectionListeners();
         });
 
         const input = imeRef.value;

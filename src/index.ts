@@ -132,6 +132,9 @@ export type {
   TerminalSelectionRange,
   TerminalSelectionState,
 } from "./selection/terminal-selection.js";
+export type {
+  SelectedRowSpan,
+} from "./selection/terminal-selection.js";
 export {
   createTerminalSelectionController,
   terminalSelectionRowSpans,

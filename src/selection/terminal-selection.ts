@@ -39,6 +39,12 @@ export type TerminalSelectionOptions = Readonly<{
 
 export type TerminalSelectionConfig = boolean | TerminalSelectionOptions;
 
+export type SelectedRowSpan = Readonly<{
+  y: number;
+  x0: number;
+  x1: number;
+}>;
+
 export type SelectionTextProvider = Readonly<{
   id: string;
   rect: Rect;
@@ -46,6 +52,27 @@ export type SelectionTextProvider = Readonly<{
   pointForCell?: (point: TerminalSelectionPoint) => TerminalSelectionPoint | null;
   getText: (range: TerminalSelectionRange) => string;
   scrollBy?: (deltaRows: number) => void;
+  /**
+   * Return overlay highlight spans for the portion of the selection that is
+   * currently visible in the viewport. Coordinates are terminal screen cells.
+   *
+   * When a virtual-scrolling provider scrolls during a drag-selection, the
+   * selection range may span content that has already scrolled out of view.
+   * The default `terminalSelectionRowSpans()` uses screen coordinates and
+   * cannot account for this, so the highlight becomes stale after each scroll
+   * tick. Providers that support cross-viewport selection should implement
+   * this method to return only the spans that intersect the current viewport,
+   * mapped back to screen cell coordinates.
+   *
+   * @param providerRange - The selection range in provider-space coordinates
+   *   (i.e. after `pointForCell` mapping).
+   * @param screenRange - The same selection range in terminal screen
+   *   coordinates (before `pointForCell` mapping).
+   */
+  getVisibleSpans?: (
+    providerRange: TerminalSelectionRange,
+    screenRange: TerminalSelectionRange,
+  ) => readonly SelectedRowSpan[];
 }>;
 
 export type TerminalSelectionController = Readonly<{
@@ -62,12 +89,6 @@ type SelectionCell = Readonly<{
   x: number;
   ch: string;
   style: Style;
-}>;
-
-type SelectedRowSpan = Readonly<{
-  y: number;
-  x0: number;
-  x1: number;
 }>;
 
 type ProviderSelectionPoint = Readonly<{
@@ -262,6 +283,18 @@ export function createTerminalSelectionController(
     state.value = { ...state.value, text };
   };
 
+  const resolveProvider = (
+    nextRange: TerminalSelectionRange | null,
+    nextProviderAnchor: ProviderSelectionPoint | null,
+  ): SelectionTextProvider | null => {
+    if (!nextRange) return null;
+    if (nextProviderAnchor) {
+      const provider = providerById(nextProviderAnchor.providerId);
+      if (provider) return provider;
+    }
+    return providers().find((candidate) => candidate.canHandle(nextRange)) ?? null;
+  };
+
   const rebuild = (
     nextRange: TerminalSelectionRange | null,
     nextProviderAnchor: ProviderSelectionPoint | null,
@@ -275,7 +308,25 @@ export function createTerminalSelectionController(
 
     if (nextRange) {
       const selectionStyle = readOptions().style;
-      const spans = terminalSelectionRowSpans(nextRange, size.cols, size.rows);
+      const activeProvider = resolveProvider(nextRange, nextProviderAnchor);
+      let spans: readonly SelectedRowSpan[];
+
+      if (
+        activeProvider?.getVisibleSpans &&
+        nextProviderAnchor &&
+        nextProviderFocus &&
+        nextProviderAnchor.providerId === nextProviderFocus.providerId
+      ) {
+        const providerRange: TerminalSelectionRange = {
+          anchor: nextProviderAnchor.point,
+          focus: nextProviderFocus.point,
+          mode: nextRange.mode,
+        };
+        spans = activeProvider.getVisibleSpans(providerRange, nextRange);
+      } else {
+        spans = terminalSelectionRowSpans(nextRange, size.cols, size.rows);
+      }
+
       hasRange = spans.length > 0 || providerPointsDiffer(nextProviderAnchor, nextProviderFocus);
       for (const span of spans) {
         const row = options.terminal.getRow(span.y);

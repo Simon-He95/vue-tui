@@ -3,6 +3,12 @@ import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
 import type { FramePerfReason } from "../../observability/frame-perf.js";
+import type {
+  SelectedRowSpan,
+  SelectionTextProvider,
+  TerminalSelectionPoint,
+  TerminalSelectionRange,
+} from "../../selection/terminal-selection.js";
 import {
   computed,
   defineComponent,
@@ -21,6 +27,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
+import { terminalSelectionRowSpans } from "../../selection/terminal-selection.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import { defaultActiveStyle } from "../utils/style-cache.js";
 import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
@@ -109,7 +116,7 @@ export const TVirtualList = defineComponent({
     "keydown",
   ],
   setup(props, { emit }) {
-    const { terminal, scheduler, render, defaultStyle, events } = useTerminal();
+    const { terminal, scheduler, render, defaultStyle, events, selection } = useTerminal();
     const instance = getCurrentInstance();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
@@ -468,6 +475,74 @@ export const TVirtualList = defineComponent({
       });
       return changed.changed;
     }
+
+    function selectionPointForCell(point: TerminalSelectionPoint): TerminalSelectionPoint | null {
+      const r = normalizedRect();
+      if (point.x < r.x || point.y < r.y || point.x >= r.x + r.w || point.y >= r.y + r.h) {
+        return null;
+      }
+      const { x: clipX, y: clipY } = clipOffsets();
+      const virtualY = scrollTop.value + clipY + (point.y - r.y);
+      if (virtualY < 0 || virtualY >= itemCount.value) return null;
+      return {
+        x: clamp(clipX + (point.x - r.x), 0, Math.max(0, props.w - 1)),
+        y: virtualY,
+      };
+    }
+
+    function canHandleSelectionRange(range: TerminalSelectionRange): boolean {
+      return Boolean(selectionPointForCell(range.anchor) && selectionPointForCell(range.focus));
+    }
+
+    function textForSelectionRange(range: TerminalSelectionRange): string {
+      const cols = Math.max(1, Math.floor(props.w));
+      return terminalSelectionRowSpans(range, cols, itemCount.value)
+        .map((span) => {
+          const text = sliceByCellsRange(itemText(span.y), span.x0, span.x1);
+          return span.x1 >= cols ? text.trimEnd() : text;
+        })
+        .join("\n");
+    }
+
+    function visibleSpansForSelectionRange(
+      providerRange: TerminalSelectionRange,
+      _screenRange: TerminalSelectionRange,
+    ): readonly SelectedRowSpan[] {
+      const r = normalizedRect();
+      const { x: clipX, y: clipY } = clipOffsets();
+      const cols = Math.max(1, Math.floor(props.w));
+      const top = scrollTop.value + clipY;
+      const bottom = top + r.h;
+      const providerSpans = terminalSelectionRowSpans(providerRange, cols, itemCount.value);
+      const result: SelectedRowSpan[] = [];
+      for (const span of providerSpans) {
+        if (span.y < top || span.y >= bottom) continue;
+        const screenY = r.y + (span.y - top);
+        const screenX0 = r.x + span.x0 - clipX;
+        const screenX1 = r.x + span.x1 - clipX;
+        if (screenY >= r.y && screenY < r.y + r.h && screenX1 > screenX0) {
+          result.push({
+            y: screenY,
+            x0: Math.max(r.x, screenX0),
+            x1: Math.min(r.x + r.w, screenX1),
+          });
+        }
+      }
+      return result;
+    }
+
+    const selectionTextProvider: SelectionTextProvider = {
+      id: `TVirtualList:${virtualListInstanceId}:selection-text`,
+      get rect() {
+        return normalizedRect();
+      },
+      canHandle: canHandleSelectionRange,
+      pointForCell: selectionPointForCell,
+      getText: textForSelectionRange,
+      getVisibleSpans: visibleSpansForSelectionRange,
+    };
+    const unregisterSelectionTextProvider = selection.registerTextProvider(selectionTextProvider);
+    onBeforeUnmount(unregisterSelectionTextProvider);
 
     const eventNode = useTerminalNode(() => ({
       rect: normalizedRect(),

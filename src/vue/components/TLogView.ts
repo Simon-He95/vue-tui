@@ -4,6 +4,7 @@ import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
 import type { FramePerfReason } from "../../observability/frame-perf.js";
 import type {
+  SelectedRowSpan,
   SelectionTextProvider,
   TerminalSelectionPoint,
   TerminalSelectionRange,
@@ -3198,6 +3199,34 @@ export const TLogView = defineComponent({
         .join("\n");
     }
 
+    function visibleSpansForSelectionRange(
+      providerRange: TerminalSelectionRange,
+      _screenRange: TerminalSelectionRange,
+    ): readonly SelectedRowSpan[] {
+      const r = normalizedRect();
+      const { x: clipX, y: clipY } = clipOffsets();
+      const cols = currentWrapWidth();
+      const totalRows = estimatedVisualRowCount();
+      const top = currentScrollTop() + clipY;
+      const bottom = top + r.h;
+      const providerSpans = terminalSelectionRowSpans(providerRange, cols, totalRows);
+      const result: SelectedRowSpan[] = [];
+      for (const span of providerSpans) {
+        if (span.y < top || span.y >= bottom) continue;
+        const screenY = r.y + (span.y - top);
+        const screenX0 = r.x + span.x0 - clipX;
+        const screenX1 = r.x + span.x1 - clipX;
+        if (screenY >= r.y && screenY < r.y + r.h && screenX1 > screenX0) {
+          result.push({
+            y: screenY,
+            x0: Math.max(r.x, screenX0),
+            x1: Math.min(r.x + r.w, screenX1),
+          });
+        }
+      }
+      return result;
+    }
+
     function scrollToLine(
       index: number,
       options?: Readonly<{
@@ -3548,6 +3577,7 @@ export const TLogView = defineComponent({
       canHandle: canHandleSelectionRange,
       pointForCell: selectionPointForCell,
       getText: textForSelectionRange,
+      getVisibleSpans: visibleSpansForSelectionRange,
     };
     const unregisterSelectionTextProvider = selection.registerTextProvider(selectionTextProvider);
     onBeforeUnmount(unregisterSelectionTextProvider);

@@ -253,4 +253,98 @@ describe("terminal selection", () => {
     expect(terminal.getCell(1, 0).style.inverse).toBe(true);
     expect(terminal.getCell(4, 0).style.href).toBe("https://example.com");
   });
+
+  it("uses provider getVisibleSpans when available for overlay highlight", () => {
+    const terminal = createTerminal({ cols: 8, rows: 4 });
+    terminal.write("aaa", { x: 0, y: 0 });
+    terminal.write("bbb", { x: 0, y: 1 });
+    terminal.write("ccc", { x: 0, y: 2 });
+    terminal.write("ddd", { x: 0, y: 3 });
+    const overlay = getPlaneTerminal(terminal, "overlay");
+    const clipboard = memoryClipboard();
+    let sourceTop = 0;
+    const getVisibleSpans = vi.fn(
+      (
+        _providerRange: TerminalSelectionRange,
+        _screenRange: TerminalSelectionRange,
+      ) => {
+        // Simulate a virtual scroll where the provider knows which rows
+        // are currently visible. Return only rows that are in the viewport.
+        const spans: Array<{ y: number; x0: number; x1: number }> = [];
+        // After scroll, visible range is sourceTop..sourceTop+3
+        // If selection covers source rows 1-4, only visible portion should be highlighted
+        for (let i = sourceTop; i < sourceTop + 4; i++) {
+          if (i >= 1 && i <= 4) {
+            spans.push({ y: i - sourceTop, x0: 0, x1: 3 });
+          }
+        }
+        return spans;
+      },
+    );
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: overlay,
+      clipboard: clipboard.api,
+      getTextProviders: () => [
+        {
+          id: "source",
+          rect: { x: 0, y: 0, w: 8, h: 4 },
+          canHandle: () => false,
+          pointForCell: (point) => ({ x: point.x, y: sourceTop + point.y }),
+          getText: () => "text",
+          getVisibleSpans,
+        },
+      ],
+    });
+
+    // Start selection at screen row 1
+    selection.start({ x: 0, y: 1 });
+    // Scroll: sourceTop moves to 1
+    sourceTop = 1;
+    // Update focus at screen row 3
+    selection.update({ x: 3, y: 3 });
+
+    // getVisibleSpans should have been called because the provider has it
+    expect(getVisibleSpans).toHaveBeenCalled();
+
+    selection.paint();
+    terminal.commit({ planes: ["overlay"], sync: true });
+
+    // After scroll, the visible rows should be highlighted correctly.
+    // With sourceTop=1, the visible rows are source rows 1-4.
+    // Row 0 (screen y=0) maps to source row 1, which IS in the selection range.
+    expect(terminal.getCell(0, 0).style.inverse).toBe(true);
+  });
+
+  it("falls back to terminal buffer spans when provider has no getVisibleSpans", () => {
+    const terminal = createTerminal({ cols: 8, rows: 4 });
+    terminal.write("aaa", { x: 0, y: 0 });
+    terminal.write("bbb", { x: 0, y: 1 });
+    const overlay = getPlaneTerminal(terminal, "overlay");
+    const clipboard = memoryClipboard();
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: overlay,
+      clipboard: clipboard.api,
+      getTextProviders: () => [
+        {
+          id: "source",
+          rect: { x: 0, y: 0, w: 8, h: 4 },
+          canHandle: () => false,
+          pointForCell: (point) => ({ x: point.x, y: point.y }),
+          getText: () => "text",
+          // No getVisibleSpans - should fall back to terminal buffer spans
+        },
+      ],
+    });
+
+    selection.start({ x: 0, y: 0 });
+    selection.update({ x: 3, y: 1 });
+    selection.paint();
+    terminal.commit({ planes: ["overlay"], sync: true });
+
+    // Standard terminal buffer overlay should work
+    expect(terminal.getCell(0, 0).style.inverse).toBe(true);
+    expect(terminal.getCell(0, 1).style.inverse).toBe(true);
+  });
 });

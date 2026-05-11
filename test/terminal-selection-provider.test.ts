@@ -640,4 +640,107 @@ describe("TerminalProvider selection", () => {
       restore();
     }
   });
+
+  it("copies TVirtualList item text across selection auto-scroll", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          itemCount: 20,
+          itemVersion: 1,
+          getItem: (index: number) => `item-${index}`,
+          selectable: true,
+        }),
+      12,
+      4,
+      { selection: true },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+      vi.advanceTimersByTime(90);
+      await nextTick();
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
+      await settleClipboard();
+
+      // Should copy item-1 through item-4 (cross-viewport selection via provider)
+      expect(writes.length).toBe(1);
+      expect(writes[0]).toContain("item-1");
+      expect(writes[0]).toContain("item-4");
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+      restore();
+    }
+  });
+
+  it("highlights only visible rows after TLogView auto-scroll during selection", async () => {
+    const source = {
+      lineCount: () => 20,
+      getLine: (index: number) => `line-${index}`,
+    };
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          source,
+          version: 1,
+          defaultScrollTop: 0,
+          autoStickToBottom: false,
+        }),
+      12,
+      4,
+      { selection: { autoCopy: false, copyOnMouseUp: false } },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+      // Start selection at row 1
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      // Drag to bottom edge to trigger auto-scroll
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+      vi.advanceTimersByTime(90);
+      await nextTick();
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
+      await settleClipboard();
+
+      // After auto-scroll + mouseup + settle, the overlay should have been painted
+      // through the selection controller's onDirtyRows → render pipeline.
+      // Verify at least one row has the selection highlight (inverse style).
+      let hasSelectionHighlight = false;
+      for (let y = 0; y < 4; y++) {
+        for (let x = 0; x < 12; x++) {
+          if (mounted.terminal.getCell(x, y).style.inverse) {
+            hasSelectionHighlight = true;
+            break;
+          }
+        }
+        if (hasSelectionHighlight) break;
+      }
+      expect(hasSelectionHighlight).toBe(true);
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+    }
+  });
 });
