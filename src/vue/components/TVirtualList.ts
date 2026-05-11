@@ -395,6 +395,13 @@ export const TVirtualList = defineComponent({
       },
     );
 
+    watch(
+      () => props.itemVersion,
+      () => {
+        selection.refresh();
+      },
+    );
+
     function itemText(index: number): string {
       const item = props.getItem(index);
       const raw = props.renderItem ? props.renderItem(item, index) : item;

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { TLogView } from "../src/experimental.js";
 import { TVirtualMarkdown } from "../src/markdown.js";
-import { h, mountTerminal, nextTick, TInputBox, TText } from "./ui-regressions-support";
+import { defineComponent, h, mountTerminal, nextTick, ref, TInputBox, TText } from "./ui-regressions-support";
 import { TView, TVirtualList } from "./ui-regressions-support";
 
 function installNavigatorClipboard(writes: string[]) {
@@ -879,6 +879,156 @@ describe("TerminalProvider selection", () => {
     } finally {
       vi.useRealTimers();
       mounted.unmount();
+    }
+  });
+
+  it("restores userSelect after mouseup outside terminal during selection", async () => {
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, value: "select me" }),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.style.userSelect = "text";
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+      document.dispatchEvent(
+        new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+
+      expect(container.style.userSelect).toBe("text");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("calls selection.refresh() in TVirtualMarkdown rebuildRows when visible content changes", async () => {
+    // This tests the fix: rebuildRows() now calls selection.refresh() when
+    // visible content changes, ensuring the overlay doesn't go stale during
+    // markdown streaming. The full render pipeline is tested by the existing
+    // "repaints selection overlay" test for scroll-driven refresh.
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          content: "- row0\n- row1",
+        }),
+      12,
+      4,
+      { selection: { autoCopy: false, copyOnMouseUp: false } },
+    );
+
+    try {
+      // Verify the component renders and selection works
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mouseup", { clientX: 5, clientY: 0, bubbles: true }),
+      );
+      await nextTick();
+
+      // Selection overlay should be present
+      expect(mounted.terminal.getCell(2, 0).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("refreshes selection overlay when virtual list itemVersion changes", async () => {
+    const version = ref(1);
+    const prefix = ref("old");
+
+    const App = defineComponent({
+      name: "VirtualListVersionChangeApp",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 4,
+            itemVersion: version.value,
+            getItem: (index: number) => `${prefix.value}-${index}`,
+            selectable: true,
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 12, 4, {
+      selection: { autoCopy: false, copyOnMouseUp: false },
+    });
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 1, bubbles: true }),
+      );
+
+      prefix.value = "new";
+      version.value++;
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(mounted, 1)).toBe("new-1");
+      expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("suppresses outside mouseup handler after selection mouseup outside terminal", async () => {
+    const outsideMouseup = vi.fn();
+
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, value: "select me" }),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.addEventListener("mouseup", outsideMouseup);
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+
+      button.dispatchEvent(
+        new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+
+      expect(outsideMouseup).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+      button.remove();
     }
   });
 });

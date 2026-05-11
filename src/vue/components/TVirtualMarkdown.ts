@@ -177,7 +177,10 @@ export const TVirtualMarkdown = defineComponent({
       const visibleChanged =
         prevVisibleRows.length !== nextVisibleRows.length ||
         prevVisibleRows.some((row, index) => row !== nextVisibleRows[index]);
-      if (!builtOnce || prevScrollTop !== nextScrollTop || visibleChanged) documentVersion.value++;
+      if (!builtOnce || prevScrollTop !== nextScrollTop || visibleChanged) {
+        documentVersion.value++;
+        selection.refresh();
+      }
     }
 
     function scheduleRebuild(): void {

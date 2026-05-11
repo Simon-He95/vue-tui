@@ -1066,9 +1066,23 @@ export const TerminalProvider = defineComponent({
         let ignoreCompatibilityMouseSelectionEvents = false;
         let compatibilityMouseResetTimer: ReturnType<typeof setTimeout> | null = null;
         let activeSelectionPointerId: number | null = null;
+        let selectionPreviousUserSelect: string | null = null;
 
         let suppressDocumentActivation = false;
         let suppressDocumentActivationTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const beginSelectionUserSelect = () => {
+          if (selectionPreviousUserSelect == null) {
+            selectionPreviousUserSelect = el.style.userSelect;
+          }
+          el.style.userSelect = "none";
+        };
+
+        const restoreSelectionUserSelect = () => {
+          if (selectionPreviousUserSelect == null) return;
+          el.style.userSelect = selectionPreviousUserSelect;
+          selectionPreviousUserSelect = null;
+        };
 
         const isPointerSelectionEvent = (event: MouseEvent | PointerEvent): event is PointerEvent =>
           "pointerId" in event && typeof event.pointerId === "number";
@@ -1224,7 +1238,7 @@ export const TerminalProvider = defineComponent({
           selectionStartPoint = point;
           selectionScrollOrigin = point;
           selectionLastPoint = point;
-          el.style.userSelect = "none";
+          beginSelectionUserSelect();
           if (isPointerSelectionEvent(event)) {
             activeSelectionPointerId = event.pointerId;
             addSelectionDocPointerListeners();
@@ -1282,7 +1296,7 @@ export const TerminalProvider = defineComponent({
             suppressNextSelectionClick = true;
             armDocumentActivationSuppression();
             (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
-            event.preventDefault();
+            suppressNativeSelectionEvent(event);
           }
           finishSelection();
         };
@@ -1293,6 +1307,7 @@ export const TerminalProvider = defineComponent({
           selectionStartPoint = null;
           selectionScrollOrigin = null;
           selectionLastPoint = null;
+          restoreSelectionUserSelect();
           clearSelectionAutoScroll();
           removeSelectionDocPointerListeners();
           removeSelectionDocListeners();
@@ -1339,17 +1354,21 @@ export const TerminalProvider = defineComponent({
             selection.update(point);
           }
           const suppressActivation = selectionDragStarted || selection.state.value.hasRange;
+          const outsideTerminal = !isEventInsideTerminal(event);
           if (suppressActivation) {
             suppressNextSelectionClick = true;
             armDocumentActivationSuppression();
             (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
-            event.preventDefault();
+
+            if (outsideTerminal) suppressNativeSelectionEvent(event);
+            else event.preventDefault();
           }
           selecting = false;
           activeSelectionPointerId = null;
           selectionStartPoint = null;
           selectionScrollOrigin = null;
           selectionLastPoint = null;
+          restoreSelectionUserSelect();
           clearSelectionAutoScroll();
           removeSelectionDocPointerListeners();
           if (isPointerSelectionEvent(event)) {
@@ -1392,6 +1411,7 @@ export const TerminalProvider = defineComponent({
         };
 
         const cleanupSelectionListeners = () => {
+          restoreSelectionUserSelect();
           clearSelectionAutoScroll();
           clearCompatibilityMouseReset();
           clearSuppressDocumentActivationTimer();
