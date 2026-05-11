@@ -998,6 +998,53 @@ describe("TerminalProvider selection", () => {
     }
   });
 
+  it("suppresses delayed document click after mouseup outside terminal", async () => {
+    vi.useFakeTimers();
+
+    const outsideClick = vi.fn();
+
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, value: "select me" }),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.addEventListener("click", outsideClick);
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+      document.dispatchEvent(
+        new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+
+      // Simulate browser dispatching click slightly later, not synchronously.
+      vi.advanceTimersByTime(10);
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      expect(outsideClick).not.toHaveBeenCalled();
+
+      // After suppression window expires, unrelated future clicks should work.
+      vi.advanceTimersByTime(300);
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      expect(outsideClick).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+      button.remove();
+      vi.useRealTimers();
+    }
+  });
+
   it("suppresses outside mouseup handler after selection mouseup outside terminal", async () => {
     const outsideMouseup = vi.fn();
 

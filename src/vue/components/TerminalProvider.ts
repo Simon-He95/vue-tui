@@ -1074,6 +1074,17 @@ export const TerminalProvider = defineComponent({
         let suppressDocumentActivation = false;
         let suppressDocumentActivationTimer: ReturnType<typeof setTimeout> | null = null;
 
+        const DOCUMENT_ACTIVATION_SUPPRESSION_MS = 250;
+
+        const disarmDocumentActivationSuppression = () => {
+          suppressDocumentActivation = false;
+          if (suppressDocumentActivationTimer != null) {
+            clearTimeout(suppressDocumentActivationTimer);
+            suppressDocumentActivationTimer = null;
+          }
+          removeSelectionDocActivationListeners();
+        };
+
         const beginSelectionUserSelect = () => {
           if (selectionPreviousUserSelect == null) {
             selectionPreviousUserSelect = el.style.userSelect;
@@ -1147,17 +1158,12 @@ export const TerminalProvider = defineComponent({
           }, 0);
         };
 
-        const clearSuppressDocumentActivationTimer = () => {
-          if (suppressDocumentActivationTimer == null) return;
-          clearTimeout(suppressDocumentActivationTimer);
-          suppressDocumentActivationTimer = null;
-        };
-
         const onSelectionDocActivationCapture = (event: MouseEvent) => {
           if (!suppressDocumentActivation) return;
-          suppressDocumentActivation = false;
-          clearSuppressDocumentActivationTimer();
-          removeSelectionDocActivationListeners();
+
+          // Suppress exactly the first activation event after drag-selection.
+          disarmDocumentActivationSuppression();
+
           event.preventDefault();
           event.stopPropagation();
           event.stopImmediatePropagation?.();
@@ -1171,15 +1177,18 @@ export const TerminalProvider = defineComponent({
 
         const armDocumentActivationSuppression = () => {
           suppressDocumentActivation = true;
+
           doc.addEventListener("click", onSelectionDocActivationCapture, true);
           doc.addEventListener("dblclick", onSelectionDocActivationCapture, true);
           doc.addEventListener("contextmenu", onSelectionDocActivationCapture, true);
-          clearSuppressDocumentActivationTimer();
+
+          if (suppressDocumentActivationTimer != null) {
+            clearTimeout(suppressDocumentActivationTimer);
+          }
+
           suppressDocumentActivationTimer = setTimeout(() => {
-            suppressDocumentActivation = false;
-            removeSelectionDocActivationListeners();
-            suppressDocumentActivationTimer = null;
-          }, 0);
+            disarmDocumentActivationSuppression();
+          }, DOCUMENT_ACTIVATION_SUPPRESSION_MS);
         };
 
         const clearSelectionAutoScroll = () => {
@@ -1417,12 +1426,10 @@ export const TerminalProvider = defineComponent({
           restoreSelectionUserSelect();
           clearSelectionAutoScroll();
           clearCompatibilityMouseReset();
-          clearSuppressDocumentActivationTimer();
+          disarmDocumentActivationSuppression();
           activeSelectionPointerId = null;
           removeSelectionDocPointerListeners();
           removeSelectionDocListeners();
-          removeSelectionDocActivationListeners();
-          suppressDocumentActivation = false;
         };
 
         el.addEventListener("pointerdown", onSelectionPointerDown, true);
