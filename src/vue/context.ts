@@ -6,6 +6,7 @@ import type { EventManager, Rect } from "../events/index.js";
 import type {
   SelectionTextProvider,
   TerminalSelectionCopyPayload,
+  TerminalSelectionRefreshOptions,
 } from "../selection/terminal-selection.js";
 import type { RendererCapabilities, TerminalRendererLike } from "../renderer/index.js";
 import type { TraceStore } from "../observability/trace.js";
@@ -107,7 +108,7 @@ export type TerminalRuntime = Readonly<{
 export type TerminalSelectionContext = Readonly<{
   registerTextProvider: (provider: SelectionTextProvider) => () => void;
   onCopy: (handler: (payload: TerminalSelectionCopyPayload) => void) => () => void;
-  refresh: () => void;
+  refresh: (options?: TerminalSelectionRefreshOptions) => void;
   clear: () => void;
 }>;
 

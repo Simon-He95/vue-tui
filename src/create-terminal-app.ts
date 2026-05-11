@@ -9,6 +9,7 @@ import type {
   SelectionTextProvider,
   TerminalSelectionConfig,
   TerminalSelectionCopyPayload,
+  TerminalSelectionRefreshOptions,
 } from "./selection/terminal-selection.js";
 import type { TInputPlugin } from "./vue/components/input/plugins/types.js";
 
@@ -544,8 +545,8 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       selectionCopyHandlers.add(handler);
       return () => selectionCopyHandlers.delete(handler);
     },
-    refresh() {
-      selection.refresh();
+    refresh(options) {
+      selection.refresh(options);
     },
     clear() {
       selection.clear();

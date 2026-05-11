@@ -10,6 +10,7 @@ import type {
   SelectionTextProvider,
   TerminalSelectionCopyPayload,
   TerminalSelectionOptions,
+  TerminalSelectionRefreshOptions,
 } from "../../selection/terminal-selection.js";
 import type {
   ImeAnchor,
@@ -189,7 +190,9 @@ export const TerminalProvider = defineComponent({
       default: false,
     },
   },
-  emits: ["selectionCopy"],
+  emits: {
+    selectionCopy: (_payload: TerminalSelectionCopyPayload) => true,
+  },
   setup(props, { slots, emit }) {
     const terminal: Terminal = createTerminal({
       cols: props.cols,
@@ -302,8 +305,8 @@ export const TerminalProvider = defineComponent({
         selectionCopyHandlers.add(handler);
         return () => selectionCopyHandlers.delete(handler);
       },
-      refresh() {
-        selection.refresh();
+      refresh(options) {
+        selection.refresh(options);
       },
       clear() {
         selection.clear();

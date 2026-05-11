@@ -91,6 +91,14 @@ export type SelectionTextProvider = Readonly<{
   ) => readonly SelectedRowSpan[];
 }>;
 
+export type TerminalSelectionRefreshOptions = Readonly<{
+  /**
+   * Re-map the current screen-space focus point through the active provider.
+   * Use this for selection-driven auto-scroll after the viewport has moved.
+   */
+  remapFocus?: boolean;
+}>;
+
 export type TerminalSelectionController = Readonly<{
   state: Ref<TerminalSelectionState>;
   start: (point: TerminalSelectionPoint, options?: { extend?: boolean }) => void;
@@ -99,7 +107,7 @@ export type TerminalSelectionController = Readonly<{
   clear: () => void;
   copy: () => Promise<boolean>;
   paint: (dirtyRows?: readonly number[]) => void;
-  refresh: () => void;
+  refresh: (options?: TerminalSelectionRefreshOptions) => void;
 }>;
 
 type ProviderSelectionPoint = Readonly<{
@@ -543,8 +551,22 @@ export function createTerminalSelectionController(
         }
       }
     },
-    refresh() {
+    refresh(refreshOptions) {
       if (!range) return;
+
+      if (refreshOptions?.remapFocus) {
+        const activeProvider = providerAnchor
+          ? providerById(providerAnchor.providerId)
+          : resolveProvider(range, null);
+
+        const nextProviderFocus = activeProvider
+          ? providerPointForCell(activeProvider, range.focus, { clampToRect: true })
+          : providerFocus;
+
+        rebuild(range, providerAnchor, nextProviderFocus);
+        return;
+      }
+
       rebuild(range, providerAnchor, providerFocus);
     },
   };

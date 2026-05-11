@@ -1031,4 +1031,62 @@ describe("TerminalProvider selection", () => {
       button.remove();
     }
   });
+
+  it("keeps TVirtualList selection correct with controlled scrollTop auto-scroll", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+
+    const scrollTopRef = ref(0);
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 20,
+            itemVersion: 1,
+            scrollTop: scrollTopRef.value,
+            getItem: (index: number) => `item-${index}`,
+            selectable: true,
+            "onUpdate:scrollTop": (value: number) => {
+              scrollTopRef.value = value;
+            },
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 12, 4, { selection: true });
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+
+      vi.advanceTimersByTime(90);
+      await nextTick();
+      await nextTick();
+
+      container.dispatchEvent(
+        new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+      await settleClipboard();
+
+      expect(scrollTopRef.value).toBeGreaterThan(0);
+      expect(writes[0]).toContain("item-1");
+      expect(writes[0]).toContain("item-4");
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+      restore();
+    }
+  });
 });

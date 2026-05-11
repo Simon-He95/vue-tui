@@ -130,6 +130,7 @@ export type {
   TerminalSelectionOptions,
   TerminalSelectionPoint,
   TerminalSelectionRange,
+  TerminalSelectionRefreshOptions,
   TerminalSelectionState,
 } from "./selection/terminal-selection.js";
 export type {

@@ -812,6 +812,7 @@ export const TLogView = defineComponent({
     let renderNodeId: string | null = null;
     let alive = true;
     let pendingWheelTop: number | null = null;
+    let pendingSelectionScrollFocusRemap = false;
     let initializedScrollTop = false;
     let lastLineCount = 0;
     let lastFirstLineIndex = 0;
@@ -3153,8 +3154,17 @@ export const TLogView = defineComponent({
         emitScroll: true,
         stickToBottom: target >= maxScrollTop(),
       });
-      if (changed) invalidateSelf("high", "scroll");
-      return changed;
+      if (!changed) return false;
+
+      if (isScrollControlled()) {
+        // Wait for parent scrollTop prop to come back, then remap screen focus.
+        pendingSelectionScrollFocusRemap = true;
+      } else {
+        selection.refresh({ remapFocus: true });
+      }
+
+      invalidateSelf("high", "scroll");
+      return true;
     }
 
     function selectionPointForCell(point: TerminalSelectionPoint): TerminalSelectionPoint | null {
@@ -3714,6 +3724,12 @@ export const TLogView = defineComponent({
       () => {
         cancelWheelScrollFrame();
         syncStickFromCurrentScrollTop();
+
+        selection.refresh({
+          remapFocus: pendingSelectionScrollFocusRemap,
+        });
+        pendingSelectionScrollFocusRemap = false;
+
         markViewportDirty();
         invalidateSelf("high", "scroll");
       },
