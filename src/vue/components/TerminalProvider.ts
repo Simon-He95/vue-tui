@@ -109,6 +109,8 @@ function shallowEqualRecord(a: Record<string, unknown>, b: Record<string, unknow
 let portalId = 0;
 
 const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
+const SUPPRESS_TERMINAL_POINTER_DOWN = "__vueTuiSuppressTerminalPointerDown";
+const SUPPRESS_TERMINAL_POINTER_MOVE = "__vueTuiSuppressTerminalPointerMove";
 
 type ResolvedTerminalSelectionConfig = Readonly<{
   enabled: boolean;
@@ -1075,10 +1077,16 @@ export const TerminalProvider = defineComponent({
         let suppressDocumentActivation = false;
         let suppressDocumentActivationTimer: ReturnType<typeof setTimeout> | null = null;
 
-        const DOCUMENT_ACTIVATION_SUPPRESSION_MS = 250;
+        const ACTIVATION_SUPPRESS_WINDOW_MS = 250;
+        const ACTIVATION_SUPPRESS_DISTANCE_PX = 4;
+
+        let lastSelectionActivationSource:
+          | { clientX: number; clientY: number; at: number }
+          | null = null;
 
         const disarmDocumentActivationSuppression = () => {
           suppressDocumentActivation = false;
+          lastSelectionActivationSource = null;
           if (suppressDocumentActivationTimer != null) {
             clearTimeout(suppressDocumentActivationTimer);
             suppressDocumentActivationTimer = null;
@@ -1117,6 +1125,7 @@ export const TerminalProvider = defineComponent({
           // Inside terminal: container listener will handle it.
           if (isEventInsideTerminal(event)) return;
 
+          (event as any).__vueTuiSuppressTerminalPointerMove = true;
           onSelectionPointerMove(event);
         };
 
@@ -1159,10 +1168,27 @@ export const TerminalProvider = defineComponent({
           }, 0);
         };
 
-        const onSelectionDocActivationCapture = (event: MouseEvent) => {
-          if (!suppressDocumentActivation) return;
+        const shouldSuppressSelectionActivation = (event: MouseEvent): boolean => {
+          if (!suppressDocumentActivation || !lastSelectionActivationSource) return false;
 
-          // Suppress exactly the first activation event after drag-selection.
+          const dt = Date.now() - lastSelectionActivationSource.at;
+          const dx = Math.abs(event.clientX - lastSelectionActivationSource.clientX);
+          const dy = Math.abs(event.clientY - lastSelectionActivationSource.clientY);
+
+          return (
+            dt <= ACTIVATION_SUPPRESS_WINDOW_MS &&
+            dx <= ACTIVATION_SUPPRESS_DISTANCE_PX &&
+            dy <= ACTIVATION_SUPPRESS_DISTANCE_PX
+          );
+        };
+
+        const onSelectionDocActivationCapture = (event: MouseEvent) => {
+          if (!shouldSuppressSelectionActivation(event)) {
+            disarmDocumentActivationSuppression();
+            return;
+          }
+
+          // Suppress exactly the first same-source activation event after drag-selection.
           disarmDocumentActivationSuppression();
 
           event.preventDefault();
@@ -1176,8 +1202,13 @@ export const TerminalProvider = defineComponent({
           doc.removeEventListener("contextmenu", onSelectionDocActivationCapture, true);
         };
 
-        const armDocumentActivationSuppression = () => {
+        const armDocumentActivationSuppression = (event: MouseEvent | PointerEvent) => {
           suppressDocumentActivation = true;
+          lastSelectionActivationSource = {
+            clientX: event.clientX,
+            clientY: event.clientY,
+            at: Date.now(),
+          };
 
           doc.addEventListener("click", onSelectionDocActivationCapture, true);
           doc.addEventListener("dblclick", onSelectionDocActivationCapture, true);
@@ -1189,7 +1220,7 @@ export const TerminalProvider = defineComponent({
 
           suppressDocumentActivationTimer = setTimeout(() => {
             disarmDocumentActivationSuppression();
-          }, DOCUMENT_ACTIVATION_SUPPRESSION_MS);
+          }, ACTIVATION_SUPPRESS_WINDOW_MS);
         };
 
         const clearSelectionAutoScroll = () => {
@@ -1270,6 +1301,7 @@ export const TerminalProvider = defineComponent({
           doc.addEventListener("mousemove", onSelectionDocMouseMove, true);
           doc.addEventListener("mouseup", onSelectionDocMouseUp, true);
           scheduleSelectionAutoScroll();
+          (event as any).__vueTuiSuppressTerminalPointerDown = true;
           event.preventDefault();
         };
 
@@ -1288,6 +1320,7 @@ export const TerminalProvider = defineComponent({
           }
           selection.update(point);
           scheduleSelectionAutoScroll();
+          (event as any).__vueTuiSuppressTerminalPointerMove = true;
           event.preventDefault();
         };
 
@@ -1307,7 +1340,7 @@ export const TerminalProvider = defineComponent({
           const suppressActivation = selectionDragStarted || selection.state.value.hasRange;
           if (suppressActivation) {
             suppressNextSelectionClick = true;
-            armDocumentActivationSuppression();
+            armDocumentActivationSuppression(event);
             (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
             suppressNativeSelectionEvent(event);
           }
@@ -1349,6 +1382,7 @@ export const TerminalProvider = defineComponent({
           }
           selection.update(point);
           scheduleSelectionAutoScroll();
+          (event as any).__vueTuiSuppressTerminalPointerMove = true;
           event.preventDefault();
         };
 
@@ -1370,7 +1404,7 @@ export const TerminalProvider = defineComponent({
           const outsideTerminal = !isEventInsideTerminal(event);
           if (suppressActivation) {
             suppressNextSelectionClick = true;
-            armDocumentActivationSuppression();
+            armDocumentActivationSuppression(event);
             (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
 
             if (outsideTerminal) suppressNativeSelectionEvent(event);

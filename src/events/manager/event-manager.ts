@@ -41,6 +41,8 @@ function now(): number {
 }
 
 const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
+const SUPPRESS_TERMINAL_POINTER_DOWN = "__vueTuiSuppressTerminalPointerDown";
+const SUPPRESS_TERMINAL_POINTER_MOVE = "__vueTuiSuppressTerminalPointerMove";
 
 type RowRange = Readonly<{ y0: number; y1: number }>;
 
@@ -588,6 +590,51 @@ export function createEventManager(
   }
 
   function onPointerDown(e: PointerEvent): void {
+    if ((e as any)[SUPPRESS_TERMINAL_POINTER_DOWN]) {
+      // Keep IME focus working even when selection suppresses the gesture.
+      if (textInputTarget && !container.contains(textInputTarget)) {
+        try {
+          (textInputTarget as any).focus?.({ preventScroll: true });
+        } catch {
+          textInputTarget.focus?.();
+        }
+      } else {
+        try {
+          (container as any).focus?.({ preventScroll: true });
+        } catch {
+          container.focus?.();
+        }
+      }
+      // Still resolve the target and set focus/capture so that component
+      // activation (e.g. TVirtualList focus) works during selection.
+      const { cellX, cellY } = toCell(e.clientX, e.clientY);
+      const list = candidatesAt(cellX, cellY);
+      const target = pickTarget(list);
+      const allowSelection = target ? (target.selectable ?? !target.focusable) : true;
+      container.style.userSelect = allowSelection ? defaultUserSelect : "none";
+      if (target) {
+        if (target.focusable) {
+          setFocus(target.id);
+        }
+      }
+      capturedId = target?.id ?? null;
+      updateHover(target, e);
+      record?.({
+        type: "pointerdown",
+        cellX,
+        cellY,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        button: e.button,
+        buttons: e.buttons,
+        ctrlKey: e.ctrlKey,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey,
+        metaKey: e.metaKey,
+      });
+      // Skip the terminal pointerdown event dispatch to the node.
+      return;
+    }
     // Keep an actual text input focused so browsers can start IME/composition.
     // (The terminal container itself isn't an editable element.)
     if (textInputTarget && !container.contains(textInputTarget)) {
@@ -683,6 +730,9 @@ export function createEventManager(
   }
 
   function onPointerMove(e: PointerEvent): void {
+    if ((e as any)[SUPPRESS_TERMINAL_POINTER_MOVE]) {
+      return;
+    }
     lastPointerMoveEvent = e;
     const { cellX, cellY } = toCell(e.clientX, e.clientY);
     record?.({

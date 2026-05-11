@@ -420,7 +420,7 @@ describe("TerminalProvider selection", () => {
       container.dispatchEvent(new MouseEvent("mouseup", { clientX: 4, clientY: 0, bubbles: true }));
       container.dispatchEvent(new MouseEvent("click", { clientX: 4, clientY: 0, bubbles: true }));
 
-      expect(onPointerdown).toHaveBeenCalledTimes(1);
+      expect(onPointerdown).not.toHaveBeenCalled();
       expect(onPointerup).not.toHaveBeenCalled();
       expect(onClick).not.toHaveBeenCalled();
     } finally {
@@ -813,7 +813,8 @@ describe("TerminalProvider selection", () => {
       document.dispatchEvent(new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }));
       document.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
 
-      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      // Browser-generated click after mouseup arrives at the same coordinates.
+      button.dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 20, bubbles: true }));
 
       expect(outsideClick).not.toHaveBeenCalled();
     } finally {
@@ -1016,15 +1017,15 @@ describe("TerminalProvider selection", () => {
         new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }),
       );
 
-      // Simulate browser dispatching click slightly later, not synchronously.
+      // Simulate browser dispatching click slightly later at the same coordinates.
       vi.advanceTimersByTime(10);
-      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      button.dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 20, bubbles: true }));
 
       expect(outsideClick).not.toHaveBeenCalled();
 
       // After suppression window expires, unrelated future clicks should work.
       vi.advanceTimersByTime(300);
-      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      button.dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 20, bubbles: true }));
 
       expect(outsideClick).toHaveBeenCalledTimes(1);
     } finally {
@@ -1123,6 +1124,82 @@ describe("TerminalProvider selection", () => {
       mounted.unmount();
       vi.useRealTimers();
       restore();
+    }
+  });
+
+  it("does not dispatch pointerdown/pointermove to selectable node when starting a drag selection", async () => {
+    const onPointerdown = vi.fn();
+    const onPointermove = vi.fn();
+    const onClick = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TView,
+          {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 1,
+            selectable: true,
+            onPointerdown,
+            onPointermove,
+            onClick,
+          },
+          () => h(TText, { x: 0, y: 0, value: "select text" }),
+        ),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 6, clientY: 0, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("click", { clientX: 6, clientY: 0, bubbles: true }));
+
+      expect(onPointerdown).not.toHaveBeenCalled();
+      expect(onPointermove).not.toHaveBeenCalled();
+      expect(onClick).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not suppress an unrelated click after drag selection", async () => {
+    const outsideClick = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TView,
+          { x: 0, y: 0, w: 12, h: 1, selectable: true },
+          () => h(TText, { x: 0, y: 0, value: "select text" }),
+        ),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    const outside = document.createElement("button");
+    outside.addEventListener("click", outsideClick);
+    document.body.appendChild(outside);
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 6, clientY: 0, bubbles: true }));
+
+      // Different coordinates from selection mouseup: should not be swallowed.
+      outside.dispatchEvent(new MouseEvent("click", { clientX: 200, clientY: 200, bubbles: true }));
+
+      expect(outsideClick).toHaveBeenCalledTimes(1);
+    } finally {
+      outside.remove();
+      mounted.unmount();
     }
   });
 });

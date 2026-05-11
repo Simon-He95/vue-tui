@@ -666,6 +666,9 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
           selectionScrollOrigin = point;
           selectionLastPoint = point;
           scheduleSelectionAutoScroll();
+
+          // selection owns this gesture; do not dispatch pointerdown to the node
+          return true;
         }
       }
       return baseEvents.dispatch(event);
@@ -682,7 +685,8 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       }
       selection.update(point);
       scheduleSelectionAutoScroll();
-      return baseEvents.dispatch(event);
+      // selection owns this gesture; do not dispatch pointermove to the node
+      return true;
     }
 
     if (event.type === "pointerup" && selecting) {
