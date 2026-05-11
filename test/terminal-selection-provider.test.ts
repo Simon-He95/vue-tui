@@ -1202,4 +1202,44 @@ describe("TerminalProvider selection", () => {
       mounted.unmount();
     }
   });
+
+  it("continues selection when dragging outside terminal via document mousemove/mouseup", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+      12,
+      2,
+      { selection: true },
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      // Start selection inside the terminal
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+
+      // Drag outside the terminal via document-level listener
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+
+      // Release outside the terminal
+      document.dispatchEvent(
+        new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+
+      await settleClipboard();
+
+      // Selection should have completed and copied the text
+      expect(writes.length).toBe(1);
+      expect(writes[0]).toContain("select");
+    } finally {
+      mounted.unmount();
+      restore();
+    }
+  });
 });

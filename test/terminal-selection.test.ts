@@ -469,4 +469,49 @@ describe("terminal selection", () => {
     expect(selection.state.value.active).toBe(true);
     expect(selection.state.value.hasRange).toBe(true);
   });
+
+  it("clears overlay highlight when provider unregisters", () => {
+    const terminal = createTerminal({ cols: 10, rows: 2 });
+    terminal.write("abcdefghij", { x: 0, y: 0, style: { fg: "whiteBright" } });
+    const overlay = getPlaneTerminal(terminal, "overlay");
+    const clipboard = memoryClipboard();
+
+    const providers: SelectionTextProvider[] = [
+      {
+        id: "source",
+        rect: { x: 0, y: 0, w: 10, h: 2 },
+        canHandle: () => true,
+        pointForCell: (point) => ({ x: point.x, y: point.y + 100 }),
+        getText: () => "provider text",
+      },
+    ];
+
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: overlay,
+      clipboard: clipboard.api,
+      getTextProviders: () => providers,
+    });
+
+    selection.start({ x: 0, y: 0 });
+    selection.update({ x: 4, y: 0 });
+    selection.paint();
+    terminal.commit({ planes: ["overlay"], sync: true });
+
+    // Verify overlay is applied
+    expect(terminal.getCell(0, 0).style.inverse).toBe(true);
+    expect(terminal.getCell(4, 0).style.inverse).toBe(true);
+
+    // Simulate provider unregister — should clear selection and dirty rows.
+    providers.length = 0;
+    selection.clearProvider("source");
+
+    // Clear overlay and repaint to verify highlight is removed.
+    overlay.clear(0, 0, 10, 2);
+    selection.paint([0]);
+    terminal.commit({ planes: ["overlay"], sync: true });
+
+    expect(terminal.getCell(0, 0).style.inverse).toBeUndefined();
+    expect(terminal.getCell(4, 0).style.inverse).toBeUndefined();
+  });
 });

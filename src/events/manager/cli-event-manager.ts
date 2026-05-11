@@ -68,6 +68,8 @@ export interface CliEventManager {
 }
 
 const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
+const SUPPRESS_TERMINAL_POINTER_DOWN = "__vueTuiSuppressTerminalPointerDown";
+const SUPPRESS_TERMINAL_POINTER_MOVE = "__vueTuiSuppressTerminalPointerMove";
 
 let nextId = 0;
 
@@ -653,6 +655,15 @@ export function createCliEventManager(
           if (event.type === "pointerdown") {
             const list = candidatesAt(event.cellX, event.cellY);
             const target = pickTarget(list);
+            // When selection owns the gesture, still resolve focus/capture
+            // for parity with the DOM event manager's suppressed path,
+            // but skip dispatching the pointerdown event to the node.
+            if ((event as any)[SUPPRESS_TERMINAL_POINTER_DOWN]) {
+              if (target?.focusable) setFocus(target.id);
+              capturedId = target?.id ?? null;
+              updateHover(target, event);
+              return true;
+            }
             if (target?.focusable) setFocus(target.id);
             capturedId = target?.id ?? null;
             updateHover(target, event);
@@ -661,6 +672,11 @@ export function createCliEventManager(
           }
 
           if (event.type === "pointermove" && capturedId) {
+            if ((event as any)[SUPPRESS_TERMINAL_POINTER_MOVE]) {
+              const target = nodes.get(capturedId) ?? null;
+              if (target) updateHover(target, event);
+              return true;
+            }
             const target = nodes.get(capturedId) ?? null;
             if (!target) return prevented;
             updateHover(target, event);
@@ -672,6 +688,9 @@ export function createCliEventManager(
           }
 
           if (event.type === "pointermove") {
+            if ((event as any)[SUPPRESS_TERMINAL_POINTER_MOVE]) {
+              return true;
+            }
             const list = candidatesAt(event.cellX, event.cellY);
             const target = pickTarget(list);
             updateHover(target, event);

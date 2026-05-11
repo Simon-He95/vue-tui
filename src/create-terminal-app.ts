@@ -68,6 +68,8 @@ interface Portal {
 
 let portalId = 0;
 const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
+const SUPPRESS_TERMINAL_POINTER_DOWN = "__vueTuiSuppressTerminalPointerDown";
+const SUPPRESS_TERMINAL_POINTER_MOVE = "__vueTuiSuppressTerminalPointerMove";
 
 type ResolvedTerminalSelectionConfig = Readonly<{
   enabled: boolean;
@@ -667,7 +669,11 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
           selectionLastPoint = point;
           scheduleSelectionAutoScroll();
 
-          // selection owns this gesture; do not dispatch pointerdown to the node
+          // Set suppress flag and dispatch so the CLI event manager's
+          // suppressed path still resolves focus/capture for parity
+          // with the DOM event manager.
+          (event as any)[SUPPRESS_TERMINAL_POINTER_DOWN] = true;
+          baseEvents.dispatch(event);
           return true;
         }
       }
@@ -685,7 +691,11 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       }
       selection.update(point);
       scheduleSelectionAutoScroll();
-      // selection owns this gesture; do not dispatch pointermove to the node
+      // Set suppress flag and dispatch so the CLI event manager's
+      // suppressed path still updates hover state for parity with
+      // the DOM event manager.
+      (event as any)[SUPPRESS_TERMINAL_POINTER_MOVE] = true;
+      baseEvents.dispatch(event);
       return true;
     }
 

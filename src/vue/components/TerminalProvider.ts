@@ -1086,6 +1086,7 @@ export const TerminalProvider = defineComponent({
 
         const disarmDocumentActivationSuppression = () => {
           suppressDocumentActivation = false;
+          suppressNextSelectionClick = false;
           lastSelectionActivationSource = null;
           if (suppressDocumentActivationTimer != null) {
             clearTimeout(suppressDocumentActivationTimer);
@@ -1188,9 +1189,9 @@ export const TerminalProvider = defineComponent({
             return;
           }
 
-          // Suppress exactly the first same-source activation event after drag-selection.
-          disarmDocumentActivationSuppression();
-
+          // Suppress all same-source activation events (click, dblclick,
+          // contextmenu) within the short window. Do not disarm early —
+          // the timer will expire and clean up automatically.
           event.preventDefault();
           event.stopPropagation();
           event.stopImmediatePropagation?.();
@@ -1434,8 +1435,9 @@ export const TerminalProvider = defineComponent({
 
         const onSelectionClickCapture = (event: MouseEvent) => {
           if (!selectionEnabled()) return;
-          if (!suppressNextSelectionClick) return;
-          suppressNextSelectionClick = false;
+          // Suppress all activation events (click, dblclick, contextmenu) during
+          // the suppression window, not just the first one.
+          if (!suppressNextSelectionClick && !suppressDocumentActivation) return;
           ignoreCompatibilityMouseSelectionEvents = false;
           clearCompatibilityMouseReset();
           event.preventDefault();

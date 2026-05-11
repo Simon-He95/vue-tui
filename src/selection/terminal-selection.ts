@@ -39,9 +39,17 @@ export type TerminalSelectionOptions = Readonly<{
 
 export type TerminalSelectionConfig = boolean | TerminalSelectionOptions;
 
+/**
+ * A visible overlay span in terminal screen coordinates.
+ * Provider-space spans must be translated to screen coordinates before
+ * returning from `getVisibleSpans()`.
+ */
 export type SelectedRowSpan = Readonly<{
+  /** Terminal screen row y */
   y: number;
+  /** Terminal screen column x inclusive */
   x0: number;
+  /** Terminal screen column x exclusive */
   x1: number;
 }>;
 
