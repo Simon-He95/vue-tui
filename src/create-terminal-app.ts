@@ -1,5 +1,6 @@
 import type { App, Component, Ref } from "vue";
 import type { PathPickerProvider } from "./cli/path-provider.js";
+import { TERMINAL_RENDER_PLANES } from "./core/render-plane.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "./core/render-plane.js";
 import type { Style, Terminal } from "./core/types.js";
 import type { CliEventManager, TerminalEventRecord } from "./events/index.js";
@@ -234,6 +235,13 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     pendingInvalidatePlanes.add(plane);
   }
 
+  const sortRenderPlanes = (planes: TerminalRenderPlanes): TerminalRenderPlanes => {
+    const order = new Map<TerminalRenderPlane, number>(
+      TERMINAL_RENDER_PLANES.map((plane, index) => [plane, index]),
+    );
+    return [...planes].sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
+  };
+
   function takeActivePlanes(): TerminalRenderPlanes | null {
     if (pendingInvalidateAllPlanes) {
       pendingInvalidateAllPlanes = false;
@@ -241,7 +249,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       return null;
     }
     if (pendingInvalidatePlanes.size === 0) return null;
-    const activePlanes = Array.from(pendingInvalidatePlanes);
+    const activePlanes = sortRenderPlanes(Array.from(pendingInvalidatePlanes));
     pendingInvalidatePlanes.clear();
     return activePlanes;
   }

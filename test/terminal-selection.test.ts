@@ -365,4 +365,38 @@ describe("terminal selection", () => {
     expect(spans[0]?.y).toBe(500);
     expect(spans.at(-1)?.y).toBe(523);
   });
+
+  it("passes provider-space range to provider getText when resolved via canHandle", async () => {
+    const terminal = createTerminal({ cols: 10, rows: 5 });
+    const clipboard = memoryClipboard();
+
+    const received: TerminalSelectionRange[] = [];
+
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: getPlaneTerminal(terminal, "overlay"),
+      clipboard: clipboard.api,
+      getTextProviders: () => [
+        {
+          id: "provider",
+          rect: { x: 0, y: 0, w: 10, h: 5 },
+          canHandle: () => true,
+          pointForCell: (point) => ({ x: point.x, y: point.y + 100 }),
+          getText: (range) => {
+            received.push(range);
+            return "ok";
+          },
+        },
+      ],
+    });
+
+    selection.start({ x: 0, y: 0 });
+    selection.update({ x: 2, y: 1 });
+    await selection.finish();
+
+    expect(received[0]).toMatchObject({
+      anchor: { x: 0, y: 100 },
+      focus: { x: 2, y: 101 },
+    });
+  });
 });

@@ -102,12 +102,6 @@ export type TerminalSelectionController = Readonly<{
   refresh: () => void;
 }>;
 
-type SelectionCell = Readonly<{
-  x: number;
-  ch: string;
-  style: Style;
-}>;
-
 type ProviderSelectionPoint = Readonly<{
   providerId: string;
   point: TerminalSelectionPoint;
@@ -253,7 +247,7 @@ export function createTerminalSelectionController(
   let range: TerminalSelectionRange | null = null;
   let providerAnchor: ProviderSelectionPoint | null = null;
   let providerFocus: ProviderSelectionPoint | null = null;
-  let overlayRows = new Map<number, readonly SelectionCell[]>();
+  let overlaySpans = new Map<number, SelectedRowSpan[]>();
   let dirtyRows = new Set<number>();
 
   const readOptions = (): ResolvedSelectionOptions => ({
@@ -317,21 +311,55 @@ export function createTerminalSelectionController(
     return lines.join("\n");
   };
 
+  const providerRangeFor = (
+    provider: SelectionTextProvider,
+    screenRange: TerminalSelectionRange,
+    anchorOverride?: ProviderSelectionPoint | null,
+    focusOverride?: ProviderSelectionPoint | null,
+  ): TerminalSelectionRange | null => {
+    if (
+      anchorOverride &&
+      focusOverride &&
+      anchorOverride.providerId === provider.id &&
+      focusOverride.providerId === provider.id
+    ) {
+      return {
+        anchor: anchorOverride.point,
+        focus: focusOverride.point,
+        mode: screenRange.mode,
+      };
+    }
+
+    const anchor = providerPointForCell(provider, screenRange.anchor, { clampToRect: true });
+    const focus = providerPointForCell(provider, screenRange.focus, { clampToRect: true });
+
+    if (!anchor || !focus) return null;
+    if (anchor.providerId !== provider.id || focus.providerId !== provider.id) return null;
+
+    return {
+      anchor: anchor.point,
+      focus: focus.point,
+      mode: screenRange.mode,
+    };
+  };
+
   const selectedText = (): string => {
     if (!range) return "";
+
     if (providerAnchor && providerFocus && providerAnchor.providerId === providerFocus.providerId) {
       const provider = providerById(providerAnchor.providerId);
       if (provider) {
-        return provider.getText({
-          anchor: providerAnchor.point,
-          focus: providerFocus.point,
-          mode: range.mode,
-        });
+        const providerRange = providerRangeFor(provider, range, providerAnchor, providerFocus);
+        if (providerRange) return provider.getText(providerRange);
       }
     }
 
     const provider = providers().find((candidate) => candidate.canHandle(range));
-    if (provider) return provider.getText(range);
+    if (provider) {
+      const providerRange = providerRangeFor(provider, range);
+      if (providerRange) return provider.getText(providerRange);
+    }
+
     return textFromTerminalBuffer(range);
   };
 
@@ -359,54 +387,47 @@ export function createTerminalSelectionController(
   ): void => {
     const previousRows = dirtyRows;
     const size = options.terminal.size();
-    const nextOverlayRows = new Map<number, readonly SelectionCell[]>();
+    const nextOverlaySpans = new Map<number, SelectedRowSpan[]>();
     const nextDirtyRows = new Set<number>();
     let hasRange = false;
 
     if (nextRange) {
-      const selectionStyle = readOptions().style;
       const activeProvider = resolveProvider(nextRange, nextProviderAnchor);
       let spans: readonly SelectedRowSpan[];
 
-      if (
-        activeProvider?.getVisibleSpans &&
-        nextProviderAnchor &&
-        nextProviderFocus &&
-        nextProviderAnchor.providerId === nextProviderFocus.providerId
-      ) {
-        const providerRange: TerminalSelectionRange = {
-          anchor: nextProviderAnchor.point,
-          focus: nextProviderFocus.point,
-          mode: nextRange.mode,
-        };
+      const providerRange =
+        activeProvider != null
+          ? providerRangeFor(activeProvider, nextRange, nextProviderAnchor, nextProviderFocus)
+          : null;
+
+      if (activeProvider?.getVisibleSpans && providerRange) {
         spans = activeProvider.getVisibleSpans(providerRange, nextRange);
       } else {
         spans = terminalSelectionRowSpans(nextRange, size.cols, size.rows);
       }
 
       hasRange = spans.length > 0 || providerPointsDiffer(nextProviderAnchor, nextProviderFocus);
+
       for (const span of spans) {
-        const row = options.terminal.getRow(span.y);
-        const cells: SelectionCell[] = [];
-        for (let x = span.x0; x < span.x1; x++) {
-          const cell = row[x];
-          if (!cell || cell.continuation) continue;
-          const { href: _href, ...baseStyle } = cell.style;
-          cells.push({
-            x,
-            ch: cell.ch || " ",
-            style: { ...baseStyle, ...selectionStyle },
-          });
+        const x0 = Math.max(0, Math.min(size.cols, Math.floor(span.x0)));
+        const x1 = Math.max(0, Math.min(size.cols, Math.floor(span.x1)));
+        const y = Math.floor(span.y);
+        if (y < 0 || y >= size.rows || x1 <= x0) continue;
+
+        let list = nextOverlaySpans.get(y);
+        if (!list) {
+          list = [];
+          nextOverlaySpans.set(y, list);
         }
-        nextOverlayRows.set(span.y, cells);
-        nextDirtyRows.add(span.y);
+        list.push({ y, x0, x1 });
+        nextDirtyRows.add(y);
       }
     }
 
     range = nextRange;
     providerAnchor = nextProviderAnchor;
     providerFocus = nextProviderFocus;
-    overlayRows = nextOverlayRows;
+    overlaySpans = nextOverlaySpans;
     dirtyRows = nextDirtyRows;
     state.value = nextRange
       ? {
@@ -499,11 +520,27 @@ export function createTerminalSelectionController(
       }
     },
     paint(dirtyRowsHint) {
-      const rows = dirtyRowsHint ?? Array.from(overlayRows.keys());
+      const rows = dirtyRowsHint ?? Array.from(overlaySpans.keys());
+      const selectionStyle = readOptions().style;
+
       for (const y of rows) {
-        const cells = overlayRows.get(y);
-        if (!cells) continue;
-        for (const cell of cells) options.overlayTerminal.put(cell.x, y, cell.ch, cell.style);
+        const spans = overlaySpans.get(y);
+        if (!spans?.length) continue;
+
+        const row = options.terminal.getRow(y);
+
+        for (const span of spans) {
+          for (let x = span.x0; x < span.x1; x++) {
+            const cell = row[x];
+            if (!cell || cell.continuation) continue;
+
+            const { href: _href, ...baseStyle } = cell.style;
+            options.overlayTerminal.put(x, y, cell.ch || " ", {
+              ...baseStyle,
+              ...selectionStyle,
+            });
+          }
+        }
       }
     },
     refresh() {

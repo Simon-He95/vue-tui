@@ -1,5 +1,6 @@
 import type { Component, PropType } from "vue";
 import type { PathPickerProvider } from "../../cli/path-provider.js";
+import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../../core/render-plane.js";
 import type { Style, Terminal } from "../../core/types.js";
 import type { EventManager, TerminalEventRecord } from "../../events/index.js";
@@ -372,6 +373,13 @@ export const TerminalProvider = defineComponent({
       pendingInvalidatePlanes.add(plane);
     }
 
+    const sortRenderPlanes = (planes: TerminalRenderPlanes): TerminalRenderPlanes => {
+      const order = new Map<TerminalRenderPlane, number>(
+        TERMINAL_RENDER_PLANES.map((plane, index) => [plane, index]),
+      );
+      return [...planes].sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
+    };
+
     function takeActivePlanes(): TerminalRenderPlanes | null {
       if (pendingInvalidateAllPlanes) {
         pendingInvalidateAllPlanes = false;
@@ -379,7 +387,7 @@ export const TerminalProvider = defineComponent({
         return null;
       }
       if (pendingInvalidatePlanes.size === 0) return null;
-      const activePlanes = Array.from(pendingInvalidatePlanes);
+      const activePlanes = sortRenderPlanes(Array.from(pendingInvalidatePlanes));
       pendingInvalidatePlanes.clear();
       return activePlanes;
     }
@@ -1065,18 +1073,30 @@ export const TerminalProvider = defineComponent({
         const isPointerSelectionEvent = (event: MouseEvent | PointerEvent): event is PointerEvent =>
           "pointerId" in event && typeof event.pointerId === "number";
 
+        const isEventInsideTerminal = (event: Event): boolean => {
+          const target = event.target;
+          return target instanceof Node && el.contains(target);
+        };
+
         // Document-level pointer listeners ensure selection continues even when
         // the pointer drags outside the terminal and setPointerCapture is
         // unavailable or unreliable.
         const onSelectionDocPointerMove = (event: PointerEvent) => {
           if (!selecting) return;
           if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId) return;
+
+          // Inside terminal: container listener will handle it.
+          if (isEventInsideTerminal(event)) return;
+
           onSelectionPointerMove(event);
         };
 
         const onSelectionDocPointerUp = (event: PointerEvent) => {
           if (!selecting) return;
           if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId) return;
+
+          if (isEventInsideTerminal(event)) return;
+
           onSelectionPointerUp(event);
         };
 
@@ -1229,6 +1249,8 @@ export const TerminalProvider = defineComponent({
         const onSelectionDocMouseMove = (event: MouseEvent) => {
           if (!selecting) return;
           if (ignoreCompatibilityMouseSelectionEvents) return;
+          if (isEventInsideTerminal(event)) return;
+
           const point = cellPointFromClient(event);
           selectionLastPoint = point;
           if (
@@ -1245,6 +1267,8 @@ export const TerminalProvider = defineComponent({
         const onSelectionDocMouseUp = (event: MouseEvent) => {
           if (!selecting) return;
           if (ignoreCompatibilityMouseSelectionEvents) return;
+          if (isEventInsideTerminal(event)) return;
+
           const point = cellPointFromClient(event);
           if (
             !selectionStartPoint ||

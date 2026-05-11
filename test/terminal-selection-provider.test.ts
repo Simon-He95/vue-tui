@@ -825,4 +825,60 @@ describe("TerminalProvider selection", () => {
       button.remove();
     }
   });
+
+  it("repaints selection overlay with current viewport text after virtual scroll", async () => {
+    const source = {
+      lineCount: () => 20,
+      getLine: (index: number) => `line-${index}`,
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          source,
+          version: 1,
+          defaultScrollTop: 0,
+          autoStickToBottom: false,
+        }),
+      12,
+      4,
+      { selection: { autoCopy: false, copyOnMouseUp: false } },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }));
+
+      vi.advanceTimersByTime(90);
+      await nextTick();
+
+      // After auto-scroll, viewport should show line-1 at row 0
+      expect(rowText(mounted, 0)).toBe("line-1");
+
+      // The overlay cells should carry the current row characters,
+      // not stale pre-scroll characters. Verify that the inverse style
+      // is applied on the current viewport content.
+      let hasInverse = false;
+      for (let y = 0; y < 4; y++) {
+        for (let x = 0; x < 12; x++) {
+          if (mounted.terminal.getCell(x, y).style.inverse) {
+            hasInverse = true;
+            break;
+          }
+        }
+        if (hasInverse) break;
+      }
+      expect(hasInverse).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      mounted.unmount();
+    }
+  });
 });
