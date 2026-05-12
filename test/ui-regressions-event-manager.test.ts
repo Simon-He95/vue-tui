@@ -924,4 +924,60 @@ describe("ui regressions event manager", () => {
     events.unregister(underlay.id);
     events.dispose();
   });
+
+  it("createEventManager attaches DOM listeners by default", () => {
+    const clicks: string[] = [];
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+
+    const manager = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    manager.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 0,
+      focusable: true,
+      handlers: {
+        click: () => clicks.push("click"),
+      },
+    });
+
+    // No manual .attach() call — should work because default is auto-attach.
+    el.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+
+    expect(clicks).toEqual(["click"]);
+
+    manager.dispose();
+    el.remove();
+  });
+
+  it("createEventManager can defer DOM listener attachment", () => {
+    const clicks: string[] = [];
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+
+    const manager = createEventManager(el, { cellWidth: 1, cellHeight: 1 }, {
+      deferAttach: true,
+    });
+
+    manager.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 0,
+      focusable: true,
+      handlers: {
+        click: () => clicks.push("click"),
+      },
+    });
+
+    // Before attach — events should not be dispatched.
+    el.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+    expect(clicks).toEqual([]);
+
+    // After attach — events should be dispatched.
+    manager.attach();
+
+    el.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+    expect(clicks).toEqual(["click"]);
+
+    manager.dispose();
+    el.remove();
+  });
 });

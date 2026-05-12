@@ -78,6 +78,12 @@ export function createEventManager(
     textInputTarget?: HTMLElement | null;
     debugIme?: boolean;
     onFocusChange?: (prev: string | null, next: string | null) => void;
+    /**
+     * When true, native DOM listeners are not attached until manager.attach()
+     * is called explicitly. Used by TerminalProvider so selection capture
+     * listeners can be registered first.
+     */
+    deferAttach?: boolean;
   }>,
 ): EventManager {
   let currentMetrics = metrics;
@@ -1257,6 +1263,10 @@ export function createEventManager(
       passive: true,
     });
     window.addEventListener("resize", markContainerRectDirty, { passive: true });
+  }
+
+  if (!options?.deferAttach) {
+    attach();
   }
 
   return {

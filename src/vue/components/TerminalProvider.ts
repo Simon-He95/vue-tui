@@ -719,6 +719,7 @@ export const TerminalProvider = defineComponent({
           },
           textInputTarget: imeRef.value,
           debugIme: props.debugIme,
+          deferAttach: true,
         });
         events.value = m;
 
