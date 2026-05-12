@@ -191,9 +191,9 @@
 
 ### Events
 
-| 名称                       | Payload                                                          | 说明 |
-| -------------------------- | ---------------------------------------------------------------- | ---- |
-| <code>selectionCopy</code> | <code>(_payload: TerminalSelectionCopyPayload) =&gt; true</code> | —    |
+| 名称                       | Payload                                                           | 说明 |
+| -------------------------- | ----------------------------------------------------------------- | ---- |
+| <code>selectionCopy</code> | <code>(\_payload: TerminalSelectionCopyPayload) =&gt; true</code> | —    |
 
 ## TFlow
 
