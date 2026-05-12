@@ -106,7 +106,7 @@
     "bench:scroll-mailbox": "tsx scripts/bench-scroll-mailbox.ts"
   },
   "dependencies": {
-    "stream-markdown-parser": "^0.0.90"
+    "stream-markdown-parser": "^0.0.95"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
