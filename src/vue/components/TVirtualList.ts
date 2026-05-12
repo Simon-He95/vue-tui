@@ -137,6 +137,11 @@ export const TVirtualList = defineComponent({
     let warnedRenderItemIdentity = false;
     let alive = true;
     let pendingWheelTop: number | null = null;
+
+    // Under controlled scrollTop, selection auto-scroll only emits a single
+    // pending update:scrollTop; the selection focus is remapped only after the
+    // parent writes scrollTop back. If the parent never writes back, selection
+    // auto-scroll pauses. This is the intended controlled-component semantic.
     let pendingSelectionScrollFocusRemap = false;
     const wheelState = createWheelScrollState();
 

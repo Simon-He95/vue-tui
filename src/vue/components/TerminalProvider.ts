@@ -1473,10 +1473,10 @@ export const TerminalProvider = defineComponent({
           resetSelectionGesture({ clearSelection: false });
         };
 
-        const releaseSelectionPointerCapture = (): void => {
-          if (activeSelectionPointerId == null) return;
+        const releaseSelectionPointerCapture = (pointerId: number | null = activeSelectionPointerId): void => {
+          if (pointerId == null) return;
           try {
-            el.releasePointerCapture?.(activeSelectionPointerId);
+            el.releasePointerCapture?.(pointerId);
           } catch {
             // best-effort
           }
@@ -1490,17 +1490,23 @@ export const TerminalProvider = defineComponent({
         const resetSelectionGesture = (
           options: SelectionGestureCleanupOptions = {},
         ): void => {
+          const pointerId = activeSelectionPointerId;
+
           selecting = false;
           selectionStartPoint = null;
           selectionScrollOrigin = null;
           selectionLastPoint = null;
           selectionDragStarted = false;
+
+          // Release pointer capture before clearing activeSelectionPointerId
+          // so the correct pointerId is used even when cleanup is triggered
+          // by Escape, selection being disabled, or component unmount.
+          releaseSelectionPointerCapture(pointerId);
           activeSelectionPointerId = null;
 
           restoreSelectionUserSelect();
           clearSelectionAutoScroll();
           clearCompatibilityMouseReset();
-          releaseSelectionPointerCapture();
           removeSelectionDocPointerListeners();
           removeSelectionDocListeners();
 

@@ -1535,4 +1535,93 @@ describe("TerminalProvider selection", () => {
       vi.useRealTimers();
     }
   });
+
+  it("releases pointer capture when Escape cancels an active selection", async () => {
+    const releasePointerCapture = vi.fn();
+
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, value: "abcdef", style: { fg: "whiteBright" } }),
+      8,
+      2,
+      { selection: true },
+    );
+
+    try {
+      const container = mounted.container()!;
+      Object.defineProperty(container, "setPointerCapture", {
+        configurable: true,
+        value: vi.fn(),
+      });
+      Object.defineProperty(container, "releasePointerCapture", {
+        configurable: true,
+        value: releasePointerCapture,
+      });
+
+      container.dispatchEvent(
+        pointerEvent("pointerdown", {
+          clientX: 0,
+          clientY: 0,
+          button: 0,
+          pointerId: 7,
+        }),
+      );
+      container.dispatchEvent(
+        pointerEvent("pointermove", {
+          clientX: 4,
+          clientY: 0,
+          button: 0,
+          pointerId: 7,
+        }),
+      );
+
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+        }),
+      );
+
+      expect(releasePointerCapture).toHaveBeenCalledWith(7);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps native user-select disabled while selection owns pointerdown", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TView,
+          {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            selectable: true,
+          },
+          () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+        ),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        pointerEvent("pointerdown", {
+          clientX: 0,
+          clientY: 0,
+          button: 0,
+          pointerId: 1,
+        }),
+      );
+
+      expect(container.style.userSelect).toBe("none");
+    } finally {
+      mounted.unmount();
+    }
+  });
 });

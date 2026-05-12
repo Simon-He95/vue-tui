@@ -617,13 +617,14 @@ export function createEventManager(
       const { cellX, cellY } = toCell(e.clientX, e.clientY);
       const list = candidatesAt(cellX, cellY);
       const target = pickTarget(list);
-      const allowSelection = target ? (target.selectable ?? !target.focusable) : true;
-      container.style.userSelect = allowSelection ? defaultUserSelect : "none";
-      if (target) {
-        if (target.focusable) {
-          setFocus(target.id);
-        }
+
+      // Important: do not touch container.style.userSelect here.
+      // Selection layer owns userSelect for suppressed gestures.
+
+      if (target?.focusable) {
+        setFocus(target.id);
       }
+
       capturedId = target?.id ?? null;
       updateHover(target, e);
       record?.({

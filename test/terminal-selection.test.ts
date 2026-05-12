@@ -514,4 +514,47 @@ describe("terminal selection", () => {
     expect(terminal.getCell(0, 0).style.inverse).toBeUndefined();
     expect(terminal.getCell(4, 0).style.inverse).toBeUndefined();
   });
+
+  it("clears previous overlay when provider visible spans become empty after scroll", () => {
+    const terminal = createTerminal({ cols: 8, rows: 4 });
+    terminal.write("row0", { x: 0, y: 0 });
+    terminal.write("row1", { x: 0, y: 1 });
+
+    const overlay = getPlaneTerminal(terminal, "overlay");
+    const clipboard = memoryClipboard();
+
+    let visible = true;
+
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: overlay,
+      clipboard: clipboard.api,
+      getTextProviders: () => [
+        {
+          id: "source",
+          rect: { x: 0, y: 0, w: 8, h: 4 },
+          canHandle: () => true,
+          pointForCell: (point) => point,
+          getText: () => "text",
+          getVisibleSpans: () => visible ? [{ y: 1, x0: 0, x1: 4 }] : [],
+        },
+      ],
+    });
+
+    selection.start({ x: 0, y: 1 });
+    selection.update({ x: 3, y: 1 });
+    selection.paint();
+    terminal.commit({ planes: ["overlay"], sync: true });
+
+    expect(terminal.getCell(0, 1).style.inverse).toBe(true);
+
+    visible = false;
+    selection.refresh();
+
+    overlay.clear(0, 0, 8, 4);
+    selection.paint([1]);
+    terminal.commit({ planes: ["overlay"], sync: true });
+
+    expect(terminal.getCell(0, 1).style.inverse).toBeUndefined();
+  });
 });
