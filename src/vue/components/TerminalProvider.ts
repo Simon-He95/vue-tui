@@ -1436,6 +1436,16 @@ export const TerminalProvider = defineComponent({
           // Suppress all activation events (click, dblclick, contextmenu) during
           // the suppression window, not just the first one.
           if (!suppressNextSelectionClick && !suppressDocumentActivation) return;
+
+          // If the click is at a different location from the selection source,
+          // it is an unrelated terminal-internal click — don't suppress it.
+          if (lastSelectionActivationSource && !shouldSuppressSelectionActivation(event)) {
+            disarmDocumentActivationSuppression();
+            ignoreCompatibilityMouseSelectionEvents = false;
+            clearCompatibilityMouseReset();
+            return;
+          }
+
           ignoreCompatibilityMouseSelectionEvents = false;
           clearCompatibilityMouseReset();
           event.preventDefault();

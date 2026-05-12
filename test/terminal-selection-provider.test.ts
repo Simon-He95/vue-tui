@@ -1203,6 +1203,43 @@ describe("TerminalProvider selection", () => {
     }
   });
 
+  it("does not suppress an unrelated terminal-internal click after drag selection", async () => {
+    const onContainerClick = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TView,
+          { x: 0, y: 0, w: 12, h: 2, selectable: true },
+          () => h(TText, { x: 0, y: 0, value: "select text" }),
+        ),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      // Add a bubble-phase click listener directly on the container (after the
+      // event manager's listener) to verify the click is not suppressed.
+      container.addEventListener("click", onContainerClick);
+
+      // Drag selection on first row
+      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 6, clientY: 0, bubbles: true }));
+
+      // Unrelated click inside terminal but at a different position (dy > 4px
+      // from the selection mouseup, so shouldSuppressSelectionActivation fails).
+      container.dispatchEvent(new MouseEvent("click", { clientX: 2, clientY: 20, bubbles: true }));
+
+      expect(onContainerClick).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("continues selection when dragging outside terminal via document mousemove/mouseup", async () => {
     const writes: string[] = [];
     const restore = installNavigatorClipboard(writes);
