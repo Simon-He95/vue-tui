@@ -64,6 +64,7 @@ export interface EventManager {
   focus: (id: string | null) => void;
   getFocused: () => string | null;
   debugNodes: () => TerminalDebugNode[];
+  attach: () => void;
   dispose: () => void;
 }
 
@@ -1218,38 +1219,45 @@ export function createEventManager(
     keyboardTargets.push(textInputTarget);
   }
 
-  container.addEventListener("pointerdown", onPointerDown);
-  container.addEventListener("pointermove", onPointerMove);
-  container.addEventListener("pointerup", onPointerUp);
-  container.addEventListener("mousedown", onMouseDown);
-  container.addEventListener("mousemove", onMouseMove);
-  container.addEventListener("mouseup", onMouseUp);
-  container.addEventListener("mouseleave", onMouseLeave);
-  container.addEventListener("click", onClick);
-  container.addEventListener("dblclick", onDblClick);
-  container.addEventListener("contextmenu", onContextMenu);
-  container.addEventListener("wheel", onWheel, { passive: false });
-  container.addEventListener("dragover", onDragOver);
-  container.addEventListener("drop", onDrop);
-  for (const target of keyboardTargets) {
-    target.addEventListener("keydown", onKeyDown);
-    target.addEventListener("keyup", onKeyUp);
-  }
+  let attached = false;
 
-  for (const target of textTargets) {
-    target.addEventListener("beforeinput", onBeforeInput as any);
-    target.addEventListener("input", onInput as any);
-    target.addEventListener("compositionstart", onCompositionStart as any);
-    target.addEventListener("compositionupdate", onCompositionUpdate as any);
-    target.addEventListener("compositionend", onCompositionEnd as any);
-    target.addEventListener("paste", onPaste as any);
-  }
+  function attach(): void {
+    if (attached) return;
+    attached = true;
 
-  window.addEventListener("scroll", markContainerRectDirty, {
-    capture: true,
-    passive: true,
-  });
-  window.addEventListener("resize", markContainerRectDirty, { passive: true });
+    container.addEventListener("pointerdown", onPointerDown);
+    container.addEventListener("pointermove", onPointerMove);
+    container.addEventListener("pointerup", onPointerUp);
+    container.addEventListener("mousedown", onMouseDown);
+    container.addEventListener("mousemove", onMouseMove);
+    container.addEventListener("mouseup", onMouseUp);
+    container.addEventListener("mouseleave", onMouseLeave);
+    container.addEventListener("click", onClick);
+    container.addEventListener("dblclick", onDblClick);
+    container.addEventListener("contextmenu", onContextMenu);
+    container.addEventListener("wheel", onWheel, { passive: false });
+    container.addEventListener("dragover", onDragOver);
+    container.addEventListener("drop", onDrop);
+    for (const target of keyboardTargets) {
+      target.addEventListener("keydown", onKeyDown);
+      target.addEventListener("keyup", onKeyUp);
+    }
+
+    for (const target of textTargets) {
+      target.addEventListener("beforeinput", onBeforeInput as any);
+      target.addEventListener("input", onInput as any);
+      target.addEventListener("compositionstart", onCompositionStart as any);
+      target.addEventListener("compositionupdate", onCompositionUpdate as any);
+      target.addEventListener("compositionend", onCompositionEnd as any);
+      target.addEventListener("paste", onPaste as any);
+    }
+
+    window.addEventListener("scroll", markContainerRectDirty, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("resize", markContainerRectDirty, { passive: true });
+  }
 
   return {
     register(node) {
@@ -1351,9 +1359,12 @@ export function createEventManager(
         focusable: Boolean(n.focusable),
       }));
     },
+    attach,
     dispose() {
       window.removeEventListener("scroll", markContainerRectDirty, true);
       window.removeEventListener("resize", markContainerRectDirty);
+      if (!attached) return;
+      attached = false;
       container.removeEventListener("pointerdown", onPointerDown);
       container.removeEventListener("pointermove", onPointerMove);
       container.removeEventListener("pointerup", onPointerUp);

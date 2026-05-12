@@ -1526,6 +1526,14 @@ export const TerminalProvider = defineComponent({
         el.addEventListener("dblclick", onSelectionClickCapture, true);
         el.addEventListener("contextmenu", onSelectionClickCapture, true);
         doc.addEventListener("keydown", onSelectionKeydown, true);
+
+        // Attach DOM listeners *after* selection capture listeners so that
+        // selection's pointerdown/move handlers run first (setting suppress
+        // flags) before the EventManager's handlers check them.  This is
+        // critical at AT_TARGET where capture/bubble ordering is determined
+        // by registration order, not by phase.
+        m.attach();
+
         onScopeDispose(() => {
           el.removeEventListener("pointerdown", onSelectionPointerDown, true);
           el.removeEventListener("pointermove", onSelectionPointerMove, true);

@@ -264,18 +264,29 @@ export const TVirtualMarkdown = defineComponent({
     function setScrollTop(
       next: number,
       emitChange = true,
-      refreshOptions?: { remapSelectionFocus?: boolean },
+      refreshOptions?: { remapSelectionFocus?: boolean; emitClampEvenIfUnchanged?: boolean },
     ): void {
-      const clamped = clamp(Math.floor(Number(next) || 0), 0, maxScrollTop());
-      if (internalScrollTop.value === clamped) return;
-      internalScrollTop.value = clamped;
-      if (emitChange) {
+      const desired = Math.floor(Number(next) || 0);
+      const clamped = clamp(desired, 0, maxScrollTop());
+      const changed = internalScrollTop.value !== clamped;
+
+      if (changed) {
+        internalScrollTop.value = clamped;
+      }
+
+      if (
+        emitChange &&
+        (changed || (refreshOptions?.emitClampEvenIfUnchanged && desired !== clamped))
+      ) {
         emit("update:scrollTop", clamped);
         emit("scroll", clamped);
       }
-      selection.refresh(
-        refreshOptions?.remapSelectionFocus ? { remapFocus: true } : undefined,
-      );
+
+      if (changed || refreshOptions?.remapSelectionFocus) {
+        selection.refresh(
+          refreshOptions?.remapSelectionFocus ? { remapFocus: true } : undefined,
+        );
+      }
     }
 
     function reconcileScrollTop(): void {
@@ -296,7 +307,9 @@ export const TVirtualMarkdown = defineComponent({
       () => props.scrollTop,
       () => {
         if (!hasControlledScrollTop()) return;
-        setScrollTop(props.scrollTop);
+        setScrollTop(props.scrollTop, true, {
+          emitClampEvenIfUnchanged: true,
+        });
       },
     );
 
