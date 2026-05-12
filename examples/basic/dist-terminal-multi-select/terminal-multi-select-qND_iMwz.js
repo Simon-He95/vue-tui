@@ -1647,11 +1647,11 @@ function createNodePathPickerProvider() {
       }
     },
     async suggest(info) {
-      const { suggestPaths } = await import("./path-suggest-C-jTVgYW.js");
+      const { suggestPaths } = await import("./path-suggest-Dw4FNBt9.js");
       return suggestPaths({ ...info, listDir: provider.listDir });
     },
     async resolvePath(workspaceAbs, input) {
-      const { resolveUserPath } = await import("./path-suggest-C-jTVgYW.js");
+      const { resolveUserPath } = await import("./path-suggest-Dw4FNBt9.js");
       return resolveUserPath(workspaceAbs, input);
     }
   };
@@ -10905,6 +10905,8 @@ function rectRowRange(rect) {
   return { y0, y1 };
 }
 const SUPPRESS_TERMINAL_POINTER_UP$1 = "__vueTuiSuppressTerminalPointerUp";
+const SUPPRESS_TERMINAL_POINTER_DOWN$1 = "__vueTuiSuppressTerminalPointerDown";
+const SUPPRESS_TERMINAL_POINTER_MOVE$1 = "__vueTuiSuppressTerminalPointerMove";
 let nextId = 0;
 function createCliEventManager(options) {
   const nodes = /* @__PURE__ */ new Map();
@@ -11348,6 +11350,12 @@ function createCliEventManager(options) {
           if (event.type === "pointerdown") {
             const list = candidatesAt(event.cellX, event.cellY);
             const target = pickTarget(list);
+            if (event[SUPPRESS_TERMINAL_POINTER_DOWN$1]) {
+              if (target?.focusable) setFocus(target.id);
+              capturedId = target?.id ?? null;
+              updateHover(target, event);
+              return true;
+            }
             if (target?.focusable) setFocus(target.id);
             capturedId = target?.id ?? null;
             updateHover(target, event);
@@ -11355,6 +11363,11 @@ function createCliEventManager(options) {
             return prevented;
           }
           if (event.type === "pointermove" && capturedId) {
+            if (event[SUPPRESS_TERMINAL_POINTER_MOVE$1]) {
+              const target2 = nodes.get(capturedId) ?? null;
+              if (target2) updateHover(target2, event);
+              return true;
+            }
             const target = nodes.get(capturedId) ?? null;
             if (!target) return prevented;
             updateHover(target, event);
@@ -11365,6 +11378,9 @@ function createCliEventManager(options) {
             return prevented;
           }
           if (event.type === "pointermove") {
+            if (event[SUPPRESS_TERMINAL_POINTER_MOVE$1]) {
+              return true;
+            }
             const list = candidatesAt(event.cellX, event.cellY);
             const target = pickTarget(list);
             updateHover(target, event);
@@ -13329,12 +13345,18 @@ function copyPayload(text, ok, error) {
     ...error === void 0 ? {} : { error }
   };
 }
+function clampPointToRect(point, rect) {
+  return {
+    x: Math.max(rect.x, Math.min(rect.x + Math.max(0, rect.w - 1), Math.floor(point.x))),
+    y: Math.max(rect.y, Math.min(rect.y + Math.max(0, rect.h - 1), Math.floor(point.y)))
+  };
+}
 function createTerminalSelectionController(options) {
   const state = /* @__PURE__ */ shallowRef(EMPTY_STATE);
   let range = null;
   let providerAnchor = null;
   let providerFocus = null;
-  let overlayRows = /* @__PURE__ */ new Map();
+  let overlaySpans = /* @__PURE__ */ new Map();
   let dirtyRows = /* @__PURE__ */ new Set();
   const readOptions = () => ({
     autoCopy: true,
@@ -13366,8 +13388,9 @@ function createTerminalSelectionController(options) {
     }
     return best;
   };
-  const providerPointForCell = (provider, point) => {
-    const providerPoint = provider.pointForCell?.(point) ?? point;
+  const providerPointForCell = (provider, point, options2) => {
+    const inputPoint = options2?.clampToRect ? clampPointToRect(point, provider.rect) : point;
+    const providerPoint = provider.pointForCell?.(inputPoint) ?? inputPoint;
     return providerPoint ? { providerId: provider.id, point: providerPoint } : null;
   };
   const textFromTerminalBuffer = (nextRange) => {
@@ -13379,57 +13402,86 @@ function createTerminalSelectionController(options) {
     }
     return lines.join("\n");
   };
+  const providerRangeFor = (provider, screenRange, anchorOverride, focusOverride) => {
+    if (anchorOverride && focusOverride && anchorOverride.providerId === provider.id && focusOverride.providerId === provider.id) {
+      return {
+        anchor: anchorOverride.point,
+        focus: focusOverride.point,
+        mode: screenRange.mode
+      };
+    }
+    const anchor = providerPointForCell(provider, screenRange.anchor, { clampToRect: true });
+    const focus = providerPointForCell(provider, screenRange.focus, { clampToRect: true });
+    if (!anchor || !focus) return null;
+    if (anchor.providerId !== provider.id || focus.providerId !== provider.id) return null;
+    return {
+      anchor: anchor.point,
+      focus: focus.point,
+      mode: screenRange.mode
+    };
+  };
   const selectedText = () => {
     if (!range) return "";
     if (providerAnchor && providerFocus && providerAnchor.providerId === providerFocus.providerId) {
       const provider2 = providerById(providerAnchor.providerId);
       if (provider2) {
-        return provider2.getText({
-          anchor: providerAnchor.point,
-          focus: providerFocus.point,
-          mode: range.mode
-        });
+        const providerRange = providerRangeFor(provider2, range, providerAnchor, providerFocus);
+        if (providerRange) return provider2.getText(providerRange);
       }
     }
     const provider = providers().find((candidate) => candidate.canHandle(range));
-    if (provider) return provider.getText(range);
+    if (provider) {
+      const providerRange = providerRangeFor(provider, range);
+      if (providerRange) return provider.getText(providerRange);
+    }
     return textFromTerminalBuffer(range);
   };
   const setResolvedText = (text) => {
     if (!range || !state.value.active || state.value.text === text) return;
     state.value = { ...state.value, text };
   };
+  const resolveProvider = (nextRange, nextProviderAnchor) => {
+    if (!nextRange) return null;
+    if (nextProviderAnchor) {
+      const provider = providerById(nextProviderAnchor.providerId);
+      if (provider) return provider;
+    }
+    return providers().find((candidate) => candidate.canHandle(nextRange)) ?? null;
+  };
   const rebuild = (nextRange, nextProviderAnchor, nextProviderFocus) => {
     const previousRows = dirtyRows;
     const size = options.terminal.size();
-    const nextOverlayRows = /* @__PURE__ */ new Map();
+    const nextOverlaySpans = /* @__PURE__ */ new Map();
     const nextDirtyRows = /* @__PURE__ */ new Set();
     let hasRange = false;
     if (nextRange) {
-      const selectionStyle = readOptions().style;
-      const spans = terminalSelectionRowSpans(nextRange, size.cols, size.rows);
+      const activeProvider = resolveProvider(nextRange, nextProviderAnchor);
+      let spans;
+      const providerRange = activeProvider != null ? providerRangeFor(activeProvider, nextRange, nextProviderAnchor, nextProviderFocus) : null;
+      if (activeProvider?.getVisibleSpans && providerRange) {
+        spans = activeProvider.getVisibleSpans(providerRange, nextRange);
+      } else {
+        spans = terminalSelectionRowSpans(nextRange, size.cols, size.rows);
+      }
       hasRange = spans.length > 0 || providerPointsDiffer(nextProviderAnchor, nextProviderFocus);
       for (const span of spans) {
-        const row = options.terminal.getRow(span.y);
-        const cells = [];
-        for (let x = span.x0; x < span.x1; x++) {
-          const cell = row[x];
-          if (!cell || cell.continuation) continue;
-          const { href: _href, ...baseStyle } = cell.style;
-          cells.push({
-            x,
-            ch: cell.ch || " ",
-            style: { ...baseStyle, ...selectionStyle }
-          });
+        const x0 = Math.max(0, Math.min(size.cols, Math.floor(span.x0)));
+        const x1 = Math.max(0, Math.min(size.cols, Math.floor(span.x1)));
+        const y = Math.floor(span.y);
+        if (y < 0 || y >= size.rows || x1 <= x0) continue;
+        let list = nextOverlaySpans.get(y);
+        if (!list) {
+          list = [];
+          nextOverlaySpans.set(y, list);
         }
-        nextOverlayRows.set(span.y, cells);
-        nextDirtyRows.add(span.y);
+        list.push({ y, x0, x1 });
+        nextDirtyRows.add(y);
       }
     }
     range = nextRange;
     providerAnchor = nextProviderAnchor;
     providerFocus = nextProviderFocus;
-    overlayRows = nextOverlayRows;
+    overlaySpans = nextOverlaySpans;
     dirtyRows = nextDirtyRows;
     state.value = nextRange ? {
       active: true,
@@ -13448,22 +13500,24 @@ function createTerminalSelectionController(options) {
       const anchor = startOptions?.extend && range?.anchor ? clampPoint(range.anchor, size.cols, size.rows) : focus;
       const anchorProvider = providerForCell(anchor);
       const focusProvider = providerForCell(focus);
+      const activeProvider = startOptions?.extend && providerAnchor ? providerById(providerAnchor.providerId) : null;
       const nextProviderAnchor = startOptions?.extend && providerAnchor ? providerAnchor : anchorProvider ? providerPointForCell(anchorProvider, anchor) : null;
-      const nextProviderFocus = nextProviderAnchor && focusProvider?.id === nextProviderAnchor.providerId ? providerPointForCell(focusProvider, focus) : null;
+      const nextProviderFocus = activeProvider ? providerPointForCell(activeProvider, focus, { clampToRect: true }) : nextProviderAnchor && focusProvider?.id === nextProviderAnchor.providerId ? providerPointForCell(focusProvider, focus) : null;
       rebuild({ anchor, focus, mode: "linear" }, nextProviderAnchor, nextProviderFocus);
     },
     update(point) {
       if (!range) return;
       const size = options.terminal.size();
       const focus = clampPoint(point, size.cols, size.rows);
-      const focusProvider = providerAnchor ? providerById(providerAnchor.providerId) : null;
+      const activeProvider = providerAnchor ? providerById(providerAnchor.providerId) : null;
+      const nextProviderFocus = activeProvider ? providerPointForCell(activeProvider, focus, { clampToRect: true }) : null;
       rebuild(
         {
           ...range,
           focus
         },
         providerAnchor,
-        focusProvider ? providerPointForCell(focusProvider, focus) : null
+        nextProviderFocus
       );
     },
     async finish() {
@@ -13499,11 +13553,38 @@ function createTerminalSelectionController(options) {
       }
     },
     paint(dirtyRowsHint) {
-      const rows2 = dirtyRowsHint ?? Array.from(overlayRows.keys());
+      const rows2 = dirtyRowsHint ?? Array.from(overlaySpans.keys());
+      const selectionStyle = readOptions().style;
       for (const y of rows2) {
-        const cells = overlayRows.get(y);
-        if (!cells) continue;
-        for (const cell of cells) options.overlayTerminal.put(cell.x, y, cell.ch, cell.style);
+        const spans = overlaySpans.get(y);
+        if (!spans?.length) continue;
+        const row = options.terminal.getRow(y);
+        for (const span of spans) {
+          for (let x = span.x0; x < span.x1; x++) {
+            const cell = row[x];
+            if (!cell || cell.continuation) continue;
+            const { href: _href, ...baseStyle } = cell.style;
+            options.overlayTerminal.put(x, y, cell.ch || " ", {
+              ...baseStyle,
+              ...selectionStyle
+            });
+          }
+        }
+      }
+    },
+    refresh(refreshOptions) {
+      if (!range) return;
+      if (refreshOptions?.remapFocus) {
+        const activeProvider = providerAnchor ? providerById(providerAnchor.providerId) : resolveProvider(range, null);
+        const nextProviderFocus = activeProvider ? providerPointForCell(activeProvider, range.focus, { clampToRect: true }) : providerFocus;
+        rebuild(range, providerAnchor, nextProviderFocus);
+        return;
+      }
+      rebuild(range, providerAnchor, providerFocus);
+    },
+    clearProvider(providerId) {
+      if (providerAnchor?.providerId === providerId || providerFocus?.providerId === providerId) {
+        controller.clear();
       }
     }
   };
@@ -15097,6 +15178,8 @@ function createSchedulerFrameTasks(options) {
 }
 let portalId = 0;
 const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
+const SUPPRESS_TERMINAL_POINTER_DOWN = "__vueTuiSuppressTerminalPointerDown";
+const SUPPRESS_TERMINAL_POINTER_MOVE = "__vueTuiSuppressTerminalPointerMove";
 function resolveSelectionConfig(config) {
   if (config == null || config === false) {
     return {
@@ -15222,6 +15305,12 @@ function createTerminalApp(options) {
     if (pendingInvalidateAllPlanes) return;
     pendingInvalidatePlanes.add(plane);
   }
+  const sortRenderPlanes = (planes) => {
+    const order = new Map(
+      TERMINAL_RENDER_PLANES.map((plane, index) => [plane, index])
+    );
+    return [...planes].sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
+  };
   function takeActivePlanes() {
     if (pendingInvalidateAllPlanes) {
       pendingInvalidateAllPlanes = false;
@@ -15229,7 +15318,7 @@ function createTerminalApp(options) {
       return null;
     }
     if (pendingInvalidatePlanes.size === 0) return null;
-    const activePlanes = Array.from(pendingInvalidatePlanes);
+    const activePlanes = sortRenderPlanes(Array.from(pendingInvalidatePlanes));
     pendingInvalidatePlanes.clear();
     return activePlanes;
   }
@@ -15470,13 +15559,20 @@ function createTerminalApp(options) {
     registerTextProvider(provider) {
       selectionTextProviders.set(provider.id, provider);
       return () => {
-        if (selectionTextProviders.get(provider.id) === provider)
-          selectionTextProviders.delete(provider.id);
+        if (selectionTextProviders.get(provider.id) !== provider) return;
+        selectionTextProviders.delete(provider.id);
+        selection.clearProvider(provider.id);
       };
     },
     onCopy(handler) {
       selectionCopyHandlers.add(handler);
       return () => selectionCopyHandlers.delete(handler);
+    },
+    refresh(options2) {
+      selection.refresh(options2);
+    },
+    clear() {
+      selection.clear();
     }
   };
   const selectionOverlay = getPlaneTerminal(terminal, "overlay");
@@ -15534,6 +15630,18 @@ function createTerminalApp(options) {
   let selectionAutoScrollTimer = null;
   let selectionDragStarted = false;
   let suppressNextSelectionClick = false;
+  const resetSelectionGesture = (options2) => {
+    selecting = false;
+    selectionStartPoint = null;
+    selectionScrollOrigin = null;
+    selectionLastPoint = null;
+    selectionDragStarted = false;
+    suppressNextSelectionClick = false;
+    clearSelectionAutoScroll();
+    {
+      selection.clear();
+    }
+  };
   const clearSelectionAutoScroll = () => {
     if (selectionAutoScrollTimer == null) return;
     clearTimeout(selectionAutoScrollTimer);
@@ -15562,8 +15670,8 @@ function createTerminalApp(options) {
   });
   const dispatchWithSelection = (event) => {
     if (!selectionEnabled()) return baseEvents.dispatch(event);
-    if (event.type === "keydown" && event.key === "Escape" && selection.state.value.active) {
-      selection.clear();
+    if (event.type === "keydown" && event.key === "Escape" && (selecting || selection.state.value.active)) {
+      resetSelectionGesture();
       return true;
     }
     if (event.type === "click" || event.type === "dblclick" || event.type === "contextmenu") {
@@ -15583,6 +15691,9 @@ function createTerminalApp(options) {
           selectionScrollOrigin = point;
           selectionLastPoint = point;
           scheduleSelectionAutoScroll();
+          event[SUPPRESS_TERMINAL_POINTER_DOWN] = true;
+          baseEvents.dispatch(event);
+          return true;
         }
       }
       return baseEvents.dispatch(event);
@@ -15595,7 +15706,9 @@ function createTerminalApp(options) {
       }
       selection.update(point);
       scheduleSelectionAutoScroll();
-      return baseEvents.dispatch(event);
+      event[SUPPRESS_TERMINAL_POINTER_MOVE] = true;
+      baseEvents.dispatch(event);
+      return true;
     }
     if (event.type === "pointerup" && selecting) {
       const point = eventPoint(event);
