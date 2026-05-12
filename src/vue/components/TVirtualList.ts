@@ -3,6 +3,12 @@ import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
 import type { FramePerfReason } from "../../observability/frame-perf.js";
+import type {
+  SelectedRowSpan,
+  SelectionTextProvider,
+  TerminalSelectionPoint,
+  TerminalSelectionRange,
+} from "../../selection/terminal-selection.js";
 import {
   computed,
   defineComponent,
@@ -21,6 +27,10 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
+import {
+  terminalSelectionRowSpans,
+  terminalSelectionVisibleRowSpans,
+} from "../../selection/terminal-selection.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import { defaultActiveStyle } from "../utils/style-cache.js";
 import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
@@ -92,6 +102,10 @@ export const TVirtualList = defineComponent({
     style: { type: Object as PropType<Style>, default: undefined },
     activeStyle: { type: Object as PropType<Style>, default: undefined },
     autoFocus: { type: Boolean, default: false },
+    selectionText: {
+      type: Function as PropType<(item: unknown, index: number) => string>,
+      default: undefined,
+    },
     selectable: { type: Boolean, default: false },
     rowScrollMode: {
       type: String as PropType<RowScrollMode>,
@@ -109,7 +123,7 @@ export const TVirtualList = defineComponent({
     "keydown",
   ],
   setup(props, { emit }) {
-    const { terminal, scheduler, render, defaultStyle, events } = useTerminal();
+    const { terminal, scheduler, render, defaultStyle, events, selection } = useTerminal();
     const instance = getCurrentInstance();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
@@ -130,6 +144,12 @@ export const TVirtualList = defineComponent({
     let warnedRenderItemIdentity = false;
     let alive = true;
     let pendingWheelTop: number | null = null;
+
+    // Under controlled scrollTop, selection auto-scroll only emits a single
+    // pending update:scrollTop; the selection focus is remapped only after the
+    // parent writes scrollTop back. If the parent never writes back, selection
+    // auto-scroll pauses. This is the intended controlled-component semantic.
+    let pendingSelectionScrollFocusRemap = false;
     const wheelState = createWheelScrollState();
 
     const itemCount = computed(() => {
@@ -232,7 +252,9 @@ export const TVirtualList = defineComponent({
       if (active.value < visibleStart) nextTop = clamp(active.value - clipY, 0, maxTop);
       else if (active.value > visibleEnd)
         nextTop = clamp(active.value - (clipY + clip.h - 1), 0, maxTop);
-      return applyScrollTop(nextTop, options);
+      const result = applyScrollTop(nextTop, options);
+      if (result.changed) selection.refresh();
+      return result;
     }
 
     function normalizedModelValue(): number {
@@ -259,6 +281,7 @@ export const TVirtualList = defineComponent({
           resetWheelScrollState(wheelState);
           return;
         }
+        selection.refresh();
         if (changed.dirty)
           ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
       },
@@ -327,6 +350,7 @@ export const TVirtualList = defineComponent({
         active.value = normalizedModelValue();
         const nextTop = clampScrollTop(scrollTop.value);
         const changed = applyScrollTop(nextTop, { emitScroll });
+        if (changed.changed) selection.refresh();
         if (!changed.changed) markViewportDirty();
         if (pendingWheelTop !== null && !hasPaintableViewport()) {
           cancelWheelScrollFrame();
@@ -347,6 +371,7 @@ export const TVirtualList = defineComponent({
       () => props.scrollTop,
       () => {
         if (!isScrollControlled()) return;
+
         const wasInitialized = initializedScrollTop;
         initializedScrollTop = true;
         cancelWheelScrollFrame();
@@ -354,6 +379,12 @@ export const TVirtualList = defineComponent({
         const changed = scrollTop.value !== nextTop;
         scrollTop.value = nextTop;
         if (!wasInitialized || !changed) return;
+
+        const remap = pendingSelectionScrollFocusRemap;
+        pendingSelectionScrollFocusRemap = false;
+
+        selection.refresh(remap ? { remapFocus: true } : undefined);
+
         markViewportDirty();
         invalidateSelf("high", "scroll");
       },
@@ -384,10 +415,24 @@ export const TVirtualList = defineComponent({
       },
     );
 
+    watch(
+      () => props.itemVersion,
+      () => {
+        selection.refresh();
+      },
+    );
+
     function itemText(index: number): string {
       const item = props.getItem(index);
+
+      if (props.selectionText) {
+        return String(props.selectionText(item, index) ?? "");
+      }
+
       const raw = props.renderItem ? props.renderItem(item, index) : item;
-      return String(raw ?? "");
+      return typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean"
+        ? String(raw)
+        : "";
     }
 
     function commit(index: number): void {
@@ -460,14 +505,105 @@ export const TVirtualList = defineComponent({
       const n = Math.trunc(Number(delta));
       if (!Number.isFinite(n) || n === 0) return false;
       cancelWheelScrollFrame();
+
+      if (isScrollControlled()) {
+        const nextTop = clampScrollTop(scrollTop.value + n);
+        if (nextTop === scrollTop.value) return false;
+
+        // Do not spam update:scrollTop while waiting for parent-controlled prop.
+        if (pendingSelectionScrollFocusRemap) return false;
+
+        pendingSelectionScrollFocusRemap = true;
+        emit("update:scrollTop", nextTop);
+        emit("scroll", nextTop);
+        return true;
+      }
+
       const changed = applyScrollTop(scrollTop.value + n, {
         emitScroll: true,
         emitUpdate: true,
         priority: "high",
         reason: "scroll",
       });
-      return changed.changed;
+
+      if (!changed.changed) return false;
+
+      selection.refresh({ remapFocus: true });
+      return true;
     }
+
+    function selectionPointForCell(point: TerminalSelectionPoint): TerminalSelectionPoint | null {
+      const r = normalizedRect();
+      if (point.x < r.x || point.y < r.y || point.x >= r.x + r.w || point.y >= r.y + r.h) {
+        return null;
+      }
+      const { x: clipX, y: clipY } = clipOffsets();
+      const virtualY = scrollTop.value + clipY + (point.y - r.y);
+      if (virtualY < 0 || virtualY >= itemCount.value) return null;
+      return {
+        x: clamp(clipX + (point.x - r.x), 0, Math.max(0, props.w - 1)),
+        y: virtualY,
+      };
+    }
+
+    function canHandleSelectionRange(range: TerminalSelectionRange): boolean {
+      return Boolean(selectionPointForCell(range.anchor) && selectionPointForCell(range.focus));
+    }
+
+    function textForSelectionRange(range: TerminalSelectionRange): string {
+      const cols = Math.max(1, Math.floor(props.w));
+      return terminalSelectionRowSpans(range, cols, itemCount.value)
+        .map((span) => {
+          const text = sliceByCellsRange(itemText(span.y), span.x0, span.x1);
+          return span.x1 >= cols ? text.trimEnd() : text;
+        })
+        .join("\n");
+    }
+
+    function visibleSpansForSelectionRange(
+      providerRange: TerminalSelectionRange,
+      _screenRange: TerminalSelectionRange,
+    ): readonly SelectedRowSpan[] {
+      const r = normalizedRect();
+      const { x: clipX, y: clipY } = clipOffsets();
+      const cols = Math.max(1, Math.floor(props.w));
+      const top = scrollTop.value + clipY;
+      const bottom = top + r.h;
+
+      const providerSpans = terminalSelectionVisibleRowSpans(
+        providerRange,
+        cols,
+        itemCount.value,
+        top,
+        bottom,
+      );
+
+      const result: SelectedRowSpan[] = [];
+      for (const span of providerSpans) {
+        const screenY = r.y + (span.y - top);
+        const screenX0 = r.x + span.x0 - clipX;
+        const screenX1 = r.x + span.x1 - clipX;
+        const x0 = Math.max(r.x, screenX0);
+        const x1 = Math.min(r.x + r.w, screenX1);
+        if (screenY >= r.y && screenY < r.y + r.h && x1 > x0) {
+          result.push({ y: screenY, x0, x1 });
+        }
+      }
+      return result;
+    }
+
+    const selectionTextProvider: SelectionTextProvider = {
+      id: `TVirtualList:${virtualListInstanceId}:selection-text`,
+      get rect() {
+        return normalizedRect();
+      },
+      canHandle: canHandleSelectionRange,
+      pointForCell: selectionPointForCell,
+      getText: textForSelectionRange,
+      getVisibleSpans: visibleSpansForSelectionRange,
+    };
+    const unregisterSelectionTextProvider = selection.registerTextProvider(selectionTextProvider);
+    onBeforeUnmount(unregisterSelectionTextProvider);
 
     const eventNode = useTerminalNode(() => ({
       rect: normalizedRect(),

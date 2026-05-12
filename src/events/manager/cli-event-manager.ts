@@ -13,6 +13,11 @@ import type {
 import { appendFileSync } from "node:fs";
 import process from "node:process";
 import { getCliLatencyProfiler } from "../../observability/cli-latency.js";
+import {
+  SUPPRESS_TERMINAL_POINTER_DOWN,
+  SUPPRESS_TERMINAL_POINTER_MOVE,
+  SUPPRESS_TERMINAL_POINTER_UP,
+} from "./selection-suppression.js";
 
 function contains(rect: Rect, x: number, y: number): boolean {
   return x >= rect.x && y >= rect.y && x < rect.x + rect.w && y < rect.y + rect.h;
@@ -66,8 +71,6 @@ export interface CliEventManager {
   debugNodes: () => TerminalDebugNode[];
   dispose: () => void;
 }
-
-const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
 
 let nextId = 0;
 
@@ -653,6 +656,15 @@ export function createCliEventManager(
           if (event.type === "pointerdown") {
             const list = candidatesAt(event.cellX, event.cellY);
             const target = pickTarget(list);
+            // When selection owns the gesture, still resolve focus/capture
+            // for parity with the DOM event manager's suppressed path,
+            // but skip dispatching the pointerdown event to the node.
+            if ((event as any)[SUPPRESS_TERMINAL_POINTER_DOWN]) {
+              if (target?.focusable) setFocus(target.id);
+              capturedId = target?.id ?? null;
+              updateHover(target, event);
+              return true;
+            }
             if (target?.focusable) setFocus(target.id);
             capturedId = target?.id ?? null;
             updateHover(target, event);
@@ -661,6 +673,11 @@ export function createCliEventManager(
           }
 
           if (event.type === "pointermove" && capturedId) {
+            if ((event as any)[SUPPRESS_TERMINAL_POINTER_MOVE]) {
+              const target = nodes.get(capturedId) ?? null;
+              if (target) updateHover(target, event);
+              return true;
+            }
             const target = nodes.get(capturedId) ?? null;
             if (!target) return prevented;
             updateHover(target, event);
@@ -672,6 +689,9 @@ export function createCliEventManager(
           }
 
           if (event.type === "pointermove") {
+            if ((event as any)[SUPPRESS_TERMINAL_POINTER_MOVE]) {
+              return true;
+            }
             const list = candidatesAt(event.cellX, event.cellY);
             const target = pickTarget(list);
             updateHover(target, event);

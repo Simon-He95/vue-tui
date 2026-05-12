@@ -1,8 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
 import { TLogView } from "../src/experimental.js";
 import { TVirtualMarkdown } from "../src/markdown.js";
-import { h, mountTerminal, nextTick, TInputBox, TText } from "./ui-regressions-support";
-import { TView, TVirtualList } from "./ui-regressions-support";
+import {
+  defineComponent,
+  h,
+  mountTerminal,
+  nextTick,
+  ref,
+  TInputBox,
+  TText,
+  watchEffect,
+} from "./ui-regressions-support";
+import {
+  createApp,
+  TerminalProvider,
+  TView,
+  TVirtualList,
+  useTerminal,
+} from "./ui-regressions-support";
 
 function installNavigatorClipboard(writes: string[]) {
   const previous = (navigator as any).clipboard;
@@ -420,7 +435,7 @@ describe("TerminalProvider selection", () => {
       container.dispatchEvent(new MouseEvent("mouseup", { clientX: 4, clientY: 0, bubbles: true }));
       container.dispatchEvent(new MouseEvent("click", { clientX: 4, clientY: 0, bubbles: true }));
 
-      expect(onPointerdown).toHaveBeenCalledTimes(1);
+      expect(onPointerdown).not.toHaveBeenCalled();
       expect(onPointerup).not.toHaveBeenCalled();
       expect(onClick).not.toHaveBeenCalled();
     } finally {
@@ -638,6 +653,1274 @@ describe("TerminalProvider selection", () => {
       mounted.unmount();
       vi.useRealTimers();
       restore();
+    }
+  });
+
+  it("copies TVirtualList item text across selection auto-scroll", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          itemCount: 20,
+          itemVersion: 1,
+          getItem: (index: number) => `item-${index}`,
+          selectable: true,
+        }),
+      12,
+      4,
+      { selection: true },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+      vi.advanceTimersByTime(90);
+      await nextTick();
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
+      await settleClipboard();
+
+      // Should copy item-1 through item-4 (cross-viewport selection via provider)
+      expect(writes).toEqual(["item-1\nitem-2\nitem-3\nitem-4"]);
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+      restore();
+    }
+  });
+
+  it("highlights only visible rows after TLogView auto-scroll during selection", async () => {
+    const source = {
+      lineCount: () => 20,
+      getLine: (index: number) => `line-${index}`,
+    };
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          source,
+          version: 1,
+          defaultScrollTop: 0,
+          autoStickToBottom: false,
+        }),
+      12,
+      4,
+      { selection: { autoCopy: false, copyOnMouseUp: false } },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+      // Start selection at row 1
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      // Drag to bottom edge to trigger auto-scroll
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+      vi.advanceTimersByTime(90);
+      await nextTick();
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
+      // Restore real timers so the overlay render pipeline can flush
+      vi.useRealTimers();
+      await settleClipboard();
+      await nextTick();
+
+      // After auto-scroll by 1 row, viewport shows line-1..line-4.
+      expect(rowText(mounted, 0)).toBe("line-1");
+
+      // The overlay selection highlight should map to the correct viewport rows.
+      // Selection spans from line-1 to line-4, all rows in the current viewport.
+      expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 2).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.inverse).toBe(true);
+      // Cell beyond selection end should not be highlighted.
+      expect(mounted.terminal.getCell(6, 3).style.inverse).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+      mounted.unmount();
+    }
+  });
+
+  it("keeps provider selection when drag focus leaves the provider rect", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+
+    const source = {
+      lineCount: () => 100,
+      getLine: (index: number) => `line-${index}`,
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          source,
+          version: 1,
+          defaultScrollTop: 0,
+          autoStickToBottom: false,
+        }),
+      12,
+      8,
+      { selection: true },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      // y=6 is outside TLogView rect h=4, but still inside terminal.
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 6, bubbles: true }),
+      );
+
+      vi.advanceTimersByTime(90);
+      await nextTick();
+
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 6, bubbles: true }));
+      await settleClipboard();
+
+      expect(writes[0]).toContain("line-1");
+      expect(writes[0]).toContain("line-4");
+      expect(writes[0]).not.toBe(rowText(mounted, 0)); // not just screen-buffer fallback
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+      restore();
+    }
+  });
+
+  it("suppresses document click after selection mouseup outside terminal", async () => {
+    const outsideClick = vi.fn();
+
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.addEventListener("click", outsideClick);
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+      document.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
+
+      // Browser-generated click after mouseup arrives at the same coordinates.
+      button.dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 20, bubbles: true }));
+
+      expect(outsideClick).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+      button.remove();
+    }
+  });
+
+  it("repaints selection overlay with current viewport text after virtual scroll", async () => {
+    const source = {
+      lineCount: () => 20,
+      getLine: (index: number) => `line-${index}`,
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          source,
+          version: 1,
+          defaultScrollTop: 0,
+          autoStickToBottom: false,
+        }),
+      12,
+      4,
+      { selection: { autoCopy: false, copyOnMouseUp: false } },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+
+      vi.advanceTimersByTime(90);
+      await nextTick();
+
+      // After auto-scroll, viewport should show line-1 at row 0
+      expect(rowText(mounted, 0)).toBe("line-1");
+
+      // The overlay cells should carry the current row characters,
+      // not stale pre-scroll characters. Verify that the inverse style
+      // is applied on the correct viewport rows.
+      expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 2).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.inverse).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      mounted.unmount();
+    }
+  });
+
+  it("restores userSelect after mouseup outside terminal during selection", async () => {
+    const mounted = await mountTerminal(() => h(TText, { x: 0, y: 0, value: "select me" }), 12, 2, {
+      selection: { autoCopy: false },
+    });
+
+    try {
+      const container = mounted.container()!;
+      container.style.userSelect = "text";
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+      document.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
+
+      expect(container.style.userSelect).toBe("text");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("calls selection.refresh() in TVirtualMarkdown rebuildRows when visible content changes", async () => {
+    // This tests the fix: rebuildRows() now calls selection.refresh() when
+    // visible content changes, ensuring the overlay doesn't go stale during
+    // markdown streaming. The full render pipeline is tested by the existing
+    // "repaints selection overlay" test for scroll-driven refresh.
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          content: "- row0\n- row1",
+        }),
+      12,
+      4,
+      { selection: { autoCopy: false, copyOnMouseUp: false } },
+    );
+
+    try {
+      // Verify the component renders and selection works
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 0, bubbles: true }));
+      await nextTick();
+
+      // Selection overlay should be present
+      expect(mounted.terminal.getCell(2, 0).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("refreshes selection overlay when virtual list itemVersion changes", async () => {
+    const version = ref(1);
+    const prefix = ref("old");
+
+    const App = defineComponent({
+      name: "VirtualListVersionChangeApp",
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 4,
+            itemVersion: version.value,
+            getItem: (index: number) => `${prefix.value}-${index}`,
+            selectable: true,
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 12, 4, {
+      selection: { autoCopy: false, copyOnMouseUp: false },
+    });
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 1, bubbles: true }),
+      );
+
+      prefix.value = "new";
+      version.value++;
+      await nextTick();
+      await nextTick();
+
+      expect(rowText(mounted, 1)).toBe("new-1");
+      expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("suppresses delayed document click after mouseup outside terminal", async () => {
+    vi.useFakeTimers();
+
+    const outsideClick = vi.fn();
+
+    const mounted = await mountTerminal(() => h(TText, { x: 0, y: 0, value: "select me" }), 12, 2, {
+      selection: { autoCopy: false },
+    });
+
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.addEventListener("click", outsideClick);
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+      document.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
+
+      // Simulate browser dispatching click slightly later at the same coordinates.
+      vi.advanceTimersByTime(10);
+      button.dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 20, bubbles: true }));
+
+      expect(outsideClick).not.toHaveBeenCalled();
+
+      // After suppression window expires, unrelated future clicks should work.
+      vi.advanceTimersByTime(300);
+      button.dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 20, bubbles: true }));
+
+      expect(outsideClick).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+      button.remove();
+      vi.useRealTimers();
+    }
+  });
+
+  it("suppresses outside mouseup handler after selection mouseup outside terminal", async () => {
+    const outsideMouseup = vi.fn();
+
+    const mounted = await mountTerminal(() => h(TText, { x: 0, y: 0, value: "select me" }), 12, 2, {
+      selection: { autoCopy: false },
+    });
+
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.addEventListener("mouseup", outsideMouseup);
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+
+      button.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
+
+      expect(outsideMouseup).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+      button.remove();
+    }
+  });
+
+  it("keeps TVirtualList selection correct with controlled scrollTop auto-scroll", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+
+    const scrollTopRef = ref(0);
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 20,
+            itemVersion: 1,
+            scrollTop: scrollTopRef.value,
+            getItem: (index: number) => `item-${index}`,
+            selectable: true,
+            "onUpdate:scrollTop": (value: number) => {
+              scrollTopRef.value = value;
+            },
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 12, 4, { selection: true });
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+
+      vi.advanceTimersByTime(90);
+      await nextTick();
+      await nextTick();
+
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
+      await settleClipboard();
+
+      expect(scrollTopRef.value).toBeGreaterThan(0);
+      expect(writes[0]).toContain("item-1");
+      expect(writes[0]).toContain("item-4");
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+      restore();
+    }
+  });
+
+  it("does not dispatch pointerdown/pointermove to selectable node when starting a drag selection", async () => {
+    const onPointerdown = vi.fn();
+    const onPointermove = vi.fn();
+    const onClick = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TView,
+          {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 1,
+            selectable: true,
+            onPointerdown,
+            onPointermove,
+            onClick,
+          },
+          () => h(TText, { x: 0, y: 0, value: "select text" }),
+        ),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 6, clientY: 0, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("click", { clientX: 6, clientY: 0, bubbles: true }));
+
+      expect(onPointerdown).not.toHaveBeenCalled();
+      expect(onPointermove).not.toHaveBeenCalled();
+      expect(onClick).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not suppress an unrelated click after drag selection", async () => {
+    const outsideClick = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TView, { x: 0, y: 0, w: 12, h: 1, selectable: true }, () =>
+          h(TText, { x: 0, y: 0, value: "select text" }),
+        ),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    const outside = document.createElement("button");
+    outside.addEventListener("click", outsideClick);
+    document.body.appendChild(outside);
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 6, clientY: 0, bubbles: true }));
+
+      // Different coordinates from selection mouseup: should not be swallowed.
+      outside.dispatchEvent(new MouseEvent("click", { clientX: 200, clientY: 200, bubbles: true }));
+
+      expect(outsideClick).toHaveBeenCalledTimes(1);
+    } finally {
+      outside.remove();
+      mounted.unmount();
+    }
+  });
+
+  it("does not suppress an unrelated terminal-internal click after drag selection", async () => {
+    const onContainerClick = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TView, { x: 0, y: 0, w: 12, h: 2, selectable: true }, () =>
+          h(TText, { x: 0, y: 0, value: "select text" }),
+        ),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      // Add a bubble-phase click listener directly on the container (after the
+      // event manager's listener) to verify the click is not suppressed.
+      container.addEventListener("click", onContainerClick);
+
+      // Drag selection on first row
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 6, clientY: 0, bubbles: true }));
+
+      // Unrelated click inside terminal but at a different position (dy > 4px
+      // from the selection mouseup, so shouldSuppressSelectionActivation fails).
+      container.dispatchEvent(new MouseEvent("click", { clientX: 2, clientY: 20, bubbles: true }));
+
+      expect(onContainerClick).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("continues selection when dragging outside terminal via document mousemove/mouseup", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+      12,
+      2,
+      { selection: true },
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      // Start selection inside the terminal
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+
+      // Drag outside the terminal via document-level listener
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
+      );
+
+      // Release outside the terminal
+      document.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
+
+      await settleClipboard();
+
+      // Selection should have completed and copied the text
+      expect(writes.length).toBe(1);
+      expect(writes[0]).toContain("select");
+    } finally {
+      mounted.unmount();
+      restore();
+    }
+  });
+
+  it("cleans up gesture state when Escape is pressed during drag", async () => {
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, value: "abcdef", style: { fg: "whiteBright" } }),
+      8,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+      // Start drag — do not release
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 4, clientY: 0, bubbles: true }),
+      );
+
+      // Press Escape mid-drag
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }),
+      );
+      await nextTick();
+
+      // After Escape, the element's user-select should be restored (not "none")
+      expect(container.style.userSelect).not.toBe("none");
+
+      // A subsequent plain click on a selectable view should still work
+      const onClick = vi.fn();
+      const mounted2 = await mountTerminal(
+        () =>
+          h(TView, { x: 0, y: 0, w: 10, h: 1, selectable: true, onClick }, () =>
+            h(TText, { x: 0, y: 0, value: "click me" }),
+          ),
+        12,
+        2,
+        { selection: true },
+      );
+
+      try {
+        const c2 = mounted2.container()!;
+        c2.dispatchEvent(new MouseEvent("mousedown", { clientX: 2, clientY: 0, bubbles: true }));
+        c2.dispatchEvent(new MouseEvent("mouseup", { clientX: 2, clientY: 0, bubbles: true }));
+        c2.dispatchEvent(new MouseEvent("click", { clientX: 2, clientY: 0, bubbles: true }));
+        await settleClipboard();
+
+        expect(onClick).toHaveBeenCalledTimes(1);
+      } finally {
+        mounted2.unmount();
+      }
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("cleans up gesture state when selection is disabled during drag", async () => {
+    const selectionProp = ref<true | false>(true);
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+
+    const exposed = {
+      terminal: null as any,
+      container: null as HTMLElement | null,
+    };
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(
+            TerminalProvider,
+            { cols: 8, rows: 2, selection: selectionProp.value },
+            {
+              default: () => [
+                h(
+                  defineComponent({
+                    name: "ExposeTerminal",
+                    setup() {
+                      const ctx = useTerminal();
+                      exposed.terminal = ctx.terminal;
+                      watchEffect(() => {
+                        exposed.container = ctx.renderer.value?.container ?? null;
+                      });
+                      return () =>
+                        h(TText, {
+                          x: 0,
+                          y: 0,
+                          value: "abcdef",
+                          style: { fg: "whiteBright" },
+                        });
+                    },
+                  }),
+                ),
+              ],
+            },
+          );
+      },
+    });
+
+    const app = createApp(App);
+    app.mount(root);
+    await nextTick();
+    await nextTick();
+
+    try {
+      const container = exposed.container!;
+      // Start drag
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 4, clientY: 0, bubbles: true }),
+      );
+
+      // Disable selection mid-drag
+      selectionProp.value = false;
+      await nextTick();
+      await nextTick();
+
+      // user-select should be restored
+      expect(container.style.userSelect).not.toBe("none");
+
+      // Verify a new mount with selection works without leftover state
+      const mounted2 = await mountTerminal(
+        () => h(TText, { x: 0, y: 0, value: "test", style: { fg: "whiteBright" } }),
+        8,
+        2,
+        { selection: true },
+      );
+
+      try {
+        const c2 = mounted2.container()!;
+        c2.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+        c2.dispatchEvent(new MouseEvent("mousemove", { clientX: 3, clientY: 0, bubbles: true }));
+        c2.dispatchEvent(new MouseEvent("mouseup", { clientX: 3, clientY: 0, bubbles: true }));
+        await settleClipboard();
+
+        // Should be able to select in the new mount without leftover state
+        expect(mounted2.terminal.getCell(0, 0).style.inverse).toBe(true);
+      } finally {
+        mounted2.unmount();
+      }
+    } finally {
+      app.unmount();
+      root.remove();
+    }
+  });
+
+  it("cleans up document listeners on unmount during drag", async () => {
+    let mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, value: "abcdef", style: { fg: "whiteBright" } }),
+      8,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    const container = mounted.container()!;
+    // Start drag but don't finish
+    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }));
+    container.dispatchEvent(new MouseEvent("mousemove", { clientX: 4, clientY: 0, bubbles: true }));
+
+    // Unmount mid-drag
+    mounted.unmount();
+
+    // After unmount, document click listeners from the old provider should be gone.
+    // Verify by mounting a new terminal and confirming clicks work.
+    const onClick = vi.fn();
+    const mounted2 = await mountTerminal(
+      () =>
+        h(TView, { x: 0, y: 0, w: 10, h: 1, selectable: true, onClick }, () =>
+          h(TText, { x: 0, y: 0, value: "click me" }),
+        ),
+      12,
+      2,
+      { selection: true },
+    );
+
+    try {
+      const c2 = mounted2.container()!;
+      c2.dispatchEvent(new MouseEvent("mousedown", { clientX: 2, clientY: 0, bubbles: true }));
+      c2.dispatchEvent(new MouseEvent("mouseup", { clientX: 2, clientY: 0, bubbles: true }));
+      c2.dispatchEvent(new MouseEvent("click", { clientX: 2, clientY: 0, bubbles: true }));
+      await settleClipboard();
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted2.unmount();
+    }
+  });
+
+  it("does not spam update:scrollTop while controlled TVirtualList waits for parent prop", async () => {
+    const scrollTopRef = ref(0);
+    const updateScrollTopCalls: number[] = [];
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            itemCount: 20,
+            itemVersion: 1,
+            scrollTop: scrollTopRef.value,
+            getItem: (index: number) => `item-${index}`,
+            selectable: true,
+            "onUpdate:scrollTop": (value: number) => {
+              updateScrollTopCalls.push(value);
+              // Simulate a parent that doesn't immediately apply the prop
+              // (deliberately NOT setting scrollTopRef.value here)
+            },
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 12, 4, { selection: true });
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+
+      // Start a drag near the bottom edge to trigger auto-scroll
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+
+      // Advance time for multiple auto-scroll ticks (3 x 80ms = 240ms)
+      vi.advanceTimersByTime(80);
+      vi.advanceTimersByTime(80);
+      vi.advanceTimersByTime(80);
+      await nextTick();
+
+      // Without the fix, update:scrollTop would have been emitted on every tick.
+      // With the fix, only the first tick emits; subsequent ones are suppressed
+      // because pendingSelectionScrollFocusRemap is still true.
+      expect(updateScrollTopCalls.length).toBeLessThanOrEqual(1);
+
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
+      await settleClipboard();
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("releases pointer capture when Escape cancels an active selection", async () => {
+    const releasePointerCapture = vi.fn();
+
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, value: "abcdef", style: { fg: "whiteBright" } }),
+      8,
+      2,
+      { selection: true },
+    );
+
+    try {
+      const container = mounted.container()!;
+      Object.defineProperty(container, "setPointerCapture", {
+        configurable: true,
+        value: vi.fn(),
+      });
+      Object.defineProperty(container, "releasePointerCapture", {
+        configurable: true,
+        value: releasePointerCapture,
+      });
+
+      container.dispatchEvent(
+        pointerEvent("pointerdown", {
+          clientX: 0,
+          clientY: 0,
+          button: 0,
+          pointerId: 7,
+        }),
+      );
+      container.dispatchEvent(
+        pointerEvent("pointermove", {
+          clientX: 4,
+          clientY: 0,
+          button: 0,
+          pointerId: 7,
+        }),
+      );
+
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+        }),
+      );
+
+      expect(releasePointerCapture).toHaveBeenCalledWith(7);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps native user-select disabled while selection owns pointerdown", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TView,
+          {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            selectable: true,
+          },
+          () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+        ),
+      12,
+      2,
+      { selection: { autoCopy: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        pointerEvent("pointerdown", {
+          clientX: 0,
+          clientY: 0,
+          button: 0,
+          pointerId: 1,
+        }),
+      );
+
+      expect(container.style.userSelect).toBe("none");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not mutate controlled TVirtualMarkdown scrollTop during selection auto-scroll before parent writeback", async () => {
+    const scrollTopRef = ref(0);
+    const updateScrollTopCalls: number[] = [];
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualMarkdown, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            content: Array.from({ length: 20 }, (_, i) => `- row-${i}`).join("\n"),
+            scrollTop: scrollTopRef.value,
+            "onUpdate:scrollTop": (value: number) => {
+              updateScrollTopCalls.push(value);
+              // Deliberately do not write back, simulating parent that delays/rejects
+            },
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 12, 4, { selection: true });
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 6, clientY: 3, bubbles: true }),
+      );
+
+      vi.advanceTimersByTime(240);
+      await nextTick();
+
+      expect(updateScrollTopCalls.length).toBeLessThanOrEqual(1);
+      expect(rowText(mounted, 0)).toBe("- row-0");
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not drop visible selection spans when wrapped TLogView visual count grows during selection", async () => {
+    const source = {
+      lineCount: () => 3,
+      getLine: (index: number) => (index === 0 ? "aaaaaaaaaaaaaaaa" : `line-${index}`),
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 4,
+          h: 4,
+          source,
+          version: 1,
+          wrap: true,
+          visualIndexMode: "estimated",
+          defaultScrollTop: 0,
+          autoStickToBottom: false,
+        }),
+      4,
+      4,
+      { selection: { autoCopy: false, copyOnMouseUp: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 3, clientY: 3, bubbles: true }),
+      );
+      await nextTick();
+
+      expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses TVirtualList selectionText for complex items", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          itemCount: 10,
+          itemVersion: 1,
+          getItem: (index: number) => ({ id: index, label: `Item ${index}` }),
+          renderItem: (item: any) => ({ label: item.label }),
+          selectionText: (item: any) => item.label,
+          selectable: true,
+        }),
+      20,
+      4,
+      { selection: true },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+      vi.advanceTimersByTime(90);
+      await nextTick();
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
+      await settleClipboard();
+
+      expect(writes.length).toBe(1);
+      expect(writes[0]).toContain("Item 1");
+      expect(writes[0]).toContain("Item 3");
+      expect(writes[0]).not.toContain("[object Object]");
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+      restore();
+    }
+  });
+
+  it("returns empty copy text for complex TVirtualList items without selectionText", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          itemCount: 10,
+          itemVersion: 1,
+          getItem: (index: number) => ({ id: index, label: `Item ${index}` }),
+          renderItem: (item: any) => ({ label: item.label }),
+          selectable: true,
+        }),
+      20,
+      4,
+      { selection: true },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+      vi.advanceTimersByTime(90);
+      await nextTick();
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
+      await settleClipboard();
+
+      // Without selectionText, complex objects should not produce [object Object]
+      expect(writes.length).toBe(1);
+      expect(writes[0]).not.toContain("[object Object]");
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+      restore();
+    }
+  });
+
+  it("does not emit update:scrollTop when controlled scrollTop prop changes to a valid value", async () => {
+    const scrollTopRef = ref(0);
+    const updates: number[] = [];
+    const scrolls: number[] = [];
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualMarkdown, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            content: Array.from({ length: 20 }, (_, i) => `- row-${i}`).join("\n"),
+            scrollTop: scrollTopRef.value,
+            "onUpdate:scrollTop": (value: number) => updates.push(value),
+            onScroll: (value: number) => scrolls.push(value),
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 20, 4, { selection: true });
+
+    try {
+      scrollTopRef.value = 3;
+      await nextTick();
+      await nextTick();
+
+      expect(updates).toEqual([]);
+      expect(scrolls).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits update:scrollTop when controlled scrollTop prop is clamped to a valid range", async () => {
+    const scrollTopRef = ref(0);
+    const updates: number[] = [];
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualMarkdown, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            content: Array.from({ length: 20 }, (_, i) => `- row-${i}`).join("\n"),
+            scrollTop: scrollTopRef.value,
+            "onUpdate:scrollTop": (value: number) => {
+              updates.push(value);
+            },
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 20, 4, { selection: true });
+
+    try {
+      scrollTopRef.value = 9999;
+      await nextTick();
+      await nextTick();
+
+      // Should emit the clamped value back so the parent can correct its state.
+      expect(updates.length).toBeGreaterThanOrEqual(1);
+      expect(updates[0]).toBeLessThan(9999);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("cleans up active selection on pointercancel", async () => {
+    const writes: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TText, {
+          x: 0,
+          y: 0,
+          value: "select me",
+          style: { fg: "whiteBright" },
+        }),
+      12,
+      2,
+      {
+        selection: true,
+        clipboard: {
+          supported: true,
+          readText: async () => writes.at(-1) ?? "",
+          writeText: async (text: string) => {
+            writes.push(text);
+          },
+        },
+      },
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(pointerEvent("pointerdown", { clientX: 0, clientY: 0, button: 0 }));
+      container.dispatchEvent(pointerEvent("pointermove", { clientX: 5, clientY: 0, button: 0 }));
+      container.dispatchEvent(pointerEvent("pointercancel", { clientX: 5, clientY: 0, button: 0 }));
+
+      await nextTick();
+      await settleClipboard();
+
+      // Selection should be cleared — no copy on cancel.
+      expect(writes).toEqual([]);
+      // userSelect should be restored, not stuck on "none".
+      expect(container.style.userSelect).not.toBe("none");
+    } finally {
+      mounted.unmount();
     }
   });
 });

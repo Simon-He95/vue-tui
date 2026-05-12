@@ -10,6 +10,11 @@ import type {
   TerminalNode,
   TerminalPointerEvent,
 } from "./types.js";
+import {
+  SUPPRESS_TERMINAL_POINTER_DOWN,
+  SUPPRESS_TERMINAL_POINTER_MOVE,
+  SUPPRESS_TERMINAL_POINTER_UP,
+} from "./selection-suppression.js";
 
 function contains(rect: Rect, x: number, y: number): boolean {
   return x >= rect.x && y >= rect.y && x < rect.x + rect.w && y < rect.y + rect.h;
@@ -40,8 +45,6 @@ function now(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
-const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
-
 type RowRange = Readonly<{ y0: number; y1: number }>;
 
 function rectRowRange(rect: Rect): RowRange | null {
@@ -62,6 +65,7 @@ export interface EventManager {
   focus: (id: string | null) => void;
   getFocused: () => string | null;
   debugNodes: () => TerminalDebugNode[];
+  attach: () => void;
   dispose: () => void;
 }
 
@@ -75,6 +79,12 @@ export function createEventManager(
     textInputTarget?: HTMLElement | null;
     debugIme?: boolean;
     onFocusChange?: (prev: string | null, next: string | null) => void;
+    /**
+     * When true, native DOM listeners are not attached until manager.attach()
+     * is called explicitly. Used by TerminalProvider so selection capture
+     * listeners can be registered first.
+     */
+    deferAttach?: boolean;
   }>,
 ): EventManager {
   let currentMetrics = metrics;
@@ -588,6 +598,52 @@ export function createEventManager(
   }
 
   function onPointerDown(e: PointerEvent): void {
+    if ((e as any)[SUPPRESS_TERMINAL_POINTER_DOWN]) {
+      // Keep IME focus working even when selection suppresses the gesture.
+      if (textInputTarget && !container.contains(textInputTarget)) {
+        try {
+          (textInputTarget as any).focus?.({ preventScroll: true });
+        } catch {
+          textInputTarget.focus?.();
+        }
+      } else {
+        try {
+          (container as any).focus?.({ preventScroll: true });
+        } catch {
+          container.focus?.();
+        }
+      }
+      // Still resolve the target and set focus/capture so that component
+      // activation (e.g. TVirtualList focus) works during selection.
+      const { cellX, cellY } = toCell(e.clientX, e.clientY);
+      const list = candidatesAt(cellX, cellY);
+      const target = pickTarget(list);
+
+      // Important: do not touch container.style.userSelect here.
+      // Selection layer owns userSelect for suppressed gestures.
+
+      if (target?.focusable) {
+        setFocus(target.id);
+      }
+
+      capturedId = target?.id ?? null;
+      updateHover(target, e);
+      record?.({
+        type: "pointerdown",
+        cellX,
+        cellY,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        button: e.button,
+        buttons: e.buttons,
+        ctrlKey: e.ctrlKey,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey,
+        metaKey: e.metaKey,
+      });
+      // Skip the terminal pointerdown event dispatch to the node.
+      return;
+    }
     // Keep an actual text input focused so browsers can start IME/composition.
     // (The terminal container itself isn't an editable element.)
     if (textInputTarget && !container.contains(textInputTarget)) {
@@ -683,6 +739,9 @@ export function createEventManager(
   }
 
   function onPointerMove(e: PointerEvent): void {
+    if ((e as any)[SUPPRESS_TERMINAL_POINTER_MOVE]) {
+      return;
+    }
     lastPointerMoveEvent = e;
     const { cellX, cellY } = toCell(e.clientX, e.clientY);
     record?.({
@@ -1168,38 +1227,49 @@ export function createEventManager(
     keyboardTargets.push(textInputTarget);
   }
 
-  container.addEventListener("pointerdown", onPointerDown);
-  container.addEventListener("pointermove", onPointerMove);
-  container.addEventListener("pointerup", onPointerUp);
-  container.addEventListener("mousedown", onMouseDown);
-  container.addEventListener("mousemove", onMouseMove);
-  container.addEventListener("mouseup", onMouseUp);
-  container.addEventListener("mouseleave", onMouseLeave);
-  container.addEventListener("click", onClick);
-  container.addEventListener("dblclick", onDblClick);
-  container.addEventListener("contextmenu", onContextMenu);
-  container.addEventListener("wheel", onWheel, { passive: false });
-  container.addEventListener("dragover", onDragOver);
-  container.addEventListener("drop", onDrop);
-  for (const target of keyboardTargets) {
-    target.addEventListener("keydown", onKeyDown);
-    target.addEventListener("keyup", onKeyUp);
+  let attached = false;
+
+  function attach(): void {
+    if (attached) return;
+    attached = true;
+
+    container.addEventListener("pointerdown", onPointerDown);
+    container.addEventListener("pointermove", onPointerMove);
+    container.addEventListener("pointerup", onPointerUp);
+    container.addEventListener("mousedown", onMouseDown);
+    container.addEventListener("mousemove", onMouseMove);
+    container.addEventListener("mouseup", onMouseUp);
+    container.addEventListener("mouseleave", onMouseLeave);
+    container.addEventListener("click", onClick);
+    container.addEventListener("dblclick", onDblClick);
+    container.addEventListener("contextmenu", onContextMenu);
+    container.addEventListener("wheel", onWheel, { passive: false });
+    container.addEventListener("dragover", onDragOver);
+    container.addEventListener("drop", onDrop);
+    for (const target of keyboardTargets) {
+      target.addEventListener("keydown", onKeyDown);
+      target.addEventListener("keyup", onKeyUp);
+    }
+
+    for (const target of textTargets) {
+      target.addEventListener("beforeinput", onBeforeInput as any);
+      target.addEventListener("input", onInput as any);
+      target.addEventListener("compositionstart", onCompositionStart as any);
+      target.addEventListener("compositionupdate", onCompositionUpdate as any);
+      target.addEventListener("compositionend", onCompositionEnd as any);
+      target.addEventListener("paste", onPaste as any);
+    }
+
+    window.addEventListener("scroll", markContainerRectDirty, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("resize", markContainerRectDirty, { passive: true });
   }
 
-  for (const target of textTargets) {
-    target.addEventListener("beforeinput", onBeforeInput as any);
-    target.addEventListener("input", onInput as any);
-    target.addEventListener("compositionstart", onCompositionStart as any);
-    target.addEventListener("compositionupdate", onCompositionUpdate as any);
-    target.addEventListener("compositionend", onCompositionEnd as any);
-    target.addEventListener("paste", onPaste as any);
+  if (!options?.deferAttach) {
+    attach();
   }
-
-  window.addEventListener("scroll", markContainerRectDirty, {
-    capture: true,
-    passive: true,
-  });
-  window.addEventListener("resize", markContainerRectDirty, { passive: true });
 
   return {
     register(node) {
@@ -1301,9 +1371,12 @@ export function createEventManager(
         focusable: Boolean(n.focusable),
       }));
     },
+    attach,
     dispose() {
       window.removeEventListener("scroll", markContainerRectDirty, true);
       window.removeEventListener("resize", markContainerRectDirty);
+      if (!attached) return;
+      attached = false;
       container.removeEventListener("pointerdown", onPointerDown);
       container.removeEventListener("pointermove", onPointerMove);
       container.removeEventListener("pointerup", onPointerUp);

@@ -191,9 +191,9 @@
 
 ### Events
 
-| 名称                       | Payload | 说明 |
-| -------------------------- | ------- | ---- |
-| <code>selectionCopy</code> | —       | —    |
+| 名称                       | Payload                                                           | 说明 |
+| -------------------------- | ----------------------------------------------------------------- | ---- |
+| <code>selectionCopy</code> | <code>(\_payload: TerminalSelectionCopyPayload) =&gt; true</code> | —    |
 
 ## TFlow
 
@@ -332,23 +332,23 @@
 
 ### Props
 
-| 名称                                     | 类型                                  | 默认值                                          | 必填 | 说明 |
-| ---------------------------------------- | ------------------------------------- | ----------------------------------------------- | ---- | ---- |
-| <code>x</code>                           | <code>number</code>                   | —                                               | 是   | —    |
-| <code>y</code>                           | <code>number</code>                   | —                                               | 是   | —    |
-| <code>w</code>                           | <code>number</code>                   | —                                               | 是   | —    |
-| <code>h</code>                           | <code>number</code>                   | <code>8</code>                                  | 否   | —    |
-| <code>zIndex</code>                      | <code>number</code>                   | <code>0</code>                                  | 否   | —    |
-| <code>modelValue</code>                  | <code>string</code>                   | —                                               | 是   | —    |
-| <code>placeholder</code>                 | <code>string</code>                   | <code>&quot;&quot;</code>                       | 否   | —    |
-| <code>style</code>                       | <code>Style</code>                    | <code>undefined</code>                          | 否   | —    |
-| <code>showIndentGuides</code>            | <code>boolean</code>                  | <code>true</code>                               | 否   | —    |
-| <code>indentSize</code>                  | <code>number</code>                   | <code>2</code>                                  | 否   | —    |
-| <code>guideColors</code>                 | <code>readonly AnsiColorName[]</code> | <code>() =&gt; [...DEFAULT_GUIDE_COLORS]</code> | 否   | —    |
-| <code>autoFocus</code>                   | <code>boolean</code>                  | <code>false</code>                              | 否   | —    |
-| <code>cursorToEndOnFirstFocus</code>     | <code>boolean</code>                  | <code>true</code>                               | 否   | —    |
-| <code>cursorToEndOnExternalUpdate</code> | <code>boolean</code>                  | <code>true</code>                               | 否   | —    |
-| <code>submitOnEnter</code>               | <code>boolean</code>                  | <code>false</code>                              | 否   | —    |
+| 名称                                     | 类型                                  | 默认值                                            | 必填 | 说明 |
+| ---------------------------------------- | ------------------------------------- | ------------------------------------------------- | ---- | ---- |
+| <code>x</code>                           | <code>number</code>                   | —                                                 | 是   | —    |
+| <code>y</code>                           | <code>number</code>                   | —                                                 | 是   | —    |
+| <code>w</code>                           | <code>number</code>                   | —                                                 | 是   | —    |
+| <code>h</code>                           | <code>number</code>                   | <code>8</code>                                    | 否   | —    |
+| <code>zIndex</code>                      | <code>number</code>                   | <code>0</code>                                    | 否   | —    |
+| <code>modelValue</code>                  | <code>string</code>                   | —                                                 | 是   | —    |
+| <code>placeholder</code>                 | <code>string</code>                   | <code>&quot;&quot;</code>                         | 否   | —    |
+| <code>style</code>                       | <code>Style</code>                    | <code>undefined</code>                            | 否   | —    |
+| <code>showIndentGuides</code>            | <code>boolean</code>                  | <code>true</code>                                 | 否   | —    |
+| <code>indentSize</code>                  | <code>number</code>                   | <code>2</code>                                    | 否   | —    |
+| <code>guideColors</code>                 | <code>readonly AnsiColorName[]</code> | <code>() =&gt; [...DEFAULT\_GUIDE\_COLORS]</code> | 否   | —    |
+| <code>autoFocus</code>                   | <code>boolean</code>                  | <code>false</code>                                | 否   | —    |
+| <code>cursorToEndOnFirstFocus</code>     | <code>boolean</code>                  | <code>true</code>                                 | 否   | —    |
+| <code>cursorToEndOnExternalUpdate</code> | <code>boolean</code>                  | <code>true</code>                                 | 否   | —    |
+| <code>submitOnEnter</code>               | <code>boolean</code>                  | <code>false</code>                                | 否   | —    |
 
 ### Events
 
@@ -973,6 +973,7 @@
 | <code>style</code>         | <code>Style</code>                                        | <code>undefined</code>       | 否   | —    |
 | <code>activeStyle</code>   | <code>Style</code>                                        | <code>undefined</code>       | 否   | —    |
 | <code>autoFocus</code>     | <code>boolean</code>                                      | <code>false</code>           | 否   | —    |
+| <code>selectionText</code> | <code>(item: unknown, index: number) =&gt; string</code>  | <code>undefined</code>       | 否   | —    |
 | <code>selectable</code>    | <code>boolean</code>                                      | <code>false</code>           | 否   | —    |
 | <code>rowScrollMode</code> | <code>RowScrollMode</code>                                | <code>&quot;off&quot;</code> | 否   | —    |
 

@@ -42,6 +42,7 @@ describe("ui regressions event manager", () => {
     el.style.userSelect = "text";
 
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
     events.register({
       rect: { x: 0, y: 0, w: 10, h: 1 },
       zIndex: 1,
@@ -57,6 +58,7 @@ describe("ui regressions event manager", () => {
     events.dispose();
 
     const events2 = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events2.attach();
     events2.register({
       rect: { x: 0, y: 0, w: 10, h: 1 },
       zIndex: 1,
@@ -77,6 +79,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
 
     const calls: string[] = [];
     const node = events.register({
@@ -112,6 +115,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
 
     const calls: string[] = [];
     events.register({
@@ -138,6 +142,7 @@ describe("ui regressions event manager", () => {
     events.dispose();
 
     const events2 = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events2.attach();
     events2.register({
       rect: { x: 0, y: 0, w: 10, h: 2 },
       zIndex: 0,
@@ -169,6 +174,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
 
     const calls: string[] = [];
     events.register({
@@ -231,6 +237,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
     const calls: string[] = [];
 
     events.register({
@@ -290,6 +297,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
     const calls: string[] = [];
 
     events.register({
@@ -347,6 +355,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
     const calls: string[] = [];
 
     events.register({
@@ -410,6 +419,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
     const calls: string[] = [];
 
     events.register({
@@ -481,6 +491,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
     const calls: string[] = [];
 
     events.register({
@@ -538,6 +549,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
     const calls: string[] = [];
 
     events.register({
@@ -599,6 +611,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
     const calls: string[] = [];
 
     const stale = events.register({
@@ -671,6 +684,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
 
     const calls: string[] = [];
 
@@ -716,6 +730,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
 
     const calls: string[] = [];
 
@@ -757,6 +772,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
     const combos: string[] = [];
 
     const parent = events.register({
@@ -805,6 +821,7 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
     const events = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    events.attach();
     const calls: string[] = [];
 
     const underlay = events.register({
@@ -906,5 +923,65 @@ describe("ui regressions event manager", () => {
     events.unregister(modal.id);
     events.unregister(underlay.id);
     events.dispose();
+  });
+
+  it("createEventManager attaches DOM listeners by default", () => {
+    const clicks: string[] = [];
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+
+    const manager = createEventManager(el, { cellWidth: 1, cellHeight: 1 });
+    manager.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 0,
+      focusable: true,
+      handlers: {
+        click: () => clicks.push("click"),
+      },
+    });
+
+    // No manual .attach() call — should work because default is auto-attach.
+    el.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+
+    expect(clicks).toEqual(["click"]);
+
+    manager.dispose();
+    el.remove();
+  });
+
+  it("createEventManager can defer DOM listener attachment", () => {
+    const clicks: string[] = [];
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+
+    const manager = createEventManager(
+      el,
+      { cellWidth: 1, cellHeight: 1 },
+      {
+        deferAttach: true,
+      },
+    );
+
+    manager.register({
+      rect: { x: 0, y: 0, w: 10, h: 1 },
+      zIndex: 0,
+      focusable: true,
+      handlers: {
+        click: () => clicks.push("click"),
+      },
+    });
+
+    // Before attach — events should not be dispatched.
+    el.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+    expect(clicks).toEqual([]);
+
+    // After attach — events should be dispatched.
+    manager.attach();
+
+    el.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+    expect(clicks).toEqual(["click"]);
+
+    manager.dispose();
+    el.remove();
   });
 });

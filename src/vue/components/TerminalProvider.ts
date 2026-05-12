@@ -1,5 +1,6 @@
 import type { Component, PropType } from "vue";
 import type { PathPickerProvider } from "../../cli/path-provider.js";
+import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../../core/render-plane.js";
 import type { Style, Terminal } from "../../core/types.js";
 import type { EventManager, TerminalEventRecord } from "../../events/index.js";
@@ -65,6 +66,11 @@ import {
 import { clearTextCaches } from "../utils/text.js";
 import { defaultTInputHostPlugin } from "./input/plugins/hostPlugin.js";
 import { TRenderPlane } from "./TRenderPlane.js";
+import {
+  SUPPRESS_TERMINAL_POINTER_DOWN,
+  SUPPRESS_TERMINAL_POINTER_MOVE,
+  SUPPRESS_TERMINAL_POINTER_UP,
+} from "../../events/manager/selection-suppression.js";
 
 interface Portal {
   id: string;
@@ -105,8 +111,6 @@ function shallowEqualRecord(a: Record<string, unknown>, b: Record<string, unknow
 }
 
 let portalId = 0;
-
-const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
 
 type ResolvedTerminalSelectionConfig = Readonly<{
   enabled: boolean;
@@ -188,7 +192,9 @@ export const TerminalProvider = defineComponent({
       default: false,
     },
   },
-  emits: ["selectionCopy"],
+  emits: {
+    selectionCopy: (_payload: TerminalSelectionCopyPayload) => true,
+  },
   setup(props, { slots, emit }) {
     const terminal: Terminal = createTerminal({
       cols: props.cols,
@@ -293,13 +299,20 @@ export const TerminalProvider = defineComponent({
       registerTextProvider(provider: SelectionTextProvider) {
         selectionTextProviders.set(provider.id, provider);
         return () => {
-          if (selectionTextProviders.get(provider.id) === provider)
-            selectionTextProviders.delete(provider.id);
+          if (selectionTextProviders.get(provider.id) !== provider) return;
+          selectionTextProviders.delete(provider.id);
+          selection.clearProvider(provider.id);
         };
       },
       onCopy(handler: (payload: TerminalSelectionCopyPayload) => void) {
         selectionCopyHandlers.add(handler);
         return () => selectionCopyHandlers.delete(handler);
+      },
+      refresh(options) {
+        selection.refresh(options);
+      },
+      clear() {
+        selection.clear();
       },
     } as const;
     const selectionOverlay = getPlaneTerminal(terminal, "overlay");
@@ -352,10 +365,6 @@ export const TerminalProvider = defineComponent({
     });
     selectionRenderNodeId = selectionRenderNode.id;
 
-    watchEffect(() => {
-      if (!resolveSelectionConfig(props.selection).enabled) selection.clear();
-    });
-
     function queueInvalidatePlane(plane?: TerminalRenderPlane): void {
       if (!plane) {
         pendingInvalidateAllPlanes = true;
@@ -366,6 +375,13 @@ export const TerminalProvider = defineComponent({
       pendingInvalidatePlanes.add(plane);
     }
 
+    const sortRenderPlanes = (planes: TerminalRenderPlanes): TerminalRenderPlanes => {
+      const order = new Map<TerminalRenderPlane, number>(
+        TERMINAL_RENDER_PLANES.map((plane, index) => [plane, index]),
+      );
+      return [...planes].sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
+    };
+
     function takeActivePlanes(): TerminalRenderPlanes | null {
       if (pendingInvalidateAllPlanes) {
         pendingInvalidateAllPlanes = false;
@@ -373,7 +389,7 @@ export const TerminalProvider = defineComponent({
         return null;
       }
       if (pendingInvalidatePlanes.size === 0) return null;
-      const activePlanes = Array.from(pendingInvalidatePlanes);
+      const activePlanes = sortRenderPlanes(Array.from(pendingInvalidatePlanes));
       pendingInvalidatePlanes.clear();
       return activePlanes;
     }
@@ -701,6 +717,7 @@ export const TerminalProvider = defineComponent({
           },
           textInputTarget: imeRef.value,
           debugIme: props.debugIme,
+          deferAttach: true,
         });
         events.value = m;
 
@@ -1051,9 +1068,107 @@ export const TerminalProvider = defineComponent({
         let suppressNextSelectionClick = false;
         let ignoreCompatibilityMouseSelectionEvents = false;
         let compatibilityMouseResetTimer: ReturnType<typeof setTimeout> | null = null;
+        let activeSelectionPointerId: number | null = null;
+        let selectionPreviousUserSelect: string | null = null;
+
+        let suppressDocumentActivation = false;
+        let suppressDocumentActivationTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const ACTIVATION_SUPPRESS_WINDOW_MS = 250;
+        const ACTIVATION_SUPPRESS_DISTANCE_PX = 4;
+
+        let lastSelectionActivationSource: { clientX: number; clientY: number; at: number } | null =
+          null;
+
+        const disarmDocumentActivationSuppression = () => {
+          suppressDocumentActivation = false;
+          suppressNextSelectionClick = false;
+          lastSelectionActivationSource = null;
+          if (suppressDocumentActivationTimer != null) {
+            clearTimeout(suppressDocumentActivationTimer);
+            suppressDocumentActivationTimer = null;
+          }
+          removeSelectionDocActivationListeners();
+        };
+
+        const beginSelectionUserSelect = () => {
+          if (selectionPreviousUserSelect == null) {
+            selectionPreviousUserSelect = el.style.userSelect;
+          }
+          el.style.userSelect = "none";
+        };
+
+        const restoreSelectionUserSelect = () => {
+          if (selectionPreviousUserSelect == null) return;
+          el.style.userSelect = selectionPreviousUserSelect;
+          selectionPreviousUserSelect = null;
+        };
 
         const isPointerSelectionEvent = (event: MouseEvent | PointerEvent): event is PointerEvent =>
           "pointerId" in event && typeof event.pointerId === "number";
+
+        const isEventInsideTerminal = (event: Event): boolean => {
+          const target = event.target;
+          return target instanceof Node && el.contains(target);
+        };
+
+        const onSelectionPointerCancel = (event: PointerEvent) => {
+          if (!selecting) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId)
+            return;
+
+          resetSelectionGesture({ clearSelection: true });
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation?.();
+        };
+
+        const onSelectionLostPointerCapture = (event: PointerEvent) => {
+          if (!selecting) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId)
+            return;
+
+          // lostpointercapture can fire after a normal pointerup; if the gesture
+          // already finished (selecting === false), we skip. Otherwise clean up.
+          resetSelectionGesture({ clearSelection: true });
+        };
+
+        // Document-level pointer listeners ensure selection continues even when
+        // the pointer drags outside the terminal and setPointerCapture is
+        // unavailable or unreliable.
+        const onSelectionDocPointerMove = (event: PointerEvent) => {
+          if (!selecting) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId)
+            return;
+
+          // Inside terminal: container listener will handle it.
+          if (isEventInsideTerminal(event)) return;
+
+          (event as any)[SUPPRESS_TERMINAL_POINTER_MOVE] = true;
+          onSelectionPointerMove(event);
+        };
+
+        const onSelectionDocPointerUp = (event: PointerEvent) => {
+          if (!selecting) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId)
+            return;
+
+          if (isEventInsideTerminal(event)) return;
+
+          onSelectionPointerUp(event);
+        };
+
+        const addSelectionDocPointerListeners = () => {
+          doc.addEventListener("pointermove", onSelectionDocPointerMove, true);
+          doc.addEventListener("pointerup", onSelectionDocPointerUp, true);
+          doc.addEventListener("pointercancel", onSelectionPointerCancel, true);
+        };
+
+        const removeSelectionDocPointerListeners = () => {
+          doc.removeEventListener("pointermove", onSelectionDocPointerMove, true);
+          doc.removeEventListener("pointerup", onSelectionDocPointerUp, true);
+          doc.removeEventListener("pointercancel", onSelectionPointerCancel, true);
+        };
 
         const suppressNativeSelectionEvent = (event: MouseEvent | PointerEvent) => {
           event.preventDefault();
@@ -1073,6 +1188,61 @@ export const TerminalProvider = defineComponent({
             ignoreCompatibilityMouseSelectionEvents = false;
             compatibilityMouseResetTimer = null;
           }, 0);
+        };
+
+        const shouldSuppressSelectionActivation = (event: MouseEvent): boolean => {
+          if (!suppressDocumentActivation || !lastSelectionActivationSource) return false;
+
+          const dt = Date.now() - lastSelectionActivationSource.at;
+          const dx = Math.abs(event.clientX - lastSelectionActivationSource.clientX);
+          const dy = Math.abs(event.clientY - lastSelectionActivationSource.clientY);
+
+          return (
+            dt <= ACTIVATION_SUPPRESS_WINDOW_MS &&
+            dx <= ACTIVATION_SUPPRESS_DISTANCE_PX &&
+            dy <= ACTIVATION_SUPPRESS_DISTANCE_PX
+          );
+        };
+
+        const onSelectionDocActivationCapture = (event: MouseEvent) => {
+          if (!shouldSuppressSelectionActivation(event)) {
+            disarmDocumentActivationSuppression();
+            return;
+          }
+
+          // Suppress all same-source activation events (click, dblclick,
+          // contextmenu) within the short window. Do not disarm early —
+          // the timer will expire and clean up automatically.
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation?.();
+        };
+
+        const removeSelectionDocActivationListeners = () => {
+          doc.removeEventListener("click", onSelectionDocActivationCapture, true);
+          doc.removeEventListener("dblclick", onSelectionDocActivationCapture, true);
+          doc.removeEventListener("contextmenu", onSelectionDocActivationCapture, true);
+        };
+
+        const armDocumentActivationSuppression = (event: MouseEvent | PointerEvent) => {
+          suppressDocumentActivation = true;
+          lastSelectionActivationSource = {
+            clientX: event.clientX,
+            clientY: event.clientY,
+            at: Date.now(),
+          };
+
+          doc.addEventListener("click", onSelectionDocActivationCapture, true);
+          doc.addEventListener("dblclick", onSelectionDocActivationCapture, true);
+          doc.addEventListener("contextmenu", onSelectionDocActivationCapture, true);
+
+          if (suppressDocumentActivationTimer != null) {
+            clearTimeout(suppressDocumentActivationTimer);
+          }
+
+          suppressDocumentActivationTimer = setTimeout(() => {
+            disarmDocumentActivationSuppression();
+          }, ACTIVATION_SUPPRESS_WINDOW_MS);
         };
 
         const clearSelectionAutoScroll = () => {
@@ -1134,18 +1304,88 @@ export const TerminalProvider = defineComponent({
           selectionStartPoint = point;
           selectionScrollOrigin = point;
           selectionLastPoint = point;
-          el.style.userSelect = "none";
+          beginSelectionUserSelect();
           if (isPointerSelectionEvent(event)) {
+            activeSelectionPointerId = event.pointerId;
+            addSelectionDocPointerListeners();
             ignoreCompatibilityMouseSelectionEvents = true;
             clearCompatibilityMouseReset();
             try {
               el.setPointerCapture?.(event.pointerId);
             } catch {
-              // Pointer capture is best-effort; selection still works inside the terminal.
+              // Document-level pointer listeners are the fallback.
             }
           }
+          // Install document-level listeners so dragging outside the terminal
+          // element still produces mousemove/mouseup events. Pointer capture
+          // handles this for pointer events, but the mouse fallback needs
+          // explicit document listeners.
+          doc.addEventListener("mousemove", onSelectionDocMouseMove, true);
+          doc.addEventListener("mouseup", onSelectionDocMouseUp, true);
           scheduleSelectionAutoScroll();
+          (event as any)[SUPPRESS_TERMINAL_POINTER_DOWN] = true;
           event.preventDefault();
+        };
+
+        const onSelectionDocMouseMove = (event: MouseEvent) => {
+          if (!selecting) return;
+          if (ignoreCompatibilityMouseSelectionEvents) return;
+          if (isEventInsideTerminal(event)) return;
+
+          const point = cellPointFromClient(event);
+          selectionLastPoint = point;
+          if (
+            selectionStartPoint &&
+            (point.x !== selectionStartPoint.x || point.y !== selectionStartPoint.y)
+          ) {
+            selectionDragStarted = true;
+          }
+          selection.update(point);
+          scheduleSelectionAutoScroll();
+          (event as any)[SUPPRESS_TERMINAL_POINTER_MOVE] = true;
+          event.preventDefault();
+        };
+
+        const onSelectionDocMouseUp = (event: MouseEvent) => {
+          if (!selecting) return;
+          if (ignoreCompatibilityMouseSelectionEvents) return;
+          if (isEventInsideTerminal(event)) return;
+
+          const point = cellPointFromClient(event);
+          if (
+            !selectionStartPoint ||
+            point.x !== selectionStartPoint.x ||
+            point.y !== selectionStartPoint.y
+          ) {
+            selection.update(point);
+          }
+          const suppressActivation = selectionDragStarted || selection.state.value.hasRange;
+          if (suppressActivation) {
+            suppressNextSelectionClick = true;
+            armDocumentActivationSuppression(event);
+            (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
+            suppressNativeSelectionEvent(event);
+          }
+          finishSelection();
+        };
+
+        const finishSelection = () => {
+          selecting = false;
+          activeSelectionPointerId = null;
+          selectionStartPoint = null;
+          selectionScrollOrigin = null;
+          selectionLastPoint = null;
+          restoreSelectionUserSelect();
+          clearSelectionAutoScroll();
+          removeSelectionDocPointerListeners();
+          removeSelectionDocListeners();
+          ignoreCompatibilityMouseSelectionEvents = false;
+          void selection.finish();
+        };
+
+        const removeSelectionDocListeners = () => {
+          doc.removeEventListener("mousemove", onSelectionDocMouseMove, true);
+          doc.removeEventListener("mouseup", onSelectionDocMouseUp, true);
         };
 
         const onSelectionPointerMove = (event: MouseEvent | PointerEvent) => {
@@ -1164,6 +1404,7 @@ export const TerminalProvider = defineComponent({
           }
           selection.update(point);
           scheduleSelectionAutoScroll();
+          (event as any)[SUPPRESS_TERMINAL_POINTER_MOVE] = true;
           event.preventDefault();
         };
 
@@ -1182,16 +1423,23 @@ export const TerminalProvider = defineComponent({
             selection.update(point);
           }
           const suppressActivation = selectionDragStarted || selection.state.value.hasRange;
+          const outsideTerminal = !isEventInsideTerminal(event);
           if (suppressActivation) {
             suppressNextSelectionClick = true;
+            armDocumentActivationSuppression(event);
             (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
-            event.preventDefault();
+
+            if (outsideTerminal) suppressNativeSelectionEvent(event);
+            else event.preventDefault();
           }
           selecting = false;
+          activeSelectionPointerId = null;
           selectionStartPoint = null;
           selectionScrollOrigin = null;
           selectionLastPoint = null;
+          restoreSelectionUserSelect();
           clearSelectionAutoScroll();
+          removeSelectionDocPointerListeners();
           if (isPointerSelectionEvent(event)) {
             try {
               el.releasePointerCapture?.(event.pointerId);
@@ -1202,13 +1450,25 @@ export const TerminalProvider = defineComponent({
           } else {
             ignoreCompatibilityMouseSelectionEvents = false;
           }
+          removeSelectionDocListeners();
           void selection.finish();
         };
 
         const onSelectionClickCapture = (event: MouseEvent) => {
           if (!selectionEnabled()) return;
-          if (!suppressNextSelectionClick) return;
-          suppressNextSelectionClick = false;
+          // Suppress all activation events (click, dblclick, contextmenu) during
+          // the suppression window, not just the first one.
+          if (!suppressNextSelectionClick && !suppressDocumentActivation) return;
+
+          // If the click is at a different location from the selection source,
+          // it is an unrelated terminal-internal click — don't suppress it.
+          if (lastSelectionActivationSource && !shouldSuppressSelectionActivation(event)) {
+            disarmDocumentActivationSuppression();
+            ignoreCompatibilityMouseSelectionEvents = false;
+            clearCompatibilityMouseReset();
+            return;
+          }
+
           ignoreCompatibilityMouseSelectionEvents = false;
           clearCompatibilityMouseReset();
           event.preventDefault();
@@ -1219,10 +1479,11 @@ export const TerminalProvider = defineComponent({
         const onSelectionKeydown = (event: KeyboardEvent) => {
           if (!selectionEnabled()) return;
           if (event.key !== "Escape") return;
-          if (!selection.state.value.active) return;
-          selection.clear();
+          if (!selection.state.value.active && !selecting) return;
+          resetSelectionGesture({ clearSelection: true });
           event.preventDefault();
           event.stopPropagation();
+          event.stopImmediatePropagation?.();
         };
 
         const onSelectionMouseLeave = () => {
@@ -1230,9 +1491,64 @@ export const TerminalProvider = defineComponent({
           selectionStartPoint = null;
         };
 
+        const cleanupSelectionListeners = () => {
+          resetSelectionGesture({ clearSelection: false });
+        };
+
+        const releaseSelectionPointerCapture = (
+          pointerId: number | null = activeSelectionPointerId,
+        ): void => {
+          if (pointerId == null) return;
+          try {
+            el.releasePointerCapture?.(pointerId);
+          } catch {
+            // best-effort
+          }
+        };
+
+        type SelectionGestureCleanupOptions = Readonly<{
+          clearSelection?: boolean;
+          suppressActivation?: boolean;
+        }>;
+
+        const resetSelectionGesture = (options: SelectionGestureCleanupOptions = {}): void => {
+          const pointerId = activeSelectionPointerId;
+
+          selecting = false;
+          selectionStartPoint = null;
+          selectionScrollOrigin = null;
+          selectionLastPoint = null;
+          selectionDragStarted = false;
+
+          // Release pointer capture before clearing activeSelectionPointerId
+          // so the correct pointerId is used even when cleanup is triggered
+          // by Escape, selection being disabled, or component unmount.
+          releaseSelectionPointerCapture(pointerId);
+          activeSelectionPointerId = null;
+
+          restoreSelectionUserSelect();
+          clearSelectionAutoScroll();
+          clearCompatibilityMouseReset();
+          removeSelectionDocPointerListeners();
+          removeSelectionDocListeners();
+
+          ignoreCompatibilityMouseSelectionEvents = false;
+
+          if (!options.suppressActivation) {
+            suppressNextSelectionClick = false;
+            disarmDocumentActivationSuppression();
+          }
+
+          if (options.clearSelection ?? true) {
+            selection.clear();
+          }
+        };
+
         el.addEventListener("pointerdown", onSelectionPointerDown, true);
         el.addEventListener("pointermove", onSelectionPointerMove, true);
         el.addEventListener("pointerup", onSelectionPointerUp, true);
+        el.addEventListener("pointercancel", onSelectionPointerCancel, true);
+        el.addEventListener("lostpointercapture", onSelectionLostPointerCapture as any, true);
         el.addEventListener("mousedown", onSelectionPointerDown, true);
         el.addEventListener("mousemove", onSelectionPointerMove, true);
         el.addEventListener("mouseup", onSelectionPointerUp, true);
@@ -1241,10 +1557,20 @@ export const TerminalProvider = defineComponent({
         el.addEventListener("dblclick", onSelectionClickCapture, true);
         el.addEventListener("contextmenu", onSelectionClickCapture, true);
         doc.addEventListener("keydown", onSelectionKeydown, true);
+
+        // Attach DOM listeners *after* selection capture listeners so that
+        // selection's pointerdown/move handlers run first (setting suppress
+        // flags) before the EventManager's handlers check them.  This is
+        // critical at AT_TARGET where capture/bubble ordering is determined
+        // by registration order, not by phase.
+        m.attach();
+
         onScopeDispose(() => {
           el.removeEventListener("pointerdown", onSelectionPointerDown, true);
           el.removeEventListener("pointermove", onSelectionPointerMove, true);
           el.removeEventListener("pointerup", onSelectionPointerUp, true);
+          el.removeEventListener("pointercancel", onSelectionPointerCancel, true);
+          el.removeEventListener("lostpointercapture", onSelectionLostPointerCapture as any, true);
           el.removeEventListener("mousedown", onSelectionPointerDown, true);
           el.removeEventListener("mousemove", onSelectionPointerMove, true);
           el.removeEventListener("mouseup", onSelectionPointerUp, true);
@@ -1253,9 +1579,34 @@ export const TerminalProvider = defineComponent({
           el.removeEventListener("dblclick", onSelectionClickCapture, true);
           el.removeEventListener("contextmenu", onSelectionClickCapture, true);
           doc.removeEventListener("keydown", onSelectionKeydown, true);
-          clearSelectionAutoScroll();
-          clearCompatibilityMouseReset();
+          cleanupSelectionListeners();
         });
+
+        // Watch for selection being dynamically disabled — clean up active drag gestures.
+        const stopSelectionEnabledWatch = watchEffect(() => {
+          if (selectionEnabled()) return;
+
+          if (selecting) {
+            resetSelectionGesture({ clearSelection: true });
+            return;
+          }
+
+          selection.clear();
+        });
+
+        onScopeDispose(stopSelectionEnabledWatch);
+
+        // Watch for selection becoming inactive while a drag is in progress
+        // (e.g. provider unregisters mid-drag). Clean up gesture state only;
+        // the controller already cleared the selection.
+        const stopSelectionActiveWatch = watchEffect(() => {
+          if (!selecting) return;
+          if (selection.state.value.active) return;
+
+          resetSelectionGesture({ clearSelection: false });
+        });
+
+        onScopeDispose(stopSelectionActiveWatch);
 
         const input = imeRef.value;
         const onImeFocus = () => {

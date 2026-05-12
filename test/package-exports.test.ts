@@ -75,6 +75,7 @@ describe("package exports", () => {
     expect(root.createOsc52ClipboardProvider).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
+    expect(root.terminalSelectionVisibleRowSpans).toBeTruthy();
     expect("TMarkdownText" in experimental).toBe(false);
     expect(experimental.TVirtualList).toBeTruthy();
     expect("TVirtualMarkdown" in experimental).toBe(false);

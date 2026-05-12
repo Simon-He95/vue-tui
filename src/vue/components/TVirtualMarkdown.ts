@@ -2,6 +2,7 @@ import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
 import type {
+  SelectedRowSpan,
   SelectionTextProvider,
   TerminalSelectionPoint,
   TerminalSelectionRange,
@@ -20,7 +21,10 @@ import {
   watchEffect,
 } from "vue";
 import { buildMarkdownBlocks } from "../markdown/document.js";
-import { terminalSelectionRowSpans } from "../../selection/terminal-selection.js";
+import {
+  terminalSelectionRowSpans,
+  terminalSelectionVisibleRowSpans,
+} from "../../selection/terminal-selection.js";
 import { layoutMarkdownBlocksCached, type TuiMarkdownLayoutCache } from "../markdown/layout.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
 import { paintMarkdownVisualRow } from "../markdown/render.js";
@@ -131,6 +135,7 @@ export const TVirtualMarkdown = defineComponent({
     const internalScrollTop = ref(0);
     const documentVersion = ref(0);
     const rows = shallowRef<readonly TuiMarkdownVisualRow[]>(markRaw([]));
+    let pendingSelectionScrollFocusRemap = false;
     const wheelState = createWheelScrollState();
     let builtOnce = false;
     let rebuildVersion = 0;
@@ -176,7 +181,10 @@ export const TVirtualMarkdown = defineComponent({
       const visibleChanged =
         prevVisibleRows.length !== nextVisibleRows.length ||
         prevVisibleRows.some((row, index) => row !== nextVisibleRows[index]);
-      if (!builtOnce || prevScrollTop !== nextScrollTop || visibleChanged) documentVersion.value++;
+      if (!builtOnce || prevScrollTop !== nextScrollTop || visibleChanged) {
+        documentVersion.value++;
+        selection.refresh();
+      }
     }
 
     function scheduleRebuild(): void {
@@ -257,13 +265,51 @@ export const TVirtualMarkdown = defineComponent({
       return Object.prototype.hasOwnProperty.call(instance?.vnode.props ?? {}, "scrollTop");
     }
 
-    function setScrollTop(next: number, emitChange = true): void {
-      const clamped = clamp(Math.floor(Number(next) || 0), 0, maxScrollTop());
-      if (internalScrollTop.value === clamped) return;
-      internalScrollTop.value = clamped;
-      if (emitChange) {
+    function applyControlledScrollTop(next: number, remapSelectionFocus = false): void {
+      const desired = Math.floor(Number(next) || 0);
+      const clamped = clamp(desired, 0, maxScrollTop());
+      const changed = internalScrollTop.value !== clamped;
+
+      if (changed) {
+        internalScrollTop.value = clamped;
+      }
+
+      // When a controlled prop changes, only emit if the parent supplied an
+      // out-of-range value so it can correct its state.  Do NOT emit on
+      // legitimate prop changes — that would create a feedback loop.
+      if (desired !== clamped) {
         emit("update:scrollTop", clamped);
         emit("scroll", clamped);
+      }
+
+      if (changed || remapSelectionFocus) {
+        selection.refresh(remapSelectionFocus ? { remapFocus: true } : undefined);
+      }
+    }
+
+    function setScrollTop(
+      next: number,
+      emitChange = true,
+      refreshOptions?: { remapSelectionFocus?: boolean; emitClampEvenIfUnchanged?: boolean },
+    ): void {
+      const desired = Math.floor(Number(next) || 0);
+      const clamped = clamp(desired, 0, maxScrollTop());
+      const changed = internalScrollTop.value !== clamped;
+
+      if (changed) {
+        internalScrollTop.value = clamped;
+      }
+
+      if (
+        emitChange &&
+        (changed || (refreshOptions?.emitClampEvenIfUnchanged && desired !== clamped))
+      ) {
+        emit("update:scrollTop", clamped);
+        emit("scroll", clamped);
+      }
+
+      if (changed || refreshOptions?.remapSelectionFocus) {
+        selection.refresh(refreshOptions?.remapSelectionFocus ? { remapFocus: true } : undefined);
       }
     }
 
@@ -278,19 +324,18 @@ export const TVirtualMarkdown = defineComponent({
         emit("update:scrollTop", clamped);
         emit("scroll", clamped);
       }
+      selection.refresh();
     }
 
     watch(
       () => props.scrollTop,
       () => {
         if (!hasControlledScrollTop()) return;
-        const desired = Math.floor(Number(props.scrollTop) || 0);
-        const clamped = clamp(desired, 0, maxScrollTop());
-        internalScrollTop.value = clamped;
-        if (desired !== clamped) {
-          emit("update:scrollTop", clamped);
-          emit("scroll", clamped);
-        }
+
+        const remap = pendingSelectionScrollFocusRemap;
+        pendingSelectionScrollFocusRemap = false;
+
+        applyControlledScrollTop(props.scrollTop, remap);
       },
     );
 
@@ -330,8 +375,22 @@ export const TVirtualMarkdown = defineComponent({
     function scrollSelectionBy(delta: number): boolean {
       const n = Math.trunc(Number(delta));
       if (!Number.isFinite(n) || n === 0) return false;
+
+      if (hasControlledScrollTop()) {
+        const nextTop = clamp(internalScrollTop.value + n, 0, maxScrollTop());
+        if (nextTop === internalScrollTop.value) return false;
+
+        // Do not spam update:scrollTop while waiting for parent-controlled prop.
+        if (pendingSelectionScrollFocusRemap) return false;
+
+        pendingSelectionScrollFocusRemap = true;
+        emit("update:scrollTop", nextTop);
+        emit("scroll", nextTop);
+        return true;
+      }
+
       const before = internalScrollTop.value;
-      setScrollTop(before + n);
+      setScrollTop(before + n, true, { remapSelectionFocus: true });
       return internalScrollTop.value !== before;
     }
 
@@ -361,6 +420,38 @@ export const TVirtualMarkdown = defineComponent({
           return span.x1 >= cols ? text.trimEnd() : text;
         })
         .join("\n");
+    }
+
+    function visibleSpansForSelectionRange(
+      providerRange: TerminalSelectionRange,
+      _screenRange: TerminalSelectionRange,
+    ): readonly SelectedRowSpan[] {
+      const r = normalizedRect();
+      const { x: clipX, y: clipY } = clipOffsets();
+      const cols = Math.max(1, Math.floor(props.w));
+      const top = internalScrollTop.value + clipY;
+      const bottom = top + r.h;
+
+      const providerSpans = terminalSelectionVisibleRowSpans(
+        providerRange,
+        cols,
+        rows.value.length,
+        top,
+        bottom,
+      );
+
+      const result: SelectedRowSpan[] = [];
+      for (const span of providerSpans) {
+        const screenY = r.y + (span.y - top);
+        const screenX0 = r.x + span.x0 - clipX;
+        const screenX1 = r.x + span.x1 - clipX;
+        const x0 = Math.max(r.x, screenX0);
+        const x1 = Math.min(r.x + r.w, screenX1);
+        if (screenY >= r.y && screenY < r.y + r.h && x1 > x0) {
+          result.push({ y: screenY, x0, x1 });
+        }
+      }
+      return result;
     }
 
     function onKeydown(event: TerminalKeyboardEvent): void {
@@ -405,6 +496,7 @@ export const TVirtualMarkdown = defineComponent({
       canHandle: canHandleSelectionRange,
       pointForCell: selectionPointForCell,
       getText: textForSelectionRange,
+      getVisibleSpans: visibleSpansForSelectionRange,
     };
     const unregisterSelectionTextProvider = selection.registerTextProvider(selectionTextProvider);
     onBeforeUnmount(unregisterSelectionTextProvider);

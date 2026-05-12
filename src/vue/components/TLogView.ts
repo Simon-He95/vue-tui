@@ -4,6 +4,7 @@ import type { Style } from "../../core/types.js";
 import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
 import type { FramePerfReason } from "../../observability/frame-perf.js";
 import type {
+  SelectedRowSpan,
   SelectionTextProvider,
   TerminalSelectionPoint,
   TerminalSelectionRange,
@@ -16,7 +17,10 @@ import type {
   TLogViewVisualIndexStatus,
 } from "../log/types.js";
 import { applyAnsiSgrStyle, parseAnsiSgr } from "../../core/ansi/sgr.js";
-import { terminalSelectionRowSpans } from "../../selection/terminal-selection.js";
+import {
+  terminalSelectionRowSpans,
+  terminalSelectionVisibleRowSpans,
+} from "../../selection/terminal-selection.js";
 import {
   computed,
   defineComponent,
@@ -811,6 +815,12 @@ export const TLogView = defineComponent({
     let renderNodeId: string | null = null;
     let alive = true;
     let pendingWheelTop: number | null = null;
+
+    // Under controlled scrollTop, selection auto-scroll only emits a single
+    // pending update:scrollTop; the selection focus is remapped only after the
+    // parent writes scrollTop back. If the parent never writes back, selection
+    // auto-scroll pauses. This is the intended controlled-component semantic.
+    let pendingSelectionScrollFocusRemap = false;
     let initializedScrollTop = false;
     let lastLineCount = 0;
     let lastFirstLineIndex = 0;
@@ -2622,6 +2632,7 @@ export const TLogView = defineComponent({
           resetWheelScrollState(wheelState);
           return;
         }
+        selection.refresh();
         ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
       },
     });
@@ -2945,6 +2956,7 @@ export const TLogView = defineComponent({
           emitScroll: true,
           stickToBottom: false,
         });
+        if (changed) selection.refresh();
         if (!changed) markViewportDirty();
         resumeVisualMeasurement();
         return true;
@@ -2956,6 +2968,7 @@ export const TLogView = defineComponent({
           emitScroll: true,
           stickToBottom: stickToBottom.value && nextTop >= maxScrollTop(),
         });
+        if (changed) selection.refresh();
         if (!changed) markViewportDirty();
         resumeVisualMeasurement();
         return true;
@@ -2976,6 +2989,7 @@ export const TLogView = defineComponent({
             extraDirtyRows: extraDirtyRow == null ? undefined : [extraDirtyRow],
           },
         );
+        if (changed) selection.refresh();
         if (!changed) {
           if (sameCountTailDirtyRows.length) markRowsDirty(sameCountTailDirtyRows);
           else markViewportDirty();
@@ -2998,6 +3012,7 @@ export const TLogView = defineComponent({
           emitScroll: true,
           stickToBottom: isAtBottom(),
         });
+        if (changed) selection.refresh();
         if (!changed) markViewportDirty();
         resumeVisualMeasurement();
         return true;
@@ -3090,7 +3105,10 @@ export const TLogView = defineComponent({
         stickToBottom: nextStick,
       });
       if (!changed && nextStick != null) stickToBottom.value = nextStick;
-      if (changed) invalidateSelf("high", "input");
+      if (changed) {
+        selection.refresh();
+        invalidateSelf("high", "input");
+      }
     }
 
     function scrollToBottom(): void {
@@ -3099,7 +3117,10 @@ export const TLogView = defineComponent({
         emitScroll: true,
         stickToBottom: true,
       });
-      if (changed) invalidateSelf("high", "scroll");
+      if (changed) {
+        selection.refresh();
+        invalidateSelf("high", "scroll");
+      }
     }
 
     function scrollToTop(): void {
@@ -3108,7 +3129,10 @@ export const TLogView = defineComponent({
         emitScroll: true,
         stickToBottom: false,
       });
-      if (changed) invalidateSelf("high", "scroll");
+      if (changed) {
+        selection.refresh();
+        invalidateSelf("high", "scroll");
+      }
     }
 
     function scrollToVisualRow(row: number): void {
@@ -3118,7 +3142,10 @@ export const TLogView = defineComponent({
         emitScroll: true,
         stickToBottom: target >= maxScrollTop(),
       });
-      if (changed) invalidateSelf("high", "scroll");
+      if (changed) {
+        selection.refresh();
+        invalidateSelf("high", "scroll");
+      }
     }
 
     function scrollBy(delta: number): void {
@@ -3130,13 +3157,32 @@ export const TLogView = defineComponent({
       const n = Math.trunc(Number(delta));
       if (!Number.isFinite(n) || n === 0) return false;
       cancelWheelScrollFrame();
+
+      if (isScrollControlled()) {
+        const target = currentScrollTop() + n;
+        const clampedTop = normalizeScrollTop(target);
+        if (clampedTop === currentScrollTop()) return false;
+
+        // Do not spam update:scrollTop while waiting for parent-controlled prop.
+        if (pendingSelectionScrollFocusRemap) return false;
+
+        pendingSelectionScrollFocusRemap = true;
+        emit("update:scrollTop", clampedTop);
+        emit("scroll", scrollPayload(clampedTop));
+        invalidateSelf("high", "scroll");
+        return true;
+      }
+
       const target = currentScrollTop() + n;
       const changed = applyScrollTop(target, "viewport-repaint", {
         emitScroll: true,
         stickToBottom: target >= maxScrollTop(),
       });
-      if (changed) invalidateSelf("high", "scroll");
-      return changed;
+      if (!changed) return false;
+
+      selection.refresh({ remapFocus: true });
+      invalidateSelf("high", "scroll");
+      return true;
     }
 
     function selectionPointForCell(point: TerminalSelectionPoint): TerminalSelectionPoint | null {
@@ -3198,6 +3244,45 @@ export const TLogView = defineComponent({
         .join("\n");
     }
 
+    function visibleSpansForSelectionRange(
+      providerRange: TerminalSelectionRange,
+      _screenRange: TerminalSelectionRange,
+    ): readonly SelectedRowSpan[] {
+      const r = normalizedRect();
+      const { x: clipX, y: clipY } = clipOffsets();
+      const cols = currentWrapWidth();
+      const totalRows = Math.max(
+        estimatedVisualRowCount(),
+        providerRange.anchor.y + 1,
+        providerRange.focus.y + 1,
+      );
+
+      const top = currentScrollTop() + clipY;
+      const bottom = top + r.h;
+
+      const providerSpans = terminalSelectionVisibleRowSpans(
+        providerRange,
+        cols,
+        totalRows,
+        top,
+        bottom,
+      );
+
+      const result: SelectedRowSpan[] = [];
+      for (const span of providerSpans) {
+        const screenY = r.y + (span.y - top);
+        const screenX0 = r.x + span.x0 - clipX;
+        const screenX1 = r.x + span.x1 - clipX;
+
+        const x0 = Math.max(r.x, screenX0);
+        const x1 = Math.min(r.x + r.w, screenX1);
+        if (screenY >= r.y && screenY < r.y + r.h && x1 > x0) {
+          result.push({ y: screenY, x0, x1 });
+        }
+      }
+      return result;
+    }
+
     function scrollToLine(
       index: number,
       options?: Readonly<{
@@ -3234,6 +3319,7 @@ export const TLogView = defineComponent({
         emitScroll: true,
         stickToBottom: stickToBottom.value && nextTop >= maxScrollTop(),
       });
+      if (changed) selection.refresh();
       if (!changed) markViewportDirty();
       invalidateSelf("normal", "data");
     }
@@ -3548,6 +3634,7 @@ export const TLogView = defineComponent({
       canHandle: canHandleSelectionRange,
       pointForCell: selectionPointForCell,
       getText: textForSelectionRange,
+      getVisibleSpans: visibleSpansForSelectionRange,
     };
     const unregisterSelectionTextProvider = selection.registerTextProvider(selectionTextProvider);
     onBeforeUnmount(unregisterSelectionTextProvider);
@@ -3659,6 +3746,12 @@ export const TLogView = defineComponent({
       () => {
         cancelWheelScrollFrame();
         syncStickFromCurrentScrollTop();
+
+        const remap = pendingSelectionScrollFocusRemap;
+        pendingSelectionScrollFocusRemap = false;
+
+        selection.refresh(remap ? { remapFocus: true } : undefined);
+
         markViewportDirty();
         invalidateSelf("high", "scroll");
       },
@@ -3756,6 +3849,7 @@ export const TLogView = defineComponent({
           emitUpdate: wasInitialized,
           stickToBottom: nextStick,
         });
+        if (changed) selection.refresh();
         if (!changed) markViewportDirty();
         invalidateSelf("normal", "data");
       },

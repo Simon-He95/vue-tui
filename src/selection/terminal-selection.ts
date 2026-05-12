@@ -39,13 +39,72 @@ export type TerminalSelectionOptions = Readonly<{
 
 export type TerminalSelectionConfig = boolean | TerminalSelectionOptions;
 
+/**
+ * A visible overlay span in terminal screen coordinates.
+ * Provider-space spans must be translated to screen coordinates before
+ * returning from `getVisibleSpans()`.
+ */
+export type SelectedRowSpan = Readonly<{
+  /** Terminal screen row y */
+  y: number;
+  /** Terminal screen column x inclusive */
+  x0: number;
+  /** Terminal screen column x exclusive */
+  x1: number;
+}>;
+
 export type SelectionTextProvider = Readonly<{
   id: string;
+
+  /**
+   * Current provider viewport rect in terminal screen coordinates.
+   */
   rect: Rect;
-  canHandle: (range: TerminalSelectionRange) => boolean;
-  pointForCell?: (point: TerminalSelectionPoint) => TerminalSelectionPoint | null;
-  getText: (range: TerminalSelectionRange) => string;
-  scrollBy?: (deltaRows: number) => void;
+
+  /**
+   * Receives a terminal screen-space range. Return true when this provider
+   * can resolve the range without relying on the terminal buffer fallback.
+   */
+  canHandle: (screenRange: TerminalSelectionRange) => boolean;
+
+  /**
+   * Maps a terminal screen-space point to provider-space point.
+   */
+  pointForCell?: (screenPoint: TerminalSelectionPoint) => TerminalSelectionPoint | null;
+
+  /**
+   * Receives a provider-space range (i.e. after `pointForCell` mapping).
+   */
+  getText: (providerRange: TerminalSelectionRange) => string;
+  /**
+   * Return overlay highlight spans for the portion of the selection that is
+   * currently visible in the viewport. Coordinates are terminal screen cells.
+   *
+   * When a virtual-scrolling provider scrolls during a drag-selection, the
+   * selection range may span content that has already scrolled out of view.
+   * The default `terminalSelectionRowSpans()` uses screen coordinates and
+   * cannot account for this, so the highlight becomes stale after each scroll
+   * tick. Providers that support cross-viewport selection should implement
+   * this method to return only the spans that intersect the current viewport,
+   * mapped back to screen cell coordinates.
+   *
+   * @param providerRange - The selection range in provider-space coordinates
+   *   (i.e. after `pointForCell` mapping).
+   * @param screenRange - The same selection range in terminal screen
+   *   coordinates (before `pointForCell` mapping).
+   */
+  getVisibleSpans?: (
+    providerRange: TerminalSelectionRange,
+    screenRange: TerminalSelectionRange,
+  ) => readonly SelectedRowSpan[];
+}>;
+
+export type TerminalSelectionRefreshOptions = Readonly<{
+  /**
+   * Re-map the current screen-space focus point through the active provider.
+   * Use this for selection-driven auto-scroll after the viewport has moved.
+   */
+  remapFocus?: boolean;
 }>;
 
 export type TerminalSelectionController = Readonly<{
@@ -56,18 +115,8 @@ export type TerminalSelectionController = Readonly<{
   clear: () => void;
   copy: () => Promise<boolean>;
   paint: (dirtyRows?: readonly number[]) => void;
-}>;
-
-type SelectionCell = Readonly<{
-  x: number;
-  ch: string;
-  style: Style;
-}>;
-
-type SelectedRowSpan = Readonly<{
-  y: number;
-  x0: number;
-  x1: number;
+  refresh: (options?: TerminalSelectionRefreshOptions) => void;
+  clearProvider: (providerId: string) => void;
 }>;
 
 type ProviderSelectionPoint = Readonly<{
@@ -150,6 +199,37 @@ export function terminalSelectionRowSpans(
   return spans;
 }
 
+export function terminalSelectionVisibleRowSpans(
+  range: TerminalSelectionRange,
+  cols: number,
+  rows: number,
+  visibleStartY: number,
+  visibleEndY: number,
+): SelectedRowSpan[] {
+  if (cols <= 0 || rows <= 0) return [];
+
+  const anchor = clampPoint(range.anchor, cols, rows);
+  const focus = clampPoint(range.focus, cols, rows);
+  if (pointKey(anchor) === pointKey(focus)) return [];
+
+  const start = comparePoints(anchor, focus) <= 0 ? anchor : focus;
+  const end = start === anchor ? focus : anchor;
+
+  const fromY = Math.max(start.y, Math.floor(visibleStartY), 0);
+  const toY = Math.min(end.y, Math.ceil(visibleEndY) - 1, rows - 1);
+
+  if (toY < fromY) return [];
+
+  const spans: SelectedRowSpan[] = [];
+  for (let y = fromY; y <= toY; y++) {
+    const x0 = y === start.y ? start.x : 0;
+    const x1 = y === end.y ? end.x + 1 : cols;
+    if (x1 > x0) spans.push({ y, x0, x1 });
+  }
+
+  return spans;
+}
+
 function selectedRowText(row: readonly Cell[], x0: number, x1: number, cols: number): string {
   let out = "";
   for (let x = x0; x < x1; x++) {
@@ -170,6 +250,13 @@ function copyPayload(text: string, ok: boolean, error?: unknown): TerminalSelect
   };
 }
 
+function clampPointToRect(point: TerminalSelectionPoint, rect: Rect): TerminalSelectionPoint {
+  return {
+    x: Math.max(rect.x, Math.min(rect.x + Math.max(0, rect.w - 1), Math.floor(point.x))),
+    y: Math.max(rect.y, Math.min(rect.y + Math.max(0, rect.h - 1), Math.floor(point.y))),
+  };
+}
+
 export function createTerminalSelectionController(
   options: CreateTerminalSelectionControllerOptions,
 ): TerminalSelectionController {
@@ -177,7 +264,7 @@ export function createTerminalSelectionController(
   let range: TerminalSelectionRange | null = null;
   let providerAnchor: ProviderSelectionPoint | null = null;
   let providerFocus: ProviderSelectionPoint | null = null;
-  let overlayRows = new Map<number, readonly SelectionCell[]>();
+  let overlaySpans = new Map<number, SelectedRowSpan[]>();
   let dirtyRows = new Set<number>();
 
   const readOptions = (): ResolvedSelectionOptions => ({
@@ -224,8 +311,10 @@ export function createTerminalSelectionController(
   const providerPointForCell = (
     provider: SelectionTextProvider,
     point: TerminalSelectionPoint,
+    options?: { clampToRect?: boolean },
   ): ProviderSelectionPoint | null => {
-    const providerPoint = provider.pointForCell?.(point) ?? point;
+    const inputPoint = options?.clampToRect ? clampPointToRect(point, provider.rect) : point;
+    const providerPoint = provider.pointForCell?.(inputPoint) ?? inputPoint;
     return providerPoint ? { providerId: provider.id, point: providerPoint } : null;
   };
 
@@ -239,27 +328,73 @@ export function createTerminalSelectionController(
     return lines.join("\n");
   };
 
+  const providerRangeFor = (
+    provider: SelectionTextProvider,
+    screenRange: TerminalSelectionRange,
+    anchorOverride?: ProviderSelectionPoint | null,
+    focusOverride?: ProviderSelectionPoint | null,
+  ): TerminalSelectionRange | null => {
+    if (
+      anchorOverride &&
+      focusOverride &&
+      anchorOverride.providerId === provider.id &&
+      focusOverride.providerId === provider.id
+    ) {
+      return {
+        anchor: anchorOverride.point,
+        focus: focusOverride.point,
+        mode: screenRange.mode,
+      };
+    }
+
+    const anchor = providerPointForCell(provider, screenRange.anchor, { clampToRect: true });
+    const focus = providerPointForCell(provider, screenRange.focus, { clampToRect: true });
+
+    if (!anchor || !focus) return null;
+    if (anchor.providerId !== provider.id || focus.providerId !== provider.id) return null;
+
+    return {
+      anchor: anchor.point,
+      focus: focus.point,
+      mode: screenRange.mode,
+    };
+  };
+
   const selectedText = (): string => {
     if (!range) return "";
+
     if (providerAnchor && providerFocus && providerAnchor.providerId === providerFocus.providerId) {
       const provider = providerById(providerAnchor.providerId);
       if (provider) {
-        return provider.getText({
-          anchor: providerAnchor.point,
-          focus: providerFocus.point,
-          mode: range.mode,
-        });
+        const providerRange = providerRangeFor(provider, range, providerAnchor, providerFocus);
+        if (providerRange) return provider.getText(providerRange);
       }
     }
 
     const provider = providers().find((candidate) => candidate.canHandle(range));
-    if (provider) return provider.getText(range);
+    if (provider) {
+      const providerRange = providerRangeFor(provider, range);
+      if (providerRange) return provider.getText(providerRange);
+    }
+
     return textFromTerminalBuffer(range);
   };
 
   const setResolvedText = (text: string): void => {
     if (!range || !state.value.active || state.value.text === text) return;
     state.value = { ...state.value, text };
+  };
+
+  const resolveProvider = (
+    nextRange: TerminalSelectionRange | null,
+    nextProviderAnchor: ProviderSelectionPoint | null,
+  ): SelectionTextProvider | null => {
+    if (!nextRange) return null;
+    if (nextProviderAnchor) {
+      const provider = providerById(nextProviderAnchor.providerId);
+      if (provider) return provider;
+    }
+    return providers().find((candidate) => candidate.canHandle(nextRange)) ?? null;
   };
 
   const rebuild = (
@@ -269,36 +404,47 @@ export function createTerminalSelectionController(
   ): void => {
     const previousRows = dirtyRows;
     const size = options.terminal.size();
-    const nextOverlayRows = new Map<number, readonly SelectionCell[]>();
+    const nextOverlaySpans = new Map<number, SelectedRowSpan[]>();
     const nextDirtyRows = new Set<number>();
     let hasRange = false;
 
     if (nextRange) {
-      const selectionStyle = readOptions().style;
-      const spans = terminalSelectionRowSpans(nextRange, size.cols, size.rows);
+      const activeProvider = resolveProvider(nextRange, nextProviderAnchor);
+      let spans: readonly SelectedRowSpan[];
+
+      const providerRange =
+        activeProvider != null
+          ? providerRangeFor(activeProvider, nextRange, nextProviderAnchor, nextProviderFocus)
+          : null;
+
+      if (activeProvider?.getVisibleSpans && providerRange) {
+        spans = activeProvider.getVisibleSpans(providerRange, nextRange);
+      } else {
+        spans = terminalSelectionRowSpans(nextRange, size.cols, size.rows);
+      }
+
       hasRange = spans.length > 0 || providerPointsDiffer(nextProviderAnchor, nextProviderFocus);
+
       for (const span of spans) {
-        const row = options.terminal.getRow(span.y);
-        const cells: SelectionCell[] = [];
-        for (let x = span.x0; x < span.x1; x++) {
-          const cell = row[x];
-          if (!cell || cell.continuation) continue;
-          const { href: _href, ...baseStyle } = cell.style;
-          cells.push({
-            x,
-            ch: cell.ch || " ",
-            style: { ...baseStyle, ...selectionStyle },
-          });
+        const x0 = Math.max(0, Math.min(size.cols, Math.floor(span.x0)));
+        const x1 = Math.max(0, Math.min(size.cols, Math.floor(span.x1)));
+        const y = Math.floor(span.y);
+        if (y < 0 || y >= size.rows || x1 <= x0) continue;
+
+        let list = nextOverlaySpans.get(y);
+        if (!list) {
+          list = [];
+          nextOverlaySpans.set(y, list);
         }
-        nextOverlayRows.set(span.y, cells);
-        nextDirtyRows.add(span.y);
+        list.push({ y, x0, x1 });
+        nextDirtyRows.add(y);
       }
     }
 
     range = nextRange;
     providerAnchor = nextProviderAnchor;
     providerFocus = nextProviderFocus;
-    overlayRows = nextOverlayRows;
+    overlaySpans = nextOverlaySpans;
     dirtyRows = nextDirtyRows;
     state.value = nextRange
       ? {
@@ -323,42 +469,55 @@ export function createTerminalSelectionController(
           : focus;
       const anchorProvider = providerForCell(anchor);
       const focusProvider = providerForCell(focus);
+      const activeProvider =
+        startOptions?.extend && providerAnchor ? providerById(providerAnchor.providerId) : null;
       const nextProviderAnchor =
         startOptions?.extend && providerAnchor
           ? providerAnchor
           : anchorProvider
             ? providerPointForCell(anchorProvider, anchor)
             : null;
-      const nextProviderFocus =
-        nextProviderAnchor && focusProvider?.id === nextProviderAnchor.providerId
+      const nextProviderFocus = activeProvider
+        ? providerPointForCell(activeProvider, focus, { clampToRect: true })
+        : nextProviderAnchor && focusProvider?.id === nextProviderAnchor.providerId
           ? providerPointForCell(focusProvider, focus)
           : null;
       rebuild({ anchor, focus, mode: "linear" }, nextProviderAnchor, nextProviderFocus);
     },
     update(point) {
       if (!range) return;
+
       const size = options.terminal.size();
       const focus = clampPoint(point, size.cols, size.rows);
-      const focusProvider = providerAnchor ? providerById(providerAnchor.providerId) : null;
+
+      const activeProvider = providerAnchor ? providerById(providerAnchor.providerId) : null;
+      const nextProviderFocus = activeProvider
+        ? providerPointForCell(activeProvider, focus, { clampToRect: true })
+        : null;
+
       rebuild(
         {
           ...range,
           focus,
         },
         providerAnchor,
-        focusProvider ? providerPointForCell(focusProvider, focus) : null,
+        nextProviderFocus,
       );
     },
     async finish() {
       if (!range) return;
-      const text = selectedText();
-      if (!text) {
+
+      if (!state.value.hasRange) {
         controller.clear();
         return;
       }
-      setResolvedText(text);
+
       const current = readOptions();
-      if (current.autoCopy && current.copyOnMouseUp) await controller.copy();
+      if (!current.autoCopy || !current.copyOnMouseUp) {
+        return;
+      }
+
+      await controller.copy();
     },
     clear() {
       if (!range && !dirtyRows.size) return;
@@ -382,11 +541,50 @@ export function createTerminalSelectionController(
       }
     },
     paint(dirtyRowsHint) {
-      const rows = dirtyRowsHint ?? Array.from(overlayRows.keys());
+      const rows = dirtyRowsHint ?? Array.from(overlaySpans.keys());
+      const selectionStyle = readOptions().style;
+
       for (const y of rows) {
-        const cells = overlayRows.get(y);
-        if (!cells) continue;
-        for (const cell of cells) options.overlayTerminal.put(cell.x, y, cell.ch, cell.style);
+        const spans = overlaySpans.get(y);
+        if (!spans?.length) continue;
+
+        const row = options.terminal.getRow(y);
+
+        for (const span of spans) {
+          for (let x = span.x0; x < span.x1; x++) {
+            const cell = row[x];
+            if (!cell || cell.continuation) continue;
+
+            const { href: _href, ...baseStyle } = cell.style;
+            options.overlayTerminal.put(x, y, cell.ch || " ", {
+              ...baseStyle,
+              ...selectionStyle,
+            });
+          }
+        }
+      }
+    },
+    refresh(refreshOptions) {
+      if (!range) return;
+
+      if (refreshOptions?.remapFocus) {
+        const activeProvider = providerAnchor
+          ? providerById(providerAnchor.providerId)
+          : resolveProvider(range, null);
+
+        const nextProviderFocus = activeProvider
+          ? providerPointForCell(activeProvider, range.focus, { clampToRect: true })
+          : providerFocus;
+
+        rebuild(range, providerAnchor, nextProviderFocus);
+        return;
+      }
+
+      rebuild(range, providerAnchor, providerFocus);
+    },
+    clearProvider(providerId) {
+      if (providerAnchor?.providerId === providerId || providerFocus?.providerId === providerId) {
+        controller.clear();
       }
     },
   };

@@ -1,5 +1,6 @@
 import type { App, Component, Ref } from "vue";
 import type { PathPickerProvider } from "./cli/path-provider.js";
+import { TERMINAL_RENDER_PLANES } from "./core/render-plane.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "./core/render-plane.js";
 import type { Style, Terminal } from "./core/types.js";
 import type { CliEventManager, TerminalEventRecord } from "./events/index.js";
@@ -56,6 +57,11 @@ import {
   type SchedulerFrameTaskRunStats,
   createSchedulerFrameTasks,
 } from "./vue/scheduler/frame-scheduler.js";
+import {
+  SUPPRESS_TERMINAL_POINTER_DOWN,
+  SUPPRESS_TERMINAL_POINTER_MOVE,
+  SUPPRESS_TERMINAL_POINTER_UP,
+} from "./events/manager/selection-suppression.js";
 
 interface Portal {
   id: string;
@@ -65,7 +71,6 @@ interface Portal {
 }
 
 let portalId = 0;
-const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
 
 type ResolvedTerminalSelectionConfig = Readonly<{
   enabled: boolean;
@@ -234,6 +239,13 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     pendingInvalidatePlanes.add(plane);
   }
 
+  const sortRenderPlanes = (planes: TerminalRenderPlanes): TerminalRenderPlanes => {
+    const order = new Map<TerminalRenderPlane, number>(
+      TERMINAL_RENDER_PLANES.map((plane, index) => [plane, index]),
+    );
+    return [...planes].sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
+  };
+
   function takeActivePlanes(): TerminalRenderPlanes | null {
     if (pendingInvalidateAllPlanes) {
       pendingInvalidateAllPlanes = false;
@@ -241,7 +253,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       return null;
     }
     if (pendingInvalidatePlanes.size === 0) return null;
-    const activePlanes = Array.from(pendingInvalidatePlanes);
+    const activePlanes = sortRenderPlanes(Array.from(pendingInvalidatePlanes));
     pendingInvalidatePlanes.clear();
     return activePlanes;
   }
@@ -528,13 +540,20 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     registerTextProvider(provider: SelectionTextProvider) {
       selectionTextProviders.set(provider.id, provider);
       return () => {
-        if (selectionTextProviders.get(provider.id) === provider)
-          selectionTextProviders.delete(provider.id);
+        if (selectionTextProviders.get(provider.id) !== provider) return;
+        selectionTextProviders.delete(provider.id);
+        selection.clearProvider(provider.id);
       };
     },
     onCopy(handler: (payload: TerminalSelectionCopyPayload) => void) {
       selectionCopyHandlers.add(handler);
       return () => selectionCopyHandlers.delete(handler);
+    },
+    refresh(options) {
+      selection.refresh(options);
+    },
+    clear() {
+      selection.clear();
     },
   } as const;
   const selectionOverlay = getPlaneTerminal(terminal, "overlay");
@@ -594,6 +613,20 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   let selectionDragStarted = false;
   let suppressNextSelectionClick = false;
 
+  const resetSelectionGesture = (options?: { clearSelection?: boolean }): void => {
+    selecting = false;
+    selectionStartPoint = null;
+    selectionScrollOrigin = null;
+    selectionLastPoint = null;
+    selectionDragStarted = false;
+    suppressNextSelectionClick = false;
+    clearSelectionAutoScroll();
+
+    if (options?.clearSelection ?? true) {
+      selection.clear();
+    }
+  };
+
   const clearSelectionAutoScroll = () => {
     if (selectionAutoScrollTimer == null) return;
     clearTimeout(selectionAutoScrollTimer);
@@ -627,8 +660,12 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   const dispatchWithSelection = (event: TerminalEventRecord): boolean => {
     if (!selectionEnabled()) return baseEvents.dispatch(event);
 
-    if (event.type === "keydown" && event.key === "Escape" && selection.state.value.active) {
-      selection.clear();
+    if (
+      event.type === "keydown" &&
+      event.key === "Escape" &&
+      (selecting || selection.state.value.active)
+    ) {
+      resetSelectionGesture({ clearSelection: true });
       return true;
     }
 
@@ -650,6 +687,13 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
           selectionScrollOrigin = point;
           selectionLastPoint = point;
           scheduleSelectionAutoScroll();
+
+          // Set suppress flag and dispatch so the CLI event manager's
+          // suppressed path still resolves focus/capture for parity
+          // with the DOM event manager.
+          (event as any)[SUPPRESS_TERMINAL_POINTER_DOWN] = true;
+          baseEvents.dispatch(event);
+          return true;
         }
       }
       return baseEvents.dispatch(event);
@@ -666,7 +710,12 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       }
       selection.update(point);
       scheduleSelectionAutoScroll();
-      return baseEvents.dispatch(event);
+      // Set suppress flag and dispatch so the CLI event manager's
+      // suppressed path still updates hover state for parity with
+      // the DOM event manager.
+      (event as any)[SUPPRESS_TERMINAL_POINTER_MOVE] = true;
+      baseEvents.dispatch(event);
+      return true;
     }
 
     if (event.type === "pointerup" && selecting) {

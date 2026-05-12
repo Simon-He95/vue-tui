@@ -75,7 +75,7 @@ describe("createTerminalApp selection", () => {
       expect(writes).toEqual(["select"]);
       expect(copies).toMatchObject([{ text: "select", rows: 1, ok: true }]);
       expect(contextCopies).toMatchObject([{ text: "select", rows: 1, ok: true }]);
-      expect(onPointerdown).toHaveBeenCalledTimes(1);
+      expect(onPointerdown).not.toHaveBeenCalled();
       expect(onPointerup).not.toHaveBeenCalled();
       expect(onClick).not.toHaveBeenCalled();
       expect(app.terminal.getCell(0, 0).style.inverse).toBe(true);
@@ -179,6 +179,56 @@ describe("createTerminalApp selection", () => {
     } finally {
       app.dispose();
       vi.useRealTimers();
+    }
+  });
+
+  it("does not dispatch pointerdown/pointermove to node when selection starts a drag", async () => {
+    const onPointerdown = vi.fn();
+    const onPointermove = vi.fn();
+    const onClick = vi.fn();
+    const App = defineComponent({
+      name: "CliPointerSuppressProbe",
+      setup() {
+        return () =>
+          h(
+            TView,
+            {
+              x: 0,
+              y: 0,
+              w: 10,
+              h: 1,
+              selectable: true,
+              onPointerdown,
+              onPointermove,
+              onClick,
+            },
+            () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+          );
+      },
+    });
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 2,
+      component: App,
+      selection: { autoCopy: false },
+    });
+
+    try {
+      app.mount();
+      await settle();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 });
+      app.events.dispatch({ type: "pointermove", cellX: 5, cellY: 0, button: 0 });
+      app.events.dispatch({ type: "pointerup", cellX: 5, cellY: 0, button: 0 });
+      app.events.dispatch({ type: "click", cellX: 5, cellY: 0, button: 0 });
+      await settle();
+
+      expect(onPointerdown).not.toHaveBeenCalled();
+      expect(onPointermove).not.toHaveBeenCalled();
+      expect(onClick).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
     }
   });
 });

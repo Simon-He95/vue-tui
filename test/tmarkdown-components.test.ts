@@ -351,6 +351,40 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("emits clamped scrollTop when controlled value is negative and internal is already at clamped value", async () => {
+    const scrollTop = ref(0);
+    const updates: number[] = [];
+    const content = Array.from({ length: 20 }, (_, index) => `- row-${index}`).join("\n");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          content,
+          scrollTop: scrollTop.value,
+          "onUpdate:scrollTop": (value: number) => {
+            updates.push(value);
+          },
+        }),
+      20,
+      8,
+    );
+    await nextTick();
+    await nextTick();
+
+    // Internal scrollTop starts at 0. Passing -10 should clamp to 0 and
+    // still emit update:scrollTop(0) so the parent sees the normalized value.
+    updates.length = 0;
+    scrollTop.value = -10;
+    await nextTick();
+    await nextTick();
+
+    expect(updates).toContain(0);
+    mounted.unmount();
+  });
+
   it("preserves trailing cells when TMarkdownText clear=false", async () => {
     const content = ref("hello world");
     const mounted = await mountTerminal(
