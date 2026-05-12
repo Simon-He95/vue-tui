@@ -1796,4 +1796,118 @@ describe("TerminalProvider selection", () => {
       restore();
     }
   });
+
+  it("does not emit update:scrollTop when controlled scrollTop prop changes to a valid value", async () => {
+    const scrollTopRef = ref(0);
+    const updates: number[] = [];
+    const scrolls: number[] = [];
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualMarkdown, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            content: Array.from({ length: 20 }, (_, i) => `- row-${i}`).join("\n"),
+            scrollTop: scrollTopRef.value,
+            "onUpdate:scrollTop": (value: number) => updates.push(value),
+            onScroll: (value: number) => scrolls.push(value),
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 20, 4, { selection: true });
+
+    try {
+      scrollTopRef.value = 3;
+      await nextTick();
+      await nextTick();
+
+      expect(updates).toEqual([]);
+      expect(scrolls).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits update:scrollTop when controlled scrollTop prop is clamped to a valid range", async () => {
+    const scrollTopRef = ref(0);
+    const updates: number[] = [];
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualMarkdown, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            content: Array.from({ length: 20 }, (_, i) => `- row-${i}`).join("\n"),
+            scrollTop: scrollTopRef.value,
+            "onUpdate:scrollTop": (value: number) => {
+              updates.push(value);
+            },
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 20, 4, { selection: true });
+
+    try {
+      scrollTopRef.value = 9999;
+      await nextTick();
+      await nextTick();
+
+      // Should emit the clamped value back so the parent can correct its state.
+      expect(updates.length).toBeGreaterThanOrEqual(1);
+      expect(updates[0]).toBeLessThan(9999);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("cleans up active selection on pointercancel", async () => {
+    const writes: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TText, {
+          x: 0,
+          y: 0,
+          value: "select me",
+          style: { fg: "whiteBright" },
+        }),
+      12,
+      2,
+      {
+        selection: true,
+        clipboard: {
+          supported: true,
+          readText: async () => writes.at(-1) ?? "",
+          writeText: async (text: string) => {
+            writes.push(text);
+          },
+        },
+      },
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(pointerEvent("pointerdown", { clientX: 0, clientY: 0, button: 0 }));
+      container.dispatchEvent(pointerEvent("pointermove", { clientX: 5, clientY: 0, button: 0 }));
+      container.dispatchEvent(pointerEvent("pointercancel", { clientX: 5, clientY: 0, button: 0 }));
+
+      await nextTick();
+      await settleClipboard();
+
+      // Selection should be cleared — no copy on cancel.
+      expect(writes).toEqual([]);
+      // userSelect should be restored, not stuck on "none".
+      expect(container.style.userSelect).not.toBe("none");
+    } finally {
+      mounted.unmount();
+    }
+  });
 });

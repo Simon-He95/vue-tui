@@ -1116,6 +1116,25 @@ export const TerminalProvider = defineComponent({
           return target instanceof Node && el.contains(target);
         };
 
+        const onSelectionPointerCancel = (event: PointerEvent) => {
+          if (!selecting) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId) return;
+
+          resetSelectionGesture({ clearSelection: true });
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation?.();
+        };
+
+        const onSelectionLostPointerCapture = (event: PointerEvent) => {
+          if (!selecting) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId) return;
+
+          // lostpointercapture can fire after a normal pointerup; if the gesture
+          // already finished (selecting === false), we skip. Otherwise clean up.
+          resetSelectionGesture({ clearSelection: true });
+        };
+
         // Document-level pointer listeners ensure selection continues even when
         // the pointer drags outside the terminal and setPointerCapture is
         // unavailable or unreliable.
@@ -1142,11 +1161,13 @@ export const TerminalProvider = defineComponent({
         const addSelectionDocPointerListeners = () => {
           doc.addEventListener("pointermove", onSelectionDocPointerMove, true);
           doc.addEventListener("pointerup", onSelectionDocPointerUp, true);
+          doc.addEventListener("pointercancel", onSelectionPointerCancel, true);
         };
 
         const removeSelectionDocPointerListeners = () => {
           doc.removeEventListener("pointermove", onSelectionDocPointerMove, true);
           doc.removeEventListener("pointerup", onSelectionDocPointerUp, true);
+          doc.removeEventListener("pointercancel", onSelectionPointerCancel, true);
         };
 
         const suppressNativeSelectionEvent = (event: MouseEvent | PointerEvent) => {
@@ -1526,6 +1547,8 @@ export const TerminalProvider = defineComponent({
         el.addEventListener("pointerdown", onSelectionPointerDown, true);
         el.addEventListener("pointermove", onSelectionPointerMove, true);
         el.addEventListener("pointerup", onSelectionPointerUp, true);
+        el.addEventListener("pointercancel", onSelectionPointerCancel, true);
+        el.addEventListener("lostpointercapture", onSelectionLostPointerCapture as any, true);
         el.addEventListener("mousedown", onSelectionPointerDown, true);
         el.addEventListener("mousemove", onSelectionPointerMove, true);
         el.addEventListener("mouseup", onSelectionPointerUp, true);
@@ -1546,6 +1569,8 @@ export const TerminalProvider = defineComponent({
           el.removeEventListener("pointerdown", onSelectionPointerDown, true);
           el.removeEventListener("pointermove", onSelectionPointerMove, true);
           el.removeEventListener("pointerup", onSelectionPointerUp, true);
+          el.removeEventListener("pointercancel", onSelectionPointerCancel, true);
+          el.removeEventListener("lostpointercapture", onSelectionLostPointerCapture as any, true);
           el.removeEventListener("mousedown", onSelectionPointerDown, true);
           el.removeEventListener("mousemove", onSelectionPointerMove, true);
           el.removeEventListener("mouseup", onSelectionPointerUp, true);

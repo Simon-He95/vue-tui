@@ -262,6 +262,28 @@ export const TVirtualMarkdown = defineComponent({
       return Object.prototype.hasOwnProperty.call(instance?.vnode.props ?? {}, "scrollTop");
     }
 
+    function applyControlledScrollTop(next: number, remapSelectionFocus = false): void {
+      const desired = Math.floor(Number(next) || 0);
+      const clamped = clamp(desired, 0, maxScrollTop());
+      const changed = internalScrollTop.value !== clamped;
+
+      if (changed) {
+        internalScrollTop.value = clamped;
+      }
+
+      // When a controlled prop changes, only emit if the parent supplied an
+      // out-of-range value so it can correct its state.  Do NOT emit on
+      // legitimate prop changes — that would create a feedback loop.
+      if (desired !== clamped) {
+        emit("update:scrollTop", clamped);
+        emit("scroll", clamped);
+      }
+
+      if (changed || remapSelectionFocus) {
+        selection.refresh(remapSelectionFocus ? { remapFocus: true } : undefined);
+      }
+    }
+
     function setScrollTop(
       next: number,
       emitChange = true,
@@ -312,10 +334,7 @@ export const TVirtualMarkdown = defineComponent({
         const remap = pendingSelectionScrollFocusRemap;
         pendingSelectionScrollFocusRemap = false;
 
-        setScrollTop(props.scrollTop, true, {
-          emitClampEvenIfUnchanged: true,
-          remapSelectionFocus: remap,
-        });
+        applyControlledScrollTop(props.scrollTop, remap);
       },
     );
 
