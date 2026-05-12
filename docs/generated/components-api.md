@@ -191,9 +191,9 @@
 
 ### Events
 
-| 名称                       | Payload | 说明 |
-| -------------------------- | ------- | ---- |
-| <code>selectionCopy</code> | —       | —    |
+| 名称                       | Payload                                                          | 说明 |
+| -------------------------- | ---------------------------------------------------------------- | ---- |
+| <code>selectionCopy</code> | <code>(_payload: TerminalSelectionCopyPayload) =&gt; true</code> | —    |
 
 ## TFlow
 
@@ -973,6 +973,7 @@
 | <code>style</code>         | <code>Style</code>                                        | <code>undefined</code>       | 否   | —    |
 | <code>activeStyle</code>   | <code>Style</code>                                        | <code>undefined</code>       | 否   | —    |
 | <code>autoFocus</code>     | <code>boolean</code>                                      | <code>false</code>           | 否   | —    |
+| <code>selectionText</code> | <code>(item: unknown, index: number) =&gt; string</code>  | <code>undefined</code>       | 否   | —    |
 | <code>selectable</code>    | <code>boolean</code>                                      | <code>false</code>           | 否   | —    |
 | <code>rowScrollMode</code> | <code>RowScrollMode</code>                                | <code>&quot;off&quot;</code> | 否   | —    |
 
