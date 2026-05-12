@@ -368,10 +368,10 @@ export const TVirtualList = defineComponent({
         scrollTop.value = nextTop;
         if (!wasInitialized || !changed) return;
 
-        selection.refresh({
-          remapFocus: pendingSelectionScrollFocusRemap,
-        });
+        const remap = pendingSelectionScrollFocusRemap;
         pendingSelectionScrollFocusRemap = false;
+
+        selection.refresh(remap ? { remapFocus: true } : undefined);
 
         markViewportDirty();
         invalidateSelf("high", "scroll");
@@ -486,6 +486,20 @@ export const TVirtualList = defineComponent({
       const n = Math.trunc(Number(delta));
       if (!Number.isFinite(n) || n === 0) return false;
       cancelWheelScrollFrame();
+
+      if (isScrollControlled()) {
+        const nextTop = clampScrollTop(scrollTop.value + n);
+        if (nextTop === scrollTop.value) return false;
+
+        // Do not spam update:scrollTop while waiting for parent-controlled prop.
+        if (pendingSelectionScrollFocusRemap) return false;
+
+        pendingSelectionScrollFocusRemap = true;
+        emit("update:scrollTop", nextTop);
+        emit("scroll", nextTop);
+        return true;
+      }
+
       const changed = applyScrollTop(scrollTop.value + n, {
         emitScroll: true,
         emitUpdate: true,
@@ -495,13 +509,7 @@ export const TVirtualList = defineComponent({
 
       if (!changed.changed) return false;
 
-      if (changed.controlled) {
-        // Wait for parent scrollTop prop to come back, then remap screen focus.
-        pendingSelectionScrollFocusRemap = true;
-      } else {
-        selection.refresh({ remapFocus: true });
-      }
-
+      selection.refresh({ remapFocus: true });
       return true;
     }
 

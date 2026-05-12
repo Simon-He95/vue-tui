@@ -365,9 +365,7 @@ export const TerminalProvider = defineComponent({
     });
     selectionRenderNodeId = selectionRenderNode.id;
 
-    watchEffect(() => {
-      if (!resolveSelectionConfig(props.selection).enabled) selection.clear();
-    });
+
 
     function queueInvalidatePlane(plane?: TerminalRenderPlane): void {
       if (!plane) {
@@ -1448,10 +1446,11 @@ export const TerminalProvider = defineComponent({
         const onSelectionKeydown = (event: KeyboardEvent) => {
           if (!selectionEnabled()) return;
           if (event.key !== "Escape") return;
-          if (!selection.state.value.active) return;
-          selection.clear();
+          if (!selection.state.value.active && !selecting) return;
+          resetSelectionGesture({ clearSelection: true });
           event.preventDefault();
           event.stopPropagation();
+          event.stopImmediatePropagation?.();
         };
 
         const onSelectionMouseLeave = () => {
@@ -1460,13 +1459,50 @@ export const TerminalProvider = defineComponent({
         };
 
         const cleanupSelectionListeners = () => {
+          resetSelectionGesture({ clearSelection: false });
+        };
+
+        const releaseSelectionPointerCapture = (): void => {
+          if (activeSelectionPointerId == null) return;
+          try {
+            el.releasePointerCapture?.(activeSelectionPointerId);
+          } catch {
+            // best-effort
+          }
+        };
+
+        type SelectionGestureCleanupOptions = Readonly<{
+          clearSelection?: boolean;
+          suppressActivation?: boolean;
+        }>;
+
+        const resetSelectionGesture = (
+          options: SelectionGestureCleanupOptions = {},
+        ): void => {
+          selecting = false;
+          selectionStartPoint = null;
+          selectionScrollOrigin = null;
+          selectionLastPoint = null;
+          selectionDragStarted = false;
+          activeSelectionPointerId = null;
+
           restoreSelectionUserSelect();
           clearSelectionAutoScroll();
           clearCompatibilityMouseReset();
-          disarmDocumentActivationSuppression();
-          activeSelectionPointerId = null;
+          releaseSelectionPointerCapture();
           removeSelectionDocPointerListeners();
           removeSelectionDocListeners();
+
+          ignoreCompatibilityMouseSelectionEvents = false;
+
+          if (!options.suppressActivation) {
+            suppressNextSelectionClick = false;
+            disarmDocumentActivationSuppression();
+          }
+
+          if (options.clearSelection ?? true) {
+            selection.clear();
+          }
         };
 
         el.addEventListener("pointerdown", onSelectionPointerDown, true);
@@ -1494,6 +1530,32 @@ export const TerminalProvider = defineComponent({
           doc.removeEventListener("keydown", onSelectionKeydown, true);
           cleanupSelectionListeners();
         });
+
+        // Watch for selection being dynamically disabled — clean up active drag gestures.
+        const stopSelectionEnabledWatch = watchEffect(() => {
+          if (selectionEnabled()) return;
+
+          if (selecting) {
+            resetSelectionGesture({ clearSelection: true });
+            return;
+          }
+
+          selection.clear();
+        });
+
+        onScopeDispose(stopSelectionEnabledWatch);
+
+        // Watch for selection becoming inactive while a drag is in progress
+        // (e.g. provider unregisters mid-drag). Clean up gesture state only;
+        // the controller already cleared the selection.
+        const stopSelectionActiveWatch = watchEffect(() => {
+          if (!selecting) return;
+          if (selection.state.value.active) return;
+
+          resetSelectionGesture({ clearSelection: false });
+        });
+
+        onScopeDispose(stopSelectionActiveWatch);
 
         const input = imeRef.value;
         const onImeFocus = () => {

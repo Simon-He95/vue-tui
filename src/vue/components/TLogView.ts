@@ -3149,6 +3149,22 @@ export const TLogView = defineComponent({
       const n = Math.trunc(Number(delta));
       if (!Number.isFinite(n) || n === 0) return false;
       cancelWheelScrollFrame();
+
+      if (isScrollControlled()) {
+        const target = currentScrollTop() + n;
+        const clampedTop = normalizeScrollTop(target);
+        if (clampedTop === currentScrollTop()) return false;
+
+        // Do not spam update:scrollTop while waiting for parent-controlled prop.
+        if (pendingSelectionScrollFocusRemap) return false;
+
+        pendingSelectionScrollFocusRemap = true;
+        emit("update:scrollTop", clampedTop);
+        emit("scroll", scrollPayload(clampedTop));
+        invalidateSelf("high", "scroll");
+        return true;
+      }
+
       const target = currentScrollTop() + n;
       const changed = applyScrollTop(target, "viewport-repaint", {
         emitScroll: true,
@@ -3156,13 +3172,7 @@ export const TLogView = defineComponent({
       });
       if (!changed) return false;
 
-      if (isScrollControlled()) {
-        // Wait for parent scrollTop prop to come back, then remap screen focus.
-        pendingSelectionScrollFocusRemap = true;
-      } else {
-        selection.refresh({ remapFocus: true });
-      }
-
+      selection.refresh({ remapFocus: true });
       invalidateSelf("high", "scroll");
       return true;
     }
@@ -3725,10 +3735,10 @@ export const TLogView = defineComponent({
         cancelWheelScrollFrame();
         syncStickFromCurrentScrollTop();
 
-        selection.refresh({
-          remapFocus: pendingSelectionScrollFocusRemap,
-        });
+        const remap = pendingSelectionScrollFocusRemap;
         pendingSelectionScrollFocusRemap = false;
+
+        selection.refresh(remap ? { remapFocus: true } : undefined);
 
         markViewportDirty();
         invalidateSelf("high", "scroll");

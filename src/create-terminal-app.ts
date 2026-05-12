@@ -612,6 +612,20 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   let selectionDragStarted = false;
   let suppressNextSelectionClick = false;
 
+  const resetSelectionGesture = (options?: { clearSelection?: boolean }): void => {
+    selecting = false;
+    selectionStartPoint = null;
+    selectionScrollOrigin = null;
+    selectionLastPoint = null;
+    selectionDragStarted = false;
+    suppressNextSelectionClick = false;
+    clearSelectionAutoScroll();
+
+    if (options?.clearSelection ?? true) {
+      selection.clear();
+    }
+  };
+
   const clearSelectionAutoScroll = () => {
     if (selectionAutoScrollTimer == null) return;
     clearTimeout(selectionAutoScrollTimer);
@@ -645,8 +659,8 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   const dispatchWithSelection = (event: TerminalEventRecord): boolean => {
     if (!selectionEnabled()) return baseEvents.dispatch(event);
 
-    if (event.type === "keydown" && event.key === "Escape" && selection.state.value.active) {
-      selection.clear();
+    if (event.type === "keydown" && event.key === "Escape" && (selecting || selection.state.value.active)) {
+      resetSelectionGesture({ clearSelection: true });
       return true;
     }
 
