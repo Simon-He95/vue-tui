@@ -515,6 +515,90 @@ describe("terminal selection", () => {
     expect(terminal.getCell(4, 0).style.inverse).toBeUndefined();
   });
 
+  it("does not resolve provider text on finish when autoCopy is disabled", async () => {
+    const terminal = createTerminal({ cols: 10, rows: 5 });
+    const clipboard = memoryClipboard();
+    const getText = vi.fn(() => "large text");
+
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: getPlaneTerminal(terminal, "overlay"),
+      clipboard: clipboard.api,
+      getOptions: () => ({ autoCopy: false, copyOnMouseUp: false }),
+      getTextProviders: () => [
+        {
+          id: "provider",
+          rect: { x: 0, y: 0, w: 10, h: 5 },
+          canHandle: () => true,
+          pointForCell: (p: any) => p,
+          getText,
+        },
+      ],
+    });
+
+    selection.start({ x: 0, y: 0 });
+    selection.update({ x: 5, y: 3 });
+    await selection.finish();
+
+    expect(getText).not.toHaveBeenCalled();
+    expect(selection.state.value.text).toBe("");
+    expect(clipboard.writes).toEqual([]);
+
+    // Explicit copy() should still resolve text lazily
+    await selection.copy();
+
+    expect(getText).toHaveBeenCalledTimes(1);
+    expect(clipboard.writes).toEqual(["large text"]);
+  });
+
+  it("does not resolve provider text on finish when copyOnMouseUp is false", async () => {
+    const terminal = createTerminal({ cols: 10, rows: 5 });
+    const clipboard = memoryClipboard();
+    const getText = vi.fn(() => "large text");
+
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: getPlaneTerminal(terminal, "overlay"),
+      clipboard: clipboard.api,
+      getOptions: () => ({ autoCopy: true, copyOnMouseUp: false }),
+      getTextProviders: () => [
+        {
+          id: "provider",
+          rect: { x: 0, y: 0, w: 10, h: 5 },
+          canHandle: () => true,
+          pointForCell: (p: any) => p,
+          getText,
+        },
+      ],
+    });
+
+    selection.start({ x: 0, y: 0 });
+    selection.update({ x: 5, y: 3 });
+    await selection.finish();
+
+    expect(getText).not.toHaveBeenCalled();
+    expect(selection.state.value.text).toBe("");
+    expect(clipboard.writes).toEqual([]);
+  });
+
+  it("clears selection with no hasRange on finish even when autoCopy is disabled", async () => {
+    const terminal = createTerminal({ cols: 10, rows: 5 });
+    const clipboard = memoryClipboard();
+
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: getPlaneTerminal(terminal, "overlay"),
+      clipboard: clipboard.api,
+      getOptions: () => ({ autoCopy: false, copyOnMouseUp: false }),
+    });
+
+    selection.start({ x: 3, y: 2 });
+    // No update — anchor === focus means no range
+    await selection.finish();
+
+    expect(selection.state.value.active).toBe(false);
+  });
+
   it("clears previous overlay when provider visible spans become empty after scroll", () => {
     const terminal = createTerminal({ cols: 8, rows: 4 });
     terminal.write("row0", { x: 0, y: 0 });

@@ -99,6 +99,10 @@ export const TVirtualList = defineComponent({
     style: { type: Object as PropType<Style>, default: undefined },
     activeStyle: { type: Object as PropType<Style>, default: undefined },
     autoFocus: { type: Boolean, default: false },
+    selectionText: {
+      type: Function as PropType<(item: unknown, index: number) => string>,
+      default: undefined,
+    },
     selectable: { type: Boolean, default: false },
     rowScrollMode: {
       type: String as PropType<RowScrollMode>,
@@ -417,8 +421,15 @@ export const TVirtualList = defineComponent({
 
     function itemText(index: number): string {
       const item = props.getItem(index);
+
+      if (props.selectionText) {
+        return String(props.selectionText(item, index) ?? "");
+      }
+
       const raw = props.renderItem ? props.renderItem(item, index) : item;
-      return String(raw ?? "");
+      return typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean"
+        ? String(raw)
+        : "";
     }
 
     function commit(index: number): void {

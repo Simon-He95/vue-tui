@@ -1704,4 +1704,96 @@ describe("TerminalProvider selection", () => {
       mounted.unmount();
     }
   });
+
+  it("uses TVirtualList selectionText for complex items", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          itemCount: 10,
+          itemVersion: 1,
+          getItem: (index: number) => ({ id: index, label: `Item ${index}` }),
+          renderItem: (item: any) => ({ label: item.label }),
+          selectionText: (item: any) => item.label,
+          selectable: true,
+        }),
+      20,
+      4,
+      { selection: true },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+      vi.advanceTimersByTime(90);
+      await nextTick();
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
+      await settleClipboard();
+
+      expect(writes.length).toBe(1);
+      expect(writes[0]).toContain("Item 1");
+      expect(writes[0]).toContain("Item 3");
+      expect(writes[0]).not.toContain("[object Object]");
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+      restore();
+    }
+  });
+
+  it("returns empty copy text for complex TVirtualList items without selectionText", async () => {
+    const writes: string[] = [];
+    const restore = installNavigatorClipboard(writes);
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualList, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          itemCount: 10,
+          itemVersion: 1,
+          getItem: (index: number) => ({ id: index, label: `Item ${index}` }),
+          renderItem: (item: any) => ({ label: item.label }),
+          selectable: true,
+        }),
+      20,
+      4,
+      { selection: true },
+    );
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
+      vi.advanceTimersByTime(90);
+      await nextTick();
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
+      await settleClipboard();
+
+      // Without selectionText, complex objects should not produce [object Object]
+      expect(writes.length).toBe(1);
+      expect(writes[0]).not.toContain("[object Object]");
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+      restore();
+    }
+  });
 });

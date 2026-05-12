@@ -10,6 +10,11 @@ import type {
   TerminalNode,
   TerminalPointerEvent,
 } from "./types.js";
+import {
+  SUPPRESS_TERMINAL_POINTER_DOWN,
+  SUPPRESS_TERMINAL_POINTER_MOVE,
+  SUPPRESS_TERMINAL_POINTER_UP,
+} from "./selection-suppression.js";
 
 function contains(rect: Rect, x: number, y: number): boolean {
   return x >= rect.x && y >= rect.y && x < rect.x + rect.w && y < rect.y + rect.h;
@@ -39,10 +44,6 @@ function sameRect(a: Rect, b: Rect): boolean {
 function now(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
-
-const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
-const SUPPRESS_TERMINAL_POINTER_DOWN = "__vueTuiSuppressTerminalPointerDown";
-const SUPPRESS_TERMINAL_POINTER_MOVE = "__vueTuiSuppressTerminalPointerMove";
 
 type RowRange = Readonly<{ y0: number; y1: number }>;
 

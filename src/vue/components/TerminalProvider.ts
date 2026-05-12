@@ -67,6 +67,11 @@ import {
 import { clearTextCaches } from "../utils/text.js";
 import { defaultTInputHostPlugin } from "./input/plugins/hostPlugin.js";
 import { TRenderPlane } from "./TRenderPlane.js";
+import {
+  SUPPRESS_TERMINAL_POINTER_DOWN,
+  SUPPRESS_TERMINAL_POINTER_MOVE,
+  SUPPRESS_TERMINAL_POINTER_UP,
+} from "../../events/manager/selection-suppression.js";
 
 interface Portal {
   id: string;
@@ -107,10 +112,6 @@ function shallowEqualRecord(a: Record<string, unknown>, b: Record<string, unknow
 }
 
 let portalId = 0;
-
-const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
-const SUPPRESS_TERMINAL_POINTER_DOWN = "__vueTuiSuppressTerminalPointerDown";
-const SUPPRESS_TERMINAL_POINTER_MOVE = "__vueTuiSuppressTerminalPointerMove";
 
 type ResolvedTerminalSelectionConfig = Readonly<{
   enabled: boolean;
@@ -1125,7 +1126,7 @@ export const TerminalProvider = defineComponent({
           // Inside terminal: container listener will handle it.
           if (isEventInsideTerminal(event)) return;
 
-          (event as any).__vueTuiSuppressTerminalPointerMove = true;
+          (event as any)[SUPPRESS_TERMINAL_POINTER_MOVE] = true;
           onSelectionPointerMove(event);
         };
 
@@ -1301,7 +1302,7 @@ export const TerminalProvider = defineComponent({
           doc.addEventListener("mousemove", onSelectionDocMouseMove, true);
           doc.addEventListener("mouseup", onSelectionDocMouseUp, true);
           scheduleSelectionAutoScroll();
-          (event as any).__vueTuiSuppressTerminalPointerDown = true;
+          (event as any)[SUPPRESS_TERMINAL_POINTER_DOWN] = true;
           event.preventDefault();
         };
 
@@ -1320,7 +1321,7 @@ export const TerminalProvider = defineComponent({
           }
           selection.update(point);
           scheduleSelectionAutoScroll();
-          (event as any).__vueTuiSuppressTerminalPointerMove = true;
+          (event as any)[SUPPRESS_TERMINAL_POINTER_MOVE] = true;
           event.preventDefault();
         };
 
@@ -1382,7 +1383,7 @@ export const TerminalProvider = defineComponent({
           }
           selection.update(point);
           scheduleSelectionAutoScroll();
-          (event as any).__vueTuiSuppressTerminalPointerMove = true;
+          (event as any)[SUPPRESS_TERMINAL_POINTER_MOVE] = true;
           event.preventDefault();
         };
 

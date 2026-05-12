@@ -506,14 +506,18 @@ export function createTerminalSelectionController(
     },
     async finish() {
       if (!range) return;
-      const text = selectedText();
-      if (!text) {
+
+      if (!state.value.hasRange) {
         controller.clear();
         return;
       }
-      setResolvedText(text);
+
       const current = readOptions();
-      if (current.autoCopy && current.copyOnMouseUp) await controller.copy();
+      if (!current.autoCopy || !current.copyOnMouseUp) {
+        return;
+      }
+
+      await controller.copy();
     },
     clear() {
       if (!range && !dirtyRows.size) return;

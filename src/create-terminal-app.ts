@@ -58,6 +58,11 @@ import {
   type SchedulerFrameTaskRunStats,
   createSchedulerFrameTasks,
 } from "./vue/scheduler/frame-scheduler.js";
+import {
+  SUPPRESS_TERMINAL_POINTER_DOWN,
+  SUPPRESS_TERMINAL_POINTER_MOVE,
+  SUPPRESS_TERMINAL_POINTER_UP,
+} from "./events/manager/selection-suppression.js";
 
 interface Portal {
   id: string;
@@ -67,9 +72,6 @@ interface Portal {
 }
 
 let portalId = 0;
-const SUPPRESS_TERMINAL_POINTER_UP = "__vueTuiSuppressTerminalPointerUp";
-const SUPPRESS_TERMINAL_POINTER_DOWN = "__vueTuiSuppressTerminalPointerDown";
-const SUPPRESS_TERMINAL_POINTER_MOVE = "__vueTuiSuppressTerminalPointerMove";
 
 type ResolvedTerminalSelectionConfig = Readonly<{
   enabled: boolean;
