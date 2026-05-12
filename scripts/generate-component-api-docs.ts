@@ -66,7 +66,10 @@ function formatMaybeCode(text: string | null): string {
   // Markdown tables split columns by `|` even inside inline code spans.
   // Use HTML <code> + entity to keep union types/payloads (A | B) intact.
   // oxfmt escapes underscores in markdown files, so match that behavior to avoid format/diff conflicts.
-  const escaped = escapeHtml(text).replaceAll("\n", "<br>").replaceAll("|", "&#124;").replaceAll("_", "\\_");
+  const escaped = escapeHtml(text)
+    .replaceAll("\n", "<br>")
+    .replaceAll("|", "&#124;")
+    .replaceAll("_", "\\_");
   return `<code>${escaped}</code>`;
 }
 
