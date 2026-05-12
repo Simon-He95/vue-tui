@@ -1624,4 +1624,84 @@ describe("TerminalProvider selection", () => {
       mounted.unmount();
     }
   });
+
+  it("does not mutate controlled TVirtualMarkdown scrollTop during selection auto-scroll before parent writeback", async () => {
+    const scrollTopRef = ref(0);
+    const updateScrollTopCalls: number[] = [];
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualMarkdown, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 4,
+            content: Array.from({ length: 20 }, (_, i) => `- row-${i}`).join("\n"),
+            scrollTop: scrollTopRef.value,
+            "onUpdate:scrollTop": (value: number) => {
+              updateScrollTopCalls.push(value);
+              // Deliberately do not write back, simulating parent that delays/rejects
+            },
+          });
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(App), 12, 4, { selection: true });
+
+    vi.useFakeTimers();
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 6, clientY: 3, bubbles: true }));
+
+      vi.advanceTimersByTime(240);
+      await nextTick();
+
+      expect(updateScrollTopCalls.length).toBeLessThanOrEqual(1);
+      expect(rowText(mounted, 0)).toBe("- row-0");
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not drop visible selection spans when wrapped TLogView visual count grows during selection", async () => {
+    const source = {
+      lineCount: () => 3,
+      getLine: (index: number) =>
+        index === 0 ? "aaaaaaaaaaaaaaaa" : `line-${index}`,
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 4,
+          h: 4,
+          source,
+          version: 1,
+          wrap: true,
+          visualIndexMode: "estimated",
+          defaultScrollTop: 0,
+          autoStickToBottom: false,
+        }),
+      4,
+      4,
+      { selection: { autoCopy: false, copyOnMouseUp: false } },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 3, clientY: 3, bubbles: true }));
+      await nextTick();
+
+      expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
 });

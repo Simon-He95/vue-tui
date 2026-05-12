@@ -132,6 +132,7 @@ export const TVirtualMarkdown = defineComponent({
     const internalScrollTop = ref(0);
     const documentVersion = ref(0);
     const rows = shallowRef<readonly TuiMarkdownVisualRow[]>(markRaw([]));
+    let pendingSelectionScrollFocusRemap = false;
     const wheelState = createWheelScrollState();
     let builtOnce = false;
     let rebuildVersion = 0;
@@ -307,8 +308,13 @@ export const TVirtualMarkdown = defineComponent({
       () => props.scrollTop,
       () => {
         if (!hasControlledScrollTop()) return;
+
+        const remap = pendingSelectionScrollFocusRemap;
+        pendingSelectionScrollFocusRemap = false;
+
         setScrollTop(props.scrollTop, true, {
           emitClampEvenIfUnchanged: true,
+          remapSelectionFocus: remap,
         });
       },
     );
@@ -349,6 +355,20 @@ export const TVirtualMarkdown = defineComponent({
     function scrollSelectionBy(delta: number): boolean {
       const n = Math.trunc(Number(delta));
       if (!Number.isFinite(n) || n === 0) return false;
+
+      if (hasControlledScrollTop()) {
+        const nextTop = clamp(internalScrollTop.value + n, 0, maxScrollTop());
+        if (nextTop === internalScrollTop.value) return false;
+
+        // Do not spam update:scrollTop while waiting for parent-controlled prop.
+        if (pendingSelectionScrollFocusRemap) return false;
+
+        pendingSelectionScrollFocusRemap = true;
+        emit("update:scrollTop", nextTop);
+        emit("scroll", nextTop);
+        return true;
+      }
+
       const before = internalScrollTop.value;
       setScrollTop(before + n, true, { remapSelectionFocus: true });
       return internalScrollTop.value !== before;

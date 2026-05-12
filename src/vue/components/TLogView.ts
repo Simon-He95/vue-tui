@@ -3248,7 +3248,11 @@ export const TLogView = defineComponent({
       const r = normalizedRect();
       const { x: clipX, y: clipY } = clipOffsets();
       const cols = currentWrapWidth();
-      const totalRows = estimatedVisualRowCount();
+      const totalRows = Math.max(
+        estimatedVisualRowCount(),
+        providerRange.anchor.y + 1,
+        providerRange.focus.y + 1,
+      );
 
       const top = currentScrollTop() + clipY;
       const bottom = top + r.h;
