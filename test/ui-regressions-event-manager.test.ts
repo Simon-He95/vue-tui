@@ -954,9 +954,13 @@ describe("ui regressions event manager", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
 
-    const manager = createEventManager(el, { cellWidth: 1, cellHeight: 1 }, {
-      deferAttach: true,
-    });
+    const manager = createEventManager(
+      el,
+      { cellWidth: 1, cellHeight: 1 },
+      {
+        deferAttach: true,
+      },
+    );
 
     manager.register({
       rect: { x: 0, y: 0, w: 10, h: 1 },

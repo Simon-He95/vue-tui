@@ -583,10 +583,7 @@ export function createTerminalSelectionController(
       rebuild(range, providerAnchor, providerFocus);
     },
     clearProvider(providerId) {
-      if (
-        providerAnchor?.providerId === providerId ||
-        providerFocus?.providerId === providerId
-      ) {
+      if (providerAnchor?.providerId === providerId || providerFocus?.providerId === providerId) {
         controller.clear();
       }
     },

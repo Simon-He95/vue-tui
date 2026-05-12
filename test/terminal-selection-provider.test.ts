@@ -1,8 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
 import { TLogView } from "../src/experimental.js";
 import { TVirtualMarkdown } from "../src/markdown.js";
-import { defineComponent, h, mountTerminal, nextTick, ref, TInputBox, TText, watchEffect } from "./ui-regressions-support";
-import { createApp, TerminalProvider, TView, TVirtualList, useTerminal } from "./ui-regressions-support";
+import {
+  defineComponent,
+  h,
+  mountTerminal,
+  nextTick,
+  ref,
+  TInputBox,
+  TText,
+  watchEffect,
+} from "./ui-regressions-support";
+import {
+  createApp,
+  TerminalProvider,
+  TView,
+  TVirtualList,
+  useTerminal,
+} from "./ui-regressions-support";
 
 function installNavigatorClipboard(writes: string[]) {
   const previous = (navigator as any).clipboard;
@@ -772,9 +787,13 @@ describe("TerminalProvider selection", () => {
     try {
       const container = mounted.container()!;
 
-      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }));
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
       // y=6 is outside TLogView rect h=4, but still inside terminal.
-      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 5, clientY: 6, bubbles: true }));
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 6, bubbles: true }),
+      );
 
       vi.advanceTimersByTime(90);
       await nextTick();
@@ -809,8 +828,12 @@ describe("TerminalProvider selection", () => {
     try {
       const container = mounted.container()!;
 
-      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }));
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
+      );
       document.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
 
       // Browser-generated click after mouseup arrives at the same coordinates.
@@ -850,8 +873,12 @@ describe("TerminalProvider selection", () => {
     try {
       const container = mounted.container()!;
 
-      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }));
-      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }));
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 5, clientY: 3, bubbles: true }),
+      );
 
       vi.advanceTimersByTime(90);
       await nextTick();
@@ -873,12 +900,9 @@ describe("TerminalProvider selection", () => {
   });
 
   it("restores userSelect after mouseup outside terminal during selection", async () => {
-    const mounted = await mountTerminal(
-      () => h(TText, { x: 0, y: 0, value: "select me" }),
-      12,
-      2,
-      { selection: { autoCopy: false } },
-    );
+    const mounted = await mountTerminal(() => h(TText, { x: 0, y: 0, value: "select me" }), 12, 2, {
+      selection: { autoCopy: false },
+    });
 
     try {
       const container = mounted.container()!;
@@ -890,9 +914,7 @@ describe("TerminalProvider selection", () => {
       document.dispatchEvent(
         new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
       );
-      document.dispatchEvent(
-        new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }),
-      );
+      document.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
 
       expect(container.style.userSelect).toBe("text");
     } finally {
@@ -930,9 +952,7 @@ describe("TerminalProvider selection", () => {
       container.dispatchEvent(
         new MouseEvent("mousemove", { clientX: 5, clientY: 0, bubbles: true }),
       );
-      container.dispatchEvent(
-        new MouseEvent("mouseup", { clientX: 5, clientY: 0, bubbles: true }),
-      );
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 0, bubbles: true }));
       await nextTick();
 
       // Selection overlay should be present
@@ -993,12 +1013,9 @@ describe("TerminalProvider selection", () => {
 
     const outsideClick = vi.fn();
 
-    const mounted = await mountTerminal(
-      () => h(TText, { x: 0, y: 0, value: "select me" }),
-      12,
-      2,
-      { selection: { autoCopy: false } },
-    );
+    const mounted = await mountTerminal(() => h(TText, { x: 0, y: 0, value: "select me" }), 12, 2, {
+      selection: { autoCopy: false },
+    });
 
     const button = document.createElement("button");
     document.body.appendChild(button);
@@ -1013,9 +1030,7 @@ describe("TerminalProvider selection", () => {
       document.dispatchEvent(
         new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
       );
-      document.dispatchEvent(
-        new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }),
-      );
+      document.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
 
       // Simulate browser dispatching click slightly later at the same coordinates.
       vi.advanceTimersByTime(10);
@@ -1038,12 +1053,9 @@ describe("TerminalProvider selection", () => {
   it("suppresses outside mouseup handler after selection mouseup outside terminal", async () => {
     const outsideMouseup = vi.fn();
 
-    const mounted = await mountTerminal(
-      () => h(TText, { x: 0, y: 0, value: "select me" }),
-      12,
-      2,
-      { selection: { autoCopy: false } },
-    );
+    const mounted = await mountTerminal(() => h(TText, { x: 0, y: 0, value: "select me" }), 12, 2, {
+      selection: { autoCopy: false },
+    });
 
     const button = document.createElement("button");
     document.body.appendChild(button);
@@ -1058,9 +1070,7 @@ describe("TerminalProvider selection", () => {
         new MouseEvent("mousemove", { clientX: 5, clientY: 20, bubbles: true }),
       );
 
-      button.dispatchEvent(
-        new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }),
-      );
+      button.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
 
       expect(outsideMouseup).not.toHaveBeenCalled();
     } finally {
@@ -1112,9 +1122,7 @@ describe("TerminalProvider selection", () => {
       await nextTick();
       await nextTick();
 
-      container.dispatchEvent(
-        new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }),
-      );
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 3, bubbles: true }));
       await settleClipboard();
 
       expect(scrollTopRef.value).toBeGreaterThan(0);
@@ -1155,8 +1163,12 @@ describe("TerminalProvider selection", () => {
 
     try {
       const container = mounted.container()!;
-      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
-      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }));
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }),
+      );
       container.dispatchEvent(new MouseEvent("mouseup", { clientX: 6, clientY: 0, bubbles: true }));
       container.dispatchEvent(new MouseEvent("click", { clientX: 6, clientY: 0, bubbles: true }));
 
@@ -1173,10 +1185,8 @@ describe("TerminalProvider selection", () => {
 
     const mounted = await mountTerminal(
       () =>
-        h(
-          TView,
-          { x: 0, y: 0, w: 12, h: 1, selectable: true },
-          () => h(TText, { x: 0, y: 0, value: "select text" }),
+        h(TView, { x: 0, y: 0, w: 12, h: 1, selectable: true }, () =>
+          h(TText, { x: 0, y: 0, value: "select text" }),
         ),
       12,
       2,
@@ -1189,8 +1199,12 @@ describe("TerminalProvider selection", () => {
 
     try {
       const container = mounted.container()!;
-      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
-      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }));
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }),
+      );
       container.dispatchEvent(new MouseEvent("mouseup", { clientX: 6, clientY: 0, bubbles: true }));
 
       // Different coordinates from selection mouseup: should not be swallowed.
@@ -1208,10 +1222,8 @@ describe("TerminalProvider selection", () => {
 
     const mounted = await mountTerminal(
       () =>
-        h(
-          TView,
-          { x: 0, y: 0, w: 12, h: 2, selectable: true },
-          () => h(TText, { x: 0, y: 0, value: "select text" }),
+        h(TView, { x: 0, y: 0, w: 12, h: 2, selectable: true }, () =>
+          h(TText, { x: 0, y: 0, value: "select text" }),
         ),
       12,
       2,
@@ -1226,8 +1238,12 @@ describe("TerminalProvider selection", () => {
       container.addEventListener("click", onContainerClick);
 
       // Drag selection on first row
-      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
-      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }));
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 6, clientY: 0, bubbles: true }),
+      );
       container.dispatchEvent(new MouseEvent("mouseup", { clientX: 6, clientY: 0, bubbles: true }));
 
       // Unrelated click inside terminal but at a different position (dy > 4px
@@ -1265,9 +1281,7 @@ describe("TerminalProvider selection", () => {
       );
 
       // Release outside the terminal
-      document.dispatchEvent(
-        new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }),
-      );
+      document.dispatchEvent(new MouseEvent("mouseup", { clientX: 5, clientY: 20, bubbles: true }));
 
       await settleClipboard();
 
@@ -1311,10 +1325,8 @@ describe("TerminalProvider selection", () => {
       const onClick = vi.fn();
       const mounted2 = await mountTerminal(
         () =>
-          h(
-            TView,
-            { x: 0, y: 0, w: 10, h: 1, selectable: true, onClick },
-            () => h(TText, { x: 0, y: 0, value: "click me" }),
+          h(TView, { x: 0, y: 0, w: 10, h: 1, selectable: true, onClick }, () =>
+            h(TText, { x: 0, y: 0, value: "click me" }),
           ),
         12,
         2,
@@ -1439,12 +1451,8 @@ describe("TerminalProvider selection", () => {
 
     const container = mounted.container()!;
     // Start drag but don't finish
-    container.dispatchEvent(
-      new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }),
-    );
-    container.dispatchEvent(
-      new MouseEvent("mousemove", { clientX: 4, clientY: 0, bubbles: true }),
-    );
+    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }));
+    container.dispatchEvent(new MouseEvent("mousemove", { clientX: 4, clientY: 0, bubbles: true }));
 
     // Unmount mid-drag
     mounted.unmount();
@@ -1454,10 +1462,8 @@ describe("TerminalProvider selection", () => {
     const onClick = vi.fn();
     const mounted2 = await mountTerminal(
       () =>
-        h(
-          TView,
-          { x: 0, y: 0, w: 10, h: 1, selectable: true, onClick },
-          () => h(TText, { x: 0, y: 0, value: "click me" }),
+        h(TView, { x: 0, y: 0, w: 10, h: 1, selectable: true, onClick }, () =>
+          h(TText, { x: 0, y: 0, value: "click me" }),
         ),
       12,
       2,
@@ -1652,8 +1658,12 @@ describe("TerminalProvider selection", () => {
     vi.useFakeTimers();
     try {
       const container = mounted.container()!;
-      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }));
-      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 6, clientY: 3, bubbles: true }));
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 6, clientY: 3, bubbles: true }),
+      );
 
       vi.advanceTimersByTime(240);
       await nextTick();
@@ -1669,8 +1679,7 @@ describe("TerminalProvider selection", () => {
   it("does not drop visible selection spans when wrapped TLogView visual count grows during selection", async () => {
     const source = {
       lineCount: () => 3,
-      getLine: (index: number) =>
-        index === 0 ? "aaaaaaaaaaaaaaaa" : `line-${index}`,
+      getLine: (index: number) => (index === 0 ? "aaaaaaaaaaaaaaaa" : `line-${index}`),
     };
 
     const mounted = await mountTerminal(
@@ -1694,8 +1703,12 @@ describe("TerminalProvider selection", () => {
 
     try {
       const container = mounted.container()!;
-      container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
-      container.dispatchEvent(new MouseEvent("mousemove", { clientX: 3, clientY: 3, bubbles: true }));
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 3, clientY: 3, bubbles: true }),
+      );
       await nextTick();
 
       expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);

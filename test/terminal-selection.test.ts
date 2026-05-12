@@ -1,9 +1,15 @@
 import type { ClipboardApi } from "../src/runtime/index.js";
-import type { SelectionTextProvider, TerminalSelectionRange } from "../src/selection/terminal-selection.js";
+import type {
+  SelectionTextProvider,
+  TerminalSelectionRange,
+} from "../src/selection/terminal-selection.js";
 import { describe, expect, it, vi } from "vitest";
 import { createTerminal } from "../src/core/index.js";
 import { getPlaneTerminal } from "../src/core/terminal/create-terminal.js";
-import { createTerminalSelectionController, terminalSelectionVisibleRowSpans } from "../src/selection/terminal-selection.js";
+import {
+  createTerminalSelectionController,
+  terminalSelectionVisibleRowSpans,
+} from "../src/selection/terminal-selection.js";
 
 function memoryClipboard(options?: { supported?: boolean; fail?: boolean }) {
   const writes: string[] = [];
@@ -264,10 +270,7 @@ describe("terminal selection", () => {
     const clipboard = memoryClipboard();
     let sourceTop = 0;
     const getVisibleSpans = vi.fn(
-      (
-        _providerRange: TerminalSelectionRange,
-        _screenRange: TerminalSelectionRange,
-      ) => {
+      (_providerRange: TerminalSelectionRange, _screenRange: TerminalSelectionRange) => {
         // Simulate a virtual scroll where the provider knows which rows
         // are currently visible. Return only rows that are in the viewport.
         const spans: Array<{ y: number; x0: number; x1: number }> = [];
@@ -620,7 +623,7 @@ describe("terminal selection", () => {
           canHandle: () => true,
           pointForCell: (point) => point,
           getText: () => "text",
-          getVisibleSpans: () => visible ? [{ y: 1, x0: 0, x1: 4 }] : [],
+          getVisibleSpans: () => (visible ? [{ y: 1, x0: 0, x1: 4 }] : []),
         },
       ],
     });

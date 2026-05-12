@@ -17,7 +17,10 @@ import type {
   TLogViewVisualIndexStatus,
 } from "../log/types.js";
 import { applyAnsiSgrStyle, parseAnsiSgr } from "../../core/ansi/sgr.js";
-import { terminalSelectionRowSpans, terminalSelectionVisibleRowSpans } from "../../selection/terminal-selection.js";
+import {
+  terminalSelectionRowSpans,
+  terminalSelectionVisibleRowSpans,
+} from "../../selection/terminal-selection.js";
 import {
   computed,
   defineComponent,

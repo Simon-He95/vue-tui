@@ -21,7 +21,10 @@ import {
   watchEffect,
 } from "vue";
 import { buildMarkdownBlocks } from "../markdown/document.js";
-import { terminalSelectionRowSpans, terminalSelectionVisibleRowSpans } from "../../selection/terminal-selection.js";
+import {
+  terminalSelectionRowSpans,
+  terminalSelectionVisibleRowSpans,
+} from "../../selection/terminal-selection.js";
 import { layoutMarkdownBlocksCached, type TuiMarkdownLayoutCache } from "../markdown/layout.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
 import { paintMarkdownVisualRow } from "../markdown/render.js";
@@ -306,9 +309,7 @@ export const TVirtualMarkdown = defineComponent({
       }
 
       if (changed || refreshOptions?.remapSelectionFocus) {
-        selection.refresh(
-          refreshOptions?.remapSelectionFocus ? { remapFocus: true } : undefined,
-        );
+        selection.refresh(refreshOptions?.remapSelectionFocus ? { remapFocus: true } : undefined);
       }
     }
 

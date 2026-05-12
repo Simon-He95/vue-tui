@@ -27,7 +27,10 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
-import { terminalSelectionRowSpans, terminalSelectionVisibleRowSpans } from "../../selection/terminal-selection.js";
+import {
+  terminalSelectionRowSpans,
+  terminalSelectionVisibleRowSpans,
+} from "../../selection/terminal-selection.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import { defaultActiveStyle } from "../utils/style-cache.js";
 import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";

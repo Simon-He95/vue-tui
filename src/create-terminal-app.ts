@@ -9,7 +9,6 @@ import type {
   SelectionTextProvider,
   TerminalSelectionConfig,
   TerminalSelectionCopyPayload,
-  TerminalSelectionRefreshOptions,
 } from "./selection/terminal-selection.js";
 import type { TInputPlugin } from "./vue/components/input/plugins/types.js";
 
@@ -661,7 +660,11 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   const dispatchWithSelection = (event: TerminalEventRecord): boolean => {
     if (!selectionEnabled()) return baseEvents.dispatch(event);
 
-    if (event.type === "keydown" && event.key === "Escape" && (selecting || selection.state.value.active)) {
+    if (
+      event.type === "keydown" &&
+      event.key === "Escape" &&
+      (selecting || selection.state.value.active)
+    ) {
       resetSelectionGesture({ clearSelection: true });
       return true;
     }

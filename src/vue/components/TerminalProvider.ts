@@ -10,7 +10,6 @@ import type {
   SelectionTextProvider,
   TerminalSelectionCopyPayload,
   TerminalSelectionOptions,
-  TerminalSelectionRefreshOptions,
 } from "../../selection/terminal-selection.js";
 import type {
   ImeAnchor,
@@ -365,8 +364,6 @@ export const TerminalProvider = defineComponent({
       paint: selection.paint,
     });
     selectionRenderNodeId = selectionRenderNode.id;
-
-
 
     function queueInvalidatePlane(plane?: TerminalRenderPlane): void {
       if (!plane) {
@@ -1080,9 +1077,8 @@ export const TerminalProvider = defineComponent({
         const ACTIVATION_SUPPRESS_WINDOW_MS = 250;
         const ACTIVATION_SUPPRESS_DISTANCE_PX = 4;
 
-        let lastSelectionActivationSource:
-          | { clientX: number; clientY: number; at: number }
-          | null = null;
+        let lastSelectionActivationSource: { clientX: number; clientY: number; at: number } | null =
+          null;
 
         const disarmDocumentActivationSuppression = () => {
           suppressDocumentActivation = false;
@@ -1118,7 +1114,8 @@ export const TerminalProvider = defineComponent({
 
         const onSelectionPointerCancel = (event: PointerEvent) => {
           if (!selecting) return;
-          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId)
+            return;
 
           resetSelectionGesture({ clearSelection: true });
           event.preventDefault();
@@ -1128,7 +1125,8 @@ export const TerminalProvider = defineComponent({
 
         const onSelectionLostPointerCapture = (event: PointerEvent) => {
           if (!selecting) return;
-          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId)
+            return;
 
           // lostpointercapture can fire after a normal pointerup; if the gesture
           // already finished (selecting === false), we skip. Otherwise clean up.
@@ -1140,7 +1138,8 @@ export const TerminalProvider = defineComponent({
         // unavailable or unreliable.
         const onSelectionDocPointerMove = (event: PointerEvent) => {
           if (!selecting) return;
-          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId)
+            return;
 
           // Inside terminal: container listener will handle it.
           if (isEventInsideTerminal(event)) return;
@@ -1151,7 +1150,8 @@ export const TerminalProvider = defineComponent({
 
         const onSelectionDocPointerUp = (event: PointerEvent) => {
           if (!selecting) return;
-          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId) return;
+          if (activeSelectionPointerId != null && event.pointerId !== activeSelectionPointerId)
+            return;
 
           if (isEventInsideTerminal(event)) return;
 
@@ -1495,7 +1495,9 @@ export const TerminalProvider = defineComponent({
           resetSelectionGesture({ clearSelection: false });
         };
 
-        const releaseSelectionPointerCapture = (pointerId: number | null = activeSelectionPointerId): void => {
+        const releaseSelectionPointerCapture = (
+          pointerId: number | null = activeSelectionPointerId,
+        ): void => {
           if (pointerId == null) return;
           try {
             el.releasePointerCapture?.(pointerId);
@@ -1509,9 +1511,7 @@ export const TerminalProvider = defineComponent({
           suppressActivation?: boolean;
         }>;
 
-        const resetSelectionGesture = (
-          options: SelectionGestureCleanupOptions = {},
-        ): void => {
+        const resetSelectionGesture = (options: SelectionGestureCleanupOptions = {}): void => {
           const pointerId = activeSelectionPointerId;
 
           selecting = false;
