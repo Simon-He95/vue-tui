@@ -1,5 +1,7 @@
 import { build } from "esbuild";
 
+// Keep CJS as a separate esbuild step so the package can publish named `.cjs`
+// files alongside tsdown's ESM and declaration output.
 await build({
   entryPoints: {
     index: "src/index.ts",

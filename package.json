@@ -70,7 +70,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown --clean --format esm --dts && node scripts/build-cjs.mjs",
+    "build": "tsdown && node scripts/build-cjs.mjs",
     "dev": "tsdown --format esm --dts --watch src",
     "build:examples": "pnpm run build && pnpm -C examples/basic build",
     "build:examples:terminal": "pnpm run build && pnpm -C examples/basic build:terminal",
