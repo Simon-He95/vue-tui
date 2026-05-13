@@ -1,6 +1,6 @@
 node_modules/
 dist/
-dist-terminal/
+dist-*/
 docs/.vitepress/cache/
 test-results/
 .release/

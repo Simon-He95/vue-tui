@@ -35,6 +35,8 @@ jobs:
 
       - run: pnpm run check:hidden-unicode
 
+      - run: pnpm run check:tracked-build-output
+
       - run: pnpm run typecheck
 
       - run: pnpm run lint

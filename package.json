@@ -91,6 +91,7 @@
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "check:hidden-unicode": "node scripts/check-hidden-unicode.cjs",
+    "check:tracked-build-output": "node scripts/check-tracked-build-output.cjs",
     "prepublishOnly": "pnpm build",
     "release": "pnpm run release:dry-run && bumpp && pnpm publish --no-git-checks --access public",
     "release:ci": "pnpm run release:dry-run && pnpm publish --no-git-checks --access public --provenance",
