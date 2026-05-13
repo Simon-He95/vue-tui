@@ -3,6 +3,8 @@
  * This allows debugging terminal rendering issues without polluting the terminal output.
  */
 
+import { importNodeModule } from "../utils/node-module.js";
+
 const LOG_FILE = "/tmp/goatchain-debug.log";
 let enabled = false;
 
@@ -10,10 +12,6 @@ type FsLike = Readonly<{
   appendFileSync?: (path: string, data: string) => void;
   writeFileSync?: (path: string, data: string) => void;
 }>;
-
-const importNodeModule = new Function("specifier", "return import(specifier)") as (
-  specifier: string,
-) => Promise<any>;
 
 let fsPromise: Promise<FsLike | null> | null = null;
 
@@ -28,7 +26,7 @@ function getFsSync(): FsLike | null {
 }
 
 function getFsAsync(): Promise<FsLike | null> {
-  fsPromise ??= importNodeModule("node:fs").catch(() => null);
+  fsPromise ??= importNodeModule<FsLike>("node:fs");
   return fsPromise;
 }
 

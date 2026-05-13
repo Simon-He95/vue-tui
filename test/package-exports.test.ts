@@ -221,6 +221,7 @@ describe("package exports", () => {
     expect(existsSync(distCliTypes)).toBe(true);
     expect(existsSync(distMarkdownTypes)).toBe(true);
     expect(existsSync(distExperimentalTypes)).toBe(true);
+    expect(readFileSync(distCliTypes, "utf8")).toContain("Osc52ClipboardOptions");
 
     const root = await import(/* @vite-ignore */ pathToFileURL(distIndex).href);
     const cli = await import(/* @vite-ignore */ pathToFileURL(distCli).href);

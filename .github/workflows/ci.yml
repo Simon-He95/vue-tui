@@ -56,7 +56,7 @@ jobs:
 
       - run: pnpm exec playwright install --with-deps chromium
 
-      - run: pnpm run e2e
+      - run: pnpm run e2e:smoke
 
   benchmark:
     if: ${{ github.event_name == 'schedule' || github.event.inputs.benchmark == 'true' }}

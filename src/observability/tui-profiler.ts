@@ -1,13 +1,10 @@
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../core/render-plane.js";
+import { importNodeModule } from "../utils/node-module.js";
 
 type NowFn = () => number;
 type FsLike = Readonly<{
   appendFileSync?: (path: string, data: string) => void;
 }>;
-
-const importNodeModule = new Function("specifier", "return import(specifier)") as (
-  specifier: string,
-) => Promise<any>;
 
 let fsPromise: Promise<FsLike | null> | null = null;
 
@@ -22,7 +19,7 @@ function getFsSync(): FsLike | null {
 }
 
 function getFsAsync(): Promise<FsLike | null> {
-  fsPromise ??= importNodeModule("node:fs").catch(() => null);
+  fsPromise ??= importNodeModule<FsLike>("node:fs");
   return fsPromise;
 }
 
