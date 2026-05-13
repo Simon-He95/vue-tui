@@ -2,6 +2,9 @@
 
 这页是 0.x release candidate 的发布前检查单。目标是确认当前 `main` 可以作为候选版本验证，而不是在 release prep 阶段继续扩大功能范围。
 
+当前 npm 版本：`0.0.8`
+下一候选版本：`0.1.0-rc.0`
+
 ## Scope
 
 - 从最新 `main` 准备 release candidate；未合并 feature PR 不写进 release notes。
