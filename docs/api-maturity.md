@@ -27,6 +27,7 @@
 - `/experimental` 不能 re-export `/markdown` 的组件；高吞吐 log stack 和 markdown stack 分开发布。
 - Internal helper 只允许在源码内部相对路径引用，不能加入 `exports`、`src/index.ts`、`src/cli.ts`、`src/markdown.ts` 或 `src/experimental.ts`。
 - Deep import `@simon_he/vue-tui/dist/...` 不属于支持面。
+- Vue injection keys 使用全局 protocol namespace，让同一 protocol 的 root/cli/experimental bundle 可以互通；如果 context shape 发生不兼容变化，必须 bump injection protocol。
 
 ## Experimental Graduation
 

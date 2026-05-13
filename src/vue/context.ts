@@ -13,6 +13,7 @@ import type { TraceStore } from "../observability/trace.js";
 import type { FramePerfReason } from "../observability/frame-perf.js";
 import type { FramePerfStore } from "../observability/frame-perf-store.js";
 import type { TInputPlugin } from "./components/input/plugins/types.js";
+import { injectionKey } from "./injection-key.js";
 import type { RenderManager } from "./render/render-manager.js";
 
 export interface LayoutContext {
@@ -133,10 +134,6 @@ export type TerminalContext = Readonly<{
   defaultStyle: Ref<Style>;
   render: RenderManager;
 }>;
-
-function injectionKey<T>(name: string): InjectionKey<T> {
-  return Symbol.for(`@simon_he/vue-tui:${name}`) as any;
-}
 
 export const TerminalContextKey = injectionKey<TerminalContext>("TerminalContext");
 export const LayoutContextKey = injectionKey<LayoutContext>("LayoutContext");
