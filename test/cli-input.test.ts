@@ -62,7 +62,7 @@ describe("cli input", () => {
     }
   });
 
-  it("cleans up for SIGINT without re-sending the signal", () => {
+  it("cleans up and re-sends SIGINT by default", () => {
     const dispose = vi.fn();
     const kill = vi.spyOn(process, "kill").mockImplementation(() => true as any);
     const before = new Set(process.rawListeners("SIGINT"));
@@ -72,6 +72,24 @@ describe("cli input", () => {
       const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
       listener?.();
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(kill).toHaveBeenCalledWith(process.pid, "SIGINT");
+    } finally {
+      uninstall();
+      kill.mockRestore();
+    }
+  });
+
+  it("can clean up without exiting when exitOnSignal=false", () => {
+    const dispose = vi.fn();
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => true as any);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const uninstall = installTerminalCleanup(dispose, { exitOnSignal: false });
+
+    try {
+      const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
       listener?.();
 
       expect(dispose).toHaveBeenCalledTimes(1);
@@ -79,6 +97,18 @@ describe("cli input", () => {
     } finally {
       uninstall();
       kill.mockRestore();
+    }
+  });
+
+  it("does not install an unhandledRejection listener", () => {
+    const dispose = vi.fn();
+    const before = process.rawListeners("unhandledRejection");
+    const uninstall = installTerminalCleanup(dispose);
+
+    try {
+      expect(process.rawListeners("unhandledRejection")).toEqual(before);
+    } finally {
+      uninstall();
     }
   });
 

@@ -9,6 +9,16 @@ export type CreateTuiProfilerOptions = Readonly<{
   fileWriter?: TuiProfilerFileWriter;
 }>;
 
+let defaultProfilerFileWriter: TuiProfilerFileWriter | null = null;
+
+export function setTuiProfilerFileWriter(writer: TuiProfilerFileWriter | null): void {
+  defaultProfilerFileWriter = writer;
+}
+
+function getProfilerFileWriter(options: CreateTuiProfilerOptions): TuiProfilerFileWriter | null {
+  return options.fileWriter ?? defaultProfilerFileWriter;
+}
+
 function defaultNow(): number {
   const p = (globalThis as any).performance;
   if (p && typeof p.now === "function") return p.now();
@@ -108,7 +118,7 @@ export function createTuiProfiler(
     if ((dest === "file" || dest === "both") && logPath) {
       try {
         const data = `${line}\n`;
-        options.fileWriter?.appendFileSync?.(logPath, data);
+        getProfilerFileWriter(options)?.appendFileSync?.(logPath, data);
       } catch {
         // ignore
       }

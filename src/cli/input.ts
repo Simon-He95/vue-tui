@@ -21,8 +21,21 @@ export type StdinDriver = Readonly<{
   dispose: () => void;
 }>;
 
-export function installTerminalCleanup(dispose: () => void): () => void {
+type CleanupSignal = "SIGINT" | "SIGTERM" | "SIGHUP";
+
+function exitCodeForSignal(signal: CleanupSignal): number {
+  if (signal === "SIGINT") return 130;
+  if (signal === "SIGTERM") return 143;
+  return 129;
+}
+
+export function installTerminalCleanup(
+  dispose: () => void,
+  options: Readonly<{ exitOnSignal?: boolean }> = {},
+): () => void {
   let cleaned = false;
+  let uninstalled = false;
+
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
@@ -31,24 +44,41 @@ export function installTerminalCleanup(dispose: () => void): () => void {
     } catch {}
   };
 
-  const onSigint = () => cleanup();
-  const onSigterm = () => cleanup();
-  const onUncaughtException = () => cleanup();
-  const onUnhandledRejection = () => cleanup();
+  const uninstall = () => {
+    if (uninstalled) return;
+    uninstalled = true;
+    process.off("exit", cleanup);
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
+    process.off("SIGHUP", onSighup);
+    process.off("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
+  };
+
+  const handleSignal = (signal: CleanupSignal) => {
+    cleanup();
+    uninstall();
+
+    if (options.exitOnSignal === false) return;
+
+    try {
+      process.kill(process.pid, signal);
+    } catch {
+      process.exit(exitCodeForSignal(signal));
+    }
+  };
+
+  const onSigint = () => handleSignal("SIGINT");
+  const onSigterm = () => handleSignal("SIGTERM");
+  const onSighup = () => handleSignal("SIGHUP");
+  const onUncaughtExceptionMonitor = () => cleanup();
 
   process.once("exit", cleanup);
   process.once("SIGINT", onSigint);
   process.once("SIGTERM", onSigterm);
-  process.once("uncaughtExceptionMonitor", onUncaughtException);
-  process.once("unhandledRejection", onUnhandledRejection);
+  process.once("SIGHUP", onSighup);
+  process.once("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
 
-  return () => {
-    process.off("exit", cleanup);
-    process.off("SIGINT", onSigint);
-    process.off("SIGTERM", onSigterm);
-    process.off("uncaughtExceptionMonitor", onUncaughtException);
-    process.off("unhandledRejection", onUnhandledRejection);
-  };
+  return uninstall;
 }
 
 function isPrintable(ch: string): boolean {

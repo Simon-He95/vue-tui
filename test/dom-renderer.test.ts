@@ -478,7 +478,45 @@ describe("DomRenderer row rendering", () => {
       const anchor = lineEl(container).querySelector("a");
       expect(anchor).toBeInstanceOf(HTMLAnchorElement);
       expect(anchor?.getAttribute("href")).toBe("docs/intro.md");
+      expect(anchor?.getAttribute("target")).toBeNull();
+      expect(anchor?.getAttribute("rel")).toBeNull();
       expect(anchor?.tabIndex).toBe(-1);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not force hash links into a new tab", () => {
+    const { terminal, container, renderer } = setup(8);
+
+    try {
+      terminal.write("hash", { x: 0, y: 0, style: { href: "#section" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      expect(anchor?.getAttribute("href")).toBe("#section");
+      expect(anchor?.getAttribute("target")).toBeNull();
+      expect(anchor?.getAttribute("rel")).toBeNull();
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not force mailto links into a new tab", () => {
+    const { terminal, container, renderer } = setup(4);
+
+    try {
+      terminal.write("mail", { x: 0, y: 0, style: { href: "mailto:test@example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      expect(anchor?.getAttribute("href")).toBe("mailto:test@example.com");
+      expect(anchor?.getAttribute("target")).toBeNull();
+      expect(anchor?.getAttribute("rel")).toBeNull();
     } finally {
       renderer.dispose();
       container.remove();

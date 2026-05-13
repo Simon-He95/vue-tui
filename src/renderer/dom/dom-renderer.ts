@@ -630,8 +630,11 @@ function createSegmentElement(style: Style): HTMLSpanElement | HTMLAnchorElement
   if (!href) return document.createElement("span");
   const anchor = document.createElement("a");
   anchor.href = href;
-  anchor.target = "_blank";
-  anchor.rel = "noopener noreferrer";
+  const protocol = href.match(/^[a-z][a-z0-9+.-]*:/i)?.[0].toLowerCase() ?? null;
+  if (protocol === "http:" || protocol === "https:") {
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+  }
   anchor.tabIndex = -1;
   anchor.draggable = false;
   return anchor;

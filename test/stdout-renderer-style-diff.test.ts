@@ -101,6 +101,7 @@ describe("stdout renderer style diffing", () => {
     expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com");
     expect(sanitizeTerminalHref("http://example.com")).toBe("http://example.com");
     expect(sanitizeTerminalHref("mailto:test@example.com")).toBe("mailto:test@example.com");
+    expect(sanitizeTerminalHref("vbscript:msgbox(1)")).toBeNull();
     expect(sanitizeTerminalHref("javascript:alert(1)")).toBeNull();
     expect(sanitizeTerminalHref("data:text/html,hi")).toBeNull();
     expect(sanitizeTerminalHref("//evil.example")).toBeNull();
