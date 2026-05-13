@@ -265,7 +265,9 @@ export function detectTLogUrls(
   while ((match = regex.exec(text)) != null) {
     const rawHref = match[0] ?? "";
     if (!rawHref) continue;
-    const href = sanitizeTLogDetectedHref(rawHref, options.allowFileUrls === true);
+    const href = sanitizeTerminalHref(rawHref, {
+      allowFileUrls: options.allowFileUrls === true,
+    });
     if (!href) continue;
     const startIndex = match.index;
     const endIndex = startIndex + rawHref.length;
@@ -283,19 +285,6 @@ export function detectTLogUrls(
   }
 
   return links;
-}
-
-function sanitizeTLogDetectedHref(value: string, allowFileUrls: boolean): string | null {
-  const href = sanitizeTerminalHref(value);
-  if (href || !allowFileUrls) return href;
-
-  const raw = value.trim();
-  if (!raw.toLowerCase().startsWith("file://")) return null;
-  for (let i = 0; i < raw.length; i++) {
-    const code = raw.charCodeAt(i);
-    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return null;
-  }
-  return raw;
 }
 
 export function detectTLogLevel(

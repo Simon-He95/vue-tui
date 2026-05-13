@@ -8,7 +8,7 @@ export { TLogSearchPager } from "./vue/components/TLogSearchPager.js";
 export { TLogLinksPanel } from "./vue/components/TLogLinksPanel.js";
 export { TLogVirtualSearchResults } from "./vue/components/TLogVirtualSearchResults.js";
 export { TLogVirtualLinksPanel } from "./vue/components/TLogVirtualLinksPanel.js";
-export { sanitizeTerminalHref } from "./core/hyperlink.js";
+export { sanitizeTerminalHref, type SanitizeTerminalHrefOptions } from "./core/hyperlink.js";
 export { createAppendOnlyLogStore } from "./vue/log/append-only-log-store.js";
 export { useTLogLinkController } from "./vue/log/use-tlog-link-controller.js";
 export { useTLogSearchController } from "./vue/log/use-tlog-search-controller.js";

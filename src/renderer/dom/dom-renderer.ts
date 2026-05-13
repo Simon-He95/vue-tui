@@ -240,8 +240,9 @@ function applyAccessibilityOptions(
   container: HTMLElement,
   options: false | DomRendererAccessibilityOptions | undefined,
 ): void {
-  for (const attr of ACCESSIBILITY_ATTRS) container.removeAttribute(attr);
   if (options === false) return;
+
+  for (const attr of ACCESSIBILITY_ATTRS) container.removeAttribute(attr);
 
   const role = options?.role ?? "application";
   container.setAttribute("role", role);
@@ -789,7 +790,9 @@ export function createDomRenderer(
   container.style.outline = "none";
   // Prevent layout shifts during updates
   container.style.contain = "layout style";
-  container.tabIndex = 0;
+  if (options.accessibility !== false && !container.hasAttribute("tabindex")) {
+    container.tabIndex = 0;
+  }
   applyAccessibilityOptions(container, options.accessibility);
   let palette: ThemePalette | null = options.palette ?? null;
   installAnsiPaletteCssVars(container, palette);

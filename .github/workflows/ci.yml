@@ -76,4 +76,4 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run bench:baseline
+      - run: pnpm run bench:baseline:timing

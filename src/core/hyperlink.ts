@@ -1,4 +1,11 @@
-export function sanitizeTerminalHref(value: unknown): string | null {
+export type SanitizeTerminalHrefOptions = Readonly<{
+  allowFileUrls?: boolean;
+}>;
+
+export function sanitizeTerminalHref(
+  value: unknown,
+  options: SanitizeTerminalHrefOptions = {},
+): string | null {
   if (typeof value !== "string") return null;
 
   const raw = value.trim();
@@ -13,6 +20,7 @@ export function sanitizeTerminalHref(value: unknown): string | null {
   if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:")) {
     return raw;
   }
+  if (options.allowFileUrls && lower.startsWith("file://")) return raw;
 
   return null;
 }

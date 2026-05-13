@@ -20,7 +20,7 @@ export type { StdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export { getStdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export type { StdoutRenderer, ThemePalette } from "./renderer/cli/stdout-renderer.js";
 export { createStdoutRenderer } from "./renderer/cli/stdout-renderer.js";
-export { sanitizeTerminalHref } from "./core/hyperlink.js";
+export { sanitizeTerminalHref, type SanitizeTerminalHrefOptions } from "./core/hyperlink.js";
 export {
   HEADLESS_RENDERER_CAPABILITIES,
   STDOUT_RENDERER_CAPABILITIES,

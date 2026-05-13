@@ -10,6 +10,7 @@ describe("TLog link sanitizing", () => {
   it("exports the shared terminal href sanitizer", () => {
     expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com");
     expect(sanitizeTerminalHref("file:///tmp/a")).toBeNull();
+    expect(sanitizeTerminalHref("file:///tmp/a", { allowFileUrls: true })).toBe("file:///tmp/a");
   });
 
   it("drops unsafe OSC8 links while preserving visible text", () => {

@@ -33,7 +33,7 @@ createDomRenderer(terminal, container, {
 | `region`      | 只读或弱交互 output panel，由页面外层提供主要 keyboard flow                   |
 | `textbox`     | 文本输入/日志阅读器语义更强的宿主；默认补 `aria-multiline` 和 `aria-readonly` |
 
-如果宿主已经有自己的 accessible wrapper，可以传 `accessibility: false`，renderer 不再写 ARIA 属性。
+如果宿主已经有自己的 accessible wrapper，可以传 `accessibility: false`，renderer 不再写 ARIA 属性，也不会改写宿主已有的 `tabindex`。
 
 当前 ARIA contract 不承诺把每个 terminal cell 映射成 DOM grid。DOM renderer 的 DOM rows 是 renderer implementation detail；屏幕阅读器 contract 是 container 级语义、focusability、label/live-region 选择，以及应用层提供的 keyboard flow。
 

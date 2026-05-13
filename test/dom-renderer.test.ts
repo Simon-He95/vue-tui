@@ -67,6 +67,28 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("preserves host-owned accessibility attributes when accessibility is false", () => {
+    const terminal = createTerminal({ cols: 4, rows: 2 });
+    const container = document.createElement("div");
+    container.setAttribute("role", "region");
+    container.setAttribute("aria-label", "Host wrapper");
+    container.tabIndex = -1;
+    document.body.appendChild(container);
+    const renderer = createDomRenderer(terminal, container, {
+      accessibility: false,
+    });
+
+    try {
+      expect(container.getAttribute("role")).toBe("region");
+      expect(container.getAttribute("aria-label")).toBe("Host wrapper");
+      expect(container.tabIndex).toBe(-1);
+    } finally {
+      renderer.dispose();
+      terminal.dispose();
+      container.remove();
+    }
+  });
+
   it("records row stats during refresh", () => {
     const { container, renderer } = setup(4, 2);
 

@@ -59,19 +59,7 @@ function sanitizeIndexedExternalHref(
   value: unknown,
   options: Readonly<{ allowFileUrls?: boolean }> = {},
 ): string | null {
-  const href = sanitizeTerminalHref(value);
-  if (href) return href;
-
-  if (!options.allowFileUrls || typeof value !== "string") return null;
-
-  const raw = value.trim();
-  if (!raw.toLowerCase().startsWith("file://")) return null;
-  for (let i = 0; i < raw.length; i++) {
-    const code = raw.charCodeAt(i);
-    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return null;
-  }
-
-  return raw;
+  return sanitizeTerminalHref(value, options);
 }
 
 export function useTLogRetainedIndex(
