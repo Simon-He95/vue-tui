@@ -7,6 +7,7 @@ import type {
 } from "../../core/types.js";
 import type { RendererCapabilities } from "../capabilities.js";
 import { Buffer } from "node:buffer";
+import { appendFileSync } from "node:fs";
 import process from "node:process";
 import type { ThemePalette } from "../../core/ansi-palette.js";
 import { ansiColorRgb, ansiHexToRgb, isAnsiColorName } from "../../core/ansi-palette.js";
@@ -114,6 +115,7 @@ export function createStdoutRenderer(
     getImeAnchor?: () => { cellX: number; cellY: number } | null;
     /** Use DEC 2026 synchronized output mode (default: false for compatibility) */
     useSyncOutput?: boolean;
+    profileFileWriter?: { appendFileSync?: (path: string, data: string) => void };
   }>,
 ): StdoutRenderer {
   const output: CliOutput | undefined = options?.output ?? (process.stdout as any);
@@ -130,7 +132,9 @@ export function createStdoutRenderer(
   const trackResize = options?.trackResize ?? true;
   const getImeAnchor = options?.getImeAnchor;
   const cliLatency = getCliLatencyProfiler();
-  const profiler = createTuiProfiler("stdout-renderer");
+  const profiler = createTuiProfiler("stdout-renderer", {
+    fileWriter: options?.profileFileWriter ?? { appendFileSync },
+  });
 
   // Resolve whether to use synchronized output mode (DEC 2026)
   // Disabled by default for terminal compatibility (ghostty, etc.)

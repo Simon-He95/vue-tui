@@ -31,24 +31,33 @@ export function installTerminalCleanup(dispose: () => void): () => void {
     } catch {}
   };
 
-  const onSignal = (signal: NodeJS.Signals) => {
+  let uninstall = () => {};
+
+  const handleSignal = (signal: NodeJS.Signals) => {
     cleanup();
-    process.off(signal, onSignal);
+    uninstall();
     process.kill(process.pid, signal);
   };
+  const onSigint = () => handleSignal("SIGINT");
+  const onSigterm = () => handleSignal("SIGTERM");
   const onUncaughtException = () => cleanup();
+  const onUnhandledRejection = () => cleanup();
 
   process.once("exit", cleanup);
-  process.once("SIGINT", onSignal);
-  process.once("SIGTERM", onSignal);
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
   process.once("uncaughtExceptionMonitor", onUncaughtException);
+  process.once("unhandledRejection", onUnhandledRejection);
 
-  return () => {
+  uninstall = () => {
     process.off("exit", cleanup);
-    process.off("SIGINT", onSignal);
-    process.off("SIGTERM", onSignal);
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
     process.off("uncaughtExceptionMonitor", onUncaughtException);
+    process.off("unhandledRejection", onUnhandledRejection);
   };
+
+  return uninstall;
 }
 
 function isPrintable(ch: string): boolean {

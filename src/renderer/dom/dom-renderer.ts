@@ -8,7 +8,7 @@ import {
   installAnsiPaletteCssVars,
   isAnsiColorName,
 } from "../../core/ansi-palette.js";
-import { sanitizeTerminalHref } from "../../core/hyperlink.js";
+import { sanitizeDomHref } from "../../core/hyperlink.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
 import { DOM_RENDERER_CAPABILITIES } from "../capabilities.js";
@@ -626,7 +626,7 @@ function resetSpanStyle(span: HTMLElement): void {
 }
 
 function createSegmentElement(style: Style): HTMLSpanElement | HTMLAnchorElement {
-  const href = sanitizeTerminalHref(style.href);
+  const href = sanitizeDomHref(style.href);
   if (!href) return document.createElement("span");
   const anchor = document.createElement("a");
   anchor.href = href;

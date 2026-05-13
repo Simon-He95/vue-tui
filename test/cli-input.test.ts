@@ -62,6 +62,26 @@ describe("cli input", () => {
     }
   });
 
+  it("cleans up and re-sends SIGINT once", () => {
+    const dispose = vi.fn();
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => true as any);
+    const before = new Set(process.rawListeners("SIGINT"));
+    const uninstall = installTerminalCleanup(dispose);
+
+    try {
+      const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+      listener?.();
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(kill).toHaveBeenCalledWith(process.pid, "SIGINT");
+    } finally {
+      uninstall();
+      kill.mockRestore();
+    }
+  });
+
   it("enables/disables mouse any-motion tracking when configured", () => {
     const stdin = new FakeStdin() as any;
     const stdout = new FakeStdout() as any;

@@ -1,5 +1,6 @@
-const LOG_FILE = "/tmp/goatchain-debug.log";
+const DEFAULT_LOG_FILE = "/tmp/vue-tui-debug.log";
 let enabled = false;
+let debugFileWriter: DebugFileWriter | null = null;
 
 type DebugFileWriter = Readonly<{
   appendFileSync?: (path: string, data: string) => void;
@@ -8,8 +9,20 @@ type DebugFileWriter = Readonly<{
 
 function getFileWriter(): DebugFileWriter | null {
   const writer = (globalThis as any).__VT_DEBUG_FILE_WRITER__;
-  if (!writer || typeof writer !== "object") return null;
-  return writer as DebugFileWriter;
+  if (writer && typeof writer === "object") return writer as DebugFileWriter;
+  return debugFileWriter;
+}
+
+export function setDebugFileWriter(writer: DebugFileWriter | null): void {
+  debugFileWriter = writer;
+}
+
+function debugLogPath(): string {
+  const env = (globalThis as any).process?.env as Record<string, unknown> | undefined;
+  return (
+    String(env?.VUE_TUI_DEBUG_LOG_PATH ?? env?.DIMCODE_DEBUG_LOG_PATH ?? DEFAULT_LOG_FILE).trim() ||
+    DEFAULT_LOG_FILE
+  );
 }
 
 export interface DebugLogger {
@@ -28,8 +41,8 @@ export function createDebugLogger(enable = false): DebugLogger {
 
   if (enabled) {
     try {
-      const data = `=== GoatChain Debug Log Started at ${new Date().toISOString()} ===\n\n`;
-      getFileWriter()?.writeFileSync?.(LOG_FILE, data);
+      const data = `=== Vue TUI Debug Log Started at ${new Date().toISOString()} ===\n\n`;
+      getFileWriter()?.writeFileSync?.(debugLogPath(), data);
     } catch {}
   }
 
@@ -56,7 +69,7 @@ function log(category: string, message: string): void {
 function write(data: string): void {
   if (!enabled) return;
   try {
-    getFileWriter()?.appendFileSync?.(LOG_FILE, data);
+    getFileWriter()?.appendFileSync?.(debugLogPath(), data);
   } catch {}
 }
 

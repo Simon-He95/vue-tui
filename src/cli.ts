@@ -1,3 +1,8 @@
+import { appendFileSync, writeFileSync } from "node:fs";
+import { setDebugFileWriter } from "./core/debug-logger.js";
+
+setDebugFileWriter({ appendFileSync, writeFileSync });
+
 export type { StdinDriver } from "./cli/input.js";
 export { createStdinDriver, installTerminalCleanup } from "./cli/input.js";
 export type { FsDirEntry, FsEntryKind, FsStat, PathPickerProvider } from "./cli/path-provider.js";

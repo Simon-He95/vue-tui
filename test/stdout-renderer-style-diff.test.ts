@@ -1,5 +1,5 @@
 import process from "node:process";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createTerminal, sanitizeTerminalHref } from "../src/index.js";
 import { createStdoutRenderer, STDOUT_RENDERER_CAPABILITIES } from "../src/cli.js";
 
@@ -44,6 +44,56 @@ describe("stdout renderer style diffing", () => {
     } finally {
       renderer.dispose();
       terminal.dispose();
+    }
+  });
+
+  it("passes file writer to stdout profiler", () => {
+    const previousProfile = process.env.VUE_TUI_PROFILE;
+    const previousFormat = process.env.VUE_TUI_PROFILE_FORMAT;
+    const previousDest = process.env.VUE_TUI_PROFILE_LOG_DEST;
+    const previousPath = process.env.VUE_TUI_PROFILE_LOG_PATH;
+    const previousEvery = process.env.VUE_TUI_PROFILE_LOG_EVERY_MS;
+
+    process.env.VUE_TUI_PROFILE = "1";
+    process.env.VUE_TUI_PROFILE_FORMAT = "text";
+    process.env.VUE_TUI_PROFILE_LOG_DEST = "file";
+    process.env.VUE_TUI_PROFILE_LOG_PATH = "/tmp/vue-tui-profile-test.log";
+    process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = "100";
+    vi.useFakeTimers();
+
+    const writes: string[] = [];
+    const terminal = createTerminal({ cols: 1, rows: 1 });
+    const renderer = createStdoutRenderer(terminal, {
+      output: { isTTY: false, write: () => {} },
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      profileFileWriter: {
+        appendFileSync: (_path, data) => writes.push(data),
+      },
+    });
+
+    try {
+      terminal.put(0, 0, "x");
+      terminal.commit({ sync: true });
+      vi.advanceTimersByTime(100);
+
+      expect(writes.join("")).toContain("[VUE_TUI_PROFILE] stdout-renderer");
+    } finally {
+      renderer.dispose();
+      terminal.dispose();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      if (previousProfile == null) delete process.env.VUE_TUI_PROFILE;
+      else process.env.VUE_TUI_PROFILE = previousProfile;
+      if (previousFormat == null) delete process.env.VUE_TUI_PROFILE_FORMAT;
+      else process.env.VUE_TUI_PROFILE_FORMAT = previousFormat;
+      if (previousDest == null) delete process.env.VUE_TUI_PROFILE_LOG_DEST;
+      else process.env.VUE_TUI_PROFILE_LOG_DEST = previousDest;
+      if (previousPath == null) delete process.env.VUE_TUI_PROFILE_LOG_PATH;
+      else process.env.VUE_TUI_PROFILE_LOG_PATH = previousPath;
+      if (previousEvery == null) delete process.env.VUE_TUI_PROFILE_LOG_EVERY_MS;
+      else process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = previousEvery;
     }
   });
 

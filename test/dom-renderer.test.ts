@@ -456,19 +456,37 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("keeps unsafe href rows as spans", () => {
-    const { terminal, container, renderer } = setup(3);
+  it("renders relative markdown-safe hrefs as anchors", () => {
+    const { terminal, container, renderer } = setup(10);
 
     try {
-      terminal.write("url", { x: 0, y: 0, style: { href: "javascript:alert(1)" } });
+      terminal.write("docs", { x: 0, y: 0, style: { href: "docs/intro.md" } });
       terminal.commit({ planes: ["default"], sync: true });
 
-      const line = lineEl(container);
-      expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
-      expect(line.querySelector("a")).toBeNull();
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      expect(anchor?.getAttribute("href")).toBe("docs/intro.md");
     } finally {
       renderer.dispose();
       container.remove();
+    }
+  });
+
+  it("keeps unsafe href rows as spans", () => {
+    for (const href of ["//evil.example", "javascript:alert(1)", "data:text/html,boom"]) {
+      const { terminal, container, renderer } = setup(3);
+
+      try {
+        terminal.write("url", { x: 0, y: 0, style: { href } });
+        terminal.commit({ planes: ["default"], sync: true });
+
+        const line = lineEl(container);
+        expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
+        expect(line.querySelector("a")).toBeNull();
+      } finally {
+        renderer.dispose();
+        container.remove();
+      }
     }
   });
 
