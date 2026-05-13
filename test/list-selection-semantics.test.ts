@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref, vShow, withDirectives } from "vue";
-import { createTerminalApp, TList, TRenderPlane, TText, TView, useTerminal } from "../src/index.js";
+import { TList, TRenderPlane, TText, TView, useTerminal } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 import { disableRaf, installRaf, rowText } from "./helpers/list.js";
 
 describe("TList selection semantics", () => {

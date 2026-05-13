@@ -1,11 +1,37 @@
-import { appendFileSync } from "node:fs";
-import process from "node:process";
-
 type StageEvent = Readonly<Record<string, unknown>> & {
   type?: unknown;
   key?: unknown;
   code?: unknown;
 };
+
+type FsLike = Readonly<{
+  appendFileSync?: (path: string, data: string) => void;
+}>;
+
+const importNodeModule = new Function("specifier", "return import(specifier)") as (
+  specifier: string,
+) => Promise<any>;
+
+let fsPromise: Promise<FsLike | null> | null = null;
+
+function getFsSync(): FsLike | null {
+  const req = (globalThis as any).require;
+  if (typeof req !== "function") return null;
+  try {
+    return req("node:fs") ?? req("fs") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getFsAsync(): Promise<FsLike | null> {
+  fsPromise ??= importNodeModule("node:fs").catch(() => null);
+  return fsPromise;
+}
+
+function getProcessLike(): any {
+  return (globalThis as any).process;
+}
 
 interface CliLatencyOp {
   id: number;
@@ -176,7 +202,8 @@ function createDisabledProfiler(): null {
 }
 
 function createProfiler(): CliLatencyProfiler | null {
-  const env = (process?.env ?? {}) as Record<string, unknown>;
+  const processLike = getProcessLike();
+  const env = (processLike?.env ?? {}) as Record<string, unknown>;
   if (!parseEnabled(env.DIMCODE_PROFILE_INPUT_LATENCY)) return createDisabledProfiler();
 
   const logPath =
@@ -194,7 +221,10 @@ function createProfiler(): CliLatencyProfiler | null {
 
   const emit = (record: CliLatencyLogRecord): void => {
     try {
-      appendFileSync(logPath, `${JSON.stringify(record)}\n`);
+      const data = `${JSON.stringify(record)}\n`;
+      const fs = getFsSync();
+      if (fs?.appendFileSync) fs.appendFileSync(logPath, data);
+      else void getFsAsync().then((mod) => mod?.appendFileSync?.(logPath, data));
     } catch {
       // Ignore profiler write errors.
     }
@@ -345,7 +375,7 @@ function createProfiler(): CliLatencyProfiler | null {
     return null;
   };
 
-  process?.once?.("exit", () => {
+  processLike?.once?.("exit", () => {
     flushPendingOps("process-exit");
   });
 

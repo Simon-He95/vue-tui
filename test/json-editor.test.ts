@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { createTerminalApp } from "../src/index";
+import { createTerminalApp } from "../src/cli";
 import {
   computeJsonIndentGuideDepths,
   lintJsonText,

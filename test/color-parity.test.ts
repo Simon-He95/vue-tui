@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createDomRenderer, createStdoutRenderer, createTerminal } from "../src/index.js";
+import { createDomRenderer, createTerminal } from "../src/index.js";
+import { createStdoutRenderer } from "../src/cli.js";
 import { ANSI_PALETTE_HEX } from "../src/core/ansi-palette.js";
 import { getPlaneTerminal } from "../src/core/terminal/create-terminal.js";
 

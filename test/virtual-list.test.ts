@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createTerminal, createTerminalApp } from "../src/index.js";
+import { createTerminal } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 import { createRenderManager } from "../src/vue/render/render-manager.js";
 import { createFramePerfProbe, expectScrollMailboxFrame } from "./helpers/frame-perf.js";
 import { installManualRaf } from "./helpers/manual-raf.js";

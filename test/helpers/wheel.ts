@@ -1,4 +1,4 @@
-import type { CliEventManager } from "../../src/index.js";
+import type { CliEventManager } from "../../src/cli.js";
 
 export type WheelBurstOptions = Readonly<{
   count: number;

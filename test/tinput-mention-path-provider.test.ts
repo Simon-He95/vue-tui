@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { createPromptMentionPlugin, createTerminalApp, TInput } from "../src/index.js";
+import { createPromptMentionPlugin, TInput } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 import { MENTION_TOKEN } from "../src/vue/components/input/utils/inlineTextTokens.js";
 
 describe("TInput mention path provider", () => {

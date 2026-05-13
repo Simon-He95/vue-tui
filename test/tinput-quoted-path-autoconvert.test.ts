@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { createTerminalApp, TInput } from "../src/index.js";
+import { TInput } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 
 describe("TInput quoted path autoconvert", () => {
   it("converts quoted absolute paths typed as plain characters into mentions", async () => {

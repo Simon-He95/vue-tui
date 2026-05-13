@@ -1,6 +1,7 @@
 import process from "node:process";
 import { describe, expect, it } from "vitest";
-import { createStdoutRenderer, createTerminal } from "../src/index.js";
+import { createTerminal } from "../src/index.js";
+import { createStdoutRenderer } from "../src/cli.js";
 
 function hrefHash10Legacy(href: string): number {
   let h = 0x811c9dc5;

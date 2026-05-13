@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { createTerminalApp, TInput } from "../src/index.js";
+import { TInput } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 import { MENTION_TOKEN } from "../src/vue/components/input/utils/inlineTextTokens.js";
 
 describe("TInput mention click", () => {

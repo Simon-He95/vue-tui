@@ -2,7 +2,7 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
   target: "node14",
-  entry: ["src/index.ts", "src/markdown.ts", "src/experimental.ts"],
+  entry: ["src/index.ts", "src/cli.ts", "src/markdown.ts", "src/experimental.ts"],
   format: ["esm"],
   clean: false,
   dts: false,

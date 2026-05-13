@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { createTerminalApp, createTextRestrictionPlugin, TInput } from "../src/index.js";
+import { createTextRestrictionPlugin, TInput } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 
 describe("TInput restrictText plugin", () => {
   it("filters key input and paste", async () => {

@@ -1,6 +1,7 @@
 import { defineComponent, h, nextTick } from "vue";
 import { describe, expect, it } from "vitest";
-import { TText, createTerminalApp } from "../src/index.js";
+import { TText } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 
 describe("TText", () => {
   it("preserves explicit newlines without emitting control chars", async () => {

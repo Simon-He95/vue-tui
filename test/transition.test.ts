@@ -1,6 +1,7 @@
 import { defineComponent, h, nextTick, ref } from "vue";
 import { describe, expect, it } from "vitest";
-import { TText, TTransition, createTerminalApp } from "../src/index.js";
+import { TText, TTransition } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 
 async function flushAsync(times = 3): Promise<void> {
   for (let i = 0; i < times; i++) await Promise.resolve();

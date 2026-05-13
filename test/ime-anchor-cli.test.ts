@@ -39,7 +39,8 @@ if (!originalDocument) {
 }
 
 const { defineComponent, h, nextTick, ref } = await import("vue");
-const { TInput, createTerminalApp } = await import("../src/index.js");
+const { TInput } = await import("../src/index.js");
+const { createTerminalApp } = await import("../src/cli.js");
 
 restoreGlobal("window", originalWindow);
 restoreGlobal("document", originalDocument);

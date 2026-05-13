@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createTerminalApp } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 import {
   defineComponent,
   h,

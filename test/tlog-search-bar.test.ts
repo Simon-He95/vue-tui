@@ -1,6 +1,6 @@
 import type { TLogDataSource, TLogSearchBarState, TLogViewHandle } from "../src/experimental.js";
 import { describe, expect, it, vi } from "vitest";
-import { createTerminalApp } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 import { TLogSearchBar, TLogView } from "../src/experimental.js";
 import {
   defineComponent,

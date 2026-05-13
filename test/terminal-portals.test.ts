@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { TDialog, TText, createTerminalApp } from "../src/index.js";
+import { TDialog, TText } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 
 describe("terminal portals", () => {
   it("teleported dialog updates in headless terminal runtime", async () => {

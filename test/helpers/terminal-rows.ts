@@ -1,4 +1,4 @@
-import type { createTerminalApp } from "../../src/index.js";
+import type { createTerminalApp } from "../../src/cli.js";
 
 type TerminalLike = ReturnType<typeof createTerminalApp>["terminal"];
 

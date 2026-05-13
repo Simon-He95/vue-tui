@@ -5,13 +5,14 @@ const port = Number(process.env.PW_PORT || 5173);
 
 export default defineConfig({
   testDir: "./e2e",
+  testMatch: "basic.spec.ts",
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: `http://127.0.0.1:${port}`,
   },
   webServer: {
-    command: `pnpm build && pnpm --filter vue-terminal-example-goatchain dev --port ${port} --strictPort --host 127.0.0.1`,
+    command: `pnpm build && pnpm --filter vue-terminal-example-basic dev --port ${port} --strictPort --host 127.0.0.1`,
     port,
     reuseExistingServer: false,
   },

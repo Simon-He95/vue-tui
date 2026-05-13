@@ -1,8 +1,8 @@
 import type { AgentConsoleApi } from "./AgentConsoleSurface";
-import type { CliEventManager, TerminalApp } from "@simon_he/vue-tui";
+import type { CliEventManager, TerminalApp } from "@simon_he/vue-tui/cli";
 import assert from "node:assert/strict";
 import { nextTick } from "vue";
-import { createTerminalApp } from "@simon_he/vue-tui";
+import { createTerminalApp } from "@simon_he/vue-tui/cli";
 import { AgentConsoleSurface, AGENT_CONSOLE_LAYOUT } from "./AgentConsoleSurface";
 import { parseAgentReplayLog, stringifyAgentReplayLog } from "./transcript-store";
 

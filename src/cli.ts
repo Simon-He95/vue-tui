@@ -1,0 +1,24 @@
+export type { StdinDriver } from "./cli/input.js";
+export { createStdinDriver } from "./cli/input.js";
+export type { FsDirEntry, FsEntryKind, FsStat, PathPickerProvider } from "./cli/path-provider.js";
+export { createNodePathPickerProvider } from "./cli/path-provider.js";
+export {
+  type PathPickMode,
+  type PathSuggestion,
+  resolveUserPath,
+  suggestPaths,
+  type SuggestPathsResult,
+} from "./cli/path-suggest.js";
+export { readEventLog, writeEventLog, writeSnapshot } from "./cli/recording.js";
+export type { CreateTerminalAppOptions, TerminalApp } from "./create-terminal-app.js";
+export { createTerminalApp } from "./create-terminal-app.js";
+export type { CliEventManager } from "./events/manager/cli-event-manager.js";
+export { createCliEventManager } from "./events/manager/cli-event-manager.js";
+export { getCliLatencyProfiler } from "./observability/cli-latency.js";
+export { createOsc52ClipboardProvider } from "./runtime/index.js";
+export type { StdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
+export { getStdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
+export type { StdoutRenderer, ThemePalette } from "./renderer/cli/stdout-renderer.js";
+export { createStdoutRenderer } from "./renderer/cli/stdout-renderer.js";
+export { HEADLESS_RENDERER_CAPABILITIES } from "./renderer/capabilities.js";
+export { createNodeMentionPathProvider } from "./vue/components/input/plugins/nodeMentionPathProvider.js";

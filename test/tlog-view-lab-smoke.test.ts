@@ -1,7 +1,7 @@
 import type { TLogViewHandle } from "../src/experimental.js";
 import type { TLogViewLabApi } from "../examples/tlog-view-lab/App.js";
 import { describe, expect, it } from "vitest";
-import { createTerminalApp } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 import { TLOG_VIEW_LAB_LAYOUT, TLogViewLabApp } from "../examples/tlog-view-lab/App.js";
 import { defineComponent, h, nextTick, waitFor } from "./ui-regressions-support.js";
 

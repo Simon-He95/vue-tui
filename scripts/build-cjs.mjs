@@ -3,6 +3,7 @@ import { build } from "esbuild";
 await build({
   entryPoints: {
     index: "src/index.ts",
+    cli: "src/cli.ts",
     markdown: "src/markdown.ts",
     experimental: "src/experimental.ts",
   },

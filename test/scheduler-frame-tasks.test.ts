@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, nextTick, onBeforeUnmount } from "vue";
 import {
-  createTerminalApp,
   TerminalProvider,
   TText,
   useTerminal,
   type FramePerfStore,
   type TerminalScheduler,
 } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 
 function installRaf() {
   const previousRaf = globalThis.requestAnimationFrame;

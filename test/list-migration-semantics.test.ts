@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { createTerminalApp, TList } from "../src/index.js";
+import { TList } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 import { rowText } from "./helpers/list.js";
 
 describe("TList migration semantics", () => {

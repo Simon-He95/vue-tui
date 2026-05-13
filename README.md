@@ -19,11 +19,12 @@ Vue is a peer dependency. The current package supports Vue `>=3.3.0 <4`.
 
 ## Entry Points
 
-| Import                           | Stability    | Use it for                                                                                                       |
-| -------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `@simon_he/vue-tui`              | Core         | Terminal runtime, root Vue components, DOM/stdout renderers, events, layout, inputs, router, and runtime helpers |
-| `@simon_he/vue-tui/markdown`     | Focused      | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources        |
-| `@simon_he/vue-tui/experimental` | Experimental | `TVirtualList`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins         |
+| Import                           | Stability    | Use it for                                                                                                             |
+| -------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `@simon_he/vue-tui`              | Core         | Browser-safe terminal runtime, root Vue components, DOM renderer, events, layout, inputs, router, and runtime helpers  |
+| `@simon_he/vue-tui/cli`          | Node/CLI     | Headless Vue app runtime, stdin driver, stdout renderer, Node path provider, recording, and terminal clipboard helpers |
+| `@simon_he/vue-tui/markdown`     | Focused      | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources              |
+| `@simon_he/vue-tui/experimental` | Experimental | `TVirtualList`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins               |
 
 High-throughput log and virtualization APIs stay under `/experimental` until their public surface settles. Keep those imports isolated in application code.
 
@@ -54,7 +55,7 @@ const input = ref("");
 For a real terminal, mount a headless Vue app and attach stdout/stdin:
 
 ```ts
-import { createStdinDriver, createStdoutRenderer, createTerminalApp } from "@simon_he/vue-tui";
+import { createStdinDriver, createStdoutRenderer, createTerminalApp } from "@simon_he/vue-tui/cli";
 import App from "./App.vue";
 
 const app = createTerminalApp({
@@ -94,21 +95,22 @@ const driver = createStdinDriver({
 
 - `createTerminal({ cols, rows })` owns the cell buffer, cursor, planes, scrollback, and commit events.
 - `createDomRenderer(terminal, container)` renders terminal cells to DOM with row caching and fast paths for plain and styled rows.
-- `createStdoutRenderer(terminal, options)` emits ANSI output for real terminal UIs.
+- `createStdoutRenderer(terminal, options)` emits ANSI output for real terminal UIs from `/cli`.
 - `TerminalProvider` is the browser-facing Vue runtime provider.
 - `createTerminalApp()` is the headless runtime for CLI apps and deterministic tests.
 - `TRenderPlane` separates transcript, chrome, input, and overlay surfaces so small updates do not repaint large panes.
 
 ## Components
 
-| Area          | Components                                                                                     |
-| ------------- | ---------------------------------------------------------------------------------------------- |
-| Layout        | `TBox`, `TView`, `TAnchor`, `TFlow`, `TRenderPlane`, `TRenderLayer`                            |
-| Text          | `TText`, `TTransition`, `TMarkdownText`, `TVirtualMarkdown`                                    |
-| Input         | `TInput`, `TInputBox`, `TSelect`, `TPathPicker`, `TJsonEditor`                                 |
-| Overlay       | `TDialog`, `TMultilineModal`, `TDebugOverlay`                                                  |
-| Experimental  | `TVirtualList`, `TLogView`, `TLogSearchBar`, `TLogLinksPanel`, `TLogScrollbar`, `TLogMinimap`  |
-| Runtime tools | `createTerminal`, `createDomRenderer`, `createStdoutRenderer`, `createTerminalApp`, event APIs |
+| Area          | Components                                                                                    |
+| ------------- | --------------------------------------------------------------------------------------------- |
+| Layout        | `TBox`, `TView`, `TAnchor`, `TFlow`, `TRenderPlane`, `TRenderLayer`                           |
+| Text          | `TText`, `TTransition`, `TMarkdownText`, `TVirtualMarkdown`                                   |
+| Input         | `TInput`, `TInputBox`, `TSelect`, `TPathPicker`, `TJsonEditor`                                |
+| Overlay       | `TDialog`, `TMultilineModal`, `TDebugOverlay`                                                 |
+| Experimental  | `TVirtualList`, `TLogView`, `TLogSearchBar`, `TLogLinksPanel`, `TLogScrollbar`, `TLogMinimap` |
+| Runtime tools | `createTerminal`, `createDomRenderer`, event APIs                                             |
+| CLI tools     | `createTerminalApp`, `createStdoutRenderer`, `createStdinDriver` from `@simon_he/vue-tui/cli` |
 
 See [docs/components.md](./docs/components.md) and [docs/generated/components-api.md](./docs/generated/components-api.md) for props and events.
 

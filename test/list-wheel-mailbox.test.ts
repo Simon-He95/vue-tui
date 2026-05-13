@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref, vShow, withDirectives } from "vue";
-import { createTerminalApp, TList, TRenderPlane, TText, TView } from "../src/index.js";
+import { TList, TRenderPlane, TText, TView } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 import { createFramePerfProbe, expectScrollMailboxFrame } from "./helpers/frame-perf.js";
 import { disableRaf, installRaf, rowText } from "./helpers/list.js";
 import { dispatchWheelBurst } from "./helpers/wheel.js";
