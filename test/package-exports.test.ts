@@ -198,8 +198,8 @@ describe("package exports", () => {
     await build({
       stdin: {
         contents: `
-          import { TerminalProvider, TBox, TInput, TText } from "./src/index.ts";
-          console.log(TerminalProvider, TBox, TInput, TText);
+          import { createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText } from "./src/index.ts";
+          console.log(createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText);
         `,
         resolveDir: process.cwd(),
         sourcefile: "vue-tui-root-browser-smoke.ts",

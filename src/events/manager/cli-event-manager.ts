@@ -12,7 +12,7 @@ import type {
 } from "./types.js";
 import { appendFileSync } from "node:fs";
 import process from "node:process";
-import { getCliLatencyProfiler } from "../../observability/cli-latency.js";
+import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
 import {
   SUPPRESS_TERMINAL_POINTER_DOWN,
   SUPPRESS_TERMINAL_POINTER_MOVE,

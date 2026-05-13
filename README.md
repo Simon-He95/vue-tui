@@ -102,15 +102,16 @@ const driver = createStdinDriver({
 
 ## Components
 
-| Area          | Components                                                                                    |
-| ------------- | --------------------------------------------------------------------------------------------- |
-| Layout        | `TBox`, `TView`, `TAnchor`, `TFlow`, `TRenderPlane`, `TRenderLayer`                           |
-| Text          | `TText`, `TTransition`, `TMarkdownText`, `TVirtualMarkdown`                                   |
-| Input         | `TInput`, `TInputBox`, `TSelect`, `TPathPicker`, `TJsonEditor`                                |
-| Overlay       | `TDialog`, `TMultilineModal`, `TDebugOverlay`                                                 |
-| Experimental  | `TVirtualList`, `TLogView`, `TLogSearchBar`, `TLogLinksPanel`, `TLogScrollbar`, `TLogMinimap` |
-| Runtime tools | `createTerminal`, `createDomRenderer`, event APIs                                             |
-| CLI tools     | `createTerminalApp`, `createStdoutRenderer`, `createStdinDriver` from `@simon_he/vue-tui/cli` |
+| Area          | Import                           | Components                                                                                    |
+| ------------- | -------------------------------- | --------------------------------------------------------------------------------------------- |
+| Layout        | `@simon_he/vue-tui`              | `TBox`, `TView`, `TAnchor`, `TFlow`, `TRenderPlane`, `TRenderLayer`                           |
+| Text          | `@simon_he/vue-tui`              | `TText`, `TTransition`                                                                        |
+| Markdown      | `@simon_he/vue-tui/markdown`     | `TMarkdownText`, `TVirtualMarkdown`                                                           |
+| Input         | `@simon_he/vue-tui`              | `TInput`, `TInputBox`, `TSelect`, `TPathPicker`, `TJsonEditor`                                |
+| Overlay       | `@simon_he/vue-tui`              | `TDialog`, `TMultilineModal`, `TDebugOverlay`                                                 |
+| Experimental  | `@simon_he/vue-tui/experimental` | `TVirtualList`, `TLogView`, `TLogSearchBar`, `TLogLinksPanel`, `TLogScrollbar`, `TLogMinimap` |
+| Runtime tools | `@simon_he/vue-tui`              | `createTerminal`, `createDomRenderer`, event APIs                                             |
+| CLI tools     | `@simon_he/vue-tui/cli`          | `createTerminalApp`, `createStdoutRenderer`, `createStdinDriver`                              |
 
 See [docs/components.md](./docs/components.md) and [docs/generated/components-api.md](./docs/generated/components-api.md) for props and events.
 
@@ -191,11 +192,12 @@ pnpm run release:dry-run
 ```
 
 `release:dry-run` runs checks, tests, docs build, benchmarks, examples smoke, and packed package install smoke.
+CI publishing uses `pnpm run release:ci`, which runs the same dry-run gate and publishes with npm provenance.
 
 ## Package Notes
 
 - The published package ships `dist` only.
-- Root, markdown, and experimental entrypoints are available as ESM, CJS, and type declarations after build.
+- Root, CLI, markdown, and experimental entrypoints are available as ESM, CJS, and type declarations after build.
 - The root browser/core API does not require a Node runtime, but CLI usage expects a Node-like stdout/stdin environment.
 - Terminal emoji and East Asian width behavior still depends on the user terminal and font.
 

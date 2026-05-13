@@ -1,6 +1,6 @@
 import type { TerminalEventRecord } from "../events/recording.js";
 import process from "node:process";
-import { getCliLatencyProfiler } from "../observability/cli-latency.js";
+import { getCliLatencyProfiler } from "../observability/cli-latency-node.js";
 import { normalizeNewlines } from "../utils/newlines.js";
 import { parseKittySequence } from "./parse-kitty.js";
 import { parseMouseSequence } from "./parse-mouse.js";
