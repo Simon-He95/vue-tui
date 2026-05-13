@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { createStdinDriver } from "../src/cli.js";
+import { createStdinDriver, installTerminalCleanup } from "../src/cli.js";
 import { normalizeNewlines } from "../src/utils/newlines.js";
 
 class FakeStdin extends EventEmitter {
@@ -47,6 +47,21 @@ function collectDriverOutput(
 }
 
 describe("cli input", () => {
+  it("installs terminal cleanup for process exit", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("exit"));
+    const uninstall = installTerminalCleanup(dispose);
+    try {
+      const listener = process.rawListeners("exit").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.(0);
+      listener?.(0);
+      expect(dispose).toHaveBeenCalledTimes(1);
+    } finally {
+      uninstall();
+    }
+  });
+
   it("enables/disables mouse any-motion tracking when configured", () => {
     const stdin = new FakeStdin() as any;
     const stdout = new FakeStdout() as any;
@@ -159,6 +174,20 @@ describe("cli input", () => {
     expect(offOutput).not.toContain("\u001B[<u");
     expect(offOutput).not.toContain("\u001B[>4;2m");
     expect(offOutput).not.toContain("\u001B[>4n");
+  });
+
+  it("prefers VUE_TUI_KEYBOARD_PROTOCOL over the legacy DIMCODE alias", () => {
+    const output = collectDriverOutput({
+      env: {
+        TERM: "vt100",
+        VUE_TUI_KEYBOARD_PROTOCOL: "xterm",
+        DIMCODE_KEYBOARD_PROTOCOL: "kitty",
+      },
+    });
+
+    expect(output).toContain("\u001B[>4;2m");
+    expect(output).toContain("\u001B[>4n");
+    expect(output).not.toContain("\u001B[>1u");
   });
 
   it("reports terminal focus in/out changes", () => {

@@ -4,7 +4,11 @@ import type { Style, Terminal } from "../src/index.js";
 import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
 import { buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
 import { layoutMarkdownBlocks, layoutMarkdownBlocksCached } from "../src/vue/markdown/layout.js";
-import { createTuiMarkdownParser, type TuiMarkdownParser } from "../src/vue/markdown/parser.js";
+import {
+  createTuiMarkdownParser,
+  isSafeMarkdownLink,
+  type TuiMarkdownParser,
+} from "../src/vue/markdown/parser.js";
 import { paintMarkdownVisualRow } from "../src/vue/markdown/render.js";
 import { DEFAULT_TUI_MARKDOWN_THEME } from "../src/vue/markdown/theme.js";
 
@@ -109,6 +113,41 @@ describe("markdown layout", () => {
     expect(safeSegment?.style?.underline).toBe(true);
     expect(unsafeSegment?.style?.href).toBeUndefined();
     expect(unsafeSegment?.style?.underline).not.toBe(true);
+  });
+
+  it("rejects markdown links with literal whitespace", () => {
+    expect(isSafeMarkdownLink("foo bar")).toBe(false);
+    expect(isSafeMarkdownLink("https://example.com/a b")).toBe(false);
+    expect(isSafeMarkdownLink("https://example.com/a%20b")).toBe(true);
+    expect(isSafeMarkdownLink("javascript:alert(1)")).toBe(false);
+    expect(isSafeMarkdownLink("//evil.test")).toBe(false);
+  });
+
+  it("evicts only the oldest markdown parser cache entry", async () => {
+    vi.resetModules();
+    const getMarkdownMock = vi.fn((name: string) => ({ name }));
+    vi.doMock("stream-markdown-parser", () => ({
+      getMarkdown: getMarkdownMock,
+      parseMarkdownToStructure: vi.fn(() => []),
+    }));
+    try {
+      const parserModule = await import("../src/vue/markdown/parser.js");
+
+      for (let i = 0; i < 32; i++) {
+        parserModule.createTuiMarkdownParser({ customHtmlTags: [`tag-${i}`] });
+      }
+      expect(getMarkdownMock).toHaveBeenCalledTimes(32);
+
+      parserModule.createTuiMarkdownParser({ customHtmlTags: ["tag-0"] });
+      parserModule.createTuiMarkdownParser({ customHtmlTags: ["tag-32"] });
+      parserModule.createTuiMarkdownParser({ customHtmlTags: ["tag-1"] });
+      parserModule.createTuiMarkdownParser({ customHtmlTags: ["tag-0"] });
+
+      expect(getMarkdownMock).toHaveBeenCalledTimes(34);
+    } finally {
+      vi.doUnmock("stream-markdown-parser");
+      vi.resetModules();
+    }
   });
 
   it("lays out long markdown paragraphs without changing row counts", () => {

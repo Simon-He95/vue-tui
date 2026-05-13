@@ -4,7 +4,7 @@
 
 > 坐标/尺寸单位：所有 `x/y/w/h` 均以「cell（字符格）」为单位，而不是像素。
 
-> 完整的 Props/Events 列表请以自动生成文件为准：`docs/generated/components-api.md`（运行 `bun run --filter '@simon_he/vue-tui' docs:gen` 生成）。
+> 完整的 Props/Events 列表请以自动生成文件为准：`docs/generated/components-api.md`（运行 `pnpm run docs:gen` 生成）。
 
 ## 组件速读
 
@@ -229,14 +229,15 @@
 - `resolvePath` / `pathToHref`
 - `isTerminalLike`
 
-默认 host plugin 只负责 Node-like 的 clipboard / path 行为，不会自动附带 UI toast；如果宿主希望保留 `Copied` / `Copy failed` 这类提示，需要显式提供 `showToast`。
+浏览器侧默认 host plugin 不携带 Node 能力；CLI 侧的默认 host plugin 负责 Node-like 的 clipboard / path 行为，不会自动附带 UI toast。如果宿主希望保留 `Copied` / `Copy failed` 这类提示，需要显式提供 `showToast`。
 
 `createOsc52ClipboardProvider()` 可作为 terminal clipboard 写入 provider 显式传给 `createTerminalApp({ clipboard })`。它不会默认执行系统剪贴板命令。
 
 一个最小宿主接线示例：
 
 ```ts
-import { createDefaultTInputHostAdapter, createTInputHostPlugin } from "@simon_he/vue-tui";
+import { createTInputHostPlugin } from "@simon_he/vue-tui";
+import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 import { createTerminalApp } from "@simon_he/vue-tui/cli";
 
 const baseHost = createDefaultTInputHostAdapter();
@@ -491,7 +492,7 @@ Experimental Markdown renderer / virtual scroller。它们走独立的 `parser -
 >
 > `TVirtualMarkdown` 默认保持文本可选中复制，即使它自身是 focusable 节点；如需列表式交互，可传 `selectable=false`。
 >
-> Markdown link 在 DOM renderer 中当前仍表现为带 `Style.href` metadata 的样式文本，不会生成原生可点击 `<a>`；CLI/stdout renderer 才会在支持时发出 OSC8 hyperlink。
+> Markdown link 会写入 `Style.href` metadata。DOM renderer 会把 safe href 渲染为 `<a>`；CLI/stdout renderer 会在支持时发出 OSC8 hyperlink。
 >
 > `TVirtualMarkdown` 当前仍是 **viewport-level repaint**，不是 row-local dirty diff；streaming append 也不会自动 follow tail，默认保持 absolute `scrollTop` / absolute visual-row index 语义。
 >

@@ -430,7 +430,7 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("keeps href rows on the fragment span path", () => {
+  it("renders safe href rows as anchors on the fragment path", () => {
     const { terminal, container, renderer } = setup(3);
 
     try {
@@ -439,13 +439,33 @@ describe("DomRenderer row rendering", () => {
 
       const line = lineEl(container);
       expect(line.childNodes).toHaveLength(1);
-      expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
-      expect((line.firstChild as HTMLSpanElement).dataset.vtFastRow).toBeUndefined();
+      expect(line.firstChild).toBeInstanceOf(HTMLAnchorElement);
+      const anchor = line.firstChild as HTMLAnchorElement;
+      expect(anchor.href).toBe("https://example.com/");
+      expect(anchor.target).toBe("_blank");
+      expect(anchor.rel).toBe("noopener noreferrer");
+      expect(anchor.dataset.vtFastRow).toBeUndefined();
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
         fragmentRows: 1,
         spansCreated: 1,
       });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("keeps unsafe href rows as spans", () => {
+    const { terminal, container, renderer } = setup(3);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "javascript:alert(1)" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
+      expect(line.querySelector("a")).toBeNull();
     } finally {
       renderer.dispose();
       container.remove();

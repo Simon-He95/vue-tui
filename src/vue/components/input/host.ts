@@ -73,7 +73,19 @@ export function fileUrlToPathLike(input: string): string | null {
 export function pathToTerminalFileHref(pathLike: string): string | undefined {
   const raw = String(pathLike ?? "").trim();
   if (!raw) return undefined;
-  if (raw.startsWith("file://")) return raw;
+  if (raw.toLowerCase().startsWith("file://")) {
+    try {
+      const url = new URL(raw);
+      if (url.protocol !== "file:") return undefined;
+      for (let i = 0; i < raw.length; i++) {
+        const code = raw.charCodeAt(i);
+        if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return undefined;
+      }
+      return url.toString();
+    } catch {
+      return undefined;
+    }
+  }
 
   const normalizedRaw = raw.replace(/\\/g, "/");
   const normalized = normalizePath(normalizedRaw);

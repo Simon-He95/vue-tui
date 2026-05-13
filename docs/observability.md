@@ -44,10 +44,10 @@
 设置环境变量：
 
 ```bash
-DIMCODE_PROFILE_TUI=1
+VUE_TUI_PROFILE=1
 ```
 
-会启用 TUI profiler。它会输出：
+会启用 TUI profiler；`DIMCODE_PROFILE_TUI` 仍作为 legacy alias 保留。它会输出：
 
 - `invalidates`
 - `renders`

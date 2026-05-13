@@ -21,6 +21,36 @@ export type StdinDriver = Readonly<{
   dispose: () => void;
 }>;
 
+export function installTerminalCleanup(dispose: () => void): () => void {
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    try {
+      dispose();
+    } catch {}
+  };
+
+  const onSignal = (signal: NodeJS.Signals) => {
+    cleanup();
+    process.off(signal, onSignal);
+    process.kill(process.pid, signal);
+  };
+  const onUncaughtException = () => cleanup();
+
+  process.once("exit", cleanup);
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
+  process.once("uncaughtExceptionMonitor", onUncaughtException);
+
+  return () => {
+    process.off("exit", cleanup);
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
+    process.off("uncaughtExceptionMonitor", onUncaughtException);
+  };
+}
+
 function isPrintable(ch: string): boolean {
   if (ch.length === 0) return false;
   if (ch.length === 1) {
@@ -107,7 +137,9 @@ function resolveKeyboardProtocol(
   const configured = parseKeyboardProtocol(options.keyboardProtocol) ?? "auto";
   if (configured !== "auto") return configured;
 
-  const envOverride = parseKeyboardProtocol(options.env?.DIMCODE_KEYBOARD_PROTOCOL);
+  const envOverride = parseKeyboardProtocol(
+    options.env?.VUE_TUI_KEYBOARD_PROTOCOL ?? options.env?.DIMCODE_KEYBOARD_PROTOCOL,
+  );
   if (envOverride && envOverride !== "auto") return envOverride;
 
   return detectKeyboardProtocol(options.env ?? {});

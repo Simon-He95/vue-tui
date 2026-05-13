@@ -306,7 +306,7 @@ export function createCliEventManager(
         // Log handler error but don't crash
         try {
           const env = process?.env;
-          if (env?.DIMCODE_DEBUG === "1") {
+          if (env?.VUE_TUI_DEBUG === "1" || env?.DIMCODE_DEBUG === "1") {
             const timestamp = new Date().toISOString().split("T")[1].slice(0, -1);
             appendFileSync(
               "/tmp/goatchain-debug.log",

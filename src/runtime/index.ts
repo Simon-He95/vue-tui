@@ -25,6 +25,7 @@ export type RuntimeOptions = Readonly<{
 export type Osc52ClipboardOptions = Readonly<{
   target?: string;
   supported?: boolean;
+  maxBytes?: number;
   write?: (sequence: string) => void | Promise<void>;
   readText?: () => Promise<string>;
 }>;
@@ -102,12 +103,18 @@ function base64EncodeBytes(bytes: Uint8Array): string {
   return out;
 }
 
-function base64EncodeText(text: string): string {
-  if (typeof TextEncoder !== "undefined") return base64EncodeBytes(new TextEncoder().encode(text));
+function encodeTextBytes(text: string): Uint8Array {
+  if (typeof TextEncoder !== "undefined") return new TextEncoder().encode(text);
   const bin = unescape(encodeURIComponent(text));
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return base64EncodeBytes(bytes);
+  return bytes;
+}
+
+function nowMs(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
 }
 
 export function createOsc52ClipboardProvider(options: Osc52ClipboardOptions = {}): ClipboardApi {
@@ -128,7 +135,11 @@ export function createOsc52ClipboardProvider(options: Osc52ClipboardOptions = {}
     },
     async writeText(text: string) {
       if (!supported) throw new Error("Clipboard not available in this runtime");
-      await write(`\u001B]52;${target};${base64EncodeText(text)}\u0007`);
+      const bytes = encodeTextBytes(text);
+      const maxBytes = options.maxBytes ?? 100 * 1024;
+      if (bytes.byteLength > maxBytes)
+        throw new Error(`OSC52 clipboard payload too large: ${bytes.byteLength} bytes`);
+      await write(`\u001B]52;${target};${base64EncodeBytes(bytes)}\u0007`);
     },
   };
 }
@@ -148,8 +159,7 @@ function createRaf(kind: RuntimeEnv, timer: TimerApi): RafApi {
 
   return {
     request(cb) {
-      // Roughly 60Hz; callers relying on determinism should not use `raf` for time-based animation.
-      return timer.setTimeout(() => cb(timer.setTimeout as any as number), 16) as any;
+      return timer.setTimeout(() => cb(nowMs()), 16) as any;
     },
     cancel(id) {
       timer.clearTimeout(id as any);
@@ -196,9 +206,7 @@ export function createRuntime(
   return {
     env,
     now() {
-      return typeof performance !== "undefined" && typeof performance.now === "function"
-        ? performance.now()
-        : Date.now();
+      return nowMs();
     },
     timer,
     raf: createRaf(kind, timer),

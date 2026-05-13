@@ -4,6 +4,9 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "esModuleInterop": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "useUnknownInCatchVariables": true,
     "lib": ["ES2022", "ES2022.Intl", "DOM", "DOM.Iterable"],
     "skipLibCheck": true
   },

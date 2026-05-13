@@ -183,11 +183,15 @@ function createDisabledProfiler(): null {
 function createProfiler(): CliLatencyProfiler | null {
   const processLike = process;
   const env = (processLike?.env ?? {}) as Record<string, unknown>;
-  if (!parseEnabled(env.DIMCODE_PROFILE_INPUT_LATENCY)) return createDisabledProfiler();
+  if (!parseEnabled(env.VUE_TUI_PROFILE_INPUT_LATENCY ?? env.DIMCODE_PROFILE_INPUT_LATENCY))
+    return createDisabledProfiler();
 
   const logPath =
-    String(env.DIMCODE_PROFILE_INPUT_LATENCY_LOG_PATH ?? DEFAULT_LOG_PATH).trim() ||
-    DEFAULT_LOG_PATH;
+    String(
+      env.VUE_TUI_PROFILE_INPUT_LATENCY_LOG_PATH ??
+        env.DIMCODE_PROFILE_INPUT_LATENCY_LOG_PATH ??
+        DEFAULT_LOG_PATH,
+    ).trim() || DEFAULT_LOG_PATH;
 
   const ops = new Map<number, CliLatencyOp>();
   const pendingCommitIds = new Set<number>();

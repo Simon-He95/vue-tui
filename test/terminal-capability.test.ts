@@ -64,13 +64,21 @@ describe("terminal capability", () => {
     expect(cap).toEqual({ mode: "truecolor", level: 256 });
   });
 
-  it("supports DIMCODE_COLOR_MODE as primary override alias", () => {
+  it("supports DIMCODE_COLOR_MODE as legacy override alias", () => {
     const cap = detectTerminalColorCapability({
       env: { DIMCODE_COLOR_MODE: "ansi16" },
       isTTY: true,
       platform: "darwin",
     });
     expect(cap).toEqual({ mode: "ansi16", level: 16 });
+  });
+
+  it("prefers VUE_TUI_COLOR_MODE over the legacy DIMCODE alias", () => {
+    const cap = detectTerminalColorCapability({
+      env: { VUE_TUI_COLOR_MODE: "ansi8", DIMCODE_COLOR_MODE: "truecolor" },
+      isTTY: true,
+    });
+    expect(cap).toEqual({ mode: "ansi8", level: 8 });
   });
 
   it("keeps Windows hint-based truecolor detection intact", () => {

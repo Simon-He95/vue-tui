@@ -629,10 +629,11 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       return y != null && y < y1;
     }
 
-    if (env?.DIMCODE_DEBUG === "1") renderMgrDebugLog.render("[RENDER-MANAGER] render() called");
+    if (env?.VUE_TUI_DEBUG === "1" || env?.DIMCODE_DEBUG === "1")
+      renderMgrDebugLog.render("[RENDER-MANAGER] render() called");
 
     if (!hasPendingDirtyWork(requestedPlanes)) {
-      if (env?.DIMCODE_DEBUG === "1")
+      if (env?.VUE_TUI_DEBUG === "1" || env?.DIMCODE_DEBUG === "1")
         renderMgrDebugLog.render("[RENDER-MANAGER] render() skipped (no dirty rows)");
       return null;
     }
@@ -812,7 +813,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       });
     }
 
-    if (env?.DIMCODE_DEBUG === "1")
+    if (env?.VUE_TUI_DEBUG === "1" || env?.DIMCODE_DEBUG === "1")
       renderMgrDebugLog.render("[RENDER-MANAGER] terminal.batch() completed");
 
     const stats: RenderStats = {

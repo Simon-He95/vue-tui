@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { TInput, createTInputHostPlugin } from "../src/index.js";
-import { createTerminalApp } from "../src/cli.js";
+import { createDefaultTInputHostAdapter, createTerminalApp } from "../src/cli.js";
 
 describe("TInput host plugins", () => {
   it("lets hosts inject terminal clipboard behavior via inputPlugins", async () => {
@@ -107,5 +107,52 @@ describe("TInput host plugins", () => {
     expect(readText).toHaveBeenCalled();
     expect(value.value).toBe("app-clipboard");
     app.dispose();
+  });
+
+  it("times out hanging default clipboard commands", async () => {
+    vi.useFakeTimers();
+    const originalProcess = (globalThis as any).process;
+    const originalSpawn = (globalThis as any).__VT_NODE_SPAWN__;
+    let killCount = 0;
+    (globalThis as any).__VT_NODE_SPAWN__ = vi.fn(() => ({
+      stdout: {
+        setEncoding: vi.fn(),
+        on: vi.fn(),
+      },
+      on: vi.fn(),
+      kill() {
+        killCount++;
+      },
+    }));
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        env: {},
+        platform: "linux",
+        stdout: { isTTY: true },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter();
+      const read = host.readClipboardText?.() ?? Promise.resolve("missing");
+
+      await vi.advanceTimersByTimeAsync(2500);
+
+      await expect(read).resolves.toBe("");
+      expect((globalThis as any).__VT_NODE_SPAWN__).toHaveBeenCalledTimes(3);
+      expect(killCount).toBe(3);
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+      if (originalSpawn === undefined) delete (globalThis as any).__VT_NODE_SPAWN__;
+      else (globalThis as any).__VT_NODE_SPAWN__ = originalSpawn;
+      vi.useRealTimers();
+    }
   });
 });

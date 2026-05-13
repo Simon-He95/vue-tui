@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createCliEventManager,
   createEventManager,
+  defaultTInputHostPlugin,
   createPromptMentionPlugin,
   defineComponent,
   expectBoxBorder,
@@ -239,14 +240,18 @@ describe("ui regressions input clipboard and ime", () => {
       configurable: true,
     });
 
-    const mounted = await mountTerminal(() =>
-      h(TInput, {
-        x: 0,
-        y: 0,
-        w: 10,
-        modelValue: value.value,
-        "onUpdate:modelValue": (v: string) => (value.value = v),
-      }),
+    const mounted = await mountTerminal(
+      () =>
+        h(TInput, {
+          x: 0,
+          y: 0,
+          w: 10,
+          modelValue: value.value,
+          "onUpdate:modelValue": (v: string) => (value.value = v),
+        }),
+      40,
+      8,
+      { inputPlugins: [defaultTInputHostPlugin] },
     );
 
     const container = mounted.container()!;
@@ -295,18 +300,22 @@ describe("ui regressions input clipboard and ime", () => {
     const secondPath = "C:\\Users\\Simon\\Desktop\\b.png";
     spawnOutputsByCmd.set("powershell.exe", `${firstPath}\n${secondPath}\n`);
 
-    const mounted = await mountTerminal(() =>
-      h(TInput, {
-        x: 0,
-        y: 0,
-        w: 10,
-        modelValue: value.value,
-        "onUpdate:modelValue": (v: string) => (value.value = v),
-        collectMentions: true,
-        mentions: mentions.value,
-        "onUpdate:mentions": (v: readonly string[]) => (mentions.value = v),
-        filePasteHandler: (inputPath: string) => inputPath,
-      }),
+    const mounted = await mountTerminal(
+      () =>
+        h(TInput, {
+          x: 0,
+          y: 0,
+          w: 10,
+          modelValue: value.value,
+          "onUpdate:modelValue": (v: string) => (value.value = v),
+          collectMentions: true,
+          mentions: mentions.value,
+          "onUpdate:mentions": (v: readonly string[]) => (mentions.value = v),
+          filePasteHandler: (inputPath: string) => inputPath,
+        }),
+      40,
+      8,
+      { inputPlugins: [defaultTInputHostPlugin] },
     );
 
     const container = mounted.container()!;
@@ -355,18 +364,22 @@ describe("ui regressions input clipboard and ime", () => {
     spawnOutputsByCmd.set("osascript", `${absPath}\n`);
     spawnOutputsByCmd.set("pbpaste", "demo.txt");
 
-    const mounted = await mountTerminal(() =>
-      h(TInput, {
-        x: 0,
-        y: 0,
-        w: 10,
-        modelValue: value.value,
-        "onUpdate:modelValue": (v: string) => (value.value = v),
-        collectMentions: true,
-        mentions: mentions.value,
-        "onUpdate:mentions": (v: readonly string[]) => (mentions.value = v),
-        filePasteHandler: (inputPath: string) => inputPath,
-      }),
+    const mounted = await mountTerminal(
+      () =>
+        h(TInput, {
+          x: 0,
+          y: 0,
+          w: 10,
+          modelValue: value.value,
+          "onUpdate:modelValue": (v: string) => (value.value = v),
+          collectMentions: true,
+          mentions: mentions.value,
+          "onUpdate:mentions": (v: readonly string[]) => (mentions.value = v),
+          filePasteHandler: (inputPath: string) => inputPath,
+        }),
+      40,
+      8,
+      { inputPlugins: [defaultTInputHostPlugin] },
     );
 
     const container = mounted.container()!;
@@ -416,18 +429,22 @@ describe("ui regressions input clipboard and ime", () => {
     spawnOutputsByCmd.set("osascript", `${firstPath}\n${secondPath}\n`);
     spawnOutputsByCmd.set("pbpaste", "a.txt b.txt");
 
-    const mounted = await mountTerminal(() =>
-      h(TInput, {
-        x: 0,
-        y: 0,
-        w: 10,
-        modelValue: value.value,
-        "onUpdate:modelValue": (v: string) => (value.value = v),
-        collectMentions: true,
-        mentions: mentions.value,
-        "onUpdate:mentions": (v: readonly string[]) => (mentions.value = v),
-        filePasteHandler: (inputPath: string) => inputPath,
-      }),
+    const mounted = await mountTerminal(
+      () =>
+        h(TInput, {
+          x: 0,
+          y: 0,
+          w: 10,
+          modelValue: value.value,
+          "onUpdate:modelValue": (v: string) => (value.value = v),
+          collectMentions: true,
+          mentions: mentions.value,
+          "onUpdate:mentions": (v: readonly string[]) => (mentions.value = v),
+          filePasteHandler: (inputPath: string) => inputPath,
+        }),
+      40,
+      8,
+      { inputPlugins: [defaultTInputHostPlugin] },
     );
 
     const container = mounted.container()!;

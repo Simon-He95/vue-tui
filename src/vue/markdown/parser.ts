@@ -32,6 +32,7 @@ export function isSafeMarkdownLink(url: string): boolean {
   const raw = String(url ?? "").trim();
   if (!raw) return false;
   if (hasControlChars(raw)) return false;
+  if (/\s/u.test(raw)) return false;
   if (raw.startsWith("//")) return false;
 
   const value = raw.toLowerCase();
@@ -57,13 +58,21 @@ function markdownInstanceCacheKey(config?: TuiMarkdownParseConfig): string {
 function getCachedMarkdownInstance(config?: TuiMarkdownParseConfig) {
   const cacheKey = markdownInstanceCacheKey(config);
   const cached = markdownInstanceCache.get(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    markdownInstanceCache.delete(cacheKey);
+    markdownInstanceCache.set(cacheKey, cached);
+    return cached;
+  }
   const customHtmlTags = config?.customHtmlTags?.filter(Boolean);
   const created = getMarkdown(`vue-tui-markdown:${cacheKey}`, {
     customHtmlTags,
   });
-  if (markdownInstanceCache.size >= MAX_MARKDOWN_INSTANCE_CACHE) markdownInstanceCache.clear();
   markdownInstanceCache.set(cacheKey, created);
+  while (markdownInstanceCache.size > MAX_MARKDOWN_INSTANCE_CACHE) {
+    const oldest = markdownInstanceCache.keys().next().value;
+    if (oldest == null) break;
+    markdownInstanceCache.delete(oldest);
+  }
   return created;
 }
 

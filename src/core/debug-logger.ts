@@ -1,33 +1,15 @@
-/**
- * Debug logger that writes to a file instead of stderr.
- * This allows debugging terminal rendering issues without polluting the terminal output.
- */
-
-import { importNodeModule } from "../utils/node-module.js";
-
 const LOG_FILE = "/tmp/goatchain-debug.log";
 let enabled = false;
 
-type FsLike = Readonly<{
+type DebugFileWriter = Readonly<{
   appendFileSync?: (path: string, data: string) => void;
   writeFileSync?: (path: string, data: string) => void;
 }>;
 
-let fsPromise: Promise<FsLike | null> | null = null;
-
-function getFsSync(): FsLike | null {
-  const req = (globalThis as any).require;
-  if (typeof req !== "function") return null;
-  try {
-    return req("node:fs") ?? req("fs") ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function getFsAsync(): Promise<FsLike | null> {
-  fsPromise ??= importNodeModule<FsLike>("node:fs");
-  return fsPromise;
+function getFileWriter(): DebugFileWriter | null {
+  const writer = (globalThis as any).__VT_DEBUG_FILE_WRITER__;
+  if (!writer || typeof writer !== "object") return null;
+  return writer as DebugFileWriter;
 }
 
 export interface DebugLogger {
@@ -45,15 +27,10 @@ export function createDebugLogger(enable = false): DebugLogger {
   enabled = enable;
 
   if (enabled) {
-    // Clear the log file on start
     try {
       const data = `=== GoatChain Debug Log Started at ${new Date().toISOString()} ===\n\n`;
-      const fs = getFsSync();
-      if (fs?.writeFileSync) fs.writeFileSync(LOG_FILE, data);
-      else void getFsAsync().then((mod) => mod?.writeFileSync?.(LOG_FILE, data));
-    } catch {
-      // Ignore errors
-    }
+      getFileWriter()?.writeFileSync?.(LOG_FILE, data);
+    } catch {}
   }
 
   return {
@@ -79,12 +56,8 @@ function log(category: string, message: string): void {
 function write(data: string): void {
   if (!enabled) return;
   try {
-    const fs = getFsSync();
-    if (fs?.appendFileSync) fs.appendFileSync(LOG_FILE, data);
-    else void getFsAsync().then((mod) => mod?.appendFileSync?.(LOG_FILE, data));
-  } catch {
-    // If we can't write to the file, just give up silently
-  }
+    getFileWriter()?.appendFileSync?.(LOG_FILE, data);
+  } catch {}
 }
 
 /**
@@ -92,5 +65,5 @@ function write(data: string): void {
  */
 export function isDebugEnabled(): boolean {
   const env = (globalThis as any).process?.env;
-  return env?.DIMCODE_DEBUG === "1" || env?.DEBUG === "1";
+  return env?.VUE_TUI_DEBUG === "1" || env?.DIMCODE_DEBUG === "1" || env?.DEBUG === "1";
 }

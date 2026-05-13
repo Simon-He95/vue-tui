@@ -36,6 +36,9 @@ function collectExportTargets(value: unknown, out: string[] = []): string[] {
 describe("package exports", () => {
   it("publishes every package export target through the files allowlist", () => {
     expect(packageJson.files).toEqual(["dist"]);
+    expect(packageJson.main).toBe("./dist/index.cjs");
+    expect(packageJson.module).toBe("./dist/index.js");
+    expect(packageJson.types).toBe("./dist/index.d.ts");
 
     const targets = [
       packageJson.main,
@@ -71,6 +74,8 @@ describe("package exports", () => {
     expect("writeSnapshot" in root).toBe(false);
     expect("getCliLatencyProfiler" in root).toBe(false);
     expect("createOsc52ClipboardProvider" in root).toBe(false);
+    expect("createDefaultTInputHostAdapter" in root).toBe(false);
+    expect("defaultTInputHostPlugin" in root).toBe(false);
     expect(cli.createTerminalApp).toBeTruthy();
     expect(cli.createStdoutRenderer).toBeTruthy();
     expect(cli.createStdinDriver).toBeTruthy();
@@ -82,6 +87,8 @@ describe("package exports", () => {
     expect(cli.writeSnapshot).toBeTruthy();
     expect(cli.getCliLatencyProfiler).toBeTruthy();
     expect(cli.createOsc52ClipboardProvider).toBeTruthy();
+    expect(cli.createDefaultTInputHostAdapter).toBeTruthy();
+    expect(cli.defaultTInputHostPlugin).toBeTruthy();
     expect(cli.STDOUT_RENDERER_CAPABILITIES).toEqual({
       syncFlush: true,
       scrollOperations: true,
@@ -200,11 +207,12 @@ describe("package exports", () => {
 
   it("keeps the root entrypoint browser-bundleable without Node built-ins", async () => {
     const { build } = await import("esbuild");
-    await build({
+    const result = await build({
       stdin: {
         contents: `
           import { createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText } from "./src/index.ts";
-          console.log(createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText);
+          import { TMarkdownText } from "./src/markdown.ts";
+          console.log(createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText, TMarkdownText);
         `,
         resolveDir: process.cwd(),
         sourcefile: "vue-tui-root-browser-smoke.ts",
@@ -215,22 +223,45 @@ describe("package exports", () => {
       format: "esm",
       external: ["vue"],
     });
+    const output = result.outputFiles
+      .map((file) => new TextDecoder().decode(file.contents))
+      .join("\n");
+    expect(output).not.toContain("node:child_process");
+    expect(output).not.toContain("new Function");
+    expect(output).not.toContain("process.stdout");
+    expect(output).not.toContain("createOsc52ClipboardProvider");
   });
 
   it.skipIf(!requireDistExports)(
-    "keeps the built root entrypoint browser-bundleable without Node built-ins",
+    "keeps the built browser entrypoints browser-bundleable without Node built-ins",
     async () => {
       expect(existsSync(distIndex)).toBe(true);
+      expect(existsSync(distMarkdown)).toBe(true);
 
       const { build } = await import("esbuild");
-      await build({
-        entryPoints: [distIndex],
+      const result = await build({
+        stdin: {
+          contents: `
+            import { TerminalProvider } from "./dist/index.js";
+            import { TMarkdownText } from "./dist/markdown.js";
+            console.log(TerminalProvider, TMarkdownText);
+          `,
+          resolveDir: process.cwd(),
+          sourcefile: "vue-tui-dist-browser-smoke.ts",
+        },
         bundle: true,
         write: false,
         platform: "browser",
         format: "esm",
         external: ["vue"],
       });
+      const output = result.outputFiles
+        .map((file) => new TextDecoder().decode(file.contents))
+        .join("\n");
+      expect(output).not.toContain("node:child_process");
+      expect(output).not.toContain("new Function");
+      expect(output).not.toContain("process.stdout");
+      expect(output).not.toContain("createOsc52ClipboardProvider");
     },
   );
 
@@ -258,6 +289,8 @@ describe("package exports", () => {
     expect("createTerminalApp" in root).toBe(false);
     expect("createStdoutRenderer" in root).toBe(false);
     expect("TVirtualList" in root).toBe(false);
+    expect("createDefaultTInputHostAdapter" in root).toBe(false);
+    expect("defaultTInputHostPlugin" in root).toBe(false);
     expect(root.TerminalProvider).toBeTruthy();
     expect(root.createRuntime).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
@@ -267,6 +300,8 @@ describe("package exports", () => {
     expect(cli.createStdoutRenderer).toBeTruthy();
     expect(cli.createStdinDriver).toBeTruthy();
     expect(cli.createOsc52ClipboardProvider).toBeTruthy();
+    expect(cli.createDefaultTInputHostAdapter).toBeTruthy();
+    expect(cli.defaultTInputHostPlugin).toBeTruthy();
     expect(cli.STDOUT_RENDERER_CAPABILITIES).toEqual({
       syncFlush: true,
       scrollOperations: true,
@@ -275,6 +310,8 @@ describe("package exports", () => {
     expect(cli.sanitizeTerminalHref("file:///tmp/a")).toBeNull();
     expect("createTerminalApp" in rootCjs).toBe(false);
     expect("createStdoutRenderer" in rootCjs).toBe(false);
+    expect("createDefaultTInputHostAdapter" in rootCjs).toBe(false);
+    expect("defaultTInputHostPlugin" in rootCjs).toBe(false);
     expect(rootCjs.TerminalProvider).toBeTruthy();
     expect(rootCjs.createRuntime).toBeTruthy();
     expect(rootCjs.createFramePerfStore).toBeTruthy();
@@ -284,6 +321,8 @@ describe("package exports", () => {
     expect(cliCjs.createStdoutRenderer).toBeTruthy();
     expect(cliCjs.createStdinDriver).toBeTruthy();
     expect(cliCjs.createOsc52ClipboardProvider).toBeTruthy();
+    expect(cliCjs.createDefaultTInputHostAdapter).toBeTruthy();
+    expect(cliCjs.defaultTInputHostPlugin).toBeTruthy();
     expect(cliCjs.STDOUT_RENDERER_CAPABILITIES).toEqual({
       syncFlush: true,
       scrollOperations: true,

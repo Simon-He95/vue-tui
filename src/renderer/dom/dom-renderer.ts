@@ -8,6 +8,7 @@ import {
   installAnsiPaletteCssVars,
   isAnsiColorName,
 } from "../../core/ansi-palette.js";
+import { sanitizeTerminalHref } from "../../core/hyperlink.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
 import { DOM_RENDERER_CAPABILITIES } from "../capabilities.js";
@@ -296,7 +297,47 @@ function resolveColorCss(color: string | undefined): string | undefined {
   return ansiCssVar(color);
 }
 
-function applyStyle(span: HTMLSpanElement, style: Style, palette?: ThemePalette | null): void {
+function parseColorToRgb(color: string): { r: number; g: number; b: number } | null {
+  if (color.startsWith("#")) {
+    const hex = color.slice(1);
+    if (hex.length === 3) {
+      const r = Number.parseInt(hex[0] + hex[0], 16);
+      const g = Number.parseInt(hex[1] + hex[1], 16);
+      const b = Number.parseInt(hex[2] + hex[2], 16);
+      return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b) ? { r, g, b } : null;
+    }
+    if (hex.length === 6) {
+      const r = Number.parseInt(hex.slice(0, 2), 16);
+      const g = Number.parseInt(hex.slice(2, 4), 16);
+      const b = Number.parseInt(hex.slice(4, 6), 16);
+      return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b) ? { r, g, b } : null;
+    }
+  }
+  const m = color.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (m) {
+    const r = Number.parseInt(m[1]!, 10);
+    const g = Number.parseInt(m[2]!, 10);
+    const b = Number.parseInt(m[3]!, 10);
+    return { r, g, b };
+  }
+  return null;
+}
+
+function luminance({ r, g, b }: { r: number; g: number; b: number }): number {
+  const srgb = [r, g, b].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * srgb[0]! + 0.7152 * srgb[1]! + 0.0722 * srgb[2]!;
+}
+
+function contrastText(bgColor: string): string {
+  const rgb = parseColorToRgb(bgColor);
+  if (!rgb) return "#111827";
+  return luminance(rgb) > 0.6 ? "#111827" : "#e5e7eb";
+}
+
+function applyStyle(span: HTMLElement, style: Style, palette?: ThemePalette | null): void {
   const fgHex = resolveColorHex(style.fg, palette);
   const bgHex = resolveColorHex(style.bg, palette);
   const fgCss = resolveColorCss(style.fg);
@@ -307,46 +348,10 @@ function applyStyle(span: HTMLSpanElement, style: Style, palette?: ThemePalette 
   const effectiveFgHex = style.inverse ? bgHex : fgHex;
   const effectiveBgHex = style.inverse ? fgHex : bgHex;
 
-  function parseColorToRgb(color: string): { r: number; g: number; b: number } | null {
-    if (color.startsWith("#")) {
-      const hex = color.slice(1);
-      if (hex.length === 3) {
-        const r = Number.parseInt(hex[0] + hex[0], 16);
-        const g = Number.parseInt(hex[1] + hex[1], 16);
-        const b = Number.parseInt(hex[2] + hex[2], 16);
-        return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b) ? { r, g, b } : null;
-      }
-      if (hex.length === 6) {
-        const r = Number.parseInt(hex.slice(0, 2), 16);
-        const g = Number.parseInt(hex.slice(2, 4), 16);
-        const b = Number.parseInt(hex.slice(4, 6), 16);
-        return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b) ? { r, g, b } : null;
-      }
-    }
-    const m = color.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-    if (m) {
-      const r = Number.parseInt(m[1]!, 10);
-      const g = Number.parseInt(m[2]!, 10);
-      const b = Number.parseInt(m[3]!, 10);
-      return { r, g, b };
-    }
-    return null;
+  if (span.tagName === "A") {
+    span.style.color = "inherit";
+    span.style.textDecoration = "inherit";
   }
-
-  function luminance({ r, g, b }: { r: number; g: number; b: number }): number {
-    const srgb = [r, g, b].map((v) => {
-      const c = v / 255;
-      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    });
-    return 0.2126 * srgb[0]! + 0.7152 * srgb[1]! + 0.0722 * srgb[2]!;
-  }
-
-  function contrastText(bgColor: string): string {
-    const rgb = parseColorToRgb(bgColor);
-    if (!rgb) return "#111827";
-    return luminance(rgb) > 0.6 ? "#111827" : "#e5e7eb";
-  }
-
   if (effectiveFg) {
     span.style.color = effectiveFg;
     // JSDOM (tests) does not support CSS variables for color values; fall back to hex.
@@ -611,8 +616,23 @@ function canReuseSegmentSpans(segments: readonly RowSegment[]): boolean {
   return segments.length > 1 && segments.every((segment) => !segment.wide && !segment.style.href);
 }
 
-function resetSpanStyle(span: HTMLSpanElement): void {
+function resetSpanStyle(span: HTMLElement): void {
   span.removeAttribute("style");
+  if (span.tagName === "A") {
+    span.removeAttribute("href");
+    span.removeAttribute("target");
+    span.removeAttribute("rel");
+  }
+}
+
+function createSegmentElement(style: Style): HTMLSpanElement | HTMLAnchorElement {
+  const href = sanitizeTerminalHref(style.href);
+  if (!href) return document.createElement("span");
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.target = "_blank";
+  anchor.rel = "noopener noreferrer";
+  return anchor;
 }
 
 function isSpanNode(
@@ -711,7 +731,7 @@ function renderRow(
   if (isSingleStyledTextRow(segments)) {
     const seg = segments[0]!;
     const firstChild = lineEl.firstChild;
-    let span: HTMLSpanElement;
+    let span: HTMLElement;
 
     if (
       lineEl.childNodes.length === 1 &&
@@ -721,7 +741,7 @@ function renderRow(
       span = firstChild;
       stats.spansReused++;
     } else {
-      span = document.createElement("span");
+      span = createSegmentElement(seg.style);
       span.dataset.vtFastRow = "styled";
       stats.spansCreated++;
       stats.replaceChildren++;
@@ -752,7 +772,7 @@ function renderRow(
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]!;
-    const span = document.createElement("span");
+    const span = createSegmentElement(seg.style);
     if (canReuseSpans) {
       span.dataset.vtFastRow = "segment";
       span.dataset.vtSegmentIndex = String(i);

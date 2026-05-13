@@ -79,13 +79,30 @@ describe("runtime (terminal/node)", () => {
     expect(writes).toEqual(["\u001B]52;c;Y29weSBtZQ==\u0007"]);
   });
 
-  it("raf wrapper runs via timers", () => {
+  it("rejects oversized OSC52 clipboard payloads", async () => {
+    const writes: string[] = [];
+    const clipboard = createOsc52ClipboardProvider({
+      supported: true,
+      maxBytes: 4,
+      write: (sequence) => {
+        writes.push(sequence);
+      },
+    });
+
+    await expect(clipboard.writeText("12345")).rejects.toThrow(/payload too large/);
+    expect(writes).toEqual([]);
+  });
+
+  it("raf wrapper runs via timers with a finite timestamp", () => {
     vi.useFakeTimers();
     const r = createRuntime();
     const cb = vi.fn();
     r.raf.request(cb as any);
     vi.advanceTimersByTime(20);
     expect(cb).toHaveBeenCalled();
+    const timestamp = cb.mock.calls[0]?.[0];
+    expect(typeof timestamp).toBe("number");
+    expect(Number.isFinite(timestamp)).toBe(true);
     vi.useRealTimers();
   });
 });

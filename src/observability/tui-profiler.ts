@@ -1,27 +1,13 @@
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../core/render-plane.js";
-import { importNodeModule } from "../utils/node-module.js";
 
 type NowFn = () => number;
-type FsLike = Readonly<{
+type TuiProfilerFileWriter = Readonly<{
   appendFileSync?: (path: string, data: string) => void;
 }>;
 
-let fsPromise: Promise<FsLike | null> | null = null;
-
-function getFsSync(): FsLike | null {
-  const req = (globalThis as any).require;
-  if (typeof req !== "function") return null;
-  try {
-    return req("node:fs") ?? req("fs") ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function getFsAsync(): Promise<FsLike | null> {
-  fsPromise ??= importNodeModule<FsLike>("node:fs");
-  return fsPromise;
-}
+export type CreateTuiProfilerOptions = Readonly<{
+  fileWriter?: TuiProfilerFileWriter;
+}>;
 
 function defaultNow(): number {
   const p = (globalThis as any).performance;
@@ -76,13 +62,18 @@ export type TuiProfiler = Readonly<{
   }) => void;
 }>;
 
-export function createTuiProfiler(name: string): TuiProfiler | null {
+export function createTuiProfiler(
+  name: string,
+  options: CreateTuiProfilerOptions = {},
+): TuiProfiler | null {
   const env = (globalThis as any).process?.env as Record<string, unknown> | undefined;
-  if (!parseEnabled(env?.DIMCODE_PROFILE_TUI)) return null;
+  if (!parseEnabled(env?.VUE_TUI_PROFILE ?? env?.DIMCODE_PROFILE_TUI)) return null;
 
-  const format = parseLogFormat(env?.DIMCODE_PROFILE_TUI_FORMAT);
-  const logDest = parseLogDest(env?.DIMCODE_PROFILE_TUI_LOG_DEST);
-  const logPath = String(env?.DIMCODE_PROFILE_TUI_LOG_PATH ?? "").trim();
+  const format = parseLogFormat(env?.VUE_TUI_PROFILE_FORMAT ?? env?.DIMCODE_PROFILE_TUI_FORMAT);
+  const logDest = parseLogDest(env?.VUE_TUI_PROFILE_LOG_DEST ?? env?.DIMCODE_PROFILE_TUI_LOG_DEST);
+  const logPath = String(
+    env?.VUE_TUI_PROFILE_LOG_PATH ?? env?.DIMCODE_PROFILE_TUI_LOG_PATH ?? "",
+  ).trim();
   let invalidates = 0;
   let renders = 0;
   let fullRenders = 0;
@@ -101,7 +92,9 @@ export function createTuiProfiler(name: string): TuiProfiler | null {
   const invalidatePlaneCounts = new Map<string, number>();
   const renderPlaneCounts = new Map<string, number>();
 
-  const logEveryMs = Number(env?.DIMCODE_PROFILE_TUI_LOG_EVERY_MS ?? 1000);
+  const logEveryMs = Number(
+    env?.VUE_TUI_PROFILE_LOG_EVERY_MS ?? env?.DIMCODE_PROFILE_TUI_LOG_EVERY_MS ?? 1000,
+  );
   const now = defaultNow;
   let lastLogAt = now();
 
@@ -115,9 +108,7 @@ export function createTuiProfiler(name: string): TuiProfiler | null {
     if ((dest === "file" || dest === "both") && logPath) {
       try {
         const data = `${line}\n`;
-        const fs = getFsSync();
-        if (fs?.appendFileSync) fs.appendFileSync(logPath, data);
-        else void getFsAsync().then((mod) => mod?.appendFileSync?.(logPath, data));
+        options.fileWriter?.appendFileSync?.(logPath, data);
       } catch {
         // ignore
       }
@@ -147,7 +138,7 @@ export function createTuiProfiler(name: string): TuiProfiler | null {
     if (format === "json") {
       emit(
         JSON.stringify({
-          tag: "DIMCODE_PROFILE_TUI",
+          tag: "VUE_TUI_PROFILE",
           name,
           at: Date.now(),
           elapsedMs: elapsed,
@@ -185,7 +176,7 @@ export function createTuiProfiler(name: string): TuiProfiler | null {
       );
     } else {
       emit(
-        `[${formatClockTime(Date.now())}] [DIMCODE_PROFILE_TUI] ${name} elapsedMs=${elapsed.toFixed(0)} ` +
+        `[${formatClockTime(Date.now())}] [VUE_TUI_PROFILE] ${name} elapsedMs=${elapsed.toFixed(0)} ` +
           `rps=${rps.toFixed(1)} ips=${ips.toFixed(1)} ` +
           `avgMs=${avgMs.toFixed(2)} maxMs=${maxRenderMs.toFixed(2)} ` +
           `avgRows=${avgRows.toFixed(1)} avgNodes=${avgNodes.toFixed(1)} ` +

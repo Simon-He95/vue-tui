@@ -668,9 +668,9 @@ export function createStdoutRenderer(
 
   // Terminal scroll regions: use DECSTBM + \e[S/\e[T to let the terminal shift
   // content natively instead of redrawing the entire viewport on scroll.
-  // Disable via DIMCODE_TUI_SCROLL_REGIONS=0 for debugging.
+  // Disable via VUE_TUI_SCROLL_REGIONS=0 (or legacy DIMCODE_TUI_SCROLL_REGIONS=0) for debugging.
   const enableScrollRegions = (() => {
-    const raw = String(env.DIMCODE_TUI_SCROLL_REGIONS ?? "").trim();
+    const raw = String(env.VUE_TUI_SCROLL_REGIONS ?? env.DIMCODE_TUI_SCROLL_REGIONS ?? "").trim();
     if (raw === "0" || raw === "false") return false;
     // Ghostty has issues with DECSTBM in some versions; disable by default
     if (isGhostty || isVscodeTerminal) return false;

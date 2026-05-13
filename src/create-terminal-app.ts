@@ -12,6 +12,7 @@ import type {
 } from "./selection/terminal-selection.js";
 import type { TInputPlugin } from "./vue/components/input/plugins/types.js";
 
+import { appendFileSync } from "node:fs";
 import type {
   ImeAnchor,
   LayoutContext,
@@ -35,11 +36,11 @@ import { createTraceStore } from "./observability/trace.js";
 import { createTuiProfiler } from "./observability/tui-profiler.js";
 import { HEADLESS_RENDERER_CAPABILITIES } from "./renderer/index.js";
 import { createTerminalSelectionController } from "./selection/terminal-selection.js";
+import { createTInputHostPlugin } from "./vue/components/input/plugins/hostPlugin.js";
 import {
   createDefaultTInputHostAdapter,
-  createTInputHostPlugin,
   defaultTInputHostPlugin,
-} from "./vue/components/input/plugins/hostPlugin.js";
+} from "./vue/components/input/plugins/hostPlugin.node.js";
 import { TRenderPlane } from "./vue/components/TRenderPlane.js";
 import {
   EventZIndexContextKey,
@@ -177,7 +178,9 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     enabled: Boolean((globalThis as any).__VT_DEBUG_PERF__),
   });
   const latency = getCliLatencyProfiler();
-  const profiler = createTuiProfiler("cli-scheduler");
+  const profiler = createTuiProfiler("cli-scheduler", {
+    fileWriter: { appendFileSync },
+  });
   const baseEvents = createCliEventManager({
     record: (event) => {
       if (!trace.enabled.value) return;
@@ -219,7 +222,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   let schedulerApi: TerminalScheduler;
   const env = (process?.env ?? {}) as Record<string, unknown>;
   const throttleMs = (() => {
-    const raw = env.DIMCODE_TUI_THROTTLE_MS;
+    const raw = env.VUE_TUI_THROTTLE_MS ?? env.DIMCODE_TUI_THROTTLE_MS;
     if (!raw) return 0;
     const v = Number(raw);
     return Number.isFinite(v) && v > 0 ? v : 0;

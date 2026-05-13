@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createCliEventManager,
   createEventManager,
+  defaultTInputHostPlugin,
   createPromptMentionPlugin,
   defineComponent,
   expectBoxBorder,
@@ -520,15 +521,19 @@ describe("ui regressions input editing", () => {
     (process.stdout as any).isTTY = true;
     try {
       const value = ref("");
-      const mounted = await mountTerminal(() =>
-        h(TInput, {
-          x: 0,
-          y: 0,
-          w: 20,
-          modelValue: value.value,
-          "onUpdate:modelValue": (v: string) => (value.value = v),
-          cursorBlink: false,
-        }),
+      const mounted = await mountTerminal(
+        () =>
+          h(TInput, {
+            x: 0,
+            y: 0,
+            w: 20,
+            modelValue: value.value,
+            "onUpdate:modelValue": (v: string) => (value.value = v),
+            cursorBlink: false,
+          }),
+        40,
+        8,
+        { inputPlugins: [defaultTInputHostPlugin] },
       );
 
       const container = mounted.container()!;
