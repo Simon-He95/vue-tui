@@ -575,7 +575,7 @@ type TLogDataSource = {
 
 `wrap=false` 是默认行为，超出宽度的行会被 clip。`wrap=true` 时，一个 logical source line 可以渲染成多个 visual rows，`scrollTop` 也按 visual row 计数。`ansi=false` 是默认行为，日志行按纯文本 fast path 渲染。`ansi=true` 时，`source.getLine(index)` 可以包含 ANSI SGR escape sequences；TLogView 会解析 fg/bg/bold/dim/italic/underline/inverse 等 style，并在 fixed clip 和 `wrap=true` visual rows 中保留样式。ANSI reset 会回到 TLogView base style（`style` prop 或 terminal default style）。
 
-`links=true` 只在 `ansi=true` 时生效。TLogView 会解析 OSC8 opener/closer，忽略 params，把 visible link text 渲染为带 `Style.href` 的 cells，并叠加 `linkStyle`。BEL 和 ST terminator 都支持。组件不会自动打开链接、不会做 URL auto-detect、不会解析 Markdown link，也不会提供 hover tooltip；点击 visible link cell 时只 emit `linkClick`，由应用层决定如何处理。
+`links=true` 只在 `ansi=true` 时生效。TLogView 会解析 OSC8 opener/closer，忽略 params，把 safe visible link text 渲染为带 `Style.href` 的 cells，并叠加 `linkStyle`；unsafe href 会按普通文本渲染，不进入 visible link model。BEL 和 ST terminator 都支持。组件不会自动打开链接、不会做 URL auto-detect、不会解析 Markdown link，也不会提供 hover tooltip；点击 visible link cell 时只 emit `linkClick`，由应用层决定如何处理。
 
 `keyboardLinks=false` 是默认行为，这样 `Tab` / `Enter` 不会默认抢占宿主应用自己的焦点和提交逻辑。启用 `keyboardLinks` 后，TLogView 在获得焦点时会只针对**当前 visible links**处理键盘：`Tab` / `Shift+Tab` 在当前 viewport 内可见的 OSC8 link segments 间循环 focus，`Enter` emit `linkActivate`，`Escape` 清除当前 focused link。`getVisibleLinks()` 返回的也是当前 visible / clipped link segments，不会为 retained source window 建立全局 link index。
 

@@ -79,4 +79,40 @@ describe("buffer fillRect fast path", () => {
 
     expect(Array.from(getRowFingerprints(buffer, 0)!)).toEqual([1, 2, 1, 2]);
   });
+
+  test("updates fingerprints when 1-cell fill clears trailing wide continuation", () => {
+    const buffer = createGridBuffer(4, 1);
+    setFingerprintFn(buffer, (ch) => {
+      if (ch === "中") return 1;
+      if (ch === "") return 2;
+      if (ch === "A") return 3;
+      if (ch === " ") return 4;
+      return 9;
+    });
+
+    putCell(buffer, 1, 0, "中");
+    fillRect(buffer, 1, 0, 1, 1, "A");
+
+    expect(buffer.grid[0]![1]!.ch).toBe("A");
+    expect(buffer.grid[0]![2]!.ch).toBe(" ");
+    expect(Array.from(getRowFingerprints(buffer, 0)!)).toEqual([4, 3, 4, 4]);
+  });
+
+  test("updates fingerprints when putCell overwrites a wide continuation", () => {
+    const buffer = createGridBuffer(4, 1);
+    setFingerprintFn(buffer, (ch) => {
+      if (ch === "中") return 1;
+      if (ch === "") return 2;
+      if (ch === "A") return 3;
+      if (ch === " ") return 4;
+      return 9;
+    });
+
+    putCell(buffer, 1, 0, "中");
+    putCell(buffer, 2, 0, "A");
+
+    expect(buffer.grid[0]![1]!.ch).toBe(" ");
+    expect(buffer.grid[0]![2]!.ch).toBe("A");
+    expect(Array.from(getRowFingerprints(buffer, 0)!)).toEqual([4, 4, 3, 4]);
+  });
 });

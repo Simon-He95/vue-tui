@@ -29,10 +29,11 @@ const baselines = JSON.parse(
 ) as Baselines;
 
 function runBench(script: string): unknown {
-  const output = execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", script], {
+  const output = execFileSync("pnpm", ["exec", "tsx", script], {
     cwd: process.cwd(),
     encoding: "utf8",
     maxBuffer: 50 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "inherit"],
     timeout: 120_000,
   });
   const jsonStart = output.indexOf("{");

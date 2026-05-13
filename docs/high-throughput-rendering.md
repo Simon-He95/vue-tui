@@ -417,8 +417,9 @@ pnpm run test:package-exports
 ```
 
 `bench:scroll-mailbox` 是 PR CI 的 deterministic smoke bench，只使用行为阈值，
-不按 GitHub runner timing 设门槛。`bench:dom-renderer` 和 `bench:phase2` 只在
-nightly/manual benchmark workflow 中运行。
+不按 GitHub runner timing 设门槛。nightly/manual benchmark workflow 跑
+`bench:baseline`，内部执行 `bench:scroll-mailbox`、`bench:dom-renderer` 和
+`bench:phase2` 并检查预算。
 
 ### Phase 2: 一个月内
 

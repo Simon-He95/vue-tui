@@ -57,9 +57,7 @@ pnpm run typecheck
 pnpm run test
 pnpm run test:package-exports
 pnpm run release:pack-smoke
-pnpm run bench:scroll-mailbox
-pnpm run bench:dom-renderer
-pnpm run bench:phase2
+pnpm run bench:baseline
 pnpm run docs:build
 ```
 

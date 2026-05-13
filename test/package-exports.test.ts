@@ -257,20 +257,24 @@ describe("package exports", () => {
     expect(root.createRuntime).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
+    expect(root.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
     expect(cli.createTerminalApp).toBeTruthy();
     expect(cli.createStdoutRenderer).toBeTruthy();
     expect(cli.createStdinDriver).toBeTruthy();
     expect(cli.createOsc52ClipboardProvider).toBeTruthy();
+    expect(cli.sanitizeTerminalHref("file:///tmp/a")).toBeNull();
     expect("createTerminalApp" in rootCjs).toBe(false);
     expect("createStdoutRenderer" in rootCjs).toBe(false);
     expect(rootCjs.TerminalProvider).toBeTruthy();
     expect(rootCjs.createRuntime).toBeTruthy();
     expect(rootCjs.createFramePerfStore).toBeTruthy();
     expect(rootCjs.framePerfNow).toBeTruthy();
+    expect(rootCjs.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
     expect(cliCjs.createTerminalApp).toBeTruthy();
     expect(cliCjs.createStdoutRenderer).toBeTruthy();
     expect(cliCjs.createStdinDriver).toBeTruthy();
     expect(cliCjs.createOsc52ClipboardProvider).toBeTruthy();
+    expect(cliCjs.sanitizeTerminalHref("file:///tmp/a")).toBeNull();
     expect(markdown.TMarkdownText).toBeTruthy();
     expect(markdown.TVirtualMarkdown).toBeTruthy();
     expect(markdown.createMarkdownBlockSource).toBeTruthy();
@@ -303,6 +307,10 @@ describe("package exports", () => {
     expect(experimental.createAppendOnlyLogStore).toBeTruthy();
     expect(experimental.createTLogViewSessionStore).toBeTruthy();
     expect(experimental.createTLogLevelPlugin).toBeTruthy();
+    expect(experimental.detectTLogUrls("https://example.com")).toHaveLength(1);
+    expect(experimental.sanitizeTerminalHref("mailto:test@example.com")).toBe(
+      "mailto:test@example.com",
+    );
     expect(experimental.tlogDefaultPreset).toBeTruthy();
     expect("TMarkdownText" in experimentalCjs).toBe(false);
     expect("TVirtualMarkdown" in experimentalCjs).toBe(false);
@@ -324,6 +332,10 @@ describe("package exports", () => {
     expect(experimentalCjs.createAppendOnlyLogStore).toBeTruthy();
     expect(experimentalCjs.createTLogViewSessionStore).toBeTruthy();
     expect(experimentalCjs.createTLogLevelPlugin).toBeTruthy();
+    expect(experimentalCjs.detectTLogUrls("https://example.com")).toHaveLength(1);
+    expect(experimentalCjs.sanitizeTerminalHref("mailto:test@example.com")).toBe(
+      "mailto:test@example.com",
+    );
     expect(experimentalCjs.tlogDefaultPreset).toBeTruthy();
   });
 });

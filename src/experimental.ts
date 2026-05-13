@@ -8,6 +8,7 @@ export { TLogSearchPager } from "./vue/components/TLogSearchPager.js";
 export { TLogLinksPanel } from "./vue/components/TLogLinksPanel.js";
 export { TLogVirtualSearchResults } from "./vue/components/TLogVirtualSearchResults.js";
 export { TLogVirtualLinksPanel } from "./vue/components/TLogVirtualLinksPanel.js";
+export { sanitizeTerminalHref } from "./core/hyperlink.js";
 export { createAppendOnlyLogStore } from "./vue/log/append-only-log-store.js";
 export { useTLogLinkController } from "./vue/log/use-tlog-link-controller.js";
 export { useTLogSearchController } from "./vue/log/use-tlog-search-controller.js";
@@ -28,6 +29,7 @@ export {
   createTLogLinkActionPlugin,
   createTLogOsc8LinkPlugin,
   createTLogUrlPlugin,
+  detectTLogUrls,
   dispatchTLogPluginLinkAction,
   getTLogPluginMetadata,
   parseTLogAnnotatedText,
@@ -161,6 +163,7 @@ export type {
   TLogViewPluginLineMetadata,
   TLogViewPluginMarkerContext,
   TLogViewPluginParseLineContext,
+  TLogUrlPluginOptions,
 } from "./vue/log/tlog-plugins.js";
 export type { TLogKeymap } from "./vue/log/tlog-keymap.js";
 export type { TLogTheme, TLogUiPreset } from "./vue/log/tlog-theme.js";

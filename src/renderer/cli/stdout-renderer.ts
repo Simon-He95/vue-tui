@@ -29,6 +29,7 @@ import {
   truecolorFgOpen,
 } from "../../core/ansi/colors.js";
 import { createDebugLogger, isDebugEnabled } from "../../core/debug-logger.js";
+import { sanitizeTerminalHref } from "../../core/hyperlink.js";
 import { getPlaneRowCoverageKind } from "../../core/terminal/create-terminal.js";
 import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
@@ -66,25 +67,6 @@ const SYNC_END = "\u001B[?2026l";
 // Terminal hyperlinks (OSC 8). Terminals that don't support this will ignore it.
 const OSC8_OPEN = (href: string) => `\u001B]8;;${href}\u0007`;
 const OSC8_CLOSE = "\u001B]8;;\u0007";
-
-export function sanitizeTerminalHref(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-
-  const raw = value.trim();
-  if (!raw) return null;
-  for (let i = 0; i < raw.length; i++) {
-    const code = raw.charCodeAt(i);
-    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return null;
-  }
-  if (raw.startsWith("//")) return null;
-
-  const lower = raw.toLowerCase();
-  if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:")) {
-    return raw;
-  }
-
-  return null;
-}
 
 export type CliOutput = Readonly<{
   write: (chunk: string) => unknown;

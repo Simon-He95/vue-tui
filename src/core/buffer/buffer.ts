@@ -256,11 +256,26 @@ export function putCell(buffer: GridBuffer, x: number, y: number, ch: string, st
   if (x < 0 || x >= buffer.cols) return;
 
   const row = getBufferRow(buffer, y);
-  clearWideIfOverwriting(row, x);
-
   const width = charCellWidth(ch);
+  const previous = row[x];
+  const next = width === 2 && x + 1 < buffer.cols ? row[x + 1] : undefined;
+  const previousWideOverlap = Boolean(
+    previous?.continuation || previous?.width === 2 || next?.continuation || next?.width === 2,
+  );
+  clearWideIfOverwriting(row, x);
+  if (width === 2 && x + 1 < buffer.cols) clearWideIfOverwriting(row, x + 1);
+
   if (width === 2 && x + 1 >= buffer.cols) {
-    row[x] = createBlankCell();
+    const blank = createBlankCell();
+    row[x] = blank;
+    if (buffer.soaFingerprints) {
+      if (previousWideOverlap) {
+        recomputeFingerprintsForRows(buffer, y, y + 1);
+      } else {
+        const physY = physicalRowIndex(buffer, y);
+        updateCellFingerprint(buffer, physY, x, blank.ch, blank.style);
+      }
+    }
     markDirty(buffer, y);
     return;
   }
@@ -270,10 +285,14 @@ export function putCell(buffer: GridBuffer, x: number, y: number, ch: string, st
 
   // Update SoA fingerprints inline
   if (buffer.soaFingerprints) {
-    const physY = physicalRowIndex(buffer, y);
-    updateCellFingerprint(buffer, physY, x, cell.ch, cell.style);
-    if (width === 2 && x + 1 < buffer.cols) {
-      updateCellFingerprint(buffer, physY, x + 1, "", cell.style);
+    if (previousWideOverlap) {
+      recomputeFingerprintsForRows(buffer, y, y + 1);
+    } else {
+      const physY = physicalRowIndex(buffer, y);
+      updateCellFingerprint(buffer, physY, x, cell.ch, cell.style);
+      if (width === 2 && x + 1 < buffer.cols) {
+        updateCellFingerprint(buffer, physY, x + 1, "", cell.style);
+      }
     }
   }
 
@@ -306,15 +325,21 @@ export function fillRect(
       const row = getBufferRow(buffer, yy);
       // If we start filling in the middle of a wide glyph (continuation cell),
       // clear its base cell to keep the row model consistent.
-      if (row[x0]?.continuation) clearWideIfOverwriting(row, x0);
+      const clearsLeftWideBase = Boolean(row[x0]?.continuation);
+      const clearsRightContinuation = Boolean(x1 < buffer.cols && row[x1]?.continuation);
+      if (clearsLeftWideBase) clearWideIfOverwriting(row, x0);
       row.fill(fillCell, x0, x1);
       // If we ended right before a continuation cell, clear it to avoid leaving
       // a dangling continuation after overwriting the wide glyph base.
-      if (x1 < buffer.cols && row[x1]?.continuation) row[x1] = blank;
+      if (clearsRightContinuation) row[x1] = blank;
       // Update SoA fingerprints for the filled range
       if (buffer.soaFingerprints) {
-        const physY = physicalRowIndex(buffer, yy);
-        updateRangeFingerprint(buffer, physY, x0, x1, fillCell.ch, fillCell.style);
+        if (clearsLeftWideBase || clearsRightContinuation) {
+          recomputeFingerprintsForRows(buffer, yy, yy + 1);
+        } else {
+          const physY = physicalRowIndex(buffer, yy);
+          updateRangeFingerprint(buffer, physY, x0, x1, fillCell.ch, fillCell.style);
+        }
       }
       markDirty(buffer, yy);
     }
