@@ -30,6 +30,10 @@ pnpm add @simon_he/vue-tui vue
 
 Vue 是 peer dependency。当前发布包支持 Vue `>=3.3.0 <4`。
 
+## 运行时支持
+
+发布包的 CLI/runtime 目标支持 Node.js `>=16.17`。仓库开发、构建、文档与 release 校验仍建议使用 Node.js 20；这是工具链要求，不代表运行时要求。
+
 ## 入口选择
 
 | 入口                             | 稳定性       | 主要用途                                                                       |

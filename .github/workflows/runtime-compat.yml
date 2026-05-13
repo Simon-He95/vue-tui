@@ -1,0 +1,126 @@
+name: Runtime compatibility
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run release:pack
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-tarball
+          path: .release/*.tgz
+
+  smoke:
+    needs: pack
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["16.17.1", "18", "20", "22", "24"]
+
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-tarball
+          path: package
+
+      - run: |
+          mkdir smoke
+          cd smoke
+          npm init -y
+          npm install ../package/*.tgz vue@^3.5.0
+
+      - run: |
+          cd smoke
+          node - <<'JS'
+          const root = require("@simon_he/vue-tui");
+          const cli = require("@simon_he/vue-tui/cli");
+
+          const terminal = root.createTerminal({ cols: 20, rows: 4 });
+          terminal.write("hello", { x: 0, y: 0 });
+          terminal.commit();
+
+          if (terminal.snapshot().lines[0].slice(0, 5) !== "hello") {
+            throw new Error("root createTerminal smoke failed");
+          }
+
+          const output = {
+            isTTY: false,
+            chunks: [],
+            write(chunk) {
+              this.chunks.push(String(chunk));
+            },
+          };
+          const renderer = cli.createStdoutRenderer(terminal, {
+            output,
+            clear: false,
+            hideCursor: false,
+            altScreen: false,
+          });
+          renderer.render();
+          renderer.dispose();
+          terminal.dispose();
+
+          if (!output.chunks.join("").includes("hello")) {
+            throw new Error("stdout renderer smoke failed");
+          }
+
+          console.log("CJS smoke ok");
+          JS
+
+      - run: |
+          cd smoke
+          node --input-type=module - <<'JS'
+          import { createTerminal } from "@simon_he/vue-tui";
+          import { createStdoutRenderer } from "@simon_he/vue-tui/cli";
+
+          const terminal = createTerminal({ cols: 20, rows: 4 });
+          terminal.write("esm", { x: 0, y: 0 });
+          terminal.commit();
+
+          const output = {
+            isTTY: false,
+            chunks: [],
+            write(chunk) {
+              this.chunks.push(String(chunk));
+            },
+          };
+          const renderer = createStdoutRenderer(terminal, {
+            output,
+            clear: false,
+            hideCursor: false,
+            altScreen: false,
+          });
+          renderer.render();
+          renderer.dispose();
+          terminal.dispose();
+
+          if (!output.chunks.join("").includes("esm")) {
+            throw new Error("ESM smoke failed");
+          }
+
+          console.log("ESM smoke ok");
+          JS

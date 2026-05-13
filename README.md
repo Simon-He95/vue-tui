@@ -17,6 +17,12 @@ pnpm add @simon_he/vue-tui vue
 
 Vue is a peer dependency. The current package supports Vue `>=3.3.0 <4`.
 
+## Runtime Support
+
+The published package supports Node.js `>=16.17` for CLI/runtime consumers.
+
+Development, release validation, and documentation builds are run on Node.js 20 in CI because the repository toolchain uses modern build/test tooling.
+
 ## Entry Points
 
 | Import                           | Stability    | Use it for                                                                                                             |
@@ -194,6 +200,8 @@ pnpm run bench:phase2
 For renderer, scheduler, or terminal behavior bugs, include the renderer target (`DOM`, `stdout`, or headless), the relevant command, and a minimal reproduction when possible.
 
 ## Development
+
+Use Node.js 20 for repository development, release validation, and documentation builds. This is a toolchain requirement, not the runtime requirement for the published package.
 
 ```bash
 pnpm install
