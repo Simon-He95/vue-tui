@@ -34,4 +34,25 @@ describe("docs: components coverage", () => {
       expect(md).toContain(name);
     }
   });
+
+  it("documents API maturity and platform contracts", () => {
+    const generated = readFileSync(
+      resolve(process.cwd(), "docs/generated/components-api.md"),
+      "utf8",
+    );
+    expect(generated).toContain("API maturity: **Public**");
+    expect(generated).toContain("API maturity: **Experimental**");
+    expect(generated).toContain("Import: `@simon_he/vue-tui/experimental`");
+
+    const maturity = readFileSync(resolve(process.cwd(), "docs/api-maturity.md"), "utf8");
+    expect(maturity).toContain("Public");
+    expect(maturity).toContain("Experimental");
+    expect(maturity).toContain("Internal");
+    expect(maturity).toContain("Experimental Graduation");
+
+    const contracts = readFileSync(resolve(process.cwd(), "docs/platform-contracts.md"), "utf8");
+    expect(contracts).toContain("Browser Accessibility");
+    expect(contracts).toContain("Renderer Capabilities");
+    expect(contracts).toContain("Terminal Permissions");
+  });
 });

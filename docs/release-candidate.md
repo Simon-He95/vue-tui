@@ -2,12 +2,16 @@
 
 这页是 0.x release candidate 的发布前检查单。目标是确认当前 `main` 可以作为候选版本验证，而不是在 release prep 阶段继续扩大功能范围。
 
+当前 npm 版本：`0.0.8`
+下一候选版本：`0.1.0-rc.0`
+
 ## Scope
 
 - 从最新 `main` 准备 release candidate；未合并 feature PR 不写进 release notes。
 - 不把 experimental API 提升到 root entrypoint。
 - 不新增 renderer、持久化层或外部 LLM API 集成。
 - 保持 root、markdown、experimental 三个 entrypoint 的边界清晰。
+- API maturity、renderer capability、browser ARIA 和 terminal permission contract 以 [API Maturity](/api-maturity) 与 [Platform Contracts](/platform-contracts) 为准。
 
 ## Migration Notes
 
@@ -54,11 +58,11 @@ pnpm run typecheck
 pnpm run test
 pnpm run test:package-exports
 pnpm run release:pack-smoke
-pnpm run bench:scroll-mailbox
-pnpm run bench:dom-renderer
-pnpm run bench:phase2
+pnpm run bench:baseline
 pnpm run docs:build
 ```
+
+`release:pack-smoke` 会把当前 tarball 安装到临时外部项目，并运行 root/cli/experimental 的真实 consumer 组合 smoke；它不是只检查 import 是否存在。
 
 示例 smoke：
 

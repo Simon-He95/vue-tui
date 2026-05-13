@@ -82,6 +82,11 @@ describe("package exports", () => {
     expect(cli.writeSnapshot).toBeTruthy();
     expect(cli.getCliLatencyProfiler).toBeTruthy();
     expect(cli.createOsc52ClipboardProvider).toBeTruthy();
+    expect(cli.STDOUT_RENDERER_CAPABILITIES).toEqual({
+      syncFlush: true,
+      scrollOperations: true,
+      domRows: false,
+    });
     expect("TMarkdownText" in root).toBe(false);
     expect("TVirtualList" in root).toBe(false);
     expect("TVirtualMarkdown" in root).toBe(false);
@@ -257,20 +262,34 @@ describe("package exports", () => {
     expect(root.createRuntime).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
+    expect(root.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
     expect(cli.createTerminalApp).toBeTruthy();
     expect(cli.createStdoutRenderer).toBeTruthy();
     expect(cli.createStdinDriver).toBeTruthy();
     expect(cli.createOsc52ClipboardProvider).toBeTruthy();
+    expect(cli.STDOUT_RENDERER_CAPABILITIES).toEqual({
+      syncFlush: true,
+      scrollOperations: true,
+      domRows: false,
+    });
+    expect(cli.sanitizeTerminalHref("file:///tmp/a")).toBeNull();
     expect("createTerminalApp" in rootCjs).toBe(false);
     expect("createStdoutRenderer" in rootCjs).toBe(false);
     expect(rootCjs.TerminalProvider).toBeTruthy();
     expect(rootCjs.createRuntime).toBeTruthy();
     expect(rootCjs.createFramePerfStore).toBeTruthy();
     expect(rootCjs.framePerfNow).toBeTruthy();
+    expect(rootCjs.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
     expect(cliCjs.createTerminalApp).toBeTruthy();
     expect(cliCjs.createStdoutRenderer).toBeTruthy();
     expect(cliCjs.createStdinDriver).toBeTruthy();
     expect(cliCjs.createOsc52ClipboardProvider).toBeTruthy();
+    expect(cliCjs.STDOUT_RENDERER_CAPABILITIES).toEqual({
+      syncFlush: true,
+      scrollOperations: true,
+      domRows: false,
+    });
+    expect(cliCjs.sanitizeTerminalHref("file:///tmp/a")).toBeNull();
     expect(markdown.TMarkdownText).toBeTruthy();
     expect(markdown.TVirtualMarkdown).toBeTruthy();
     expect(markdown.createMarkdownBlockSource).toBeTruthy();
@@ -303,6 +322,10 @@ describe("package exports", () => {
     expect(experimental.createAppendOnlyLogStore).toBeTruthy();
     expect(experimental.createTLogViewSessionStore).toBeTruthy();
     expect(experimental.createTLogLevelPlugin).toBeTruthy();
+    expect(experimental.detectTLogUrls("https://example.com")).toHaveLength(1);
+    expect(experimental.sanitizeTerminalHref("mailto:test@example.com")).toBe(
+      "mailto:test@example.com",
+    );
     expect(experimental.tlogDefaultPreset).toBeTruthy();
     expect("TMarkdownText" in experimentalCjs).toBe(false);
     expect("TVirtualMarkdown" in experimentalCjs).toBe(false);
@@ -324,6 +347,54 @@ describe("package exports", () => {
     expect(experimentalCjs.createAppendOnlyLogStore).toBeTruthy();
     expect(experimentalCjs.createTLogViewSessionStore).toBeTruthy();
     expect(experimentalCjs.createTLogLevelPlugin).toBeTruthy();
+    expect(experimentalCjs.detectTLogUrls("https://example.com")).toHaveLength(1);
+    expect(experimentalCjs.sanitizeTerminalHref("mailto:test@example.com")).toBe(
+      "mailto:test@example.com",
+    );
     expect(experimentalCjs.tlogDefaultPreset).toBeTruthy();
+
+    const { h, nextTick } = require("vue");
+    const log = experimentalCjs.createAppendOnlyLogStore({ maxLines: 4 });
+    log.appendLines(["INFO cjs consumer", "WARN https://safe.dev"]);
+    const Consumer = {
+      setup() {
+        return () =>
+          h(
+            rootCjs.TBox,
+            { x: 0, y: 0, w: 32, h: 6, title: "CJS" },
+            {
+              default: () => [
+                h(rootCjs.TText, { x: 0, y: 0, w: 28, value: "root text" }),
+                h(experimentalCjs.TLogView, {
+                  x: 0,
+                  y: 2,
+                  w: 28,
+                  h: 2,
+                  source: log.source,
+                  version: log.version.value,
+                  links: true,
+                }),
+              ],
+            },
+          );
+      },
+    };
+    const app = cliCjs.createTerminalApp({ cols: 32, rows: 6, component: Consumer });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      const screen = Array.from({ length: app.terminal.size().rows }, (_, y) =>
+        app.terminal
+          .getRow(y)
+          .map((cell: any) => cell.ch)
+          .join(""),
+      ).join("\n");
+      expect(screen).toContain("root text");
+      expect(screen).toContain("INFO cjs consumer");
+      expect(screen).toContain("https://safe.dev");
+    } finally {
+      app.dispose();
+    }
   });
 });

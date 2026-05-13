@@ -1,0 +1,186 @@
+{
+  "domRenderer": [
+    {
+      "path": "cacheHitPlain.default.secondFlushDurationMs",
+      "timing": true,
+      "max": 20
+    },
+    {
+      "path": "cacheHitPlain.default.secondFlush.cacheHits",
+      "equals": 100
+    },
+    {
+      "path": "changedPlain.default.secondFlushDurationMs",
+      "timing": true,
+      "max": 20
+    },
+    {
+      "path": "singleStyled.default.secondFlushDurationMs",
+      "timing": true,
+      "max": 30
+    },
+    {
+      "path": "singleStyled.default.secondFlush.spansReused",
+      "equals": 100
+    },
+    {
+      "path": "changedMultiSegment.default.secondFlushDurationMs",
+      "timing": true,
+      "max": 50
+    },
+    {
+      "path": "changedMultiSegment.default.secondFlush.segmentReuseRows",
+      "equals": 100
+    },
+    {
+      "path": "mixedRowKeyPrepass.default.secondFlushDurationMs",
+      "timing": true,
+      "max": 50
+    },
+    {
+      "path": "mixedRowKeyPrepass.default.secondFlush.rowKeyPrepassChecks",
+      "equals": 100
+    }
+  ],
+  "scrollMailbox": [
+    {
+      "component": "TList",
+      "scenario": "wheel burst",
+      "metrics": {
+        "frameTaskCount": { "equals": 1 },
+        "droppedUpdates": { "min": 999 },
+        "dirtyRows": { "max": 20 },
+        "scannedNodes": { "max": 1 },
+        "paintedNodes": { "max": 1 },
+        "commits": { "equals": 1 }
+      }
+    },
+    {
+      "component": "TLogView",
+      "scenario": "append burst",
+      "metrics": {
+        "frameTaskCount": { "equals": 1 },
+        "droppedUpdates": { "min": 999 },
+        "dirtyRows": { "max": 20 },
+        "scannedNodes": { "max": 1 },
+        "paintedNodes": { "max": 1 },
+        "commits": { "equals": 1 }
+      }
+    },
+    {
+      "component": "TVirtualList",
+      "scenario": "wheel burst",
+      "metrics": {
+        "frameTaskCount": { "equals": 1 },
+        "droppedUpdates": { "min": 999 },
+        "dirtyRows": { "max": 20 },
+        "scannedNodes": { "max": 1 },
+        "paintedNodes": { "max": 1 },
+        "commits": { "equals": 1 }
+      }
+    }
+  ],
+  "phase2": [
+    {
+      "scenario": "render-manager-1000-nodes-dirty-1-row",
+      "metrics": {
+        "dirtyRows": { "equals": 1 },
+        "scannedNodes": { "equals": 1 },
+        "paintedNodes": { "equals": 1 }
+      }
+    },
+    {
+      "scenario": "render-manager-1000-nodes-dirty-1-row",
+      "timing": true,
+      "metrics": {
+        "durationMs": { "max": 10 }
+      }
+    },
+    {
+      "scenario": "virtual-list-100000-rows-wheel-burst-100",
+      "metrics": {
+        "frames": { "equals": 1 },
+        "coalescingRatio": { "min": 100 },
+        "avgScannedNodes": { "max": 1 },
+        "avgPaintedNodes": { "max": 1 }
+      }
+    },
+    {
+      "scenario": "virtual-list-100000-rows-wheel-burst-100",
+      "timing": true,
+      "metrics": {
+        "maxFrameMs": { "max": 5 }
+      }
+    },
+    {
+      "scenario": "dom-sync-flush-20-dirty-rows",
+      "metrics": {
+        "dirtyRows": { "equals": 20 }
+      }
+    },
+    {
+      "scenario": "dom-sync-flush-20-dirty-rows",
+      "timing": true,
+      "metrics": {
+        "domFlushMs": { "max": 10 }
+      }
+    },
+    {
+      "scenario": "tlog-view-1000-lines-burst",
+      "metrics": {
+        "frames": { "max": 2 },
+        "getLineCalls": { "max": 30 },
+        "dirtyRows": { "max": 10 },
+        "domFlushRows": { "max": 20 }
+      }
+    },
+    {
+      "scenario": "tlog-view-1000-lines-burst",
+      "timing": true,
+      "metrics": {
+        "maxFrameMs": { "max": 10 }
+      }
+    },
+    {
+      "scenario": "tlog-view-retention-100k-append-max-1000",
+      "metrics": {
+        "retainedLineCount": { "equals": 1000 },
+        "getLineCalls": { "max": 30 }
+      }
+    },
+    {
+      "scenario": "tlog-view-retention-100k-append-max-1000",
+      "timing": true,
+      "metrics": {
+        "maxFrameMs": { "max": 10 }
+      }
+    },
+    {
+      "scenario": "tlog-view-search-wrap-long-lines",
+      "metrics": {
+        "matchCount": { "equals": 2000 },
+        "getLineCalls": { "max": 25000 }
+      }
+    },
+    {
+      "scenario": "tlog-view-search-wrap-long-lines",
+      "timing": true,
+      "metrics": {
+        "maxFrameMs": { "max": 10 }
+      }
+    },
+    {
+      "scenario": "tlog-view-exact-index-retention-append",
+      "metrics": {
+        "measuredLineCount": { "equals": 1000 }
+      }
+    },
+    {
+      "scenario": "tlog-view-exact-index-retention-append",
+      "timing": true,
+      "metrics": {
+        "maxFrameMs": { "max": 10 }
+      }
+    }
+  ]
+}

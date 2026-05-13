@@ -28,6 +28,7 @@ export {
 export type { ThemePalette } from "./core/ansi-palette.js";
 export { parseAnsiSgr } from "./core/ansi/sgr.js";
 export { charCellWidth } from "./core/buffer/width.js";
+export { sanitizeTerminalHref, type SanitizeTerminalHrefOptions } from "./core/hyperlink.js";
 export type {
   AnsiColorName,
   BufferSnapshot,
@@ -75,6 +76,8 @@ export { DOM_RENDERER_CAPABILITIES } from "./renderer/capabilities.js";
 export type {
   CellMetrics,
   DomRenderer,
+  DomRendererAccessibilityOptions,
+  DomRendererAccessibilityRole,
   DomRendererDebugStats,
   DomRendererFlushSample,
   DomRendererFlushStats,

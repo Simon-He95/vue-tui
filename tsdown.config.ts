@@ -2,12 +2,19 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
   target: "node14",
-  entry: ["src/index.ts", "src/cli.ts", "src/markdown.ts", "src/experimental.ts"],
+  entry: {
+    index: "src/index.ts",
+    cli: "src/cli.ts",
+    markdown: "src/markdown.ts",
+    experimental: "src/experimental.ts",
+  },
   format: ["esm"],
-  clean: false,
-  dts: false,
+  clean: true,
+  dts: true,
   platform: "node",
   external: [
+    "vue",
+    "stream-markdown-parser",
     "fs",
     "node:fs",
     "node:fs/promises",

@@ -237,12 +237,6 @@ function clearCellRange(row: Cell[], startX: number, endXExclusive: number): voi
   for (let x = startX; x < endXExclusive; x++) row[x] = blank;
 }
 
-function clearDanglingContinuation(row: Cell[], x: number): void {
-  const cell = row[x];
-  if (!cell?.continuation) return;
-  row[x] = createBlankCell();
-}
-
 function clearWideIfOverwriting(row: Cell[], x: number): void {
   const cell = row[x];
   if (!cell) return;
@@ -262,11 +256,26 @@ export function putCell(buffer: GridBuffer, x: number, y: number, ch: string, st
   if (x < 0 || x >= buffer.cols) return;
 
   const row = getBufferRow(buffer, y);
-  clearWideIfOverwriting(row, x);
-
   const width = charCellWidth(ch);
+  const previous = row[x];
+  const next = width === 2 && x + 1 < buffer.cols ? row[x + 1] : undefined;
+  const previousWideOverlap = Boolean(
+    previous?.continuation || previous?.width === 2 || next?.continuation || next?.width === 2,
+  );
+  clearWideIfOverwriting(row, x);
+  if (width === 2 && x + 1 < buffer.cols) clearWideIfOverwriting(row, x + 1);
+
   if (width === 2 && x + 1 >= buffer.cols) {
-    row[x] = createBlankCell();
+    const blank = createBlankCell();
+    row[x] = blank;
+    if (buffer.soaFingerprints) {
+      if (previousWideOverlap) {
+        recomputeFingerprintsForRows(buffer, y, y + 1);
+      } else {
+        const physY = physicalRowIndex(buffer, y);
+        updateCellFingerprint(buffer, physY, x, blank.ch, blank.style);
+      }
+    }
     markDirty(buffer, y);
     return;
   }
@@ -276,10 +285,14 @@ export function putCell(buffer: GridBuffer, x: number, y: number, ch: string, st
 
   // Update SoA fingerprints inline
   if (buffer.soaFingerprints) {
-    const physY = physicalRowIndex(buffer, y);
-    updateCellFingerprint(buffer, physY, x, cell.ch, cell.style);
-    if (width === 2 && x + 1 < buffer.cols) {
-      updateCellFingerprint(buffer, physY, x + 1, "", cell.style);
+    if (previousWideOverlap) {
+      recomputeFingerprintsForRows(buffer, y, y + 1);
+    } else {
+      const physY = physicalRowIndex(buffer, y);
+      updateCellFingerprint(buffer, physY, x, cell.ch, cell.style);
+      if (width === 2 && x + 1 < buffer.cols) {
+        updateCellFingerprint(buffer, physY, x + 1, "", cell.style);
+      }
     }
   }
 
@@ -312,34 +325,47 @@ export function fillRect(
       const row = getBufferRow(buffer, yy);
       // If we start filling in the middle of a wide glyph (continuation cell),
       // clear its base cell to keep the row model consistent.
-      if (row[x0]?.continuation) clearWideIfOverwriting(row, x0);
+      const clearsLeftWideBase = Boolean(row[x0]?.continuation);
+      const clearsRightContinuation = Boolean(x1 < buffer.cols && row[x1]?.continuation);
+      if (clearsLeftWideBase) clearWideIfOverwriting(row, x0);
       row.fill(fillCell, x0, x1);
       // If we ended right before a continuation cell, clear it to avoid leaving
       // a dangling continuation after overwriting the wide glyph base.
-      if (x1 < buffer.cols && row[x1]?.continuation) row[x1] = blank;
+      if (clearsRightContinuation) row[x1] = blank;
       // Update SoA fingerprints for the filled range
       if (buffer.soaFingerprints) {
-        const physY = physicalRowIndex(buffer, yy);
-        updateRangeFingerprint(buffer, physY, x0, x1, fillCell.ch, fillCell.style);
+        if (clearsLeftWideBase || clearsRightContinuation) {
+          recomputeFingerprintsForRows(buffer, yy, yy + 1);
+        } else {
+          const physY = physicalRowIndex(buffer, yy);
+          updateRangeFingerprint(buffer, physY, x0, x1, fillCell.ch, fillCell.style);
+        }
       }
       markDirty(buffer, yy);
     }
     return;
   }
 
-  const cell = width === 2 ? undefined : createCell(ch, style);
+  const fillCell = createCell(ch, style);
+  const continuationCell = createContinuationCell(style);
+  const blank = createBlankCell();
 
   for (let yy = y0; yy < y1; yy++) {
     const row = getBufferRow(buffer, yy);
-    for (let xx = x0; xx < x1; xx++) {
+    for (let xx = x0; xx < x1; ) {
       clearWideIfOverwriting(row, xx);
-      if (width === 2 && xx + 1 >= buffer.cols) {
-        row[xx] = createBlankCell();
-      } else {
-        row[xx] = cell ?? createCell(ch, style);
-        if (width === 2 && xx + 1 < buffer.cols) row[xx + 1] = createContinuationCell(style);
+      if (xx + 1 >= x1 || xx + 1 >= buffer.cols) {
+        row[xx] = blank;
+        xx += 1;
+        continue;
       }
+
+      clearWideIfOverwriting(row, xx + 1);
+      row[xx] = fillCell;
+      row[xx + 1] = continuationCell;
+      xx += 2;
     }
+    recomputeFingerprintsForRows(buffer, yy, yy + 1);
     markDirty(buffer, yy);
   }
 }
@@ -375,9 +401,10 @@ export function clearRect(
 
   for (let yy = y0; yy < y1; yy++) {
     const row = getBufferRow(buffer, yy);
+    if (row[x0]?.continuation) clearWideIfOverwriting(row, x0);
     clearCellRange(row, x0, x1);
-    if (x0 - 1 >= 0) clearDanglingContinuation(row, x0);
-    if (x1 < buffer.cols) clearDanglingContinuation(row, x1);
+    if (x1 < buffer.cols && row[x1]?.continuation) row[x1] = createBlankCell();
+    recomputeFingerprintsForRows(buffer, yy, yy + 1);
     markDirty(buffer, yy);
   }
 }
@@ -543,7 +570,16 @@ export function resizeBuffer(buffer: GridBuffer, cols: number, rows: number): vo
   if (nextCols > 0) {
     for (let y = 0; y < nextGrid.length; y++) {
       const row = nextGrid[y]!;
-      if (row[nextCols - 1]?.continuation) row[nextCols - 1] = blank;
+      for (let x = 0; x < nextCols; x++) {
+        const cell = row[x]!;
+        if (cell.continuation) {
+          if (x === 0 || row[x - 1]?.width !== 2 || row[x - 1]?.continuation) row[x] = blank;
+          continue;
+        }
+        if (cell.width === 2 && (x + 1 >= nextCols || !row[x + 1]?.continuation)) {
+          row[x] = blank;
+        }
+      }
     }
   }
 

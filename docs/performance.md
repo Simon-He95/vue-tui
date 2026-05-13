@@ -54,7 +54,7 @@ DOM renderer 的 `scrollOperations` 是输出层优化：terminal/compositor 先
 - `TLogView wrap=true` 会按 visual row 滚动，并按 `getLineKey(index) + width` 缓存 wrap 结果；`ansi=true` 会解析并缓存 ANSI SGR styled rows，但不支持 OSC8/highlight/rich span wrap。scroll payload 暴露的是 `estimatedVisualRowCount`，不是精确全量 wrap 后总行数。
 - `TVirtualList rowScrollMode="unsafe-full-row"` 只用于 unclipped full-row 且独占 plane rows 的场景；DOM renderer 会只 repaint exposed dirty rows，pending rows 或不安全条件会回退到 viewport repaint。
 - `TLogView` 用户离底后 append 不会抢 `scrollTop`；如果需要实时 tail，按 End 回到底部后会恢复 stick-to-bottom。
-- `style`/`highlightStyle` 这类对象尽量复用（避免每次都创建新对象导致 watchEffect 触发）。
+- `style`/`highlightStyle` 这类对象按 immutable 使用：热路径复用稳定对象，需要改变样式时传入新对象。
 
 ## 如何排查
 
@@ -77,6 +77,15 @@ Phase 2 baseline 使用：
 ```bash
 pnpm run bench:phase2
 ```
+
+发布 gate 使用：
+
+```bash
+pnpm run bench:baseline
+```
+
+`bench:baseline` 会运行现有 benchmark，并用 `scripts/bench-baselines.json` 里的预算检查 dirty rows、scanned nodes 和 coalescing 等行为指标。
+需要检查耗时预算时运行 `pnpm run bench:baseline:timing`。
 
 脚本输出 JSON，覆盖：
 

@@ -21,6 +21,7 @@ import {
   terminalSelectionRowSpans,
   terminalSelectionVisibleRowSpans,
 } from "../../selection/terminal-selection.js";
+import { sanitizeTerminalHref } from "../../core/hyperlink.js";
 import {
   computed,
   defineComponent,
@@ -478,7 +479,7 @@ function parseAnsiLineToSegments(
       flush(i);
       const parts = osc.body.split(";");
       if (parts[0] === "8" && parts.length >= 3) {
-        href = parts.slice(2).join(";") || undefined;
+        href = sanitizeTerminalHref(parts.slice(2).join(";")) ?? undefined;
       }
       i = osc.end;
       textStart = osc.end + 1;

@@ -38,6 +38,10 @@
 
 源码：`src/vue/components/TAnchor.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                    | 类型                 | 默认值                 | 必填 | 说明 |
@@ -81,6 +85,10 @@
 
 源码：`src/vue/components/TBox.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                    | 类型                 | 默认值                    | 必填 | 说明 |
@@ -112,6 +120,10 @@
 
 源码：`src/vue/components/TDebugOverlay.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                  | 类型                                                  | 默认值                         | 必填 | 说明 |
@@ -128,6 +140,10 @@
 ## TDialog
 
 源码：`src/vue/components/TDialog.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
 
 ### Props
 
@@ -170,6 +186,10 @@
 
 源码：`src/vue/components/TerminalProvider.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                            | 类型                                                                | 默认值                                          | 必填 | 说明 |
@@ -199,6 +219,10 @@
 
 源码：`src/vue/components/TFlow.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                   | 类型                   | 默认值                            | 必填 | 说明 |
@@ -220,6 +244,10 @@
 ## TInput
 
 源码：`src/vue/components/TInput.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
 
 ### Props
 
@@ -295,6 +323,10 @@
 
 源码：`src/vue/components/TInputBox.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                       | 类型                                                                               | 默认值                         | 必填 | 说明 |
@@ -329,6 +361,10 @@
 ## TJsonEditor
 
 源码：`src/vue/components/TJsonEditor.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
 
 ### Props
 
@@ -367,6 +403,10 @@
 
 源码：`src/vue/components/TList.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                     | 类型                  | 默认值                 | 必填 | 说明 |
@@ -398,6 +438,10 @@
 ## TLogLinksPanel
 
 源码：`src/vue/components/TLogLinksPanel.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
 
 ### Props
 
@@ -434,6 +478,10 @@
 
 源码：`src/vue/components/TLogMinimap.ts`
 
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
+
 ### Props
 
 | 名称                            | 类型                                             | 默认值                   | 必填 | 说明 |
@@ -467,6 +515,10 @@
 
 源码：`src/vue/components/TLogScrollbar.ts`
 
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
+
 ### Props
 
 | 名称                            | 类型                                          | 默认值                                                            | 必填 | 说明 |
@@ -497,6 +549,10 @@
 ## TLogSearchBar
 
 源码：`src/vue/components/TLogSearchBar.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
 
 ### Props
 
@@ -541,6 +597,10 @@
 
 源码：`src/vue/components/TLogSearchPager.ts`
 
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
+
 ### Props
 
 | 名称                       | 类型                                          | 默认值                                                            | 必填 | 说明 |
@@ -567,6 +627,10 @@
 ## TLogSearchResults
 
 源码：`src/vue/components/TLogSearchResults.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
 
 ### Props
 
@@ -600,7 +664,9 @@
 
 源码：`src/vue/components/TLogView.ts`
 
-> Experimental import: `@simon_he/vue-tui/experimental`
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
 
 ### Props
 
@@ -657,6 +723,10 @@
 
 源码：`src/vue/components/TLogVirtualLinksPanel.ts`
 
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
+
 ### Props
 
 | 名称                         | 类型                                      | 默认值                       | 必填 | 说明 |
@@ -689,6 +759,10 @@
 ## TLogVirtualSearchResults
 
 源码：`src/vue/components/TLogVirtualSearchResults.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
 
 ### Props
 
@@ -724,6 +798,10 @@
 
 源码：`src/vue/components/TMultilineModal.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                 | 类型                 | 默认值                                  | 必填 | 说明 |
@@ -743,6 +821,10 @@
 ## TPathPicker
 
 源码：`src/vue/components/TPathPicker.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
 
 ### Props
 
@@ -781,6 +863,10 @@
 
 源码：`src/vue/components/TRenderLayer.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                | 类型                | 默认值         | 必填 | 说明 |
@@ -794,6 +880,10 @@
 ## TRenderPlane
 
 源码：`src/vue/components/TRenderPlane.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
 
 ### Props
 
@@ -809,6 +899,10 @@
 
 源码：`src/vue/router/RouterView.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                      | 类型                               | 默认值            | 必填 | 说明 |
@@ -823,6 +917,10 @@
 ## TSelect
 
 源码：`src/vue/components/TSelect.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
 
 ### Props
 
@@ -860,6 +958,10 @@
 
 源码：`src/vue/components/TText.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                 | 类型                 | 默认值                 | 必填 | 说明                                                                                                                                                                                                                                                                       |
@@ -883,6 +985,10 @@
 
 源码：`src/vue/components/TTransition.ts`
 
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
 ### Props
 
 | 名称                     | 类型                        | 默认值                 | 必填 | 说明 |
@@ -903,6 +1009,10 @@
 ## TView
 
 源码：`src/vue/components/TView.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
 
 ### Props
 
@@ -953,7 +1063,9 @@
 
 源码：`src/vue/components/TVirtualList.ts`
 
-> Experimental import: `@simon_he/vue-tui/experimental`
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
 
 ### Props
 

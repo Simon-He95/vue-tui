@@ -13,6 +13,16 @@ import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
 import { DOM_RENDERER_CAPABILITIES } from "../capabilities.js";
 
 export type CellMetrics = Readonly<{ cellWidth: number; cellHeight: number }>;
+export type DomRendererAccessibilityRole = "application" | "region" | "textbox";
+export type DomRendererAccessibilityOptions = Readonly<{
+  role?: DomRendererAccessibilityRole;
+  label?: string;
+  labelledBy?: string;
+  describedBy?: string;
+  live?: "off" | "polite" | "assertive";
+  multiline?: boolean;
+  readonly?: boolean;
+}>;
 
 export type DomRendererSyncFlushDecision = Readonly<{
   performed: boolean;
@@ -114,6 +124,11 @@ export interface DomRenderer {
 
 export interface DomRendererOptions {
   /**
+   * Browser accessibility contract for the renderer container.
+   * Pass false when the host owns the accessible wrapper.
+   */
+  accessibility?: false | DomRendererAccessibilityOptions;
+  /**
    * Maximum dirty row count allowed for same-call DOM flush when commit({ sync: true }).
    * Larger updates are rAF-batched to avoid blocking the main thread.
    */
@@ -165,6 +180,15 @@ const DEFAULT_SYNC_FLUSH_CELL_BUDGET = 4096;
 const PREPASS_SAMPLE_ROWS = 512;
 const PREPASS_ENABLE_HIT_RATIO = 0.5;
 const PREPASS_DISABLE_HIT_RATIO = 0.25;
+const ACCESSIBILITY_ATTRS = [
+  "role",
+  "aria-label",
+  "aria-labelledby",
+  "aria-describedby",
+  "aria-live",
+  "aria-multiline",
+  "aria-readonly",
+];
 
 const styleKeyCache = new WeakMap<object, string>();
 
@@ -210,6 +234,31 @@ function addRowStats(target: RowRenderMutableStats, source: RowRenderMutableStat
   target.spansReused += source.spansReused;
   target.textNodeUpdates += source.textNodeUpdates;
   target.replaceChildren += source.replaceChildren;
+}
+
+function applyAccessibilityOptions(
+  container: HTMLElement,
+  options: false | DomRendererAccessibilityOptions | undefined,
+): void {
+  if (options === false) return;
+
+  for (const attr of ACCESSIBILITY_ATTRS) container.removeAttribute(attr);
+
+  const role = options?.role ?? "application";
+  container.setAttribute("role", role);
+  container.setAttribute("aria-live", options?.live ?? "off");
+  if (options?.labelledBy) {
+    container.setAttribute("aria-labelledby", options.labelledBy);
+  } else {
+    container.setAttribute("aria-label", options?.label ?? "Terminal");
+  }
+  if (options?.describedBy) container.setAttribute("aria-describedby", options.describedBy);
+  if (role === "textbox" || options?.multiline != null) {
+    container.setAttribute("aria-multiline", String(options?.multiline ?? true));
+  }
+  if (role === "textbox" || options?.readonly != null) {
+    container.setAttribute("aria-readonly", String(options?.readonly ?? true));
+  }
 }
 
 function styleKey(style: Style): string {
@@ -741,7 +790,10 @@ export function createDomRenderer(
   container.style.outline = "none";
   // Prevent layout shifts during updates
   container.style.contain = "layout style";
-  container.tabIndex = 0;
+  if (options.accessibility !== false && !container.hasAttribute("tabindex")) {
+    container.tabIndex = 0;
+  }
+  applyAccessibilityOptions(container, options.accessibility);
   let palette: ThemePalette | null = options.palette ?? null;
   installAnsiPaletteCssVars(container, palette);
 

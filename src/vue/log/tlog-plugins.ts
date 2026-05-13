@@ -2,6 +2,7 @@ import type { Style } from "../../core/types.js";
 import type { TLogMinimapDensityBucket } from "../components/TLogMinimap.js";
 import type { TLogViewVisibleLink } from "../components/TLogView.js";
 import type { TLogLinkAction } from "./use-tlog-link-controller.js";
+import { sanitizeTerminalHref } from "../../core/hyperlink.js";
 import { textCellWidth } from "../utils/text.js";
 
 export type TLogPluginSeverity = "error" | "warning" | "info";
@@ -140,6 +141,7 @@ export type TLogLevelPluginOptions = Readonly<{
 
 export type TLogUrlPluginOptions = Readonly<{
   pattern?: RegExp;
+  allowFileUrls?: boolean;
 }>;
 
 function escapeRegExp(value: string): string {
@@ -232,7 +234,7 @@ export function parseTLogAnnotatedText(text: string): Readonly<{
       const parts = body.split(";");
       if (parts[0] === "8" && parts.length >= 3) {
         flushLink();
-        currentHref = parts.slice(2).join(";") || undefined;
+        currentHref = sanitizeTerminalHref(parts.slice(2).join(";")) ?? undefined;
       }
       i = j;
       continue;
@@ -250,17 +252,25 @@ export function detectTLogUrls(
   text: string,
   options: TLogUrlPluginOptions = {},
 ): readonly TLogViewPluginLineLink[] {
-  const pattern = options.pattern ?? /\b(?:https?:\/\/|file:\/\/)[^\s<>"'`]+/giu;
+  const pattern =
+    options.pattern ??
+    (options.allowFileUrls
+      ? /\b(?:https?:\/\/|mailto:|file:\/\/)[^\s<>"'`]+/giu
+      : /\b(?:https?:\/\/|mailto:)[^\s<>"'`]+/giu);
   const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
   const regex = new RegExp(pattern.source, flags);
   const links: TLogViewPluginLineLink[] = [];
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) != null) {
-    const href = match[0] ?? "";
+    const rawHref = match[0] ?? "";
+    if (!rawHref) continue;
+    const href = sanitizeTerminalHref(rawHref, {
+      allowFileUrls: options.allowFileUrls === true,
+    });
     if (!href) continue;
     const startIndex = match.index;
-    const endIndex = startIndex + href.length;
+    const endIndex = startIndex + rawHref.length;
     const startCell = stringIndexToCell(text, startIndex);
     const endCell = stringIndexToCell(text, endIndex);
     if (endCell <= startCell) continue;
@@ -271,7 +281,7 @@ export function detectTLogUrls(
       endCell,
       source: "url",
     });
-    if (!href.length) regex.lastIndex += 1;
+    if (!rawHref.length) regex.lastIndex += 1;
   }
 
   return links;
@@ -390,15 +400,23 @@ export function createTLogOsc8LinkPlugin(): TLogViewPlugin {
     name: "tlog-osc8-links",
     parseLine(ctx) {
       if (!ctx.osc8Links.length) return;
-      return {
-        externalLinks: ctx.osc8Links.map((link, index) => ({
-          id: `osc8:${ctx.absoluteLineIndex}:${index}:${link.href}`,
-          href: link.href,
+      const links: TLogViewPluginLineLink[] = [];
+      for (let index = 0; index < ctx.osc8Links.length; index++) {
+        const link = ctx.osc8Links[index]!;
+        const href = sanitizeTerminalHref(link.href);
+        if (!href) continue;
+        links.push({
+          id: `osc8:${ctx.absoluteLineIndex}:${index}:${href}`,
+          href,
           text: link.text,
           startCell: link.startCell,
           endCell: link.endCell,
           source: "osc8",
-        })),
+        });
+      }
+      if (!links.length) return;
+      return {
+        externalLinks: links,
       };
     },
   };

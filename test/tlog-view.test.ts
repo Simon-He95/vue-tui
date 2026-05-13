@@ -4600,6 +4600,62 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
+  it("drops unsafe OSC8 hrefs from visible links", async () => {
+    const payloads: TLogViewLinkClickPayload[] = [];
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () =>
+        "bad \x1b]8;;javascript:alert(1)\x07raw\x1b]8;;\x07 good \x1b]8;;https://safe.example\x07ok\x1b]8;;\x07",
+      getLineKey: () => "line",
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          ref: logView,
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 1,
+          source,
+          version: 1,
+          ansi: true,
+          links: true,
+          onLinkClick: (payload: TLogViewLinkClickPayload) => payloads.push(payload),
+        }),
+      16,
+      2,
+    );
+
+    expect(rowText(mounted, 0)).toBe("bad raw good ok");
+    expect(rowStyles(mounted, 0)[4]!.href).toBeUndefined();
+    expect(logView.value?.getVisibleLinks()).toEqual([
+      {
+        visibleIndex: 0,
+        href: "https://safe.example",
+        text: "ok",
+        absoluteLineIndex: 0,
+        index: 0,
+        startCell: 13,
+        endCell: 15,
+        startX: 13,
+        endX: 15,
+        y: 0,
+      },
+    ]);
+
+    mounted
+      .container()
+      ?.dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 0, bubbles: true }));
+    mounted
+      .container()
+      ?.dispatchEvent(new MouseEvent("click", { clientX: 14, clientY: 0, bubbles: true }));
+
+    expect(payloads.map((payload) => payload.href)).toEqual(["https://safe.example"]);
+    mounted.unmount();
+  });
+
   it("strips OSC8 sequences without href metadata when links are disabled", async () => {
     const source: TLogDataSource = {
       lineCount: () => 1,

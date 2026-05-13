@@ -177,4 +177,64 @@ describe("useTLogRetainedIndex", () => {
       vi.useRealTimers();
     }
   });
+
+  it("sanitizes custom plugin external links in retained index", async () => {
+    const raf = installManualRaf();
+    const source = ref<TLogDataSource>({
+      lineCount: () => 1,
+      firstLineIndex: () => 0,
+      getLineKey: (index) => index,
+      getLine: () => "bad safe",
+    });
+    const version = ref(1);
+    const logView = ref<TLogViewHandle | null>({
+      getScrollMetrics: () => createMetrics(),
+      getSearchState: () => ({
+        query: "",
+        status: "idle" as const,
+        matchCount: 0,
+        currentMatchIndex: -1,
+        error: null,
+      }),
+      getSearchMatch: () => null,
+    } as Partial<TLogViewHandle> as TLogViewHandle);
+
+    const retained = useTLogRetainedIndex(logView, source, version, {
+      budgetMs: 100,
+      plugins: [
+        {
+          name: "custom-links",
+          parseLine() {
+            return {
+              externalLinks: [
+                {
+                  href: "javascript:alert(1)",
+                  text: "bad",
+                  startCell: 0,
+                  endCell: 3,
+                },
+                {
+                  href: "https://safe.example",
+                  text: "safe",
+                  startCell: 4,
+                  endCell: 8,
+                },
+              ],
+            };
+          },
+        },
+      ],
+    });
+
+    try {
+      await nextTick();
+      raf.flush();
+      await nextTick();
+
+      expect(retained.status.value).toBe("done");
+      expect(retained.links.value.map((link) => link.href)).toEqual(["https://safe.example"]);
+    } finally {
+      raf.restore();
+    }
+  });
 });
