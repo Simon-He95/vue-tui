@@ -78,6 +78,14 @@ Phase 2 baseline 使用：
 pnpm run bench:phase2
 ```
 
+发布 gate 使用：
+
+```bash
+pnpm run bench:baseline
+```
+
+`bench:baseline` 会运行现有 benchmark，并用 `scripts/bench-baselines.json` 里的预算检查关键耗时、dirty rows、scanned nodes 和 coalescing 指标。
+
 脚本输出 JSON，覆盖：
 
 - 1000 render nodes / dirty 1 row

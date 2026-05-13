@@ -95,7 +95,7 @@
     "prepublishOnly": "pnpm build",
     "release": "pnpm run release:dry-run && bumpp && pnpm publish --no-git-checks --access public",
     "release:ci": "pnpm run release:dry-run && pnpm publish --no-git-checks --access public --provenance",
-    "release:bench": "pnpm run bench:scroll-mailbox && pnpm run bench:dom-renderer && pnpm run bench:phase2",
+    "release:bench": "pnpm run bench:baseline",
     "release:check": "pnpm run check:hidden-unicode && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run test:package-exports && pnpm run docs:build",
     "release:dry-run": "pnpm run release:check && pnpm run release:bench && pnpm run release:smoke && pnpm run release:pack-smoke",
     "release:pack": "pnpm run build && pnpm pack --pack-destination .release",
@@ -110,6 +110,7 @@
     "e2e:smoke": "playwright test --project=smoke",
     "bench:vfor": "tsx scripts/bench-vfor.ts",
     "bench:dom-renderer": "tsx scripts/bench-dom-renderer.ts",
+    "bench:baseline": "tsx scripts/check-bench-baselines.ts",
     "bench:phase2": "tsx scripts/bench-phase2.ts",
     "bench:scroll-mailbox": "tsx scripts/bench-scroll-mailbox.ts"
   },
