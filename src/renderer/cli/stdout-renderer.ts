@@ -67,6 +67,25 @@ const SYNC_END = "\u001B[?2026l";
 const OSC8_OPEN = (href: string) => `\u001B]8;;${href}\u0007`;
 const OSC8_CLOSE = "\u001B]8;;\u0007";
 
+export function sanitizeTerminalHref(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const raw = value.trim();
+  if (!raw) return null;
+  for (let i = 0; i < raw.length; i++) {
+    const code = raw.charCodeAt(i);
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return null;
+  }
+  if (raw.startsWith("//")) return null;
+
+  const lower = raw.toLowerCase();
+  if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:")) {
+    return raw;
+  }
+
+  return null;
+}
+
 export type CliOutput = Readonly<{
   write: (chunk: string) => unknown;
   isTTY?: boolean;
@@ -314,6 +333,7 @@ export function createStdoutRenderer(
   function styleKey(style: Style): number {
     const cached = styleKeyCache.get(style);
     if (cached !== undefined) return cached;
+    const href = sanitizeTerminalHref(style.href);
     const key =
       colorIndex(style.fg) |
       (colorIndex(style.bg ?? defaultBg) << 8) |
@@ -322,7 +342,7 @@ export function createStdoutRenderer(
       (style.italic ? 1 << 18 : 0) |
       (style.underline ? 1 << 19 : 0) |
       (style.inverse ? 1 << 20 : 0) |
-      (style.href ? HREF_STYLE_FLAG : 0);
+      (href ? HREF_STYLE_FLAG : 0);
     styleKeyCache.set(style, key);
     return key;
   }
@@ -347,12 +367,12 @@ export function createStdoutRenderer(
       (style.italic ? 1 << 18 : 0) |
       (style.underline ? 1 << 19 : 0) |
       (style.inverse ? 1 << 20 : 0) |
-      (style.href ? HREF_STYLE_FLAG : 0)
+      (sanitizeTerminalHref(style.href) ? HREF_STYLE_FLAG : 0)
     );
   }
 
   function normalizeHref(value: unknown): string | null {
-    return typeof value === "string" && value ? value : null;
+    return sanitizeTerminalHref(value);
   }
 
   function resolveAnsiColorRgb(name: string) {

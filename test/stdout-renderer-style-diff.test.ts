@@ -2,6 +2,7 @@ import process from "node:process";
 import { describe, expect, it } from "vitest";
 import { createTerminal } from "../src/index.js";
 import { createStdoutRenderer } from "../src/cli.js";
+import { sanitizeTerminalHref } from "../src/renderer/cli/stdout-renderer.js";
 
 function hrefHash10Legacy(href: string): number {
   let h = 0x811c9dc5;
@@ -25,6 +26,61 @@ function findHrefHashCollision(): readonly [string, string] {
 }
 
 describe("stdout renderer style diffing", () => {
+  it("sanitizes terminal hrefs before OSC8 output", () => {
+    expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com");
+    expect(sanitizeTerminalHref("http://example.com")).toBe("http://example.com");
+    expect(sanitizeTerminalHref("mailto:test@example.com")).toBe("mailto:test@example.com");
+    expect(sanitizeTerminalHref("javascript:alert(1)")).toBeNull();
+    expect(sanitizeTerminalHref("data:text/html,hi")).toBeNull();
+    expect(sanitizeTerminalHref("//evil.example")).toBeNull();
+    expect(sanitizeTerminalHref("file:///tmp/a")).toBeNull();
+    expect(sanitizeTerminalHref("https://a.com\u0007bad")).toBeNull();
+    expect(sanitizeTerminalHref("https://a.com\u001B]8;;x")).toBeNull();
+  });
+
+  it("does not emit unsafe OSC8 hrefs", () => {
+    const previousTermProgram = process.env.TERM_PROGRAM;
+    const previousVscodePid = process.env.VSCODE_PID;
+    const previousVscodeHook = process.env.VSCODE_IPC_HOOK_CLI;
+    process.env.TERM_PROGRAM = "xterm";
+    delete process.env.VSCODE_PID;
+    delete process.env.VSCODE_IPC_HOOK_CLI;
+    try {
+      const terminal = createTerminal({ cols: 2, rows: 1 });
+      let out = "";
+      const output = {
+        isTTY: true,
+        write(chunk: string) {
+          out += chunk;
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+      });
+
+      terminal.put(0, 0, "x", { underline: true, href: "https://a.com\u0007bad" });
+      terminal.put(1, 0, "y", { underline: true, href: "https://safe.example" });
+      terminal.commit({ sync: true });
+
+      expect(out).toContain("https://safe.example");
+      expect(out).not.toContain("https://a.com");
+      expect(out).not.toContain("\u001B]8;;https://a.com");
+
+      renderer.dispose();
+    } finally {
+      if (previousTermProgram == null) delete process.env.TERM_PROGRAM;
+      else process.env.TERM_PROGRAM = previousTermProgram;
+      if (previousVscodePid == null) delete process.env.VSCODE_PID;
+      else process.env.VSCODE_PID = previousVscodePid;
+      if (previousVscodeHook == null) delete process.env.VSCODE_IPC_HOOK_CLI;
+      else process.env.VSCODE_IPC_HOOK_CLI = previousVscodeHook;
+    }
+  });
+
   it("avoids per-run resets when only setting attributes", () => {
     const terminal = createTerminal({ cols: 4, rows: 1 });
     let out = "";
