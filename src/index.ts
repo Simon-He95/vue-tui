@@ -76,6 +76,8 @@ export { DOM_RENDERER_CAPABILITIES } from "./renderer/capabilities.js";
 export type {
   CellMetrics,
   DomRenderer,
+  DomRendererAccessibilityOptions,
+  DomRendererAccessibilityRole,
   DomRendererDebugStats,
   DomRendererFlushSample,
   DomRendererFlushStats,

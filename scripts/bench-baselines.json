@@ -2,6 +2,7 @@
   "domRenderer": [
     {
       "path": "cacheHitPlain.default.secondFlushDurationMs",
+      "timing": true,
       "max": 20
     },
     {
@@ -10,10 +11,12 @@
     },
     {
       "path": "changedPlain.default.secondFlushDurationMs",
+      "timing": true,
       "max": 20
     },
     {
       "path": "singleStyled.default.secondFlushDurationMs",
+      "timing": true,
       "max": 30
     },
     {
@@ -22,6 +25,7 @@
     },
     {
       "path": "changedMultiSegment.default.secondFlushDurationMs",
+      "timing": true,
       "max": 50
     },
     {
@@ -30,6 +34,7 @@
     },
     {
       "path": "mixedRowKeyPrepass.default.secondFlushDurationMs",
+      "timing": true,
       "max": 50
     },
     {
@@ -79,10 +84,16 @@
     {
       "scenario": "render-manager-1000-nodes-dirty-1-row",
       "metrics": {
-        "durationMs": { "max": 10 },
         "dirtyRows": { "equals": 1 },
         "scannedNodes": { "equals": 1 },
         "paintedNodes": { "equals": 1 }
+      }
+    },
+    {
+      "scenario": "render-manager-1000-nodes-dirty-1-row",
+      "timing": true,
+      "metrics": {
+        "durationMs": { "max": 10 }
       }
     },
     {
@@ -90,15 +101,27 @@
       "metrics": {
         "frames": { "equals": 1 },
         "coalescingRatio": { "min": 100 },
-        "maxFrameMs": { "max": 5 },
         "avgScannedNodes": { "max": 1 },
         "avgPaintedNodes": { "max": 1 }
       }
     },
     {
+      "scenario": "virtual-list-100000-rows-wheel-burst-100",
+      "timing": true,
+      "metrics": {
+        "maxFrameMs": { "max": 5 }
+      }
+    },
+    {
       "scenario": "dom-sync-flush-20-dirty-rows",
       "metrics": {
-        "dirtyRows": { "equals": 20 },
+        "dirtyRows": { "equals": 20 }
+      }
+    },
+    {
+      "scenario": "dom-sync-flush-20-dirty-rows",
+      "timing": true,
+      "metrics": {
         "domFlushMs": { "max": 10 }
       }
     },
@@ -108,7 +131,13 @@
         "frames": { "max": 2 },
         "getLineCalls": { "max": 30 },
         "dirtyRows": { "max": 10 },
-        "domFlushRows": { "max": 20 },
+        "domFlushRows": { "max": 20 }
+      }
+    },
+    {
+      "scenario": "tlog-view-1000-lines-burst",
+      "timing": true,
+      "metrics": {
         "maxFrameMs": { "max": 10 }
       }
     },
@@ -116,7 +145,13 @@
       "scenario": "tlog-view-retention-100k-append-max-1000",
       "metrics": {
         "retainedLineCount": { "equals": 1000 },
-        "getLineCalls": { "max": 30 },
+        "getLineCalls": { "max": 30 }
+      }
+    },
+    {
+      "scenario": "tlog-view-retention-100k-append-max-1000",
+      "timing": true,
+      "metrics": {
         "maxFrameMs": { "max": 10 }
       }
     },
@@ -124,14 +159,26 @@
       "scenario": "tlog-view-search-wrap-long-lines",
       "metrics": {
         "matchCount": { "equals": 2000 },
-        "getLineCalls": { "max": 25000 },
+        "getLineCalls": { "max": 25000 }
+      }
+    },
+    {
+      "scenario": "tlog-view-search-wrap-long-lines",
+      "timing": true,
+      "metrics": {
         "maxFrameMs": { "max": 10 }
       }
     },
     {
       "scenario": "tlog-view-exact-index-retention-append",
       "metrics": {
-        "measuredLineCount": { "equals": 1000 },
+        "measuredLineCount": { "equals": 1000 }
+      }
+    },
+    {
+      "scenario": "tlog-view-exact-index-retention-append",
+      "timing": true,
+      "metrics": {
         "maxFrameMs": { "max": 10 }
       }
     }

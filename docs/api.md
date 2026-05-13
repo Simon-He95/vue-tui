@@ -66,6 +66,10 @@ type Style = {
 - 行级 diff + span 合并
 - rAF 合并 dirtyRows 渲染
 - 字体度量（cellWidth/cellHeight）+ resize 重建
+- container 默认写入 browser accessibility contract（`role="application"`、`aria-label="Terminal"`、`aria-live="off"`）；可通过 `DomRendererOptions.accessibility` 覆盖或关闭
+- renderer instance 暴露 `capabilities`，组件只能通过 capability 判断 DOM row、scroll operation、sync flush 支持
+
+更完整的 renderer / ARIA / terminal permission 边界见：[Platform Contracts](/platform-contracts)。
 
 ## Events
 

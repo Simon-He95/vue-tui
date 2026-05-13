@@ -84,7 +84,8 @@ pnpm run bench:phase2
 pnpm run bench:baseline
 ```
 
-`bench:baseline` 会运行现有 benchmark，并用 `scripts/bench-baselines.json` 里的预算检查关键耗时、dirty rows、scanned nodes 和 coalescing 指标。
+`bench:baseline` 会运行现有 benchmark，并用 `scripts/bench-baselines.json` 里的预算检查 dirty rows、scanned nodes 和 coalescing 等行为指标。
+需要检查耗时预算时运行 `pnpm run bench:baseline:timing`。
 
 脚本输出 JSON，覆盖：
 

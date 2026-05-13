@@ -11,6 +11,7 @@
 - 不把 experimental API 提升到 root entrypoint。
 - 不新增 renderer、持久化层或外部 LLM API 集成。
 - 保持 root、markdown、experimental 三个 entrypoint 的边界清晰。
+- API maturity、renderer capability、browser ARIA 和 terminal permission contract 以 [API Maturity](/api-maturity) 与 [Platform Contracts](/platform-contracts) 为准。
 
 ## Migration Notes
 
@@ -60,6 +61,8 @@ pnpm run release:pack-smoke
 pnpm run bench:baseline
 pnpm run docs:build
 ```
+
+`release:pack-smoke` 会把当前 tarball 安装到临时外部项目，并运行 root/cli/experimental 的真实 consumer 组合 smoke；它不是只检查 import 是否存在。
 
 示例 smoke：
 

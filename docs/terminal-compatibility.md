@@ -2,6 +2,8 @@
 
 终端模拟器（macOS Terminal / iTerm2 / kitty / Alacritty / WezTerm / Windows Terminal / VSCode 终端 / tmux / SSH 等）在「颜色能力、字体、宽字符、换行/滚动行为」上存在差异。为了让 GoatChain / vue-tui 在大多数终端中表现一致，我们采用以下策略。
 
+Renderer capability、browser ARIA 和 terminal permission/opt-in 规则见：[Platform Contracts](/platform-contracts)。
+
 ## 颜色一致性策略
 
 ### 1) 优先使用 Truecolor（24-bit）

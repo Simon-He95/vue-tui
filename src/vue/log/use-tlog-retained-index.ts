@@ -8,6 +8,7 @@ import type {
   TLogViewPlugin,
   TLogViewPluginLineMetadata,
 } from "./tlog-plugins.js";
+import { sanitizeTerminalHref } from "../../core/hyperlink.js";
 import { computed, ref, watch } from "vue";
 import {
   createTLogLevelPlugin,
@@ -29,6 +30,7 @@ export type TLogRetainedIndexOptions = Readonly<{
   budgetMs?: number;
   maxItems?: number;
   bucketCount?: number;
+  allowFileUrls?: boolean;
   plugins?: readonly TLogViewPlugin[];
 }>;
 
@@ -53,6 +55,25 @@ function normalizeMaxItems(value: number | undefined): number {
   return Number.isFinite(n) ? Math.max(1, n) : DEFAULT_MAX_ITEMS;
 }
 
+function sanitizeIndexedExternalHref(
+  value: unknown,
+  options: Readonly<{ allowFileUrls?: boolean }> = {},
+): string | null {
+  const href = sanitizeTerminalHref(value);
+  if (href) return href;
+
+  if (!options.allowFileUrls || typeof value !== "string") return null;
+
+  const raw = value.trim();
+  if (!raw.toLowerCase().startsWith("file://")) return null;
+  for (let i = 0; i < raw.length; i++) {
+    const code = raw.charCodeAt(i);
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return null;
+  }
+
+  return raw;
+}
+
 export function useTLogRetainedIndex(
   logView: Ref<TLogViewHandle | null>,
   source: Ref<TLogDataSource>,
@@ -74,7 +95,7 @@ export function useTLogRetainedIndex(
   const plugins = computed<readonly TLogViewPlugin[]>(() => {
     const builtins: TLogViewPlugin[] = [];
     if (options.links) builtins.push(createTLogOsc8LinkPlugin());
-    if (options.urls) builtins.push(createTLogUrlPlugin());
+    if (options.urls) builtins.push(createTLogUrlPlugin({ allowFileUrls: options.allowFileUrls }));
     if (options.levels) builtins.push(createTLogLevelPlugin({ bucketCount: options.bucketCount }));
     return [...builtins, ...(options.plugins ?? [])];
   });
@@ -219,15 +240,20 @@ export function useTLogRetainedIndex(
           if (!metadata) continue;
           results.push({ pluginName: plugin.name, metadata });
           for (const link of metadata.externalLinks ?? []) {
+            const href = sanitizeIndexedExternalHref(link.href, {
+              allowFileUrls: options.allowFileUrls === true,
+            });
+            if (!href) continue;
+
             const id = String(
               link.id ??
-                `${plugin.name}:${firstLineIndex + lineIndex}:${link.startCell}:${link.endCell}:${link.href}`,
+                `${plugin.name}:${firstLineIndex + lineIndex}:${link.startCell}:${link.endCell}:${href}`,
             );
             if (seenLinks.has(id) || externalLinks.length >= maxItems) continue;
             seenLinks.add(id);
             externalLinks.push({
               id,
-              href: link.href,
+              href,
               text: link.text,
               absoluteLineIndex: firstLineIndex + lineIndex,
               lineIndex,

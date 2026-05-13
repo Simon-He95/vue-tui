@@ -23,6 +23,50 @@ function lastRowStats(renderer: ReturnType<typeof createDomRenderer>) {
 }
 
 describe("DomRenderer row rendering", () => {
+  it("applies the default browser accessibility contract", () => {
+    const { container, renderer } = setup(4, 2);
+
+    try {
+      expect(container.tabIndex).toBe(0);
+      expect(container.getAttribute("role")).toBe("application");
+      expect(container.getAttribute("aria-label")).toBe("Terminal");
+      expect(container.getAttribute("aria-live")).toBe("off");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("lets hosts customize or disable browser accessibility attributes", () => {
+    const custom = setup(4, 2, {
+      accessibility: {
+        role: "textbox",
+        label: "Build log",
+        describedBy: "build-log-help",
+        live: "polite",
+      },
+    });
+    const disabled = setup(4, 2, { accessibility: false });
+
+    try {
+      expect(custom.container.getAttribute("role")).toBe("textbox");
+      expect(custom.container.getAttribute("aria-label")).toBe("Build log");
+      expect(custom.container.getAttribute("aria-describedby")).toBe("build-log-help");
+      expect(custom.container.getAttribute("aria-live")).toBe("polite");
+      expect(custom.container.getAttribute("aria-multiline")).toBe("true");
+      expect(custom.container.getAttribute("aria-readonly")).toBe("true");
+
+      expect(disabled.container.hasAttribute("role")).toBe(false);
+      expect(disabled.container.hasAttribute("aria-label")).toBe(false);
+      expect(disabled.container.hasAttribute("aria-live")).toBe(false);
+    } finally {
+      custom.renderer.dispose();
+      custom.container.remove();
+      disabled.renderer.dispose();
+      disabled.container.remove();
+    }
+  });
+
   it("records row stats during refresh", () => {
     const { container, renderer } = setup(4, 2);
 

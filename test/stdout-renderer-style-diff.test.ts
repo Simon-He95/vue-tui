@@ -1,7 +1,7 @@
 import process from "node:process";
 import { describe, expect, it } from "vitest";
 import { createTerminal, sanitizeTerminalHref } from "../src/index.js";
-import { createStdoutRenderer } from "../src/cli.js";
+import { createStdoutRenderer, STDOUT_RENDERER_CAPABILITIES } from "../src/cli.js";
 
 function hrefHash10Legacy(href: string): number {
   let h = 0x811c9dc5;
@@ -25,6 +25,28 @@ function findHrefHashCollision(): readonly [string, string] {
 }
 
 describe("stdout renderer style diffing", () => {
+  it("exposes stdout renderer capabilities", () => {
+    const terminal = createTerminal({ cols: 2, rows: 1 });
+    const renderer = createStdoutRenderer(terminal, {
+      output: { isTTY: false, write: () => {} },
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+    });
+
+    try {
+      expect(renderer.capabilities).toBe(STDOUT_RENDERER_CAPABILITIES);
+      expect(renderer.capabilities).toEqual({
+        syncFlush: true,
+        scrollOperations: true,
+        domRows: false,
+      });
+    } finally {
+      renderer.dispose();
+      terminal.dispose();
+    }
+  });
+
   it("sanitizes terminal hrefs before OSC8 output", () => {
     expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com");
     expect(sanitizeTerminalHref("http://example.com")).toBe("http://example.com");

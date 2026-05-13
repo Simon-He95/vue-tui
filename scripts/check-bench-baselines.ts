@@ -7,26 +7,39 @@ type MetricBudget = Readonly<{
   max?: number;
 }>;
 
+type RuleOptions = Readonly<{
+  timing?: boolean;
+}>;
+
 type Baselines = Readonly<{
   domRenderer: readonly Readonly<
     {
       path: string;
-    } & MetricBudget
+    } & RuleOptions &
+      MetricBudget
   >[];
-  scrollMailbox: readonly Readonly<{
-    component: string;
-    scenario: string;
-    metrics: Record<string, MetricBudget>;
-  }>[];
-  phase2: readonly Readonly<{
-    scenario: string;
-    metrics: Record<string, MetricBudget>;
-  }>[];
+  scrollMailbox: readonly Readonly<
+    {
+      component: string;
+      scenario: string;
+      metrics: Record<string, MetricBudget>;
+    } & RuleOptions
+  >[];
+  phase2: readonly Readonly<
+    {
+      scenario: string;
+      metrics: Record<string, MetricBudget>;
+    } & RuleOptions
+  >[];
 }>;
 
 const baselines = JSON.parse(
   readFileSync(new URL("./bench-baselines.json", import.meta.url), "utf8"),
 ) as Baselines;
+
+function shouldCheckRule(rule: RuleOptions): boolean {
+  return !rule.timing || process.env.BENCH_TIMING === "1";
+}
 
 function runBench(script: string): unknown {
   const output = execFileSync("pnpm", ["exec", "tsx", script], {
@@ -66,12 +79,14 @@ function checkMetric(label: string, value: unknown, budget: MetricBudget): void 
 
 function checkDomRenderer(results: unknown): void {
   for (const rule of baselines.domRenderer) {
+    if (!shouldCheckRule(rule)) continue;
     checkMetric(`bench:dom-renderer ${rule.path}`, readPath(results, rule.path), rule);
   }
 }
 
 function checkScrollMailbox(results: any): void {
   for (const rule of baselines.scrollMailbox) {
+    if (!shouldCheckRule(rule)) continue;
     const scenario = results.scenarios.find(
       (entry: any) => entry.component === rule.component && entry.scenario === rule.scenario,
     );
@@ -89,6 +104,7 @@ function checkScrollMailbox(results: any): void {
 
 function checkPhase2(results: any): void {
   for (const rule of baselines.phase2) {
+    if (!shouldCheckRule(rule)) continue;
     const scenario = results.scenarios.find((entry: any) => entry.scenario === rule.scenario);
     if (!scenario) throw new Error(`bench:phase2 missing ${rule.scenario}`);
     for (const [metric, budget] of Object.entries(rule.metrics)) {

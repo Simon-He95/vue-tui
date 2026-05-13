@@ -115,8 +115,9 @@ function writeSmokeFiles() {
   );
   writeFileSync(
     join(smokeDir, "smoke-esm.mjs"),
-    `import { createDomRenderer, createTerminal } from "${packageName}";
-import { createTerminalApp } from "${packageName}/cli";
+    `import { h, nextTick } from "vue";
+import { createDomRenderer, createTerminal, TBox, TText } from "${packageName}";
+import { createTerminalApp, STDOUT_RENDERER_CAPABILITIES } from "${packageName}/cli";
 import * as root from "${packageName}";
 import * as markdown from "${packageName}/markdown";
 import * as experimental from "${packageName}/experimental";
@@ -135,23 +136,67 @@ assert(typeof markdown.TVirtualMarkdown !== "undefined", "markdown ESM TVirtualM
 assert(typeof markdown.createTuiMarkdownParser === "function", "markdown ESM parser export is missing");
 assert(typeof experimental.TVirtualList !== "undefined", "experimental ESM TVirtualList export is missing");
 assert(typeof experimental.TLogView !== "undefined", "experimental ESM TLogView export is missing");
+assert(STDOUT_RENDERER_CAPABILITIES.domRows === false, "stdout capabilities are missing");
 
 const terminal = createTerminal({ cols: 4, rows: 2 });
 assert(terminal, "createTerminal did not return a terminal");
 terminal.dispose();
 
+function terminalText(app) {
+  const size = app.terminal.size();
+  return Array.from({ length: size.rows }, (_, y) =>
+    app.terminal.getRow(y).map((cell) => cell.ch).join(""),
+  ).join("\\n");
+}
+
+const log = experimental.createAppendOnlyLogStore({ maxLines: 8 });
+log.appendLines([
+  "INFO consumer boot",
+  "WARN https://safe.dev",
+  "ERROR retained index ready",
+]);
+
+const ConsumerApp = {
+  name: "PackedConsumerSmoke",
+  setup() {
+    return () =>
+      h(TBox, { x: 0, y: 0, w: 42, h: 8, title: "Consumer" }, {
+        default: () => [
+          h(TText, { x: 0, y: 0, w: 38, value: "root component mounted" }),
+          h(experimental.TLogView, {
+            x: 0,
+            y: 2,
+            w: 38,
+            h: 3,
+            source: log.source,
+            version: log.version.value,
+            links: true,
+          }),
+        ],
+      });
+  },
+};
+
 const app = createTerminalApp({
-  cols: 4,
-  rows: 2,
-  component: { render: () => null },
+  cols: 42,
+  rows: 8,
+  component: ConsumerApp,
 });
 app.mount();
+await nextTick();
+app.scheduler.flushNow();
+const screen = terminalText(app);
+assert(screen.includes("Consumer"), "packed consumer did not render root TBox");
+assert(screen.includes("root component mounted"), "packed consumer did not render root TText");
+assert(screen.includes("INFO consumer boot"), "packed consumer did not render experimental TLogView line");
+assert(screen.includes("https://safe.dev"), "packed consumer did not render TLogView link text");
 app.dispose();
 `,
   );
   writeFileSync(
     join(smokeDir, "smoke-cjs.cjs"),
-    `const root = require("${packageName}");
+    `const { h, nextTick } = require("vue");
+const root = require("${packageName}");
 const cli = require("${packageName}/cli");
 const markdown = require("${packageName}/markdown");
 const experimental = require("${packageName}/experimental");
@@ -170,18 +215,68 @@ assert(typeof markdown.TVirtualMarkdown !== "undefined", "markdown CJS TVirtualM
 assert(typeof markdown.createTuiMarkdownParser === "function", "markdown CJS parser export is missing");
 assert(typeof experimental.TVirtualList !== "undefined", "experimental CJS TVirtualList export is missing");
 assert(typeof experimental.TLogView !== "undefined", "experimental CJS TLogView export is missing");
+assert(cli.STDOUT_RENDERER_CAPABILITIES.domRows === false, "stdout capabilities are missing");
 
 const terminal = root.createTerminal({ cols: 4, rows: 2 });
 assert(terminal, "createTerminal did not return a terminal");
 terminal.dispose();
 
-const app = cli.createTerminalApp({
-  cols: 4,
-  rows: 2,
-  component: { render: () => null },
+function terminalText(app) {
+  const size = app.terminal.size();
+  return Array.from({ length: size.rows }, (_, y) =>
+    app.terminal.getRow(y).map((cell) => cell.ch).join(""),
+  ).join("\\n");
+}
+
+async function main() {
+  const log = experimental.createAppendOnlyLogStore({ maxLines: 8 });
+  log.appendLines([
+    "INFO consumer boot",
+    "WARN https://safe.dev",
+    "ERROR retained index ready",
+  ]);
+
+  const ConsumerApp = {
+    name: "PackedConsumerSmoke",
+    setup() {
+      return () =>
+        h(root.TBox, { x: 0, y: 0, w: 42, h: 8, title: "Consumer" }, {
+          default: () => [
+            h(root.TText, { x: 0, y: 0, w: 38, value: "root component mounted" }),
+            h(experimental.TLogView, {
+              x: 0,
+              y: 2,
+              w: 38,
+              h: 3,
+              source: log.source,
+              version: log.version.value,
+              links: true,
+            }),
+          ],
+        });
+    },
+  };
+
+  const app = cli.createTerminalApp({
+    cols: 42,
+    rows: 8,
+    component: ConsumerApp,
+  });
+  app.mount();
+  await nextTick();
+  app.scheduler.flushNow();
+  const screen = terminalText(app);
+  assert(screen.includes("Consumer"), "packed consumer did not render root TBox");
+  assert(screen.includes("root component mounted"), "packed consumer did not render root TText");
+  assert(screen.includes("INFO consumer boot"), "packed consumer did not render experimental TLogView line");
+  assert(screen.includes("https://safe.dev"), "packed consumer did not render TLogView link text");
+  app.dispose();
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
 });
-app.mount();
-app.dispose();
 `,
   );
 }

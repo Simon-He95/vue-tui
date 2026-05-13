@@ -21,3 +21,9 @@ export const HEADLESS_RENDERER_CAPABILITIES: RendererCapabilities = Object.freez
   scrollOperations: true,
   domRows: false,
 });
+
+export const STDOUT_RENDERER_CAPABILITIES: RendererCapabilities = Object.freeze({
+  syncFlush: true,
+  scrollOperations: true,
+  domRows: false,
+});

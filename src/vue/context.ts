@@ -134,23 +134,22 @@ export type TerminalContext = Readonly<{
   render: RenderManager;
 }>;
 
-export const TerminalContextKey: InjectionKey<TerminalContext> = Symbol("TerminalContext") as any;
-export const LayoutContextKey: InjectionKey<LayoutContext> = Symbol("LayoutContext") as any;
-export const VisibilityContextKey: InjectionKey<Ref<boolean>> = Symbol("VisibilityContext") as any;
-export const EventZIndexContextKey: InjectionKey<Ref<number>> = Symbol("EventZIndex") as any;
-export const RenderPlaneContextKey: InjectionKey<Ref<TerminalRenderPlane>> = Symbol(
-  "RenderPlane",
-) as any;
-export const ImeAnchorContextKey: InjectionKey<ShallowRef<ImeAnchor | null>> = Symbol(
-  "ImeAnchor",
-) as any;
-export const TInputPluginsContextKey: InjectionKey<Readonly<Ref<readonly TInputPlugin[]>>> = Symbol(
-  "TInputPlugins",
-) as any;
+function injectionKey<T>(name: string): InjectionKey<T> {
+  return Symbol.for(`@simon_he/vue-tui:${name}`) as any;
+}
+
+export const TerminalContextKey = injectionKey<TerminalContext>("TerminalContext");
+export const LayoutContextKey = injectionKey<LayoutContext>("LayoutContext");
+export const VisibilityContextKey = injectionKey<Ref<boolean>>("VisibilityContext");
+export const EventZIndexContextKey = injectionKey<Ref<number>>("EventZIndex");
+export const RenderPlaneContextKey = injectionKey<Ref<TerminalRenderPlane>>("RenderPlane");
+export const ImeAnchorContextKey = injectionKey<ShallowRef<ImeAnchor | null>>("ImeAnchor");
+export const TInputPluginsContextKey =
+  injectionKey<Readonly<Ref<readonly TInputPlugin[]>>>("TInputPlugins");
 export const TPathPickerProviderContextKey: InjectionKey<
   Readonly<Ref<PathPickerProvider | undefined>>
-> = Symbol("TPathPickerProvider") as any;
+> = injectionKey<Readonly<Ref<PathPickerProvider | undefined>>>("TPathPickerProvider");
 
 // Provided by dialog surfaces to indicate "this subtree is inside a modal dialog".
 // Used by inputs to opt into dialog confirmation semantics (e.g. Enter submits the dialog).
-export const DialogContextKey: InjectionKey<boolean> = Symbol("DialogContext") as any;
+export const DialogContextKey = injectionKey<boolean>("DialogContext");

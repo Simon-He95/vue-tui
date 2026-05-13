@@ -43,13 +43,13 @@ Vue 是 peer dependency。当前发布包支持 Vue `>=3.3.0 <4`。
 
 ## 快速路径
 
-| 目标         | 先读这些页面                                                                                            |
-| ------------ | ------------------------------------------------------------------------------------------------------- |
-| 了解能力边界 | [Live Showcase](/showcase)、[组件总览](/components)、[核心 API](/api)                                   |
-| 跑示例       | [Examples Index](/examples)、[Agent Console 示例](/agent-console)                                       |
-| 做 CLI       | [Runtime](/runtime)、[CLI Events](/cli-events)、[Terminal Compatibility](/terminal-compatibility)       |
-| 做高吞吐 UI  | [Performance](/performance)、[高吞吐渲染](/high-throughput-rendering)、[TLogView Lab](/tlog-view-lab)   |
-| 准备发布     | [0.x Release Candidate](/release-candidate)、[TLogView Release Readiness](/tlog-view-release-readiness) |
+| 目标         | 先读这些页面                                                                                                                           |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 了解能力边界 | [Live Showcase](/showcase)、[组件总览](/components)、[核心 API](/api)                                                                  |
+| 跑示例       | [Examples Index](/examples)、[Agent Console 示例](/agent-console)                                                                      |
+| 做 CLI       | [Runtime](/runtime)、[CLI Events](/cli-events)、[Platform Contracts](/platform-contracts)                                              |
+| 做高吞吐 UI  | [Performance](/performance)、[高吞吐渲染](/high-throughput-rendering)、[TLogView Lab](/tlog-view-lab)                                  |
+| 准备发布     | [API Maturity](/api-maturity)、[0.x Release Candidate](/release-candidate)、[TLogView Release Readiness](/tlog-view-release-readiness) |
 
 完整 props / events 以 [组件 API（自动生成）](/generated/components-api) 为准。
 

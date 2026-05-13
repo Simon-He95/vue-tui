@@ -17,9 +17,13 @@ type EventMeta = {
   description: string | null;
 };
 
+type ApiMaturity = "public" | "experimental";
+
 type ComponentMeta = {
   name: string;
   sourceRelPath: string;
+  maturity: ApiMaturity;
+  entrypoint: string;
   props: PropMeta[];
   events: EventMeta[];
 };
@@ -358,6 +362,8 @@ function extractComponentMeta(
   componentName: string,
   absPath: string,
   packageRoot: string,
+  maturity: ApiMaturity,
+  entrypoint: string,
 ): ComponentMeta {
   const text = ts.sys.readFile(absPath, "utf8") ?? "";
   const sourceFile = ts.createSourceFile(absPath, text, ts.ScriptTarget.Latest, true);
@@ -403,7 +409,7 @@ function extractComponentMeta(
   const rel = path.relative(packageRoot, absPath).split(path.sep).join("/");
 
   if (!componentOptions) {
-    return { name: componentName, sourceRelPath: rel, props: [], events: [] };
+    return { name: componentName, sourceRelPath: rel, maturity, entrypoint, props: [], events: [] };
   }
 
   const propsExpr = getObjectPropertyValue(componentOptions, "props");
@@ -412,13 +418,19 @@ function extractComponentMeta(
   const props = propsExpr ? extractProps(sourceFile, propsExpr, printer) : [];
   const events = emitsExpr ? extractEvents(sourceFile, emitsExpr, printer) : [];
 
-  return { name: componentName, sourceRelPath: rel, props, events };
+  return { name: componentName, sourceRelPath: rel, maturity, entrypoint, props, events };
 }
 
-async function listExportedComponents(vueIndexAbsPath: string): Promise<
+async function listExportedComponents(
+  vueIndexAbsPath: string,
+  maturity: ApiMaturity,
+  entrypoint: string,
+): Promise<
   Array<{
     name: string;
     absPath: string;
+    maturity: ApiMaturity;
+    entrypoint: string;
   }>
 > {
   const text = await fs.readFile(vueIndexAbsPath, "utf8");
@@ -444,7 +456,7 @@ async function listExportedComponents(vueIndexAbsPath: string): Promise<
       if (!isComponentName) continue;
       const tsPath = spec.replace(/\.js$/u, ".ts");
       const absPath = path.resolve(vueDir, tsPath);
-      out.push({ name, absPath });
+      out.push({ name, absPath, maturity, entrypoint });
     }
   }
 
@@ -473,10 +485,10 @@ function renderMarkdown(components: ComponentMeta[]): string {
     lines.push("");
     lines.push(`源码：\`${c.sourceRelPath}\``);
     lines.push("");
-    if (c.name === "TVirtualList" || c.name === "TLogView") {
-      lines.push("> Experimental import: `@simon_he/vue-tui/experimental`");
-      lines.push("");
-    }
+    lines.push(`API maturity: **${c.maturity === "experimental" ? "Experimental" : "Public"}**`);
+    lines.push("");
+    lines.push(`Import: \`${c.entrypoint}\``);
+    lines.push("");
 
     lines.push("### Props");
     lines.push("");
@@ -530,10 +542,16 @@ async function main(): Promise<void> {
   const experimentalIndex = path.join(packageRoot, "src/experimental.ts");
 
   const components = [
-    ...(await listExportedComponents(vueIndex)),
-    ...(await listExportedComponents(experimentalIndex)),
+    ...(await listExportedComponents(vueIndex, "public", "@simon_he/vue-tui")),
+    ...(await listExportedComponents(
+      experimentalIndex,
+      "experimental",
+      "@simon_he/vue-tui/experimental",
+    )),
   ].sort((a, b) => a.name.localeCompare(b.name));
-  const metas = components.map((c) => extractComponentMeta(c.name, c.absPath, packageRoot));
+  const metas = components.map((c) =>
+    extractComponentMeta(c.name, c.absPath, packageRoot, c.maturity, c.entrypoint),
+  );
 
   const outPath = path.join(packageRoot, "docs/generated/components-api.md");
   await fs.mkdir(path.dirname(outPath), { recursive: true });

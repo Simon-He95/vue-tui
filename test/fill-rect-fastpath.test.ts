@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  clearRect,
   createGridBuffer,
   fillRect,
   getRowFingerprints,
@@ -114,5 +115,44 @@ describe("buffer fillRect fast path", () => {
     expect(buffer.grid[0]![1]!.ch).toBe(" ");
     expect(buffer.grid[0]![2]!.ch).toBe("A");
     expect(Array.from(getRowFingerprints(buffer, 0)!)).toEqual([4, 4, 3, 4]);
+  });
+});
+
+describe("buffer clearRect wide boundaries", () => {
+  test("clears wide base when range starts at continuation", () => {
+    const buffer = createGridBuffer(4, 1);
+    putCell(buffer, 0, 0, "中");
+
+    clearRect(buffer, 1, 0, 1, 1);
+
+    expect(buffer.grid[0]![0]!.ch).toBe(" ");
+    expect(buffer.grid[0]![1]!.ch).toBe(" ");
+    expect(buffer.grid[0]![1]!.continuation).toBeUndefined();
+  });
+
+  test("clears trailing continuation when range ends after wide base", () => {
+    const buffer = createGridBuffer(4, 1);
+    putCell(buffer, 1, 0, "中");
+
+    clearRect(buffer, 1, 0, 1, 1);
+
+    expect(buffer.grid[0]![1]!.ch).toBe(" ");
+    expect(buffer.grid[0]![2]!.ch).toBe(" ");
+    expect(buffer.grid[0]![2]!.continuation).toBeUndefined();
+  });
+
+  test("recomputes fingerprints after clearing wide boundaries", () => {
+    const buffer = createGridBuffer(4, 1);
+    setFingerprintFn(buffer, (ch) => {
+      if (ch === "中") return 1;
+      if (ch === "") return 2;
+      if (ch === " ") return 3;
+      return 9;
+    });
+
+    putCell(buffer, 0, 0, "中");
+    clearRect(buffer, 1, 0, 1, 1);
+
+    expect(Array.from(getRowFingerprints(buffer, 0)!)).toEqual([3, 3, 3, 3]);
   });
 });

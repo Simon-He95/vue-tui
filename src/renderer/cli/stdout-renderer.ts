@@ -5,6 +5,7 @@ import type {
   Terminal,
   TerminalScrollOperation,
 } from "../../core/types.js";
+import type { RendererCapabilities } from "../capabilities.js";
 import { Buffer } from "node:buffer";
 import process from "node:process";
 import type { ThemePalette } from "../../core/ansi-palette.js";
@@ -33,6 +34,7 @@ import { sanitizeTerminalHref } from "../../core/hyperlink.js";
 import { getPlaneRowCoverageKind } from "../../core/terminal/create-terminal.js";
 import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
+import { STDOUT_RENDERER_CAPABILITIES } from "../capabilities.js";
 import { recordStdoutFrame } from "./stdout-metrics.js";
 
 // Global debug logger instance (lazy init)
@@ -74,6 +76,7 @@ export type CliOutput = Readonly<{
 }>;
 
 export type StdoutRenderer = Readonly<{
+  capabilities: RendererCapabilities;
   render: () => void;
   dispose: () => void;
   /** Move terminal cursor to specified cell position for IME input */
@@ -2146,5 +2149,12 @@ export function createStdoutRenderer(
     render();
   };
 
-  return { render, dispose, setCursor, showCursor, updateTheme };
+  return {
+    capabilities: STDOUT_RENDERER_CAPABILITIES,
+    render,
+    dispose,
+    setCursor,
+    showCursor,
+    updateTheme,
+  };
 }
