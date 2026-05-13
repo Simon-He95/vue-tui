@@ -2,6 +2,11 @@ import { fileURLToPath, URL } from "node:url";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 
+const vueTuiSrc = fileURLToPath(new URL("../../src/index.ts", import.meta.url));
+const vueTuiCliSrc = fileURLToPath(new URL("../../src/cli.ts", import.meta.url));
+const vueTuiMarkdownSrc = fileURLToPath(new URL("../../src/markdown.ts", import.meta.url));
+const vueTuiExperimentalSrc = fileURLToPath(new URL("../../src/experimental.ts", import.meta.url));
+
 const terminalExternal = [
   "fs",
   "node:fs",
@@ -26,10 +31,10 @@ export default defineConfig(({ mode }) => {
     plugins: [vue()],
     resolve: {
       alias: [
-        {
-          find: "@simon_he/vue-tui",
-          replacement: fileURLToPath(new URL("../../src/index.ts", import.meta.url)),
-        },
+        { find: /^@simon_he\/vue-tui$/, replacement: vueTuiSrc },
+        { find: /^@simon_he\/vue-tui\/cli$/, replacement: vueTuiCliSrc },
+        { find: /^@simon_he\/vue-tui\/markdown$/, replacement: vueTuiMarkdownSrc },
+        { find: /^@simon_he\/vue-tui\/experimental$/, replacement: vueTuiExperimentalSrc },
       ],
     },
   };
