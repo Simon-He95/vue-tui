@@ -22,48 +22,14 @@ const terminalExternal = [
 export default defineConfig(({ mode }) => {
   const terminalMode =
     mode === "terminal" || mode === "terminal-multi-select" || mode === "terminal-table";
-  const browserAliases = terminalMode
-    ? []
-    : [
-        {
-          find: /.*\/events\/index\.js$/,
-          replacement: fileURLToPath(new URL("./src/vue-tui-browser-events.ts", import.meta.url)),
-        },
-        {
-          find: /.*\/renderer\/index\.js$/,
-          replacement: fileURLToPath(new URL("./src/vue-tui-browser-renderer.ts", import.meta.url)),
-        },
-        {
-          find: /.*\/observability\/tui-profiler\.js$/,
-          replacement: fileURLToPath(new URL("./src/vue-tui-browser-profiler.ts", import.meta.url)),
-        },
-        {
-          find: /.*\/observability\/cli-latency\.js$/,
-          replacement: fileURLToPath(
-            new URL("./src/vue-tui-browser-cli-latency.ts", import.meta.url),
-          ),
-        },
-        {
-          find: /.*\/core\/debug-logger\.js$/,
-          replacement: fileURLToPath(
-            new URL("./src/vue-tui-browser-debug-logger.ts", import.meta.url),
-          ),
-        },
-      ];
   const base = {
     plugins: [vue()],
     resolve: {
       alias: [
         {
           find: "@simon_he/vue-tui",
-          replacement: fileURLToPath(
-            new URL(
-              terminalMode ? "../../src/index.ts" : "./src/vue-tui-browser.ts",
-              import.meta.url,
-            ),
-          ),
+          replacement: fileURLToPath(new URL("../../src/index.ts", import.meta.url)),
         },
-        ...browserAliases,
       ],
     },
   };
