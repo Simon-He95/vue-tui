@@ -1,8 +1,27 @@
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../core/render-plane.js";
-import { appendFileSync } from "node:fs";
-import process from "node:process";
+import { importNodeModule } from "../utils/node-module.js";
 
 type NowFn = () => number;
+type FsLike = Readonly<{
+  appendFileSync?: (path: string, data: string) => void;
+}>;
+
+let fsPromise: Promise<FsLike | null> | null = null;
+
+function getFsSync(): FsLike | null {
+  const req = (globalThis as any).require;
+  if (typeof req !== "function") return null;
+  try {
+    return req("node:fs") ?? req("fs") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getFsAsync(): Promise<FsLike | null> {
+  fsPromise ??= importNodeModule<FsLike>("node:fs");
+  return fsPromise;
+}
 
 function defaultNow(): number {
   const p = (globalThis as any).performance;
@@ -58,7 +77,7 @@ export type TuiProfiler = Readonly<{
 }>;
 
 export function createTuiProfiler(name: string): TuiProfiler | null {
-  const env = process?.env as Record<string, unknown> | undefined;
+  const env = (globalThis as any).process?.env as Record<string, unknown> | undefined;
   if (!parseEnabled(env?.DIMCODE_PROFILE_TUI)) return null;
 
   const format = parseLogFormat(env?.DIMCODE_PROFILE_TUI_FORMAT);
@@ -95,7 +114,10 @@ export function createTuiProfiler(name: string): TuiProfiler | null {
     const dest = logDest;
     if ((dest === "file" || dest === "both") && logPath) {
       try {
-        appendFileSync(logPath, `${line}\n`);
+        const data = `${line}\n`;
+        const fs = getFsSync();
+        if (fs?.appendFileSync) fs.appendFileSync(logPath, data);
+        else void getFsAsync().then((mod) => mod?.appendFileSync?.(logPath, data));
       } catch {
         // ignore
       }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { TInput, createTInputHostPlugin, createTerminalApp } from "../src/index.js";
+import { TInput, createTInputHostPlugin } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 
 describe("cli copy toast host plugin", () => {
   it("uses an injected host plugin when TInput auto-copies on mouse selection release", async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { TInput, createTerminalApp, createTInputHostPlugin } from "../src/index.js";
+import { TInput, createTInputHostPlugin } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 
 describe("TInput host plugins", () => {
   it("lets hosts inject terminal clipboard behavior via inputPlugins", async () => {

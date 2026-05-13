@@ -28,7 +28,7 @@ import { createNodePathPickerProvider } from "./cli/path-provider.js";
 import { createTerminal } from "./core/index.js";
 import { getPlaneTerminal } from "./core/terminal/create-terminal.js";
 import { createCliEventManager } from "./events/index.js";
-import { getCliLatencyProfiler } from "./observability/cli-latency.js";
+import { getCliLatencyProfiler } from "./observability/cli-latency-node.js";
 import { framePerfNow, mergeFramePerfReason } from "./observability/frame-perf.js";
 import { createFramePerfStore } from "./observability/frame-perf-store.js";
 import { createTraceStore } from "./observability/trace.js";

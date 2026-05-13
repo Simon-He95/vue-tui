@@ -1,5 +1,5 @@
 import type { AgentConsoleApi } from "./AgentConsoleSurface";
-import { createStdinDriver, createStdoutRenderer, createTerminalApp } from "@simon_he/vue-tui";
+import { createStdinDriver, createStdoutRenderer, createTerminalApp } from "@simon_he/vue-tui/cli";
 import { AgentConsoleSurface, AGENT_CONSOLE_LAYOUT } from "./AgentConsoleSurface";
 import { consoleDefaultStyle, domPalette } from "./theme";
 

@@ -1,4 +1,4 @@
-import { createStdinDriver, createStdoutRenderer, createTerminalApp } from "../src/index.js";
+import { createStdinDriver, createStdoutRenderer, createTerminalApp } from "../src/cli.js";
 import { TLOG_VIEW_LAB_LAYOUT, createTLogViewLabRunnerApp } from "./tlog-view-lab/App.js";
 
 const interactive = process.env.VT_INTERACTIVE === "1";

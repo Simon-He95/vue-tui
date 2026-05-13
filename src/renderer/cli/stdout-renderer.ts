@@ -30,7 +30,7 @@ import {
 } from "../../core/ansi/colors.js";
 import { createDebugLogger, isDebugEnabled } from "../../core/debug-logger.js";
 import { getPlaneRowCoverageKind } from "../../core/terminal/create-terminal.js";
-import { getCliLatencyProfiler } from "../../observability/cli-latency.js";
+import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { recordStdoutFrame } from "./stdout-metrics.js";
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { createTerminalApp, TPathPicker } from "../src/index.js";
+import { TPathPicker } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 
 async function waitFor<T>(
   fn: () => T | null | undefined | Promise<T | null | undefined>,

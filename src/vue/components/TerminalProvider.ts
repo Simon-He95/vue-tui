@@ -3,8 +3,9 @@ import type { PathPickerProvider } from "../../cli/path-provider.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../../core/render-plane.js";
 import type { Style, Terminal } from "../../core/types.js";
-import type { EventManager, TerminalEventRecord } from "../../events/index.js";
-import type { DomRenderer, DomRendererOptions } from "../../renderer/index.js";
+import type { TerminalEventRecord } from "../../events/recording.js";
+import type { EventManager } from "../../events/manager/event-manager.js";
+import type { DomRenderer, DomRendererOptions } from "../../renderer/dom/dom-renderer.js";
 import type { ClipboardApi } from "../../runtime/index.js";
 import type {
   SelectionTextProvider,
@@ -39,12 +40,13 @@ import {
 } from "vue";
 import { createTerminal } from "../../core/index.js";
 import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
-import { createEventManager } from "../../events/index.js";
+import { createEventManager } from "../../events/manager/event-manager.js";
 import { framePerfNow, mergeFramePerfReason } from "../../observability/frame-perf.js";
 import { createFramePerfStore } from "../../observability/frame-perf-store.js";
 import { createTraceStore } from "../../observability/trace.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
-import { createDomRenderer, DOM_RENDERER_CAPABILITIES } from "../../renderer/index.js";
+import { DOM_RENDERER_CAPABILITIES } from "../../renderer/capabilities.js";
+import { createDomRenderer } from "../../renderer/dom/dom-renderer.js";
 import { createRuntime } from "../../runtime/index.js";
 import { createTerminalSelectionController } from "../../selection/terminal-selection.js";
 import {

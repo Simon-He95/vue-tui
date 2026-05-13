@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
-import { createTerminalApp, TText, useTerminal } from "../src/index.js";
+import { TText, useTerminal } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 import type {
   TerminalFrameContext,
   TerminalFrameTask,

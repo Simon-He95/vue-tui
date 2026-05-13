@@ -1,6 +1,7 @@
 import type { ResolveTInputPathInfo, TInputHostAdapter } from "../host.js";
 import type { TInputPlugin } from "./types.js";
 import { createOsc52ClipboardProvider } from "../../../../runtime/index.js";
+import { importNodeModule } from "../../../../utils/node-module.js";
 import { pathToTerminalFileHref, resolveDefaultTInputPath } from "../host.js";
 
 type SpawnLike = (
@@ -14,10 +15,6 @@ type SpawnLike = (
   };
   on?: (event: string, listener: (...args: any[]) => void) => void;
 };
-
-const importNodeModule = new Function("specifier", "return import(specifier)") as (
-  specifier: string,
-) => Promise<any>;
 
 function getProcessLike(): any {
   return (globalThis as any).process;
@@ -41,7 +38,7 @@ async function loadNodeSpawn(): Promise<SpawnLike | null> {
   const override = (globalThis as any).__VT_NODE_SPAWN__;
   if (typeof override === "function") return override as SpawnLike;
   try {
-    const mod = await importNodeModule("node:child_process");
+    const mod = await importNodeModule<{ spawn?: SpawnLike }>("node:child_process");
     return typeof mod?.spawn === "function" ? (mod.spawn as SpawnLike) : null;
   } catch {
     return null;

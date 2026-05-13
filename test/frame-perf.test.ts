@@ -4,7 +4,6 @@ import {
   createDomRenderer,
   createFramePerfStore,
   createTerminal,
-  createTerminalApp,
   TerminalProvider,
   TList,
   TText,
@@ -12,6 +11,7 @@ import {
   type FramePerfStore,
   type TerminalScheduler,
 } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 import { TVirtualList } from "../src/experimental.js";
 
 function sample(frameId: number) {

@@ -32,11 +32,12 @@ Vue 是 peer dependency。当前发布包支持 Vue `>=3.3.0 <4`。
 
 ## 入口选择
 
-| 入口                             | 稳定性       | 主要用途                                                                 |
-| -------------------------------- | ------------ | ------------------------------------------------------------------------ |
-| `@simon_he/vue-tui`              | Core         | Terminal runtime、基础组件、DOM/stdout renderer、events、router、runtime |
-| `@simon_he/vue-tui/markdown`     | Focused      | `TMarkdownText`、`TVirtualMarkdown`、markdown parser、block source       |
-| `@simon_he/vue-tui/experimental` | Experimental | `TVirtualList`、`TLogView`、TLog companions、append-only log store       |
+| 入口                             | 稳定性       | 主要用途                                                                       |
+| -------------------------------- | ------------ | ------------------------------------------------------------------------------ |
+| `@simon_he/vue-tui`              | Core         | Browser-safe terminal runtime、基础组件、DOM renderer、events、router、runtime |
+| `@simon_he/vue-tui/cli`          | Node/CLI     | headless app、stdin driver、stdout renderer、Node path provider、recording     |
+| `@simon_he/vue-tui/markdown`     | Focused      | `TMarkdownText`、`TVirtualMarkdown`、markdown parser、block source             |
+| `@simon_he/vue-tui/experimental` | Experimental | `TVirtualList`、`TLogView`、TLog companions、append-only log store             |
 
 `/experimental` API 仍可能在下一个 stable release 前变化。生产应用建议把这些 import 隔离在少量边界文件内。
 

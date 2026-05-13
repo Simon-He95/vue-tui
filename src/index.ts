@@ -11,20 +11,16 @@ export {
   truecolorBgOpen,
   truecolorFgOpen,
 } from "./ansi-styles.js";
-export type { StdinDriver } from "./cli/input.js";
-
-export { createStdinDriver } from "./cli/input.js";
 export type { FsDirEntry, FsEntryKind, FsStat, PathPickerProvider } from "./cli/path-provider.js";
-
-export { createNodePathPickerProvider } from "./cli/path-provider.js";
 export {
   type PathPickMode,
   type PathSuggestion,
+  parsePathQuery,
   resolveUserPath,
+  suggestParentHint,
   suggestPaths,
   type SuggestPathsResult,
-} from "./cli/path-suggest.js";
-export { readEventLog, writeEventLog, writeSnapshot } from "./cli/recording.js";
+} from "./cli/path-suggest-core.js";
 export {
   detectTerminalColorCapability,
   type TerminalColorCapability,
@@ -44,20 +40,13 @@ export type {
   TerminalScrollOperation,
   ThemeModeId,
 } from "./core/index.js";
-
 export { createTerminal } from "./core/index.js";
-
 export {
   TERMINAL_RENDER_PLANES,
   type TerminalRenderPlane,
   type TerminalRenderPlanes,
 } from "./core/render-plane.js";
-
-export type { CreateTerminalAppOptions, TerminalApp } from "./create-terminal-app.js";
-
-export { createTerminalApp } from "./create-terminal-app.js";
 export type {
-  CliEventManager,
   EventManager,
   Rect,
   TerminalBaseEvent,
@@ -70,9 +59,7 @@ export type {
   TerminalNode,
   TerminalPointerEvent,
 } from "./events/index.js";
-
-export { createCliEventManager, createEventManager } from "./events/index.js";
-export { getCliLatencyProfiler } from "./observability/cli-latency.js";
+export { createEventManager } from "./events/manager/event-manager.js";
 export type {
   FramePerfReason,
   FramePerfRowBucketFallback,
@@ -83,9 +70,8 @@ export type { FramePerfStore } from "./observability/frame-perf-store.js";
 export { createFramePerfStore } from "./observability/frame-perf-store.js";
 export type { TraceRecord, TraceStore } from "./observability/trace.js";
 export { createTraceStore } from "./observability/trace.js";
-
-export type { StdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
-export { getStdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
+export type { RendererCapabilities, TerminalRendererLike } from "./renderer/capabilities.js";
+export { DOM_RENDERER_CAPABILITIES } from "./renderer/capabilities.js";
 export type {
   CellMetrics,
   DomRenderer,
@@ -100,27 +86,17 @@ export type {
   DomRendererRowRenderStats,
   DomRendererSyncFlushDecision,
   DomRendererSyncFlushStats,
-  TerminalRendererLike,
-  RendererCapabilities,
-  StdoutRenderer,
-} from "./renderer/index.js";
-export {
-  createDomRenderer,
-  createStdoutRenderer,
-  DOM_RENDERER_CAPABILITIES,
-  HEADLESS_RENDERER_CAPABILITIES,
-} from "./renderer/index.js";
-
+} from "./renderer/dom/dom-renderer.js";
+export { createDomRenderer } from "./renderer/dom/dom-renderer.js";
 export type {
   ClipboardApi,
-  Osc52ClipboardOptions,
   RafApi,
   Runtime,
   RuntimeEnv,
   RuntimeOptions,
   TimerApi,
 } from "./runtime/index.js";
-export { createOsc52ClipboardProvider, createRuntime } from "./runtime/index.js";
+export { createRuntime } from "./runtime/index.js";
 export type {
   CreateTerminalSelectionControllerOptions,
   SelectionTextProvider,
@@ -144,46 +120,41 @@ export type {
   TerminalProviderSelectionOptions,
 } from "./vue/components/TerminalProvider.js";
 export { normalizeNewlines } from "./utils/newlines.js";
-
 export {
   createDefaultTInputHostAdapter,
-  createNodeMentionPathProvider,
-  createPromptMentionPlugin,
-  createTerminalRouter,
-  createTextRestrictionPlugin,
   createTInputHostPlugin,
   defaultTInputHostPlugin,
-  lintJsonText,
-  TAnchor,
-  TBox,
-  TDebugOverlay,
-  TDialog,
-  TerminalProvider,
-  TFlow,
-  TInput,
-  TInputBox,
-  TInputPluginsContextKey,
-  TJsonEditor,
-  TList,
-  TMultilineModal,
-  TPathPicker,
-  TRenderLayer,
-  TRenderPlane,
-  TRouterView,
-  TSelect,
-  TText,
-  TTransition,
-  TView,
-  useLayout,
-  useRenderNode,
-  useRoute,
-  useRouter,
-  useTerminal,
-  useTerminalNode,
-  useTerminalRuntime,
-  useVisibility,
-} from "./vue/index.js";
-
+} from "./vue/components/input/plugins/hostPlugin.js";
+export { createPromptMentionPlugin } from "./vue/components/input/plugins/promptMentionPlugin.js";
+export { createTextRestrictionPlugin } from "./vue/components/input/plugins/restrictText.js";
+export { TInputPluginsContextKey } from "./vue/context.js";
+export { TAnchor } from "./vue/components/TAnchor.js";
+export { TBox } from "./vue/components/TBox.js";
+export { TDebugOverlay } from "./vue/components/TDebugOverlay.js";
+export { TDialog } from "./vue/components/TDialog.js";
+export { TerminalProvider } from "./vue/components/TerminalProvider.js";
+export { TFlow } from "./vue/components/TFlow.js";
+export { TInput } from "./vue/components/TInput.js";
+export { TInputBox } from "./vue/components/TInputBox.js";
+export { lintJsonText, TJsonEditor } from "./vue/components/TJsonEditor.js";
+export { TList } from "./vue/components/TList.js";
+export { TMultilineModal } from "./vue/components/TMultilineModal.js";
+export { TPathPicker } from "./vue/components/TPathPicker.js";
+export { TRenderLayer } from "./vue/components/TRenderLayer.js";
+export { TRenderPlane } from "./vue/components/TRenderPlane.js";
+export { TSelect } from "./vue/components/TSelect.js";
+export { TText } from "./vue/components/TText.js";
+export { TTransition } from "./vue/components/TTransition.js";
+export { TView } from "./vue/components/TView.js";
+export { useLayout } from "./vue/composables/use-layout.js";
+export { useRenderNode } from "./vue/composables/use-render-node.js";
+export { useRoute, useRouter } from "./vue/router/composables.js";
+export { createTerminalRouter } from "./vue/router/router.js";
+export { TRouterView } from "./vue/router/RouterView.js";
+export { useTerminal } from "./vue/composables/use-terminal.js";
+export { useTerminalNode } from "./vue/composables/use-terminal-node.js";
+export { useTerminalRuntime } from "./vue/composables/use-runtime.js";
+export { useVisibility } from "./vue/composables/use-visibility.js";
 export type {
   LayoutContext,
   MentionPathProvider,

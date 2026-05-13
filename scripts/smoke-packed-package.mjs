@@ -115,7 +115,8 @@ function writeSmokeFiles() {
   );
   writeFileSync(
     join(smokeDir, "smoke-esm.mjs"),
-    `import { createDomRenderer, createTerminal, createTerminalApp } from "${packageName}";
+    `import { createDomRenderer, createTerminal } from "${packageName}";
+import { createTerminalApp } from "${packageName}/cli";
 import * as root from "${packageName}";
 import * as markdown from "${packageName}/markdown";
 import * as experimental from "${packageName}/experimental";
@@ -125,7 +126,8 @@ function assert(condition, message) {
 }
 
 assert(typeof createTerminal === "function", "root ESM createTerminal export is missing");
-assert(typeof createTerminalApp === "function", "root ESM createTerminalApp export is missing");
+assert(!("createTerminalApp" in root), "root ESM export leaked createTerminalApp");
+assert(typeof createTerminalApp === "function", "cli ESM createTerminalApp export is missing");
 assert(typeof createDomRenderer === "function", "root ESM createDomRenderer export is missing");
 assert(!("TVirtualList" in root), "root ESM export leaked TVirtualList");
 assert(typeof markdown.TMarkdownText !== "undefined", "markdown ESM TMarkdownText export is missing");
@@ -150,6 +152,7 @@ app.dispose();
   writeFileSync(
     join(smokeDir, "smoke-cjs.cjs"),
     `const root = require("${packageName}");
+const cli = require("${packageName}/cli");
 const markdown = require("${packageName}/markdown");
 const experimental = require("${packageName}/experimental");
 
@@ -158,7 +161,8 @@ function assert(condition, message) {
 }
 
 assert(typeof root.createTerminal === "function", "root CJS createTerminal export is missing");
-assert(typeof root.createTerminalApp === "function", "root CJS createTerminalApp export is missing");
+assert(!("createTerminalApp" in root), "root CJS export leaked createTerminalApp");
+assert(typeof cli.createTerminalApp === "function", "cli CJS createTerminalApp export is missing");
 assert(typeof root.createDomRenderer === "function", "root CJS createDomRenderer export is missing");
 assert(!("TVirtualList" in root), "root CJS export leaked TVirtualList");
 assert(typeof markdown.TMarkdownText !== "undefined", "markdown CJS TMarkdownText export is missing");
@@ -171,7 +175,7 @@ const terminal = root.createTerminal({ cols: 4, rows: 2 });
 assert(terminal, "createTerminal did not return a terminal");
 terminal.dispose();
 
-const app = root.createTerminalApp({
+const app = cli.createTerminalApp({
   cols: 4,
   rows: 2,
   component: { render: () => null },

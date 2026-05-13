@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { createStdinDriver } from "../src/index.js";
+import { createStdinDriver } from "../src/cli.js";
 import { normalizeNewlines } from "../src/utils/newlines.js";
 
 class FakeStdin extends EventEmitter {

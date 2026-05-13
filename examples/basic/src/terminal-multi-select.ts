@@ -1,4 +1,4 @@
-import { createStdinDriver, createStdoutRenderer, createTerminalApp } from "@simon_he/vue-tui";
+import { createStdinDriver, createStdoutRenderer, createTerminalApp } from "@simon_he/vue-tui/cli";
 import MultiSelectDemo from "./MultiSelectDemo.vue";
 
 const cols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : 70;

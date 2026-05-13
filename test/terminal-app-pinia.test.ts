@@ -1,7 +1,8 @@
 import { createPinia, defineStore } from "pinia";
 import { defineComponent, h, nextTick } from "vue";
 import { describe, expect, it } from "vitest";
-import { TText, createTerminalApp } from "../src/index.js";
+import { TText } from "../src/index.js";
+import { createTerminalApp } from "../src/cli.js";
 
 const useCounter = defineStore("counter", {
   state: () => ({ n: 0 }),

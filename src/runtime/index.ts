@@ -1,5 +1,3 @@
-import process from "node:process";
-
 export type RuntimeEnv = "browser" | "terminal" | "unknown";
 
 export type TimerApi = Readonly<{
@@ -43,7 +41,8 @@ export type Runtime = Readonly<{
 }>;
 
 function isNodeLike(): boolean {
-  return typeof process?.versions?.node === "string";
+  const proc = (globalThis as any).process;
+  return typeof proc?.versions?.node === "string";
 }
 
 function detectEnv(): RuntimeEnv {

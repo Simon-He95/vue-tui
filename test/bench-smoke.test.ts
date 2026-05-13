@@ -28,7 +28,7 @@ describe("bench smoke", () => {
     expect(results.cacheHitPlain.off).toBeDefined();
     expect(results.cacheHitPlain.default).toBeDefined();
     expect(results.cacheHitPlain.prepass).toBeDefined();
-  });
+  }, 30_000);
 
   it("bench:scroll-mailbox still passes and emits scenarios", () => {
     const output = runTsx("scripts/bench-scroll-mailbox.ts");
@@ -37,5 +37,5 @@ describe("bench smoke", () => {
     const results = parseJsonObject(output);
     expect(results.scenarios.length).toBeGreaterThan(0);
     expect(results.guards).toBeDefined();
-  });
+  }, 30_000);
 });

@@ -236,11 +236,8 @@
 一个最小宿主接线示例：
 
 ```ts
-import {
-  createDefaultTInputHostAdapter,
-  createTInputHostPlugin,
-  createTerminalApp,
-} from "@simon_he/vue-tui";
+import { createDefaultTInputHostAdapter, createTInputHostPlugin } from "@simon_he/vue-tui";
+import { createTerminalApp } from "@simon_he/vue-tui/cli";
 
 const baseHost = createDefaultTInputHostAdapter();
 

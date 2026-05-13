@@ -52,10 +52,10 @@ const {
   useLayout,
   useTerminal,
   useTerminalNode,
-  createCliEventManager,
   createEventManager,
 } = await import("../src/index.js");
 
+const { createCliEventManager } = await import("../src/cli.js");
 const { TVirtualList } = await import("../src/experimental.js");
 const { useRenderNode } = await import("../src/vue/composables/use-render-node.js");
 

@@ -1,4 +1,4 @@
-import { createTerminalApp } from "@simon_he/vue-tui";
+import { createTerminalApp } from "@simon_he/vue-tui/cli";
 import TableDemo from "./TableDemo.vue";
 
 const { app, terminal } = createTerminalApp({

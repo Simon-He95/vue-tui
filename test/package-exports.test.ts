@@ -5,9 +5,11 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const distIndex = resolve("dist/index.js");
+const distCli = resolve("dist/cli.js");
 const distMarkdown = resolve("dist/markdown.js");
 const distExperimental = resolve("dist/experimental.js");
 const distTypes = resolve("dist/index.d.ts");
+const distCliTypes = resolve("dist/cli.d.ts");
 const distMarkdownTypes = resolve("dist/markdown.d.ts");
 const distExperimentalTypes = resolve("dist/experimental.d.ts");
 const requireDistExports = process.env.VUE_TUI_REQUIRE_DIST_EXPORTS === "1";
@@ -54,9 +56,32 @@ describe("package exports", () => {
 
   it("keeps high-throughput components behind the experimental entrypoint", async () => {
     const root = await import("../src/index.js");
+    const cli = await import("../src/cli.js");
     const markdown = await import("../src/markdown.js");
     const experimental = await import("../src/experimental.js");
 
+    expect("createTerminalApp" in root).toBe(false);
+    expect("createStdoutRenderer" in root).toBe(false);
+    expect("createStdinDriver" in root).toBe(false);
+    expect("createCliEventManager" in root).toBe(false);
+    expect("createNodePathPickerProvider" in root).toBe(false);
+    expect("createNodeMentionPathProvider" in root).toBe(false);
+    expect("readEventLog" in root).toBe(false);
+    expect("writeEventLog" in root).toBe(false);
+    expect("writeSnapshot" in root).toBe(false);
+    expect("getCliLatencyProfiler" in root).toBe(false);
+    expect("createOsc52ClipboardProvider" in root).toBe(false);
+    expect(cli.createTerminalApp).toBeTruthy();
+    expect(cli.createStdoutRenderer).toBeTruthy();
+    expect(cli.createStdinDriver).toBeTruthy();
+    expect(cli.createCliEventManager).toBeTruthy();
+    expect(cli.createNodePathPickerProvider).toBeTruthy();
+    expect(cli.createNodeMentionPathProvider).toBeTruthy();
+    expect(cli.readEventLog).toBeTruthy();
+    expect(cli.writeEventLog).toBeTruthy();
+    expect(cli.writeSnapshot).toBeTruthy();
+    expect(cli.getCliLatencyProfiler).toBeTruthy();
+    expect(cli.createOsc52ClipboardProvider).toBeTruthy();
     expect("TMarkdownText" in root).toBe(false);
     expect("TVirtualList" in root).toBe(false);
     expect("TVirtualMarkdown" in root).toBe(false);
@@ -72,7 +97,6 @@ describe("package exports", () => {
     expect("useTLogLinkController" in root).toBe(false);
     expect("createAppendOnlyLogStore" in root).toBe(false);
     expect(root.createRuntime).toBeTruthy();
-    expect(root.createOsc52ClipboardProvider).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
     expect(root.terminalSelectionVisibleRowSpans).toBeTruthy();
@@ -169,33 +193,84 @@ describe("package exports", () => {
     expect(useTLogVirtualSearchResults).toBeTruthy();
   });
 
+  it("keeps the root entrypoint browser-bundleable without Node built-ins", async () => {
+    const { build } = await import("esbuild");
+    await build({
+      stdin: {
+        contents: `
+          import { createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText } from "./src/index.ts";
+          console.log(createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText);
+        `,
+        resolveDir: process.cwd(),
+        sourcefile: "vue-tui-root-browser-smoke.ts",
+      },
+      bundle: true,
+      write: false,
+      platform: "browser",
+      format: "esm",
+      external: ["vue"],
+    });
+  });
+
+  it.skipIf(!requireDistExports)(
+    "keeps the built root entrypoint browser-bundleable without Node built-ins",
+    async () => {
+      expect(existsSync(distIndex)).toBe(true);
+
+      const { build } = await import("esbuild");
+      await build({
+        entryPoints: [distIndex],
+        bundle: true,
+        write: false,
+        platform: "browser",
+        format: "esm",
+        external: ["vue"],
+      });
+    },
+  );
+
   it.skipIf(!requireDistExports)("keeps built ESM/CJS experimental exports usable", async () => {
     expect(existsSync(distIndex)).toBe(true);
+    expect(existsSync(distCli)).toBe(true);
     expect(existsSync(distMarkdown)).toBe(true);
     expect(existsSync(distExperimental)).toBe(true);
     expect(existsSync(distTypes)).toBe(true);
+    expect(existsSync(distCliTypes)).toBe(true);
     expect(existsSync(distMarkdownTypes)).toBe(true);
     expect(existsSync(distExperimentalTypes)).toBe(true);
+    expect(readFileSync(distCliTypes, "utf8")).toContain("Osc52ClipboardOptions");
 
     const root = await import(/* @vite-ignore */ pathToFileURL(distIndex).href);
+    const cli = await import(/* @vite-ignore */ pathToFileURL(distCli).href);
     const markdown = await import(/* @vite-ignore */ pathToFileURL(distMarkdown).href);
     const experimental = await import(/* @vite-ignore */ pathToFileURL(distExperimental).href);
     const require = createRequire(import.meta.url);
     const rootCjs = require("../dist/index.cjs");
+    const cliCjs = require("../dist/cli.cjs");
     const markdownCjs = require("../dist/markdown.cjs");
     const experimentalCjs = require("../dist/experimental.cjs");
 
+    expect("createTerminalApp" in root).toBe(false);
+    expect("createStdoutRenderer" in root).toBe(false);
     expect("TVirtualList" in root).toBe(false);
     expect(root.TerminalProvider).toBeTruthy();
     expect(root.createRuntime).toBeTruthy();
-    expect(root.createOsc52ClipboardProvider).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
+    expect(cli.createTerminalApp).toBeTruthy();
+    expect(cli.createStdoutRenderer).toBeTruthy();
+    expect(cli.createStdinDriver).toBeTruthy();
+    expect(cli.createOsc52ClipboardProvider).toBeTruthy();
+    expect("createTerminalApp" in rootCjs).toBe(false);
+    expect("createStdoutRenderer" in rootCjs).toBe(false);
     expect(rootCjs.TerminalProvider).toBeTruthy();
     expect(rootCjs.createRuntime).toBeTruthy();
-    expect(rootCjs.createOsc52ClipboardProvider).toBeTruthy();
     expect(rootCjs.createFramePerfStore).toBeTruthy();
     expect(rootCjs.framePerfNow).toBeTruthy();
+    expect(cliCjs.createTerminalApp).toBeTruthy();
+    expect(cliCjs.createStdoutRenderer).toBeTruthy();
+    expect(cliCjs.createStdinDriver).toBeTruthy();
+    expect(cliCjs.createOsc52ClipboardProvider).toBeTruthy();
     expect(markdown.TMarkdownText).toBeTruthy();
     expect(markdown.TVirtualMarkdown).toBeTruthy();
     expect(markdown.createMarkdownBlockSource).toBeTruthy();
