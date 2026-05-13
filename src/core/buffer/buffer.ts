@@ -327,19 +327,26 @@ export function fillRect(
     return;
   }
 
-  const cell = width === 2 ? undefined : createCell(ch, style);
+  const fillCell = createCell(ch, style);
+  const continuationCell = createContinuationCell(style);
+  const blank = createBlankCell();
 
   for (let yy = y0; yy < y1; yy++) {
     const row = getBufferRow(buffer, yy);
-    for (let xx = x0; xx < x1; xx++) {
+    for (let xx = x0; xx < x1; ) {
       clearWideIfOverwriting(row, xx);
-      if (width === 2 && xx + 1 >= buffer.cols) {
-        row[xx] = createBlankCell();
-      } else {
-        row[xx] = cell ?? createCell(ch, style);
-        if (width === 2 && xx + 1 < buffer.cols) row[xx + 1] = createContinuationCell(style);
+      if (xx + 1 >= x1 || xx + 1 >= buffer.cols) {
+        row[xx] = blank;
+        xx += 1;
+        continue;
       }
+
+      clearWideIfOverwriting(row, xx + 1);
+      row[xx] = fillCell;
+      row[xx + 1] = continuationCell;
+      xx += 2;
     }
+    recomputeFingerprintsForRows(buffer, yy, yy + 1);
     markDirty(buffer, yy);
   }
 }
