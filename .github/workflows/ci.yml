@@ -45,8 +45,8 @@ jobs:
 
       - run: pnpm run test:unit
 
-      # Deterministic smoke bench: behavior thresholds only, no runner-timing gate.
-      - run: pnpm run bench:scroll-mailbox
+      # Deterministic behavior budgets only; timing budgets stay out of PR CI.
+      - run: pnpm run bench:baseline
 
       - run: pnpm run docs:build
 

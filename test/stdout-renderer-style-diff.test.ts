@@ -55,6 +55,9 @@ describe("stdout renderer style diffing", () => {
     expect(sanitizeTerminalHref("data:text/html,hi")).toBeNull();
     expect(sanitizeTerminalHref("//evil.example")).toBeNull();
     expect(sanitizeTerminalHref("file:///tmp/a")).toBeNull();
+    expect(sanitizeTerminalHref("https://")).toBeNull();
+    expect(sanitizeTerminalHref("http://?x")).toBeNull();
+    expect(sanitizeTerminalHref("https:example.com")).toBeNull();
     expect(sanitizeTerminalHref("https://a.com\u0007bad")).toBeNull();
     expect(sanitizeTerminalHref("https://a.com\u001B]8;;x")).toBeNull();
     expect(sanitizeTerminalHref("https://example.com/a b")).toBeNull();

@@ -2,6 +2,8 @@ export type SanitizeTerminalHrefOptions = Readonly<{
   allowFileUrls?: boolean;
 }>;
 
+const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
+
 export function sanitizeTerminalHref(
   value: unknown,
   options: SanitizeTerminalHrefOptions = {},
@@ -18,10 +20,21 @@ export function sanitizeTerminalHref(
   if (raw.startsWith("//")) return null;
 
   const lower = raw.toLowerCase();
-  if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:")) {
-    return raw;
-  }
-  if (options.allowFileUrls && lower.startsWith("file://")) return raw;
+  const hasAllowedPrefix =
+    lower.startsWith("http://") ||
+    lower.startsWith("https://") ||
+    lower.startsWith("mailto:") ||
+    (options.allowFileUrls === true && lower.startsWith("file://"));
 
-  return null;
+  if (!hasAllowedPrefix) return null;
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol === "file:") {
+      return options.allowFileUrls === true ? raw : null;
+    }
+    return SAFE_PROTOCOLS.has(parsed.protocol) ? raw : null;
+  } catch {
+    return null;
+  }
 }
