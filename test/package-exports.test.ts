@@ -212,6 +212,23 @@ describe("package exports", () => {
     });
   });
 
+  it.skipIf(!requireDistExports)(
+    "keeps the built root entrypoint browser-bundleable without Node built-ins",
+    async () => {
+      expect(existsSync(distIndex)).toBe(true);
+
+      const { build } = await import("esbuild");
+      await build({
+        entryPoints: [distIndex],
+        bundle: true,
+        write: false,
+        platform: "browser",
+        format: "esm",
+        external: ["vue"],
+      });
+    },
+  );
+
   it.skipIf(!requireDistExports)("keeps built ESM/CJS experimental exports usable", async () => {
     expect(existsSync(distIndex)).toBe(true);
     expect(existsSync(distCli)).toBe(true);
