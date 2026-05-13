@@ -92,7 +92,7 @@
     "lint:fix": "oxlint . --fix",
     "check:hidden-unicode": "node scripts/check-hidden-unicode.cjs",
     "prepublishOnly": "pnpm build",
-    "release": "bumpp && pnpm run release:dry-run && pnpm publish --no-git-checks --access public",
+    "release": "pnpm run release:dry-run && bumpp && pnpm publish --no-git-checks --access public",
     "release:ci": "pnpm run release:dry-run && pnpm publish --no-git-checks --access public --provenance",
     "release:bench": "pnpm run bench:scroll-mailbox && pnpm run bench:dom-renderer && pnpm run bench:phase2",
     "release:check": "pnpm run check:hidden-unicode && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run test:package-exports && pnpm run docs:build",
