@@ -155,7 +155,7 @@ The smoke commands are deterministic and avoid real LLM APIs, real TTY dependenc
 - Use `TLogView` with `createAppendOnlyLogStore({ maxLines })` for retained streaming logs.
 - Provide stable line keys for custom `TLogView` sources; mutable rows should change keys or call the explicit invalidation APIs.
 - Split high-volume content and frequently changing chrome into different `TRenderPlane`s.
-- Reuse style objects on hot paths instead of creating new object literals every frame.
+- Style objects are treated as immutable. Reuse stable style objects on hot paths, but pass a new object when a style changes.
 
 Useful checks:
 
