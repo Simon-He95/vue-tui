@@ -1,17 +1,20 @@
 import type { ParseResult } from "./parse-utils.js";
 import { appendFileSync } from "node:fs";
 import process from "node:process";
+import { envFlag, envString } from "../utils/env.js";
 
 function parseMouseSgr(sequence: string): ParseResult {
   if (!sequence.startsWith("\x1B[<")) return { handled: false, event: null };
 
   const env = (process?.env ?? {}) as Record<string, unknown>;
-  const invertWheel = String(env.VUE_TUI_WHEEL_INVERT ?? env.DIMCODE_WHEEL_INVERT ?? "") === "1";
-  const mouseDebugEnabled =
-    String(env.VUE_TUI_MOUSE_DEBUG ?? env.DIMCODE_MOUSE_DEBUG ?? "") === "1";
-  const mouseDebugPath =
-    String(env.VUE_TUI_MOUSE_DEBUG_PATH ?? env.DIMCODE_MOUSE_DEBUG_PATH ?? "").trim() ||
-    "/tmp/vue-tui-mouse-debug.log";
+  const invertWheel = envFlag(env, "VUE_TUI_WHEEL_INVERT", "DIMCODE_WHEEL_INVERT");
+  const mouseDebugEnabled = envFlag(env, "VUE_TUI_MOUSE_DEBUG", "DIMCODE_MOUSE_DEBUG");
+  const mouseDebugPath = envString(
+    env,
+    "VUE_TUI_MOUSE_DEBUG_PATH",
+    "DIMCODE_MOUSE_DEBUG_PATH",
+    "/tmp/vue-tui-mouse-debug.log",
+  );
   const debug = (msg: string): void => {
     if (!mouseDebugEnabled) return;
     try {

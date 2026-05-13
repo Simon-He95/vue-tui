@@ -1,6 +1,5 @@
 export type { TInputHostAdapter } from "./components/input/host.js";
 export { createTInputHostPlugin } from "./components/input/plugins/hostPlugin.js";
-export { createNodeMentionPathProvider } from "./components/input/plugins/nodeMentionPathProvider.js";
 export { createPromptMentionPlugin } from "./components/input/plugins/promptMentionPlugin.js";
 export type {
   MentionPathProvider,

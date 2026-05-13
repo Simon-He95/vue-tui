@@ -81,6 +81,28 @@ describe("terminal capability", () => {
     expect(cap).toEqual({ mode: "ansi8", level: 8 });
   });
 
+  it("falls back to legacy color env when the new env is empty", () => {
+    const cap = detectTerminalColorCapability({
+      env: {
+        VUE_TUI_COLOR_MODE: "",
+        DIMCODE_COLOR_MODE: "ansi256",
+      },
+      isTTY: true,
+    });
+    expect(cap).toEqual({ mode: "ansi256", level: 256 });
+  });
+
+  it("falls back to legacy color env when the new env is invalid", () => {
+    const cap = detectTerminalColorCapability({
+      env: {
+        VUE_TUI_COLOR_MODE: "bogus",
+        DIMCODE_COLOR_MODE: "ansi16",
+      },
+      isTTY: true,
+    });
+    expect(cap).toEqual({ mode: "ansi16", level: 16 });
+  });
+
   it("keeps Windows hint-based truecolor detection intact", () => {
     const cap = detectTerminalColorCapability({
       env: {

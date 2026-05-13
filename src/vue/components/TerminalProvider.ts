@@ -11,6 +11,7 @@ import type {
   SelectionTextProvider,
   TerminalSelectionCopyPayload,
   TerminalSelectionOptions,
+  TerminalSelectionRefreshOptions,
 } from "../../selection/terminal-selection.js";
 import type {
   ImeAnchor,
@@ -310,7 +311,7 @@ export const TerminalProvider = defineComponent({
         selectionCopyHandlers.add(handler);
         return () => selectionCopyHandlers.delete(handler);
       },
-      refresh(options) {
+      refresh(options?: TerminalSelectionRefreshOptions) {
         selection.refresh(options);
       },
       clear() {

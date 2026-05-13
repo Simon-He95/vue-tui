@@ -144,6 +144,12 @@ export type TLogUrlPluginOptions = Readonly<{
   allowFileUrls?: boolean;
 }>;
 
+type ActiveTLogOsc8Link = {
+  href: string;
+  startIndex: number;
+  endIndex: number;
+};
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -163,7 +169,7 @@ export function parseTLogAnnotatedText(text: string): Readonly<{
   const out: string[] = [];
   const links: TLogParsedOsc8Link[] = [];
   let currentHref: string | undefined;
-  let activeLink: { href: string; startIndex: number; endIndex: number } | null = null;
+  let activeLink: ActiveTLogOsc8Link | null = null;
   let plainLength = 0;
 
   const flushLink = (): void => {
@@ -190,7 +196,8 @@ export function parseTLogAnnotatedText(text: string): Readonly<{
       out.push(ch);
       plainLength += ch.length;
       if (currentHref) {
-        if (activeLink?.href === currentHref) activeLink.endIndex += ch.length;
+        const link = activeLink as ActiveTLogOsc8Link | null;
+        if (link && link.href === currentHref) link.endIndex += ch.length;
         else
           activeLink = {
             href: currentHref,

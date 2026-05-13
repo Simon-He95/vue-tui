@@ -15,7 +15,7 @@ export default defineConfig([
     external: ["vue", "stream-markdown-parser"],
   },
   {
-    target: "node18",
+    target: "node14",
     entry: {
       cli: "src/cli.ts",
     },

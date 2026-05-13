@@ -4,6 +4,7 @@ import { createDebugLogger, isDebugEnabled } from "../../core/debug-logger.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import { resetPlaneRowsForRender, scrollPlaneRows } from "../../core/terminal/create-terminal.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
+import { envFlag } from "../../utils/env.js";
 import { clearTextCaches, withTextRenderPass } from "../utils/text.js";
 
 const renderMgrDebugLog = createDebugLogger(isDebugEnabled());
@@ -629,11 +630,11 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       return y != null && y < y1;
     }
 
-    if (env?.VUE_TUI_DEBUG === "1" || env?.DIMCODE_DEBUG === "1")
+    if (envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG"))
       renderMgrDebugLog.render("[RENDER-MANAGER] render() called");
 
     if (!hasPendingDirtyWork(requestedPlanes)) {
-      if (env?.VUE_TUI_DEBUG === "1" || env?.DIMCODE_DEBUG === "1")
+      if (envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG"))
         renderMgrDebugLog.render("[RENDER-MANAGER] render() skipped (no dirty rows)");
       return null;
     }
@@ -813,7 +814,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       });
     }
 
-    if (env?.VUE_TUI_DEBUG === "1" || env?.DIMCODE_DEBUG === "1")
+    if (envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG"))
       renderMgrDebugLog.render("[RENDER-MANAGER] terminal.batch() completed");
 
     const stats: RenderStats = {

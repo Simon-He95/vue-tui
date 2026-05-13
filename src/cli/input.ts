@@ -1,6 +1,7 @@
 import type { TerminalEventRecord } from "../events/recording.js";
 import process from "node:process";
 import { getCliLatencyProfiler } from "../observability/cli-latency-node.js";
+import { firstNonEmptyEnv } from "../utils/env.js";
 import { normalizeNewlines } from "../utils/newlines.js";
 import { parseKittySequence } from "./parse-kitty.js";
 import { parseMouseSequence } from "./parse-mouse.js";
@@ -167,9 +168,13 @@ function resolveKeyboardProtocol(
   const configured = parseKeyboardProtocol(options.keyboardProtocol) ?? "auto";
   if (configured !== "auto") return configured;
 
-  const envOverride = parseKeyboardProtocol(
-    options.env?.VUE_TUI_KEYBOARD_PROTOCOL ?? options.env?.DIMCODE_KEYBOARD_PROTOCOL,
+  const primaryOverride = parseKeyboardProtocol(
+    firstNonEmptyEnv(options.env, "VUE_TUI_KEYBOARD_PROTOCOL"),
   );
+  if (primaryOverride === "auto") return detectKeyboardProtocol(options.env ?? {});
+  const envOverride =
+    primaryOverride ??
+    parseKeyboardProtocol(firstNonEmptyEnv(options.env, "DIMCODE_KEYBOARD_PROTOCOL"));
   if (envOverride && envOverride !== "auto") return envOverride;
 
   return detectKeyboardProtocol(options.env ?? {});

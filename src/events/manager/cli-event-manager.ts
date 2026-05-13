@@ -13,6 +13,7 @@ import type {
 import { appendFileSync } from "node:fs";
 import process from "node:process";
 import { resolveDebugLogPath } from "../../core/debug-logger.js";
+import { envFlag } from "../../utils/env.js";
 import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
 import {
   SUPPRESS_TERMINAL_POINTER_DOWN,
@@ -307,7 +308,7 @@ export function createCliEventManager(
         // Log handler error but don't crash
         try {
           const env = process?.env as Record<string, unknown> | undefined;
-          if (env?.VUE_TUI_DEBUG === "1" || env?.DIMCODE_DEBUG === "1") {
+          if (envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG")) {
             const timestamp = new Date().toISOString().split("T")[1].slice(0, -1);
             appendFileSync(
               resolveDebugLogPath(env),

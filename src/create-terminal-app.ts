@@ -9,10 +9,10 @@ import type {
   SelectionTextProvider,
   TerminalSelectionConfig,
   TerminalSelectionCopyPayload,
+  TerminalSelectionRefreshOptions,
 } from "./selection/terminal-selection.js";
 import type { TInputPlugin } from "./vue/components/input/plugins/types.js";
 
-import { appendFileSync } from "node:fs";
 import type {
   ImeAnchor,
   LayoutContext,
@@ -25,6 +25,7 @@ import type {
 import process from "node:process";
 import { defineComponent, h, provide, ref, shallowReactive, shallowRef } from "vue";
 import { createHeadlessApp, createHeadlessRoot } from "./cli/headless-renderer.js";
+import { installNodeFileWriters, nodeProfilerFileWriter } from "./cli/node-file-writers.js";
 import { createNodePathPickerProvider } from "./cli/path-provider.js";
 import { createTerminal } from "./core/index.js";
 import { getPlaneTerminal } from "./core/terminal/create-terminal.js";
@@ -63,6 +64,7 @@ import {
   SUPPRESS_TERMINAL_POINTER_MOVE,
   SUPPRESS_TERMINAL_POINTER_UP,
 } from "./events/manager/selection-suppression.js";
+import { firstNonEmptyEnv } from "./utils/env.js";
 
 interface Portal {
   id: string;
@@ -167,6 +169,8 @@ export type CreateTerminalAppOptions = Readonly<{
 }>;
 
 export function createTerminalApp(options: CreateTerminalAppOptions): TerminalApp {
+  installNodeFileWriters();
+
   const terminal: Terminal = createTerminal({
     cols: options.cols,
     rows: options.rows,
@@ -179,7 +183,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   });
   const latency = getCliLatencyProfiler();
   const profiler = createTuiProfiler("cli-scheduler", {
-    fileWriter: { appendFileSync },
+    fileWriter: nodeProfilerFileWriter,
   });
   const baseEvents = createCliEventManager({
     record: (event) => {
@@ -222,10 +226,16 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   let schedulerApi: TerminalScheduler;
   const env = (process?.env ?? {}) as Record<string, unknown>;
   const throttleMs = (() => {
-    const raw = env.VUE_TUI_THROTTLE_MS ?? env.DIMCODE_TUI_THROTTLE_MS;
-    if (!raw) return 0;
-    const v = Number(raw);
-    return Number.isFinite(v) && v > 0 ? v : 0;
+    const parseThrottle = (raw: unknown): number | null => {
+      if (raw == null) return null;
+      const v = Number(raw);
+      return Number.isFinite(v) && v >= 0 ? v : null;
+    };
+    return (
+      parseThrottle(firstNonEmptyEnv(env, "VUE_TUI_THROTTLE_MS")) ??
+      parseThrottle(firstNonEmptyEnv(env, "DIMCODE_TUI_THROTTLE_MS")) ??
+      0
+    );
   })();
   const frameThrottleMs = (() => {
     if (!process?.stdout?.isTTY) return 0;
@@ -552,7 +562,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       selectionCopyHandlers.add(handler);
       return () => selectionCopyHandlers.delete(handler);
     },
-    refresh(options) {
+    refresh(options?: TerminalSelectionRefreshOptions) {
       selection.refresh(options);
     },
     clear() {

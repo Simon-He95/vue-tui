@@ -7,8 +7,8 @@ import type {
 } from "../../core/types.js";
 import type { RendererCapabilities } from "../capabilities.js";
 import { Buffer } from "node:buffer";
-import { appendFileSync } from "node:fs";
 import process from "node:process";
+import { installNodeFileWriters, nodeProfilerFileWriter } from "../../cli/node-file-writers.js";
 import type { ThemePalette } from "../../core/ansi-palette.js";
 import { ansiColorRgb, ansiHexToRgb, isAnsiColorName } from "../../core/ansi-palette.js";
 import { detectTerminalColorCapability } from "../../core/ansi/capability.js";
@@ -35,6 +35,7 @@ import { sanitizeTerminalHref } from "../../core/hyperlink.js";
 import { getPlaneRowCoverageKind } from "../../core/terminal/create-terminal.js";
 import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
+import { firstNonEmptyEnv } from "../../utils/env.js";
 import { STDOUT_RENDERER_CAPABILITIES } from "../capabilities.js";
 import { recordStdoutFrame } from "./stdout-metrics.js";
 
@@ -118,6 +119,8 @@ export function createStdoutRenderer(
     profileFileWriter?: { appendFileSync?: (path: string, data: string) => void };
   }>,
 ): StdoutRenderer {
+  installNodeFileWriters();
+
   const output: CliOutput | undefined = options?.output ?? (process.stdout as any);
   if (!output) throw new Error("createStdoutRenderer requires a Node stdout-like output");
   const out = output;
@@ -133,7 +136,7 @@ export function createStdoutRenderer(
   const getImeAnchor = options?.getImeAnchor;
   const cliLatency = getCliLatencyProfiler();
   const profiler = createTuiProfiler("stdout-renderer", {
-    fileWriter: options?.profileFileWriter ?? { appendFileSync },
+    fileWriter: options?.profileFileWriter ?? nodeProfilerFileWriter,
   });
 
   // Resolve whether to use synchronized output mode (DEC 2026)
@@ -674,7 +677,9 @@ export function createStdoutRenderer(
   // content natively instead of redrawing the entire viewport on scroll.
   // Disable via VUE_TUI_SCROLL_REGIONS=0 (or legacy DIMCODE_TUI_SCROLL_REGIONS=0) for debugging.
   const enableScrollRegions = (() => {
-    const raw = String(env.VUE_TUI_SCROLL_REGIONS ?? env.DIMCODE_TUI_SCROLL_REGIONS ?? "").trim();
+    const raw = String(
+      firstNonEmptyEnv(env, "VUE_TUI_SCROLL_REGIONS", "DIMCODE_TUI_SCROLL_REGIONS") ?? "",
+    ).trim();
     if (raw === "0" || raw === "false") return false;
     // Ghostty has issues with DECSTBM in some versions; disable by default
     if (isGhostty || isVscodeTerminal) return false;

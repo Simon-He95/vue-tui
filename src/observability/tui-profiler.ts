@@ -1,4 +1,5 @@
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../core/render-plane.js";
+import { envFlag, envString, firstNonEmptyEnv } from "../utils/env.js";
 
 type NowFn = () => number;
 type TuiProfilerFileWriter = Readonly<{
@@ -25,24 +26,28 @@ function defaultNow(): number {
   return Date.now();
 }
 
-function parseEnabled(v: unknown): boolean {
-  return String(v ?? "").trim() === "1";
-}
-
-function parseLogFormat(v: unknown): "text" | "json" {
+function parseLogFormat(v: unknown): "text" | "json" | null {
   const s = String(v ?? "")
     .trim()
     .toLowerCase();
-  return s === "json" ? "json" : "text";
+  if (s === "json") return "json";
+  if (s === "text") return "text";
+  return null;
 }
 
-function parseLogDest(v: unknown): "stdout" | "file" | "both" {
+function parseLogDest(v: unknown): "stdout" | "file" | "both" | null {
   const s = String(v ?? "")
     .trim()
     .toLowerCase();
   if (s === "file") return "file";
   if (s === "both") return "both";
-  return "stdout";
+  if (s === "stdout") return "stdout";
+  return null;
+}
+
+function parseLogEveryMs(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 function formatClockTime(ms: number): string {
@@ -77,13 +82,17 @@ export function createTuiProfiler(
   options: CreateTuiProfilerOptions = {},
 ): TuiProfiler | null {
   const env = (globalThis as any).process?.env as Record<string, unknown> | undefined;
-  if (!parseEnabled(env?.VUE_TUI_PROFILE ?? env?.DIMCODE_PROFILE_TUI)) return null;
+  if (!envFlag(env, "VUE_TUI_PROFILE", "DIMCODE_PROFILE_TUI")) return null;
 
-  const format = parseLogFormat(env?.VUE_TUI_PROFILE_FORMAT ?? env?.DIMCODE_PROFILE_TUI_FORMAT);
-  const logDest = parseLogDest(env?.VUE_TUI_PROFILE_LOG_DEST ?? env?.DIMCODE_PROFILE_TUI_LOG_DEST);
-  const logPath = String(
-    env?.VUE_TUI_PROFILE_LOG_PATH ?? env?.DIMCODE_PROFILE_TUI_LOG_PATH ?? "",
-  ).trim();
+  const format =
+    parseLogFormat(firstNonEmptyEnv(env, "VUE_TUI_PROFILE_FORMAT")) ??
+    parseLogFormat(firstNonEmptyEnv(env, "DIMCODE_PROFILE_TUI_FORMAT")) ??
+    "text";
+  const logDest =
+    parseLogDest(firstNonEmptyEnv(env, "VUE_TUI_PROFILE_LOG_DEST")) ??
+    parseLogDest(firstNonEmptyEnv(env, "DIMCODE_PROFILE_TUI_LOG_DEST")) ??
+    "stdout";
+  const logPath = envString(env, "VUE_TUI_PROFILE_LOG_PATH", "DIMCODE_PROFILE_TUI_LOG_PATH");
   let invalidates = 0;
   let renders = 0;
   let fullRenders = 0;
@@ -102,9 +111,10 @@ export function createTuiProfiler(
   const invalidatePlaneCounts = new Map<string, number>();
   const renderPlaneCounts = new Map<string, number>();
 
-  const logEveryMs = Number(
-    env?.VUE_TUI_PROFILE_LOG_EVERY_MS ?? env?.DIMCODE_PROFILE_TUI_LOG_EVERY_MS ?? 1000,
-  );
+  const logEveryMs =
+    parseLogEveryMs(firstNonEmptyEnv(env, "VUE_TUI_PROFILE_LOG_EVERY_MS")) ??
+    parseLogEveryMs(firstNonEmptyEnv(env, "DIMCODE_PROFILE_TUI_LOG_EVERY_MS")) ??
+    1000;
   const now = defaultNow;
   let lastLogAt = now();
 

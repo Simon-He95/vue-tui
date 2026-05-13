@@ -59,7 +59,10 @@ async function mountComposableHarness(
   const App = defineComponent({
     name: "UseTLogSearchResultsPageHarness",
     setup() {
-      api = useTLogSearchResultsPage(logView, options);
+      api = useTLogSearchResultsPage(
+        logView as Parameters<typeof useTLogSearchResultsPage>[0],
+        options,
+      );
       return () => null;
     },
   });

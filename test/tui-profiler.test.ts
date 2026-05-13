@@ -52,4 +52,66 @@ describe("tui profiler", () => {
       else process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = previousEvery;
     }
   });
+
+  it("falls back to legacy profiler env when new parsed values are invalid or empty", () => {
+    const previousProfile = process.env.VUE_TUI_PROFILE;
+    const previousDest = process.env.VUE_TUI_PROFILE_LOG_DEST;
+    const previousPath = process.env.VUE_TUI_PROFILE_LOG_PATH;
+    const previousEvery = process.env.VUE_TUI_PROFILE_LOG_EVERY_MS;
+    const previousLegacyDest = process.env.DIMCODE_PROFILE_TUI_LOG_DEST;
+    const previousLegacyPath = process.env.DIMCODE_PROFILE_TUI_LOG_PATH;
+    const previousLegacyEvery = process.env.DIMCODE_PROFILE_TUI_LOG_EVERY_MS;
+
+    process.env.VUE_TUI_PROFILE = "1";
+    process.env.VUE_TUI_PROFILE_LOG_DEST = "invalid";
+    process.env.VUE_TUI_PROFILE_LOG_PATH = "";
+    process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = "invalid";
+    process.env.DIMCODE_PROFILE_TUI_LOG_DEST = "file";
+    process.env.DIMCODE_PROFILE_TUI_LOG_PATH = "/tmp/vue-tui-legacy-profile-test.log";
+    process.env.DIMCODE_PROFILE_TUI_LOG_EVERY_MS = "100";
+    vi.useFakeTimers();
+
+    const writes: string[] = [];
+    const paths: string[] = [];
+    setTuiProfilerFileWriter({
+      appendFileSync: (path, data) => {
+        paths.push(path);
+        writes.push(data);
+      },
+    });
+    const profiler = createTuiProfiler("render-manager");
+
+    try {
+      expect(profiler).not.toBeNull();
+      profiler?.recordRender({
+        durationMs: 2,
+        rows: 1,
+        nodes: 1,
+        fullRepaint: false,
+        sorted: false,
+      });
+      vi.advanceTimersByTime(100);
+
+      expect(paths).toEqual(["/tmp/vue-tui-legacy-profile-test.log"]);
+      expect(writes.join("")).toContain("[VUE_TUI_PROFILE] render-manager");
+    } finally {
+      setTuiProfilerFileWriter(null);
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      if (previousProfile == null) delete process.env.VUE_TUI_PROFILE;
+      else process.env.VUE_TUI_PROFILE = previousProfile;
+      if (previousDest == null) delete process.env.VUE_TUI_PROFILE_LOG_DEST;
+      else process.env.VUE_TUI_PROFILE_LOG_DEST = previousDest;
+      if (previousPath == null) delete process.env.VUE_TUI_PROFILE_LOG_PATH;
+      else process.env.VUE_TUI_PROFILE_LOG_PATH = previousPath;
+      if (previousEvery == null) delete process.env.VUE_TUI_PROFILE_LOG_EVERY_MS;
+      else process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = previousEvery;
+      if (previousLegacyDest == null) delete process.env.DIMCODE_PROFILE_TUI_LOG_DEST;
+      else process.env.DIMCODE_PROFILE_TUI_LOG_DEST = previousLegacyDest;
+      if (previousLegacyPath == null) delete process.env.DIMCODE_PROFILE_TUI_LOG_PATH;
+      else process.env.DIMCODE_PROFILE_TUI_LOG_PATH = previousLegacyPath;
+      if (previousLegacyEvery == null) delete process.env.DIMCODE_PROFILE_TUI_LOG_EVERY_MS;
+      else process.env.DIMCODE_PROFILE_TUI_LOG_EVERY_MS = previousLegacyEvery;
+    }
+  });
 });

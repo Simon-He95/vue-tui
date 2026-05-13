@@ -227,9 +227,13 @@ describe("package exports", () => {
       .map((file) => new TextDecoder().decode(file.contents))
       .join("\n");
     expect(output).not.toContain("node:child_process");
+    expect(output).not.toContain("node:fs");
+    expect(output).not.toContain("node:path");
+    expect(output).not.toContain("node:url");
     expect(output).not.toContain("new Function");
     expect(output).not.toContain("process.stdout");
     expect(output).not.toContain("createOsc52ClipboardProvider");
+    expect(output).not.toContain("createNodeMentionPathProvider");
   });
 
   it.skipIf(!requireDistExports)(
@@ -259,9 +263,13 @@ describe("package exports", () => {
         .map((file) => new TextDecoder().decode(file.contents))
         .join("\n");
       expect(output).not.toContain("node:child_process");
+      expect(output).not.toContain("node:fs");
+      expect(output).not.toContain("node:path");
+      expect(output).not.toContain("node:url");
       expect(output).not.toContain("new Function");
       expect(output).not.toContain("process.stdout");
       expect(output).not.toContain("createOsc52ClipboardProvider");
+      expect(output).not.toContain("createNodeMentionPathProvider");
     },
   );
 

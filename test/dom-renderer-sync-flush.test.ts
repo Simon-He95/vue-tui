@@ -77,7 +77,7 @@ describe("DomRenderer sync flush", () => {
       const container = document.createElement("div");
       document.body.appendChild(container);
       const renderer = createDomRenderer(terminal, container);
-      pending?.(0);
+      (pending as FrameRequestCallback | null)?.(0);
       rafCalls = 0;
       pending = null;
 
@@ -86,7 +86,7 @@ describe("DomRenderer sync flush", () => {
 
       expect(rafCalls).toBe(1);
       expect(container.textContent).not.toContain("B");
-      pending?.(0);
+      (pending as FrameRequestCallback | null)?.(0);
       expect(container.textContent).toContain("B");
 
       renderer.dispose();
@@ -373,12 +373,12 @@ describe("DomRenderer sync flush", () => {
       const container = document.createElement("div");
       document.body.appendChild(container);
       const renderer = createDomRenderer(terminal, container);
-      pending?.(0);
+      (pending as FrameRequestCallback | null)?.(0);
 
       for (let y = 0; y < 40; y++) terminal.fill(0, y, 4, 1, "A");
       terminal.commit({ sync: true });
       expect(rowText(container, 39)).not.toContain("A");
-      pending?.(0);
+      (pending as FrameRequestCallback | null)?.(0);
       expect(rowText(container, 39)).toContain("A");
 
       (globalThis as any).__VT_DEBUG_PERF__ = true;
@@ -389,7 +389,7 @@ describe("DomRenderer sync flush", () => {
         "[vue-tui] sync DOM flush request deferred to rAF: rows=40 maxRows=32 cols=4 planes=4 cells=640 maxCells=4096",
       );
       expect(rowText(container, 39)).toContain("A");
-      pending?.(0);
+      (pending as FrameRequestCallback | null)?.(0);
       expect(rowText(container, 39)).not.toContain("A");
 
       renderer.dispose();
@@ -423,7 +423,7 @@ describe("DomRenderer sync flush", () => {
       const container = document.createElement("div");
       document.body.appendChild(container);
       const renderer = createDomRenderer(terminal, container);
-      pending?.(0);
+      (pending as FrameRequestCallback | null)?.(0);
 
       terminal.clear();
       terminal.commit({ sync: true });

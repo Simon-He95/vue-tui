@@ -137,7 +137,7 @@ describe("scheduler frame tasks", () => {
           },
         });
       }
-      probe.scheduler.cancelFrameTask("canceled");
+      probe.scheduler.cancelFrameTask?.("canceled");
       probe.scheduler.queueFrameTask({
         id: "kept",
         reason: "input",

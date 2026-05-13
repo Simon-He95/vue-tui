@@ -11,6 +11,8 @@ describe("TLog link sanitizing", () => {
     expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com");
     expect(sanitizeTerminalHref("file:///tmp/a")).toBeNull();
     expect(sanitizeTerminalHref("file:///tmp/a", { allowFileUrls: true })).toBe("file:///tmp/a");
+    expect(sanitizeTerminalHref("docs/intro.md")).toBeNull();
+    expect(sanitizeTerminalHref("foo:bar")).toBeNull();
   });
 
   it("drops unsafe OSC8 links while preserving visible text", () => {

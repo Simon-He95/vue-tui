@@ -17,7 +17,10 @@ async function mountHarness(
   const App = defineComponent({
     name: "UseTLogSearchControllerHarness",
     setup() {
-      api = useTLogSearchController(logView, options);
+      api = useTLogSearchController(
+        logView as Parameters<typeof useTLogSearchController>[0],
+        options,
+      );
       return () => null;
     },
   });

@@ -28,8 +28,11 @@ describe("DomRenderer row rendering", () => {
     expect(sanitizeDomHref("vbscript:msgbox(1)")).toBeNull();
     expect(sanitizeDomHref("JaVaScRiPt:alert(1)")).toBeNull();
     expect(sanitizeDomHref("data:text/html,boom")).toBeNull();
+    expect(sanitizeDomHref("foo:bar")).toBeNull();
     expect(sanitizeDomHref("https://example.com")).toBe("https://example.com");
     expect(sanitizeDomHref("docs/intro.md")).toBe("docs/intro.md");
+    expect(sanitizeDomHref("./intro.md")).toBe("./intro.md");
+    expect(sanitizeDomHref("../intro.md")).toBe("../intro.md");
     expect(sanitizeDomHref("#section")).toBe("#section");
   });
 

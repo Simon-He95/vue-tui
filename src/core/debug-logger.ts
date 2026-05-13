@@ -1,3 +1,5 @@
+import { envFlag, envString } from "../utils/env.js";
+
 const DEFAULT_LOG_FILE = "/tmp/vue-tui-debug.log";
 let enabled = false;
 let debugFileWriter: DebugFileWriter | null = null;
@@ -21,10 +23,7 @@ export function resolveDebugLogPath(
   env: Record<string, unknown> | undefined,
   fallback = DEFAULT_LOG_FILE,
 ): string {
-  return (
-    String(env?.VUE_TUI_DEBUG_LOG_PATH ?? env?.DIMCODE_DEBUG_LOG_PATH ?? fallback).trim() ||
-    fallback
-  );
+  return envString(env, "VUE_TUI_DEBUG_LOG_PATH", "DIMCODE_DEBUG_LOG_PATH", fallback);
 }
 
 function debugLogPath(): string {
@@ -85,5 +84,5 @@ function write(data: string): void {
  */
 export function isDebugEnabled(): boolean {
   const env = (globalThis as any).process?.env;
-  return env?.VUE_TUI_DEBUG === "1" || env?.DIMCODE_DEBUG === "1" || env?.DEBUG === "1";
+  return envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG") || env?.DEBUG === "1";
 }

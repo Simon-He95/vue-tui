@@ -22,7 +22,7 @@ async function mountHarness(
   const App = defineComponent({
     name: "UseTLogLinkControllerHarness",
     setup() {
-      api = useTLogLinkController(logView, options);
+      api = useTLogLinkController(logView as Parameters<typeof useTLogLinkController>[0], options);
       return () => null;
     },
   });

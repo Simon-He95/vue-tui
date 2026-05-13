@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { parseMouseSequence } from "../src/cli/parse-mouse.js";
 import { resolveDebugLogPath } from "../src/core/debug-logger.js";
 import { createCliEventManager } from "../src/events/manager/cli-event-manager.js";
+import { envFlag } from "../src/utils/env.js";
 
 const ENV_KEYS = [
   "VUE_TUI_DEBUG",
@@ -61,6 +62,22 @@ describe("debug log paths", () => {
     expect(resolveDebugLogPath({ DIMCODE_DEBUG_LOG_PATH: "/tmp/legacy.log" })).toBe(
       "/tmp/legacy.log",
     );
+    expect(
+      resolveDebugLogPath({
+        VUE_TUI_DEBUG_LOG_PATH: "",
+        DIMCODE_DEBUG_LOG_PATH: "/tmp/legacy.log",
+      }),
+    ).toBe("/tmp/legacy.log");
+  });
+
+  it("lets explicit new env flag values override legacy aliases", () => {
+    expect(
+      envFlag(
+        { VUE_TUI_MOUSE_DEBUG: "0", DIMCODE_MOUSE_DEBUG: "1" },
+        "VUE_TUI_MOUSE_DEBUG",
+        "DIMCODE_MOUSE_DEBUG",
+      ),
+    ).toBe(false);
   });
 
   it("writes CLI event handler debug errors to the configured Vue TUI path", () => {
@@ -106,6 +123,26 @@ describe("debug log paths", () => {
         {
           VUE_TUI_MOUSE_DEBUG: "1",
           VUE_TUI_MOUSE_DEBUG_PATH: logPath,
+        },
+        () => {
+          parseMouseSequence("\u001B[<64;10;5M");
+        },
+      );
+
+      const log = readFileSync(logPath, "utf8");
+      expect(log).toContain("[MOUSE] wheel");
+    });
+  });
+
+  it("falls back to the legacy mouse debug path when the new path is empty", () => {
+    withTempDir((dir) => {
+      const logPath = join(dir, "legacy-mouse.log");
+
+      withEnv(
+        {
+          VUE_TUI_MOUSE_DEBUG: "1",
+          VUE_TUI_MOUSE_DEBUG_PATH: "",
+          DIMCODE_MOUSE_DEBUG_PATH: logPath,
         },
         () => {
           parseMouseSequence("\u001B[<64;10;5M");
