@@ -76,4 +76,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run bench:baseline:timing
+      - run: pnpm run bench:baseline
+
+      - name: Timing baseline
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.benchmark == 'true' }}
+        run: pnpm run bench:baseline:timing

@@ -16,5 +16,7 @@ await build({
   platform: "node",
   target: ["node14"],
   sourcemap: false,
+  // CJS intentionally bundles stream-markdown-parser because it only exposes
+  // ESM entrypoints. ESM keeps it external via tsdown.
   external: ["vue"],
 });

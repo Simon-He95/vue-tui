@@ -14,6 +14,7 @@ export function sanitizeTerminalHref(
     const code = raw.charCodeAt(i);
     if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return null;
   }
+  if (/\s/u.test(raw)) return null;
   if (raw.startsWith("//")) return null;
 
   const lower = raw.toLowerCase();

@@ -57,6 +57,12 @@ describe("stdout renderer style diffing", () => {
     expect(sanitizeTerminalHref("file:///tmp/a")).toBeNull();
     expect(sanitizeTerminalHref("https://a.com\u0007bad")).toBeNull();
     expect(sanitizeTerminalHref("https://a.com\u001B]8;;x")).toBeNull();
+    expect(sanitizeTerminalHref("https://example.com/a b")).toBeNull();
+    expect(sanitizeTerminalHref("https://example.com/a%20b")).toBe("https://example.com/a%20b");
+    expect(sanitizeTerminalHref("mailto:test@example.com?subject=Hello World")).toBeNull();
+    expect(sanitizeTerminalHref("mailto:test@example.com?subject=Hello%20World")).toBe(
+      "mailto:test@example.com?subject=Hello%20World",
+    );
   });
 
   it("does not emit unsafe OSC8 hrefs", () => {

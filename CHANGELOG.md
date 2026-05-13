@@ -35,6 +35,14 @@
 - README was rewritten into user-facing docs for entrypoints, examples, validation, and performance guidance.
 - Vue peer dependency range now allows Vue 3.3 through Vue 3.x.
 - Package exports were tightened around root, markdown, and experimental entrypoints.
+- `Style` objects are treated as immutable after first normalization. Pass a new object when style values change.
+- `createTLogUrlPlugin()` no longer detects `file://` URLs by default. Use `{ allowFileUrls: true }` to opt in.
+- Release benchmark validation now uses `bench:baseline`; timing budgets are only checked by `bench:baseline:timing`.
+
+### Security
+
+- Sanitized terminal OSC8 hyperlinks before stdout output, TLog visible-link rendering, TLog plugins, and retained-index link collection.
+- Rejected control characters, raw whitespace, protocol-relative URLs, `javascript:`, `data:`, and `file://` by default for terminal hyperlinks.
 
 ### Fixed
 
@@ -45,6 +53,8 @@
 - Basic browser example build avoids bundling Node-only terminal/event/profiler modules while keeping terminal builds on the root package entry.
 - `TLogView` wrap scroll fast path is disabled when it is unsafe.
 - CI now runs the VitePress docs build during verification so broken docs links fail before release.
+- Preserved wide-glyph buffer invariants when `fillRect()`, `putCell()`, `clearRect()`, and resize operations overlap CJK or emoji continuation cells.
+- Recomputed SoA row fingerprints when wide-glyph boundary operations clear cells outside the direct write range.
 
 ### Performance
 
@@ -62,6 +72,7 @@
 - `bench:scroll-mailbox`.
 - `bench:dom-renderer`.
 - `bench:phase2`.
+- Comparable benchmark baseline checks for renderer cache behavior, mailbox coalescing, and selected Phase 2 scenarios.
 
 ### Experimental
 
