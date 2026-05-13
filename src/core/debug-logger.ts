@@ -17,12 +17,19 @@ export function setDebugFileWriter(writer: DebugFileWriter | null): void {
   debugFileWriter = writer;
 }
 
+export function resolveDebugLogPath(
+  env: Record<string, unknown> | undefined,
+  fallback = DEFAULT_LOG_FILE,
+): string {
+  return (
+    String(env?.VUE_TUI_DEBUG_LOG_PATH ?? env?.DIMCODE_DEBUG_LOG_PATH ?? fallback).trim() ||
+    fallback
+  );
+}
+
 function debugLogPath(): string {
   const env = (globalThis as any).process?.env as Record<string, unknown> | undefined;
-  return (
-    String(env?.VUE_TUI_DEBUG_LOG_PATH ?? env?.DIMCODE_DEBUG_LOG_PATH ?? DEFAULT_LOG_FILE).trim() ||
-    DEFAULT_LOG_FILE
-  );
+  return resolveDebugLogPath(env);
 }
 
 export interface DebugLogger {

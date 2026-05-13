@@ -44,9 +44,6 @@ export function sanitizeDomHref(value: unknown): string | null {
   if (/\s/u.test(raw)) return null;
   if (raw.startsWith("//")) return null;
 
-  const lower = raw.toLowerCase();
-  if (lower.startsWith("javascript:") || lower.startsWith("data:")) return null;
-
   if (RELATIVE_LINK_PREFIXES.some((prefix) => raw.startsWith(prefix))) return raw;
   if (!SCHEME_RE.test(raw)) return raw;
 

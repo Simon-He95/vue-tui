@@ -9,11 +9,9 @@ function parseMouseSgr(sequence: string): ParseResult {
   const invertWheel = String(env.VUE_TUI_WHEEL_INVERT ?? env.DIMCODE_WHEEL_INVERT ?? "") === "1";
   const mouseDebugEnabled =
     String(env.VUE_TUI_MOUSE_DEBUG ?? env.DIMCODE_MOUSE_DEBUG ?? "") === "1";
-  const mouseDebugPath = String(
-    env.VUE_TUI_MOUSE_DEBUG_PATH ??
-      env.DIMCODE_MOUSE_DEBUG_PATH ??
-      "/tmp/goatchain-mouse-debug.log",
-  );
+  const mouseDebugPath =
+    String(env.VUE_TUI_MOUSE_DEBUG_PATH ?? env.DIMCODE_MOUSE_DEBUG_PATH ?? "").trim() ||
+    "/tmp/vue-tui-mouse-debug.log";
   const debug = (msg: string): void => {
     if (!mouseDebugEnabled) return;
     try {

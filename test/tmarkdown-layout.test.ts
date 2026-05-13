@@ -120,6 +120,9 @@ describe("markdown layout", () => {
     expect(isSafeMarkdownLink("https://example.com/a b")).toBe(false);
     expect(isSafeMarkdownLink("https://example.com/a%20b")).toBe(true);
     expect(isSafeMarkdownLink("javascript:alert(1)")).toBe(false);
+    expect(isSafeMarkdownLink("JaVaScRiPt:alert(1)")).toBe(false);
+    expect(isSafeMarkdownLink("data:text/html,boom")).toBe(false);
+    expect(isSafeMarkdownLink("vbscript:msgbox(1)")).toBe(false);
     expect(isSafeMarkdownLink("//evil.test")).toBe(false);
   });
 

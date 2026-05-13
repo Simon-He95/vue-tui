@@ -62,7 +62,7 @@ describe("cli input", () => {
     }
   });
 
-  it("cleans up and re-sends SIGINT once", () => {
+  it("cleans up for SIGINT without re-sending the signal", () => {
     const dispose = vi.fn();
     const kill = vi.spyOn(process, "kill").mockImplementation(() => true as any);
     const before = new Set(process.rawListeners("SIGINT"));
@@ -75,7 +75,7 @@ describe("cli input", () => {
       listener?.();
 
       expect(dispose).toHaveBeenCalledTimes(1);
-      expect(kill).toHaveBeenCalledWith(process.pid, "SIGINT");
+      expect(kill).not.toHaveBeenCalled();
     } finally {
       uninstall();
       kill.mockRestore();

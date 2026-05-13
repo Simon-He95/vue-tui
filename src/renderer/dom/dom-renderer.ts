@@ -632,6 +632,8 @@ function createSegmentElement(style: Style): HTMLSpanElement | HTMLAnchorElement
   anchor.href = href;
   anchor.target = "_blank";
   anchor.rel = "noopener noreferrer";
+  anchor.tabIndex = -1;
+  anchor.draggable = false;
   return anchor;
 }
 

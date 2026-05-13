@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createDomRenderer, createTerminal } from "../src/index.js";
+import { sanitizeDomHref } from "../src/core/hyperlink.js";
 
 function setup(cols = 8, rows = 1, options: Parameters<typeof createDomRenderer>[2] = {}) {
   const terminal = createTerminal({ cols, rows });
@@ -23,6 +24,15 @@ function lastRowStats(renderer: ReturnType<typeof createDomRenderer>) {
 }
 
 describe("DomRenderer row rendering", () => {
+  it("sanitizes DOM hrefs with an explicit allowlist", () => {
+    expect(sanitizeDomHref("vbscript:msgbox(1)")).toBeNull();
+    expect(sanitizeDomHref("JaVaScRiPt:alert(1)")).toBeNull();
+    expect(sanitizeDomHref("data:text/html,boom")).toBeNull();
+    expect(sanitizeDomHref("https://example.com")).toBe("https://example.com");
+    expect(sanitizeDomHref("docs/intro.md")).toBe("docs/intro.md");
+    expect(sanitizeDomHref("#section")).toBe("#section");
+  });
+
   it("applies the default browser accessibility contract", () => {
     const { container, renderer } = setup(4, 2);
 
@@ -444,6 +454,8 @@ describe("DomRenderer row rendering", () => {
       expect(anchor.href).toBe("https://example.com/");
       expect(anchor.target).toBe("_blank");
       expect(anchor.rel).toBe("noopener noreferrer");
+      expect(anchor.tabIndex).toBe(-1);
+      expect(anchor.draggable).toBe(false);
       expect(anchor.dataset.vtFastRow).toBeUndefined();
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
@@ -466,6 +478,7 @@ describe("DomRenderer row rendering", () => {
       const anchor = lineEl(container).querySelector("a");
       expect(anchor).toBeInstanceOf(HTMLAnchorElement);
       expect(anchor?.getAttribute("href")).toBe("docs/intro.md");
+      expect(anchor?.tabIndex).toBe(-1);
     } finally {
       renderer.dispose();
       container.remove();
@@ -473,7 +486,13 @@ describe("DomRenderer row rendering", () => {
   });
 
   it("keeps unsafe href rows as spans", () => {
-    for (const href of ["//evil.example", "javascript:alert(1)", "data:text/html,boom"]) {
+    for (const href of [
+      "//evil.example",
+      "javascript:alert(1)",
+      "JaVaScRiPt:alert(1)",
+      "data:text/html,boom",
+      "vbscript:msgbox(1)",
+    ]) {
       const { terminal, container, renderer } = setup(3);
 
       try {

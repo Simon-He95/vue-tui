@@ -35,9 +35,6 @@ export function isSafeMarkdownLink(url: string): boolean {
   if (/\s/u.test(raw)) return false;
   if (raw.startsWith("//")) return false;
 
-  const value = raw.toLowerCase();
-  if (value.startsWith("javascript:")) return false;
-  if (value.startsWith("data:")) return false;
   if (RELATIVE_LINK_PREFIXES.some((prefix) => raw.startsWith(prefix))) return true;
   if (!SCHEME_RE.test(raw)) return true;
 
