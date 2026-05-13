@@ -58,7 +58,7 @@ type Style = {
 
 `fg` / `bg` 推荐使用 `AnsiColorName`（16 色，如 `whiteBright` / `blue`）、hex（如 `#79c0ff`）或 `transparent`。未知颜色会被 renderer 忽略或回退到默认颜色。
 
-`href` 表示 hyperlink 目标。stdout renderer 会在通过 `sanitizeTerminalHref()` 后输出 OSC8 链接；DOM renderer 会把 safe href 渲染为带 `noopener noreferrer` 的 `<a>`，unsafe href 仍按普通文本渲染。
+`href` 表示 hyperlink 目标。stdout renderer 会在通过 `sanitizeTerminalHref()` 后输出 OSC8 链接；DOM renderer 默认只把 `http:`、`https:`、`mailto:` 渲染为 `<a>`，相对 href 会按普通文本渲染。若宿主信任内容并希望启用相对链接，可传 `<TerminalProvider :dom-renderer-options="{ links: { allowRelative: true } }" />`；unsafe href 始终按普通文本渲染。
 
 ## Renderer (DOM)
 

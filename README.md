@@ -55,7 +55,12 @@ const input = ref("");
 For a real terminal, mount a headless Vue app and attach stdout/stdin:
 
 ```ts
-import { createStdinDriver, createStdoutRenderer, createTerminalApp } from "@simon_he/vue-tui/cli";
+import {
+  createStdinDriver,
+  createStdoutRenderer,
+  createTerminalApp,
+  installTerminalCleanup,
+} from "@simon_he/vue-tui/cli";
 import App from "./App.vue";
 
 const app = createTerminalApp({
@@ -75,19 +80,33 @@ const renderer = createStdoutRenderer(app.terminal, {
 
 app.scheduler.flush();
 
-const driver = createStdinDriver({
+let driver: ReturnType<typeof createStdinDriver> | null = null;
+let uninstallCleanup: (() => void) | null = null;
+let disposed = false;
+
+const cleanup = () => {
+  if (disposed) return;
+  disposed = true;
+  uninstallCleanup?.();
+  driver?.dispose();
+  renderer.dispose();
+  app.dispose();
+};
+
+const exit = () => {
+  cleanup();
+  process.exit(0);
+};
+
+uninstallCleanup = installTerminalCleanup(cleanup);
+driver = createStdinDriver({
   dispatch(event) {
     const prevented = app.events.dispatch(event);
     app.scheduler.flush();
     return prevented;
   },
   enableMouse: true,
-  onExit() {
-    driver.dispose();
-    renderer.dispose();
-    app.dispose();
-    process.exit(0);
-  },
+  onExit: exit,
 });
 ```
 

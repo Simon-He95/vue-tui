@@ -1,4 +1,4 @@
-import { createTerminalApp } from "@simon_he/vue-tui/cli";
+import { createTerminalApp, installTerminalCleanup } from "@simon_he/vue-tui/cli";
 import TableDemo from "./TableDemo.vue";
 
 const { app, terminal } = createTerminalApp({
@@ -12,12 +12,4 @@ const { app, terminal } = createTerminalApp({
 app.start?.();
 
 // 处理退出
-process.on("SIGINT", () => {
-  terminal.dispose();
-  process.exit(0);
-});
-
-process.on("SIGTERM", () => {
-  terminal.dispose();
-  process.exit(0);
-});
+installTerminalCleanup(() => terminal.dispose());

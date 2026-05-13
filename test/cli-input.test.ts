@@ -62,9 +62,9 @@ describe("cli input", () => {
     }
   });
 
-  it("cleans up and re-sends SIGINT by default", () => {
+  it("cleans up and exits with signal code by default", () => {
     const dispose = vi.fn();
-    const kill = vi.spyOn(process, "kill").mockImplementation(() => true as any);
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const before = new Set(process.rawListeners("SIGINT"));
     const uninstall = installTerminalCleanup(dispose);
 
@@ -74,16 +74,16 @@ describe("cli input", () => {
       listener?.();
 
       expect(dispose).toHaveBeenCalledTimes(1);
-      expect(kill).toHaveBeenCalledWith(process.pid, "SIGINT");
+      expect(exit).toHaveBeenCalledWith(130);
     } finally {
       uninstall();
-      kill.mockRestore();
+      exit.mockRestore();
     }
   });
 
   it("can clean up without exiting when exitOnSignal=false", () => {
     const dispose = vi.fn();
-    const kill = vi.spyOn(process, "kill").mockImplementation(() => true as any);
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const before = new Set(process.rawListeners("SIGTERM"));
     const uninstall = installTerminalCleanup(dispose, { exitOnSignal: false });
 
@@ -93,17 +93,33 @@ describe("cli input", () => {
       listener?.();
 
       expect(dispose).toHaveBeenCalledTimes(1);
-      expect(kill).not.toHaveBeenCalled();
+      expect(exit).not.toHaveBeenCalled();
     } finally {
       uninstall();
-      kill.mockRestore();
+      exit.mockRestore();
     }
   });
 
-  it("cleans up on unhandledRejection", () => {
+  it("does not clean up on unhandledRejection by default", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("unhandledRejection"));
+    const uninstall = installTerminalCleanup(dispose);
+
+    try {
+      const added = process.rawListeners("unhandledRejection").filter((item) => !before.has(item));
+      expect(added).toHaveLength(0);
+    } finally {
+      uninstall();
+    }
+  });
+
+  it("can opt into unhandledRejection cleanup", () => {
     const dispose = vi.fn();
     const before = process.rawListeners("unhandledRejection");
-    const uninstall = installTerminalCleanup(dispose);
+    const uninstall = installTerminalCleanup(dispose, {
+      cleanupUnhandledRejection: true,
+      exitOnSignal: false,
+    });
 
     try {
       const listener = process
@@ -118,10 +134,9 @@ describe("cli input", () => {
     }
   });
 
-  it("auto-installs terminal cleanup by default", () => {
+  it("does not auto-install terminal cleanup by default", () => {
     const stdin = new FakeStdin() as any;
     const stdout = new FakeStdout() as any;
-    const kill = vi.spyOn(process, "kill").mockImplementation(() => true as any);
     const before = new Set(process.rawListeners("SIGTERM"));
     const driver = createStdinDriver({
       stdin,
@@ -131,16 +146,37 @@ describe("cli input", () => {
     });
 
     try {
+      const added = process.rawListeners("SIGTERM").filter((item) => !before.has(item));
+      expect(added).toHaveLength(0);
+    } finally {
+      driver.dispose();
+    }
+  });
+
+  it("can opt into stdin driver terminal cleanup", () => {
+    const stdin = new FakeStdin() as any;
+    const stdout = new FakeStdout() as any;
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const driver = createStdinDriver({
+      stdin,
+      stdout,
+      dispatch: () => {},
+      enableMouse: false,
+      autoCleanup: true,
+    });
+
+    try {
       const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
       listener?.();
 
       expect(stdin.isRaw).toBe(false);
       expect(stdout.writes).toContain("\u001B[?2004l");
-      expect(kill).toHaveBeenCalledWith(process.pid, "SIGTERM");
+      expect(exit).toHaveBeenCalledWith(143);
     } finally {
       driver.dispose();
-      kill.mockRestore();
+      exit.mockRestore();
     }
   });
 

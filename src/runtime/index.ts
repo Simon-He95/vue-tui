@@ -111,6 +111,11 @@ function encodeTextBytes(text: string): Uint8Array {
   return bytes;
 }
 
+function normalizeOsc52Target(value: unknown): string {
+  const raw = String(value ?? "c").trim();
+  return /^[cpsq0-7]+$/i.test(raw) ? raw : "c";
+}
+
 function nowMs(): number {
   return typeof performance !== "undefined" && typeof performance.now === "function"
     ? performance.now()
@@ -125,7 +130,7 @@ export function createOsc52ClipboardProvider(options: Osc52ClipboardOptions = {}
       stdout?.write?.(sequence);
     });
   const supported = options.supported ?? Boolean(options.write || (stdout?.write && stdout.isTTY));
-  const target = options.target ?? "c";
+  const target = normalizeOsc52Target(options.target);
 
   return {
     supported,
@@ -136,7 +141,7 @@ export function createOsc52ClipboardProvider(options: Osc52ClipboardOptions = {}
     async writeText(text: string) {
       if (!supported) throw new Error("Clipboard not available in this runtime");
       const bytes = encodeTextBytes(text);
-      const maxBytes = options.maxBytes ?? 100 * 1024;
+      const maxBytes = Math.max(0, Math.floor(options.maxBytes ?? 100 * 1024));
       if (bytes.byteLength > maxBytes)
         throw new Error(`OSC52 clipboard payload too large: ${bytes.byteLength} bytes`);
       await write(`\u001B]52;${target};${base64EncodeBytes(bytes)}\u0007`);

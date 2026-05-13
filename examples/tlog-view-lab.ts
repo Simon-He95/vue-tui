@@ -1,4 +1,9 @@
-import { createStdinDriver, createStdoutRenderer, createTerminalApp } from "../src/cli.js";
+import {
+  createStdinDriver,
+  createStdoutRenderer,
+  createTerminalApp,
+  installTerminalCleanup,
+} from "../src/cli.js";
 import { TLOG_VIEW_LAB_LAYOUT, createTLogViewLabRunnerApp } from "./tlog-view-lab/App.js";
 
 const interactive = process.env.VT_INTERACTIVE === "1";
@@ -38,15 +43,23 @@ const out = createStdoutRenderer(
 app.scheduler.flush();
 
 let driver: ReturnType<typeof createStdinDriver> | null = null;
+let uninstallCleanup: (() => void) | null = null;
+let exiting = false;
 
-const exit = () => {
+const cleanup = () => {
+  if (exiting) return;
+  exiting = true;
+  uninstallCleanup?.();
+  uninstallCleanup = null;
   driver?.dispose();
   out.dispose();
   app.dispose();
-  process.exit(0);
 };
 
-process.on("SIGINT", exit);
+const exit = () => {
+  cleanup();
+  process.exit(0);
+};
 
 if (process.stdout.isTTY) {
   process.stdout.on("resize", () => {
@@ -64,6 +77,7 @@ if (process.stdout.isTTY) {
 if (smoke) {
   exit();
 } else {
+  uninstallCleanup = installTerminalCleanup(cleanup);
   driver = createStdinDriver({
     dispatch: (event) => {
       const prevented = app.events.dispatch(event);

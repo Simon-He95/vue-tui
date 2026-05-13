@@ -1,5 +1,10 @@
 import type { AgentConsoleApi } from "./AgentConsoleSurface";
-import { createStdinDriver, createStdoutRenderer, createTerminalApp } from "@simon_he/vue-tui/cli";
+import {
+  createStdinDriver,
+  createStdoutRenderer,
+  createTerminalApp,
+  installTerminalCleanup,
+} from "@simon_he/vue-tui/cli";
 import { AgentConsoleSurface, AGENT_CONSOLE_LAYOUT } from "./AgentConsoleSurface";
 import { consoleDefaultStyle, domPalette } from "./theme";
 
@@ -72,20 +77,24 @@ const offCommitCursor = app.terminal.on("commit", () => {
 });
 
 let driver: ReturnType<typeof createStdinDriver> | null = null;
+let uninstallCleanup: (() => void) | null = null;
 let exiting = false;
 
-const exit = (code = 0) => {
+const cleanup = () => {
   if (exiting) return;
   exiting = true;
+  uninstallCleanup?.();
+  uninstallCleanup = null;
   driver?.dispose();
   offCommitCursor();
   out.dispose();
   app.dispose();
-  process.exit(code);
 };
 
-process.on("SIGINT", () => exit(0));
-process.on("SIGTERM", () => exit(0));
+const exit = (code = 0) => {
+  cleanup();
+  process.exit(code);
+};
 
 app.scheduler.flushNow();
 
@@ -102,6 +111,7 @@ if (smoke) {
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
   exit(0);
 } else {
+  uninstallCleanup = installTerminalCleanup(cleanup);
   driver = createStdinDriver({
     dispatch: (event) => {
       const prevented = app.events.dispatch(event);

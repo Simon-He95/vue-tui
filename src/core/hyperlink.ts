@@ -8,6 +8,7 @@ export type SanitizeDomHrefOptions = Readonly<{
 
 const SAFE_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+const BLOCKED_SCHEME_RE = /^(?:javascript|data|vbscript):/i;
 
 function normalizeRawHref(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -22,6 +23,7 @@ function normalizeRawHref(value: unknown): string | null {
 
   if (/\s/u.test(raw)) return null;
   if (raw.startsWith("//")) return null;
+  if (BLOCKED_SCHEME_RE.test(raw)) return null;
 
   return raw;
 }

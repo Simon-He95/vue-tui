@@ -207,17 +207,28 @@ describe("package exports", () => {
     expect(useTLogVirtualSearchResults).toBeTruthy();
   });
 
-  it("keeps the root entrypoint browser-bundleable without Node built-ins", async () => {
+  it("keeps the root/markdown/experimental entrypoints browser-bundleable without Node built-ins", async () => {
     const { build } = await import("esbuild");
     const result = await build({
       stdin: {
         contents: `
           import { createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText } from "./src/index.ts";
           import { TMarkdownText } from "./src/markdown.ts";
-          console.log(createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText, TMarkdownText);
+          import { TLogView, TVirtualList, createAppendOnlyLogStore } from "./src/experimental.ts";
+          console.log(
+            createPromptMentionPlugin,
+            TerminalProvider,
+            TBox,
+            TInput,
+            TText,
+            TMarkdownText,
+            TLogView,
+            TVirtualList,
+            createAppendOnlyLogStore
+          );
         `,
         resolveDir: process.cwd(),
-        sourcefile: "vue-tui-root-browser-smoke.ts",
+        sourcefile: "vue-tui-browser-smoke.ts",
       },
       bundle: true,
       write: false,
@@ -243,6 +254,7 @@ describe("package exports", () => {
     async () => {
       expect(existsSync(distIndex)).toBe(true);
       expect(existsSync(distMarkdown)).toBe(true);
+      expect(existsSync(distExperimental)).toBe(true);
 
       const { build } = await import("esbuild");
       const result = await build({
@@ -250,7 +262,8 @@ describe("package exports", () => {
           contents: `
             import { TerminalProvider } from "./dist/index.js";
             import { TMarkdownText } from "./dist/markdown.js";
-            console.log(TerminalProvider, TMarkdownText);
+            import { TLogView, TVirtualList, createAppendOnlyLogStore } from "./dist/experimental.js";
+            console.log(TerminalProvider, TMarkdownText, TLogView, TVirtualList, createAppendOnlyLogStore);
           `,
           resolveDir: process.cwd(),
           sourcefile: "vue-tui-dist-browser-smoke.ts",

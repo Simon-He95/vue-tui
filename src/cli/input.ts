@@ -24,6 +24,11 @@ export type StdinDriver = Readonly<{
 
 type CleanupSignal = "SIGINT" | "SIGTERM" | "SIGHUP";
 
+export type TerminalCleanupOptions = Readonly<{
+  exitOnSignal?: boolean;
+  cleanupUnhandledRejection?: boolean;
+}>;
+
 function exitCodeForSignal(signal: CleanupSignal): number {
   if (signal === "SIGINT") return 130;
   if (signal === "SIGTERM") return 143;
@@ -32,7 +37,7 @@ function exitCodeForSignal(signal: CleanupSignal): number {
 
 export function installTerminalCleanup(
   dispose: () => void,
-  options: Readonly<{ exitOnSignal?: boolean }> = {},
+  options: TerminalCleanupOptions = {},
 ): () => void {
   let cleaned = false;
   let uninstalled = false;
@@ -53,7 +58,9 @@ export function installTerminalCleanup(
     process.off("SIGTERM", onSigterm);
     process.off("SIGHUP", onSighup);
     process.off("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
-    process.off("unhandledRejection", onUnhandledRejection);
+    if (options.cleanupUnhandledRejection) {
+      process.off("unhandledRejection", onUnhandledRejection);
+    }
   };
 
   const handleSignal = (signal: CleanupSignal) => {
@@ -62,11 +69,7 @@ export function installTerminalCleanup(
 
     if (options.exitOnSignal === false) return;
 
-    try {
-      process.kill(process.pid, signal);
-    } catch {
-      process.exit(exitCodeForSignal(signal));
-    }
+    process.exit(exitCodeForSignal(signal));
   };
 
   const onSigint = () => handleSignal("SIGINT");
@@ -80,7 +83,9 @@ export function installTerminalCleanup(
   process.once("SIGTERM", onSigterm);
   process.once("SIGHUP", onSighup);
   process.once("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
-  process.once("unhandledRejection", onUnhandledRejection);
+  if (options.cleanupUnhandledRejection) {
+    process.once("unhandledRejection", onUnhandledRejection);
+  }
 
   return uninstall;
 }
@@ -216,7 +221,7 @@ export function createStdinDriver(
     enableMouseMotion?: boolean;
     onTerminalFocusChange?: (focused: boolean) => void;
     onExit?: () => void;
-    autoCleanup?: boolean | Readonly<{ exitOnSignal?: boolean }>;
+    autoCleanup?: boolean | TerminalCleanupOptions;
   }>,
 ): StdinDriver {
   const stdin = options.stdin ?? process.stdin;
@@ -547,10 +552,12 @@ export function createStdinDriver(
     }
   };
 
-  const autoCleanup = options.autoCleanup ?? true;
+  const autoCleanup = options.autoCleanup ?? false;
   if (autoCleanup) {
     uninstallCleanup = installTerminalCleanup(dispose, {
       exitOnSignal: typeof autoCleanup === "object" ? autoCleanup.exitOnSignal : true,
+      cleanupUnhandledRejection:
+        typeof autoCleanup === "object" ? autoCleanup.cleanupUnhandledRejection : false,
     });
   }
 

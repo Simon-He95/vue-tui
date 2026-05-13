@@ -492,7 +492,7 @@ Experimental Markdown renderer / virtual scroller。它们走独立的 `parser -
 >
 > `TVirtualMarkdown` 默认保持文本可选中复制，即使它自身是 focusable 节点；如需列表式交互，可传 `selectable=false`。
 >
-> Markdown link 会写入 `Style.href` metadata。DOM renderer 会把 safe href 渲染为 `<a>`；CLI/stdout renderer 会在支持时发出 OSC8 hyperlink。
+> Markdown link 会写入 `Style.href` metadata。DOM renderer 默认只把 `http:`、`https:`、`mailto:` 渲染为 `<a>`；相对链接会保留为普通文本。若宿主信任内容并希望启用相对链接，可传 `<TerminalProvider :dom-renderer-options="{ links: { allowRelative: true } }" />`。CLI/stdout renderer 会在支持时发出 OSC8 hyperlink。
 >
 > `TVirtualMarkdown` 当前仍是 **viewport-level repaint**，不是 row-local dirty diff；streaming append 也不会自动 follow tail，默认保持 absolute `scrollTop` / absolute visual-row index 语义。
 >

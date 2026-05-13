@@ -93,6 +93,21 @@ describe("runtime (terminal/node)", () => {
     expect(writes).toEqual([]);
   });
 
+  it("sanitizes OSC52 target", async () => {
+    const writes: string[] = [];
+    const clipboard = createOsc52ClipboardProvider({
+      supported: true,
+      target: "c;\u0007bad",
+      write: (sequence) => {
+        writes.push(sequence);
+      },
+    });
+
+    await clipboard.writeText("x");
+
+    expect(writes).toEqual(["\u001B]52;c;eA==\u0007"]);
+  });
+
   it("raf wrapper runs via timers with a finite timestamp", () => {
     vi.useFakeTimers();
     const r = createRuntime();
