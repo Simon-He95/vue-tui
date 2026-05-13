@@ -89,6 +89,8 @@ describe("package exports", () => {
     expect(cli.createOsc52ClipboardProvider).toBeTruthy();
     expect(cli.createDefaultTInputHostAdapter).toBeTruthy();
     expect(cli.defaultTInputHostPlugin).toBeTruthy();
+    expect(cli.installNodeFileWriters).toBeTruthy();
+    expect(cli.resetNodeFileWriters).toBeTruthy();
     expect(cli.STDOUT_RENDERER_CAPABILITIES).toEqual({
       syncFlush: true,
       scrollOperations: true,
@@ -310,6 +312,8 @@ describe("package exports", () => {
     expect(cli.createOsc52ClipboardProvider).toBeTruthy();
     expect(cli.createDefaultTInputHostAdapter).toBeTruthy();
     expect(cli.defaultTInputHostPlugin).toBeTruthy();
+    expect(cli.installNodeFileWriters).toBeTruthy();
+    expect(cli.resetNodeFileWriters).toBeTruthy();
     expect(cli.STDOUT_RENDERER_CAPABILITIES).toEqual({
       syncFlush: true,
       scrollOperations: true,
@@ -331,6 +335,8 @@ describe("package exports", () => {
     expect(cliCjs.createOsc52ClipboardProvider).toBeTruthy();
     expect(cliCjs.createDefaultTInputHostAdapter).toBeTruthy();
     expect(cliCjs.defaultTInputHostPlugin).toBeTruthy();
+    expect(cliCjs.installNodeFileWriters).toBeTruthy();
+    expect(cliCjs.resetNodeFileWriters).toBeTruthy();
     expect(cliCjs.STDOUT_RENDERER_CAPABILITIES).toEqual({
       syncFlush: true,
       scrollOperations: true,

@@ -2,6 +2,10 @@ export type SanitizeTerminalHrefOptions = Readonly<{
   allowFileUrls?: boolean;
 }>;
 
+export type SanitizeDomHrefOptions = Readonly<{
+  allowRelative?: boolean;
+}>;
+
 const SAFE_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
@@ -52,12 +56,15 @@ export function sanitizeTerminalHref(
   return null;
 }
 
-export function sanitizeDomHref(value: unknown): string | null {
+export function sanitizeDomHref(
+  value: unknown,
+  options: SanitizeDomHrefOptions = {},
+): string | null {
   const raw = normalizeRawHref(value);
   if (!raw) return null;
 
   const scheme = hrefScheme(raw);
-  if (!scheme) return raw;
+  if (!scheme) return options.allowRelative ? raw : null;
 
   const protocol = parsedProtocol(raw);
   return protocol && SAFE_LINK_PROTOCOLS.has(protocol) ? raw : null;

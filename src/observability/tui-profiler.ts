@@ -8,6 +8,8 @@ type TuiProfilerFileWriter = Readonly<{
 
 export type CreateTuiProfilerOptions = Readonly<{
   fileWriter?: TuiProfilerFileWriter;
+  defaultLogDest?: "stdout" | "file" | "both";
+  defaultLogPath?: string;
 }>;
 
 let defaultProfilerFileWriter: TuiProfilerFileWriter | null = null;
@@ -75,6 +77,7 @@ export type TuiProfiler = Readonly<{
     bytes: number;
     mode: "stream" | "sync" | "chunked";
   }) => void;
+  dispose: () => void;
 }>;
 
 export function createTuiProfiler(
@@ -91,8 +94,12 @@ export function createTuiProfiler(
   const logDest =
     parseLogDest(firstNonEmptyEnv(env, "VUE_TUI_PROFILE_LOG_DEST")) ??
     parseLogDest(firstNonEmptyEnv(env, "DIMCODE_PROFILE_TUI_LOG_DEST")) ??
+    options.defaultLogDest ??
     "stdout";
-  const logPath = envString(env, "VUE_TUI_PROFILE_LOG_PATH", "DIMCODE_PROFILE_TUI_LOG_PATH");
+  const logPath =
+    envString(env, "VUE_TUI_PROFILE_LOG_PATH", "DIMCODE_PROFILE_TUI_LOG_PATH") ||
+    options.defaultLogPath ||
+    "";
   let invalidates = 0;
   let renders = 0;
   let fullRenders = 0;
@@ -117,6 +124,7 @@ export function createTuiProfiler(
     1000;
   const now = defaultNow;
   let lastLogAt = now();
+  let disposed = false;
 
   function incrementPlaneCount(target: Map<string, number>, key: string | null | undefined): void {
     const normalized = String(key ?? "all").trim() || "all";
@@ -140,6 +148,7 @@ export function createTuiProfiler(
   }
 
   function flushLog(): void {
+    if (disposed) return;
     const at = now();
     const elapsed = at - lastLogAt;
     if (elapsed <= 0) return;
@@ -236,10 +245,12 @@ export function createTuiProfiler(
   return {
     now,
     recordInvalidate(info) {
+      if (disposed) return;
       invalidates++;
       incrementPlaneCount(invalidatePlaneCounts, info?.plane ?? "all");
     },
     recordRender(info) {
+      if (disposed) return;
       renders++;
       if (info.fullRepaint) fullRenders++;
       if (info.sorted) sortedRenders++;
@@ -254,6 +265,7 @@ export function createTuiProfiler(
       }
     },
     recordWrite(info) {
+      if (disposed) return;
       writes++;
       totalWriteMs += info.durationMs;
       totalBytes += Math.max(0, Math.floor(info.bytes));
@@ -261,6 +273,11 @@ export function createTuiProfiler(
       if (info.mode === "stream") streamWrites++;
       else if (info.mode === "sync") syncWrites++;
       else chunkedWrites++;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      clearInterval(timer as any);
     },
   };
 }

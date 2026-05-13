@@ -144,5 +144,8 @@
     "*": "oxfmt --write",
     "*.{vue,js,ts,jsx,tsx}": "oxlint --fix"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "packageManager": "pnpm@10.32.1"
 }

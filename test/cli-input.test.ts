@@ -100,15 +100,47 @@ describe("cli input", () => {
     }
   });
 
-  it("does not install an unhandledRejection listener", () => {
+  it("cleans up on unhandledRejection", () => {
     const dispose = vi.fn();
     const before = process.rawListeners("unhandledRejection");
     const uninstall = installTerminalCleanup(dispose);
 
     try {
-      expect(process.rawListeners("unhandledRejection")).toEqual(before);
+      const listener = process
+        .rawListeners("unhandledRejection")
+        .find((item) => !before.includes(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.(new Error("boom"), Promise.resolve());
+      listener?.(new Error("boom"), Promise.resolve());
+      expect(dispose).toHaveBeenCalledTimes(1);
     } finally {
       uninstall();
+    }
+  });
+
+  it("auto-installs terminal cleanup by default", () => {
+    const stdin = new FakeStdin() as any;
+    const stdout = new FakeStdout() as any;
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => true as any);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const driver = createStdinDriver({
+      stdin,
+      stdout,
+      dispatch: () => {},
+      enableMouse: false,
+    });
+
+    try {
+      const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+
+      expect(stdin.isRaw).toBe(false);
+      expect(stdout.writes).toContain("\u001B[?2004l");
+      expect(kill).toHaveBeenCalledWith(process.pid, "SIGTERM");
+    } finally {
+      driver.dispose();
+      kill.mockRestore();
     }
   });
 

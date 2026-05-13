@@ -139,11 +139,61 @@ describe("TInput host plugins", () => {
       const host = createDefaultTInputHostAdapter();
       const read = host.readClipboardText?.() ?? Promise.resolve("missing");
 
-      await vi.advanceTimersByTimeAsync(2500);
+      await vi.advanceTimersByTimeAsync(1000);
 
       await expect(read).resolves.toBe("");
       expect((globalThis as any).__VT_NODE_SPAWN__).toHaveBeenCalledTimes(3);
       expect(killCount).toBe(3);
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+      if (originalSpawn === undefined) delete (globalThis as any).__VT_NODE_SPAWN__;
+      else (globalThis as any).__VT_NODE_SPAWN__ = originalSpawn;
+      vi.useRealTimers();
+    }
+  });
+
+  it("respects total clipboard timeout budget", async () => {
+    vi.useFakeTimers();
+    const originalProcess = (globalThis as any).process;
+    const originalSpawn = (globalThis as any).__VT_NODE_SPAWN__;
+    let killCount = 0;
+    (globalThis as any).__VT_NODE_SPAWN__ = vi.fn(() => ({
+      stdout: {
+        setEncoding: vi.fn(),
+        on: vi.fn(),
+      },
+      on: vi.fn(),
+      kill() {
+        killCount++;
+      },
+    }));
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        env: {},
+        platform: "linux",
+        stdout: { isTTY: true },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter({
+        clipboardCommandTimeoutMs: 800,
+        clipboardTotalTimeoutMs: 900,
+      });
+      const read = host.readClipboardText?.() ?? Promise.resolve("missing");
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(read).resolves.toBe("");
+      expect((globalThis as any).__VT_NODE_SPAWN__).toHaveBeenCalledTimes(2);
+      expect(killCount).toBe(2);
     } finally {
       Object.defineProperty(globalThis, "process", {
         configurable: true,

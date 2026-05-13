@@ -17,6 +17,11 @@ type SpawnLike = (
   kill?: () => void;
 };
 
+export type CreateDefaultTInputHostAdapterOptions = Readonly<{
+  clipboardCommandTimeoutMs?: number;
+  clipboardTotalTimeoutMs?: number;
+}>;
+
 function getProcessLike(): any {
   return (globalThis as any).process;
 }
@@ -67,7 +72,7 @@ async function runClipboardCommand(
   const spawn = await loadNodeSpawn();
   if (!spawn) return null;
 
-  const timeoutMs = options.timeoutMs ?? 800;
+  const timeoutMs = Math.max(1, options.timeoutMs ?? 800);
 
   return new Promise((resolve) => {
     let settled = false;
@@ -106,13 +111,33 @@ async function runClipboardCommand(
   });
 }
 
-async function readTerminalClipboardText(): Promise<string> {
+function positiveFiniteOrDefault(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function remainingMs(deadline: number): number {
+  return Math.max(1, deadline - Date.now());
+}
+
+async function readTerminalClipboardText(
+  options: Readonly<{ commandTimeoutMs: number; totalTimeoutMs: number }>,
+): Promise<string> {
   const platform = getPlatform();
   if (!platform) return "";
 
+  const commandTimeoutMs = positiveFiniteOrDefault(options.commandTimeoutMs, 300);
+  const totalTimeoutMs = positiveFiniteOrDefault(options.totalTimeoutMs, 800);
+  const deadline = Date.now() + totalTimeoutMs;
+  const run = (cmd: string, args: string[]) =>
+    Date.now() < deadline
+      ? runClipboardCommand(cmd, args, {
+          timeoutMs: Math.min(commandTimeoutMs, remainingMs(deadline)),
+        })
+      : Promise.resolve(null);
+
   try {
     if (platform === "darwin") {
-      const filePaths = await runClipboardCommand("osascript", [
+      const filePaths = await run("osascript", [
         "-e",
         "set out to {}",
         "-e",
@@ -142,7 +167,7 @@ async function readTerminalClipboardText(): Promise<string> {
       ]);
       const normalizedPaths = normalizeClipboardPathList(filePaths ?? "");
       if (normalizedPaths) return normalizedPaths;
-      return (await runClipboardCommand("pbpaste", [])) ?? "";
+      return (await run("pbpaste", [])) ?? "";
     }
 
     if (platform === "win32") {
@@ -153,24 +178,24 @@ async function readTerminalClipboardText(): Promise<string> {
         "if ($null -ne $text) { [Console]::Out.Write($text) }",
       ].join("; ");
       const powershellArgs = ["-NoProfile", "-Command", clipboardScript];
-      let text = await runClipboardCommand("powershell.exe", powershellArgs);
-      if (text == null) text = await runClipboardCommand("powershell", powershellArgs);
-      if (text == null) text = await runClipboardCommand("pwsh", powershellArgs);
+      let text = await run("powershell.exe", powershellArgs);
+      if (text == null) text = await run("powershell", powershellArgs);
+      if (text == null) text = await run("pwsh", powershellArgs);
       return text ?? "";
     }
 
-    let text = await runClipboardCommand("wl-paste", ["--no-newline"]);
-    if (text == null) {
-      text = await runClipboardCommand("xclip", ["-selection", "clipboard", "-o"]);
-    }
-    if (text == null) text = await runClipboardCommand("xsel", ["--clipboard", "--output"]);
+    let text = await run("wl-paste", ["--no-newline"]);
+    if (text == null) text = await run("xclip", ["-selection", "clipboard", "-o"]);
+    if (text == null) text = await run("xsel", ["--clipboard", "--output"]);
     return text ?? "";
   } catch {
     return "";
   }
 }
 
-export function createDefaultTInputHostAdapter(): TInputHostAdapter {
+export function createDefaultTInputHostAdapter(
+  options: CreateDefaultTInputHostAdapterOptions = {},
+): TInputHostAdapter {
   return {
     isTerminalLike: isTerminalLike(),
     resolvePath(info: ResolveTInputPathInfo) {
@@ -182,7 +207,10 @@ export function createDefaultTInputHostAdapter(): TInputHostAdapter {
     pathToHref: pathToTerminalFileHref,
     async readClipboardText() {
       if (!isTerminalLike()) return "";
-      return readTerminalClipboardText();
+      return readTerminalClipboardText({
+        commandTimeoutMs: options.clipboardCommandTimeoutMs ?? 300,
+        totalTimeoutMs: options.clipboardTotalTimeoutMs ?? 800,
+      });
     },
     async writeClipboardText(text: string) {
       if (!text) return false;

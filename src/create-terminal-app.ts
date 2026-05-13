@@ -25,7 +25,11 @@ import type {
 import process from "node:process";
 import { defineComponent, h, provide, ref, shallowReactive, shallowRef } from "vue";
 import { createHeadlessApp, createHeadlessRoot } from "./cli/headless-renderer.js";
-import { installNodeFileWriters, nodeProfilerFileWriter } from "./cli/node-file-writers.js";
+import {
+  installNodeFileWriters,
+  nodeProfilerFileWriter,
+  shouldInstallFileWriters,
+} from "./cli/node-file-writers.js";
 import { createNodePathPickerProvider } from "./cli/path-provider.js";
 import { createTerminal } from "./core/index.js";
 import { getPlaneTerminal } from "./core/terminal/create-terminal.js";
@@ -169,7 +173,8 @@ export type CreateTerminalAppOptions = Readonly<{
 }>;
 
 export function createTerminalApp(options: CreateTerminalAppOptions): TerminalApp {
-  installNodeFileWriters();
+  const env = (process?.env ?? {}) as Record<string, unknown>;
+  if (shouldInstallFileWriters(env)) installNodeFileWriters();
 
   const terminal: Terminal = createTerminal({
     cols: options.cols,
@@ -184,6 +189,8 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   const latency = getCliLatencyProfiler();
   const profiler = createTuiProfiler("cli-scheduler", {
     fileWriter: nodeProfilerFileWriter,
+    defaultLogDest: "file",
+    defaultLogPath: "/tmp/vue-tui-profile.log",
   });
   const baseEvents = createCliEventManager({
     record: (event) => {
@@ -195,7 +202,13 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       trace.push({ type: "focus", at: Date.now(), prev, next });
     },
   });
-  const render = createRenderManager(terminal);
+  const render = createRenderManager(terminal, {
+    profiler: {
+      fileWriter: nodeProfilerFileWriter,
+      defaultLogDest: "file",
+      defaultLogPath: "/tmp/vue-tui-profile.log",
+    },
+  });
   const offCommit = terminal.on("commit", ({ dirtyRows, planes, sync }) => {
     latency?.recordCommit({ dirtyRows, planes, sync });
     if (!trace.enabled.value) return;
@@ -224,7 +237,6 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   let pendingFrameReason: TerminalSchedulerInvalidateOptions["reason"] = "unknown";
   let pendingCoalescedInvalidates = 0;
   let schedulerApi: TerminalScheduler;
-  const env = (process?.env ?? {}) as Record<string, unknown>;
   const throttleMs = (() => {
     const parseThrottle = (raw: unknown): number | null => {
       if (raw == null) return null;
@@ -886,6 +898,8 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       if (selectionRenderNodeId) render.unregister(selectionRenderNodeId);
       offResize?.();
       offCommit?.();
+      profiler?.dispose();
+      render.dispose();
       events.dispose();
       terminal.dispose();
     },

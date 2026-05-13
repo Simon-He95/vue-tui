@@ -1721,6 +1721,8 @@ export const TerminalProvider = defineComponent({
       if (raf > 0) cancelAnimationFrame(raf);
       raf = 0;
       render.unregister(selectionRenderNode.id);
+      profiler?.dispose();
+      render.dispose();
       scope.stop();
     });
 

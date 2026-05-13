@@ -30,10 +30,12 @@ describe("DomRenderer row rendering", () => {
     expect(sanitizeDomHref("data:text/html,boom")).toBeNull();
     expect(sanitizeDomHref("foo:bar")).toBeNull();
     expect(sanitizeDomHref("https://example.com")).toBe("https://example.com");
-    expect(sanitizeDomHref("docs/intro.md")).toBe("docs/intro.md");
-    expect(sanitizeDomHref("./intro.md")).toBe("./intro.md");
-    expect(sanitizeDomHref("../intro.md")).toBe("../intro.md");
-    expect(sanitizeDomHref("#section")).toBe("#section");
+    expect(sanitizeDomHref("docs/intro.md")).toBeNull();
+    expect(sanitizeDomHref("./intro.md")).toBeNull();
+    expect(sanitizeDomHref("../intro.md")).toBeNull();
+    expect(sanitizeDomHref("#section")).toBeNull();
+    expect(sanitizeDomHref("docs/intro.md", { allowRelative: true })).toBe("docs/intro.md");
+    expect(sanitizeDomHref("#section", { allowRelative: true })).toBe("#section");
   });
 
   it("applies the default browser accessibility contract", () => {
@@ -471,8 +473,24 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("renders relative markdown-safe hrefs as anchors", () => {
+  it("does not render relative hrefs as anchors by default", () => {
     const { terminal, container, renderer } = setup(10);
+
+    try {
+      terminal.write("docs", { x: 0, y: 0, style: { href: "docs/intro.md" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")).toBeNull();
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("renders relative hrefs only when explicitly enabled", () => {
+    const { terminal, container, renderer } = setup(10, 1, {
+      links: { allowRelative: true },
+    });
 
     try {
       terminal.write("docs", { x: 0, y: 0, style: { href: "docs/intro.md" } });
@@ -490,8 +508,10 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("does not force hash links into a new tab", () => {
-    const { terminal, container, renderer } = setup(8);
+  it("does not force hash links into a new tab when relative links are enabled", () => {
+    const { terminal, container, renderer } = setup(8, 1, {
+      links: { allowRelative: true },
+    });
 
     try {
       terminal.write("hash", { x: 0, y: 0, style: { href: "#section" } });

@@ -79,6 +79,13 @@ export type DomRendererRowRenderDebugStats = Readonly<{
 
 export type DomRendererRowKeyPrepassMode = boolean | "auto";
 
+export type DomRendererLinkOptions =
+  | false
+  | Readonly<{
+      allowRelative?: boolean;
+      externalTarget?: "_blank" | "_self";
+    }>;
+
 export type DomRendererRowKeyPrepassDecision =
   | "forced-enabled"
   | "forced-disabled"
@@ -142,6 +149,11 @@ export interface DomRendererOptions {
    * Enables DOM line-node shifting for terminal scrollOperations.
    */
   enableScrollOperations?: boolean;
+  /**
+   * Controls DOM anchor rendering for Style.href segments.
+   * Relative hrefs are disabled by default to avoid same-origin navigation from untrusted output.
+   */
+  links?: DomRendererLinkOptions;
   /** Optional ANSI-name palette exposed as DOM CSS variables. */
   palette?: ThemePalette | null;
   /**
@@ -625,14 +637,22 @@ function resetSpanStyle(span: HTMLElement): void {
   }
 }
 
-function createSegmentElement(style: Style): HTMLSpanElement | HTMLAnchorElement {
-  const href = sanitizeDomHref(style.href);
+function createSegmentElement(
+  style: Style,
+  options: Readonly<{ links?: DomRendererLinkOptions }>,
+): HTMLSpanElement | HTMLAnchorElement {
+  const linkOptions = options.links ?? {};
+  if (linkOptions === false) return document.createElement("span");
+
+  const href = sanitizeDomHref(style.href, {
+    allowRelative: linkOptions.allowRelative === true,
+  });
   if (!href) return document.createElement("span");
   const anchor = document.createElement("a");
   anchor.href = href;
   const protocol = href.match(/^[a-z][a-z0-9+.-]*:/i)?.[0].toLowerCase() ?? null;
   if (protocol === "http:" || protocol === "https:") {
-    anchor.target = "_blank";
+    anchor.target = linkOptions.externalTarget ?? "_blank";
     anchor.rel = "noopener noreferrer";
   }
   anchor.tabIndex = -1;
@@ -690,6 +710,7 @@ function renderRow(
   stats: RowRenderMutableStats,
   enableRowKeyPrepass: boolean,
   palette: ThemePalette | null,
+  linkOptions: DomRendererLinkOptions | undefined,
 ): void {
   stats.rows++;
   const cachedKey = rowCache.get(lineEl);
@@ -746,7 +767,7 @@ function renderRow(
       span = firstChild;
       stats.spansReused++;
     } else {
-      span = createSegmentElement(seg.style);
+      span = createSegmentElement(seg.style, { links: linkOptions });
       span.dataset.vtFastRow = "styled";
       stats.spansCreated++;
       stats.replaceChildren++;
@@ -777,7 +798,7 @@ function renderRow(
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]!;
-    const span = createSegmentElement(seg.style);
+    const span = createSegmentElement(seg.style, { links: linkOptions });
     if (canReuseSpans) {
       span.dataset.vtFastRow = "segment";
       span.dataset.vtSegmentIndex = String(i);
@@ -804,6 +825,7 @@ export function createDomRenderer(
   container: HTMLElement,
   options: DomRendererOptions = {},
 ): DomRenderer {
+  const rendererLinkOptions = options.links;
   container.style.fontFamily = DEFAULT_FONT_FAMILY;
   container.style.whiteSpace = "pre";
   container.style.display = "inline-block";
@@ -1066,6 +1088,7 @@ export function createDomRenderer(
           rowStats,
           shouldUseRowKeyPrepass(),
           palette,
+          rendererLinkOptions,
         );
     }
     recordRowKeyPrepassAutoStats(rowStats);
@@ -1374,6 +1397,7 @@ export function createDomRenderer(
             rowStats,
             useRowKeyPrepass,
             palette,
+            rendererLinkOptions,
           );
         deletePendingRow(plane, rows, y);
         flushedRows++;

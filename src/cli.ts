@@ -1,5 +1,6 @@
 export type { StdinDriver } from "./cli/input.js";
 export { createStdinDriver, installTerminalCleanup } from "./cli/input.js";
+export { installNodeFileWriters, resetNodeFileWriters } from "./cli/node-file-writers.js";
 export type { FsDirEntry, FsEntryKind, FsStat, PathPickerProvider } from "./cli/path-provider.js";
 export { createNodePathPickerProvider } from "./cli/path-provider.js";
 export {
@@ -26,6 +27,7 @@ export {
   STDOUT_RENDERER_CAPABILITIES,
 } from "./renderer/capabilities.js";
 export {
+  type CreateDefaultTInputHostAdapterOptions,
   createDefaultTInputHostAdapter,
   defaultTInputHostPlugin,
 } from "./vue/components/input/plugins/hostPlugin.node.js";

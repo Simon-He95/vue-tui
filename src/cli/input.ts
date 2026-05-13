@@ -53,6 +53,7 @@ export function installTerminalCleanup(
     process.off("SIGTERM", onSigterm);
     process.off("SIGHUP", onSighup);
     process.off("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
+    process.off("unhandledRejection", onUnhandledRejection);
   };
 
   const handleSignal = (signal: CleanupSignal) => {
@@ -72,12 +73,14 @@ export function installTerminalCleanup(
   const onSigterm = () => handleSignal("SIGTERM");
   const onSighup = () => handleSignal("SIGHUP");
   const onUncaughtExceptionMonitor = () => cleanup();
+  const onUnhandledRejection = () => cleanup();
 
   process.once("exit", cleanup);
   process.once("SIGINT", onSigint);
   process.once("SIGTERM", onSigterm);
   process.once("SIGHUP", onSighup);
   process.once("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
+  process.once("unhandledRejection", onUnhandledRejection);
 
   return uninstall;
 }
@@ -213,6 +216,7 @@ export function createStdinDriver(
     enableMouseMotion?: boolean;
     onTerminalFocusChange?: (focused: boolean) => void;
     onExit?: () => void;
+    autoCleanup?: boolean | Readonly<{ exitOnSignal?: boolean }>;
   }>,
 ): StdinDriver {
   const stdin = options.stdin ?? process.stdin;
@@ -227,6 +231,7 @@ export function createStdinDriver(
   });
   const keyboardProtocolSequences = getKeyboardProtocolSequences(keyboardProtocol);
   let disposed = false;
+  let uninstallCleanup: (() => void) | null = null;
 
   let swallowNextLF = false;
   let lastMouseDown: {
@@ -515,6 +520,8 @@ export function createStdinDriver(
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    uninstallCleanup?.();
+    uninstallCleanup = null;
     stdin.off("data", onData);
     stdinBuffer.destroy();
     try {
@@ -539,6 +546,13 @@ export function createStdinDriver(
       }
     }
   };
+
+  const autoCleanup = options.autoCleanup ?? true;
+  if (autoCleanup) {
+    uninstallCleanup = installTerminalCleanup(dispose, {
+      exitOnSignal: typeof autoCleanup === "object" ? autoCleanup.exitOnSignal : true,
+    });
+  }
 
   return { dispose };
 }

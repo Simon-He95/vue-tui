@@ -8,7 +8,11 @@ import type {
 import type { RendererCapabilities } from "../capabilities.js";
 import { Buffer } from "node:buffer";
 import process from "node:process";
-import { installNodeFileWriters, nodeProfilerFileWriter } from "../../cli/node-file-writers.js";
+import {
+  installNodeFileWriters,
+  nodeProfilerFileWriter,
+  shouldInstallFileWriters,
+} from "../../cli/node-file-writers.js";
 import type { ThemePalette } from "../../core/ansi-palette.js";
 import { ansiColorRgb, ansiHexToRgb, isAnsiColorName } from "../../core/ansi-palette.js";
 import { detectTerminalColorCapability } from "../../core/ansi/capability.js";
@@ -119,7 +123,8 @@ export function createStdoutRenderer(
     profileFileWriter?: { appendFileSync?: (path: string, data: string) => void };
   }>,
 ): StdoutRenderer {
-  installNodeFileWriters();
+  const env = (process?.env ?? {}) as Record<string, unknown>;
+  if (shouldInstallFileWriters(env)) installNodeFileWriters();
 
   const output: CliOutput | undefined = options?.output ?? (process.stdout as any);
   if (!output) throw new Error("createStdoutRenderer requires a Node stdout-like output");
@@ -137,6 +142,8 @@ export function createStdoutRenderer(
   const cliLatency = getCliLatencyProfiler();
   const profiler = createTuiProfiler("stdout-renderer", {
     fileWriter: options?.profileFileWriter ?? nodeProfilerFileWriter,
+    defaultLogDest: "file",
+    defaultLogPath: "/tmp/vue-tui-profile.log",
   });
 
   // Resolve whether to use synchronized output mode (DEC 2026)
@@ -144,8 +151,6 @@ export function createStdoutRenderer(
   function resolveUseSyncOutput(): boolean {
     // Explicit option takes precedence
     if (options?.useSyncOutput != null) return options.useSyncOutput;
-
-    const env = (process?.env ?? {}) as Record<string, unknown>;
 
     // Detect terminal type and disable for known incompatible terminals
     const term = String(env.TERM ?? "").toLowerCase();
@@ -202,7 +207,6 @@ export function createStdoutRenderer(
   // Detect if running in ghostty for special handling
   const isGhostty = "GHOSTTY_RESOURCES_DIR" in (process?.env ?? {});
 
-  const env = (process?.env ?? {}) as Record<string, unknown>;
   const chunkSize = 8 * 1024;
   const chunkThresholdBytes = 64 * 1024;
   const syncMaxBytes = 128 * 1024;
@@ -2122,6 +2126,7 @@ export function createStdoutRenderer(
     }
     if (hideCursor) out.write("\u001B[?25h");
     if (altScreen && out.isTTY) out.write("\u001B[?1049l");
+    profiler?.dispose();
   }
 
   const updateTheme = (

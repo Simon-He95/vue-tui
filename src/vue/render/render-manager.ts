@@ -3,7 +3,10 @@ import type { Terminal } from "../../core/types.js";
 import { createDebugLogger, isDebugEnabled } from "../../core/debug-logger.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import { resetPlaneRowsForRender, scrollPlaneRows } from "../../core/terminal/create-terminal.js";
-import { createTuiProfiler } from "../../observability/tui-profiler.js";
+import {
+  createTuiProfiler,
+  type CreateTuiProfilerOptions,
+} from "../../observability/tui-profiler.js";
 import { envFlag } from "../../utils/env.js";
 import { clearTextCaches, withTextRenderPass } from "../utils/text.js";
 
@@ -98,6 +101,11 @@ export type RenderManager = Readonly<{
   markDirtyRows: (id: string, rows: readonly number[]) => boolean;
   unregister: (id: string) => void;
   render: (options?: { activePlanes?: TerminalRenderPlanes | null }) => RenderStats | null;
+  dispose: () => void;
+}>;
+
+export type CreateRenderManagerOptions = Readonly<{
+  profiler?: CreateTuiProfilerOptions;
 }>;
 
 let nextStackId = 0;
@@ -150,7 +158,10 @@ function sameRect(a: RenderRect | null, b: RenderRect | null): boolean {
   return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 }
 
-export function createRenderManager(terminal: Terminal): RenderManager {
+export function createRenderManager(
+  terminal: Terminal,
+  options: CreateRenderManagerOptions = {},
+): RenderManager {
   let orderCounter = 0;
   const nodes = new Map<string, RenderNode>();
   const planeDirtyStates = new Map<TerminalRenderPlane, DirtyPlaneState>();
@@ -174,7 +185,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   const warnedLocalDirtyRows = new Set<string>();
 
   const stackPathCache = new WeakMap<RenderStack, readonly PathSegment[]>();
-  const profiler = createTuiProfiler("render-manager");
+  const profiler = createTuiProfiler("render-manager", options.profiler);
 
   terminal.on("resize", ({ rows }) => {
     terminalRows = rows;
@@ -842,5 +853,8 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     markDirtyRows,
     unregister,
     render,
+    dispose() {
+      profiler?.dispose();
+    },
   };
 }

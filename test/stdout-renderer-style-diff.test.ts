@@ -97,6 +97,59 @@ describe("stdout renderer style diffing", () => {
     }
   });
 
+  it("defaults stdout profiler logs to file", () => {
+    const previousProfile = process.env.VUE_TUI_PROFILE;
+    const previousFormat = process.env.VUE_TUI_PROFILE_FORMAT;
+    const previousDest = process.env.VUE_TUI_PROFILE_LOG_DEST;
+    const previousPath = process.env.VUE_TUI_PROFILE_LOG_PATH;
+    const previousEvery = process.env.VUE_TUI_PROFILE_LOG_EVERY_MS;
+
+    process.env.VUE_TUI_PROFILE = "1";
+    process.env.VUE_TUI_PROFILE_FORMAT = "text";
+    delete process.env.VUE_TUI_PROFILE_LOG_DEST;
+    delete process.env.VUE_TUI_PROFILE_LOG_PATH;
+    process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = "100";
+    vi.useFakeTimers();
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const writes: string[] = [];
+    const terminal = createTerminal({ cols: 1, rows: 1 });
+    const renderer = createStdoutRenderer(terminal, {
+      output: { isTTY: false, write: () => {} },
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      profileFileWriter: {
+        appendFileSync: (_path, data) => writes.push(data),
+      },
+    });
+
+    try {
+      terminal.put(0, 0, "x");
+      terminal.commit({ sync: true });
+      vi.advanceTimersByTime(100);
+
+      expect(writes.join("")).toContain("[VUE_TUI_PROFILE] stdout-renderer");
+      expect(log).not.toHaveBeenCalled();
+    } finally {
+      renderer.dispose();
+      terminal.dispose();
+      log.mockRestore();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      if (previousProfile == null) delete process.env.VUE_TUI_PROFILE;
+      else process.env.VUE_TUI_PROFILE = previousProfile;
+      if (previousFormat == null) delete process.env.VUE_TUI_PROFILE_FORMAT;
+      else process.env.VUE_TUI_PROFILE_FORMAT = previousFormat;
+      if (previousDest == null) delete process.env.VUE_TUI_PROFILE_LOG_DEST;
+      else process.env.VUE_TUI_PROFILE_LOG_DEST = previousDest;
+      if (previousPath == null) delete process.env.VUE_TUI_PROFILE_LOG_PATH;
+      else process.env.VUE_TUI_PROFILE_LOG_PATH = previousPath;
+      if (previousEvery == null) delete process.env.VUE_TUI_PROFILE_LOG_EVERY_MS;
+      else process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = previousEvery;
+    }
+  });
+
   it("sanitizes terminal hrefs before OSC8 output", () => {
     expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com");
     expect(sanitizeTerminalHref("http://example.com")).toBe("http://example.com");

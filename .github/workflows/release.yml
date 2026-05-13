@@ -34,6 +34,20 @@ jobs:
         if: ${{ inputs.dry_run }}
         run: pnpm run release:dry-run
 
+      - name: Guard publish ref
+        if: ${{ !inputs.dry_run }}
+        run: test "${GITHUB_REF}" = "refs/heads/main"
+
+      - name: Check version is not already published
+        if: ${{ !inputs.dry_run }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          NAME=$(node -p "require('./package.json').name")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION already exists on npm"
+            exit 1
+          fi
+
       - name: Publish release
         if: ${{ !inputs.dry_run }}
         run: pnpm run release:ci
