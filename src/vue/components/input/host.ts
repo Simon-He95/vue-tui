@@ -78,6 +78,18 @@ function encodePathSegments(path: string): string {
     .join("/");
 }
 
+function encodeFilePathForUrl(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const windowsDrive = normalized.match(/^([A-Z]:)(?:\/(.*))?$/i);
+  if (windowsDrive) {
+    const drive = windowsDrive[1]!;
+    const rest = encodePathSegments(windowsDrive[2] ?? "");
+    if (rest) return `${drive}/${rest}`;
+    return normalized.endsWith("/") ? `${drive}/` : drive;
+  }
+  return encodePathSegments(normalized);
+}
+
 export function pathToTerminalFileHref(pathLike: string): string | undefined {
   const raw = String(pathLike ?? "").trim();
   if (!raw) return undefined;
@@ -115,12 +127,5 @@ export function pathToTerminalFileHref(pathLike: string): string | undefined {
   const normalized = normalizePath(normalizedRaw);
   if (!isAbsolutePath(normalized)) return undefined;
 
-  try {
-    if (/^[A-Z]:\//i.test(normalized)) {
-      return new URL(`file:///${normalized}`).toString();
-    }
-    return new URL(`file://${normalized}`).toString();
-  } catch {
-    return undefined;
-  }
+  return `file:///${encodeFilePathForUrl(normalized)}`;
 }

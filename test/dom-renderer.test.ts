@@ -498,7 +498,7 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("prevents native DOM link activation by default", () => {
+  it("allows native DOM link activation by default", () => {
     const { terminal, container, renderer } = setup(3);
 
     try {
@@ -508,15 +508,15 @@ describe("DomRenderer row rendering", () => {
       const anchor = lineEl(container).querySelector("a");
       expect(anchor).toBeInstanceOf(HTMLAnchorElement);
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
-      expect(anchor?.dispatchEvent(event)).toBe(false);
-      expect(event.defaultPrevented).toBe(true);
+      expect(anchor?.dispatchEvent(event)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
     } finally {
       renderer.dispose();
       container.remove();
     }
   });
 
-  it("lets hosts handle DOM link activation events", () => {
+  it("prevents native activation when host handles DOM link activation", () => {
     const onActivate = vi.fn();
     const { terminal, container, renderer } = setup(3, 1, {
       links: { onActivate },
@@ -528,9 +528,29 @@ describe("DomRenderer row rendering", () => {
 
       const anchor = lineEl(container).querySelector("a");
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
-      anchor?.dispatchEvent(event);
+      expect(anchor?.dispatchEvent(event)).toBe(false);
 
+      expect(event.defaultPrevented).toBe(true);
       expect(onActivate).toHaveBeenCalledWith("https://example.com/", event);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("can explicitly disable DOM link activation", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { activation: "none" },
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
     } finally {
       renderer.dispose();
       container.remove();

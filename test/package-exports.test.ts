@@ -240,20 +240,10 @@ describe("package exports", () => {
     const result = await build({
       stdin: {
         contents: `
-          import { createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText } from "./src/index.ts";
-          import { TMarkdownText } from "./src/markdown.ts";
-          import { TLogView, TVirtualList, createAppendOnlyLogStore } from "./src/experimental.ts";
-          console.log(
-            createPromptMentionPlugin,
-            TerminalProvider,
-            TBox,
-            TInput,
-            TText,
-            TMarkdownText,
-            TLogView,
-            TVirtualList,
-            createAppendOnlyLogStore
-          );
+          import * as root from "./src/index.ts";
+          import * as markdown from "./src/markdown.ts";
+          import * as experimental from "./src/experimental.ts";
+          console.log(root, markdown, experimental);
         `,
         resolveDir: process.cwd(),
         sourcefile: "vue-tui-browser-smoke.ts",
@@ -289,10 +279,10 @@ describe("package exports", () => {
       const result = await build({
         stdin: {
           contents: `
-            import { TerminalProvider } from "./dist/index.js";
-            import { TMarkdownText } from "./dist/markdown.js";
-            import { TLogView, TVirtualList, createAppendOnlyLogStore } from "./dist/experimental.js";
-            console.log(TerminalProvider, TMarkdownText, TLogView, TVirtualList, createAppendOnlyLogStore);
+            import * as root from "./dist/index.js";
+            import * as markdown from "./dist/markdown.js";
+            import * as experimental from "./dist/experimental.js";
+            console.log(root, markdown, experimental);
           `,
           resolveDir: process.cwd(),
           sourcefile: "vue-tui-dist-browser-smoke.ts",
@@ -317,6 +307,21 @@ describe("package exports", () => {
       expect(output).not.toContain("createNodeMentionPathProvider");
     },
   );
+
+  it.skipIf(!requireDistExports)("does not emit Node-only code into browser dist entries", () => {
+    expect(existsSync(distIndex)).toBe(true);
+    expect(existsSync(distMarkdown)).toBe(true);
+    expect(existsSync(distExperimental)).toBe(true);
+
+    for (const file of [distIndex, distMarkdown, distExperimental]) {
+      const source = readFileSync(file, "utf8");
+      expect(source).not.toMatch(/node:child_process|node:fs|node:path|node:url/);
+      expect(source).not.toContain("new Function");
+      expect(source).not.toContain("process.stdout");
+      expect(source).not.toContain("createOsc52ClipboardProvider");
+      expect(source).not.toContain("createNodeMentionPathProvider");
+    }
+  });
 
   it.skipIf(!requireDistExports)("keeps built ESM/CJS experimental exports usable", async () => {
     expect(existsSync(distIndex)).toBe(true);

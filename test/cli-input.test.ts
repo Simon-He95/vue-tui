@@ -120,14 +120,17 @@ describe("cli input", () => {
     }
   });
 
-  it("does not install unhandledRejection cleanup", () => {
+  it("cleans up on unhandledRejection", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("unhandledRejection"));
     const uninstall = installTerminalCleanup(dispose);
 
     try {
-      const added = process.rawListeners("unhandledRejection").filter((item) => !before.has(item));
-      expect(added).toHaveLength(0);
+      const listener = process.rawListeners("unhandledRejection").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.(new Error("boom"), Promise.resolve());
+      listener?.(new Error("boom"), Promise.resolve());
+      expect(dispose).toHaveBeenCalledTimes(1);
     } finally {
       uninstall();
     }

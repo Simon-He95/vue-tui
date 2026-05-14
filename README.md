@@ -41,14 +41,14 @@ Node-specific input host defaults are no longer exported from the browser-safe r
 Before:
 
 ```ts
-import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui";
+import { createDefaultTInputHostAdapter, defaultTInputHostPlugin } from "@simon_he/vue-tui";
 ```
 
 After:
 
 ```ts
 import { createTInputHostPlugin } from "@simon_he/vue-tui";
-import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
+import { createDefaultTInputHostAdapter, defaultTInputHostPlugin } from "@simon_he/vue-tui/cli";
 ```
 
 ## Browser Usage
@@ -236,7 +236,7 @@ pnpm run release:dry-run
 ```
 
 `release:dry-run` runs checks, tests, docs build, benchmarks, examples smoke, and packed package install smoke.
-The GitHub Release workflow publishes the already-verified tarball with npm provenance. `release:ci` is kept for CI environments that need to pack and publish from the same job; set `NPM_CONFIG_PROVENANCE=false` only in environments that do not support npm provenance.
+The GitHub Release workflow publishes the already-verified tarball with npm provenance. `release` and `release:ci` intentionally fail so publishing stays on that workflow path.
 
 ## Package Notes
 

@@ -667,11 +667,16 @@ function createSegmentElement(
   }
   anchor.tabIndex = linkOptions.tabIndex ?? -1;
   anchor.draggable = false;
-  const activation = linkOptions.activation ?? "event";
-  if (activation !== "native") {
+  const activation =
+    linkOptions.activation ?? (typeof linkOptions.onActivate === "function" ? "event" : "native");
+  if (activation === "event") {
     anchor.addEventListener("click", (event) => {
       event.preventDefault();
-      if (activation === "event") linkOptions.onActivate?.(href, event);
+      linkOptions.onActivate?.(href, event);
+    });
+  } else if (activation === "none") {
+    anchor.addEventListener("click", (event) => {
+      event.preventDefault();
     });
   }
   return anchor;

@@ -157,7 +157,7 @@ jobs:
 
   publish:
     needs: [verify, runtime-compat]
-    if: ${{ !inputs.dry_run }}
+    if: ${{ inputs.dry_run == false }}
     runs-on: ubuntu-latest
 
     steps:

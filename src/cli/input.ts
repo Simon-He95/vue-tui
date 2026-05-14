@@ -57,6 +57,7 @@ export function installTerminalCleanup(
     process.off("SIGTERM", onSigterm);
     process.off("SIGHUP", onSighup);
     process.off("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
+    process.off("unhandledRejection", onUnhandledRejection);
   };
 
   const handleSignal = (signal: CleanupSignal) => {
@@ -78,12 +79,17 @@ export function installTerminalCleanup(
     cleanup();
     uninstall();
   };
+  const onUnhandledRejection = () => {
+    cleanup();
+    uninstall();
+  };
 
   process.once("exit", cleanup);
   process.once("SIGINT", onSigint);
   process.once("SIGTERM", onSigterm);
   process.once("SIGHUP", onSighup);
   process.once("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
+  process.once("unhandledRejection", onUnhandledRejection);
 
   return uninstall;
 }
