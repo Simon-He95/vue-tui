@@ -24,6 +24,7 @@ function normalizeRawHref(value: unknown): string | null {
   if (/\s/u.test(raw)) return null;
   if (raw.startsWith("//")) return null;
   if (BLOCKED_SCHEME_RE.test(raw)) return null;
+  if (ENCODED_CRLF_RE.test(raw)) return null;
 
   return raw;
 }
@@ -54,10 +55,7 @@ function sanitizeAbsoluteHref(
     return options.preserveHttpHref ? raw : url.toString();
   }
 
-  if (url.protocol === "mailto:") {
-    if (ENCODED_CRLF_RE.test(raw)) return null;
-    return raw;
-  }
+  if (url.protocol === "mailto:") return raw;
 
   return null;
 }

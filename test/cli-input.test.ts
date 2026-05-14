@@ -121,11 +121,64 @@ describe("cli input", () => {
     }
   });
 
-  it("cleans up on unhandledRejection by default and rethrows", () => {
+  it("does not register unhandledRejection cleanup by default", () => {
+    const dispose = vi.fn();
+    const before = process.listenerCount("unhandledRejection");
+    const uninstall = installTerminalCleanup(dispose);
+
+    try {
+      expect(process.listenerCount("unhandledRejection")).toBe(before);
+    } finally {
+      uninstall();
+    }
+  });
+
+  it("registers unhandledRejection cleanup only when explicitly enabled", () => {
+    const dispose = vi.fn();
+    const before = process.listenerCount("unhandledRejection");
+    const uninstall = installTerminalCleanup(dispose, {
+      cleanupOnUnhandledRejection: true,
+    });
+
+    try {
+      expect(process.listenerCount("unhandledRejection")).toBe(before + 1);
+    } finally {
+      uninstall();
+    }
+  });
+
+  it("cleans up on opted-in unhandledRejection without rethrowing by default", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("unhandledRejection"));
+    const uninstall = installTerminalCleanup(dispose, {
+      cleanupOnUnhandledRejection: true,
+    });
+
+    try {
+      const listener = process.rawListeners("unhandledRejection").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      const nextTick = vi.spyOn(process, "nextTick");
+      try {
+        listener?.(new Error("boom"), Promise.resolve());
+      } finally {
+        nextTick.mockRestore();
+      }
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(nextTick).not.toHaveBeenCalled();
+    } finally {
+      uninstall();
+    }
+  });
+
+  it("can rethrow after opted-in unhandledRejection cleanup", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("unhandledRejection"));
     const error = new Error("boom");
-    const uninstall = installTerminalCleanup(dispose);
+    const uninstall = installTerminalCleanup(dispose, {
+      cleanupOnUnhandledRejection: true,
+      rethrowUnhandledRejection: true,
+    });
 
     try {
       const listener = process.rawListeners("unhandledRejection").find((item) => !before.has(item));
@@ -159,7 +212,7 @@ describe("cli input", () => {
     }
   });
 
-  it("can opt out of unhandledRejection cleanup", () => {
+  it("can explicitly skip unhandledRejection cleanup", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("unhandledRejection"));
     const uninstall = installTerminalCleanup(dispose, {

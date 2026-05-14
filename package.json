@@ -97,7 +97,7 @@
     "release:workflow-only": "node -e \"console.error('Use GitHub Release workflow'); process.exit(1)\"",
     "release": "pnpm run release:workflow-only",
     "release:ci": "pnpm run release:workflow-only",
-    "release:local": "pnpm run release:dry-run && bumpp && NPM_CONFIG_PROVENANCE=false pnpm publish --no-git-checks --access public",
+    "release:local": "pnpm run release:workflow-only",
     "release:bench": "pnpm run bench:baseline",
     "release:check": "pnpm run check:hidden-unicode && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run test:package-exports && pnpm run docs:build",
     "release:dry-run": "pnpm run release:check && pnpm run release:bench && pnpm run release:smoke && pnpm run release:pack-smoke",

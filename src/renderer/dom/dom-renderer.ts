@@ -670,6 +670,10 @@ function stopNativeAndTerminalActivation(event: MouseEvent): void {
   event.stopPropagation();
 }
 
+function stopTerminalPropagation(event: Event): void {
+  event.stopPropagation();
+}
+
 function createSegmentElement(
   doc: Document,
   style: Style,
@@ -691,17 +695,20 @@ function createSegmentElement(
   }
   anchor.tabIndex = linkOptions.tabIndex ?? -1;
   anchor.draggable = false;
+  anchor.addEventListener("pointerdown", stopTerminalPropagation);
+  anchor.addEventListener("pointerup", stopTerminalPropagation);
+  anchor.addEventListener("dblclick", stopTerminalPropagation);
   const activation =
     linkOptions.activation ?? (typeof linkOptions.onActivate === "function" ? "event" : "native");
-  if (activation === "event") {
+  if (activation === "native") {
+    anchor.addEventListener("click", stopTerminalPropagation);
+  } else if (activation === "event") {
     anchor.addEventListener("click", (event) => {
       stopNativeAndTerminalActivation(event);
       linkOptions.onActivate?.(href, event);
     });
   } else if (activation === "none") {
-    anchor.addEventListener("click", (event) => {
-      stopNativeAndTerminalActivation(event);
-    });
+    anchor.addEventListener("click", stopNativeAndTerminalActivation);
   }
   return anchor;
 }

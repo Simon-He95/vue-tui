@@ -121,7 +121,10 @@ const exit = () => {
   process.exit(0);
 };
 
-uninstallCleanup = installTerminalCleanup(cleanup, { exitOnSignal: true });
+uninstallCleanup = installTerminalCleanup(cleanup, {
+  exitOnSignal: true,
+  cleanupOnUnhandledRejection: false,
+});
 driver = createStdinDriver({
   dispatch(event) {
     const prevented = app.events.dispatch(event);
@@ -132,6 +135,8 @@ driver = createStdinDriver({
   onExit: exit,
 });
 ```
+
+Unhandled promise rejections stay host-owned by default; set `cleanupOnUnhandledRejection` and `rethrowUnhandledRejection` explicitly if the CLI should clean up and then crash on them.
 
 ## Core Concepts
 
@@ -233,11 +238,10 @@ Release validation:
 
 ```bash
 pnpm run release:dry-run
-pnpm run release:local
 ```
 
 `release:dry-run` runs checks, tests, docs build, benchmarks, examples smoke, and packed package install smoke.
-`release:local` is the explicit local publish path after the same validation. The GitHub Release workflow publishes the already-verified tarball with npm provenance. `release`, `release:ci`, and `release:workflow-only` intentionally fail so publishing stays on that workflow path unless a maintainer chooses `release:local`.
+The GitHub Release workflow publishes the already-verified tarball with npm provenance. `release`, `release:ci`, `release:local`, and `release:workflow-only` intentionally fail so publishing stays on that workflow path.
 
 ## Package Notes
 

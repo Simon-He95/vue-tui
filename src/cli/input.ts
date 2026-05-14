@@ -27,6 +27,7 @@ type CleanupSignal = "SIGINT" | "SIGTERM" | "SIGHUP";
 export type TerminalCleanupOptions = Readonly<{
   exitOnSignal?: boolean;
   cleanupOnUnhandledRejection?: boolean;
+  rethrowUnhandledRejection?: boolean;
 }>;
 
 function exitCodeForSignal(signal: CleanupSignal): number {
@@ -42,7 +43,8 @@ export function installTerminalCleanup(
   let cleaned = false;
   let uninstalled = false;
   const exitOnSignal = options.exitOnSignal ?? true;
-  const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? true;
+  const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? false;
+  const rethrowUnhandledRejection = options.rethrowUnhandledRejection === true;
 
   const cleanup = () => {
     if (cleaned) return;
@@ -87,9 +89,11 @@ export function installTerminalCleanup(
   const onUnhandledRejection = (reason: unknown) => {
     cleanup();
     uninstall();
-    process.nextTick(() => {
-      throw reason instanceof Error ? reason : new Error(String(reason));
-    });
+    if (rethrowUnhandledRejection) {
+      process.nextTick(() => {
+        throw reason instanceof Error ? reason : new Error(String(reason));
+      });
+    }
   };
 
   process.once("exit", cleanup);

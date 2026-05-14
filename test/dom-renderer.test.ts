@@ -43,6 +43,8 @@ describe("DomRenderer row rendering", () => {
     expect(sanitizeDomHref("../ok", { allowRelative: true })).toBe("../ok");
     expect(sanitizeDomHref("#section", { allowRelative: true })).toBe("#section");
     expect(sanitizeDomHref("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBeNull();
+    expect(sanitizeDomHref("https://example.com/%0aevil")).toBeNull();
+    expect(sanitizeDomHref("/docs/%0dheader", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("https://example.com/a%20b")).toBe("https://example.com/a%20b");
   });
 
@@ -513,6 +515,32 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("does not bubble DOM link pointer events to the terminal container", () => {
+    const { terminal, container, renderer } = setup(3);
+    const pointerDown = vi.fn();
+    const pointerUp = vi.fn();
+    container.addEventListener("pointerdown", pointerDown);
+    container.addEventListener("pointerup", pointerUp);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      anchor!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      anchor!.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
+
+      expect(pointerDown).not.toHaveBeenCalled();
+      expect(pointerUp).not.toHaveBeenCalled();
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("pointerdown", pointerDown);
+      container.removeEventListener("pointerup", pointerUp);
+      container.remove();
+    }
+  });
+
   it("allows native DOM link activation by default", () => {
     const { terminal, container, renderer } = setup(3);
 
@@ -527,6 +555,28 @@ describe("DomRenderer row rendering", () => {
       expect(event.defaultPrevented).toBe(false);
     } finally {
       renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not bubble native DOM link activation to the terminal container", () => {
+    const { terminal, container, renderer } = setup(3);
+    const bubbled = vi.fn();
+    container.addEventListener("click", bubbled);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor!.dispatchEvent(event)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
+      expect(bubbled).not.toHaveBeenCalled();
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("click", bubbled);
       container.remove();
     }
   });

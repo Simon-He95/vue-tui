@@ -41,14 +41,13 @@
 
 ```bash
 pnpm run release:dry-run
-pnpm run release:local
 pnpm run release:check
 pnpm run release:bench
 pnpm run release:smoke
 pnpm run release:pack-smoke
 ```
 
-`release:dry-run` 是发布前最后一道本地 gate。它会跑 `release:check`、`release:bench`、`release:smoke` 和 packed package install smoke，确认当前构建可以从 `.tgz` 安装到外部项目后使用。`release:local` 是显式本地发布路径，会先跑同一套 dry-run 验证。
+`release:dry-run` 是发布前最后一道本地 gate。它会跑 `release:check`、`release:bench`、`release:smoke` 和 packed package install smoke，确认当前构建可以从 `.tgz` 安装到外部项目后使用。实际发布只走 GitHub Release workflow。
 
 展开命令：
 
@@ -89,4 +88,4 @@ pnpm run example:agent-console:terminal
 3. 跑 `pnpm run release:dry-run`。
 4. 如果 `docs:build` 更新 generated API，提交 generated docs；否则保持工作区干净。
 5. 更新 `CHANGELOG.md`，把 `Unreleased` 的内容整理成目标版本。
-6. 只在发布验证完成后通过 GitHub Release workflow 发布已验证的 tarball；`pnpm run release`、`pnpm run release:ci` 和 `pnpm run release:workflow-only` 会阻止本地手动发布。需要本地发布时显式使用 `pnpm run release:local`。
+6. 只在发布验证完成后通过 GitHub Release workflow 发布已验证的 tarball；`pnpm run release`、`pnpm run release:ci`、`pnpm run release:local` 和 `pnpm run release:workflow-only` 会阻止本地手动发布。
