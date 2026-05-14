@@ -1,6 +1,7 @@
+import type { Plugin } from "esbuild";
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { builtinModules, createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -13,6 +14,10 @@ const distCliTypes = resolve("dist/cli.d.ts");
 const distMarkdownTypes = resolve("dist/markdown.d.ts");
 const distExperimentalTypes = resolve("dist/experimental.d.ts");
 const requireDistExports = process.env.VUE_TUI_REQUIRE_DIST_EXPORTS === "1";
+const forbiddenNodeBuiltins = new Set([
+  ...builtinModules,
+  ...builtinModules.map((name) => `node:${name}`),
+]);
 const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as {
   files?: string[];
   main?: string;
@@ -20,6 +25,22 @@ const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as
   types?: string;
   exports?: Record<string, unknown>;
   peerDependencies?: Record<string, string>;
+};
+
+const forbidNodeBuiltins: Plugin = {
+  name: "forbid-node-builtins",
+  setup(build) {
+    build.onResolve({ filter: /.*/ }, (args) => {
+      if (!forbiddenNodeBuiltins.has(args.path)) return null;
+      return {
+        errors: [
+          {
+            text: `Browser-safe entry resolved Node builtin: ${args.path} imported by ${args.importer}`,
+          },
+        ],
+      };
+    });
+  },
 };
 
 function collectExportTargets(value: unknown, out: string[] = []): string[] {
@@ -55,6 +76,11 @@ describe("package exports", () => {
 
   it("does not pin Vue consumers to a single patch line", () => {
     expect(packageJson.peerDependencies?.vue).toBe(">=3.3.0 <4");
+  });
+
+  it("does not import the mixed renderer barrel from CLI app runtime", () => {
+    const source = readFileSync(resolve("src/create-terminal-app.ts"), "utf8");
+    expect(source).not.toContain("./renderer/index.js");
   });
 
   it("keeps high-throughput components behind the experimental entrypoint", async () => {
@@ -235,6 +261,7 @@ describe("package exports", () => {
       platform: "browser",
       format: "esm",
       external: ["vue"],
+      plugins: [forbidNodeBuiltins],
     });
     const output = result.outputFiles
       .map((file) => new TextDecoder().decode(file.contents))
@@ -273,6 +300,7 @@ describe("package exports", () => {
         platform: "browser",
         format: "esm",
         external: ["vue"],
+        plugins: [forbidNodeBuiltins],
       });
       const output = result.outputFiles
         .map((file) => new TextDecoder().decode(file.contents))

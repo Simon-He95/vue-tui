@@ -67,7 +67,7 @@ export function installTerminalCleanup(
     cleanup();
     uninstall();
 
-    if (options.exitOnSignal === true) {
+    if (options.exitOnSignal ?? true) {
       const code = exitCodeForSignal(signal);
       process.nextTick(() => {
         process.exit(code);

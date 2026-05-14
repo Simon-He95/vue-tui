@@ -84,6 +84,7 @@ export type DomRendererLinkOptions =
   | Readonly<{
       allowRelative?: boolean;
       externalTarget?: "_blank" | "_self";
+      tabIndex?: number;
     }>;
 
 export type DomRendererRowKeyPrepassDecision =
@@ -382,7 +383,7 @@ function applyStyle(span: HTMLElement, style: Style, palette?: ThemePalette | nu
 }
 
 function measureCell(container: HTMLElement): CellMetrics {
-  const probe = document.createElement("span");
+  const probe = container.ownerDocument.createElement("span");
   probe.textContent = "M";
   probe.style.position = "absolute";
   probe.style.visibility = "hidden";
@@ -397,7 +398,7 @@ function measureCell(container: HTMLElement): CellMetrics {
 }
 
 function measureCharWidth(container: HTMLElement, ch: string): number {
-  const probe = document.createElement("span");
+  const probe = container.ownerDocument.createElement("span");
   probe.textContent = ch;
   probe.style.position = "absolute";
   probe.style.visibility = "hidden";
@@ -638,24 +639,25 @@ function resetSpanStyle(span: HTMLElement): void {
 }
 
 function createSegmentElement(
+  doc: Document,
   style: Style,
   options: Readonly<{ links?: DomRendererLinkOptions }>,
 ): HTMLSpanElement | HTMLAnchorElement {
   const linkOptions = options.links ?? {};
-  if (linkOptions === false) return document.createElement("span");
+  if (linkOptions === false) return doc.createElement("span");
 
   const href = sanitizeDomHref(style.href, {
     allowRelative: linkOptions.allowRelative === true,
   });
-  if (!href) return document.createElement("span");
-  const anchor = document.createElement("a");
+  if (!href) return doc.createElement("span");
+  const anchor = doc.createElement("a");
   anchor.href = href;
   const protocol = href.match(/^[a-z][a-z0-9+.-]*:/i)?.[0].toLowerCase() ?? null;
   if (protocol === "http:" || protocol === "https:") {
     anchor.target = linkOptions.externalTarget ?? "_blank";
     anchor.rel = "noopener noreferrer";
   }
-  anchor.tabIndex = -1;
+  anchor.tabIndex = linkOptions.tabIndex ?? 0;
   anchor.draggable = false;
   return anchor;
 }
@@ -713,6 +715,7 @@ function renderRow(
   linkOptions: DomRendererLinkOptions | undefined,
 ): void {
   stats.rows++;
+  const doc = lineEl.ownerDocument;
   const cachedKey = rowCache.get(lineEl);
   if (enableRowKeyPrepass && cachedKey != null) {
     stats.rowKeyPrepassChecks++;
@@ -767,7 +770,7 @@ function renderRow(
       span = firstChild;
       stats.spansReused++;
     } else {
-      span = createSegmentElement(seg.style, { links: linkOptions });
+      span = createSegmentElement(doc, seg.style, { links: linkOptions });
       span.dataset.vtFastRow = "styled";
       stats.spansCreated++;
       stats.replaceChildren++;
@@ -794,17 +797,17 @@ function renderRow(
   stats.replaceChildren++;
 
   // Use DocumentFragment to batch DOM operations and avoid layout thrashing
-  const fragment = document.createDocumentFragment();
+  const fragment = doc.createDocumentFragment();
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]!;
-    const span = createSegmentElement(seg.style, { links: linkOptions });
+    const span = createSegmentElement(doc, seg.style, { links: linkOptions });
     if (canReuseSpans) {
       span.dataset.vtFastRow = "segment";
       span.dataset.vtSegmentIndex = String(i);
     }
     if (seg.wide && wideScaleX > 1.01) {
-      const inner = document.createElement("span");
+      const inner = doc.createElement("span");
       inner.textContent = seg.text;
       inner.style.cssText = `display:inline-block;white-space:pre;transform:scaleX(${wideScaleX});transform-origin:left`;
       span.appendChild(inner);
@@ -825,6 +828,7 @@ export function createDomRenderer(
   container: HTMLElement,
   options: DomRendererOptions = {},
 ): DomRenderer {
+  const doc = container.ownerDocument;
   const rendererLinkOptions = options.links;
   container.style.fontFamily = DEFAULT_FONT_FAMILY;
   container.style.whiteSpace = "pre";
@@ -1007,14 +1011,14 @@ export function createDomRenderer(
     container.style.width = `${cols * metrics.cellWidth}px`;
     container.style.height = `${rows * metrics.cellHeight}px`;
 
-    const fragment = document.createDocumentFragment();
+    const fragment = doc.createDocumentFragment();
     for (let i = 0; i < TERMINAL_RENDER_PLANES.length; i++) {
       const plane = TERMINAL_RENDER_PLANES[i]!;
       const planeTerminal = getPlaneTerminal(terminal, plane);
       let layer = planeLayers.get(plane);
       if (!layer) {
-        const el = document.createElement("div");
-        const contentEl = document.createElement("div");
+        const el = doc.createElement("div");
+        const contentEl = doc.createElement("div");
         el.dataset.vtPlane = plane;
         el.style.pointerEvents = "none";
         contentEl.style.position = "absolute";
@@ -1052,9 +1056,9 @@ export function createDomRenderer(
             },
       );
 
-      const lineFragment = document.createDocumentFragment();
+      const lineFragment = doc.createDocumentFragment();
       layer.lines = Array.from({ length: rows }, () => {
-        const line = document.createElement("div");
+        const line = doc.createElement("div");
         line.style.cssText = `height:${metrics.cellHeight}px;width:${cols * metrics.cellWidth}px;overflow:hidden;contain:layout style`;
         lineFragment.appendChild(line);
         return line;
@@ -1167,7 +1171,7 @@ export function createDomRenderer(
 
   function reorderLayerDomRows(layer: PlaneLayer, startY: number, endY: number): void {
     const before = layer.lines[endY] ?? null;
-    const fragment = document.createDocumentFragment();
+    const fragment = layer.contentEl.ownerDocument.createDocumentFragment();
     for (let y = startY; y < endY; y++) {
       const line = layer.lines[y];
       if (line) fragment.appendChild(line);

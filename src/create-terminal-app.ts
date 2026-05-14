@@ -40,7 +40,7 @@ import { framePerfNow, mergeFramePerfReason } from "./observability/frame-perf.j
 import { createFramePerfStore } from "./observability/frame-perf-store.js";
 import { createTraceStore } from "./observability/trace.js";
 import { createTuiProfiler } from "./observability/tui-profiler.js";
-import { HEADLESS_RENDERER_CAPABILITIES } from "./renderer/index.js";
+import { HEADLESS_RENDERER_CAPABILITIES } from "./renderer/capabilities.js";
 import { createTerminalSelectionController } from "./selection/terminal-selection.js";
 import { createTInputHostPlugin } from "./vue/components/input/plugins/hostPlugin.js";
 import {

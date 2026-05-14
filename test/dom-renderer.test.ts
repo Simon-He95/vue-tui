@@ -464,7 +464,7 @@ describe("DomRenderer row rendering", () => {
       expect(anchor.href).toBe("https://example.com/");
       expect(anchor.target).toBe("_blank");
       expect(anchor.rel).toBe("noopener noreferrer");
-      expect(anchor.tabIndex).toBe(-1);
+      expect(anchor.tabIndex).toBe(0);
       expect(anchor.draggable).toBe(false);
       expect(anchor.dataset.vtFastRow).toBeUndefined();
       expect(lastRowStats(renderer)).toMatchObject({
@@ -472,6 +472,22 @@ describe("DomRenderer row rendering", () => {
         fragmentRows: 1,
         spansCreated: 1,
       });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("lets hosts customize DOM link tabIndex", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { tabIndex: -1 },
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")?.tabIndex).toBe(-1);
     } finally {
       renderer.dispose();
       container.remove();
@@ -506,10 +522,33 @@ describe("DomRenderer row rendering", () => {
       expect(anchor?.getAttribute("href")).toBe("docs/intro.md");
       expect(anchor?.getAttribute("target")).toBeNull();
       expect(anchor?.getAttribute("rel")).toBeNull();
-      expect(anchor?.tabIndex).toBe(-1);
+      expect(anchor?.tabIndex).toBe(0);
     } finally {
       renderer.dispose();
       container.remove();
+    }
+  });
+
+  it("creates row nodes using the container ownerDocument", () => {
+    const iframe = document.createElement("iframe");
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument!;
+    const terminal = createTerminal({ cols: 3, rows: 1 });
+    const container = doc.createElement("div");
+    doc.body.appendChild(container);
+    const renderer = createDomRenderer(terminal, container);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = container.querySelector("a");
+      expect(anchor?.ownerDocument).toBe(doc);
+    } finally {
+      renderer.dispose();
+      terminal.dispose();
+      iframe.remove();
     }
   });
 

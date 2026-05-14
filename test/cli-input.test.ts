@@ -62,7 +62,7 @@ describe("cli input", () => {
     }
   });
 
-  it("cleans up without exiting on signals by default", () => {
+  it("exits on signals by default after cleanup", async () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const before = new Set(process.rawListeners("SIGINT"));
@@ -72,16 +72,17 @@ describe("cli input", () => {
       const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
       listener?.();
+      await new Promise<void>((resolve) => process.nextTick(resolve));
 
       expect(dispose).toHaveBeenCalledTimes(1);
-      expect(exit).not.toHaveBeenCalled();
+      expect(exit).toHaveBeenCalledWith(130);
     } finally {
       uninstall();
       exit.mockRestore();
     }
   });
 
-  it("can opt into exiting with signal code", async () => {
+  it("can explicitly exit with signal code", async () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const before = new Set(process.rawListeners("SIGINT"));

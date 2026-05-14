@@ -84,7 +84,7 @@ type CliLatencyLogRecord = Readonly<{
 }>;
 
 const EVENT_OP_ID = Symbol("dimcode.cliLatencyOpId");
-const DEFAULT_LOG_PATH = "/tmp/dimcode-cli-latency.jsonl";
+const DEFAULT_LOG_PATH = "/tmp/vue-tui-cli-latency.jsonl";
 const INVALIDATE_ASSOCIATION_WINDOW_MS = 32;
 const MAX_OP_AGE_MS = 5000;
 const GLOBAL_PROFILER_KEY = "__vueTuiCliLatencyProfiler" as const;
