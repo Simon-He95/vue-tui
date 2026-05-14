@@ -64,7 +64,7 @@
 - `pathPickerProvider` `(PathPickerProvider?)`: 给子树里的 `TPathPicker` 注入宿主路径 provider
 - `debugIme` `(boolean)`: 输出 IME 调试信息
 - `debugTrace` `(boolean)`: 开启 trace（commit/event/focus）
-- `domRendererOptions` `(DomRendererOptions?)`: DOM renderer 挂载时配置，例如 `syncFlushMaxRows` / `syncFlushCellBudget`；该选项按 mount-time 使用，修改后需重新挂载 provider
+- `domRendererOptions` `(DomRendererOptions?)`: DOM renderer 配置，例如 `syncFlushMaxRows` / `syncFlushCellBudget`；link options 会在更新时刷新，其他选项按 mount-time 使用，修改后需重新挂载 provider
 
 ### Slots
 

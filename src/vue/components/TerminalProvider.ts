@@ -37,6 +37,7 @@ import {
   shallowReactive,
   shallowRef,
   toRef,
+  watch,
   watchEffect,
 } from "vue";
 import { createTerminal } from "../../core/index.js";
@@ -693,6 +694,11 @@ export const TerminalProvider = defineComponent({
         const r = createDomRenderer(terminal, el, props.domRendererOptions ?? {});
         renderer.value = r;
         rendererCapabilities.value = r.capabilities;
+        watch(
+          () => props.domRendererOptions?.links,
+          (links) => r.updateOptions({ links }),
+          { deep: true },
+        );
 
         let lastPointerImeAt = 0;
         let focusImeFn: ((e?: PointerEvent | MouseEvent) => void) | null = null;

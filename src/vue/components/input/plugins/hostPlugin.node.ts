@@ -21,6 +21,7 @@ export type CreateDefaultTInputHostAdapterOptions = Readonly<{
   clipboardCommandTimeoutMs?: number;
   clipboardTotalTimeoutMs?: number;
   clipboardMaxBytes?: number;
+  clipboardReadMaxBytes?: number;
 }>;
 
 function getProcessLike(): any {
@@ -68,17 +69,20 @@ function normalizeClipboardPathList(raw: string): string {
 async function runClipboardCommand(
   cmd: string,
   args: string[],
-  options: Readonly<{ timeoutMs?: number }> = {},
+  options: Readonly<{ timeoutMs?: number; maxBytes?: number }> = {},
 ): Promise<string | null> {
   const spawn = await loadNodeSpawn();
   if (!spawn) return null;
 
   const timeoutMs = Math.max(1, options.timeoutMs ?? 800);
+  const maxBytes = Math.max(1, options.maxBytes ?? 1024 * 1024);
 
   return new Promise((resolve) => {
     let settled = false;
     let child: ReturnType<SpawnLike> | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let out = "";
+    let bytes = 0;
 
     const finish = (value: string | null) => {
       if (settled) return;
@@ -99,10 +103,18 @@ async function runClipboardCommand(
         stdio: ["ignore", "pipe", "ignore"],
         windowsHide: true,
       });
-      let out = "";
       child.stdout?.setEncoding?.("utf8");
       child.stdout?.on?.("data", (chunk) => {
-        out += String(chunk);
+        const text = String(chunk);
+        bytes += Buffer.byteLength(text, "utf8");
+        if (bytes > maxBytes) {
+          try {
+            child?.kill?.();
+          } catch {}
+          finish(null);
+          return;
+        }
+        out += text;
       });
       child.on?.("error", () => finish(null));
       child.on?.("close", (code) => finish(code === 0 ? out : null));
@@ -121,18 +133,20 @@ function remainingMs(deadline: number): number {
 }
 
 async function readTerminalClipboardText(
-  options: Readonly<{ commandTimeoutMs: number; totalTimeoutMs: number }>,
+  options: Readonly<{ commandTimeoutMs: number; totalTimeoutMs: number; maxReadBytes: number }>,
 ): Promise<string> {
   const platform = getPlatform();
   if (!platform) return "";
 
   const commandTimeoutMs = positiveFiniteOrDefault(options.commandTimeoutMs, 300);
   const totalTimeoutMs = positiveFiniteOrDefault(options.totalTimeoutMs, 800);
+  const maxReadBytes = positiveFiniteOrDefault(options.maxReadBytes, 1024 * 1024);
   const deadline = Date.now() + totalTimeoutMs;
   const run = (cmd: string, args: string[]) =>
     Date.now() < deadline
       ? runClipboardCommand(cmd, args, {
           timeoutMs: Math.min(commandTimeoutMs, remainingMs(deadline)),
+          maxBytes: maxReadBytes,
         })
       : Promise.resolve(null);
 
@@ -211,6 +225,7 @@ export function createDefaultTInputHostAdapter(
       return readTerminalClipboardText({
         commandTimeoutMs: options.clipboardCommandTimeoutMs ?? 300,
         totalTimeoutMs: options.clipboardTotalTimeoutMs ?? 800,
+        maxReadBytes: options.clipboardReadMaxBytes ?? 1024 * 1024,
       });
     },
     async writeClipboardText(text: string) {

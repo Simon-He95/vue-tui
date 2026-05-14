@@ -3,6 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseMouseSequence } from "../src/cli/parse-mouse.js";
+import {
+  defaultVueTuiDebugLogPath,
+  defaultVueTuiMouseDebugLogPath,
+} from "../src/cli/node-file-writers.js";
 import { resolveDebugLogPath } from "../src/core/debug-logger.js";
 import { createCliEventManager } from "../src/events/manager/cli-event-manager.js";
 import { envFlag } from "../src/utils/env.js";
@@ -52,9 +56,11 @@ function withTempDir(run: (dir: string) => void): void {
 
 describe("debug log paths", () => {
   it("resolves Vue TUI debug log paths and defaults", () => {
-    expect(resolveDebugLogPath(undefined)).toBe("/tmp/vue-tui-debug.log");
-    expect(resolveDebugLogPath({}, "/tmp/vue-tui-mouse-debug.log")).toBe(
-      "/tmp/vue-tui-mouse-debug.log",
+    expect(resolveDebugLogPath(undefined, defaultVueTuiDebugLogPath())).toBe(
+      join(tmpdir(), "vue-tui-debug.log"),
+    );
+    expect(resolveDebugLogPath({}, defaultVueTuiMouseDebugLogPath())).toBe(
+      join(tmpdir(), "vue-tui-mouse-debug.log"),
     );
     expect(resolveDebugLogPath({ VUE_TUI_DEBUG_LOG_PATH: " /tmp/custom.log " })).toBe(
       "/tmp/custom.log",

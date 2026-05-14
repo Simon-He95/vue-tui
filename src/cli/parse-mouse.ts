@@ -2,6 +2,7 @@ import type { ParseResult } from "./parse-utils.js";
 import { appendFileSync } from "node:fs";
 import process from "node:process";
 import { envFlag, envString } from "../utils/env.js";
+import { defaultVueTuiMouseDebugLogPath } from "./node-file-writers.js";
 
 function parseMouseSgr(sequence: string): ParseResult {
   if (!sequence.startsWith("\x1B[<")) return { handled: false, event: null };
@@ -13,7 +14,7 @@ function parseMouseSgr(sequence: string): ParseResult {
     env,
     "VUE_TUI_MOUSE_DEBUG_PATH",
     "DIMCODE_MOUSE_DEBUG_PATH",
-    "/tmp/vue-tui-mouse-debug.log",
+    defaultVueTuiMouseDebugLogPath(),
   );
   const debug = (msg: string): void => {
     if (!mouseDebugEnabled) return;

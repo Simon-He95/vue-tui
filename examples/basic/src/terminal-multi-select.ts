@@ -50,9 +50,17 @@ let driver: ReturnType<typeof createStdinDriver> | null = null;
 let uninstallCleanup: (() => void) | null = null;
 let exiting = false;
 
+const onResize = () => {
+  const nextCols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : cols;
+  const nextRows = Number.isFinite(process.stdout.rows) ? process.stdout.rows : rows;
+  app.terminal.resize(nextCols, nextRows);
+  app.scheduler.flush();
+};
+
 const cleanup = () => {
   if (exiting) return;
   exiting = true;
+  if (process.stdout.isTTY) process.stdout.off("resize", onResize);
   uninstallCleanup?.();
   uninstallCleanup = null;
   driver?.dispose();
@@ -67,12 +75,7 @@ exit = () => {
 };
 
 if (process.stdout.isTTY) {
-  process.stdout.on("resize", () => {
-    const nextCols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : cols;
-    const nextRows = Number.isFinite(process.stdout.rows) ? process.stdout.rows : rows;
-    app.terminal.resize(nextCols, nextRows);
-    app.scheduler.flush();
-  });
+  process.stdout.on("resize", onResize);
 }
 
 if (smoke) {

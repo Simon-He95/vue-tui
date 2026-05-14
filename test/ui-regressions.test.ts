@@ -33,7 +33,7 @@ import {
   withDirectives,
 } from "./ui-regressions-support";
 
-import type { PropType } from "vue";
+import { reactive, type PropType } from "vue";
 
 describe("ui regressions", () => {
   it("useRenderNode batches sibling node invalidates into one scheduler tick", async () => {
@@ -394,6 +394,41 @@ describe("ui regressions", () => {
       mounted?.unmount();
       globalThis.requestAnimationFrame = previousRaf;
       globalThis.cancelAnimationFrame = previousCancel;
+    }
+  });
+
+  it("TerminalProvider updates DOM link options after mount", async () => {
+    const providerProps = reactive<{ domRendererOptions: any }>({
+      domRendererOptions: { links: false },
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TText, {
+          x: 0,
+          y: 0,
+          w: 4,
+          value: "docs",
+          style: { href: "docs/intro.md" },
+        }),
+      8,
+      1,
+      providerProps,
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+      const container = mounted.container()!;
+      expect(container.querySelector("a")).toBeNull();
+
+      providerProps.domRendererOptions = { links: { allowRelative: true } };
+      await nextTick();
+      await Promise.resolve();
+
+      expect(container.querySelector("a")?.getAttribute("href")).toBe("docs/intro.md");
+    } finally {
+      mounted.unmount();
     }
   });
 

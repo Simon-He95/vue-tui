@@ -12,6 +12,7 @@ import type {
 } from "./types.js";
 import { appendFileSync } from "node:fs";
 import process from "node:process";
+import { defaultVueTuiDebugLogPath } from "../../cli/node-file-writers.js";
 import { resolveDebugLogPath } from "../../core/debug-logger.js";
 import { envFlag } from "../../utils/env.js";
 import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
@@ -311,7 +312,7 @@ export function createCliEventManager(
           if (envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG")) {
             const timestamp = new Date().toISOString().split("T")[1].slice(0, -1);
             appendFileSync(
-              resolveDebugLogPath(env),
+              resolveDebugLogPath(env, defaultVueTuiDebugLogPath()),
               `[${timestamp}] [EVENT-MGR] ERROR in handler ${node.id}.${handlerKey}: ${err}\n`,
             );
           }

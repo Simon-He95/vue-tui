@@ -17,6 +17,10 @@ export function defaultVueTuiDebugLogPath(): string {
   return join(tmpdir(), "vue-tui-debug.log");
 }
 
+export function defaultVueTuiMouseDebugLogPath(): string {
+  return join(tmpdir(), "vue-tui-mouse-debug.log");
+}
+
 function legacyDebugFlag(env: Readonly<Record<string, unknown>> | undefined): boolean {
   return String(env?.DEBUG ?? "").trim() === "1";
 }

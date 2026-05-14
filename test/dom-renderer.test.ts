@@ -742,6 +742,30 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("updates DOM link options after creation", () => {
+    const onActivate = vi.fn();
+    const { terminal, container, renderer } = setup(10, 1, { links: false });
+
+    try {
+      terminal.write("docs", { x: 0, y: 0, style: { href: "docs/intro.md" } });
+      terminal.commit({ planes: ["default"], sync: true });
+      expect(lineEl(container).querySelector("a")).toBeNull();
+
+      renderer.updateOptions({ links: { allowRelative: true, onActivate } });
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      expect(anchor?.getAttribute("href")).toBe("docs/intro.md");
+
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
+      expect(onActivate).toHaveBeenCalledWith("docs/intro.md", event);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("creates row nodes using the container ownerDocument", () => {
     const iframe = document.createElement("iframe");
     document.body.appendChild(iframe);

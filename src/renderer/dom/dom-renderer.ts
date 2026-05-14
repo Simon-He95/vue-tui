@@ -130,6 +130,7 @@ export interface DomRenderer {
       palette?: ThemePalette | null;
     }>,
   ) => void;
+  updateOptions: (next: Readonly<{ links?: DomRendererLinkOptions }>) => void;
   setPlaneOffset: (plane: TerminalRenderPlane, offsetPx: number) => void;
   setPlaneViewport: (
     plane: TerminalRenderPlane,
@@ -880,7 +881,7 @@ export function createDomRenderer(
   options: DomRendererOptions = {},
 ): DomRenderer {
   const doc = container.ownerDocument;
-  const rendererLinkOptions = options.links;
+  let rendererLinkOptions = options.links;
   container.style.fontFamily = DEFAULT_FONT_FAMILY;
   container.style.whiteSpace = "pre";
   container.style.display = "inline-block";
@@ -1575,6 +1576,12 @@ export function createDomRenderer(
     }
   }
 
+  function updateOptions(next: Readonly<{ links?: DomRendererLinkOptions }>): void {
+    if (disposed) return;
+    rendererLinkOptions = next.links;
+    refresh();
+  }
+
   refresh();
   // Clear initial dirty flags.
   terminal.commit();
@@ -1588,6 +1595,7 @@ export function createDomRenderer(
     },
     refresh,
     updateTheme,
+    updateOptions,
     dispose() {
       disposed = true;
       offCommit();

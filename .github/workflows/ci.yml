@@ -54,6 +54,8 @@ jobs:
 
       - run: pnpm run test:package-exports
 
+      - run: pnpm -C test/fixtures/browser-vite-import build
+
       - run: pnpm exec playwright install --with-deps chromium
 
       - run: pnpm run e2e:smoke

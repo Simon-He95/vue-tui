@@ -1,6 +1,6 @@
 import { envFlag, envString } from "../utils/env.js";
 
-const DEFAULT_LOG_FILE = "/tmp/vue-tui-debug.log";
+const DEFAULT_LOG_FILE = "vue-tui-debug.log";
 let debugFileWriter: DebugFileWriter | null = null;
 let debugLogDefaultPath = DEFAULT_LOG_FILE;
 const initializedDebugLogPaths = new Set<string>();
