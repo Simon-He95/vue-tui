@@ -26,6 +26,7 @@ type CleanupSignal = "SIGINT" | "SIGTERM" | "SIGHUP";
 
 export type TerminalCleanupOptions = Readonly<{
   exitOnSignal?: boolean;
+  cleanupOnUnhandledRejection?: boolean;
 }>;
 
 function exitCodeForSignal(signal: CleanupSignal): number {
@@ -40,6 +41,8 @@ export function installTerminalCleanup(
 ): () => void {
   let cleaned = false;
   let uninstalled = false;
+  const exitOnSignal = options.exitOnSignal ?? true;
+  const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? false;
 
   const cleanup = () => {
     if (cleaned) return;
@@ -57,14 +60,16 @@ export function installTerminalCleanup(
     process.off("SIGTERM", onSigterm);
     process.off("SIGHUP", onSighup);
     process.off("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
-    process.off("unhandledRejection", onUnhandledRejection);
+    if (cleanupOnUnhandledRejection) {
+      process.off("unhandledRejection", onUnhandledRejection);
+    }
   };
 
   const handleSignal = (signal: CleanupSignal) => {
     cleanup();
     uninstall();
 
-    if (options.exitOnSignal === true) {
+    if (exitOnSignal) {
       const code = exitCodeForSignal(signal);
       process.nextTick(() => {
         process.exit(code);
@@ -79,9 +84,12 @@ export function installTerminalCleanup(
     cleanup();
     uninstall();
   };
-  const onUnhandledRejection = () => {
+  const onUnhandledRejection = (reason: unknown) => {
     cleanup();
     uninstall();
+    process.nextTick(() => {
+      throw reason instanceof Error ? reason : new Error(String(reason));
+    });
   };
 
   process.once("exit", cleanup);
@@ -89,7 +97,9 @@ export function installTerminalCleanup(
   process.once("SIGTERM", onSigterm);
   process.once("SIGHUP", onSighup);
   process.once("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
-  process.once("unhandledRejection", onUnhandledRejection);
+  if (cleanupOnUnhandledRejection) {
+    process.once("unhandledRejection", onUnhandledRejection);
+  }
 
   return uninstall;
 }
@@ -557,6 +567,7 @@ export function createStdinDriver(
   if (autoCleanup) {
     const cleanupOptions = typeof autoCleanup === "object" ? autoCleanup : {};
     uninstallCleanup = installTerminalCleanup(dispose, {
+      ...cleanupOptions,
       exitOnSignal: autoCleanup === true ? true : (cleanupOptions.exitOnSignal ?? true),
     });
   }

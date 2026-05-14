@@ -62,7 +62,7 @@ describe("cli input", () => {
     }
   });
 
-  it("cleans up without exiting on signals by default", async () => {
+  it("exits with signal code by default", async () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const before = new Set(process.rawListeners("SIGINT"));
@@ -72,9 +72,10 @@ describe("cli input", () => {
       const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
       listener?.();
+      await new Promise<void>((resolve) => process.nextTick(resolve));
 
       expect(dispose).toHaveBeenCalledTimes(1);
-      expect(exit).not.toHaveBeenCalled();
+      expect(exit).toHaveBeenCalledWith(130);
     } finally {
       uninstall();
       exit.mockRestore();
@@ -120,17 +121,52 @@ describe("cli input", () => {
     }
   });
 
-  it("cleans up on unhandledRejection", () => {
+  it("does not install unhandledRejection cleanup by default", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("unhandledRejection"));
     const uninstall = installTerminalCleanup(dispose);
 
     try {
+      const added = process.rawListeners("unhandledRejection").filter((item) => !before.has(item));
+      expect(added).toHaveLength(0);
+    } finally {
+      uninstall();
+    }
+  });
+
+  it("can opt into unhandledRejection cleanup and rethrow", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("unhandledRejection"));
+    const error = new Error("boom");
+    const uninstall = installTerminalCleanup(dispose, { cleanupOnUnhandledRejection: true });
+
+    try {
       const listener = process.rawListeners("unhandledRejection").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
-      listener?.(new Error("boom"), Promise.resolve());
-      listener?.(new Error("boom"), Promise.resolve());
+      const scheduled: Array<() => void> = [];
+      const nextTick = vi.spyOn(process, "nextTick").mockImplementation(((
+        callback: (...args: any[]) => void,
+        ...args: any[]
+      ) => {
+        scheduled.push(() => callback(...args));
+      }) as any);
+      try {
+        listener?.(error, Promise.resolve());
+      } finally {
+        nextTick.mockRestore();
+      }
+
       expect(dispose).toHaveBeenCalledTimes(1);
+      expect(
+        scheduled.some((callback) => {
+          try {
+            callback();
+            return false;
+          } catch (caught) {
+            return caught === error;
+          }
+        }),
+      ).toBe(true);
     } finally {
       uninstall();
     }

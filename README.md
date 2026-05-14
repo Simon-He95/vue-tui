@@ -233,10 +233,11 @@ Release validation:
 
 ```bash
 pnpm run release:dry-run
+pnpm run release:local
 ```
 
 `release:dry-run` runs checks, tests, docs build, benchmarks, examples smoke, and packed package install smoke.
-The GitHub Release workflow publishes the already-verified tarball with npm provenance. `release` and `release:ci` intentionally fail so publishing stays on that workflow path.
+`release:local` is the explicit local publish path after the same validation. The GitHub Release workflow publishes the already-verified tarball with npm provenance. `release`, `release:ci`, and `release:workflow-only` intentionally fail so publishing stays on that workflow path unless a maintainer chooses `release:local`.
 
 ## Package Notes
 

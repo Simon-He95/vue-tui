@@ -624,17 +624,36 @@ function isPlainTextRow(segments: readonly RowSegment[]): boolean {
   return segments.length === 1 && !segments[0]!.wide && isPlainStyle(segments[0]!.style);
 }
 
-function isSingleStyledTextRow(segments: readonly RowSegment[]): boolean {
+function renderableHref(
+  style: Style,
+  linkOptions: DomRendererLinkOptions | undefined,
+): string | null {
+  if (linkOptions === false) return null;
+  return sanitizeDomHref(style.href, {
+    allowRelative: linkOptions?.allowRelative === true,
+  });
+}
+
+function isSingleStyledTextRow(
+  segments: readonly RowSegment[],
+  linkOptions: DomRendererLinkOptions | undefined,
+): boolean {
   return (
     segments.length === 1 &&
     !segments[0]!.wide &&
-    !segments[0]!.style.href &&
+    !renderableHref(segments[0]!.style, linkOptions) &&
     !isPlainStyle(segments[0]!.style)
   );
 }
 
-function canReuseSegmentSpans(segments: readonly RowSegment[]): boolean {
-  return segments.length > 1 && segments.every((segment) => !segment.wide && !segment.style.href);
+function canReuseSegmentSpans(
+  segments: readonly RowSegment[],
+  linkOptions: DomRendererLinkOptions | undefined,
+): boolean {
+  return (
+    segments.length > 1 &&
+    segments.every((segment) => !segment.wide && !renderableHref(segment.style, linkOptions))
+  );
 }
 
 function resetSpanStyle(span: HTMLElement): void {
@@ -777,7 +796,7 @@ function renderRow(
     return;
   }
 
-  if (isSingleStyledTextRow(segments)) {
+  if (isSingleStyledTextRow(segments, linkOptions)) {
     const seg = segments[0]!;
     const firstChild = lineEl.firstChild;
     let span: HTMLElement;
@@ -805,7 +824,7 @@ function renderRow(
     return;
   }
 
-  const canReuseSpans = canReuseSegmentSpans(segments);
+  const canReuseSpans = canReuseSegmentSpans(segments, linkOptions);
   if (canReuseSpans && tryUpdateSegmentSpans(lineEl, segments, metrics, palette)) {
     stats.segmentReuseRows++;
     stats.spansReused += segments.length;

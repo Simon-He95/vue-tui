@@ -436,6 +436,21 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("keeps styled href rows on the fast path when links are disabled", () => {
+    const { terminal, container, renderer } = setup(4, 2, { links: false });
+
+    try {
+      terminal.fill(0, 0, 4, 1, "L", { href: "https://example.com", underline: true });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(container.querySelector("a")).toBeNull();
+      expect(renderer.debugStats.rowRender.total.singleStyledRows).toBeGreaterThan(0);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("does not mark wide multi-segment rows for reuse", () => {
     const { terminal, container, renderer } = setup(4);
 

@@ -166,4 +166,46 @@ describe("tui profiler", () => {
       else process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = previousEvery;
     }
   });
+
+  it("does not emit profiler logs when no samples were recorded", () => {
+    const previousProfile = process.env.VUE_TUI_PROFILE;
+    const previousDest = process.env.VUE_TUI_PROFILE_LOG_DEST;
+    const previousPath = process.env.VUE_TUI_PROFILE_LOG_PATH;
+    const previousEvery = process.env.VUE_TUI_PROFILE_LOG_EVERY_MS;
+
+    process.env.VUE_TUI_PROFILE = "1";
+    process.env.VUE_TUI_PROFILE_LOG_DEST = "file";
+    process.env.VUE_TUI_PROFILE_LOG_PATH = "/tmp/vue-tui-empty-profile-test.log";
+    process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = "100";
+    vi.useFakeTimers();
+
+    const writes: string[] = [];
+    const profiler = createTuiProfiler("empty", {
+      fileWriter: {
+        appendFileSync: (_path, data) => {
+          writes.push(data);
+        },
+      },
+    });
+
+    try {
+      expect(profiler).not.toBeNull();
+      vi.advanceTimersByTime(5000);
+      profiler?.dispose();
+
+      expect(writes).toEqual([]);
+    } finally {
+      profiler?.dispose();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      if (previousProfile == null) delete process.env.VUE_TUI_PROFILE;
+      else process.env.VUE_TUI_PROFILE = previousProfile;
+      if (previousDest == null) delete process.env.VUE_TUI_PROFILE_LOG_DEST;
+      else process.env.VUE_TUI_PROFILE_LOG_DEST = previousDest;
+      if (previousPath == null) delete process.env.VUE_TUI_PROFILE_LOG_PATH;
+      else process.env.VUE_TUI_PROFILE_LOG_PATH = previousPath;
+      if (previousEvery == null) delete process.env.VUE_TUI_PROFILE_LOG_EVERY_MS;
+      else process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = previousEvery;
+    }
+  });
 });

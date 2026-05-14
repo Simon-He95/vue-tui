@@ -115,7 +115,11 @@ describe("markdown layout", () => {
     expect(unsafeSegment?.style?.underline).not.toBe(true);
   });
 
-  it("rejects markdown links with literal whitespace", () => {
+  it("uses core href safety rules for markdown links", () => {
+    expect(isSafeMarkdownLink("https://example.com")).toBe(true);
+    expect(isSafeMarkdownLink("mailto:test@example.com")).toBe(true);
+    expect(isSafeMarkdownLink("#section")).toBe(true);
+    expect(isSafeMarkdownLink("/docs/page")).toBe(true);
     expect(isSafeMarkdownLink("foo bar")).toBe(false);
     expect(isSafeMarkdownLink("https://example.com/a b")).toBe(false);
     expect(isSafeMarkdownLink("https://example.com/a%20b")).toBe(true);
@@ -124,9 +128,9 @@ describe("markdown layout", () => {
     expect(isSafeMarkdownLink("data:text/html,boom")).toBe(false);
     expect(isSafeMarkdownLink("vbscript:msgbox(1)")).toBe(false);
     expect(isSafeMarkdownLink("//evil.test")).toBe(false);
+    expect(isSafeMarkdownLink("https:\\\\evil.test")).toBe(false);
     expect(isSafeMarkdownLink("\\evil")).toBe(false);
     expect(isSafeMarkdownLink("../ok")).toBe(true);
-    expect(isSafeMarkdownLink("#section")).toBe(true);
     expect(isSafeMarkdownLink("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBe(false);
   });
 

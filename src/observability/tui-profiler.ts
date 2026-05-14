@@ -153,7 +153,7 @@ export function createTuiProfiler(
 
   function flushLog(force = false): void {
     if (disposed) return;
-    if (force && !hasPendingSamples()) return;
+    if (!hasPendingSamples()) return;
 
     const at = now();
     const elapsedRaw = at - lastLogAt;

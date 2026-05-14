@@ -19,7 +19,10 @@ export function envFlag(
   primary: string,
   legacy?: string,
 ): boolean {
-  return String(firstNonEmptyEnv(env, primary, legacy) ?? "").trim() === "1";
+  const raw = String(firstNonEmptyEnv(env, primary, legacy) ?? "")
+    .trim()
+    .toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
 export function envString(

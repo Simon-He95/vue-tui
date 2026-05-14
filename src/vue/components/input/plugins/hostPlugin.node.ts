@@ -20,6 +20,7 @@ type SpawnLike = (
 export type CreateDefaultTInputHostAdapterOptions = Readonly<{
   clipboardCommandTimeoutMs?: number;
   clipboardTotalTimeoutMs?: number;
+  clipboardMaxBytes?: number;
 }>;
 
 function getProcessLike(): any {
@@ -214,7 +215,9 @@ export function createDefaultTInputHostAdapter(
     },
     async writeClipboardText(text: string) {
       if (!text) return false;
-      const clipboard = createOsc52ClipboardProvider();
+      const clipboard = createOsc52ClipboardProvider({
+        maxBytes: options.clipboardMaxBytes,
+      });
       if (!clipboard.supported) return false;
       try {
         await clipboard.writeText(text);

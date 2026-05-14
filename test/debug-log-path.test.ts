@@ -80,6 +80,16 @@ describe("debug log paths", () => {
     ).toBe(false);
   });
 
+  it("parses common env flag values consistently", () => {
+    for (const value of ["1", "true", "yes", "on"]) {
+      expect(envFlag({ VUE_TUI_DEBUG: value }, "VUE_TUI_DEBUG")).toBe(true);
+    }
+
+    for (const value of ["", "0", "false", "no", "off", "bogus"]) {
+      expect(envFlag({ VUE_TUI_DEBUG: value }, "VUE_TUI_DEBUG")).toBe(false);
+    }
+  });
+
   it("writes CLI event handler debug errors to the configured Vue TUI path", () => {
     withTempDir((dir) => {
       const logPath = join(dir, "custom.log");

@@ -205,4 +205,40 @@ describe("TInput host plugins", () => {
       vi.useRealTimers();
     }
   });
+
+  it("passes clipboardMaxBytes to OSC52 provider", async () => {
+    const originalProcess = (globalThis as any).process;
+    const writes: string[] = [];
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        stdout: {
+          isTTY: true,
+          write(sequence: string) {
+            writes.push(sequence);
+          },
+        },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter({
+        clipboardMaxBytes: 4,
+      });
+      const writeClipboardText = host.writeClipboardText;
+      expect(writeClipboardText).toBeTypeOf("function");
+
+      await expect(writeClipboardText!("12345")).resolves.toBe(false);
+      await expect(writeClipboardText!("1234")).resolves.toBe(true);
+      expect(writes).toEqual(["\u001B]52;c;MTIzNA==\u0007"]);
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+    }
+  });
 });

@@ -1,7 +1,7 @@
 import { appendFileSync } from "node:fs";
 import process from "node:process";
 import type { CliLatencyProfiler, CliLatencyStageEvent } from "./cli-latency-types.js";
-import { envString, firstNonEmptyEnv } from "../utils/env.js";
+import { envFlag, envString } from "../utils/env.js";
 
 interface CliLatencyOp {
   id: number;
@@ -107,13 +107,6 @@ function diffMs(end: number | null, start: number | null): number | null {
   return Math.max(0, end - start);
 }
 
-function parseEnabled(value: unknown): boolean {
-  const raw = String(value ?? "")
-    .trim()
-    .toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes";
-}
-
 function isTrackedEventType(type: string): boolean {
   return type === "keydown" || type === "beforeinput" || type === "input" || type === "paste";
 }
@@ -143,11 +136,7 @@ function createDisabledProfiler(): null {
 function createProfiler(): CliLatencyProfiler | null {
   const processLike = process;
   const env = (processLike?.env ?? {}) as Record<string, unknown>;
-  if (
-    !parseEnabled(
-      firstNonEmptyEnv(env, "VUE_TUI_PROFILE_INPUT_LATENCY", "DIMCODE_PROFILE_INPUT_LATENCY"),
-    )
-  )
+  if (!envFlag(env, "VUE_TUI_PROFILE_INPUT_LATENCY", "DIMCODE_PROFILE_INPUT_LATENCY"))
     return createDisabledProfiler();
 
   const logPath = envString(
