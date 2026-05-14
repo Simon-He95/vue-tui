@@ -362,6 +362,8 @@ function applyStyle(span: HTMLElement, style: Style, palette?: ThemePalette | nu
   const effectiveBgHex = style.inverse ? fgHex : bgHex;
 
   if (span.tagName === "A") {
+    span.style.pointerEvents = "auto";
+    span.style.cursor = "pointer";
     span.style.color = "inherit";
     span.style.textDecoration = "inherit";
   }

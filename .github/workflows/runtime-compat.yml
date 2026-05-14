@@ -53,13 +53,21 @@ jobs:
           mkdir smoke
           cd smoke
           npm init -y
-          npm install ../package/*.tgz vue@^3.5.0
+          npm install ../package/*.tgz vue@3.5.33
 
       - run: |
           cd smoke
           node - <<'JS'
           const root = require("@simon_he/vue-tui");
           const cli = require("@simon_he/vue-tui/cli");
+          const markdown = require("@simon_he/vue-tui/markdown");
+          const experimental = require("@simon_he/vue-tui/experimental");
+
+          if (!root.createTerminal) throw new Error("root CJS export missing");
+          if (!cli.createStdoutRenderer) throw new Error("cli CJS export missing");
+          if (!markdown.createTuiMarkdownParser) throw new Error("markdown CJS export missing");
+          if (!experimental.createAppendOnlyLogStore)
+            throw new Error("experimental CJS export missing");
 
           const terminal = root.createTerminal({ cols: 20, rows: 4 });
           terminal.write("hello", { x: 0, y: 0 });
@@ -98,6 +106,13 @@ jobs:
           node --input-type=module - <<'JS'
           import { createTerminal } from "@simon_he/vue-tui";
           import { createStdoutRenderer } from "@simon_he/vue-tui/cli";
+          import { createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
+          import { createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
+
+          if (!createTerminal) throw new Error("root ESM export missing");
+          if (!createStdoutRenderer) throw new Error("cli ESM export missing");
+          if (!createTuiMarkdownParser) throw new Error("markdown ESM export missing");
+          if (!createAppendOnlyLogStore) throw new Error("experimental ESM export missing");
 
           const terminal = createTerminal({ cols: 20, rows: 4 });
           terminal.write("esm", { x: 0, y: 0 });

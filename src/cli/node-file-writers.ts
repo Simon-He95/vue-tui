@@ -17,6 +17,10 @@ export function defaultVueTuiDebugLogPath(): string {
   return join(tmpdir(), "vue-tui-debug.log");
 }
 
+function legacyDebugFlag(env: Readonly<Record<string, unknown>> | undefined): boolean {
+  return String(env?.DEBUG ?? "").trim() === "1";
+}
+
 export function shouldInstallFileWriters(
   env: Readonly<Record<string, unknown>> | undefined,
 ): boolean {
@@ -27,6 +31,7 @@ export function shouldInstallFileWriters(
   ).toLowerCase();
   return (
     envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG") ||
+    legacyDebugFlag(env) ||
     profileLogDest === "file" ||
     profileLogDest === "both"
   );
@@ -35,6 +40,10 @@ export function shouldInstallFileWriters(
 export function installNodeFileWriters(options: Readonly<{ force?: boolean }> = {}): void {
   if (installed && !options.force) return;
   installed = true;
+  const env = process.env as Record<string, string | undefined>;
+  if (!env.VUE_TUI_DEBUG_LOG_PATH && !env.DIMCODE_DEBUG_LOG_PATH) {
+    env.VUE_TUI_DEBUG_LOG_PATH = defaultVueTuiDebugLogPath();
+  }
   setDebugFileWriter({ appendFileSync, writeFileSync });
   setTuiProfilerFileWriter(nodeProfilerFileWriter);
 }

@@ -478,6 +478,23 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("makes DOM href anchors pointer-interactive", () => {
+    const { terminal, container, renderer } = setup(3);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      expect(anchor?.style.pointerEvents).toBe("auto");
+      expect(anchor?.style.cursor).toBe("pointer");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("lets hosts customize DOM link tabIndex", () => {
     const { terminal, container, renderer } = setup(3, 1, {
       links: { tabIndex: -1 },
