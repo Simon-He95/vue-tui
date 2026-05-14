@@ -29,6 +29,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          registry-url: https://registry.npmjs.org
 
       - run: pnpm install --frozen-lockfile
 
@@ -47,15 +48,11 @@ jobs:
           cd .release
           sha256sum *.tgz | tee SHA256SUMS
 
-      - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz
+      - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz 3.3.0
 
       - name: Dry-run npm publish from validated tarball
         run: |
           TARBALL=$(ls .release/*.tgz | head -n 1)
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "NPM_TOKEN is not available; skipping npm publish --dry-run"
-            exit 0
-          fi
           npm publish "$TARBALL" --access public --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -77,6 +74,7 @@ jobs:
       fail-fast: false
       matrix:
         node: ["16.17.1", "18", "20", "22", "24"]
+        vue: ["3.3.0", "3.5.33"]
 
     steps:
       - uses: actions/checkout@v4
@@ -92,7 +90,7 @@ jobs:
 
       - run: |
           TARBALL=$(ls package/*.tgz | head -n 1)
-          node scripts/smoke-packed-runtime.mjs "$TARBALL"
+          node scripts/smoke-packed-runtime.mjs "$TARBALL" "${{ matrix.vue }}"
 
   publish:
     needs: [verify, runtime-compat]

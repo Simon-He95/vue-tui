@@ -378,7 +378,7 @@ describe("cli input", () => {
       await new Promise<void>((resolve) => process.nextTick(resolve));
 
       expect(stdin.isRaw).toBe(false);
-      expect(stdout.writes).toContain("\u001B[?2004l");
+      expect(stdout.writes.join("")).toContain("\u001B[?2004l");
       expect(exit).toHaveBeenCalledWith(143);
     } finally {
       driver.dispose();

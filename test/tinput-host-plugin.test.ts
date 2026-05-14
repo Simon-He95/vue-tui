@@ -269,6 +269,67 @@ describe("TInput host plugins", () => {
     }
   });
 
+  it("ignores clipboard stdout after command settlement", async () => {
+    const originalProcess = (globalThis as any).process;
+    const originalSpawn = (globalThis as any).__VT_NODE_SPAWN__;
+    const lateToString = vi.fn(() => "late");
+    let callCount = 0;
+
+    (globalThis as any).__VT_NODE_SPAWN__ = vi.fn(() => {
+      callCount++;
+      const handlers = new Map<string, Function>();
+      const child = {
+        stdout: {
+          setEncoding: vi.fn(),
+          on(event: string, fn: Function) {
+            handlers.set(`stdout:${event}`, fn);
+          },
+        },
+        on(event: string, fn: Function) {
+          handlers.set(event, fn);
+        },
+        kill: vi.fn(),
+      };
+
+      queueMicrotask(() => {
+        if (callCount === 1) {
+          handlers.get("stdout:data")?.("x".repeat(2048));
+          handlers.get("stdout:data")?.({ toString: lateToString });
+        }
+        handlers.get("close")?.(1);
+      });
+
+      return child;
+    });
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        env: {},
+        platform: "linux",
+        stdout: { isTTY: true },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter({
+        clipboardReadMaxBytes: 1024,
+      });
+
+      await expect(host.readClipboardText?.()).resolves.toBe("");
+      expect(lateToString).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+      if (originalSpawn === undefined) delete (globalThis as any).__VT_NODE_SPAWN__;
+      else (globalThis as any).__VT_NODE_SPAWN__ = originalSpawn;
+    }
+  });
+
   it("passes clipboardMaxBytes to OSC52 provider", async () => {
     const originalProcess = (globalThis as any).process;
     const writes: string[] = [];

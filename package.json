@@ -70,7 +70,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "pnpm run build:raw",
+    "build": "pnpm run build:checked",
+    "build:fast": "pnpm run build:raw",
     "build:raw": "tsdown && node scripts/build-cjs.mjs",
     "build:checked": "node scripts/run-build-checked.mjs && node scripts/check-build-warnings.mjs .tmp/build.log",
     "dev": "tsdown --watch",

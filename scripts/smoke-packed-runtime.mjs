@@ -1,10 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const tarball = process.argv[2];
-if (!tarball) throw new Error("Usage: node scripts/smoke-packed-runtime.mjs <package.tgz>");
+if (!tarball)
+  throw new Error("Usage: node scripts/smoke-packed-runtime.mjs <package.tgz> [vue-version]");
+const vueVersion = process.argv[3] ?? "3.5.33";
 
 const dir = mkdtempSync(join(tmpdir(), "vue-tui-runtime-smoke-"));
 
@@ -13,12 +15,13 @@ function run(command, args, options = {}) {
   execFileSync(command, args, { cwd: dir, stdio: "inherit", ...options });
 }
 
-run("npm", ["init", "-y"]);
-run("npm", ["install", resolve(tarball), "vue@3.5.33"]);
+try {
+  run("npm", ["init", "-y"]);
+  run("npm", ["install", resolve(tarball), `vue@${vueVersion}`]);
 
-run("node", [
-  "-e",
-  `
+  run("node", [
+    "-e",
+    `
 const root = require("@simon_he/vue-tui");
 const cli = require("@simon_he/vue-tui/cli");
 const markdown = require("@simon_he/vue-tui/markdown");
@@ -72,12 +75,12 @@ if (!output.chunks.join("").includes("hello")) {
 
 console.log("CJS smoke ok");
 `,
-]);
+  ]);
 
-run("node", [
-  "--input-type=module",
-  "-e",
-  `
+  run("node", [
+    "--input-type=module",
+    "-e",
+    `
 import { createTerminal } from "@simon_he/vue-tui";
 import { createStdoutRenderer } from "@simon_he/vue-tui/cli";
 import { createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
@@ -127,4 +130,14 @@ if (!output.chunks.join("").includes("esm")) {
 
 console.log("ESM smoke ok");
 `,
-]);
+  ]);
+} catch (error) {
+  if (process.env.VUE_TUI_KEEP_SMOKE_DIR) {
+    console.error(`Packed runtime smoke project left at ${dir}`);
+  }
+  throw error;
+} finally {
+  if (!process.env.VUE_TUI_KEEP_SMOKE_DIR) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}

@@ -641,14 +641,13 @@ export function createStdoutRenderer(
     if (!fpCols || y < 0 || y >= fpRows || !fpPrevValid) return false;
 
     const rowFP = terminal.getRowFingerprints(y);
-    const row = rowFP && rowFP.length >= cols ? null : (terminal.getRow(y) as Cell[]);
+    const row = terminal.getRow(y) as Cell[];
     const base = y * fpCols;
     for (let x = 0; x < cols; x++) {
-      const rowHrefId = hrefId(
-        normalizeHref((row ?? (terminal.getRow(y) as Cell[]))[x]!.style.href),
-      );
+      const cell = row[x]!;
+      const rowHrefId = hrefId(normalizeHref(cell.style.href));
       const fingerprint =
-        rowFP && rowFP.length >= cols ? rowFP[x]! : cellFingerprint(row![x]!.ch, row![x]!.style);
+        rowFP && rowFP.length >= cols ? rowFP[x]! : cellFingerprint(cell.ch, cell.style);
       if (fingerprint !== prevFP[base + x] || rowHrefId !== prevHrefIds[base + x]) return false;
     }
     return true;
@@ -1169,6 +1168,9 @@ export function createStdoutRenderer(
       activeStyle = next;
     };
 
+    const shouldEmitStyle = (style: Style, key: number): boolean =>
+      activeStyleKey !== key || activeStyle.href !== normalizeHref(style.href);
+
     const renderRow = (
       y: number,
       row: readonly Cell[],
@@ -1226,7 +1228,7 @@ export function createStdoutRenderer(
           continue;
         }
         // Only emit SGR if style actually changed from what's active
-        if (activeStyleKey !== currentKey) {
+        if (shouldEmitStyle(currentStyle!, currentKey)) {
           emitStyle(currentStyle!, currentKey);
         }
         frameParts.push(currentTextParts.join(""));
@@ -1239,7 +1241,7 @@ export function createStdoutRenderer(
       }
 
       if (currentKey != null) {
-        if (activeStyleKey !== currentKey) {
+        if (shouldEmitStyle(currentStyle!, currentKey)) {
           emitStyle(currentStyle!, currentKey);
         }
         frameParts.push(currentTextParts.join(""));

@@ -1,4 +1,5 @@
 import type { TerminalEventRecord } from "../events/recording.js";
+import { writeSync } from "node:fs";
 import process from "node:process";
 import { getCliLatencyProfiler } from "../observability/cli-latency-node.js";
 import { firstNonEmptyEnv } from "../utils/env.js";
@@ -48,6 +49,18 @@ function normalizeUnhandledRejection(reason: unknown): Error {
     (error as Error & { cause?: unknown }).cause = reason;
     return error;
   }
+}
+
+function writeTTYSyncOrStream(stdout: NodeJS.WriteStream, chunk: string): void {
+  const fd = (stdout as any).fd;
+  if (typeof fd === "number") {
+    try {
+      writeSync(fd, chunk);
+      return;
+    } catch {}
+  }
+
+  stdout.write(chunk);
 }
 
 export function installTerminalCleanup(
@@ -586,14 +599,15 @@ export function createStdinDriver(
     }
     if (stdin.isTTY) stdin.setRawMode(Boolean(wasRaw));
     if (stdout.isTTY) {
-      stdout.write("\u001B[?2004l");
-      stdout.write("\u001B[?1004l");
-      if (keyboardProtocolSequences) stdout.write(keyboardProtocolSequences.disable);
+      let restore = "\u001B[?2004l\u001B[?1004l";
+      if (keyboardProtocolSequences) restore += keyboardProtocolSequences.disable;
       if (enableMouse) {
-        stdout.write("\u001B[?1007l");
-        if (enableMouseMotion) stdout.write("\u001B[?1000l\u001B[?1003l\u001B[?1006l");
-        else stdout.write("\u001B[?1000l\u001B[?1002l\u001B[?1006l");
+        restore += "\u001B[?1007l";
+        restore += enableMouseMotion
+          ? "\u001B[?1000l\u001B[?1003l\u001B[?1006l"
+          : "\u001B[?1000l\u001B[?1002l\u001B[?1006l";
       }
+      writeTTYSyncOrStream(stdout, restore);
     }
   };
 

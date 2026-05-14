@@ -393,6 +393,58 @@ describe("stdout renderer style diffing", () => {
     }
   });
 
+  it("emits OSC8 boundary when adjacent segments only differ by href", () => {
+    const previousTermProgram = process.env.TERM_PROGRAM;
+    const previousVscodePid = process.env.VSCODE_PID;
+    const previousVscodeHook = process.env.VSCODE_IPC_HOOK_CLI;
+
+    process.env.TERM_PROGRAM = "xterm";
+    delete process.env.VSCODE_PID;
+    delete process.env.VSCODE_IPC_HOOK_CLI;
+
+    try {
+      const terminal = createTerminal({ cols: 2, rows: 1 });
+      let out = "";
+      const output = {
+        isTTY: true,
+        write(chunk: string) {
+          out += chunk;
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+      });
+
+      out = "";
+      terminal.put(0, 0, "a", { underline: true, href: "https://a.example" });
+      terminal.put(1, 0, "b", { underline: true, href: "https://b.example" });
+      terminal.commit({ sync: true });
+
+      const a = out.indexOf("\x1B]8;;https://a.example\x07");
+      const b = out.indexOf("\x1B]8;;https://b.example\x07");
+
+      expect(a).toBeGreaterThanOrEqual(0);
+      expect(b).toBeGreaterThan(a);
+      expect(out).toContain("\x1B]8;;\x07");
+
+      renderer.dispose();
+      terminal.dispose();
+    } finally {
+      if (previousTermProgram == null) delete process.env.TERM_PROGRAM;
+      else process.env.TERM_PROGRAM = previousTermProgram;
+
+      if (previousVscodePid == null) delete process.env.VSCODE_PID;
+      else process.env.VSCODE_PID = previousVscodePid;
+
+      if (previousVscodeHook == null) delete process.env.VSCODE_IPC_HOOK_CLI;
+      else process.env.VSCODE_IPC_HOOK_CLI = previousVscodeHook;
+    }
+  });
+
   it("re-emits OSC8 links even when legacy href hashes collide", () => {
     const [hrefA, hrefB] = findHrefHashCollision();
     const previousTermProgram = process.env.TERM_PROGRAM;

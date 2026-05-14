@@ -24,7 +24,7 @@ jobs:
 
       - run: pnpm run release:pack
 
-      - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz
+      - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz 3.3.0
 
       - uses: actions/upload-artifact@v4
         with:
@@ -40,6 +40,7 @@ jobs:
       fail-fast: false
       matrix:
         node: ["16.17.1", "18", "20", "22", "24"]
+        vue: ["3.3.0", "3.5.33"]
 
     steps:
       - uses: actions/checkout@v4
@@ -55,4 +56,4 @@ jobs:
 
       - run: |
           TARBALL=$(ls package/*.tgz | head -n 1)
-          node scripts/smoke-packed-runtime.mjs "$TARBALL"
+          node scripts/smoke-packed-runtime.mjs "$TARBALL" "${{ matrix.vue }}"

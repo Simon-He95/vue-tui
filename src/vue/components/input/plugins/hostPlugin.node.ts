@@ -109,6 +109,8 @@ async function runClipboardCommand(
       });
       child.stdout?.setEncoding?.("utf8");
       child.stdout?.on?.("data", (chunk) => {
+        if (settled) return;
+
         const text = String(chunk);
         bytes += Buffer.byteLength(text, "utf8");
         if (bytes > maxBytes) {
@@ -120,8 +122,12 @@ async function runClipboardCommand(
         }
         out += text;
       });
-      child.on?.("error", () => finish(null));
-      child.on?.("close", (code) => finish(code === 0 ? out : null));
+      child.on?.("error", () => {
+        if (!settled) finish(null);
+      });
+      child.on?.("close", (code) => {
+        if (!settled) finish(code === 0 ? out : null);
+      });
     } catch {
       finish(null);
     }

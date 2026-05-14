@@ -10,7 +10,7 @@ if (!tarball) throw new Error("Usage: node scripts/smoke-packed-browser-vite.mjs
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageJson = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
 const packageName = packageJson.name;
-const vueVersion = packageJson.devDependencies?.vue ?? packageJson.peerDependencies?.vue ?? "vue";
+const vueVersion = process.argv[3] ?? packageJson.devDependencies?.vue ?? "vue";
 const viteVersion = packageJson.devDependencies?.vite ?? "vite";
 const dir = mkdtempSync(join(tmpdir(), "vue-tui-browser-smoke-"));
 
