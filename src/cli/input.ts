@@ -42,7 +42,7 @@ export function installTerminalCleanup(
   let cleaned = false;
   let uninstalled = false;
   const exitOnSignal = options.exitOnSignal ?? true;
-  const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? false;
+  const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? true;
 
   const cleanup = () => {
     if (cleaned) return;

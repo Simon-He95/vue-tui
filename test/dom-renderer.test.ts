@@ -553,6 +553,32 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("does not bubble host-handled DOM link activation to the terminal container", () => {
+    const onActivate = vi.fn();
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { onActivate },
+    });
+    const bubbled = vi.fn();
+    container.addEventListener("click", bubbled);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      anchor?.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(onActivate).toHaveBeenCalledOnce();
+      expect(bubbled).not.toHaveBeenCalled();
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("click", bubbled);
+      container.remove();
+    }
+  });
+
   it("can explicitly disable DOM link activation", () => {
     const { terminal, container, renderer } = setup(3, 1, {
       links: { activation: "none" },
@@ -568,6 +594,30 @@ describe("DomRenderer row rendering", () => {
       expect(event.defaultPrevented).toBe(true);
     } finally {
       renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not bubble disabled DOM link activation to the terminal container", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { activation: "none" },
+    });
+    const bubbled = vi.fn();
+    container.addEventListener("click", bubbled);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      anchor?.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(bubbled).not.toHaveBeenCalled();
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("click", bubbled);
       container.remove();
     }
   });

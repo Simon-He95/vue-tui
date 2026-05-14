@@ -665,6 +665,11 @@ function resetSpanStyle(span: HTMLElement): void {
   }
 }
 
+function stopNativeAndTerminalActivation(event: MouseEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 function createSegmentElement(
   doc: Document,
   style: Style,
@@ -690,12 +695,12 @@ function createSegmentElement(
     linkOptions.activation ?? (typeof linkOptions.onActivate === "function" ? "event" : "native");
   if (activation === "event") {
     anchor.addEventListener("click", (event) => {
-      event.preventDefault();
+      stopNativeAndTerminalActivation(event);
       linkOptions.onActivate?.(href, event);
     });
   } else if (activation === "none") {
     anchor.addEventListener("click", (event) => {
-      event.preventDefault();
+      stopNativeAndTerminalActivation(event);
     });
   }
   return anchor;
