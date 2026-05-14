@@ -438,8 +438,10 @@ function recomputeFingerprintsForRows(buffer: GridBuffer, startY: number, endY: 
 }
 
 export function scrollBuffer(buffer: GridBuffer, lines: number): void {
-  const n = Math.trunc(lines);
-  if (n === 0 || buffer.rows === 0) return;
+  const raw = Math.trunc(lines);
+  if (raw === 0 || buffer.rows === 0) return;
+  const abs = Math.min(Math.abs(raw), buffer.rows);
+  const n = raw > 0 ? abs : -abs;
 
   if (n > 0) {
     for (let i = 0; i < n; i++) {
@@ -472,7 +474,7 @@ export function scrollBuffer(buffer: GridBuffer, lines: number): void {
   }
 
   if (buffer.soaFingerprints && buffer.fingerprintFn) {
-    const inserted = Math.min(Math.abs(n), buffer.rows);
+    const inserted = Math.abs(n);
     if (n > 0) {
       recomputeFingerprintsForRows(buffer, buffer.rows - inserted, buffer.rows);
     } else {
@@ -481,7 +483,7 @@ export function scrollBuffer(buffer: GridBuffer, lines: number): void {
   }
 
   markAllDirty(buffer);
-  buffer.cursorY = clamp(buffer.cursorY - n, 0, Math.max(0, buffer.rows - 1));
+  buffer.cursorY = clamp(buffer.cursorY - raw, 0, Math.max(0, buffer.rows - 1));
 }
 
 export function scrollBufferRegion(

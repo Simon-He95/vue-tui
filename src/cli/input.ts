@@ -57,7 +57,7 @@ export function installTerminalCleanup(
   let cleaned = false;
   let uninstalled = false;
   const exitOnSignal = options.exitOnSignal ?? false;
-  const preserveSignalDefault = options.preserveSignalDefault ?? false;
+  const preserveSignalDefault = options.preserveSignalDefault ?? !exitOnSignal;
   const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? false;
   const rethrowUnhandledRejection =
     options.rethrowUnhandledRejection ?? cleanupOnUnhandledRejection;
@@ -98,7 +98,11 @@ export function installTerminalCleanup(
 
     if (preserveSignalDefault) {
       process.nextTick(() => {
-        process.kill(process.pid, signal);
+        try {
+          process.kill(process.pid, signal);
+        } catch {
+          process.exit(exitCodeForSignal(signal));
+        }
       });
     }
   };

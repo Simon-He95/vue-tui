@@ -39,7 +39,7 @@
 - `createTLogUrlPlugin()` no longer detects `file://` URLs by default. Use `{ allowFileUrls: true }` to opt in.
 - Release benchmark validation now uses `bench:baseline`; timing budgets are only checked by `bench:baseline:timing`.
 - DOM renderer no longer renders `Style.href` as native anchors unless `links` are explicitly configured.
-- `installTerminalCleanup()` cleans up on signals without exiting by default. `createStdinDriver({ autoCleanup: true })` keeps the CLI-oriented signal exit behavior.
+- `installTerminalCleanup()` cleans up and preserves default signal behavior unless `exitOnSignal: true` or `preserveSignalDefault: false` is set.
 - Opted-in unhandled rejection cleanup now rethrows by default. Set `rethrowUnhandledRejection: false` to suppress it explicitly.
 - `release:ci` now points users to the GitHub Release workflow instead of publishing from a second scripted path.
 

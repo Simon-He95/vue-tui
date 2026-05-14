@@ -13,6 +13,17 @@ describe("render-manager", () => {
     terminal.dispose();
   });
 
+  it("ignores render manager calls after dispose", () => {
+    const terminal = createTerminal({ cols: 10, rows: 2 });
+    const render = createRenderManager(terminal);
+
+    render.dispose();
+
+    expect(render.markDirtyRows("missing", [0])).toBe(false);
+    expect(render.render()).toBeNull();
+    terminal.dispose();
+  });
+
   it("skips empty rect nodes on full repaint", () => {
     const paints: string[] = [];
 

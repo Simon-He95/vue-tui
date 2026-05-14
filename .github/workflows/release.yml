@@ -52,6 +52,10 @@ jobs:
       - name: Dry-run npm publish from validated tarball
         run: |
           TARBALL=$(ls .release/*.tgz | head -n 1)
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "NPM_TOKEN is not available; skipping npm publish --dry-run"
+            exit 0
+          fi
           npm publish "$TARBALL" --access public --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

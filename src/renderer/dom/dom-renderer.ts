@@ -79,19 +79,22 @@ export type DomRendererRowRenderDebugStats = Readonly<{
 
 export type DomRendererRowKeyPrepassMode = boolean | "auto";
 
-export type DomRendererLinkOptions =
-  | false
-  | Readonly<{
-      allowRelative?: boolean;
-      externalTarget?: "_blank" | "_self";
-      /**
-       * Defaults to -1 so terminal links do not enter the browser tab order.
-       * Set to 0 when the host explicitly wants native anchor keyboard focus.
-       */
-      tabIndex?: number;
-      activation?: "native" | "event" | "none";
-      onActivate?: (href: string, event: MouseEvent) => void;
-    }>;
+type DomRendererLinkConfig = Readonly<{
+  allowRelative?: boolean;
+  externalTarget?: "_blank" | "_self";
+  /**
+   * Defaults to -1 so terminal links do not enter the browser tab order.
+   * Set to 0 when the host explicitly wants native anchor keyboard focus.
+   */
+  tabIndex?: number;
+  activation?: "native" | "event" | "none";
+  onActivate?: (href: string, event: MouseEvent) => void;
+}>;
+
+export type DomRendererLinkOptions = boolean | DomRendererLinkConfig;
+
+type NormalizedDomRendererLinkOptions = false | DomRendererLinkConfig;
+type DomRendererLinkActivateHandler = (href: string, event: MouseEvent) => void;
 
 export type DomRendererRowKeyPrepassDecision =
   | "forced-enabled"
@@ -625,9 +628,30 @@ function isPlainTextRow(segments: readonly RowSegment[]): boolean {
   return segments.length === 1 && !segments[0]!.wide && isPlainStyle(segments[0]!.style);
 }
 
+function normalizeLinkOptions(
+  value: DomRendererLinkOptions | undefined,
+): NormalizedDomRendererLinkOptions {
+  if (value === true) return {};
+  if (value === false || value == null) return false;
+  return value;
+}
+
+function linkOptionsKey(options: NormalizedDomRendererLinkOptions): string {
+  if (!options) return "disabled";
+
+  return JSON.stringify({
+    allowRelative: options.allowRelative === true,
+    externalTarget: options.externalTarget ?? "_blank",
+    tabIndex: options.tabIndex ?? -1,
+    activation:
+      options.activation ?? (typeof options.onActivate === "function" ? "event" : "native"),
+    hasOnActivate: typeof options.onActivate === "function",
+  });
+}
+
 function renderableHref(
   style: Style,
-  linkOptions: DomRendererLinkOptions | undefined,
+  linkOptions: NormalizedDomRendererLinkOptions,
 ): string | null {
   if (!linkOptions) return null;
   if (linkOptions.activation === "none") return null;
@@ -638,7 +662,7 @@ function renderableHref(
 
 function isSingleStyledTextRow(
   segments: readonly RowSegment[],
-  linkOptions: DomRendererLinkOptions | undefined,
+  linkOptions: NormalizedDomRendererLinkOptions,
 ): boolean {
   return (
     segments.length === 1 &&
@@ -650,7 +674,7 @@ function isSingleStyledTextRow(
 
 function canReuseSegmentSpans(
   segments: readonly RowSegment[],
-  linkOptions: DomRendererLinkOptions | undefined,
+  linkOptions: NormalizedDomRendererLinkOptions,
 ): boolean {
   return (
     segments.length > 1 &&
@@ -679,7 +703,10 @@ function stopTerminalPropagation(event: Event): void {
 function createSegmentElement(
   doc: Document,
   style: Style,
-  options: Readonly<{ links?: DomRendererLinkOptions }>,
+  options: Readonly<{
+    links: NormalizedDomRendererLinkOptions;
+    activateLink: DomRendererLinkActivateHandler;
+  }>,
 ): HTMLSpanElement | HTMLAnchorElement {
   const linkOptions = options.links;
   if (!linkOptions) return doc.createElement("span");
@@ -707,7 +734,7 @@ function createSegmentElement(
   if (activation === "event") {
     anchor.addEventListener("click", (event) => {
       stopNativeAndTerminalActivation(event);
-      linkOptions.onActivate?.(href, event);
+      options.activateLink(href, event);
     });
   } else {
     anchor.addEventListener("click", stopTerminalPropagation);
@@ -765,7 +792,8 @@ function renderRow(
   stats: RowRenderMutableStats,
   enableRowKeyPrepass: boolean,
   palette: ThemePalette | null,
-  linkOptions: DomRendererLinkOptions | undefined,
+  linkOptions: NormalizedDomRendererLinkOptions,
+  activateLink: DomRendererLinkActivateHandler,
   linkVersion: number,
 ): void {
   stats.rows++;
@@ -826,7 +854,7 @@ function renderRow(
       span = firstChild;
       stats.spansReused++;
     } else {
-      span = createSegmentElement(doc, seg.style, { links: linkOptions });
+      span = createSegmentElement(doc, seg.style, { links: linkOptions, activateLink });
       span.dataset.vtFastRow = "styled";
       stats.spansCreated++;
       stats.replaceChildren++;
@@ -857,7 +885,7 @@ function renderRow(
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]!;
-    const span = createSegmentElement(doc, seg.style, { links: linkOptions });
+    const span = createSegmentElement(doc, seg.style, { links: linkOptions, activateLink });
     if (canReuseSpans) {
       span.dataset.vtFastRow = "segment";
       span.dataset.vtSegmentIndex = String(i);
@@ -885,8 +913,13 @@ export function createDomRenderer(
   options: DomRendererOptions = {},
 ): DomRenderer {
   const doc = container.ownerDocument;
-  let rendererLinkOptions = options.links ?? false;
+  let rendererLinkOptions = normalizeLinkOptions(options.links);
+  let rendererLinkOptionsKey = linkOptionsKey(rendererLinkOptions);
   let rendererLinkVersion = 0;
+  const activateLink: DomRendererLinkActivateHandler = (href, event) => {
+    if (!rendererLinkOptions || typeof rendererLinkOptions.onActivate !== "function") return;
+    rendererLinkOptions.onActivate(href, event);
+  };
   container.style.fontFamily = DEFAULT_FONT_FAMILY;
   container.style.whiteSpace = "pre";
   container.style.display = "inline-block";
@@ -1150,6 +1183,7 @@ export function createDomRenderer(
           shouldUseRowKeyPrepass(),
           palette,
           rendererLinkOptions,
+          activateLink,
           rendererLinkVersion,
         );
     }
@@ -1460,6 +1494,7 @@ export function createDomRenderer(
             useRowKeyPrepass,
             palette,
             rendererLinkOptions,
+            activateLink,
             rendererLinkVersion,
           );
         deletePendingRow(plane, rows, y);
@@ -1585,11 +1620,16 @@ export function createDomRenderer(
 
   function updateOptions(next: Readonly<{ links?: DomRendererLinkOptions }>): void {
     if (disposed) return;
-    if (Object.prototype.hasOwnProperty.call(next, "links")) {
-      rendererLinkOptions = next.links ?? false;
-      rendererLinkVersion++;
-      refresh();
-    }
+    if (!Object.prototype.hasOwnProperty.call(next, "links")) return;
+
+    const normalized = normalizeLinkOptions(next.links);
+    const nextKey = linkOptionsKey(normalized);
+    rendererLinkOptions = normalized;
+    if (nextKey === rendererLinkOptionsKey) return;
+
+    rendererLinkOptionsKey = nextKey;
+    rendererLinkVersion++;
+    refresh();
   }
 
   refresh();

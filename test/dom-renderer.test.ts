@@ -532,6 +532,24 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("accepts links: true as default DOM link rendering config", () => {
+    const { terminal, container, renderer } = setup(4, 1, { links: true });
+
+    try {
+      terminal.write("docs", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")?.href).toBe("https://example.com/");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("makes DOM href anchors pointer-interactive", () => {
     const { terminal, container, renderer } = setup(3, 1, { links: {} });
 
@@ -929,6 +947,56 @@ describe("DomRenderer row rendering", () => {
 
       renderer.updateOptions({});
       expect(container.querySelector("a")).toBeTruthy();
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not refresh DOM rows when link options are semantically unchanged", () => {
+    const { renderer, container } = setup(3, 1, {
+      links: { activation: "event", allowRelative: false },
+    });
+
+    try {
+      const before = renderer.debugStats.rowRender.total.replaceChildren;
+
+      renderer.updateOptions({
+        links: { activation: "event", allowRelative: false },
+      });
+
+      expect(renderer.debugStats.rowRender.total.replaceChildren).toBe(before);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("updates DOM link activation handler without repainting semantically unchanged options", () => {
+    const firstActivate = vi.fn();
+    const nextActivate = vi.fn();
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { onActivate: firstActivate },
+    });
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+      const anchor = lineEl(container).querySelector("a");
+      const before = renderer.debugStats.rowRender.total.replaceChildren;
+
+      renderer.updateOptions({ links: { onActivate: nextActivate } });
+
+      expect(renderer.debugStats.rowRender.total.replaceChildren).toBe(before);
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      anchor?.dispatchEvent(event);
+
+      expect(firstActivate).not.toHaveBeenCalled();
+      expect(nextActivate).toHaveBeenCalledWith("https://example.com/", event);
     } finally {
       renderer.dispose();
       container.remove();

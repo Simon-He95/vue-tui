@@ -7,6 +7,7 @@ import {
   putCell,
   scrollBuffer,
   setFingerprintFn,
+  snapshotText,
 } from "../src/core/buffer/buffer.js";
 
 describe("buffer fillRect fast path", () => {
@@ -206,5 +207,18 @@ describe("buffer scroll fingerprints", () => {
     expect(Array.from(getRowFingerprints(buffer, 0)!)).toEqual([0, 0, 0]);
     expect(Array.from(getRowFingerprints(buffer, 1)!)).toEqual([65, 0, 0]);
     expect(Array.from(getRowFingerprints(buffer, 2)!)).toEqual([66, 0, 0]);
+  });
+
+  test("clamps large scrollBuffer operations to visible rows", () => {
+    const buffer = createGridBuffer(5, 3);
+    setFingerprintFn(buffer, (ch) => ch.charCodeAt(0) || 0);
+    putCell(buffer, 0, 0, "a");
+    putCell(buffer, 0, 1, "b");
+    putCell(buffer, 0, 2, "c");
+
+    scrollBuffer(buffer, 100);
+
+    expect(snapshotText(buffer)).toEqual(["     ", "     ", "     "]);
+    expect(buffer.scrollback.length).toBeLessThanOrEqual(3);
   });
 });

@@ -62,7 +62,7 @@ describe("cli input", () => {
     }
   });
 
-  it("cleans up without exiting or re-sending signal by default", async () => {
+  it("preserves signal default after cleanup by default", async () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
@@ -77,7 +77,7 @@ describe("cli input", () => {
 
       expect(dispose).toHaveBeenCalledTimes(1);
       expect(exit).not.toHaveBeenCalled();
-      expect(kill).not.toHaveBeenCalled();
+      expect(kill).toHaveBeenCalledWith(process.pid, "SIGTERM");
     } finally {
       uninstall();
       exit.mockRestore();

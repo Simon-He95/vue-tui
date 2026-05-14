@@ -469,10 +469,12 @@ export function createRenderManager(
     endY: number,
     delta: number,
   ): void {
+    if (disposed) return;
     scrollPlaneRows(terminal, plane, startY, endY, delta);
   }
 
   function invalidatePlane(plane: TerminalRenderPlane): void {
+    if (disposed) return;
     getDirtyState(plane).allRowsDirty = true;
   }
 
@@ -497,6 +499,7 @@ export function createRenderManager(
       rectY1: y1,
       paint: node.paint,
     });
+    if (disposed) return full;
     nodes.set(id, full);
     addToRowBuckets(full);
     markRect(full.plane, full.rect);
@@ -515,6 +518,7 @@ export function createRenderManager(
       paint: (dirtyRows?: readonly number[]) => void;
     }>,
   ): void {
+    if (disposed) return;
     const prev = nodes.get(id);
     if (!prev) return;
     const sortChanged =
@@ -567,6 +571,7 @@ export function createRenderManager(
   }
 
   function markDirtyRows(id: string, rows: readonly number[]): boolean {
+    if (disposed) return false;
     if (!rows.length) return false;
     const node = nodes.get(id);
     if (!node) return false;
@@ -574,6 +579,7 @@ export function createRenderManager(
   }
 
   function unregister(id: string): void {
+    if (disposed) return;
     const prev = nodes.get(id);
     if (prev) {
       markRect(prev.plane, prev.rect);
@@ -625,6 +631,7 @@ export function createRenderManager(
   }
 
   function render(options?: { activePlanes?: TerminalRenderPlanes | null }): RenderStats | null {
+    if (disposed) return null;
     const renderStart = profiler?.now();
     const activePlanes = options?.activePlanes ?? null;
     const requestedPlanes = activePlanes ?? TERMINAL_RENDER_PLANES;
