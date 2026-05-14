@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,34 @@ const dir = mkdtempSync(join(tmpdir(), "vue-tui-browser-smoke-"));
 function run(command, args) {
   console.log(`$ ${[command, ...args].join(" ")}`);
   execFileSync(command, args, { cwd: dir, stdio: "inherit" });
+}
+
+function assertNoForbiddenBrowserCode() {
+  const assetsDir = join(dir, "dist", "assets");
+  const files = readdirSync(assetsDir)
+    .filter((name) => name.endsWith(".js"))
+    .map((name) => join(assetsDir, name));
+
+  if (!files.length) {
+    throw new Error("Packed browser smoke did not emit any JS assets");
+  }
+
+  const bundle = files.map((file) => readFileSync(file, "utf8")).join("\n");
+  const forbidden = [
+    /\bnode:(?:fs|path|url|buffer|child_process|process)\b/,
+    /\bprocess\.stdout\b/,
+    /\bprocess\.stderr\b/,
+    /\bcreateOsc52ClipboardProvider\b/,
+    /\bcreateDefaultTInputHostAdapter\b/,
+    /\bcreateNodeMentionPathProvider\b/,
+    /\bnew Function\b/,
+  ];
+
+  for (const pattern of forbidden) {
+    if (pattern.test(bundle)) {
+      throw new Error(`Packed browser bundle contains forbidden code: ${pattern}`);
+    }
+  }
 }
 
 try {
@@ -40,6 +68,7 @@ console.log(TerminalProvider, TText, TMarkdownText, TVirtualList, createTerminal
   );
 
   run("npx", ["vite", "build"]);
+  assertNoForbiddenBrowserCode();
 } catch (error) {
   console.error(`Packed browser Vite smoke project left at ${dir}`);
   throw error;

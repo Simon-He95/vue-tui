@@ -31,6 +31,8 @@ describe("DomRenderer row rendering", () => {
     expect(sanitizeDomHref("foo:bar")).toBeNull();
     expect(sanitizeDomHref("https://example.com")).toBe("https://example.com/");
     expect(sanitizeDomHref("https://example.com/a")).toBe("https://example.com/a");
+    expect(sanitizeDomHref(" https://example.com")).toBeNull();
+    expect(sanitizeDomHref("https://example.com ")).toBeNull();
     expect(sanitizeDomHref("https:example.com")).toBeNull();
     expect(sanitizeDomHref("http:\\example.com")).toBeNull();
     expect(sanitizeDomHref("docs/intro.md")).toBeNull();
@@ -480,7 +482,14 @@ describe("DomRenderer row rendering", () => {
       });
       terminal.commit({ planes: ["default"], sync: true });
 
-      expect(lineEl(container).querySelector("a")).toBeNull();
+      const line = lineEl(container);
+      expect(line.querySelector("a")).toBeNull();
+      expect(line.firstChild?.nodeType).toBe(Node.TEXT_NODE);
+      expect(lastRowStats(renderer)).toMatchObject({
+        plainTextRows: 1,
+        textNodeUpdates: 1,
+        fragmentRows: 0,
+      });
     } finally {
       renderer.dispose();
       container.remove();
@@ -737,7 +746,7 @@ describe("DomRenderer row rendering", () => {
 
       const line = lineEl(container);
       expect(line.querySelector("a")).toBeNull();
-      expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
+      expect(line.firstChild?.nodeType).toBe(Node.TEXT_NODE);
       expect(line.textContent).toContain("url");
     } finally {
       renderer.dispose();
@@ -830,6 +839,40 @@ describe("DomRenderer row rendering", () => {
       renderer.dispose();
       container.removeEventListener("keydown", keydown);
       container.removeEventListener("keyup", keyup);
+      container.remove();
+    }
+  });
+
+  it("does not leak keyboard events from focused event-mode links", () => {
+    const onActivate = vi.fn();
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { tabIndex: 0, onActivate },
+    });
+    const keydown = vi.fn();
+    container.addEventListener("keydown", keydown);
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      anchor!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+      expect(keydown).not.toHaveBeenCalled();
+      expect(onActivate).not.toHaveBeenCalled();
+
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor!.dispatchEvent(click)).toBe(false);
+      expect(click.defaultPrevented).toBe(true);
+      expect(onActivate).toHaveBeenCalledWith("https://example.com/", click);
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("keydown", keydown);
       container.remove();
     }
   });
@@ -1064,7 +1107,7 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("keeps unsafe href rows as spans", () => {
+  it("renders unsafe href-only rows as plain text", () => {
     for (const href of [
       "//evil.example",
       "javascript:alert(1)",
@@ -1079,7 +1122,7 @@ describe("DomRenderer row rendering", () => {
         terminal.commit({ planes: ["default"], sync: true });
 
         const line = lineEl(container);
-        expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
+        expect(line.firstChild?.nodeType).toBe(Node.TEXT_NODE);
         expect(line.querySelector("a")).toBeNull();
       } finally {
         renderer.dispose();
@@ -1661,7 +1704,8 @@ describe("DomRenderer row rendering", () => {
         rowKeyPrepassChecks: 1,
         rowKeyPrepassHits: 0,
         rowKeyPrepassMisses: 1,
-        singleStyledRows: 1,
+        plainTextRows: 1,
+        textNodeUpdates: 1,
       });
     } finally {
       renderer.dispose();

@@ -616,16 +616,41 @@ function isPlainStyle(style: Style): boolean {
   );
 }
 
-function isTransparentBlankRow(segments: readonly RowSegment[]): boolean {
+function isPlainVisualStyle(style: Style, linkOptions: NormalizedDomRendererLinkOptions): boolean {
+  const hasRenderableHref = renderableHref(style, linkOptions) != null;
+
+  return (
+    !style.fg &&
+    !style.bg &&
+    !style.bold &&
+    !style.dim &&
+    !style.italic &&
+    !style.underline &&
+    !style.inverse &&
+    !hasRenderableHref
+  );
+}
+
+function isTransparentBlankRow(
+  segments: readonly RowSegment[],
+  linkOptions: NormalizedDomRendererLinkOptions,
+): boolean {
   return (
     segments.length === 1 &&
-    isPlainStyle(segments[0]!.style) &&
+    isPlainVisualStyle(segments[0]!.style, linkOptions) &&
     segments[0]!.text.trim().length === 0
   );
 }
 
-function isPlainTextRow(segments: readonly RowSegment[]): boolean {
-  return segments.length === 1 && !segments[0]!.wide && isPlainStyle(segments[0]!.style);
+function isPlainTextRow(
+  segments: readonly RowSegment[],
+  linkOptions: NormalizedDomRendererLinkOptions,
+): boolean {
+  return (
+    segments.length === 1 &&
+    !segments[0]!.wide &&
+    isPlainVisualStyle(segments[0]!.style, linkOptions)
+  );
 }
 
 function normalizeLinkOptions(
@@ -668,7 +693,7 @@ function isSingleStyledTextRow(
     segments.length === 1 &&
     !segments[0]!.wide &&
     !renderableHref(segments[0]!.style, linkOptions) &&
-    !isPlainStyle(segments[0]!.style)
+    !isPlainVisualStyle(segments[0]!.style, linkOptions)
   );
 }
 
@@ -821,14 +846,14 @@ function renderRow(
 
   rowCache.set(lineEl, newKey);
 
-  if (isTransparentBlankRow(segments)) {
+  if (isTransparentBlankRow(segments, linkOptions)) {
     stats.transparentBlankRows++;
     stats.replaceChildren++;
     lineEl.replaceChildren();
     return;
   }
 
-  if (isPlainTextRow(segments)) {
+  if (isPlainTextRow(segments, linkOptions)) {
     stats.plainTextRows++;
     stats.textNodeUpdates++;
     const text = segments[0]!.text;

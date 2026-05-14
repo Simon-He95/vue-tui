@@ -18,6 +18,7 @@ function normalizeRawHref(value: unknown): string | null {
 
   const raw = value.trim();
   if (!raw) return null;
+  if (raw !== value) return null;
 
   for (let i = 0; i < value.length; i++) {
     const code = value.charCodeAt(i);

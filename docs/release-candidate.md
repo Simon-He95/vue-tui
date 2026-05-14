@@ -88,4 +88,4 @@ pnpm run example:agent-console:terminal
 3. 跑 `pnpm run release:dry-run`。
 4. 如果 `docs:build` 更新 generated API，提交 generated docs；否则保持工作区干净。
 5. 更新 `CHANGELOG.md`，把 `Unreleased` 的内容整理成目标版本。
-6. 只在发布验证完成后通过 GitHub Release workflow 发布已验证的 tarball；`pnpm run release`、`pnpm run release:ci`、`pnpm run release:local` 和 `pnpm run release:workflow-only` 会阻止本地手动发布。
+6. 只在发布验证完成后通过 GitHub Release workflow 发布已验证的 tarball；`pnpm run release:ci` 只做 dry-run 验证，`pnpm run release`、`pnpm run release:local` 和 `pnpm run release:workflow-only` 会阻止本地手动发布。

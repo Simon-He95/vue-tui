@@ -103,6 +103,8 @@ export function pathToTerminalFileHref(pathLike: string): string | undefined {
   if (ENCODED_CRLF_RE.test(raw)) return undefined;
 
   if (raw.toLowerCase().startsWith("file://")) {
+    if (/\s/u.test(raw)) return undefined;
+
     try {
       const url = new URL(raw);
       if (url.protocol !== "file:") return undefined;

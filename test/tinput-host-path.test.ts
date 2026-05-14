@@ -3,8 +3,13 @@ import { pathToTerminalFileHref } from "../src/vue/components/input/host.js";
 
 describe("TInput host path hrefs", () => {
   it("normalizes file URLs through URL parsing", () => {
-    expect(pathToTerminalFileHref("file:///tmp/a b")).toBe("file:///tmp/a%20b");
-    expect(pathToTerminalFileHref("file://server/share/a b")).toBe("file://server/share/a%20b");
+    expect(pathToTerminalFileHref("file:///tmp/a%20b")).toBe("file:///tmp/a%20b");
+    expect(pathToTerminalFileHref("file://server/share/a%20b")).toBe("file://server/share/a%20b");
+  });
+
+  it("rejects literal whitespace in raw file URLs", () => {
+    expect(pathToTerminalFileHref("file:///tmp/a b")).toBeUndefined();
+    expect(pathToTerminalFileHref("file://server/share/a b")).toBeUndefined();
   });
 
   it("rejects invalid or control-character file URLs", () => {

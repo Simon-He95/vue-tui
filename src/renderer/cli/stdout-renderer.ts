@@ -328,6 +328,8 @@ export function createStdoutRenderer(
   }
 
   let styleKeyCache = new WeakMap<Style, number>();
+  const normalizedHrefCache = new Map<string, string | null>();
+  const MAX_HREF_CACHE = 2048;
   const HREF_STYLE_FLAG = 1 << 21;
   function styleKey(style: Style): number {
     const cached = styleKeyCache.get(style);
@@ -371,7 +373,20 @@ export function createStdoutRenderer(
   }
 
   function normalizeHref(value: unknown): string | null {
-    return sanitizeTerminalHref(value, { allowFileUrls });
+    if (typeof value !== "string") return null;
+
+    const cached = normalizedHrefCache.get(value);
+    if (cached !== undefined) return cached;
+
+    const normalized = sanitizeTerminalHref(value, { allowFileUrls });
+    normalizedHrefCache.set(value, normalized);
+
+    if (normalizedHrefCache.size > MAX_HREF_CACHE) {
+      const oldest = normalizedHrefCache.keys().next().value;
+      if (oldest != null) normalizedHrefCache.delete(oldest);
+    }
+
+    return normalized;
   }
 
   function resolveAnsiColorRgb(name: string) {

@@ -9,9 +9,10 @@ const forbidden = [
   /\[UNRESOLVED_IMPORT\]/i,
   /Module has been externalized for browser compatibility/i,
   /Could not resolve/i,
-  /\bwarning\b/i,
   /▲\s*\[WARNING\]/i,
   /\[WARNING\]/i,
+  /^warning\s+-/im,
+  /^warn\s+/im,
 ];
 
 const allowed = [

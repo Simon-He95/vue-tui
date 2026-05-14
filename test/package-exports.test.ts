@@ -9,6 +9,9 @@ const distIndex = resolve("dist/index.js");
 const distCli = resolve("dist/cli.js");
 const distMarkdown = resolve("dist/markdown.js");
 const distExperimental = resolve("dist/experimental.js");
+const distIndexCjs = resolve("dist/index.cjs");
+const distMarkdownCjs = resolve("dist/markdown.cjs");
+const distExperimentalCjs = resolve("dist/experimental.cjs");
 const distTypes = resolve("dist/index.d.ts");
 const distCliTypes = resolve("dist/cli.d.ts");
 const distMarkdownTypes = resolve("dist/markdown.d.ts");
@@ -52,6 +55,19 @@ function collectExportTargets(value: unknown, out: string[] = []): string[] {
     for (const child of Object.values(value)) collectExportTargets(child, out);
   }
   return out;
+}
+
+function expectNoBrowserForbiddenCode(file: string): void {
+  const source = readFileSync(file, "utf8");
+  expect(source).not.toMatch(
+    /node:child_process|node:fs|node:path|node:url|node:buffer|node:process/,
+  );
+  expect(source).not.toContain("new Function");
+  expect(source).not.toContain("process.stdout");
+  expect(source).not.toContain("process.stderr");
+  expect(source).not.toContain("createOsc52ClipboardProvider");
+  expect(source).not.toContain("createDefaultTInputHostAdapter");
+  expect(source).not.toContain("createNodeMentionPathProvider");
 }
 
 describe("package exports", () => {
@@ -309,17 +325,16 @@ describe("package exports", () => {
   );
 
   it.skipIf(!requireDistExports)("does not emit Node-only code into browser dist entries", () => {
-    expect(existsSync(distIndex)).toBe(true);
-    expect(existsSync(distMarkdown)).toBe(true);
-    expect(existsSync(distExperimental)).toBe(true);
-
-    for (const file of [distIndex, distMarkdown, distExperimental]) {
-      const source = readFileSync(file, "utf8");
-      expect(source).not.toMatch(/node:child_process|node:fs|node:path|node:url/);
-      expect(source).not.toContain("new Function");
-      expect(source).not.toContain("process.stdout");
-      expect(source).not.toContain("createOsc52ClipboardProvider");
-      expect(source).not.toContain("createNodeMentionPathProvider");
+    for (const file of [
+      distIndex,
+      distMarkdown,
+      distExperimental,
+      distIndexCjs,
+      distMarkdownCjs,
+      distExperimentalCjs,
+    ]) {
+      expect(existsSync(file)).toBe(true);
+      expectNoBrowserForbiddenCode(file);
     }
   });
 

@@ -158,7 +158,9 @@ describe("stdout renderer style diffing", () => {
   });
 
   it("sanitizes terminal hrefs before OSC8 output", () => {
-    expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com");
+    expect(sanitizeTerminalHref(" https://example.com")).toBeNull();
+    expect(sanitizeTerminalHref("https://example.com ")).toBeNull();
+    expect(sanitizeTerminalHref(" mailto:test@example.com")).toBeNull();
     expect(sanitizeTerminalHref("http://example.com")).toBe("http://example.com");
     expect(sanitizeTerminalHref("mailto:test@example.com")).toBe("mailto:test@example.com");
     expect(sanitizeTerminalHref("vbscript:msgbox(1)")).toBeNull();
