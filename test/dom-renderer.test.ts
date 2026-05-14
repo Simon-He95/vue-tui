@@ -42,9 +42,12 @@ describe("DomRenderer row rendering", () => {
     expect(sanitizeDomHref("//evil.test", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("../ok", { allowRelative: true })).toBe("../ok");
     expect(sanitizeDomHref("#section", { allowRelative: true })).toBe("#section");
+    expect(sanitizeDomHref("guide%20intro", { allowRelative: true })).toBe("guide%20intro");
     expect(sanitizeDomHref("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBeNull();
     expect(sanitizeDomHref("https://example.com/%0aevil")).toBeNull();
     expect(sanitizeDomHref("/docs/%0dheader", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("guide%0aintro", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("guide%zzintro", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("https://example.com/a%20b")).toBe("https://example.com/a%20b");
   });
 
@@ -810,6 +813,50 @@ describe("DomRenderer row rendering", () => {
       expect(anchor?.dispatchEvent(event)).toBe(false);
       expect(event.defaultPrevented).toBe(true);
       expect(onActivate).toHaveBeenCalledWith("docs/intro.md", event);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("updates href rows when DOM link options are enabled after first render", () => {
+    const { terminal, container, renderer } = setup(3, 1);
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")).toBeNull();
+
+      renderer.updateOptions({ links: {} });
+
+      expect(lineEl(container).querySelector("a")).toBeInstanceOf(HTMLAnchorElement);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("removes href anchors when DOM link options are disabled", () => {
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")).toBeInstanceOf(HTMLAnchorElement);
+
+      renderer.updateOptions({ links: false });
+
+      expect(lineEl(container).querySelector("a")).toBeNull();
     } finally {
       renderer.dispose();
       container.remove();

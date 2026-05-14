@@ -101,6 +101,26 @@ describe("cli input", () => {
     }
   });
 
+  it("cleans up on SIGBREAK with Ctrl+Break exit code", async () => {
+    const dispose = vi.fn();
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const before = new Set(process.rawListeners("SIGBREAK"));
+    const uninstall = installTerminalCleanup(dispose, { exitOnSignal: true });
+
+    try {
+      const listener = process.rawListeners("SIGBREAK").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+      await new Promise<void>((resolve) => process.nextTick(resolve));
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(130);
+    } finally {
+      uninstall();
+      exit.mockRestore();
+    }
+  });
+
   it("can clean up without exiting when exitOnSignal=false", () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);

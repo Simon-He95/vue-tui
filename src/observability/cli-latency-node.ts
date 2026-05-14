@@ -1,4 +1,6 @@
 import { appendFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import process from "node:process";
 import type { CliLatencyProfiler, CliLatencyStageEvent } from "./cli-latency-types.js";
 import { envFlag, envString } from "../utils/env.js";
@@ -84,7 +86,7 @@ type CliLatencyLogRecord = Readonly<{
 }>;
 
 const EVENT_OP_ID = Symbol("dimcode.cliLatencyOpId");
-const DEFAULT_LOG_PATH = "/tmp/vue-tui-cli-latency.jsonl";
+const DEFAULT_LOG_FILE = "vue-tui-cli-latency.jsonl";
 const INVALIDATE_ASSOCIATION_WINDOW_MS = 32;
 const MAX_OP_AGE_MS = 5000;
 const GLOBAL_PROFILER_KEY = "__vueTuiCliLatencyProfiler" as const;
@@ -133,6 +135,10 @@ function createDisabledProfiler(): null {
   return null;
 }
 
+export function defaultCliLatencyLogPath(): string {
+  return join(tmpdir(), DEFAULT_LOG_FILE);
+}
+
 function createProfiler(): CliLatencyProfiler | null {
   const processLike = process;
   const env = (processLike?.env ?? {}) as Record<string, unknown>;
@@ -143,7 +149,7 @@ function createProfiler(): CliLatencyProfiler | null {
     env,
     "VUE_TUI_PROFILE_INPUT_LATENCY_LOG_PATH",
     "DIMCODE_PROFILE_INPUT_LATENCY_LOG_PATH",
-    DEFAULT_LOG_PATH,
+    defaultCliLatencyLogPath(),
   );
 
   const ops = new Map<number, CliLatencyOp>();

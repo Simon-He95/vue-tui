@@ -767,13 +767,15 @@ function renderRow(
   enableRowKeyPrepass: boolean,
   palette: ThemePalette | null,
   linkOptions: DomRendererLinkOptions | undefined,
+  linkVersion: number,
 ): void {
   stats.rows++;
   const doc = lineEl.ownerDocument;
+  const rowModeKey = `links:${linkVersion}`;
   const cachedKey = rowCache.get(lineEl);
   if (enableRowKeyPrepass && cachedKey != null) {
     stats.rowKeyPrepassChecks++;
-    const prepassKey = computeRowKey(terminal, y);
+    const prepassKey = `${rowModeKey}|${computeRowKey(terminal, y)}`;
     if (cachedKey === prepassKey) {
       stats.rowKeyPrepassHits++;
       stats.cacheHits++;
@@ -783,7 +785,8 @@ function renderRow(
     stats.rowKeyPrepassMisses++;
   }
 
-  const { segments, key: newKey } = computeRowSegmentsWithKey(terminal, y);
+  const { segments, key } = computeRowSegmentsWithKey(terminal, y);
+  const newKey = `${rowModeKey}|${key}`;
   if (cachedKey === newKey) {
     stats.cacheHits++;
     return;
@@ -884,6 +887,7 @@ export function createDomRenderer(
 ): DomRenderer {
   const doc = container.ownerDocument;
   let rendererLinkOptions = options.links ?? false;
+  let rendererLinkVersion = 0;
   container.style.fontFamily = DEFAULT_FONT_FAMILY;
   container.style.whiteSpace = "pre";
   container.style.display = "inline-block";
@@ -1147,6 +1151,7 @@ export function createDomRenderer(
           shouldUseRowKeyPrepass(),
           palette,
           rendererLinkOptions,
+          rendererLinkVersion,
         );
     }
     recordRowKeyPrepassAutoStats(rowStats);
@@ -1456,6 +1461,7 @@ export function createDomRenderer(
             useRowKeyPrepass,
             palette,
             rendererLinkOptions,
+            rendererLinkVersion,
           );
         deletePendingRow(plane, rows, y);
         flushedRows++;
@@ -1582,6 +1588,7 @@ export function createDomRenderer(
     if (disposed) return;
     if (Object.prototype.hasOwnProperty.call(next, "links")) {
       rendererLinkOptions = next.links ?? false;
+      rendererLinkVersion++;
       refresh();
     }
   }

@@ -29,6 +29,18 @@ if (!cli.createStdoutRenderer) throw new Error("cli CJS export missing");
 if (!markdown.createTuiMarkdownParser) throw new Error("markdown CJS export missing");
 if (!experimental.createAppendOnlyLogStore) throw new Error("experimental CJS export missing");
 
+const parser = markdown.createTuiMarkdownParser();
+const nodes = parser.parse("[safe](https://example.com)", true);
+if (!Array.isArray(nodes) || nodes.length === 0) {
+  throw new Error("markdown parser runtime smoke failed");
+}
+
+const store = experimental.createAppendOnlyLogStore({ maxLines: 4 });
+store.appendLines(["one", "two", "three"]);
+if (store.source.lineCount() < 3) {
+  throw new Error("experimental append-only log store smoke failed");
+}
+
 const terminal = root.createTerminal({ cols: 20, rows: 4 });
 terminal.write("hello", { x: 0, y: 0 });
 terminal.commit();
@@ -75,6 +87,18 @@ if (!createTerminal) throw new Error("root ESM export missing");
 if (!createStdoutRenderer) throw new Error("cli ESM export missing");
 if (!createTuiMarkdownParser) throw new Error("markdown ESM export missing");
 if (!createAppendOnlyLogStore) throw new Error("experimental ESM export missing");
+
+const parser = createTuiMarkdownParser();
+const nodes = parser.parse("[safe](https://example.com)", true);
+if (!Array.isArray(nodes) || nodes.length === 0) {
+  throw new Error("markdown parser ESM smoke failed");
+}
+
+const store = createAppendOnlyLogStore({ maxLines: 4 });
+store.appendLines(["one", "two", "three"]);
+if (store.source.lineCount() < 3) {
+  throw new Error("experimental store ESM smoke failed");
+}
 
 const terminal = createTerminal({ cols: 20, rows: 4 });
 terminal.write("esm", { x: 0, y: 0 });

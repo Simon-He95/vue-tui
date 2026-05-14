@@ -1,12 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const releaseDir = join(rootDir, ".release");
 const smokeDir = join(rootDir, ".tmp", "pack-smoke");
 const existingTarball = process.argv[2];
+if (!existingTarball) throw new Error("Usage: node scripts/smoke-packed-package.mjs <package.tgz>");
+
 const packageJson = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
 const packageName = packageJson.name;
 const packageInstallDir = join(smokeDir, "node_modules", ...packageName.split("/"));
@@ -90,15 +91,6 @@ function assertTarballContents(tarballPath) {
       `Tarball includes package/${root}/`,
     );
   }
-}
-
-function findPackedTarball() {
-  const tarballs = readdirSync(releaseDir)
-    .filter((file) => file.endsWith(".tgz"))
-    .map((file) => join(releaseDir, file));
-
-  assert(tarballs.length === 1, `Expected one tarball in .release, found ${tarballs.length}`);
-  return tarballs[0];
 }
 
 function assertInstalledExportTargets() {
@@ -285,17 +277,8 @@ main().catch((error) => {
 rmSync(smokeDir, { recursive: true, force: true });
 mkdirSync(smokeDir, { recursive: true });
 
-let tarballPath;
-if (existingTarball) {
-  tarballPath = resolve(existingTarball);
-  assert(existsSync(tarballPath), `Tarball does not exist: ${tarballPath}`);
-} else {
-  rmSync(releaseDir, { recursive: true, force: true });
-  mkdirSync(releaseDir, { recursive: true });
-  run("pnpm", ["run", "build"]);
-  run("pnpm", ["pack", "--pack-destination", ".release"]);
-  tarballPath = findPackedTarball();
-}
+const tarballPath = resolve(existingTarball);
+assert(existsSync(tarballPath), `Tarball does not exist: ${tarballPath}`);
 
 assertTarballContents(tarballPath);
 writeSmokeFiles();

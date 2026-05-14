@@ -54,6 +54,69 @@ describe("tui profiler", () => {
     }
   });
 
+  it("writes profiler output with an injected file writer", () => {
+    const previousProfile = process.env.VUE_TUI_PROFILE;
+    const previousDest = process.env.VUE_TUI_PROFILE_LOG_DEST;
+    const previousPath = process.env.VUE_TUI_PROFILE_LOG_PATH;
+    const previousEvery = process.env.VUE_TUI_PROFILE_LOG_EVERY_MS;
+    const previousLegacyDest = process.env.DIMCODE_PROFILE_TUI_LOG_DEST;
+    const previousLegacyPath = process.env.DIMCODE_PROFILE_TUI_LOG_PATH;
+    const previousLegacyEvery = process.env.DIMCODE_PROFILE_TUI_LOG_EVERY_MS;
+
+    process.env.VUE_TUI_PROFILE = "1";
+    delete process.env.VUE_TUI_PROFILE_LOG_DEST;
+    delete process.env.VUE_TUI_PROFILE_LOG_PATH;
+    delete process.env.VUE_TUI_PROFILE_LOG_EVERY_MS;
+    delete process.env.DIMCODE_PROFILE_TUI_LOG_DEST;
+    delete process.env.DIMCODE_PROFILE_TUI_LOG_PATH;
+    delete process.env.DIMCODE_PROFILE_TUI_LOG_EVERY_MS;
+
+    const writes: string[] = [];
+    const paths: string[] = [];
+    const profiler = createTuiProfiler("test", {
+      fileWriter: {
+        appendFileSync(path, data) {
+          paths.push(path);
+          writes.push(data);
+        },
+      },
+      defaultLogDest: "file",
+      defaultLogPath: "profile.log",
+    });
+
+    try {
+      profiler?.recordRender({
+        durationMs: 1,
+        rows: 1,
+        nodes: 1,
+        fullRepaint: false,
+        sorted: false,
+        activePlanes: ["default"],
+      });
+
+      profiler?.dispose();
+
+      expect(paths).toEqual(["profile.log"]);
+      expect(writes.join("")).toContain("[VUE_TUI_PROFILE] test");
+    } finally {
+      profiler?.dispose();
+      if (previousProfile == null) delete process.env.VUE_TUI_PROFILE;
+      else process.env.VUE_TUI_PROFILE = previousProfile;
+      if (previousDest == null) delete process.env.VUE_TUI_PROFILE_LOG_DEST;
+      else process.env.VUE_TUI_PROFILE_LOG_DEST = previousDest;
+      if (previousPath == null) delete process.env.VUE_TUI_PROFILE_LOG_PATH;
+      else process.env.VUE_TUI_PROFILE_LOG_PATH = previousPath;
+      if (previousEvery == null) delete process.env.VUE_TUI_PROFILE_LOG_EVERY_MS;
+      else process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = previousEvery;
+      if (previousLegacyDest == null) delete process.env.DIMCODE_PROFILE_TUI_LOG_DEST;
+      else process.env.DIMCODE_PROFILE_TUI_LOG_DEST = previousLegacyDest;
+      if (previousLegacyPath == null) delete process.env.DIMCODE_PROFILE_TUI_LOG_PATH;
+      else process.env.DIMCODE_PROFILE_TUI_LOG_PATH = previousLegacyPath;
+      if (previousLegacyEvery == null) delete process.env.DIMCODE_PROFILE_TUI_LOG_EVERY_MS;
+      else process.env.DIMCODE_PROFILE_TUI_LOG_EVERY_MS = previousLegacyEvery;
+    }
+  });
+
   it("falls back to legacy profiler env when new values are empty", () => {
     const previousProfile = process.env.VUE_TUI_PROFILE;
     const previousDest = process.env.VUE_TUI_PROFILE_LOG_DEST;

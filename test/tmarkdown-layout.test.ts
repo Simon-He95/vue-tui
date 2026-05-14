@@ -123,6 +123,8 @@ describe("markdown layout", () => {
     expect(isSafeMarkdownLink("foo bar")).toBe(false);
     expect(isSafeMarkdownLink("https://example.com/a b")).toBe(false);
     expect(isSafeMarkdownLink("https://example.com/a%20b")).toBe(true);
+    expect(isSafeMarkdownLink("guide%20intro")).toBe(true);
+    expect(isSafeMarkdownLink("README%20copy.md")).toBe(true);
     expect(isSafeMarkdownLink("javascript:alert(1)")).toBe(false);
     expect(isSafeMarkdownLink("JaVaScRiPt:alert(1)")).toBe(false);
     expect(isSafeMarkdownLink("data:text/html,boom")).toBe(false);
@@ -132,6 +134,9 @@ describe("markdown layout", () => {
     expect(isSafeMarkdownLink("\\evil")).toBe(false);
     expect(isSafeMarkdownLink("../ok")).toBe(true);
     expect(isSafeMarkdownLink("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBe(false);
+    expect(isSafeMarkdownLink("guide%0aintro")).toBe(false);
+    expect(isSafeMarkdownLink("guide%0dintro")).toBe(false);
+    expect(isSafeMarkdownLink("guide%zzintro")).toBe(false);
   });
 
   it("evicts only the oldest markdown parser cache entry", async () => {
