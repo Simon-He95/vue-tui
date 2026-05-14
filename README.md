@@ -236,7 +236,7 @@ pnpm run release:dry-run
 ```
 
 `release:dry-run` runs checks, tests, docs build, benchmarks, examples smoke, and packed package install smoke.
-CI publishing uses `pnpm run release:ci`, which runs the same dry-run gate and publishes with npm provenance.
+The GitHub Release workflow publishes the already-verified tarball with npm provenance. `release:ci` is kept for local or non-GitHub CI environments that need to pack and publish from the same job.
 
 ## Package Notes
 

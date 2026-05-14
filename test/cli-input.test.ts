@@ -121,7 +121,7 @@ describe("cli input", () => {
     }
   });
 
-  it("does not clean up on unhandledRejection by default", () => {
+  it("does not install unhandledRejection cleanup", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("unhandledRejection"));
     const uninstall = installTerminalCleanup(dispose);
@@ -134,21 +134,18 @@ describe("cli input", () => {
     }
   });
 
-  it("can opt into unhandledRejection cleanup", () => {
+  it("cleans up on uncaughtExceptionMonitor", () => {
     const dispose = vi.fn();
-    const before = process.rawListeners("unhandledRejection");
-    const uninstall = installTerminalCleanup(dispose, {
-      cleanupUnhandledRejection: true,
-      exitOnSignal: false,
-    });
+    const before = new Set(process.rawListeners("uncaughtExceptionMonitor"));
+    const uninstall = installTerminalCleanup(dispose);
 
     try {
       const listener = process
-        .rawListeners("unhandledRejection")
-        .find((item) => !before.includes(item));
+        .rawListeners("uncaughtExceptionMonitor")
+        .find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
-      listener?.(new Error("boom"), Promise.resolve());
-      listener?.(new Error("boom"), Promise.resolve());
+      listener?.(new Error("boom"), "uncaughtException");
+      listener?.(new Error("boom"), "uncaughtException");
       expect(dispose).toHaveBeenCalledTimes(1);
     } finally {
       uninstall();

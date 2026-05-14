@@ -26,7 +26,6 @@ type CleanupSignal = "SIGINT" | "SIGTERM" | "SIGHUP";
 
 export type TerminalCleanupOptions = Readonly<{
   exitOnSignal?: boolean;
-  cleanupUnhandledRejection?: boolean;
 }>;
 
 function exitCodeForSignal(signal: CleanupSignal): number {
@@ -58,9 +57,6 @@ export function installTerminalCleanup(
     process.off("SIGTERM", onSigterm);
     process.off("SIGHUP", onSighup);
     process.off("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
-    if (options.cleanupUnhandledRejection) {
-      process.off("unhandledRejection", onUnhandledRejection);
-    }
   };
 
   const handleSignal = (signal: CleanupSignal) => {
@@ -82,19 +78,12 @@ export function installTerminalCleanup(
     cleanup();
     uninstall();
   };
-  const onUnhandledRejection = () => {
-    cleanup();
-    uninstall();
-  };
 
   process.once("exit", cleanup);
   process.once("SIGINT", onSigint);
   process.once("SIGTERM", onSigterm);
   process.once("SIGHUP", onSighup);
   process.once("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
-  if (options.cleanupUnhandledRejection) {
-    process.once("unhandledRejection", onUnhandledRejection);
-  }
 
   return uninstall;
 }
@@ -563,7 +552,6 @@ export function createStdinDriver(
     const cleanupOptions = typeof autoCleanup === "object" ? autoCleanup : {};
     uninstallCleanup = installTerminalCleanup(dispose, {
       exitOnSignal: autoCleanup === true ? true : (cleanupOptions.exitOnSignal ?? true),
-      cleanupUnhandledRejection: cleanupOptions.cleanupUnhandledRejection ?? false,
     });
   }
 

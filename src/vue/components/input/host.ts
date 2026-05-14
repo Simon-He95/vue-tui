@@ -70,21 +70,45 @@ export function fileUrlToPathLike(input: string): string | null {
   }
 }
 
+function encodePathSegments(path: string): string {
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
+
 export function pathToTerminalFileHref(pathLike: string): string | undefined {
   const raw = String(pathLike ?? "").trim();
   if (!raw) return undefined;
+
+  for (let i = 0; i < raw.length; i++) {
+    const code = raw.charCodeAt(i);
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return undefined;
+  }
+
   if (raw.toLowerCase().startsWith("file://")) {
     try {
       const url = new URL(raw);
       if (url.protocol !== "file:") return undefined;
-      for (let i = 0; i < raw.length; i++) {
-        const code = raw.charCodeAt(i);
-        if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return undefined;
-      }
       return url.toString();
     } catch {
       return undefined;
     }
+  }
+
+  const backslashUnc = raw.match(/^\\\\([^\\/]+)[\\/](.+)$/);
+  if (backslashUnc) {
+    const host = encodeURIComponent(backslashUnc[1]!);
+    const path = encodePathSegments(backslashUnc[2]!.replace(/\\/g, "/"));
+    return `file://${host}/${path}`;
+  }
+
+  const slashUnc = raw.match(/^\/\/([^/]+)\/(.+)$/);
+  if (slashUnc) {
+    const host = encodeURIComponent(slashUnc[1]!);
+    const path = encodePathSegments(slashUnc[2]!);
+    return `file://${host}/${path}`;
   }
 
   const normalizedRaw = raw.replace(/\\/g, "/");

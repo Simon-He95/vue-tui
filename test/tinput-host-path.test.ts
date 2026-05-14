@@ -16,4 +16,11 @@ describe("TInput host path hrefs", () => {
     expect(pathToTerminalFileHref("/tmp/a b")).toBe("file:///tmp/a%20b");
     expect(pathToTerminalFileHref("C:\\tmp\\a b")).toBe("file:///C:/tmp/a%20b");
   });
+
+  it("keeps UNC hosts in file URLs", () => {
+    expect(pathToTerminalFileHref("\\\\server\\share\\a b.txt")).toBe(
+      "file://server/share/a%20b.txt",
+    );
+    expect(pathToTerminalFileHref("//server/share/a b.txt")).toBe("file://server/share/a%20b.txt");
+  });
 });

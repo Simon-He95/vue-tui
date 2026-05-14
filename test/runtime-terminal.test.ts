@@ -93,6 +93,34 @@ describe("runtime (terminal/node)", () => {
     expect(writes).toEqual([]);
   });
 
+  it("does not let invalid OSC52 maxBytes disable the payload limit", async () => {
+    const writes: string[] = [];
+    const clipboard = createOsc52ClipboardProvider({
+      supported: true,
+      maxBytes: Number.NaN,
+      write: (sequence) => {
+        writes.push(sequence);
+      },
+    });
+
+    await expect(clipboard.writeText("x".repeat(101 * 1024))).rejects.toThrow(/payload too large/i);
+    expect(writes).toEqual([]);
+  });
+
+  it("does not allow Infinity as an OSC52 payload limit", async () => {
+    const writes: string[] = [];
+    const clipboard = createOsc52ClipboardProvider({
+      supported: true,
+      maxBytes: Infinity,
+      write: (sequence) => {
+        writes.push(sequence);
+      },
+    });
+
+    await expect(clipboard.writeText("x".repeat(101 * 1024))).rejects.toThrow(/payload too large/i);
+    expect(writes).toEqual([]);
+  });
+
   it("sanitizes OSC52 target", async () => {
     const writes: string[] = [];
     const clipboard = createOsc52ClipboardProvider({

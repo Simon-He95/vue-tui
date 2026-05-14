@@ -116,6 +116,13 @@ function normalizeOsc52Target(value: unknown): string {
   return /^[cpsq0-7]+$/i.test(raw) ? raw : "c";
 }
 
+function resolveMaxBytes(value: unknown, fallback: number): number {
+  if (value == null) return fallback;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.floor(n));
+}
+
 function nowMs(): number {
   return typeof performance !== "undefined" && typeof performance.now === "function"
     ? performance.now()
@@ -141,7 +148,7 @@ export function createOsc52ClipboardProvider(options: Osc52ClipboardOptions = {}
     async writeText(text: string) {
       if (!supported) throw new Error("Clipboard not available in this runtime");
       const bytes = encodeTextBytes(text);
-      const maxBytes = Math.max(0, Math.floor(options.maxBytes ?? 100 * 1024));
+      const maxBytes = resolveMaxBytes(options.maxBytes, 100 * 1024);
       if (bytes.byteLength > maxBytes)
         throw new Error(`OSC52 clipboard payload too large: ${bytes.byteLength} bytes`);
       await write(`\u001B]52;${target};${base64EncodeBytes(bytes)}\u0007`);
