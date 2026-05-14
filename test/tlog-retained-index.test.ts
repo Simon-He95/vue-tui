@@ -214,7 +214,7 @@ describe("useTLogRetainedIndex", () => {
                   endCell: 3,
                 },
                 {
-                  href: "https://safe.example",
+                  href: "https://safe.example/",
                   text: "safe",
                   startCell: 4,
                   endCell: 8,
@@ -232,7 +232,7 @@ describe("useTLogRetainedIndex", () => {
       await nextTick();
 
       expect(retained.status.value).toBe("done");
-      expect(retained.links.value.map((link) => link.href)).toEqual(["https://safe.example"]);
+      expect(retained.links.value.map((link) => link.href)).toEqual(["https://safe.example/"]);
     } finally {
       raf.restore();
     }

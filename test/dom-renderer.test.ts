@@ -29,7 +29,10 @@ describe("DomRenderer row rendering", () => {
     expect(sanitizeDomHref("JaVaScRiPt:alert(1)")).toBeNull();
     expect(sanitizeDomHref("data:text/html,boom")).toBeNull();
     expect(sanitizeDomHref("foo:bar")).toBeNull();
-    expect(sanitizeDomHref("https://example.com")).toBe("https://example.com");
+    expect(sanitizeDomHref("https://example.com")).toBe("https://example.com/");
+    expect(sanitizeDomHref("https://example.com/a")).toBe("https://example.com/a");
+    expect(sanitizeDomHref("https:example.com")).toBeNull();
+    expect(sanitizeDomHref("http:\\example.com")).toBeNull();
     expect(sanitizeDomHref("docs/intro.md")).toBeNull();
     expect(sanitizeDomHref("./intro.md")).toBeNull();
     expect(sanitizeDomHref("../intro.md")).toBeNull();
@@ -464,7 +467,7 @@ describe("DomRenderer row rendering", () => {
       expect(anchor.href).toBe("https://example.com/");
       expect(anchor.target).toBe("_blank");
       expect(anchor.rel).toBe("noopener noreferrer");
-      expect(anchor.tabIndex).toBe(0);
+      expect(anchor.tabIndex).toBe(-1);
       expect(anchor.draggable).toBe(false);
       expect(anchor.dataset.vtFastRow).toBeUndefined();
       expect(lastRowStats(renderer)).toMatchObject({
@@ -497,14 +500,14 @@ describe("DomRenderer row rendering", () => {
 
   it("lets hosts customize DOM link tabIndex", () => {
     const { terminal, container, renderer } = setup(3, 1, {
-      links: { tabIndex: -1 },
+      links: { tabIndex: 0 },
     });
 
     try {
       terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
       terminal.commit({ planes: ["default"], sync: true });
 
-      expect(lineEl(container).querySelector("a")?.tabIndex).toBe(-1);
+      expect(lineEl(container).querySelector("a")?.tabIndex).toBe(0);
     } finally {
       renderer.dispose();
       container.remove();
@@ -539,7 +542,7 @@ describe("DomRenderer row rendering", () => {
       expect(anchor?.getAttribute("href")).toBe("docs/intro.md");
       expect(anchor?.getAttribute("target")).toBeNull();
       expect(anchor?.getAttribute("rel")).toBeNull();
-      expect(anchor?.tabIndex).toBe(0);
+      expect(anchor?.tabIndex).toBe(-1);
     } finally {
       renderer.dispose();
       container.remove();

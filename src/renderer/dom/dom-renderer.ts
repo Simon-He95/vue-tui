@@ -84,6 +84,10 @@ export type DomRendererLinkOptions =
   | Readonly<{
       allowRelative?: boolean;
       externalTarget?: "_blank" | "_self";
+      /**
+       * Defaults to -1 so terminal links do not enter the browser tab order.
+       * Set to 0 when the host explicitly wants native anchor keyboard focus.
+       */
       tabIndex?: number;
     }>;
 
@@ -659,7 +663,7 @@ function createSegmentElement(
     anchor.target = linkOptions.externalTarget ?? "_blank";
     anchor.rel = "noopener noreferrer";
   }
-  anchor.tabIndex = linkOptions.tabIndex ?? 0;
+  anchor.tabIndex = linkOptions.tabIndex ?? -1;
   anchor.draggable = false;
   return anchor;
 }

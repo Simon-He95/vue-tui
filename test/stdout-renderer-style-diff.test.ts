@@ -158,14 +158,16 @@ describe("stdout renderer style diffing", () => {
   });
 
   it("sanitizes terminal hrefs before OSC8 output", () => {
-    expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com");
-    expect(sanitizeTerminalHref("http://example.com")).toBe("http://example.com");
+    expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com/");
+    expect(sanitizeTerminalHref("http://example.com")).toBe("http://example.com/");
     expect(sanitizeTerminalHref("mailto:test@example.com")).toBe("mailto:test@example.com");
     expect(sanitizeTerminalHref("vbscript:msgbox(1)")).toBeNull();
     expect(sanitizeTerminalHref("javascript:alert(1)")).toBeNull();
     expect(sanitizeTerminalHref("data:text/html,hi")).toBeNull();
     expect(sanitizeTerminalHref("//evil.example")).toBeNull();
     expect(sanitizeTerminalHref("file:///tmp/a")).toBeNull();
+    expect(sanitizeTerminalHref("https:example.com")).toBeNull();
+    expect(sanitizeTerminalHref("http:\\example.com")).toBeNull();
     expect(sanitizeTerminalHref("https://a.com\u0007bad")).toBeNull();
     expect(sanitizeTerminalHref("https://a.com\u001B]8;;x")).toBeNull();
     expect(sanitizeTerminalHref("https://example.com/a b")).toBeNull();

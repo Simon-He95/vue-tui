@@ -117,7 +117,7 @@ describe("tui profiler", () => {
     }
   });
 
-  it("disposes profiler interval", () => {
+  it("flushes pending samples when disposing profiler interval", () => {
     const previousProfile = process.env.VUE_TUI_PROFILE;
     const previousDest = process.env.VUE_TUI_PROFILE_LOG_DEST;
     const previousPath = process.env.VUE_TUI_PROFILE_LOG_PATH;
@@ -146,9 +146,11 @@ describe("tui profiler", () => {
         sorted: false,
       });
       profiler?.dispose();
+      const flushed = writes.length;
       vi.advanceTimersByTime(5000);
 
-      expect(writes).toEqual([]);
+      expect(writes.join("")).toContain("[VUE_TUI_PROFILE] disposed");
+      expect(writes).toHaveLength(flushed);
     } finally {
       profiler?.dispose();
       setTuiProfilerFileWriter(null);

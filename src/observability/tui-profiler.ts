@@ -147,11 +147,18 @@ export function createTuiProfiler(
     }
   }
 
-  function flushLog(): void {
+  function hasPendingSamples(): boolean {
+    return invalidates > 0 || renders > 0 || writes > 0;
+  }
+
+  function flushLog(force = false): void {
     if (disposed) return;
+    if (force && !hasPendingSamples()) return;
+
     const at = now();
-    const elapsed = at - lastLogAt;
-    if (elapsed <= 0) return;
+    const elapsedRaw = at - lastLogAt;
+    if (!force && elapsedRaw <= 0) return;
+    const elapsed = Math.max(1, elapsedRaw);
     lastLogAt = at;
 
     const rps = renders ? (renders * 1000) / elapsed : 0;
@@ -276,6 +283,7 @@ export function createTuiProfiler(
     },
     dispose() {
       if (disposed) return;
+      flushLog(true);
       disposed = true;
       clearInterval(timer as any);
     },

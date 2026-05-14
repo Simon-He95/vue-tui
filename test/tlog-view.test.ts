@@ -4595,7 +4595,7 @@ describe("TLogView", () => {
 
     expect(rowText(mounted, 0)).toBe("link");
     const style = rowStyles(mounted, 0)[0]!;
-    expect(style.href).toBe("https://example.com");
+    expect(style.href).toBe("https://example.com/");
     expect(style.underline).toBe(true);
     mounted.unmount();
   });
@@ -4633,7 +4633,7 @@ describe("TLogView", () => {
     expect(logView.value?.getVisibleLinks()).toEqual([
       {
         visibleIndex: 0,
-        href: "https://safe.example",
+        href: "https://safe.example/",
         text: "ok",
         absoluteLineIndex: 0,
         index: 0,
@@ -4652,7 +4652,7 @@ describe("TLogView", () => {
       .container()
       ?.dispatchEvent(new MouseEvent("click", { clientX: 14, clientY: 0, bubbles: true }));
 
-    expect(payloads.map((payload) => payload.href)).toEqual(["https://safe.example"]);
+    expect(payloads.map((payload) => payload.href)).toEqual(["https://safe.example/"]);
     mounted.unmount();
   });
 
@@ -4707,7 +4707,7 @@ describe("TLogView", () => {
     );
 
     expect(rowText(mounted, 0)).toBe("link");
-    expect(rowStyles(mounted, 0)[0]!.href).toBe("https://x");
+    expect(rowStyles(mounted, 0)[0]!.href).toBe("https://x/");
     mounted.unmount();
   });
 
@@ -4736,8 +4736,8 @@ describe("TLogView", () => {
 
     expect(rowText(mounted, 0)).toBe("ink af");
     const styles = rowStyles(mounted, 0);
-    expect(styles[0]!.href).toBe("https://example.com");
-    expect(styles[2]!.href).toBe("https://example.com");
+    expect(styles[0]!.href).toBe("https://example.com/");
+    expect(styles[2]!.href).toBe("https://example.com/");
     expect(styles[4]!.href).toBeUndefined();
     mounted.unmount();
   });
@@ -4771,8 +4771,8 @@ describe("TLogView", () => {
     const row = mounted.terminal.getRow(0);
     expect(row[0]!.ch).toBe(" ");
     expect(row[1]!.ch).toBe("A");
-    expect(row[0]!.style.href).toBe("https://example.com");
-    expect(row[1]!.style.href).toBe("https://example.com");
+    expect(row[0]!.style.href).toBe("https://example.com/");
+    expect(row[1]!.style.href).toBe("https://example.com/");
     expect(row[0]!.style.fg).toBe("red");
     expect(row[1]!.style.fg).toBe("red");
     expect(row[2]!.style.href).toBeUndefined();
@@ -4781,7 +4781,7 @@ describe("TLogView", () => {
     expect(row[3]!.style.fg).toBeUndefined();
     expect(logView.value!.getVisibleLinks()).toMatchObject([
       {
-        href: "https://example.com",
+        href: "https://example.com/",
         text: " A",
         startX: 0,
         endX: 2,
@@ -4939,7 +4939,7 @@ describe("TLogView", () => {
     );
 
     expect(mounted.terminal.getCell(0, 0).ch).toBe(" ");
-    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://example.com");
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://example.com/");
     expect(mounted.terminal.getCell(1, 0).ch).toBe("b");
     expect(mounted.terminal.getCell(1, 0).style.href).toBeUndefined();
     mounted.unmount();
@@ -5041,12 +5041,12 @@ describe("TLogView", () => {
     expect(
       rowStyles(mounted, 0)
         .slice(0, 4)
-        .every((style) => style.href === "https://example.com"),
+        .every((style) => style.href === "https://example.com/"),
     ).toBe(true);
     expect(
       rowStyles(mounted, 1)
         .slice(0, 4)
-        .every((style) => style.href === "https://example.com"),
+        .every((style) => style.href === "https://example.com/"),
     ).toBe(true);
     mounted.unmount();
   });
@@ -5085,7 +5085,7 @@ describe("TLogView", () => {
 
     expect(payloads).toEqual([
       {
-        href: "https://example.com",
+        href: "https://example.com/",
         text: "link",
         absoluteLineIndex: 0,
         index: 0,
@@ -5179,7 +5179,7 @@ describe("TLogView", () => {
 
     await nextTick();
     const style = rowStyles(mounted, 0)[0]!;
-    expect(style.href).toBe("https://example.com");
+    expect(style.href).toBe("https://example.com/");
     expect(style.underline).toBe(true);
     expect(style.inverse).toBe(true);
     mounted.unmount();
@@ -5465,7 +5465,7 @@ describe("TLogView", () => {
     expect(logView.value?.focusNextLink()).toBe(true);
     await nextTick();
     expect(rowStyles(mounted, 0)[0]).toMatchObject({
-      href: "https://example.com",
+      href: "https://example.com/",
       underline: true,
       inverse: true,
     });
@@ -5474,7 +5474,7 @@ describe("TLogView", () => {
     expect(activatePayloads[0]).toEqual({
       link: {
         visibleIndex: 0,
-        href: "https://example.com",
+        href: "https://example.com/",
         text: "ERROR",
         absoluteLineIndex: 0,
         index: 0,
@@ -5491,7 +5491,7 @@ describe("TLogView", () => {
     logView.value?.clearLinkFocus();
     await nextTick();
     expect(rowStyles(mounted, 0)[0]).toMatchObject({
-      href: "https://example.com",
+      href: "https://example.com/",
       underline: true,
       inverse: true,
     });
@@ -5556,7 +5556,7 @@ describe("TLogView", () => {
       });
       expect(logView.value?.getVisibleLinks()[0]?.focused).toBeUndefined();
       expect(rowStyles(app, 0)[0]).toMatchObject({
-        href: "https://example.com",
+        href: "https://example.com/",
         underline: true,
       });
       expect(rowStyles(app, 0)[0]?.inverse).toBeUndefined();
@@ -5653,7 +5653,7 @@ describe("TLogView", () => {
       expect(logView.value?.focusNextLink()).toBe(true);
       await nextTick();
       expect(rowStyles(mounted, 0)[0]).toMatchObject({
-        href: "https://example.com",
+        href: "https://example.com/",
         underline: true,
         bg: "blue",
       });
@@ -5661,7 +5661,7 @@ describe("TLogView", () => {
       logView.value?.clearLinkFocus();
       await nextTick();
       expect(rowStyles(mounted, 0)[0]).toMatchObject({
-        href: "https://example.com",
+        href: "https://example.com/",
         underline: true,
       });
       expect(rowStyles(mounted, 0)[0]?.bg).toBeUndefined();
@@ -5925,7 +5925,7 @@ describe("TLogView", () => {
 
     for (let y = 0; y < 2; y++) {
       expect(mounted.terminal.getCell(0, y).ch).toBe(" ");
-      expect(mounted.terminal.getCell(0, y).style.href).toBe("https://example.com");
+      expect(mounted.terminal.getCell(0, y).style.href).toBe("https://example.com/");
       expect(mounted.terminal.getCell(1, y).continuation).not.toBe(true);
       expect(mounted.terminal.getCell(1, y).style.href).toBeUndefined();
     }

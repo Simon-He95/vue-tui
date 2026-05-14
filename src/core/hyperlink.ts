@@ -6,7 +6,6 @@ export type SanitizeDomHrefOptions = Readonly<{
   allowRelative?: boolean;
 }>;
 
-const SAFE_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 const BLOCKED_SCHEME_RE = /^(?:javascript|data|vbscript):/i;
 const ENCODED_CRLF_RE = /%(?:0d|0a)/i;
@@ -33,12 +32,31 @@ function hrefScheme(raw: string): string | null {
   return raw.match(SCHEME_RE)?.[0].toLowerCase() ?? null;
 }
 
-function parsedProtocol(raw: string): string | null {
+function parseSafeAbsoluteUrl(raw: string): URL | null {
+  if (raw.includes("\\")) return null;
+
   try {
-    return new URL(raw).protocol;
+    return new URL(raw);
   } catch {
     return null;
   }
+}
+
+function sanitizeAbsoluteHref(raw: string): string | null {
+  const url = parseSafeAbsoluteUrl(raw);
+  if (!url) return null;
+
+  if (url.protocol === "http:" || url.protocol === "https:") {
+    if (!/^https?:\/\//i.test(raw)) return null;
+    return url.toString();
+  }
+
+  if (url.protocol === "mailto:") {
+    if (ENCODED_CRLF_RE.test(raw)) return null;
+    return raw;
+  }
+
+  return null;
 }
 
 export function isSafeRelativeHref(raw: string): boolean {
@@ -63,16 +81,13 @@ export function sanitizeTerminalHref(
   const raw = normalizeRawHref(value);
   if (!raw) return null;
 
-  const scheme = hrefScheme(raw);
-  if (!scheme) return null;
+  const sanitized = sanitizeAbsoluteHref(raw);
+  if (sanitized) return sanitized;
 
-  const protocol = parsedProtocol(raw);
-  if (!protocol) return null;
-
-  if (protocol === "mailto:" && ENCODED_CRLF_RE.test(raw)) return null;
-
-  if (SAFE_LINK_PROTOCOLS.has(protocol)) return raw;
-  if (options.allowFileUrls && protocol === "file:") return new URL(raw).toString();
+  if (options.allowFileUrls) {
+    const url = parseSafeAbsoluteUrl(raw);
+    if (url?.protocol === "file:") return url.toString();
+  }
 
   return null;
 }
@@ -87,9 +102,5 @@ export function sanitizeDomHref(
   const scheme = hrefScheme(raw);
   if (!scheme) return options.allowRelative && isSafeRelativeHref(raw) ? raw : null;
 
-  const protocol = parsedProtocol(raw);
-  if (!protocol || !SAFE_LINK_PROTOCOLS.has(protocol)) return null;
-  if (protocol === "mailto:" && ENCODED_CRLF_RE.test(raw)) return null;
-
-  return raw;
+  return sanitizeAbsoluteHref(raw);
 }

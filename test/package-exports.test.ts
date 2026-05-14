@@ -346,7 +346,7 @@ describe("package exports", () => {
     expect(root.createRuntime).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
-    expect(root.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
+    expect(root.sanitizeTerminalHref("https://example.com")).toBe("https://example.com/");
     expect(cli.createTerminalApp).toBeTruthy();
     expect(cli.createStdoutRenderer).toBeTruthy();
     expect(cli.createStdinDriver).toBeTruthy();
@@ -369,7 +369,7 @@ describe("package exports", () => {
     expect(rootCjs.createRuntime).toBeTruthy();
     expect(rootCjs.createFramePerfStore).toBeTruthy();
     expect(rootCjs.framePerfNow).toBeTruthy();
-    expect(rootCjs.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
+    expect(rootCjs.sanitizeTerminalHref("https://example.com")).toBe("https://example.com/");
     expect(cliCjs.createTerminalApp).toBeTruthy();
     expect(cliCjs.createStdoutRenderer).toBeTruthy();
     expect(cliCjs.createStdinDriver).toBeTruthy();

@@ -67,6 +67,31 @@ describe("debug logger", () => {
     }
   });
 
+  it("does not truncate debug log when multiple loggers write to the same path", () => {
+    let content = "";
+    setDebugFileWriter({
+      writeFileSync: (_path, data) => {
+        content = String(data);
+      },
+      appendFileSync: (_path, data) => {
+        content += String(data);
+      },
+    });
+
+    try {
+      const first = createDebugLogger(true);
+      first.render("first");
+
+      const second = createDebugLogger(true);
+      second.stream("second");
+
+      expect(content).toContain("first");
+      expect(content).toContain("second");
+    } finally {
+      setDebugFileWriter(null);
+    }
+  });
+
   it("does not install file writers when importing the CLI entrypoint", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vue-tui-cli-side-effects-"));
     const logPath = join(dir, "debug.log");

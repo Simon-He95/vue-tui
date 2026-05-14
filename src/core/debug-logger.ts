@@ -2,6 +2,7 @@ import { envFlag, envString } from "../utils/env.js";
 
 const DEFAULT_LOG_FILE = "/tmp/vue-tui-debug.log";
 let debugFileWriter: DebugFileWriter | null = null;
+const initializedDebugLogPaths = new Set<string>();
 
 type DebugFileWriter = Readonly<{
   appendFileSync?: (path: string, data: string) => void;
@@ -16,6 +17,7 @@ function getFileWriter(): DebugFileWriter | null {
 
 export function setDebugFileWriter(writer: DebugFileWriter | null): void {
   debugFileWriter = writer;
+  if (!writer) initializedDebugLogPaths.clear();
 }
 
 export function resolveDebugLogPath(
@@ -38,17 +40,18 @@ export interface DebugLogger {
 
 export function createDebugLogger(enable = false): DebugLogger {
   const enabled = enable;
-  let wroteHeader = false;
 
   const ensureHeader = () => {
-    if (!enabled || wroteHeader) return;
+    if (!enabled) return;
     const writer = getFileWriter();
     if (!writer?.writeFileSync) return;
+    const path = debugLogPath();
+    if (initializedDebugLogPaths.has(path)) return;
 
     try {
       const data = `=== Vue TUI Debug Log Started at ${new Date().toISOString()} ===\n\n`;
-      writer.writeFileSync(debugLogPath(), data);
-      wroteHeader = true;
+      writer.writeFileSync(path, data);
+      initializedDebugLogPaths.add(path);
     } catch {}
   };
 
