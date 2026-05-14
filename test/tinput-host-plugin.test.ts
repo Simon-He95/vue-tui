@@ -4,6 +4,11 @@ import { TInput, createTInputHostPlugin } from "../src/index.js";
 import { createDefaultTInputHostAdapter, createTerminalApp } from "../src/cli.js";
 
 describe("TInput host plugins", () => {
+  it("allows createTInputHostPlugin() as a browser-safe no-op", () => {
+    const plugin = createTInputHostPlugin();
+    expect(plugin.name).toBe("tinput-host");
+  });
+
   it("lets hosts inject terminal clipboard behavior via inputPlugins", async () => {
     const value = ref("");
 

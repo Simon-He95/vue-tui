@@ -61,6 +61,7 @@ const out = createStdoutRenderer(
         hideCursor: true,
         altScreen: true,
         colorMode: "auto",
+        allowFileUrls: true,
         palette: domPalette,
         defaultBg: "black",
         getImeAnchor: () => app.getImeAnchor(),

@@ -27,7 +27,7 @@ const out = createStdoutRenderer(
         hideCursor: false,
         altScreen: false,
       }
-    : { output: process.stdout, hideCursor: true },
+    : { output: process.stdout, hideCursor: true, allowFileUrls: true },
 );
 
 // Keep cursor position updated (even while hidden) so terminals that need it for composition

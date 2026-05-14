@@ -31,11 +31,11 @@ try {
   writeFileSync(
     join(dir, "src/main.ts"),
     `
-import { TerminalProvider, TText, createTerminal, defaultTInputHostPlugin } from "${packageName}";
+import { TerminalProvider, TText, createTerminal } from "${packageName}";
 import { TMarkdownText } from "${packageName}/markdown";
 import { TVirtualList } from "${packageName}/experimental";
 
-console.log(TerminalProvider, TText, TMarkdownText, TVirtualList, createTerminal, defaultTInputHostPlugin);
+console.log(TerminalProvider, TText, TMarkdownText, TVirtualList, createTerminal);
 `,
   );
 

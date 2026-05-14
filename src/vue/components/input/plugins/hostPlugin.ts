@@ -2,7 +2,7 @@ import type { TInputHostAdapter } from "../host.js";
 import type { TInputPlugin } from "./types.js";
 
 export function createTInputHostPlugin(
-  adapterOrFactory: TInputHostAdapter | (() => TInputHostAdapter),
+  adapterOrFactory: TInputHostAdapter | (() => TInputHostAdapter) = {},
 ): TInputPlugin {
   return {
     name: "tinput-host",

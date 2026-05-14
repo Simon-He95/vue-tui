@@ -225,6 +225,95 @@ describe("stdout renderer style diffing", () => {
     }
   });
 
+  it("filters file OSC8 hrefs by default", () => {
+    const previousTermProgram = process.env.TERM_PROGRAM;
+    const previousVscodePid = process.env.VSCODE_PID;
+    const previousVscodeHook = process.env.VSCODE_IPC_HOOK_CLI;
+    process.env.TERM_PROGRAM = "xterm";
+    delete process.env.VSCODE_PID;
+    delete process.env.VSCODE_IPC_HOOK_CLI;
+    try {
+      const terminal = createTerminal({ cols: 4, rows: 1 });
+      let out = "";
+      const output = {
+        isTTY: true,
+        write(chunk: string) {
+          out += chunk;
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+      });
+
+      terminal.put(0, 0, "f", { href: "file:///tmp/a.txt" });
+      terminal.put(1, 0, "i", { href: "file:///tmp/a.txt" });
+      terminal.put(2, 0, "l", { href: "file:///tmp/a.txt" });
+      terminal.put(3, 0, "e", { href: "file:///tmp/a.txt" });
+      terminal.commit({ sync: true });
+
+      expect(out).not.toContain("file://");
+
+      renderer.dispose();
+      terminal.dispose();
+    } finally {
+      if (previousTermProgram == null) delete process.env.TERM_PROGRAM;
+      else process.env.TERM_PROGRAM = previousTermProgram;
+      if (previousVscodePid == null) delete process.env.VSCODE_PID;
+      else process.env.VSCODE_PID = previousVscodePid;
+      if (previousVscodeHook == null) delete process.env.VSCODE_IPC_HOOK_CLI;
+      else process.env.VSCODE_IPC_HOOK_CLI = previousVscodeHook;
+    }
+  });
+
+  it("emits OSC8 file hrefs when file urls are allowed", () => {
+    const previousTermProgram = process.env.TERM_PROGRAM;
+    const previousVscodePid = process.env.VSCODE_PID;
+    const previousVscodeHook = process.env.VSCODE_IPC_HOOK_CLI;
+    process.env.TERM_PROGRAM = "xterm";
+    delete process.env.VSCODE_PID;
+    delete process.env.VSCODE_IPC_HOOK_CLI;
+    try {
+      const terminal = createTerminal({ cols: 4, rows: 1 });
+      let out = "";
+      const output = {
+        isTTY: true,
+        write(chunk: string) {
+          out += chunk;
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        allowFileUrls: true,
+      });
+
+      terminal.put(0, 0, "f", { href: "file:///tmp/a.txt" });
+      terminal.put(1, 0, "i", { href: "file:///tmp/a.txt" });
+      terminal.put(2, 0, "l", { href: "file:///tmp/a.txt" });
+      terminal.put(3, 0, "e", { href: "file:///tmp/a.txt" });
+      terminal.commit({ sync: true });
+
+      expect(out).toContain("\x1B]8;;file:///tmp/a.txt\x07");
+
+      renderer.dispose();
+      terminal.dispose();
+    } finally {
+      if (previousTermProgram == null) delete process.env.TERM_PROGRAM;
+      else process.env.TERM_PROGRAM = previousTermProgram;
+      if (previousVscodePid == null) delete process.env.VSCODE_PID;
+      else process.env.VSCODE_PID = previousVscodePid;
+      if (previousVscodeHook == null) delete process.env.VSCODE_IPC_HOOK_CLI;
+      else process.env.VSCODE_IPC_HOOK_CLI = previousVscodeHook;
+    }
+  });
+
   it("avoids per-run resets when only setting attributes", () => {
     const terminal = createTerminal({ cols: 4, rows: 1 });
     let out = "";

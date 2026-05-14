@@ -99,6 +99,7 @@ const renderer = createStdoutRenderer(app.terminal, {
   output: process.stdout,
   hideCursor: true,
   colorMode: "auto",
+  allowFileUrls: true,
 });
 
 app.scheduler.flush();
@@ -136,7 +137,9 @@ driver = createStdinDriver({
 });
 ```
 
-Signal cleanup does not exit unless `exitOnSignal` is set. Unhandled promise rejections stay host-owned by default; setting `cleanupOnUnhandledRejection: true` cleans up and rethrows by default. Set `rethrowUnhandledRejection: false` only when the host explicitly wants to suppress the rejection.
+Signal cleanup restores terminal state first. By default, `installTerminalCleanup()` preserves the original signal behavior after cleanup, which usually terminates the process. Set `exitOnSignal: true` to exit explicitly with the conventional signal exit code after cleanup. Set `preserveSignalDefault: false` only when the host wants cleanup-only handling and will decide process lifetime itself.
+
+Unhandled promise rejections stay host-owned by default. Setting `cleanupOnUnhandledRejection: true` cleans up and rethrows by default. Set `rethrowUnhandledRejection: false` only when the host explicitly wants to suppress the rejection.
 
 ## Core Concepts
 

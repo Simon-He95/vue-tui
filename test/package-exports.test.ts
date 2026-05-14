@@ -101,7 +101,7 @@ describe("package exports", () => {
     expect("getCliLatencyProfiler" in root).toBe(false);
     expect("createOsc52ClipboardProvider" in root).toBe(false);
     expect("createDefaultTInputHostAdapter" in root).toBe(false);
-    expect(root.defaultTInputHostPlugin).toBeTruthy();
+    expect("defaultTInputHostPlugin" in root).toBe(false);
     expect(cli.createTerminalApp).toBeTruthy();
     expect(cli.createStdoutRenderer).toBeTruthy();
     expect(cli.createStdinDriver).toBeTruthy();
@@ -348,7 +348,7 @@ describe("package exports", () => {
     expect("createStdoutRenderer" in root).toBe(false);
     expect("TVirtualList" in root).toBe(false);
     expect("createDefaultTInputHostAdapter" in root).toBe(false);
-    expect(root.defaultTInputHostPlugin).toBeTruthy();
+    expect("defaultTInputHostPlugin" in root).toBe(false);
     expect(root.TerminalProvider).toBeTruthy();
     expect(root.createRuntime).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
@@ -373,7 +373,7 @@ describe("package exports", () => {
     expect("createTerminalApp" in rootCjs).toBe(false);
     expect("createStdoutRenderer" in rootCjs).toBe(false);
     expect("createDefaultTInputHostAdapter" in rootCjs).toBe(false);
-    expect(rootCjs.defaultTInputHostPlugin).toBeTruthy();
+    expect("defaultTInputHostPlugin" in rootCjs).toBe(false);
     expect(rootCjs.TerminalProvider).toBeTruthy();
     expect(rootCjs.createRuntime).toBeTruthy();
     expect(rootCjs.createFramePerfStore).toBeTruthy();

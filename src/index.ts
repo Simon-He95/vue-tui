@@ -135,10 +135,7 @@ export type {
   TerminalProviderSelectionOptions,
 } from "./vue/components/TerminalProvider.js";
 export { normalizeNewlines } from "./utils/newlines.js";
-export {
-  createTInputHostPlugin,
-  defaultTInputHostPlugin,
-} from "./vue/components/input/plugins/hostPlugin.js";
+export { createTInputHostPlugin } from "./vue/components/input/plugins/hostPlugin.js";
 export { createPromptMentionPlugin } from "./vue/components/input/plugins/promptMentionPlugin.js";
 export { createTextRestrictionPlugin } from "./vue/components/input/plugins/restrictText.js";
 export { TInputPluginsContextKey } from "./vue/context.js";

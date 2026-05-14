@@ -121,6 +121,7 @@ export function createStdoutRenderer(
     getImeAnchor?: () => { cellX: number; cellY: number } | null;
     /** Use DEC 2026 synchronized output mode (default: false for compatibility) */
     useSyncOutput?: boolean;
+    allowFileUrls?: boolean;
     profileFileWriter?: { appendFileSync?: (path: string, data: string) => void };
   }>,
 ): StdoutRenderer {
@@ -140,6 +141,7 @@ export function createStdoutRenderer(
   let palette: ThemePalette | null = options?.palette ?? null;
   const trackResize = options?.trackResize ?? true;
   const getImeAnchor = options?.getImeAnchor;
+  const allowFileUrls = options?.allowFileUrls ?? false;
   const cliLatency = getCliLatencyProfiler();
   const profiler = createTuiProfiler("stdout-renderer", {
     fileWriter: options?.profileFileWriter ?? nodeProfilerFileWriter,
@@ -330,7 +332,7 @@ export function createStdoutRenderer(
   function styleKey(style: Style): number {
     const cached = styleKeyCache.get(style);
     if (cached !== undefined) return cached;
-    const href = sanitizeTerminalHref(style.href);
+    const href = normalizeHref(style.href);
     const key =
       colorIndex(style.fg) |
       (colorIndex(style.bg ?? defaultBg) << 8) |
@@ -364,12 +366,12 @@ export function createStdoutRenderer(
       (style.italic ? 1 << 18 : 0) |
       (style.underline ? 1 << 19 : 0) |
       (style.inverse ? 1 << 20 : 0) |
-      (sanitizeTerminalHref(style.href) ? HREF_STYLE_FLAG : 0)
+      (normalizeHref(style.href) ? HREF_STYLE_FLAG : 0)
     );
   }
 
   function normalizeHref(value: unknown): string | null {
-    return sanitizeTerminalHref(value);
+    return sanitizeTerminalHref(value, { allowFileUrls });
   }
 
   function resolveAnsiColorRgb(name: string) {
