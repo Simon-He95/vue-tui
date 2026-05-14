@@ -13,6 +13,10 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: npm-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -183,6 +187,8 @@ jobs:
           fi
 
       - name: Publish validated tarball
-        run: npm publish package/*.tgz --access public --provenance
+        run: |
+          TARBALL=$(ls package/*.tgz | head -n 1)
+          npm publish "$TARBALL" --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createDomRenderer, createTerminal } from "../src/index.js";
 import { sanitizeDomHref } from "../src/core/hyperlink.js";
 
@@ -492,6 +492,64 @@ describe("DomRenderer row rendering", () => {
       expect(anchor).toBeInstanceOf(HTMLAnchorElement);
       expect(anchor?.style.pointerEvents).toBe("auto");
       expect(anchor?.style.cursor).toBe("pointer");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("prevents native DOM link activation by default", () => {
+    const { terminal, container, renderer } = setup(3);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("lets hosts handle DOM link activation events", () => {
+    const onActivate = vi.fn();
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { onActivate },
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      anchor?.dispatchEvent(event);
+
+      expect(onActivate).toHaveBeenCalledWith("https://example.com/", event);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("allows native DOM link activation when explicitly configured", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { activation: "native" },
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
     } finally {
       renderer.dispose();
       container.remove();

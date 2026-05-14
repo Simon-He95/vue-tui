@@ -14,9 +14,10 @@ describe("node file writers", () => {
     expect(shouldInstallFileWriters({ DEBUG: "1" })).toBe(true);
   });
 
-  it("sets a Node default debug log path when installing file writers", () => {
+  it("uses a Node default debug log path without mutating process env", () => {
     const previousDebugPath = process.env.VUE_TUI_DEBUG_LOG_PATH;
     const previousLegacyDebugPath = process.env.DIMCODE_DEBUG_LOG_PATH;
+    const paths: string[] = [];
 
     delete process.env.VUE_TUI_DEBUG_LOG_PATH;
     delete process.env.DIMCODE_DEBUG_LOG_PATH;
@@ -24,7 +25,15 @@ describe("node file writers", () => {
 
     try {
       installNodeFileWriters();
-      expect(process.env.VUE_TUI_DEBUG_LOG_PATH).toBe(defaultVueTuiDebugLogPath());
+      expect(process.env.VUE_TUI_DEBUG_LOG_PATH).toBeUndefined();
+      expect(process.env.DIMCODE_DEBUG_LOG_PATH).toBeUndefined();
+      setDebugFileWriter({
+        writeFileSync: (path) => paths.push(path),
+        appendFileSync: (path) => paths.push(path),
+      });
+      const logger = createDebugLogger(true);
+      logger.render("hello");
+      expect(paths).toContain(defaultVueTuiDebugLogPath());
     } finally {
       resetNodeFileWriters();
       if (previousDebugPath == null) delete process.env.VUE_TUI_DEBUG_LOG_PATH;

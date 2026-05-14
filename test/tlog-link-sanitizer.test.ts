@@ -8,7 +8,7 @@ import {
 
 describe("TLog link sanitizing", () => {
   it("exports the shared terminal href sanitizer", () => {
-    expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com/");
+    expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com");
     expect(sanitizeTerminalHref("file:///tmp/a")).toBeNull();
     expect(sanitizeTerminalHref("file:///tmp/a", { allowFileUrls: true })).toBe("file:///tmp/a");
     expect(sanitizeTerminalHref("docs/intro.md")).toBeNull();
@@ -26,7 +26,7 @@ describe("TLog link sanitizing", () => {
     expect(parsed.plainText).toBe("bad safe");
     expect(parsed.osc8Links).toEqual([
       {
-        href: "https://safe.example/",
+        href: "https://safe.example",
         text: "safe",
         startCell: 4,
         endCell: 8,
@@ -50,7 +50,7 @@ describe("TLog link sanitizing", () => {
           endCell: 3,
         },
         {
-          href: "https://safe.example/",
+          href: "https://safe.example",
           text: "safe",
           startCell: 4,
           endCell: 8,
@@ -61,8 +61,8 @@ describe("TLog link sanitizing", () => {
     expect(metadata).toEqual({
       externalLinks: [
         {
-          id: "osc8:10:1:https://safe.example/",
-          href: "https://safe.example/",
+          id: "osc8:10:1:https://safe.example",
+          href: "https://safe.example",
           text: "safe",
           startCell: 4,
           endCell: 8,
@@ -78,7 +78,7 @@ describe("TLog link sanitizing", () => {
     );
 
     expect(links.map((link) => link.href)).toEqual([
-      "https://example.com/",
+      "https://example.com",
       "mailto:test@example.com",
     ]);
   });
@@ -86,6 +86,6 @@ describe("TLog link sanitizing", () => {
   it("detects file URLs only when explicitly enabled", () => {
     const links = detectTLogUrls("file:///tmp/a https://example.com", { allowFileUrls: true });
 
-    expect(links.map((link) => link.href)).toEqual(["file:///tmp/a", "https://example.com/"]);
+    expect(links.map((link) => link.href)).toEqual(["file:///tmp/a", "https://example.com"]);
   });
 });

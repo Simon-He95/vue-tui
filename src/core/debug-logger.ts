@@ -2,6 +2,7 @@ import { envFlag, envString } from "../utils/env.js";
 
 const DEFAULT_LOG_FILE = "/tmp/vue-tui-debug.log";
 let debugFileWriter: DebugFileWriter | null = null;
+let debugLogDefaultPath = DEFAULT_LOG_FILE;
 const initializedDebugLogPaths = new Set<string>();
 
 type DebugFileWriter = Readonly<{
@@ -27,9 +28,21 @@ export function resolveDebugLogPath(
   return envString(env, "VUE_TUI_DEBUG_LOG_PATH", "DIMCODE_DEBUG_LOG_PATH", fallback);
 }
 
+export function setDebugLogDefaultPath(path: string | null): void {
+  debugLogDefaultPath = path || DEFAULT_LOG_FILE;
+}
+
 function debugLogPath(): string {
   const env = (globalThis as any).process?.env as Record<string, unknown> | undefined;
-  return resolveDebugLogPath(env);
+  return resolveDebugLogPath(env, debugLogDefaultPath);
+}
+
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
 }
 
 export interface DebugLogger {
@@ -78,7 +91,7 @@ export function createDebugLogger(enable = false): DebugLogger {
       if (!enabled) return;
       const timestamp = new Date().toISOString().split("T")[1].slice(0, -1);
       const fullMessage = `[${timestamp}] [ERROR] ${message}${
-        args.length ? ` ${JSON.stringify(args)}` : ""
+        args.length ? ` ${safeJson(args)}` : ""
       }`;
       write(`${fullMessage}\n`);
     },

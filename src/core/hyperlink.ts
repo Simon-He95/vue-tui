@@ -42,13 +42,16 @@ function parseSafeAbsoluteUrl(raw: string): URL | null {
   }
 }
 
-function sanitizeAbsoluteHref(raw: string): string | null {
+function sanitizeAbsoluteHref(
+  raw: string,
+  options: Readonly<{ preserveHttpHref?: boolean }> = {},
+): string | null {
   const url = parseSafeAbsoluteUrl(raw);
   if (!url) return null;
 
   if (url.protocol === "http:" || url.protocol === "https:") {
     if (!/^https?:\/\//i.test(raw)) return null;
-    return url.toString();
+    return options.preserveHttpHref ? raw : url.toString();
   }
 
   if (url.protocol === "mailto:") {
@@ -81,7 +84,7 @@ export function sanitizeTerminalHref(
   const raw = normalizeRawHref(value);
   if (!raw) return null;
 
-  const sanitized = sanitizeAbsoluteHref(raw);
+  const sanitized = sanitizeAbsoluteHref(raw, { preserveHttpHref: true });
   if (sanitized) return sanitized;
 
   if (options.allowFileUrls) {

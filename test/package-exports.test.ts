@@ -139,6 +139,8 @@ describe("package exports", () => {
     expect(root.createRuntime).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
+    expect(root.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
+    expect(root.isSafeRelativeHref("#section")).toBe(true);
     expect(root.terminalSelectionVisibleRowSpans).toBeTruthy();
     expect("TMarkdownText" in experimental).toBe(false);
     expect(experimental.TVirtualList).toBeTruthy();
@@ -346,7 +348,9 @@ describe("package exports", () => {
     expect(root.createRuntime).toBeTruthy();
     expect(root.createFramePerfStore).toBeTruthy();
     expect(root.framePerfNow).toBeTruthy();
-    expect(root.sanitizeTerminalHref("https://example.com")).toBe("https://example.com/");
+    expect(root.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
+    expect(root.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
+    expect(root.isSafeRelativeHref("#section")).toBe(true);
     expect(cli.createTerminalApp).toBeTruthy();
     expect(cli.createStdoutRenderer).toBeTruthy();
     expect(cli.createStdinDriver).toBeTruthy();
@@ -369,7 +373,9 @@ describe("package exports", () => {
     expect(rootCjs.createRuntime).toBeTruthy();
     expect(rootCjs.createFramePerfStore).toBeTruthy();
     expect(rootCjs.framePerfNow).toBeTruthy();
-    expect(rootCjs.sanitizeTerminalHref("https://example.com")).toBe("https://example.com/");
+    expect(rootCjs.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
+    expect(rootCjs.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
+    expect(rootCjs.isSafeRelativeHref("#section")).toBe(true);
     expect(cliCjs.createTerminalApp).toBeTruthy();
     expect(cliCjs.createStdoutRenderer).toBeTruthy();
     expect(cliCjs.createStdinDriver).toBeTruthy();

@@ -508,6 +508,36 @@ describe("stdout renderer", () => {
     renderer.dispose();
   });
 
+  it("keeps live screen in sync after terminal.scroll with fingerprint fast path", () => {
+    const terminal = createTerminal({ cols: 6, rows: 3 });
+    let transcriptOut = "";
+    const output = {
+      isTTY: false,
+      write(chunk: string) {
+        transcriptOut += chunk;
+      },
+    };
+    const renderer = createStdoutRenderer(terminal, {
+      output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+    });
+
+    terminal.write("row0  ", { x: 0, y: 0 });
+    terminal.write("row1  ", { x: 0, y: 1 });
+    terminal.write("row2  ", { x: 0, y: 2 });
+    terminal.commit();
+
+    terminal.scroll(1);
+    terminal.write("new   ", { x: 0, y: 2 });
+    terminal.commit();
+
+    expect(applyAnsiToScreen(transcriptOut, 6, 3)).toEqual(terminal.snapshot().lines);
+
+    renderer.dispose();
+  });
+
   it("skips no-op frames when the IME anchor is unchanged", () => {
     const terminal = createTerminal({ cols: 24, rows: 4 });
     let out = "";

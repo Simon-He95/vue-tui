@@ -13,6 +13,10 @@ if (tarballs.length !== 1) {
   );
 }
 
-execFileSync("npm", ["publish", tarballs[0], "--access", "public", "--provenance"], {
-  stdio: "inherit",
-});
+const args = ["publish", tarballs[0], "--access", "public"];
+
+if (process.env.NPM_CONFIG_PROVENANCE !== "false") {
+  args.push("--provenance");
+}
+
+execFileSync("npm", args, { stdio: "inherit" });

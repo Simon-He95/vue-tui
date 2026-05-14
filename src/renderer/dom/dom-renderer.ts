@@ -89,6 +89,8 @@ export type DomRendererLinkOptions =
        * Set to 0 when the host explicitly wants native anchor keyboard focus.
        */
       tabIndex?: number;
+      activation?: "native" | "event" | "none";
+      onActivate?: (href: string, event: MouseEvent) => void;
     }>;
 
 export type DomRendererRowKeyPrepassDecision =
@@ -665,6 +667,13 @@ function createSegmentElement(
   }
   anchor.tabIndex = linkOptions.tabIndex ?? -1;
   anchor.draggable = false;
+  const activation = linkOptions.activation ?? "event";
+  if (activation !== "native") {
+    anchor.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (activation === "event") linkOptions.onActivate?.(href, event);
+    });
+  }
   return anchor;
 }
 

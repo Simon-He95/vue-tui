@@ -1,7 +1,7 @@
 import { appendFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setDebugFileWriter } from "../core/debug-logger.js";
+import { setDebugFileWriter, setDebugLogDefaultPath } from "../core/debug-logger.js";
 import { setTuiProfilerFileWriter } from "../observability/tui-profiler.js";
 import { envFlag, envString } from "../utils/env.js";
 
@@ -40,10 +40,7 @@ export function shouldInstallFileWriters(
 export function installNodeFileWriters(options: Readonly<{ force?: boolean }> = {}): void {
   if (installed && !options.force) return;
   installed = true;
-  const env = process.env as Record<string, string | undefined>;
-  if (!env.VUE_TUI_DEBUG_LOG_PATH && !env.DIMCODE_DEBUG_LOG_PATH) {
-    env.VUE_TUI_DEBUG_LOG_PATH = defaultVueTuiDebugLogPath();
-  }
+  setDebugLogDefaultPath(defaultVueTuiDebugLogPath());
   setDebugFileWriter({ appendFileSync, writeFileSync });
   setTuiProfilerFileWriter(nodeProfilerFileWriter);
 }
@@ -51,5 +48,6 @@ export function installNodeFileWriters(options: Readonly<{ force?: boolean }> = 
 export function resetNodeFileWriters(): void {
   installed = false;
   setDebugFileWriter(null);
+  setDebugLogDefaultPath(null);
   setTuiProfilerFileWriter(null);
 }

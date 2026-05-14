@@ -71,7 +71,7 @@
   },
   "scripts": {
     "build": "tsdown && node scripts/build-cjs.mjs",
-    "dev": "tsdown --format esm --dts --watch src",
+    "dev": "tsdown --watch",
     "build:examples": "pnpm run build && pnpm -C examples/basic build",
     "build:examples:terminal": "pnpm run build && pnpm -C examples/basic build:terminal",
     "example:basic:terminal-table:smoke": "pnpm run build && VT_SMOKE=1 pnpm -C examples/basic terminal:table",
@@ -96,7 +96,7 @@
     "prepublishOnly": "pnpm build",
     "release": "node -e \"console.error('Use GitHub Release workflow'); process.exit(1)\"",
     "release:ci": "pnpm run release:dry-run && pnpm run release:pack && node scripts/publish-packed-package.mjs",
-    "release:local": "pnpm run release:dry-run && bumpp && pnpm publish --no-git-checks --access public",
+    "release:local": "pnpm run release:dry-run && bumpp && NPM_CONFIG_PROVENANCE=false pnpm publish --no-git-checks --access public",
     "release:bench": "pnpm run bench:baseline",
     "release:check": "pnpm run check:hidden-unicode && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run test:package-exports && pnpm run docs:build",
     "release:dry-run": "pnpm run release:check && pnpm run release:bench && pnpm run release:smoke && pnpm run release:pack-smoke",

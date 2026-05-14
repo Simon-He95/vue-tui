@@ -92,6 +92,26 @@ describe("debug logger", () => {
     }
   });
 
+  it("does not throw when debug error args are circular", () => {
+    const obj: any = {};
+    obj.self = obj;
+    const writes: string[] = [];
+
+    setDebugFileWriter({
+      writeFileSync: (_path, data) => writes.push(String(data)),
+      appendFileSync: (_path, data) => writes.push(String(data)),
+    });
+
+    try {
+      const logger = createDebugLogger(true);
+
+      expect(() => logger.error("boom", obj)).not.toThrow();
+      expect(writes.join("")).toContain("[unserializable]");
+    } finally {
+      setDebugFileWriter(null);
+    }
+  });
+
   it("does not install file writers when importing the CLI entrypoint", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vue-tui-cli-side-effects-"));
     const logPath = join(dir, "debug.log");
