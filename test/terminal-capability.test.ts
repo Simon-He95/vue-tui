@@ -92,15 +92,16 @@ describe("terminal capability", () => {
     expect(cap).toEqual({ mode: "ansi256", level: 256 });
   });
 
-  it("falls back to legacy color env when the new env is invalid", () => {
+  it("does not fall back to legacy color env when the new env is invalid", () => {
     const cap = detectTerminalColorCapability({
       env: {
+        TERM: "xterm-256color",
         VUE_TUI_COLOR_MODE: "bogus",
-        DIMCODE_COLOR_MODE: "ansi16",
+        DIMCODE_COLOR_MODE: "ansi8",
       },
       isTTY: true,
     });
-    expect(cap).toEqual({ mode: "ansi16", level: 16 });
+    expect(cap).toEqual({ mode: "ansi256", level: 256 });
   });
 
   it("keeps Windows hint-based truecolor detection intact", () => {

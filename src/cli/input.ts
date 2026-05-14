@@ -185,14 +185,11 @@ function resolveKeyboardProtocol(
   const configured = parseKeyboardProtocol(options.keyboardProtocol) ?? "auto";
   if (configured !== "auto") return configured;
 
-  const primaryOverride = parseKeyboardProtocol(
-    firstNonEmptyEnv(options.env, "VUE_TUI_KEYBOARD_PROTOCOL"),
+  const envOverride = parseKeyboardProtocol(
+    firstNonEmptyEnv(options.env, "VUE_TUI_KEYBOARD_PROTOCOL", "DIMCODE_KEYBOARD_PROTOCOL"),
   );
-  if (primaryOverride === "auto") return detectKeyboardProtocol(options.env ?? {});
-  const envOverride =
-    primaryOverride ??
-    parseKeyboardProtocol(firstNonEmptyEnv(options.env, "DIMCODE_KEYBOARD_PROTOCOL"));
-  if (envOverride && envOverride !== "auto") return envOverride;
+  if (envOverride === "auto") return detectKeyboardProtocol(options.env ?? {});
+  if (envOverride) return envOverride;
 
   return detectKeyboardProtocol(options.env ?? {});
 }

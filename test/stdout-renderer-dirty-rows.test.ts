@@ -478,6 +478,36 @@ describe("stdout renderer", () => {
     renderer.dispose();
   });
 
+  it("keeps live screen in sync when previous content is written again after full clear", () => {
+    const terminal = createTerminal({ cols: 4, rows: 2 });
+    let transcriptOut = "";
+    const output = {
+      isTTY: false,
+      write(chunk: string) {
+        transcriptOut += chunk;
+      },
+    };
+    const renderer = createStdoutRenderer(terminal, {
+      output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+    });
+
+    terminal.write("ABCD", { x: 0, y: 0, style: { fg: "red" } });
+    terminal.commit();
+
+    terminal.clear();
+    terminal.commit();
+
+    terminal.write("ABCD", { x: 0, y: 0, style: { fg: "red" } });
+    terminal.commit();
+
+    expect(applyAnsiToScreen(transcriptOut, 4, 2)).toEqual(terminal.snapshot().lines);
+
+    renderer.dispose();
+  });
+
   it("skips no-op frames when the IME anchor is unchanged", () => {
     const terminal = createTerminal({ cols: 24, rows: 4 });
     let out = "";

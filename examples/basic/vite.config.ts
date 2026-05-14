@@ -15,6 +15,10 @@ const terminalExternal = [
   "node:child_process",
   "events",
   "node:events",
+  "os",
+  "node:os",
+  "path",
+  "node:path",
   "buffer",
   "node:buffer",
   "process",
@@ -22,6 +26,7 @@ const terminalExternal = [
   "url",
   "node:url",
   "util",
+  "node:util",
 ];
 
 export default defineConfig(({ mode }) => {

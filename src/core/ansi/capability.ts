@@ -55,9 +55,7 @@ export function detectTerminalColorCapability(
       .trim()
       .toLowerCase() === "windows_nt";
 
-  const forced =
-    parseColorMode(firstNonEmptyEnv(env, "VUE_TUI_COLOR_MODE")) ??
-    parseColorMode(firstNonEmptyEnv(env, "DIMCODE_COLOR_MODE"));
+  const forced = parseColorMode(firstNonEmptyEnv(env, "VUE_TUI_COLOR_MODE", "DIMCODE_COLOR_MODE"));
   if (forced) return { mode: forced, level: levelForMode(forced) };
 
   // Non-TTY outputs (tests, logs) should be deterministic.

@@ -120,6 +120,27 @@ describe("buffer fillRect fast path", () => {
 });
 
 describe("buffer clearRect wide boundaries", () => {
+  test("recomputes fingerprints after full clear", () => {
+    const buffer = createGridBuffer(4, 2);
+    const fp = (ch: string, style: any) =>
+      ((style.fg === "red" ? 1 : 0) << 16) | (ch.charCodeAt(0) || 0);
+    setFingerprintFn(buffer, fp);
+    putCell(buffer, 0, 0, "A", { fg: "red" });
+    putCell(buffer, 1, 1, "B", { fg: "red" });
+
+    clearRect(buffer);
+
+    for (let y = 0; y < buffer.rows; y++) {
+      const row = buffer.grid[y]!;
+      const fingerprints = getRowFingerprints(buffer, y);
+      expect(fingerprints).not.toBeNull();
+      for (let x = 0; x < buffer.cols; x++) {
+        const cell = row[x]!;
+        expect(fingerprints![x]).toBe(fp(cell.ch, cell.style));
+      }
+    }
+  });
+
   test("clears wide base when range starts at continuation", () => {
     const buffer = createGridBuffer(4, 1);
     putCell(buffer, 0, 0, "中");

@@ -46,6 +46,27 @@ describe("debug logger", () => {
     }
   });
 
+  it("keeps enabled state scoped to each logger", () => {
+    const writes: string[] = [];
+    setDebugFileWriter({
+      writeFileSync: (_path, data) => writes.push(String(data)),
+      appendFileSync: (_path, data) => writes.push(String(data)),
+    });
+
+    try {
+      const enabledLogger = createDebugLogger(true);
+      const disabledLogger = createDebugLogger(false);
+      enabledLogger.render("still enabled");
+      disabledLogger.render("still disabled");
+
+      const data = writes.join("");
+      expect(data).toContain("[RENDER] still enabled");
+      expect(data).not.toContain("[RENDER] still disabled");
+    } finally {
+      setDebugFileWriter(null);
+    }
+  });
+
   it("does not install file writers when importing the CLI entrypoint", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vue-tui-cli-side-effects-"));
     const logPath = join(dir, "debug.log");

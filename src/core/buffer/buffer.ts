@@ -386,6 +386,7 @@ export function clearRect(
       row.length = buffer.cols;
       for (let xx = 0; xx < buffer.cols; xx++) row[xx] = blank;
     }
+    recomputeFingerprintsForRows(buffer, 0, buffer.rows);
     markAllDirty(buffer);
     buffer.cursorX = 0;
     buffer.cursorY = 0;

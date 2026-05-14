@@ -88,12 +88,12 @@ export function createTuiProfiler(
   if (!envFlag(env, "VUE_TUI_PROFILE", "DIMCODE_PROFILE_TUI")) return null;
 
   const format =
-    parseLogFormat(firstNonEmptyEnv(env, "VUE_TUI_PROFILE_FORMAT")) ??
-    parseLogFormat(firstNonEmptyEnv(env, "DIMCODE_PROFILE_TUI_FORMAT")) ??
+    parseLogFormat(firstNonEmptyEnv(env, "VUE_TUI_PROFILE_FORMAT", "DIMCODE_PROFILE_TUI_FORMAT")) ??
     "text";
   const logDest =
-    parseLogDest(firstNonEmptyEnv(env, "VUE_TUI_PROFILE_LOG_DEST")) ??
-    parseLogDest(firstNonEmptyEnv(env, "DIMCODE_PROFILE_TUI_LOG_DEST")) ??
+    parseLogDest(
+      firstNonEmptyEnv(env, "VUE_TUI_PROFILE_LOG_DEST", "DIMCODE_PROFILE_TUI_LOG_DEST"),
+    ) ??
     options.defaultLogDest ??
     "stdout";
   const logPath =
@@ -119,9 +119,9 @@ export function createTuiProfiler(
   const renderPlaneCounts = new Map<string, number>();
 
   const logEveryMs =
-    parseLogEveryMs(firstNonEmptyEnv(env, "VUE_TUI_PROFILE_LOG_EVERY_MS")) ??
-    parseLogEveryMs(firstNonEmptyEnv(env, "DIMCODE_PROFILE_TUI_LOG_EVERY_MS")) ??
-    1000;
+    parseLogEveryMs(
+      firstNonEmptyEnv(env, "VUE_TUI_PROFILE_LOG_EVERY_MS", "DIMCODE_PROFILE_TUI_LOG_EVERY_MS"),
+    ) ?? 1000;
   const now = defaultNow;
   let lastLogAt = now();
   let disposed = false;

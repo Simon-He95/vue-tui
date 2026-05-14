@@ -355,6 +355,19 @@ describe("cli input", () => {
     expect(output).not.toContain("\u001B[>1u");
   });
 
+  it("does not fall back to legacy keyboard env when the new env is invalid", () => {
+    const output = collectDriverOutput({
+      env: {
+        TERM: "vt100",
+        VUE_TUI_KEYBOARD_PROTOCOL: "bogus",
+        DIMCODE_KEYBOARD_PROTOCOL: "kitty",
+      },
+    });
+
+    expect(output).not.toContain("\u001B[>1u");
+    expect(output).not.toContain("\u001B[<u");
+  });
+
   it("reports terminal focus in/out changes", () => {
     const stdin = new FakeStdin() as any;
     const stdout = new FakeStdout() as any;

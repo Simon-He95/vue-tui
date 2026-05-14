@@ -1,8 +1,6 @@
 import { envFlag, envString } from "../utils/env.js";
 
 const DEFAULT_LOG_FILE = "/tmp/vue-tui-debug.log";
-let enabled = false;
-let wroteHeader = false;
 let debugFileWriter: DebugFileWriter | null = null;
 
 type DebugFileWriter = Readonly<{
@@ -38,22 +36,37 @@ export interface DebugLogger {
   error: (message: string, ...args: any[]) => void;
 }
 
-function ensureHeader(): void {
-  if (!enabled || wroteHeader) return;
-  const writer = getFileWriter();
-  if (!writer?.writeFileSync) return;
-
-  try {
-    const data = `=== Vue TUI Debug Log Started at ${new Date().toISOString()} ===\n\n`;
-    writer.writeFileSync(debugLogPath(), data);
-    wroteHeader = true;
-  } catch {}
-}
-
 export function createDebugLogger(enable = false): DebugLogger {
-  enabled = enable;
-  if (!enabled) wroteHeader = false;
-  else ensureHeader();
+  const enabled = enable;
+  let wroteHeader = false;
+
+  const ensureHeader = () => {
+    if (!enabled || wroteHeader) return;
+    const writer = getFileWriter();
+    if (!writer?.writeFileSync) return;
+
+    try {
+      const data = `=== Vue TUI Debug Log Started at ${new Date().toISOString()} ===\n\n`;
+      writer.writeFileSync(debugLogPath(), data);
+      wroteHeader = true;
+    } catch {}
+  };
+
+  const write = (data: string) => {
+    if (!enabled) return;
+    ensureHeader();
+    try {
+      getFileWriter()?.appendFileSync?.(debugLogPath(), data);
+    } catch {}
+  };
+
+  const log = (category: string, message: string) => {
+    if (!enabled) return;
+    const timestamp = new Date().toISOString().split("T")[1].slice(0, -1);
+    write(`[${timestamp}] ${category} ${message}\n`);
+  };
+
+  ensureHeader();
 
   return {
     render: (message: string) => log("[RENDER]", message),
@@ -67,20 +80,6 @@ export function createDebugLogger(enable = false): DebugLogger {
       write(`${fullMessage}\n`);
     },
   };
-}
-
-function log(category: string, message: string): void {
-  if (!enabled) return;
-  const timestamp = new Date().toISOString().split("T")[1].slice(0, -1);
-  write(`[${timestamp}] ${category} ${message}\n`);
-}
-
-function write(data: string): void {
-  if (!enabled) return;
-  ensureHeader();
-  try {
-    getFileWriter()?.appendFileSync?.(debugLogPath(), data);
-  } catch {}
 }
 
 /**

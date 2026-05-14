@@ -75,7 +75,7 @@ describe("scheduler priority", () => {
     const prevNew = proc?.env?.VUE_TUI_THROTTLE_MS;
     const prevLegacy = proc?.env?.DIMCODE_TUI_THROTTLE_MS;
     if (proc?.env) {
-      proc.env.VUE_TUI_THROTTLE_MS = "invalid";
+      proc.env.VUE_TUI_THROTTLE_MS = "";
       proc.env.DIMCODE_TUI_THROTTLE_MS = "50";
     }
 

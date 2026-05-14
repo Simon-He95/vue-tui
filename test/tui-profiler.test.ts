@@ -54,7 +54,7 @@ describe("tui profiler", () => {
     }
   });
 
-  it("falls back to legacy profiler env when new parsed values are invalid or empty", () => {
+  it("falls back to legacy profiler env when new values are empty", () => {
     const previousProfile = process.env.VUE_TUI_PROFILE;
     const previousDest = process.env.VUE_TUI_PROFILE_LOG_DEST;
     const previousPath = process.env.VUE_TUI_PROFILE_LOG_PATH;
@@ -64,9 +64,9 @@ describe("tui profiler", () => {
     const previousLegacyEvery = process.env.DIMCODE_PROFILE_TUI_LOG_EVERY_MS;
 
     process.env.VUE_TUI_PROFILE = "1";
-    process.env.VUE_TUI_PROFILE_LOG_DEST = "invalid";
+    process.env.VUE_TUI_PROFILE_LOG_DEST = "";
     process.env.VUE_TUI_PROFILE_LOG_PATH = "";
-    process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = "invalid";
+    process.env.VUE_TUI_PROFILE_LOG_EVERY_MS = "";
     process.env.DIMCODE_PROFILE_TUI_LOG_DEST = "file";
     process.env.DIMCODE_PROFILE_TUI_LOG_PATH = "/tmp/vue-tui-legacy-profile-test.log";
     process.env.DIMCODE_PROFILE_TUI_LOG_EVERY_MS = "100";

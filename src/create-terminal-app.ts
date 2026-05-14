@@ -245,9 +245,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       return Number.isFinite(v) && v >= 0 ? v : null;
     };
     return (
-      parseThrottle(firstNonEmptyEnv(env, "VUE_TUI_THROTTLE_MS")) ??
-      parseThrottle(firstNonEmptyEnv(env, "DIMCODE_TUI_THROTTLE_MS")) ??
-      0
+      parseThrottle(firstNonEmptyEnv(env, "VUE_TUI_THROTTLE_MS", "DIMCODE_TUI_THROTTLE_MS")) ?? 0
     );
   })();
   const frameThrottleMs = (() => {
