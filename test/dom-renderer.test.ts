@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createDomRenderer, createTerminal } from "../src/index.js";
-import { sanitizeDomHref } from "../src/core/hyperlink.js";
+import { isSafeRelativeHref, sanitizeDomHref } from "../src/core/hyperlink.js";
 
 function setup(cols = 8, rows = 1, options: Parameters<typeof createDomRenderer>[2] = {}) {
   const terminal = createTerminal({ cols, rows });
@@ -49,6 +49,19 @@ describe("DomRenderer row rendering", () => {
     expect(sanitizeDomHref("guide%0aintro", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("guide%zzintro", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("https://example.com/a%20b")).toBe("https://example.com/a%20b");
+  });
+
+  it("rejects unsafe relative hrefs through exported helper", () => {
+    expect(isSafeRelativeHref("#section")).toBe(true);
+    expect(isSafeRelativeHref("/docs/a%20b")).toBe(true);
+    expect(isSafeRelativeHref("docs/a%20b")).toBe(true);
+
+    expect(isSafeRelativeHref("#x\n")).toBe(false);
+    expect(isSafeRelativeHref("/docs/a b")).toBe(false);
+    expect(isSafeRelativeHref("./a\tb")).toBe(false);
+    expect(isSafeRelativeHref("../a%0a")).toBe(false);
+    expect(isSafeRelativeHref("//evil.test")).toBe(false);
+    expect(isSafeRelativeHref("https://example.com")).toBe(false);
   });
 
   it("applies the default browser accessibility contract", () => {
@@ -650,7 +663,7 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("falls back to native DOM link activation when event activation has no handler", () => {
+  it("prevents native DOM link activation in event mode even without a handler", () => {
     const { terminal, container, renderer } = setup(3, 1, {
       links: { activation: "event" },
     });
@@ -662,8 +675,8 @@ describe("DomRenderer row rendering", () => {
       const anchor = lineEl(container).querySelector("a");
       expect(anchor).toBeInstanceOf(HTMLAnchorElement);
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
-      expect(anchor?.dispatchEvent(event)).toBe(true);
-      expect(event.defaultPrevented).toBe(false);
+      expect(anchor?.dispatchEvent(event)).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
     } finally {
       renderer.dispose();
       container.remove();
@@ -686,7 +699,7 @@ describe("DomRenderer row rendering", () => {
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
       anchor?.dispatchEvent(event);
 
-      expect(event.defaultPrevented).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
       expect(bubbled).not.toHaveBeenCalled();
     } finally {
       renderer.dispose();
@@ -708,6 +721,28 @@ describe("DomRenderer row rendering", () => {
       expect(line.querySelector("a")).toBeNull();
       expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
       expect(line.textContent).toContain("url");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("keeps href rows on the styled fast path when link activation is none", () => {
+    const { terminal, container, renderer } = setup(4, 1, {
+      links: { activation: "none" },
+    });
+
+    try {
+      terminal.fill(0, 0, 4, 1, "L", {
+        href: "https://example.com",
+        underline: true,
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(container.querySelector("a")).toBeNull();
+      expect(lastRowStats(renderer)).toMatchObject({
+        singleStyledRows: 1,
+      });
     } finally {
       renderer.dispose();
       container.remove();

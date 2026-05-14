@@ -19,8 +19,8 @@ function normalizeRawHref(value: unknown): string | null {
   const raw = value.trim();
   if (!raw) return null;
 
-  for (let i = 0; i < raw.length; i++) {
-    const code = raw.charCodeAt(i);
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
     if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return null;
   }
 
@@ -63,8 +63,7 @@ function sanitizeAbsoluteHref(
   return null;
 }
 
-export function isSafeRelativeHref(raw: string): boolean {
-  if (!raw) return false;
+function isSafeNormalizedRelativeHref(raw: string): boolean {
   if (raw.includes("\\")) return false;
   if (raw.startsWith("//")) return false;
   if (SCHEME_RE.test(raw)) return false;
@@ -77,6 +76,11 @@ export function isSafeRelativeHref(raw: string): boolean {
     raw.startsWith("../") ||
     SAFE_BARE_RELATIVE_RE.test(raw)
   );
+}
+
+export function isSafeRelativeHref(value: string): boolean {
+  const raw = normalizeRawHref(value);
+  return raw != null && isSafeNormalizedRelativeHref(raw);
 }
 
 export function sanitizeTerminalHref(
@@ -105,7 +109,7 @@ export function sanitizeDomHref(
   if (!raw) return null;
 
   const scheme = hrefScheme(raw);
-  if (!scheme) return options.allowRelative && isSafeRelativeHref(raw) ? raw : null;
+  if (!scheme) return options.allowRelative && isSafeNormalizedRelativeHref(raw) ? raw : null;
 
   return sanitizeAbsoluteHref(raw);
 }

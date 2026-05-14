@@ -630,6 +630,7 @@ function renderableHref(
   linkOptions: DomRendererLinkOptions | undefined,
 ): string | null {
   if (!linkOptions) return null;
+  if (linkOptions.activation === "none") return null;
   return sanitizeDomHref(style.href, {
     allowRelative: linkOptions.allowRelative === true,
   });
@@ -683,14 +684,11 @@ function createSegmentElement(
   const linkOptions = options.links;
   if (!linkOptions) return doc.createElement("span");
 
-  const href = sanitizeDomHref(style.href, {
-    allowRelative: linkOptions.allowRelative === true,
-  });
+  const href = renderableHref(style, linkOptions);
   if (!href) return doc.createElement("span");
 
   const hasActivateHandler = typeof linkOptions.onActivate === "function";
   const activation = linkOptions.activation ?? (hasActivateHandler ? "event" : "native");
-  if (activation === "none") return doc.createElement("span");
 
   const anchor = doc.createElement("a");
   anchor.href = href;
@@ -706,10 +704,10 @@ function createSegmentElement(
   anchor.addEventListener("dblclick", stopTerminalPropagation);
   anchor.addEventListener("keydown", stopTerminalPropagation);
   anchor.addEventListener("keyup", stopTerminalPropagation);
-  if (activation === "event" && hasActivateHandler) {
+  if (activation === "event") {
     anchor.addEventListener("click", (event) => {
       stopNativeAndTerminalActivation(event);
-      linkOptions.onActivate!(href, event);
+      linkOptions.onActivate?.(href, event);
     });
   } else {
     anchor.addEventListener("click", stopTerminalPropagation);

@@ -57,7 +57,7 @@ export function installTerminalCleanup(
   let cleaned = false;
   let uninstalled = false;
   const exitOnSignal = options.exitOnSignal ?? false;
-  const preserveSignalDefault = options.preserveSignalDefault ?? !exitOnSignal;
+  const preserveSignalDefault = options.preserveSignalDefault ?? false;
   const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? false;
   const rethrowUnhandledRejection =
     options.rethrowUnhandledRejection ?? cleanupOnUnhandledRejection;

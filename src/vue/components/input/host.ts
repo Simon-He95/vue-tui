@@ -1,5 +1,7 @@
 import { isAbsolutePath, normalizePath, resolvePath } from "../../../utils/path.js";
 
+const ENCODED_CRLF_RE = /%(?:0d|0a)/i;
+
 export type ResolveTInputPathInfo = Readonly<{
   workspace: string;
   input: string;
@@ -98,6 +100,7 @@ export function pathToTerminalFileHref(pathLike: string): string | undefined {
     const code = raw.charCodeAt(i);
     if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return undefined;
   }
+  if (ENCODED_CRLF_RE.test(raw)) return undefined;
 
   if (raw.toLowerCase().startsWith("file://")) {
     try {

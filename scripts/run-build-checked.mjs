@@ -12,7 +12,7 @@ function exitAfterLogFlush(code) {
   });
 }
 
-const child = spawn(pnpm, ["run", "build"], {
+const child = spawn(pnpm, ["run", "build:raw"], {
   stdio: ["inherit", "pipe", "pipe"],
 });
 

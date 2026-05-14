@@ -12,6 +12,12 @@ describe("TInput host path hrefs", () => {
     expect(pathToTerminalFileHref("file://[::1")).toBeUndefined();
   });
 
+  it("rejects encoded CRLF in file hrefs", () => {
+    expect(pathToTerminalFileHref("file:///tmp/a%0ab")).toBeUndefined();
+    expect(pathToTerminalFileHref("file:///tmp/a%0Db")).toBeUndefined();
+    expect(pathToTerminalFileHref("/tmp/a%0ab")).toBeUndefined();
+  });
+
   it("keeps absolute platform paths encoded as file URLs", () => {
     expect(pathToTerminalFileHref("/tmp/a b")).toBe("file:///tmp/a%20b");
     expect(pathToTerminalFileHref("C:\\tmp\\a b")).toBe("file:///C:/tmp/a%20b");
