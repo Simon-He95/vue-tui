@@ -42,9 +42,10 @@ export function installTerminalCleanup(
 ): () => void {
   let cleaned = false;
   let uninstalled = false;
-  const exitOnSignal = options.exitOnSignal ?? true;
+  const exitOnSignal = options.exitOnSignal ?? false;
   const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? false;
-  const rethrowUnhandledRejection = options.rethrowUnhandledRejection === true;
+  const rethrowUnhandledRejection =
+    options.rethrowUnhandledRejection ?? cleanupOnUnhandledRejection;
 
   const cleanup = () => {
     if (cleaned) return;
@@ -572,7 +573,7 @@ export function createStdinDriver(
     const cleanupOptions = typeof autoCleanup === "object" ? autoCleanup : {};
     uninstallCleanup = installTerminalCleanup(dispose, {
       ...cleanupOptions,
-      exitOnSignal: autoCleanup === true ? true : (cleanupOptions.exitOnSignal ?? true),
+      exitOnSignal: typeof autoCleanup === "object" ? (cleanupOptions.exitOnSignal ?? true) : true,
     });
   }
 

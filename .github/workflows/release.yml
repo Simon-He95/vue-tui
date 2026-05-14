@@ -36,12 +36,19 @@ jobs:
 
       - run: pnpm run release:pack
 
+      - name: Record tarball digest
+        run: |
+          cd .release
+          sha256sum *.tgz | tee SHA256SUMS
+
       - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz
 
       - uses: actions/upload-artifact@v4
         with:
           name: package-tarball
-          path: .release/*.tgz
+          path: |
+            .release/*.tgz
+            .release/SHA256SUMS
           include-hidden-files: true
           if-no-files-found: error
 
@@ -91,6 +98,11 @@ jobs:
         with:
           name: package-tarball
           path: package
+
+      - name: Verify tarball digest
+        run: |
+          cd package
+          sha256sum -c SHA256SUMS
 
       - name: Check version is not already published
         run: |

@@ -1,6 +1,6 @@
 {
   "name": "@simon_he/vue-tui",
-  "version": "0.0.8",
+  "version": "0.1.0-rc.0",
   "description": "Vue 3 terminal UI toolkit for browser DOM and CLI stdout renderers",
   "keywords": [
     "ansi",
@@ -71,7 +71,7 @@
   },
   "scripts": {
     "build": "tsdown && node scripts/build-cjs.mjs",
-    "build:checked": "mkdir -p .tmp && bash -o pipefail -c 'pnpm run build 2>&1 | tee .tmp/build.log' && node scripts/check-build-warnings.mjs .tmp/build.log",
+    "build:checked": "node scripts/run-build-checked.mjs && node scripts/check-build-warnings.mjs .tmp/build.log",
     "dev": "tsdown --watch",
     "build:examples": "pnpm run build && pnpm -C examples/basic build",
     "build:examples:terminal": "pnpm run build && pnpm -C examples/basic build:terminal",

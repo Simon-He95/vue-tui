@@ -136,7 +136,7 @@ driver = createStdinDriver({
 });
 ```
 
-Unhandled promise rejections stay host-owned by default; set `cleanupOnUnhandledRejection` and `rethrowUnhandledRejection` explicitly if the CLI should clean up and then crash on them.
+Signal cleanup does not exit unless `exitOnSignal` is set. Unhandled promise rejections stay host-owned by default; setting `cleanupOnUnhandledRejection: true` cleans up and rethrows by default. Set `rethrowUnhandledRejection: false` only when the host explicitly wants to suppress the rejection.
 
 ## Core Concepts
 

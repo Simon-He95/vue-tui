@@ -420,8 +420,8 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("does not mark href multi-segment rows for reuse", () => {
-    const { terminal, container, renderer } = setup(4);
+  it("does not mark href multi-segment rows for reuse when links are enabled", () => {
+    const { terminal, container, renderer } = setup(4, 1, { links: {} });
 
     try {
       terminal.fill(0, 0, 2, 1, "A", { href: "https://example.com" });
@@ -438,8 +438,8 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("keeps styled href rows on the fast path when links are disabled", () => {
-    const { terminal, container, renderer } = setup(4, 2, { links: false });
+  it("keeps styled href rows on the fast path by default", () => {
+    const { terminal, container, renderer } = setup(4, 2);
 
     try {
       terminal.fill(0, 0, 4, 1, "L", { href: "https://example.com", underline: true });
@@ -447,6 +447,24 @@ describe("DomRenderer row rendering", () => {
 
       expect(container.querySelector("a")).toBeNull();
       expect(renderer.debugStats.rowRender.total.singleStyledRows).toBeGreaterThan(0);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not render href anchors by default", () => {
+    const { terminal, container, renderer } = setup(3);
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")).toBeNull();
     } finally {
       renderer.dispose();
       container.remove();
@@ -470,8 +488,8 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("renders safe href rows as anchors on the fragment path", () => {
-    const { terminal, container, renderer } = setup(3);
+  it("renders safe href rows as anchors on the fragment path when links are enabled", () => {
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
 
     try {
       terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
@@ -499,7 +517,7 @@ describe("DomRenderer row rendering", () => {
   });
 
   it("makes DOM href anchors pointer-interactive", () => {
-    const { terminal, container, renderer } = setup(3);
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
 
     try {
       terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
@@ -516,7 +534,7 @@ describe("DomRenderer row rendering", () => {
   });
 
   it("does not bubble DOM link pointer events to the terminal container", () => {
-    const { terminal, container, renderer } = setup(3);
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
     const pointerDown = vi.fn();
     const pointerUp = vi.fn();
     container.addEventListener("pointerdown", pointerDown);
@@ -541,8 +559,8 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("allows native DOM link activation by default", () => {
-    const { terminal, container, renderer } = setup(3);
+  it("allows native DOM link activation when links are explicitly enabled", () => {
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
 
     try {
       terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
@@ -560,7 +578,7 @@ describe("DomRenderer row rendering", () => {
   });
 
   it("does not bubble native DOM link activation to the terminal container", () => {
-    const { terminal, container, renderer } = setup(3);
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
     const bubbled = vi.fn();
     container.addEventListener("click", bubbled);
 
@@ -707,8 +725,40 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("does not render relative hrefs as anchors by default", () => {
-    const { terminal, container, renderer } = setup(10);
+  it("does not bubble focused DOM link keyboard events to the terminal container", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { tabIndex: 0, activation: "native" },
+    });
+    const keydown = vi.fn();
+    const keyup = vi.fn();
+    container.addEventListener("keydown", keydown);
+    container.addEventListener("keyup", keyup);
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      anchor!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      anchor!.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+
+      expect(keydown).not.toHaveBeenCalled();
+      expect(keyup).not.toHaveBeenCalled();
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("keydown", keydown);
+      container.removeEventListener("keyup", keyup);
+      container.remove();
+    }
+  });
+
+  it("does not render relative hrefs as anchors without allowRelative", () => {
+    const { terminal, container, renderer } = setup(10, 1, { links: {} });
 
     try {
       terminal.write("docs", { x: 0, y: 0, style: { href: "docs/intro.md" } });
@@ -774,7 +824,7 @@ describe("DomRenderer row rendering", () => {
     const terminal = createTerminal({ cols: 3, rows: 1 });
     const container = doc.createElement("div");
     doc.body.appendChild(container);
-    const renderer = createDomRenderer(terminal, container);
+    const renderer = createDomRenderer(terminal, container, { links: {} });
 
     try {
       terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
@@ -810,7 +860,7 @@ describe("DomRenderer row rendering", () => {
   });
 
   it("does not force mailto links into a new tab", () => {
-    const { terminal, container, renderer } = setup(4);
+    const { terminal, container, renderer } = setup(4, 1, { links: {} });
 
     try {
       terminal.write("mail", { x: 0, y: 0, style: { href: "mailto:test@example.com" } });
@@ -835,7 +885,7 @@ describe("DomRenderer row rendering", () => {
       "data:text/html,boom",
       "vbscript:msgbox(1)",
     ]) {
-      const { terminal, container, renderer } = setup(3);
+      const { terminal, container, renderer } = setup(3, 1, { links: {} });
 
       try {
         terminal.write("url", { x: 0, y: 0, style: { href } });
@@ -852,7 +902,7 @@ describe("DomRenderer row rendering", () => {
   });
 
   it("invalidates the row cache when href changes", () => {
-    const { terminal, container, renderer } = setup(3);
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
 
     try {
       terminal.write("url", { x: 0, y: 0, style: { href: "https://a.example" } });
@@ -1424,7 +1474,7 @@ describe("DomRenderer row rendering", () => {
         rowKeyPrepassChecks: 1,
         rowKeyPrepassHits: 0,
         rowKeyPrepassMisses: 1,
-        fragmentRows: 1,
+        singleStyledRows: 1,
       });
     } finally {
       renderer.dispose();

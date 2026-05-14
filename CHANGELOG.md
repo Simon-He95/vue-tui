@@ -38,7 +38,9 @@
 - `Style` objects are treated as immutable after first normalization. Pass a new object when style values change.
 - `createTLogUrlPlugin()` no longer detects `file://` URLs by default. Use `{ allowFileUrls: true }` to opt in.
 - Release benchmark validation now uses `bench:baseline`; timing budgets are only checked by `bench:baseline:timing`.
-- DOM renderer anchors now use native browser activation by default when no `links.onActivate` handler is configured.
+- DOM renderer no longer renders `Style.href` as native anchors unless `links` are explicitly configured.
+- `installTerminalCleanup()` cleans up on signals without exiting by default. `createStdinDriver({ autoCleanup: true })` keeps the CLI-oriented signal exit behavior.
+- Opted-in unhandled rejection cleanup now rethrows by default. Set `rethrowUnhandledRejection: false` to suppress it explicitly.
 - `release:ci` now points users to the GitHub Release workflow instead of publishing from a second scripted path.
 
 ### Security
@@ -99,7 +101,8 @@ Experimental APIs remain under `@simon_he/vue-tui/experimental` and may change b
 - `TLogView` custom mutable sources should bump `version`, provide changing `getLineKey(index)`, or call `refreshViewport()` / `invalidateLine()` / `invalidateRange()`.
 - Browser and terminal examples now have separate smoke paths. Run headless smoke in CI and reserve real terminal runners for manual checks.
 - High-throughput APIs remain outside the root entrypoint.
-- Node-aware input host helpers moved from the root entrypoint to `@simon_he/vue-tui/cli`.
+- `createDefaultTInputHostAdapter()` moved from `@simon_he/vue-tui` to `@simon_he/vue-tui/cli`; the root `defaultTInputHostPlugin` is now browser-safe no-op.
+- DOM renderer `Style.href` output is no longer clickable by default. Pass `domRendererOptions.links` when the host wants native DOM anchors.
 
 ### Release Validation
 

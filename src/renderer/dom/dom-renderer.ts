@@ -629,9 +629,9 @@ function renderableHref(
   style: Style,
   linkOptions: DomRendererLinkOptions | undefined,
 ): string | null {
-  if (linkOptions === false) return null;
+  if (!linkOptions) return null;
   return sanitizeDomHref(style.href, {
-    allowRelative: linkOptions?.allowRelative === true,
+    allowRelative: linkOptions.allowRelative === true,
   });
 }
 
@@ -680,8 +680,8 @@ function createSegmentElement(
   style: Style,
   options: Readonly<{ links?: DomRendererLinkOptions }>,
 ): HTMLSpanElement | HTMLAnchorElement {
-  const linkOptions = options.links ?? {};
-  if (linkOptions === false) return doc.createElement("span");
+  const linkOptions = options.links;
+  if (!linkOptions) return doc.createElement("span");
 
   const href = sanitizeDomHref(style.href, {
     allowRelative: linkOptions.allowRelative === true,
@@ -699,6 +699,8 @@ function createSegmentElement(
   anchor.addEventListener("pointerdown", stopTerminalPropagation);
   anchor.addEventListener("pointerup", stopTerminalPropagation);
   anchor.addEventListener("dblclick", stopTerminalPropagation);
+  anchor.addEventListener("keydown", stopTerminalPropagation);
+  anchor.addEventListener("keyup", stopTerminalPropagation);
   const activation =
     linkOptions.activation ?? (typeof linkOptions.onActivate === "function" ? "event" : "native");
   if (activation === "native") {
@@ -881,7 +883,7 @@ export function createDomRenderer(
   options: DomRendererOptions = {},
 ): DomRenderer {
   const doc = container.ownerDocument;
-  let rendererLinkOptions = options.links;
+  let rendererLinkOptions = options.links ?? false;
   container.style.fontFamily = DEFAULT_FONT_FAMILY;
   container.style.whiteSpace = "pre";
   container.style.display = "inline-block";
@@ -1578,7 +1580,7 @@ export function createDomRenderer(
 
   function updateOptions(next: Readonly<{ links?: DomRendererLinkOptions }>): void {
     if (disposed) return;
-    rendererLinkOptions = next.links;
+    rendererLinkOptions = next.links ?? false;
     refresh();
   }
 

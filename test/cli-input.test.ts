@@ -62,20 +62,19 @@ describe("cli input", () => {
     }
   });
 
-  it("exits with signal code by default", async () => {
+  it("cleans up without exiting by default", () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
-    const before = new Set(process.rawListeners("SIGINT"));
+    const before = new Set(process.rawListeners("SIGTERM"));
     const uninstall = installTerminalCleanup(dispose);
 
     try {
-      const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));
+      const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
       listener?.();
-      await new Promise<void>((resolve) => process.nextTick(resolve));
 
       expect(dispose).toHaveBeenCalledTimes(1);
-      expect(exit).toHaveBeenCalledWith(130);
+      expect(exit).not.toHaveBeenCalled();
     } finally {
       uninstall();
       exit.mockRestore();
@@ -147,37 +146,12 @@ describe("cli input", () => {
     }
   });
 
-  it("cleans up on opted-in unhandledRejection without rethrowing by default", () => {
-    const dispose = vi.fn();
-    const before = new Set(process.rawListeners("unhandledRejection"));
-    const uninstall = installTerminalCleanup(dispose, {
-      cleanupOnUnhandledRejection: true,
-    });
-
-    try {
-      const listener = process.rawListeners("unhandledRejection").find((item) => !before.has(item));
-      expect(listener).toBeTypeOf("function");
-      const nextTick = vi.spyOn(process, "nextTick");
-      try {
-        listener?.(new Error("boom"), Promise.resolve());
-      } finally {
-        nextTick.mockRestore();
-      }
-
-      expect(dispose).toHaveBeenCalledTimes(1);
-      expect(nextTick).not.toHaveBeenCalled();
-    } finally {
-      uninstall();
-    }
-  });
-
-  it("can rethrow after opted-in unhandledRejection cleanup", () => {
+  it("rethrows after opted-in unhandledRejection cleanup by default", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("unhandledRejection"));
     const error = new Error("boom");
     const uninstall = installTerminalCleanup(dispose, {
       cleanupOnUnhandledRejection: true,
-      rethrowUnhandledRejection: true,
     });
 
     try {
@@ -207,6 +181,31 @@ describe("cli input", () => {
           }
         }),
       ).toBe(true);
+    } finally {
+      uninstall();
+    }
+  });
+
+  it("can suppress rethrow when explicitly configured", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("unhandledRejection"));
+    const uninstall = installTerminalCleanup(dispose, {
+      cleanupOnUnhandledRejection: true,
+      rethrowUnhandledRejection: false,
+    });
+
+    try {
+      const listener = process.rawListeners("unhandledRejection").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      const nextTick = vi.spyOn(process, "nextTick");
+      try {
+        listener?.(new Error("boom"), Promise.resolve());
+      } finally {
+        nextTick.mockRestore();
+      }
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(nextTick).not.toHaveBeenCalled();
     } finally {
       uninstall();
     }

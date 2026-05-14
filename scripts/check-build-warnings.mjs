@@ -4,7 +4,11 @@ const file = process.argv[2];
 if (!file) throw new Error("Usage: node scripts/check-build-warnings.mjs <build-log>");
 
 const text = readFileSync(file, "utf8");
-const forbidden = ["[UNRESOLVED_IMPORT]"];
+const forbidden = [
+  "[UNRESOLVED_IMPORT]",
+  "Module has been externalized for browser compatibility",
+  "Could not resolve",
+];
 
 for (const marker of forbidden) {
   if (text.includes(marker)) {
