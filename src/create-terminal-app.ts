@@ -26,6 +26,7 @@ import process from "node:process";
 import { defineComponent, h, provide, ref, shallowReactive, shallowRef } from "vue";
 import { createHeadlessApp, createHeadlessRoot } from "./cli/headless-renderer.js";
 import {
+  defaultVueTuiProfileLogPath,
   installNodeFileWriters,
   nodeProfilerFileWriter,
   shouldInstallFileWriters,
@@ -190,7 +191,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   const profiler = createTuiProfiler("cli-scheduler", {
     fileWriter: nodeProfilerFileWriter,
     defaultLogDest: "file",
-    defaultLogPath: "/tmp/vue-tui-profile.log",
+    defaultLogPath: defaultVueTuiProfileLogPath(),
   });
   const baseEvents = createCliEventManager({
     record: (event) => {
@@ -206,7 +207,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     profiler: {
       fileWriter: nodeProfilerFileWriter,
       defaultLogDest: "file",
-      defaultLogPath: "/tmp/vue-tui-profile.log",
+      defaultLogPath: defaultVueTuiProfileLogPath(),
     },
   });
   const offCommit = terminal.on("commit", ({ dirtyRows, planes, sync }) => {

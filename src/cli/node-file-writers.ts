@@ -1,4 +1,6 @@
 import { appendFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setDebugFileWriter } from "../core/debug-logger.js";
 import { setTuiProfilerFileWriter } from "../observability/tui-profiler.js";
 import { envFlag, envString } from "../utils/env.js";
@@ -6,6 +8,14 @@ import { envFlag, envString } from "../utils/env.js";
 export const nodeProfilerFileWriter = { appendFileSync };
 
 let installed = false;
+
+export function defaultVueTuiProfileLogPath(): string {
+  return join(tmpdir(), "vue-tui-profile.log");
+}
+
+export function defaultVueTuiDebugLogPath(): string {
+  return join(tmpdir(), "vue-tui-debug.log");
+}
 
 export function shouldInstallFileWriters(
   env: Readonly<Record<string, unknown>> | undefined,

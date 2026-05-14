@@ -81,7 +81,7 @@ describe("cli input", () => {
     }
   });
 
-  it("can opt into exiting with signal code", () => {
+  it("can opt into exiting with signal code", async () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const before = new Set(process.rawListeners("SIGINT"));
@@ -91,6 +91,7 @@ describe("cli input", () => {
       const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
       listener?.();
+      await new Promise<void>((resolve) => process.nextTick(resolve));
 
       expect(dispose).toHaveBeenCalledTimes(1);
       expect(exit).toHaveBeenCalledWith(130);
@@ -172,7 +173,7 @@ describe("cli input", () => {
     }
   });
 
-  it("can opt into stdin driver terminal cleanup", () => {
+  it("can opt into stdin driver terminal cleanup", async () => {
     const stdin = new FakeStdin() as any;
     const stdout = new FakeStdout() as any;
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
@@ -189,9 +190,36 @@ describe("cli input", () => {
       const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
       listener?.();
+      await new Promise<void>((resolve) => process.nextTick(resolve));
 
       expect(stdin.isRaw).toBe(false);
       expect(stdout.writes).toContain("\u001B[?2004l");
+      expect(exit).toHaveBeenCalledWith(143);
+    } finally {
+      driver.dispose();
+      exit.mockRestore();
+    }
+  });
+
+  it("autoCleanup object defaults to exiting on signals", async () => {
+    const stdin = new FakeStdin() as any;
+    const stdout = new FakeStdout() as any;
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const driver = createStdinDriver({
+      stdin,
+      stdout,
+      dispatch: () => {},
+      enableMouse: false,
+      autoCleanup: {},
+    });
+
+    try {
+      const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+      await new Promise<void>((resolve) => process.nextTick(resolve));
+
       expect(exit).toHaveBeenCalledWith(143);
     } finally {
       driver.dispose();

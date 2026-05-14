@@ -68,6 +68,9 @@ export function sanitizeTerminalHref(
 
   const protocol = parsedProtocol(raw);
   if (!protocol) return null;
+
+  if (protocol === "mailto:" && ENCODED_CRLF_RE.test(raw)) return null;
+
   if (SAFE_LINK_PROTOCOLS.has(protocol)) return raw;
   if (options.allowFileUrls && protocol === "file:") return new URL(raw).toString();
 

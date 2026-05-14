@@ -68,7 +68,10 @@ export function installTerminalCleanup(
     uninstall();
 
     if (options.exitOnSignal === true) {
-      process.exit(exitCodeForSignal(signal));
+      const code = exitCodeForSignal(signal);
+      process.nextTick(() => {
+        process.exit(code);
+      });
     }
   };
 
@@ -560,10 +563,10 @@ export function createStdinDriver(
 
   const autoCleanup = options.autoCleanup ?? false;
   if (autoCleanup) {
+    const cleanupOptions = typeof autoCleanup === "object" ? autoCleanup : {};
     uninstallCleanup = installTerminalCleanup(dispose, {
-      exitOnSignal: typeof autoCleanup === "object" ? autoCleanup.exitOnSignal === true : true,
-      cleanupUnhandledRejection:
-        typeof autoCleanup === "object" ? autoCleanup.cleanupUnhandledRejection : false,
+      exitOnSignal: autoCleanup === true ? true : (cleanupOptions.exitOnSignal ?? true),
+      cleanupUnhandledRejection: cleanupOptions.cleanupUnhandledRejection ?? false,
     });
   }
 

@@ -9,6 +9,7 @@ import type { RendererCapabilities } from "../capabilities.js";
 import { Buffer } from "node:buffer";
 import process from "node:process";
 import {
+  defaultVueTuiProfileLogPath,
   installNodeFileWriters,
   nodeProfilerFileWriter,
   shouldInstallFileWriters,
@@ -143,7 +144,7 @@ export function createStdoutRenderer(
   const profiler = createTuiProfiler("stdout-renderer", {
     fileWriter: options?.profileFileWriter ?? nodeProfilerFileWriter,
     defaultLogDest: "file",
-    defaultLogPath: "/tmp/vue-tui-profile.log",
+    defaultLogPath: defaultVueTuiProfileLogPath(),
   });
 
   // Resolve whether to use synchronized output mode (DEC 2026)

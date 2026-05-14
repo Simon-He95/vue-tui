@@ -15,7 +15,7 @@ export default defineConfig([
     clean: true,
     dts: true,
     platform: "neutral",
-    external: ["vue", "stream-markdown-parser", ...nodeBuiltins],
+    external: ["vue", "stream-markdown-parser"],
   },
   {
     target: "node16",

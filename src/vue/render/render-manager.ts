@@ -183,11 +183,13 @@ export function createRenderManager(
   let candidateGeneration = 1;
   const candidateNodesScratch: RenderNode[] = [];
   const warnedLocalDirtyRows = new Set<string>();
+  let disposed = false;
 
   const stackPathCache = new WeakMap<RenderStack, readonly PathSegment[]>();
   const profiler = createTuiProfiler("render-manager", options.profiler);
 
-  terminal.on("resize", ({ rows }) => {
+  const offResize = terminal.on("resize", ({ rows }) => {
+    if (disposed) return;
     terminalRows = rows;
     allRows = Array.from({ length: terminalRows }, (_, index) => index);
     for (const state of planeDirtyStates.values()) {
@@ -854,6 +856,9 @@ export function createRenderManager(
     unregister,
     render,
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      offResize();
       profiler?.dispose();
     },
   };

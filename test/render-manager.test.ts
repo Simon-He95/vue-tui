@@ -3,6 +3,16 @@ import { createTerminal } from "../src/index.js";
 import { createRenderManager } from "../src/vue/render/render-manager.js";
 
 describe("render-manager", () => {
+  it("dispose detaches resize listener", () => {
+    const terminal = createTerminal({ cols: 10, rows: 2 });
+    const render = createRenderManager(terminal);
+
+    render.dispose();
+
+    terminal.resize(10, 5);
+    terminal.dispose();
+  });
+
   it("skips empty rect nodes on full repaint", () => {
     const paints: string[] = [];
 

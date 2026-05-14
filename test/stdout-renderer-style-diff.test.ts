@@ -1,5 +1,8 @@
 import process from "node:process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { defaultVueTuiProfileLogPath } from "../src/cli/node-file-writers.js";
 import { createTerminal, sanitizeTerminalHref } from "../src/index.js";
 import { createStdoutRenderer, STDOUT_RENDERER_CAPABILITIES } from "../src/cli.js";
 
@@ -25,6 +28,10 @@ function findHrefHashCollision(): readonly [string, string] {
 }
 
 describe("stdout renderer style diffing", () => {
+  it("uses a platform temp path for default profiler logs", () => {
+    expect(defaultVueTuiProfileLogPath()).toBe(join(tmpdir(), "vue-tui-profile.log"));
+  });
+
   it("exposes stdout renderer capabilities", () => {
     const terminal = createTerminal({ cols: 2, rows: 1 });
     const renderer = createStdoutRenderer(terminal, {
@@ -163,6 +170,9 @@ describe("stdout renderer style diffing", () => {
     expect(sanitizeTerminalHref("https://a.com\u001B]8;;x")).toBeNull();
     expect(sanitizeTerminalHref("https://example.com/a b")).toBeNull();
     expect(sanitizeTerminalHref("https://example.com/a%20b")).toBe("https://example.com/a%20b");
+    expect(sanitizeTerminalHref("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBeNull();
+    expect(sanitizeTerminalHref("mailto:a@b.com?subject=x%0DBCC:c@d.com")).toBeNull();
+    expect(sanitizeTerminalHref("mailto:a@b.com?subject=ok")).toBe("mailto:a@b.com?subject=ok");
     expect(sanitizeTerminalHref("mailto:test@example.com?subject=Hello World")).toBeNull();
     expect(sanitizeTerminalHref("mailto:test@example.com?subject=Hello%20World")).toBe(
       "mailto:test@example.com?subject=Hello%20World",

@@ -34,6 +34,23 @@ Development, release validation, and documentation builds are run on Node.js 20 
 
 High-throughput log and virtualization APIs stay under `/experimental` until their public surface settles. Keep those imports isolated in application code.
 
+### Migration: Node Host Adapter Moved To `/cli`
+
+Node-specific input host defaults are no longer exported from the browser-safe root entrypoint.
+
+Before:
+
+```ts
+import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui";
+```
+
+After:
+
+```ts
+import { createTInputHostPlugin } from "@simon_he/vue-tui";
+import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
+```
+
 ## Browser Usage
 
 ```vue
