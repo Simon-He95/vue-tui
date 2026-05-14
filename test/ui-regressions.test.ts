@@ -432,6 +432,41 @@ describe("ui regressions", () => {
     }
   });
 
+  it("does not dispatch terminal node click when a DOM link is activated", async () => {
+    const onActivate = vi.fn();
+    const terminalClick = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TView, { x: 0, y: 0, w: 40, h: 4, onClick: terminalClick }, () =>
+          h(TText, {
+            x: 0,
+            y: 0,
+            value: "url",
+            style: { href: "https://example.com" },
+          }),
+        ),
+      40,
+      4,
+      { domRendererOptions: { links: { onActivate } } },
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+
+      const anchor = mounted.container()!.querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+
+      anchor!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+      expect(onActivate).toHaveBeenCalledOnce();
+      expect(terminalClick).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("useRenderNode can consume a one-shot dirtyRowsHint without other dep changes", async () => {
     const dirtyRowsHint = ref<readonly number[] | null>(null);
     const paints: string[] = [];

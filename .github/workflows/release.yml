@@ -32,9 +32,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run release:dry-run
+      - run: pnpm run release:check
+
+      - run: pnpm run release:bench
+
+      - run: pnpm run release:smoke
 
       - run: pnpm run release:pack
+
+      - run: pnpm run release:pack-smoke:existing
 
       - name: Record tarball digest
         run: |

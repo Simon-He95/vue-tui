@@ -816,6 +816,22 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("does not reset link options when updateOptions receives no links field", () => {
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+      expect(container.querySelector("a")).toBeTruthy();
+
+      renderer.updateOptions({});
+      expect(container.querySelector("a")).toBeTruthy();
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("creates row nodes using the container ownerDocument", () => {
     const iframe = document.createElement("iframe");
     document.body.appendChild(iframe);

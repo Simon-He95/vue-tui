@@ -1,4 +1,5 @@
 import type { ResolveTInputPathInfo, TInputHostAdapter } from "../host.js";
+import { Buffer } from "node:buffer";
 import { createOsc52ClipboardProvider } from "../../../../runtime/index.js";
 import { importNodeModule } from "../../../../utils/node-module.js";
 import { pathToTerminalFileHref, resolveDefaultTInputPath } from "../host.js";
@@ -20,6 +21,9 @@ type SpawnLike = (
 export type CreateDefaultTInputHostAdapterOptions = Readonly<{
   clipboardCommandTimeoutMs?: number;
   clipboardTotalTimeoutMs?: number;
+  /** Max bytes for OSC52 clipboard writes. */
+  clipboardWriteMaxBytes?: number;
+  /** @deprecated Use clipboardWriteMaxBytes. */
   clipboardMaxBytes?: number;
   clipboardReadMaxBytes?: number;
 }>;
@@ -231,7 +235,7 @@ export function createDefaultTInputHostAdapter(
     async writeClipboardText(text: string) {
       if (!text) return false;
       const clipboard = createOsc52ClipboardProvider({
-        maxBytes: options.clipboardMaxBytes,
+        maxBytes: options.clipboardWriteMaxBytes ?? options.clipboardMaxBytes,
       });
       if (!clipboard.supported) return false;
       try {

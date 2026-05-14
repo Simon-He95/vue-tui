@@ -1580,8 +1580,10 @@ export function createDomRenderer(
 
   function updateOptions(next: Readonly<{ links?: DomRendererLinkOptions }>): void {
     if (disposed) return;
-    rendererLinkOptions = next.links ?? false;
-    refresh();
+    if (Object.prototype.hasOwnProperty.call(next, "links")) {
+      rendererLinkOptions = next.links ?? false;
+      refresh();
+    }
   }
 
   refresh();

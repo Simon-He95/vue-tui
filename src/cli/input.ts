@@ -36,6 +36,18 @@ function exitCodeForSignal(signal: CleanupSignal): number {
   return 129;
 }
 
+function normalizeUnhandledRejection(reason: unknown): Error {
+  if (reason instanceof Error) return reason;
+
+  try {
+    return new Error("Unhandled promise rejection", { cause: reason });
+  } catch {
+    const error = new Error(`Unhandled promise rejection: ${String(reason)}`);
+    (error as Error & { cause?: unknown }).cause = reason;
+    return error;
+  }
+}
+
 export function installTerminalCleanup(
   dispose: () => void,
   options: TerminalCleanupOptions = {},
@@ -92,7 +104,7 @@ export function installTerminalCleanup(
     uninstall();
     if (rethrowUnhandledRejection) {
       process.nextTick(() => {
-        throw reason instanceof Error ? reason : new Error(String(reason));
+        throw normalizeUnhandledRejection(reason);
       });
     }
   };

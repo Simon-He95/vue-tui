@@ -52,9 +52,9 @@ jobs:
 
       - run: pnpm run build:checked
 
-      - run: pnpm run test:package-exports
+      - run: pnpm run test:package-exports:dist
 
-      - run: pnpm run test:browser-vite-import
+      - run: pnpm run test:browser-vite-import:dist
 
       - run: pnpm exec playwright install --with-deps chromium
 

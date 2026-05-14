@@ -186,6 +186,49 @@ describe("cli input", () => {
     }
   });
 
+  it("preserves non-error unhandledRejection reasons as cause", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("unhandledRejection"));
+    const reason = { code: "boom" };
+    const uninstall = installTerminalCleanup(dispose, {
+      cleanupOnUnhandledRejection: true,
+    });
+
+    try {
+      const listener = process.rawListeners("unhandledRejection").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      const scheduled: Array<() => void> = [];
+      const nextTick = vi.spyOn(process, "nextTick").mockImplementation(((
+        callback: (...args: any[]) => void,
+        ...args: any[]
+      ) => {
+        scheduled.push(() => callback(...args));
+      }) as any);
+      try {
+        listener?.(reason, Promise.resolve());
+      } finally {
+        nextTick.mockRestore();
+      }
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(
+        scheduled.some((callback) => {
+          try {
+            callback();
+            return false;
+          } catch (caught) {
+            expect(caught).toBeInstanceOf(Error);
+            expect((caught as Error).message).toBe("Unhandled promise rejection");
+            expect((caught as Error).cause).toBe(reason);
+            return true;
+          }
+        }),
+      ).toBe(true);
+    } finally {
+      uninstall();
+    }
+  });
+
   it("can suppress rethrow when explicitly configured", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("unhandledRejection"));

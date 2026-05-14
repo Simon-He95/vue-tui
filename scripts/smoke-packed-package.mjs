@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const releaseDir = join(rootDir, ".release");
 const smokeDir = join(rootDir, ".tmp", "pack-smoke");
+const existingTarball = process.argv[2];
 const packageJson = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
 const packageName = packageJson.name;
 const packageInstallDir = join(smokeDir, "node_modules", ...packageName.split("/"));
@@ -281,15 +282,21 @@ main().catch((error) => {
   );
 }
 
-rmSync(releaseDir, { recursive: true, force: true });
 rmSync(smokeDir, { recursive: true, force: true });
-mkdirSync(releaseDir, { recursive: true });
 mkdirSync(smokeDir, { recursive: true });
 
-run("pnpm", ["run", "build"]);
-run("pnpm", ["pack", "--pack-destination", ".release"]);
+let tarballPath;
+if (existingTarball) {
+  tarballPath = resolve(existingTarball);
+  assert(existsSync(tarballPath), `Tarball does not exist: ${tarballPath}`);
+} else {
+  rmSync(releaseDir, { recursive: true, force: true });
+  mkdirSync(releaseDir, { recursive: true });
+  run("pnpm", ["run", "build"]);
+  run("pnpm", ["pack", "--pack-destination", ".release"]);
+  tarballPath = findPackedTarball();
+}
 
-const tarballPath = findPackedTarball();
 assertTarballContents(tarballPath);
 writeSmokeFiles();
 
