@@ -49,6 +49,14 @@ jobs:
 
       - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz
 
+      - name: Dry-run npm publish from validated tarball
+        run: |
+          TARBALL=$(ls .release/*.tgz | head -n 1)
+          npm publish "$TARBALL" --access public --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VUE_TUI_ALLOW_DIRECT_PUBLISH: "1"
+
       - uses: actions/upload-artifact@v4
         with:
           name: package-tarball
@@ -128,3 +136,4 @@ jobs:
           npm publish "$TARBALL" --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VUE_TUI_ALLOW_DIRECT_PUBLISH: "1"

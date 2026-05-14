@@ -26,6 +26,7 @@ type CleanupSignal = "SIGINT" | "SIGTERM" | "SIGHUP" | "SIGBREAK";
 
 export type TerminalCleanupOptions = Readonly<{
   exitOnSignal?: boolean;
+  preserveSignalDefault?: boolean;
   cleanupOnUnhandledRejection?: boolean;
   rethrowUnhandledRejection?: boolean;
 }>;
@@ -56,6 +57,7 @@ export function installTerminalCleanup(
   let cleaned = false;
   let uninstalled = false;
   const exitOnSignal = options.exitOnSignal ?? false;
+  const preserveSignalDefault = options.preserveSignalDefault ?? !exitOnSignal;
   const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? false;
   const rethrowUnhandledRejection =
     options.rethrowUnhandledRejection ?? cleanupOnUnhandledRejection;
@@ -90,6 +92,13 @@ export function installTerminalCleanup(
       const code = exitCodeForSignal(signal);
       process.nextTick(() => {
         process.exit(code);
+      });
+      return;
+    }
+
+    if (preserveSignalDefault) {
+      process.nextTick(() => {
+        process.kill(process.pid, signal);
       });
     }
   };

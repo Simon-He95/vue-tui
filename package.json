@@ -94,7 +94,7 @@
     "lint:fix": "oxlint . --fix",
     "check:hidden-unicode": "node scripts/check-hidden-unicode.cjs",
     "check:tracked-build-output": "node scripts/check-tracked-build-output.cjs",
-    "prepublishOnly": "node scripts/guard-direct-publish.mjs && pnpm build",
+    "prepublishOnly": "node -e \"if (process.env.VUE_TUI_ALLOW_DIRECT_PUBLISH !== '1') { console.error('Direct npm publish is disabled. Use the GitHub Release workflow.'); process.exit(1) }\"",
     "release:workflow-only": "node -e \"console.error('Use GitHub Release workflow'); process.exit(1)\"",
     "release": "pnpm run release:workflow-only",
     "release:ci": "pnpm run release:workflow-only",

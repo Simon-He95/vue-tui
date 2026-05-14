@@ -687,6 +687,11 @@ function createSegmentElement(
     allowRelative: linkOptions.allowRelative === true,
   });
   if (!href) return doc.createElement("span");
+
+  const hasActivateHandler = typeof linkOptions.onActivate === "function";
+  const activation = linkOptions.activation ?? (hasActivateHandler ? "event" : "native");
+  if (activation === "none") return doc.createElement("span");
+
   const anchor = doc.createElement("a");
   anchor.href = href;
   const protocol = href.match(/^[a-z][a-z0-9+.-]*:/i)?.[0].toLowerCase() ?? null;
@@ -701,17 +706,13 @@ function createSegmentElement(
   anchor.addEventListener("dblclick", stopTerminalPropagation);
   anchor.addEventListener("keydown", stopTerminalPropagation);
   anchor.addEventListener("keyup", stopTerminalPropagation);
-  const activation =
-    linkOptions.activation ?? (typeof linkOptions.onActivate === "function" ? "event" : "native");
-  if (activation === "native") {
-    anchor.addEventListener("click", stopTerminalPropagation);
-  } else if (activation === "event") {
+  if (activation === "event" && hasActivateHandler) {
     anchor.addEventListener("click", (event) => {
       stopNativeAndTerminalActivation(event);
-      linkOptions.onActivate?.(href, event);
+      linkOptions.onActivate!(href, event);
     });
-  } else if (activation === "none") {
-    anchor.addEventListener("click", stopNativeAndTerminalActivation);
+  } else {
+    anchor.addEventListener("click", stopTerminalPropagation);
   }
   return anchor;
 }

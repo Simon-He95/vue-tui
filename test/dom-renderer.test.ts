@@ -650,9 +650,9 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("can explicitly disable DOM link activation", () => {
+  it("falls back to native DOM link activation when event activation has no handler", () => {
     const { terminal, container, renderer } = setup(3, 1, {
-      links: { activation: "none" },
+      links: { activation: "event" },
     });
 
     try {
@@ -660,18 +660,19 @@ describe("DomRenderer row rendering", () => {
       terminal.commit({ planes: ["default"], sync: true });
 
       const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
-      expect(anchor?.dispatchEvent(event)).toBe(false);
-      expect(event.defaultPrevented).toBe(true);
+      expect(anchor?.dispatchEvent(event)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
     } finally {
       renderer.dispose();
       container.remove();
     }
   });
 
-  it("does not bubble disabled DOM link activation to the terminal container", () => {
+  it("does not bubble event-without-handler DOM link activation to the terminal container", () => {
     const { terminal, container, renderer } = setup(3, 1, {
-      links: { activation: "none" },
+      links: { activation: "event" },
     });
     const bubbled = vi.fn();
     container.addEventListener("click", bubbled);
@@ -681,14 +682,34 @@ describe("DomRenderer row rendering", () => {
       terminal.commit({ planes: ["default"], sync: true });
 
       const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
       anchor?.dispatchEvent(event);
 
-      expect(event.defaultPrevented).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
       expect(bubbled).not.toHaveBeenCalled();
     } finally {
       renderer.dispose();
       container.removeEventListener("click", bubbled);
+      container.remove();
+    }
+  });
+
+  it("does not render native anchors when DOM link activation is disabled", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { activation: "none" },
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      expect(line.querySelector("a")).toBeNull();
+      expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
+      expect(line.textContent).toContain("url");
+    } finally {
+      renderer.dispose();
       container.remove();
     }
   });

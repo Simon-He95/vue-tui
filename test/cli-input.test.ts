@@ -62,9 +62,10 @@ describe("cli input", () => {
     }
   });
 
-  it("cleans up without exiting by default", () => {
+  it("cleans up and preserves signal default by default", async () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
     const before = new Set(process.rawListeners("SIGTERM"));
     const uninstall = installTerminalCleanup(dispose);
 
@@ -72,12 +73,15 @@ describe("cli input", () => {
       const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
       listener?.();
+      await new Promise<void>((resolve) => process.nextTick(resolve));
 
       expect(dispose).toHaveBeenCalledTimes(1);
       expect(exit).not.toHaveBeenCalled();
+      expect(kill).toHaveBeenCalledWith(process.pid, "SIGTERM");
     } finally {
       uninstall();
       exit.mockRestore();
+      kill.mockRestore();
     }
   });
 
@@ -121,11 +125,15 @@ describe("cli input", () => {
     }
   });
 
-  it("can clean up without exiting when exitOnSignal=false", () => {
+  it("can clean up without exiting when signal default preservation is disabled", () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
     const before = new Set(process.rawListeners("SIGTERM"));
-    const uninstall = installTerminalCleanup(dispose, { exitOnSignal: false });
+    const uninstall = installTerminalCleanup(dispose, {
+      exitOnSignal: false,
+      preserveSignalDefault: false,
+    });
 
     try {
       const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
@@ -134,9 +142,11 @@ describe("cli input", () => {
 
       expect(dispose).toHaveBeenCalledTimes(1);
       expect(exit).not.toHaveBeenCalled();
+      expect(kill).not.toHaveBeenCalled();
     } finally {
       uninstall();
       exit.mockRestore();
+      kill.mockRestore();
     }
   });
 
