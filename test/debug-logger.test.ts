@@ -25,6 +25,27 @@ describe("debug logger", () => {
     }
   });
 
+  it("writes the debug header after a delayed file writer install", () => {
+    const writes: string[] = [];
+    setDebugFileWriter(null);
+
+    try {
+      const logger = createDebugLogger(true);
+      setDebugFileWriter({
+        writeFileSync: (_path, data) => writes.push(String(data)),
+        appendFileSync: (_path, data) => writes.push(String(data)),
+      });
+
+      logger.render("hello");
+
+      expect(writes.join("")).toContain("Vue TUI Debug Log Started");
+      expect(writes.join("")).toContain("[RENDER] hello");
+    } finally {
+      createDebugLogger(false);
+      setDebugFileWriter(null);
+    }
+  });
+
   it("does not install file writers when importing the CLI entrypoint", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vue-tui-cli-side-effects-"));
     const logPath = join(dir, "debug.log");

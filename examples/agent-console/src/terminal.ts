@@ -111,7 +111,7 @@ if (smoke) {
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
   exit(0);
 } else {
-  uninstallCleanup = installTerminalCleanup(cleanup);
+  uninstallCleanup = installTerminalCleanup(cleanup, { exitOnSignal: true });
   driver = createStdinDriver({
     dispatch: (event) => {
       const prevented = app.events.dispatch(event);

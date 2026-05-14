@@ -28,6 +28,8 @@ jobs:
         with:
           name: package-tarball
           path: .release/*.tgz
+          include-hidden-files: true
+          if-no-files-found: error
 
   smoke:
     needs: pack

@@ -2,6 +2,7 @@ import { envFlag, envString } from "../utils/env.js";
 
 const DEFAULT_LOG_FILE = "/tmp/vue-tui-debug.log";
 let enabled = false;
+let wroteHeader = false;
 let debugFileWriter: DebugFileWriter | null = null;
 
 type DebugFileWriter = Readonly<{
@@ -37,20 +38,22 @@ export interface DebugLogger {
   error: (message: string, ...args: any[]) => void;
 }
 
-/**
- * Initialize the debug logger.
- * @param enable Whether to enable debug logging
- * @returns DebugLogger instance
- */
+function ensureHeader(): void {
+  if (!enabled || wroteHeader) return;
+  const writer = getFileWriter();
+  if (!writer?.writeFileSync) return;
+
+  try {
+    const data = `=== Vue TUI Debug Log Started at ${new Date().toISOString()} ===\n\n`;
+    writer.writeFileSync(debugLogPath(), data);
+    wroteHeader = true;
+  } catch {}
+}
+
 export function createDebugLogger(enable = false): DebugLogger {
   enabled = enable;
-
-  if (enabled) {
-    try {
-      const data = `=== Vue TUI Debug Log Started at ${new Date().toISOString()} ===\n\n`;
-      getFileWriter()?.writeFileSync?.(debugLogPath(), data);
-    } catch {}
-  }
+  if (!enabled) wroteHeader = false;
+  else ensureHeader();
 
   return {
     render: (message: string) => log("[RENDER]", message),
@@ -74,6 +77,7 @@ function log(category: string, message: string): void {
 
 function write(data: string): void {
   if (!enabled) return;
+  ensureHeader();
   try {
     getFileWriter()?.appendFileSync?.(debugLogPath(), data);
   } catch {}

@@ -11,7 +11,12 @@ export {
   truecolorBgOpen,
   truecolorFgOpen,
 } from "./ansi-styles.js";
-export type { FsDirEntry, FsEntryKind, FsStat, PathPickerProvider } from "./cli/path-provider.js";
+export type {
+  FsDirEntry,
+  FsEntryKind,
+  FsStat,
+  PathPickerProvider,
+} from "./cli/path-provider-types.js";
 export {
   type PathPickMode,
   type PathSuggestion,
@@ -48,18 +53,18 @@ export {
   type TerminalRenderPlanes,
 } from "./core/render-plane.js";
 export type {
-  EventManager,
   Rect,
   TerminalBaseEvent,
   TerminalDebugNode,
   TerminalEventHandlerMap,
-  TerminalEventRecord,
   TerminalEventType,
   TerminalInputEvent,
   TerminalKeyboardEvent,
   TerminalNode,
   TerminalPointerEvent,
-} from "./events/index.js";
+} from "./events/manager/types.js";
+export type { EventManager } from "./events/manager/event-manager.js";
+export type { TerminalEventRecord } from "./events/recording.js";
 export { createEventManager } from "./events/manager/event-manager.js";
 export type {
   FramePerfReason,

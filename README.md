@@ -104,7 +104,7 @@ const exit = () => {
   process.exit(0);
 };
 
-uninstallCleanup = installTerminalCleanup(cleanup);
+uninstallCleanup = installTerminalCleanup(cleanup, { exitOnSignal: true });
 driver = createStdinDriver({
   dispatch(event) {
     const prevented = app.events.dispatch(event);

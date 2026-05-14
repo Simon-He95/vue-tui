@@ -1,4 +1,4 @@
-import type { Rect } from "../../events/index.js";
+import type { Rect } from "../../events/manager/types.js";
 
 export function intersectRect(a: Rect, b: Rect): Rect | null {
   const x0 = Math.max(a.x, b.x);

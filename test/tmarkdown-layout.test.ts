@@ -124,6 +124,10 @@ describe("markdown layout", () => {
     expect(isSafeMarkdownLink("data:text/html,boom")).toBe(false);
     expect(isSafeMarkdownLink("vbscript:msgbox(1)")).toBe(false);
     expect(isSafeMarkdownLink("//evil.test")).toBe(false);
+    expect(isSafeMarkdownLink("\\evil")).toBe(false);
+    expect(isSafeMarkdownLink("../ok")).toBe(true);
+    expect(isSafeMarkdownLink("#section")).toBe(true);
+    expect(isSafeMarkdownLink("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBe(false);
   });
 
   it("evicts only the oldest markdown parser cache entry", async () => {

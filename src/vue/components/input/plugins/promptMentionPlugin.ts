@@ -1,5 +1,8 @@
 import type { Style } from "../../../../core/types.js";
-import type { TerminalKeyboardEvent, TerminalPointerEvent } from "../../../../events/index.js";
+import type {
+  TerminalKeyboardEvent,
+  TerminalPointerEvent,
+} from "../../../../events/manager/types.js";
 import type { MentionPathProvider, MentionSuggestionProvider } from "./promptMentionState.js";
 import type { TInputPlugin, TInputPluginContext } from "./types.js";
 import { reactive, watch, watchEffect } from "vue";

@@ -1,8 +1,8 @@
 import type { ComputedRef, Ref } from "vue";
-import type { FsEntryKind } from "../../../../cli/path-provider.js";
-import type { PathPickMode, PathSuggestion } from "../../../../cli/path-suggest.js";
+import type { FsEntryKind } from "../../../../cli/path-provider-types.js";
+import type { PathPickMode, PathSuggestion } from "../../../../cli/path-suggest-core.js";
 import type { Terminal } from "../../../../core/types.js";
-import type { Rect } from "../../../../events/index.js";
+import type { Rect } from "../../../../events/manager/types.js";
 import { computed, ref, watch, watchEffect } from "vue";
 import { clamp, isWhitespace } from "../utils/primitives.js";
 import { isCommitMention } from "./mentionUtils.js";

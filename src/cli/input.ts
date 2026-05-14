@@ -67,16 +67,22 @@ export function installTerminalCleanup(
     cleanup();
     uninstall();
 
-    if (options.exitOnSignal === false) return;
-
-    process.exit(exitCodeForSignal(signal));
+    if (options.exitOnSignal === true) {
+      process.exit(exitCodeForSignal(signal));
+    }
   };
 
   const onSigint = () => handleSignal("SIGINT");
   const onSigterm = () => handleSignal("SIGTERM");
   const onSighup = () => handleSignal("SIGHUP");
-  const onUncaughtExceptionMonitor = () => cleanup();
-  const onUnhandledRejection = () => cleanup();
+  const onUncaughtExceptionMonitor = () => {
+    cleanup();
+    uninstall();
+  };
+  const onUnhandledRejection = () => {
+    cleanup();
+    uninstall();
+  };
 
   process.once("exit", cleanup);
   process.once("SIGINT", onSigint);
@@ -555,7 +561,7 @@ export function createStdinDriver(
   const autoCleanup = options.autoCleanup ?? false;
   if (autoCleanup) {
     uninstallCleanup = installTerminalCleanup(dispose, {
-      exitOnSignal: typeof autoCleanup === "object" ? autoCleanup.exitOnSignal : true,
+      exitOnSignal: typeof autoCleanup === "object" ? autoCleanup.exitOnSignal === true : true,
       cleanupUnhandledRejection:
         typeof autoCleanup === "object" ? autoCleanup.cleanupUnhandledRejection : false,
     });

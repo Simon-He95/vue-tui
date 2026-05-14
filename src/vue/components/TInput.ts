@@ -1,12 +1,12 @@
 import type { PropType, Ref, ShallowRef } from "vue";
-import type { PathPickMode } from "../../cli/path-suggest.js";
+import type { PathPickMode } from "../../cli/path-suggest-core.js";
 import type { Cell, Style } from "../../core/types.js";
 import type {
   Rect,
   TerminalInputEvent,
   TerminalKeyboardEvent,
   TerminalPointerEvent,
-} from "../../events/index.js";
+} from "../../events/manager/types.js";
 import type { ImeAnchor } from "../context.js";
 import type { TInputHostAdapter } from "./input/host.js";
 import type { PromptSuggestion, TInputPlugin } from "./input/plugins/types.js";

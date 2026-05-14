@@ -1,8 +1,8 @@
 import type { ComputedRef, Ref } from "vue";
-import type { PathPickMode } from "../../../../cli/path-suggest.js";
+import type { PathPickMode } from "../../../../cli/path-suggest-core.js";
 import type { TerminalRenderPlane } from "../../../../core/render-plane.js";
 import type { Style, Terminal } from "../../../../core/types.js";
-import type { Rect, TerminalKeyboardEvent } from "../../../../events/index.js";
+import type { Rect, TerminalKeyboardEvent } from "../../../../events/manager/types.js";
 import type { TerminalScheduler } from "../../../context.js";
 import type { TInputHostAdapter } from "../host.js";
 

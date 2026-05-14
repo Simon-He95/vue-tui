@@ -75,7 +75,7 @@ if (process.stdout.isTTY) {
 if (smoke) {
   exit();
 } else {
-  uninstallCleanup = installTerminalCleanup(cleanup);
+  uninstallCleanup = installTerminalCleanup(cleanup, { exitOnSignal: true });
   driver = createStdinDriver({
     dispatch: (e) => {
       const prevented = app.events.dispatch(e);

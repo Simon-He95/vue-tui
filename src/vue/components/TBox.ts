@@ -1,6 +1,6 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import type { Rect } from "../../events/index.js";
+import type { Rect } from "../../events/manager/types.js";
 import type { LayoutContext } from "../context.js";
 import { computed, defineComponent, h, inject, provide, shallowReactive, watchEffect } from "vue";
 import { useLayout } from "../composables/use-layout.js";

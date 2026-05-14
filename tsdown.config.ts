@@ -1,4 +1,7 @@
+import { builtinModules } from "node:module";
 import { defineConfig } from "tsdown";
+
+const nodeBuiltins = [...builtinModules, ...builtinModules.map((name) => `node:${name}`)];
 
 export default defineConfig([
   {
@@ -12,7 +15,7 @@ export default defineConfig([
     clean: true,
     dts: true,
     platform: "neutral",
-    external: ["vue", "stream-markdown-parser"],
+    external: ["vue", "stream-markdown-parser", ...nodeBuiltins],
   },
   {
     target: "node16",
@@ -23,20 +26,6 @@ export default defineConfig([
     clean: false,
     dts: true,
     platform: "node",
-    external: [
-      "vue",
-      "fs",
-      "node:fs",
-      "node:fs/promises",
-      "child_process",
-      "node:child_process",
-      "node:events",
-      "node:buffer",
-      "process",
-      "node:process",
-      "url",
-      "node:url",
-      "util",
-    ],
+    external: ["vue", ...nodeBuiltins],
   },
 ]);

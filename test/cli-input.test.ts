@@ -62,11 +62,30 @@ describe("cli input", () => {
     }
   });
 
-  it("cleans up and exits with signal code by default", () => {
+  it("cleans up without exiting on signals by default", () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const before = new Set(process.rawListeners("SIGINT"));
     const uninstall = installTerminalCleanup(dispose);
+
+    try {
+      const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(exit).not.toHaveBeenCalled();
+    } finally {
+      uninstall();
+      exit.mockRestore();
+    }
+  });
+
+  it("can opt into exiting with signal code", () => {
+    const dispose = vi.fn();
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const before = new Set(process.rawListeners("SIGINT"));
+    const uninstall = installTerminalCleanup(dispose, { exitOnSignal: true });
 
     try {
       const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));

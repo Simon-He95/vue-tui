@@ -1,5 +1,5 @@
 import type { Ref } from "vue";
-import type { Rect } from "../events/index.js";
+import type { Rect } from "../events/manager/types.js";
 import type { ClipboardApi } from "../runtime/index.js";
 import type { Cell, Style, Terminal } from "../core/types.js";
 import { shallowRef } from "vue";

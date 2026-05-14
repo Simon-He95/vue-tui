@@ -1,6 +1,10 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
+import type {
+  Rect,
+  TerminalKeyboardEvent,
+  TerminalPointerEvent,
+} from "../../events/manager/types.js";
 import { computed, defineComponent, h, inject, ref, watch } from "vue";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";

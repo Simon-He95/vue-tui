@@ -35,7 +35,12 @@ describe("DomRenderer row rendering", () => {
     expect(sanitizeDomHref("../intro.md")).toBeNull();
     expect(sanitizeDomHref("#section")).toBeNull();
     expect(sanitizeDomHref("docs/intro.md", { allowRelative: true })).toBe("docs/intro.md");
+    expect(sanitizeDomHref("\\evil", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("//evil.test", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("../ok", { allowRelative: true })).toBe("../ok");
     expect(sanitizeDomHref("#section", { allowRelative: true })).toBe("#section");
+    expect(sanitizeDomHref("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBeNull();
+    expect(sanitizeDomHref("https://example.com/a%20b")).toBe("https://example.com/a%20b");
   });
 
   it("applies the default browser accessibility contract", () => {

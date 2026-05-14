@@ -4,6 +4,7 @@ import {
   type ParseOptions,
   type ParsedNode,
 } from "stream-markdown-parser";
+import { isSafeRelativeHref } from "../../core/hyperlink.js";
 
 export interface TuiMarkdownParseConfig {
   streaming?: boolean;
@@ -14,12 +15,12 @@ export interface TuiMarkdownParser {
   parse: (content: string, final: boolean) => ParsedNode[];
 }
 
-const RELATIVE_LINK_PREFIXES = ["#", "/", "./", "../"] as const;
 const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 const markdownInstanceCache = new Map<string, ReturnType<typeof getMarkdown>>();
 const MAX_MARKDOWN_INSTANCE_CACHE = 32;
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 const BLOCKED_SCHEME_RE = /^(?:javascript|data|vbscript):/i;
+const ENCODED_CRLF_RE = /%(?:0d|0a)/i;
 
 function hasControlChars(value: string): boolean {
   for (const ch of value) {
@@ -37,11 +38,11 @@ export function isSafeMarkdownLink(url: string): boolean {
   if (raw.startsWith("//")) return false;
   if (BLOCKED_SCHEME_RE.test(raw)) return false;
 
-  if (RELATIVE_LINK_PREFIXES.some((prefix) => raw.startsWith(prefix))) return true;
-  if (!SCHEME_RE.test(raw)) return true;
+  if (!SCHEME_RE.test(raw)) return isSafeRelativeHref(raw);
 
   try {
     const parsed = new URL(raw);
+    if (parsed.protocol === "mailto:" && ENCODED_CRLF_RE.test(raw)) return false;
     return SAFE_PROTOCOLS.has(parsed.protocol);
   } catch {
     return false;

@@ -1,6 +1,6 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import type { Rect, TerminalPointerEvent } from "../../events/index.js";
+import type { Rect, TerminalPointerEvent } from "../../events/manager/types.js";
 import type { TLogViewScrollMetrics } from "./TLogView.js";
 import { computed, defineComponent, h, inject } from "vue";
 import { useLayout } from "../composables/use-layout.js";

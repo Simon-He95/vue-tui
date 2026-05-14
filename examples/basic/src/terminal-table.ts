@@ -12,4 +12,4 @@ const { app, terminal } = createTerminalApp({
 app.start?.();
 
 // 处理退出
-installTerminalCleanup(() => terminal.dispose());
+installTerminalCleanup(() => terminal.dispose(), { exitOnSignal: true });

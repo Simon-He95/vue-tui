@@ -9,6 +9,7 @@ export type SanitizeDomHrefOptions = Readonly<{
 const SAFE_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 const BLOCKED_SCHEME_RE = /^(?:javascript|data|vbscript):/i;
+const ENCODED_CRLF_RE = /%(?:0d|0a)/i;
 
 function normalizeRawHref(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -40,6 +41,21 @@ function parsedProtocol(raw: string): string | null {
   }
 }
 
+export function isSafeRelativeHref(raw: string): boolean {
+  if (!raw) return false;
+  if (raw.includes("\\")) return false;
+  if (raw.startsWith("//")) return false;
+  if (SCHEME_RE.test(raw)) return false;
+
+  return (
+    raw.startsWith("#") ||
+    raw.startsWith("/") ||
+    raw.startsWith("./") ||
+    raw.startsWith("../") ||
+    /^[A-Za-z0-9._~!$&'()*+,;=@-]+(?:[/?#][^\s\\]*)?$/u.test(raw)
+  );
+}
+
 export function sanitizeTerminalHref(
   value: unknown,
   options: SanitizeTerminalHrefOptions = {},
@@ -66,8 +82,11 @@ export function sanitizeDomHref(
   if (!raw) return null;
 
   const scheme = hrefScheme(raw);
-  if (!scheme) return options.allowRelative ? raw : null;
+  if (!scheme) return options.allowRelative && isSafeRelativeHref(raw) ? raw : null;
 
   const protocol = parsedProtocol(raw);
-  return protocol && SAFE_LINK_PROTOCOLS.has(protocol) ? raw : null;
+  if (!protocol || !SAFE_LINK_PROTOCOLS.has(protocol)) return null;
+  if (protocol === "mailto:" && ENCODED_CRLF_RE.test(raw)) return null;
+
+  return raw;
 }

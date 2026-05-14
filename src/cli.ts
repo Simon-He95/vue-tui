@@ -1,7 +1,12 @@
 export type { StdinDriver, TerminalCleanupOptions } from "./cli/input.js";
 export { createStdinDriver, installTerminalCleanup } from "./cli/input.js";
 export { installNodeFileWriters, resetNodeFileWriters } from "./cli/node-file-writers.js";
-export type { FsDirEntry, FsEntryKind, FsStat, PathPickerProvider } from "./cli/path-provider.js";
+export type {
+  FsDirEntry,
+  FsEntryKind,
+  FsStat,
+  PathPickerProvider,
+} from "./cli/path-provider-types.js";
 export { createNodePathPickerProvider } from "./cli/path-provider.js";
 export {
   type PathPickMode,

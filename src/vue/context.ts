@@ -1,14 +1,15 @@
 import type { Component, InjectionKey, Ref, ShallowRef } from "vue";
-import type { PathPickerProvider } from "../cli/path-provider.js";
+import type { PathPickerProvider } from "../cli/path-provider-types.js";
 import type { TerminalRenderPlane } from "../core/render-plane.js";
 import type { Style, Terminal } from "../core/types.js";
-import type { EventManager, Rect } from "../events/index.js";
+import type { EventManager } from "../events/manager/event-manager.js";
+import type { Rect } from "../events/manager/types.js";
 import type {
   SelectionTextProvider,
   TerminalSelectionCopyPayload,
   TerminalSelectionRefreshOptions,
 } from "../selection/terminal-selection.js";
-import type { RendererCapabilities, TerminalRendererLike } from "../renderer/index.js";
+import type { RendererCapabilities, TerminalRendererLike } from "../renderer/capabilities.js";
 import type { TraceStore } from "../observability/trace.js";
 import type { FramePerfReason } from "../observability/frame-perf.js";
 import type { FramePerfStore } from "../observability/frame-perf-store.js";
