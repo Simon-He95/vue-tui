@@ -20,7 +20,7 @@
 - `TRenderPlane.plane` mount 后按 immutable 处理；需要迁移 plane 时使用 `:key` remount。
 - `scheduler.queueFrameTask()` 可能返回 `false`；producer 必须在被拒绝时清理自己的 pending state。
 - 高吞吐组件继续从 `@simon_he/vue-tui/experimental` 引入，应用代码应把这些 imports 隔离在少量边界文件内。
-- Node-aware input host helpers `createDefaultTInputHostAdapter()` / `defaultTInputHostPlugin` 继续从 `@simon_he/vue-tui/cli` 引入；root entrypoint 保持 browser-safe。
+- root entrypoint 导出 browser-safe 的 no-op `defaultTInputHostPlugin`；Node-aware 的 `createDefaultTInputHostAdapter()` / `defaultTInputHostPlugin` 继续从 `@simon_he/vue-tui/cli` 引入。
 - 自定义 `TLogView` source 仍应通过 `version` 或 `getLineKey(index)` 表达内容变化，避免复用 stale line cache。
 
 完整行为变更列表以 [CHANGELOG](https://github.com/Simon-He95/vue-tui/blob/main/CHANGELOG.md) 的 `0.1.0-rc.0` 为准。

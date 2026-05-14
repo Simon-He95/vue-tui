@@ -2,6 +2,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "../../../node_modules/.bin/vite build --config vite.config.ts"
+    "build": "pnpm --dir ../../.. exec vite build --config test/fixtures/browser-vite-import/vite.config.ts"
   }
 }

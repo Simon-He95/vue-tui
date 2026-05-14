@@ -50,11 +50,11 @@ jobs:
 
       - run: git diff --exit-code docs/generated/components-api.md
 
-      - run: pnpm run build
+      - run: pnpm run build:checked
 
       - run: pnpm run test:package-exports
 
-      - run: pnpm -C test/fixtures/browser-vite-import build
+      - run: pnpm run test:browser-vite-import
 
       - run: pnpm exec playwright install --with-deps chromium
 

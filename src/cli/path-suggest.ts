@@ -1,7 +1,7 @@
-import type { FsDirEntry } from "./path-provider.js";
+import type { FsDirEntry } from "./path-provider-types.js";
 import type { PathPickMode, SuggestPathsResult } from "./path-suggest-core.js";
-import process from "node:process";
 import { normalizePath, resolvePath } from "../utils/path.js";
+import { importNodeModule } from "../utils/node-module.js";
 import {
   resolveUserPath as resolveUserPathCore,
   suggestPaths as suggestPathsCore,
@@ -31,7 +31,7 @@ const gitignoreRulesCache = new Map<string, readonly GitignoreRule[]>();
 const gitignoreRulesLoading = new Map<string, Promise<readonly GitignoreRule[]>>();
 
 function isNodeLike(): boolean {
-  const proc: any = process;
+  const proc: any = (globalThis as any).process;
   return typeof proc?.versions?.node === "string";
 }
 
@@ -40,7 +40,8 @@ function loadGitignoreRulesAsync(workspaceAbs: string): Promise<readonly Gitigno
   return (async () => {
     if (!isNodeLike()) return EMPTY_GITIGNORE_RULES;
     try {
-      const fs = await import("node:fs/promises");
+      const fs = await importNodeModule<typeof import("node:fs/promises")>("node:fs/promises");
+      if (!fs) return EMPTY_GITIGNORE_RULES;
       const gitignoreAbs = resolvePath(key, ".gitignore");
       const content = await fs.readFile(gitignoreAbs, "utf8");
       return compileGitignoreRules(content);
@@ -264,7 +265,7 @@ export async function suggestPaths(
 }
 
 export function resolveUserPath(workspaceAbs: string, input: string): string {
-  const env = process?.env ?? {};
+  const env = (globalThis as any).process?.env ?? {};
   return resolveUserPathCore(workspaceAbs, input, {
     homeDir: String(env.HOME || env.USERPROFILE || ""),
   });

@@ -24,6 +24,8 @@ jobs:
 
       - run: pnpm run release:pack
 
+      - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz
+
       - uses: actions/upload-artifact@v4
         with:
           name: package-tarball

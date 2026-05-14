@@ -1,10 +1,14 @@
 import { fileURLToPath, URL } from "node:url";
 
+const fixtureRoot = fileURLToPath(new URL(".", import.meta.url));
+const outDir = fileURLToPath(new URL("../../../.tmp/browser-vite-import", import.meta.url));
+
 function distEntry(file: string): string {
   return fileURLToPath(new URL(`../../../dist/${file}`, import.meta.url));
 }
 
 export default {
+  root: fixtureRoot,
   resolve: {
     alias: [
       { find: /^@simon_he\/vue-tui$/, replacement: distEntry("index.js") },
@@ -13,7 +17,7 @@ export default {
     ],
   },
   build: {
-    outDir: "../../../.tmp/browser-vite-import",
+    outDir,
     emptyOutDir: true,
   },
 };

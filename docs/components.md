@@ -229,7 +229,7 @@
 - `resolvePath` / `pathToHref`
 - `isTerminalLike`
 
-浏览器侧默认 host plugin 不携带 Node 能力；CLI 侧的默认 host plugin 负责 Node-like 的 clipboard / path 行为，不会自动附带 UI toast。如果宿主希望保留 `Copied` / `Copy failed` 这类提示，需要显式提供 `showToast`。
+`@simon_he/vue-tui` 导出 browser-safe 的 no-op `defaultTInputHostPlugin`。CLI 侧的 `defaultTInputHostPlugin` 和 `createDefaultTInputHostAdapter()` 从 `@simon_he/vue-tui/cli` 导出，负责 Node-like 的 clipboard / path 行为，不会自动附带 UI toast。如果宿主希望保留 `Copied` / `Copy failed` 这类提示，需要显式提供 `showToast`。
 
 `createOsc52ClipboardProvider()` 可作为 terminal clipboard 写入 provider 显式传给 `createTerminalApp({ clipboard })`。它不会默认执行系统剪贴板命令。
 

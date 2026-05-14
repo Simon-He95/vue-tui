@@ -1,7 +1,16 @@
 import { builtinModules } from "node:module";
 import { defineConfig } from "tsdown";
 
-const nodeBuiltins = [...builtinModules, ...builtinModules.map((name) => `node:${name}`)];
+const nodeBuiltins = Array.from(
+  new Set([
+    ...builtinModules,
+    ...builtinModules.map((name) => `node:${name}`),
+    "fs/promises",
+    "node:fs/promises",
+    "process",
+    "node:process",
+  ]),
+);
 
 export default defineConfig([
   {

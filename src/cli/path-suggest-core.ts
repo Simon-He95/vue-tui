@@ -1,4 +1,4 @@
-import type { FsDirEntry } from "./path-provider.js";
+import type { FsDirEntry } from "./path-provider-types.js";
 import { dirname, isAbsolutePath, joinPath, normalizePath, resolvePath } from "../utils/path.js";
 
 export type PathPickMode = "directory" | "file" | "any";
