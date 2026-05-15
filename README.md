@@ -174,7 +174,7 @@ driver = createStdinDriver({
 });
 ```
 
-Signal cleanup restores terminal state first. `installTerminalCleanup()` returns a cleanup handle: call `handle.uninstall()` to remove process listeners without disposing the app, or `handle.cleanup()` to run cleanup manually. By default, signal handling uses `signalPolicy: "reraise"`: the helper cleans up, removes its own listeners, and re-sends the original signal. If the host process has other listeners for the same signal, those listeners keep ownership of termination. Set `signalPolicy: "cleanup-only"` only when the host explicitly owns termination, or `signalPolicy: "exit"` when vue-tui should exit with the conventional signal exit code after cleanup.
+Signal cleanup restores terminal state first. `installTerminalCleanup()` returns a cleanup handle: call `handle.uninstall()` to remove process listeners without disposing the app, or `handle.cleanup()` to run cleanup manually. By default, signal handling uses `signalPolicy: "reraise"`: the helper cleans up, removes its own listeners, and re-sends the original signal when no other listener owns that signal. If the host process has other listeners for the same signal, those listeners keep ownership of termination. Set `signalPolicy: "cleanup-only"` only when the host explicitly owns termination, or `signalPolicy: "exit"` when vue-tui should exit with the conventional signal exit code after cleanup.
 
 Unhandled promise rejections stay host-owned by default. Setting `cleanupOnUnhandledRejection: true` cleans up and rethrows by default. Set `rethrowUnhandledRejection: false` only when the host explicitly wants to suppress the rejection.
 

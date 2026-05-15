@@ -150,31 +150,38 @@ export interface DomRenderer {
 
 export interface DomRendererOptions {
   /**
+   * Init-only. Changing this after renderer creation requires recreating the renderer.
    * Browser accessibility contract for the renderer container.
    * Pass false when the host owns the accessible wrapper.
    */
   accessibility?: false | DomRendererAccessibilityOptions;
   /**
+   * Init-only. Changing this after renderer creation requires recreating the renderer.
    * Maximum dirty row count allowed for same-call DOM flush when commit({ sync: true }).
    * Larger updates are rAF-batched to avoid blocking the main thread.
    */
   syncFlushMaxRows?: number;
   /**
+   * Init-only. Changing this after renderer creation requires recreating the renderer.
    * Maximum estimated cell work for sync DOM flush: dirtyRows * cols * activePlanes.
    */
   syncFlushCellBudget?: number;
   /**
+   * Init-only because renderer capabilities are frozen at creation time.
    * Enables DOM line-node shifting for terminal scrollOperations.
    */
   enableScrollOperations?: boolean;
   /**
+   * Runtime-updatable.
    * Controls DOM anchor rendering for Style.href segments.
    */
   links?: DomRendererLinkOptions;
+  /** Runtime-updatable. */
   onLinkClick?: (event: MouseEvent, href: string) => boolean | void;
-  /** Optional ANSI-name palette exposed as DOM CSS variables. */
+  /** Runtime-updatable ANSI-name palette exposed as DOM CSS variables. */
   palette?: ThemePalette | null;
   /**
+   * Init-only. Changing this after renderer creation requires recreating the renderer.
    * Controls a key-only early bailout before row segment allocation.
    * The normal row cache remains enabled regardless of this option.
    * Defaults to "auto": sample cached-row hit ratio and keep prepass enabled only

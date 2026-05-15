@@ -102,8 +102,16 @@ describe("package exports", () => {
 
     expect(targets.length).toBeGreaterThan(0);
     for (const target of targets) {
+      if (target === "./package.json") continue;
       expect(target).toMatch(/^\.\/dist\//);
     }
+  });
+
+  it("exports package metadata for tooling", async () => {
+    const specifier = "@simon_he/vue-tui/package.json";
+    const pkg = await import(specifier, { with: { type: "json" } });
+
+    expect(pkg.default.name).toBe("@simon_he/vue-tui");
   });
 
   it("does not pin Vue consumers to a single patch line", () => {

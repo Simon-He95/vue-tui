@@ -168,6 +168,33 @@ describe("cli input", () => {
     }
   });
 
+  it("does not re-raise when another host signal listener exists", async () => {
+    const dispose = vi.fn();
+    const hostListener = vi.fn();
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+
+    process.once("SIGTERM", hostListener);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      signalPolicy: "reraise",
+    });
+
+    try {
+      const ownListener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
+      expect(ownListener).toBeTypeOf("function");
+
+      ownListener?.();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(kill).not.toHaveBeenCalled();
+    } finally {
+      cleanupHandle.uninstall();
+      process.off("SIGTERM", hostListener);
+      kill.mockRestore();
+    }
+  });
+
   it("honors explicit cleanup signals", () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);

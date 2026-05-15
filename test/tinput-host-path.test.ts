@@ -3,6 +3,7 @@ import { fileUrlToPathLike, pathToTerminalFileHref } from "../src/vue/components
 
 describe("TInput host path hrefs", () => {
   it("normalizes file URLs through URL parsing", () => {
+    expect(pathToTerminalFileHref("file:///tmp/a")).toBe("file:///tmp/a");
     expect(pathToTerminalFileHref("file:///tmp/a%20b")).toBe("file:///tmp/a%20b");
     expect(pathToTerminalFileHref("file://server/share/a%20b")).toBe("file://server/share/a%20b");
   });
@@ -20,6 +21,11 @@ describe("TInput host path hrefs", () => {
   it("rejects invalid or control-character file URLs", () => {
     expect(pathToTerminalFileHref("file:///tmp/a\u0007b")).toBeUndefined();
     expect(pathToTerminalFileHref("file://[::1")).toBeUndefined();
+  });
+
+  it("rejects backslashes in raw file URLs", () => {
+    expect(pathToTerminalFileHref("file:///C:\\Users\\me")).toBeUndefined();
+    expect(pathToTerminalFileHref("file://server\\share\\a")).toBeUndefined();
   });
 
   it("rejects encoded controls in raw file URLs", () => {
@@ -46,6 +52,7 @@ describe("TInput host path hrefs", () => {
   it("keeps absolute platform paths encoded as file URLs", () => {
     expect(pathToTerminalFileHref("/tmp/a b")).toBe("file:///tmp/a%20b");
     expect(pathToTerminalFileHref("/tmp/a ")).toBe("file:///tmp/a%20");
+    expect(pathToTerminalFileHref("C:\\Users\\me\\a b")).toBe("file:///C:/Users/me/a%20b");
     expect(pathToTerminalFileHref("C:\\tmp\\a b")).toBe("file:///C:/tmp/a%20b");
   });
 
@@ -60,6 +67,7 @@ describe("TInput host path hrefs", () => {
   });
 
   it("keeps UNC hosts in file URLs", () => {
+    expect(pathToTerminalFileHref("\\\\server\\share\\a b")).toBe("file://server/share/a%20b");
     expect(pathToTerminalFileHref("\\\\server\\share\\a b.txt")).toBe(
       "file://server/share/a%20b.txt",
     );

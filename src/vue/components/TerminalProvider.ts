@@ -114,6 +114,24 @@ function shallowEqualRecord(a: Record<string, unknown>, b: Record<string, unknow
   return true;
 }
 
+function warnDev(message: string): void {
+  const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
+    ?.NODE_ENV;
+  if (nodeEnv === "production") return;
+  console.warn(message);
+}
+
+function pickInitOnlyDomOptions(options: DomRendererOptions | undefined): Record<string, unknown> {
+  const accessibility = options?.accessibility;
+  return {
+    accessibility: isPlainObject(accessibility) ? { ...accessibility } : accessibility,
+    syncFlushMaxRows: options?.syncFlushMaxRows,
+    syncFlushCellBudget: options?.syncFlushCellBudget,
+    enableScrollOperations: options?.enableScrollOperations,
+    enableRowKeyPrepass: options?.enableRowKeyPrepass,
+  };
+}
+
 let portalId = 0;
 
 type ResolvedTerminalSelectionConfig = Readonly<{
@@ -694,6 +712,18 @@ export const TerminalProvider = defineComponent({
         const r = createDomRenderer(terminal, el, props.domRendererOptions ?? {});
         renderer.value = r;
         rendererCapabilities.value = r.capabilities;
+        let currentInitOnlyDomOptions = pickInitOnlyDomOptions(props.domRendererOptions);
+        watch(
+          () => pickInitOnlyDomOptions(props.domRendererOptions),
+          (next) => {
+            if (shallowEqualRecord(currentInitOnlyDomOptions, next)) return;
+            currentInitOnlyDomOptions = next;
+            warnDev(
+              "[vue-tui] domRendererOptions.accessibility/syncFlushMaxRows/syncFlushCellBudget/enableScrollOperations/enableRowKeyPrepass are init-only. Remount TerminalProvider to apply them.",
+            );
+          },
+          { deep: true },
+        );
         watch(
           () => ({
             links: props.domRendererOptions?.links ?? false,

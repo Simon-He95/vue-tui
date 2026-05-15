@@ -111,6 +111,7 @@ function writeSmokeFiles() {
     `import { h, nextTick } from "vue";
 import { createDomRenderer, createTerminal, TBox, TText } from "${packageName}";
 import { createTerminalApp, STDOUT_RENDERER_CAPABILITIES } from "${packageName}/cli";
+import packageMetadata from "${packageName}/package.json" with { type: "json" };
 import * as root from "${packageName}";
 import * as markdown from "${packageName}/markdown";
 import * as experimental from "${packageName}/experimental";
@@ -123,6 +124,7 @@ assert(typeof createTerminal === "function", "root ESM createTerminal export is 
 assert(!("createTerminalApp" in root), "root ESM export leaked createTerminalApp");
 assert(typeof createTerminalApp === "function", "cli ESM createTerminalApp export is missing");
 assert(typeof createDomRenderer === "function", "root ESM createDomRenderer export is missing");
+assert(packageMetadata.name === "${packageName}", "package metadata ESM export is missing");
 assert(!("TVirtualList" in root), "root ESM export leaked TVirtualList");
 assert(typeof markdown.TMarkdownText !== "undefined", "markdown ESM TMarkdownText export is missing");
 assert(typeof markdown.TVirtualMarkdown !== "undefined", "markdown ESM TVirtualMarkdown export is missing");
@@ -191,6 +193,7 @@ app.dispose();
     `const { h, nextTick } = require("vue");
 const root = require("${packageName}");
 const cli = require("${packageName}/cli");
+const packageMetadata = require("${packageName}/package.json");
 const markdown = require("${packageName}/markdown");
 const experimental = require("${packageName}/experimental");
 
@@ -202,6 +205,7 @@ assert(typeof root.createTerminal === "function", "root CJS createTerminal expor
 assert(!("createTerminalApp" in root), "root CJS export leaked createTerminalApp");
 assert(typeof cli.createTerminalApp === "function", "cli CJS createTerminalApp export is missing");
 assert(typeof root.createDomRenderer === "function", "root CJS createDomRenderer export is missing");
+assert(packageMetadata.name === "${packageName}", "package metadata CJS export is missing");
 assert(!("TVirtualList" in root), "root CJS export leaked TVirtualList");
 assert(typeof markdown.TMarkdownText !== "undefined", "markdown CJS TMarkdownText export is missing");
 assert(typeof markdown.TVirtualMarkdown !== "undefined", "markdown CJS TVirtualMarkdown export is missing");

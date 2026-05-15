@@ -61,7 +61,7 @@ import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 - Release benchmark validation now uses `bench:baseline`; timing budgets are only checked by `bench:baseline:timing`.
 - DOM renderer no longer renders `Style.href` as native anchors unless `links` are explicitly configured.
 - DOM renderer link callbacks preserve native browser behavior unless they return `false`; safe relative/hash/search hrefs are allowed when DOM links are enabled.
-- `installTerminalCleanup()` now returns an explicit `{ cleanup, uninstall }` handle and uses `signalPolicy: "cleanup-only" | "exit" | "reraise"` instead of inferring process behavior from existing signal listeners.
+- `installTerminalCleanup()` now returns an explicit `{ cleanup, uninstall }` handle and uses `signalPolicy: "cleanup-only" | "exit" | "reraise"` while leaving termination ownership with existing host signal listeners.
 - Opted-in unhandled rejection cleanup now rethrows by default. Set `rethrowUnhandledRejection: false` to suppress it explicitly.
 - `release:ci` now points users to the GitHub Release workflow instead of publishing from a second scripted path.
 

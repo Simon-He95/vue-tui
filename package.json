@@ -109,7 +109,8 @@
       "types": "./dist/experimental.d.ts",
       "import": "./dist/experimental.js",
       "require": "./dist/experimental.cjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"

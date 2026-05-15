@@ -467,6 +467,33 @@ describe("ui regressions", () => {
     }
   });
 
+  it("warns when init-only DOM renderer options change after mount", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const providerProps = reactive<{ domRendererOptions: any }>({
+      domRendererOptions: { syncFlushMaxRows: 1, links: false },
+    });
+
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, w: 4, value: "text" }),
+      8,
+      1,
+      providerProps,
+    );
+
+    try {
+      providerProps.domRendererOptions = { syncFlushMaxRows: 2, links: false };
+      await nextTick();
+      await Promise.resolve();
+
+      expect(warn).toHaveBeenCalledWith(
+        "[vue-tui] domRendererOptions.accessibility/syncFlushMaxRows/syncFlushCellBudget/enableScrollOperations/enableRowKeyPrepass are init-only. Remount TerminalProvider to apply them.",
+      );
+    } finally {
+      mounted.unmount();
+      warn.mockRestore();
+    }
+  });
+
   it("keeps terminal node click handling when a DOM link is activated", async () => {
     const onActivate = vi.fn();
     const terminalClick = vi.fn();

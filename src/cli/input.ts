@@ -30,7 +30,7 @@ export type TerminalCleanupOptions = Readonly<{
   signals?: readonly CleanupSignal[];
   /**
    * Defaults to "reraise": cleanup runs, vue-tui removes its own listener,
-   * then the signal is sent again for any remaining host listeners.
+   * then the signal is sent again when no other listener owns the signal.
    */
   signalPolicy?: TerminalCleanupSignalPolicy;
   cleanupOnUnhandledRejection?: boolean;
@@ -92,6 +92,12 @@ function removeProcessListener(
 
 function shouldRegisterSignal(signal: CleanupSignal): boolean {
   return signal !== "SIGBREAK" || process.platform === "win32";
+}
+
+function hasOtherSignalListeners(signal: CleanupSignal, ownHandler: () => void): boolean {
+  return process.rawListeners(signal).some((listener: any) => {
+    return listener !== ownHandler && listener.listener !== ownHandler;
+  });
 }
 
 function writeTTYSyncOrStream(stdout: NodeJS.WriteStream, chunk: string): void {
@@ -158,7 +164,9 @@ export function installTerminalCleanup(
     }
   };
 
-  const handleSignal = (signal: CleanupSignal) => {
+  const handleSignal = (signal: CleanupSignal, ownHandler: () => void) => {
+    const hasHostSignalListener = hasOtherSignalListeners(signal, ownHandler);
+
     cleanup();
     uninstall();
 
@@ -172,6 +180,8 @@ export function installTerminalCleanup(
       return;
     }
 
+    if (hasHostSignalListener) return;
+
     setImmediate(() => {
       process.kill(process.pid, action.signal);
     });
@@ -180,7 +190,7 @@ export function installTerminalCleanup(
   for (const signal of signals) {
     if (!shouldRegisterSignal(signal)) continue;
     if (signalHandlers.has(signal)) continue;
-    const handler = () => handleSignal(signal);
+    const handler = () => handleSignal(signal, handler);
     if (addProcessOnce(signal, handler)) signalHandlers.set(signal, handler);
   }
 

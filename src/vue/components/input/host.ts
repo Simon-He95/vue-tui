@@ -115,6 +115,8 @@ function hasControlChar(value: string): boolean {
 function sanitizeRawFileUrl(raw: string): string | undefined {
   if (raw !== raw.trim()) return undefined;
   if (/\s/u.test(raw)) return undefined;
+  if (raw.includes("\\")) return undefined;
+  if (hasControlChar(raw)) return undefined;
   if (hasEncodedControl(raw)) return undefined;
 
   try {
