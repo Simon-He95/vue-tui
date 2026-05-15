@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { builtinModules, createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { assertNoBrowserForbiddenCode } from "../scripts/browser-forbidden-code.js";
 
 const distIndex = resolve("dist/index.js");
 const distCli = resolve("dist/cli.js");
@@ -59,15 +60,7 @@ function collectExportTargets(value: unknown, out: string[] = []): string[] {
 
 function expectNoBrowserForbiddenCode(file: string): void {
   const source = readFileSync(file, "utf8");
-  expect(source).not.toMatch(
-    /node:child_process|node:fs|node:path|node:url|node:buffer|node:process/,
-  );
-  expect(source).not.toContain("new Function");
-  expect(source).not.toContain("process.stdout");
-  expect(source).not.toContain("process.stderr");
-  expect(source).not.toContain("createOsc52ClipboardProvider");
-  expect(source).not.toContain("createDefaultTInputHostAdapter");
-  expect(source).not.toContain("createNodeMentionPathProvider");
+  assertNoBrowserForbiddenCode(source, file);
 }
 
 describe("package exports", () => {
@@ -97,6 +90,21 @@ describe("package exports", () => {
   it("does not import the mixed renderer barrel from CLI app runtime", () => {
     const source = readFileSync(resolve("src/create-terminal-app.ts"), "utf8");
     expect(source).not.toContain("./renderer/index.js");
+  });
+
+  it("detects bare Node builtins in browser forbidden code scans", () => {
+    for (const bad of [
+      `const fs = require("fs")`,
+      `const fs = require("node:fs")`,
+      `import path from "path"`,
+      `import "path"`,
+      `export { readFile } from "fs"`,
+      `await import("child_process")`,
+      `await import("node:child_process")`,
+      `process.env.NODE_ENV`,
+    ]) {
+      expect(() => assertNoBrowserForbiddenCode(bad)).toThrow(/forbidden code/);
+    }
   });
 
   it("keeps high-throughput components behind the experimental entrypoint", async () => {
@@ -274,14 +282,7 @@ describe("package exports", () => {
     const output = result.outputFiles
       .map((file) => new TextDecoder().decode(file.contents))
       .join("\n");
-    expect(output).not.toContain("node:child_process");
-    expect(output).not.toContain("node:fs");
-    expect(output).not.toContain("node:path");
-    expect(output).not.toContain("node:url");
-    expect(output).not.toContain("new Function");
-    expect(output).not.toContain("process.stdout");
-    expect(output).not.toContain("createOsc52ClipboardProvider");
-    expect(output).not.toContain("createNodeMentionPathProvider");
+    assertNoBrowserForbiddenCode(output, "source browser bundle");
   });
 
   it.skipIf(!requireDistExports)(
@@ -313,14 +314,7 @@ describe("package exports", () => {
       const output = result.outputFiles
         .map((file) => new TextDecoder().decode(file.contents))
         .join("\n");
-      expect(output).not.toContain("node:child_process");
-      expect(output).not.toContain("node:fs");
-      expect(output).not.toContain("node:path");
-      expect(output).not.toContain("node:url");
-      expect(output).not.toContain("new Function");
-      expect(output).not.toContain("process.stdout");
-      expect(output).not.toContain("createOsc52ClipboardProvider");
-      expect(output).not.toContain("createNodeMentionPathProvider");
+      assertNoBrowserForbiddenCode(output, "dist browser bundle");
     },
   );
 

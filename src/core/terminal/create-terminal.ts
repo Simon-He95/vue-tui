@@ -29,6 +29,15 @@ import {
 import { TERMINAL_RENDER_PLANES } from "../render-plane.js";
 import { Emitter } from "./emitter.js";
 
+type GraphemeSegment = Readonly<{ segment: string }>;
+type GraphemeSegmenter = Readonly<{ segment(input: string): Iterable<GraphemeSegment> }>;
+type IntlWithSegmenter = typeof Intl & {
+  Segmenter?: new (
+    locales?: string | string[],
+    options?: Readonly<{ granularity?: "grapheme" }>,
+  ) => GraphemeSegmenter;
+};
+
 function isControlChar(ch: string): boolean {
   return ch === "\n" || ch === "\r" || ch === "\t";
 }
@@ -260,11 +269,12 @@ function normalizeDirtyRows(
 }
 
 // Shared Intl.Segmenter instance for grapheme cluster iteration
-let sharedGraphemeSegmenter: Intl.Segmenter | null = null;
+let sharedGraphemeSegmenter: GraphemeSegmenter | null = null;
 try {
-  sharedGraphemeSegmenter = new Intl.Segmenter(undefined, {
-    granularity: "grapheme",
-  });
+  const Segmenter = (Intl as IntlWithSegmenter).Segmenter;
+  sharedGraphemeSegmenter = Segmenter
+    ? new Segmenter(undefined, { granularity: "grapheme" })
+    : null;
 } catch {
   // Fall back to code point iteration if Intl.Segmenter is not available
 }

@@ -5,6 +5,16 @@ interface GraphemeSegment {
   index: number;
 }
 
+type GraphemeSegmenter = {
+  segment(input: string): Iterable<GraphemeSegment>;
+};
+type IntlWithSegmenter = typeof Intl & {
+  Segmenter?: new (
+    locales?: string | string[],
+    options?: Readonly<{ granularity?: "grapheme" }>,
+  ) => GraphemeSegmenter;
+};
+
 export interface TextCellSegment {
   text: string;
   cells: number;
@@ -61,13 +71,11 @@ function needsGraphemeSegmentation(text: string): boolean {
   return false;
 }
 
-let graphemeSegmenter: Intl.Segmenter | null = null;
+let graphemeSegmenter: GraphemeSegmenter | null = null;
 try {
   // Some runtimes may not support Intl.Segmenter; fall back to code-point iteration.
-  graphemeSegmenter =
-    typeof Intl !== "undefined" && "Segmenter" in Intl
-      ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
-      : null;
+  const Segmenter = typeof Intl !== "undefined" ? (Intl as IntlWithSegmenter).Segmenter : undefined;
+  graphemeSegmenter = Segmenter ? new Segmenter(undefined, { granularity: "grapheme" }) : null;
 } catch {
   graphemeSegmenter = null;
 }

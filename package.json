@@ -117,7 +117,7 @@
     "test:unit": "vitest run --exclude test/package-exports.test.ts",
     "test:package-exports": "pnpm run build:checked && VUE_TUI_REQUIRE_DIST_EXPORTS=1 vitest run test/package-exports.test.ts",
     "test:package-exports:dist": "VUE_TUI_REQUIRE_DIST_EXPORTS=1 vitest run test/package-exports.test.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.runtime.json --noEmit && tsc -p tsconfig.json --noEmit",
     "e2e": "playwright test --project=smoke",
     "e2e:smoke": "playwright test --project=smoke",
     "bench:vfor": "tsx scripts/bench-vfor.ts",

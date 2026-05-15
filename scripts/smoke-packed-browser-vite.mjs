@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertNoBrowserForbiddenCode } from "./browser-forbidden-code.js";
 
 const tarball = process.argv[2];
 if (!tarball) throw new Error("Usage: node scripts/smoke-packed-browser-vite.mjs <package.tgz>");
@@ -30,21 +31,7 @@ function assertNoForbiddenBrowserCode() {
   }
 
   const bundle = files.map((file) => readFileSync(file, "utf8")).join("\n");
-  const forbidden = [
-    /\bnode:(?:fs|path|url|buffer|child_process|process)\b/,
-    /\bprocess\.stdout\b/,
-    /\bprocess\.stderr\b/,
-    /\bcreateOsc52ClipboardProvider\b/,
-    /\bcreateDefaultTInputHostAdapter\b/,
-    /\bcreateNodeMentionPathProvider\b/,
-    /\bnew Function\b/,
-  ];
-
-  for (const pattern of forbidden) {
-    if (pattern.test(bundle)) {
-      throw new Error(`Packed browser bundle contains forbidden code: ${pattern}`);
-    }
-  }
+  assertNoBrowserForbiddenCode(bundle, "Packed browser bundle");
 }
 
 try {

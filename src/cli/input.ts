@@ -42,13 +42,9 @@ function exitCodeForSignal(signal: CleanupSignal): number {
 function normalizeUnhandledRejection(reason: unknown): Error {
   if (reason instanceof Error) return reason;
 
-  try {
-    return new Error("Unhandled promise rejection", { cause: reason });
-  } catch {
-    const error = new Error(`Unhandled promise rejection: ${String(reason)}`);
-    (error as Error & { cause?: unknown }).cause = reason;
-    return error;
-  }
+  const error = new Error("Unhandled promise rejection");
+  (error as Error & { cause?: unknown }).cause = reason;
+  return error;
 }
 
 function writeTTYSyncOrStream(stdout: NodeJS.WriteStream, chunk: string): void {

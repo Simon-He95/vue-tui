@@ -9,9 +9,7 @@ export type SanitizeDomHrefOptions = Readonly<{
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 const BLOCKED_SCHEME_RE = /^(?:javascript|data|vbscript):/i;
 const ENCODED_CRLF_RE = /%(?:0d|0a)/i;
-const PCT_ENCODED = "%[0-9A-Fa-f]{2}";
-const RELATIVE_SEGMENT = `(?:[A-Za-z0-9._~!$&'()*+,;=@-]|${PCT_ENCODED})+`;
-const SAFE_BARE_RELATIVE_RE = new RegExp(`^${RELATIVE_SEGMENT}(?:[/?#][^\\s\\\\]*)?$`, "u");
+const SAFE_RELATIVE_HREF_RE = /^(?:[A-Za-z0-9._~!$&()*+,;=:@/?#-]|%[0-9A-Fa-f]{2})+$/u;
 
 function normalizeRawHref(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -69,13 +67,14 @@ function isSafeNormalizedRelativeHref(raw: string): boolean {
   if (raw.startsWith("//")) return false;
   if (SCHEME_RE.test(raw)) return false;
   if (ENCODED_CRLF_RE.test(raw)) return false;
+  if (!SAFE_RELATIVE_HREF_RE.test(raw)) return false;
 
   return (
     raw.startsWith("#") ||
     raw.startsWith("/") ||
     raw.startsWith("./") ||
     raw.startsWith("../") ||
-    SAFE_BARE_RELATIVE_RE.test(raw)
+    /^[A-Za-z0-9._~-]/u.test(raw)
   );
 }
 

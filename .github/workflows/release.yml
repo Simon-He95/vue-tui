@@ -19,6 +19,8 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -51,12 +53,19 @@ jobs:
       - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz 3.3.0
 
       - name: Dry-run npm publish from validated tarball
+        if: ${{ env.HAS_NPM_TOKEN == 'true' }}
         run: |
           TARBALL=$(ls .release/*.tgz | head -n 1)
           npm publish "$TARBALL" --access public --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VUE_TUI_ALLOW_DIRECT_PUBLISH: "1"
+
+      - name: Skip authenticated npm dry-run
+        if: ${{ env.HAS_NPM_TOKEN != 'true' }}
+        run: |
+          echo "NPM_TOKEN is not configured; skipping authenticated npm publish --dry-run."
+          echo "Tarball pack, checksum, browser smoke, and runtime smoke still ran."
 
       - uses: actions/upload-artifact@v4
         with:
@@ -131,6 +140,15 @@ jobs:
             echo "$NAME@$VERSION already exists on npm"
             exit 1
           fi
+
+      - name: Require npm token
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "NPM_TOKEN is required for publishing"
+            exit 1
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish validated tarball
         run: |

@@ -125,10 +125,17 @@ describe("markdown layout", () => {
     expect(isSafeMarkdownLink("https://example.com/a%20b")).toBe(true);
     expect(isSafeMarkdownLink("guide%20intro")).toBe(true);
     expect(isSafeMarkdownLink("README%20copy.md")).toBe(true);
+    expect(isSafeMarkdownLink("docs/intro%20guide.md")).toBe(true);
+    expect(isSafeMarkdownLink("../guide/parser-api")).toBe(true);
+    expect(isSafeMarkdownLink("#section-1")).toBe(true);
     expect(isSafeMarkdownLink("javascript:alert(1)")).toBe(false);
     expect(isSafeMarkdownLink("JaVaScRiPt:alert(1)")).toBe(false);
     expect(isSafeMarkdownLink("data:text/html,boom")).toBe(false);
     expect(isSafeMarkdownLink("vbscript:msgbox(1)")).toBe(false);
+    expect(isSafeMarkdownLink("docs/<img>")).toBe(false);
+    expect(isSafeMarkdownLink('docs/"x"')).toBe(false);
+    expect(isSafeMarkdownLink("docs/'x'")).toBe(false);
+    expect(isSafeMarkdownLink("docs/`x`")).toBe(false);
     expect(isSafeMarkdownLink("//evil.test")).toBe(false);
     expect(isSafeMarkdownLink("https:\\\\evil.test")).toBe(false);
     expect(isSafeMarkdownLink("\\evil")).toBe(false);

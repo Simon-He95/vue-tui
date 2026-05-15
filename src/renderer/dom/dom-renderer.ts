@@ -94,7 +94,7 @@ type DomRendererLinkConfig = Readonly<{
 export type DomRendererLinkOptions = boolean | DomRendererLinkConfig;
 
 type NormalizedDomRendererLinkOptions = false | DomRendererLinkConfig;
-type DomRendererLinkActivateHandler = (href: string, event: MouseEvent) => void;
+type DomRendererAnchorClickHandler = (event: MouseEvent) => void;
 
 export type DomRendererRowKeyPrepassDecision =
   | "forced-enabled"
@@ -713,6 +713,7 @@ function resetSpanStyle(span: HTMLElement): void {
     span.removeAttribute("href");
     span.removeAttribute("target");
     span.removeAttribute("rel");
+    delete span.dataset.vtHref;
   }
 }
 
@@ -730,7 +731,7 @@ function createSegmentElement(
   style: Style,
   options: Readonly<{
     links: NormalizedDomRendererLinkOptions;
-    activateLink: DomRendererLinkActivateHandler;
+    onAnchorClick: DomRendererAnchorClickHandler;
   }>,
 ): HTMLSpanElement | HTMLAnchorElement {
   const linkOptions = options.links;
@@ -739,11 +740,9 @@ function createSegmentElement(
   const href = renderableHref(style, linkOptions);
   if (!href) return doc.createElement("span");
 
-  const hasActivateHandler = typeof linkOptions.onActivate === "function";
-  const activation = linkOptions.activation ?? (hasActivateHandler ? "event" : "native");
-
   const anchor = doc.createElement("a");
   anchor.href = href;
+  anchor.dataset.vtHref = href;
   const protocol = href.match(/^[a-z][a-z0-9+.-]*:/i)?.[0].toLowerCase() ?? null;
   if (protocol === "http:" || protocol === "https:") {
     anchor.target = linkOptions.externalTarget ?? "_blank";
@@ -756,14 +755,7 @@ function createSegmentElement(
   anchor.addEventListener("dblclick", stopTerminalPropagation);
   anchor.addEventListener("keydown", stopTerminalPropagation);
   anchor.addEventListener("keyup", stopTerminalPropagation);
-  if (activation === "event") {
-    anchor.addEventListener("click", (event) => {
-      stopNativeAndTerminalActivation(event);
-      options.activateLink(href, event);
-    });
-  } else {
-    anchor.addEventListener("click", stopTerminalPropagation);
-  }
+  anchor.addEventListener("click", options.onAnchorClick);
   return anchor;
 }
 
@@ -818,7 +810,7 @@ function renderRow(
   enableRowKeyPrepass: boolean,
   palette: ThemePalette | null,
   linkOptions: NormalizedDomRendererLinkOptions,
-  activateLink: DomRendererLinkActivateHandler,
+  onAnchorClick: DomRendererAnchorClickHandler,
   linkVersion: number,
 ): void {
   stats.rows++;
@@ -879,7 +871,7 @@ function renderRow(
       span = firstChild;
       stats.spansReused++;
     } else {
-      span = createSegmentElement(doc, seg.style, { links: linkOptions, activateLink });
+      span = createSegmentElement(doc, seg.style, { links: linkOptions, onAnchorClick });
       span.dataset.vtFastRow = "styled";
       stats.spansCreated++;
       stats.replaceChildren++;
@@ -910,7 +902,7 @@ function renderRow(
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]!;
-    const span = createSegmentElement(doc, seg.style, { links: linkOptions, activateLink });
+    const span = createSegmentElement(doc, seg.style, { links: linkOptions, onAnchorClick });
     if (canReuseSpans) {
       span.dataset.vtFastRow = "segment";
       span.dataset.vtSegmentIndex = String(i);
@@ -941,9 +933,20 @@ export function createDomRenderer(
   let rendererLinkOptions = normalizeLinkOptions(options.links);
   let rendererLinkOptionsKey = linkOptionsKey(rendererLinkOptions);
   let rendererLinkVersion = 0;
-  const activateLink: DomRendererLinkActivateHandler = (href, event) => {
-    if (!rendererLinkOptions || typeof rendererLinkOptions.onActivate !== "function") return;
-    rendererLinkOptions.onActivate(href, event);
+  const onAnchorClick: DomRendererAnchorClickHandler = (event) => {
+    const anchor = event.currentTarget as HTMLAnchorElement;
+    const href = anchor.dataset.vtHref;
+    if (!href || !rendererLinkOptions) return;
+
+    const hasActivateHandler = typeof rendererLinkOptions.onActivate === "function";
+    const activation = rendererLinkOptions.activation ?? (hasActivateHandler ? "event" : "native");
+    if (activation === "event") {
+      stopNativeAndTerminalActivation(event);
+      rendererLinkOptions.onActivate?.(href, event);
+      return;
+    }
+
+    stopTerminalPropagation(event);
   };
   container.style.fontFamily = DEFAULT_FONT_FAMILY;
   container.style.whiteSpace = "pre";
@@ -1208,7 +1211,7 @@ export function createDomRenderer(
           shouldUseRowKeyPrepass(),
           palette,
           rendererLinkOptions,
-          activateLink,
+          onAnchorClick,
           rendererLinkVersion,
         );
     }
@@ -1519,7 +1522,7 @@ export function createDomRenderer(
             useRowKeyPrepass,
             palette,
             rendererLinkOptions,
-            activateLink,
+            onAnchorClick,
             rendererLinkVersion,
           );
         deletePendingRow(plane, rows, y);

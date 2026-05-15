@@ -45,6 +45,10 @@ describe("DomRenderer row rendering", () => {
     expect(sanitizeDomHref("../ok", { allowRelative: true })).toBe("../ok");
     expect(sanitizeDomHref("#section", { allowRelative: true })).toBe("#section");
     expect(sanitizeDomHref("guide%20intro", { allowRelative: true })).toBe("guide%20intro");
+    expect(sanitizeDomHref("docs/<img>", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref('docs/"x"', { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("docs/'x'", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("docs/`x`", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBeNull();
     expect(sanitizeDomHref("https://example.com/%0aevil")).toBeNull();
     expect(sanitizeDomHref("/docs/%0dheader", { allowRelative: true })).toBeNull();
@@ -59,6 +63,10 @@ describe("DomRenderer row rendering", () => {
     expect(isSafeRelativeHref("docs/a%20b")).toBe(true);
 
     expect(isSafeRelativeHref("#x\n")).toBe(false);
+    expect(isSafeRelativeHref("docs/<img>")).toBe(false);
+    expect(isSafeRelativeHref('docs/"x"')).toBe(false);
+    expect(isSafeRelativeHref("docs/'x'")).toBe(false);
+    expect(isSafeRelativeHref("docs/`x`")).toBe(false);
     expect(isSafeRelativeHref("/docs/a b")).toBe(false);
     expect(isSafeRelativeHref("./a\tb")).toBe(false);
     expect(isSafeRelativeHref("../a%0a")).toBe(false);
