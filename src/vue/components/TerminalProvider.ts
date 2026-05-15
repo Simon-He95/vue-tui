@@ -1,4 +1,5 @@
 import type { PropType } from "vue";
+import type { WidthProvider } from "../../core/buffer/width.js";
 import type { PathPickerProvider } from "../../core/path-provider-types.js";
 import type { Style, Terminal } from "../../core/types.js";
 import type { TerminalEventRecord } from "../../events/recording.js";
@@ -76,6 +77,10 @@ export const TerminalProvider = defineComponent({
   props: {
     cols: { type: Number, required: true },
     rows: { type: Number, required: true },
+    widthProvider: {
+      type: [String, Function] as PropType<WidthProvider>,
+      default: "default",
+    },
     defaultStyle: { type: Object as PropType<Style>, default: () => ({}) },
     autoResize: { type: Boolean, default: false },
     minCols: { type: Number, default: 1 },
@@ -111,9 +116,11 @@ export const TerminalProvider = defineComponent({
     selectionCopy: (_payload: TerminalSelectionCopyPayload) => true,
   },
   setup(props, { slots, emit }) {
+    const widthProvider = props.widthProvider ?? "default";
     const terminal: Terminal = createTerminal({
       cols: props.cols,
       rows: props.rows,
+      widthProvider,
     });
     const hostRef = ref<HTMLElement | null>(null);
     const containerRef = ref<HTMLElement | null>(null);
@@ -161,7 +168,7 @@ export const TerminalProvider = defineComponent({
     let imeComposing = false;
     let unmounting = false;
     let updateImePositionAfterFlush: (() => void) | null = null;
-    const render = createRenderManager(terminal);
+    const render = createRenderManager(terminal, { widthProvider });
     const profiler = createTuiProfiler("dom-scheduler");
     const scope = effectScope();
     const scheduler = createTerminalProviderScheduler({
@@ -278,6 +285,7 @@ export const TerminalProvider = defineComponent({
       observability: { trace, framePerf },
       selection: selectionContext,
       defaultStyle: toRef(props, "defaultStyle"),
+      widthProvider,
       render,
     };
 

@@ -9,6 +9,7 @@ import type {
   TerminalOptions,
   TerminalScrollOperation,
 } from "../types.js";
+import type { WidthProvider } from "../buffer/width.js";
 import { parseAnsiSgr } from "../ansi/sgr.js";
 import {
   clearRect,
@@ -99,8 +100,12 @@ function setBufferClean(buffer: GridBuffer): void {
   buffer.dirtyAll = false;
 }
 
-function createPlaneState(cols: number, rows: number, opts: TerminalOptions): PlaneBufferState {
-  const buffer = createGridBuffer(cols, rows, { widthProvider: opts.widthProvider });
+function createPlaneState(
+  cols: number,
+  rows: number,
+  widthProvider: WidthProvider,
+): PlaneBufferState {
+  const buffer = createGridBuffer(cols, rows, { widthProvider });
   setBufferClean(buffer);
   buffer.cursorVisible = false;
   return {
@@ -280,6 +285,26 @@ try {
   // Fall back to code point iteration if Intl.Segmenter is not available
 }
 
+function needsGraphemeSegmentation(text: string): boolean {
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    if (cp === 0x200d) return true;
+    if ((cp >= 0xfe00 && cp <= 0xfe0f) || (cp >= 0xe0100 && cp <= 0xe01ef)) return true;
+    if (
+      (cp >= 0x0300 && cp <= 0x036f) ||
+      (cp >= 0x1ab0 && cp <= 0x1aff) ||
+      (cp >= 0x1dc0 && cp <= 0x1dff) ||
+      (cp >= 0x20d0 && cp <= 0x20ff) ||
+      (cp >= 0xfe20 && cp <= 0xfe2f)
+    ) {
+      return true;
+    }
+    if (cp >= 0x1f3fb && cp <= 0x1f3ff) return true;
+    if (cp >= 0x1f1e6 && cp <= 0x1f1ff) return true;
+  }
+  return false;
+}
+
 export function getPlaneTerminal(terminal: Terminal, plane: TerminalRenderPlane): Terminal {
   const internals = (terminal as PlaneAwareTerminal)[TERMINAL_PLANE_INTERNALS];
   return internals?.getPlaneTerminal(plane) ?? terminal;
@@ -315,9 +340,10 @@ export function scrollPlaneRows(
 }
 
 export function createTerminal(opts: TerminalOptions): Terminal {
+  const widthProvider = opts.widthProvider ?? "default";
   const emitter = new Emitter<TerminalEventMap>();
   const compositeBuffer = createGridBuffer(opts.cols, opts.rows, {
-    widthProvider: opts.widthProvider,
+    widthProvider,
   });
   const planeStates = new Map<TerminalRenderPlane, PlaneBufferState>();
   let disposed = false;
@@ -338,7 +364,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
   function getPlaneState(plane: TerminalRenderPlane): PlaneBufferState {
     let state = planeStates.get(plane);
     if (!state) {
-      state = createPlaneState(compositeBuffer.cols, compositeBuffer.rows, opts);
+      state = createPlaneState(compositeBuffer.cols, compositeBuffer.rows, widthProvider);
       planeStates.set(plane, state);
     }
     return state;
@@ -422,6 +448,19 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       cx += width;
       return true;
     };
+
+    if (needsGraphemeSegmentation(text)) {
+      if (sharedGraphemeSegmenter) {
+        for (const seg of sharedGraphemeSegmenter.segment(text)) {
+          if (!writeChar(seg.segment)) break;
+        }
+      } else {
+        for (const ch of text) {
+          if (!writeChar(ch)) break;
+        }
+      }
+      return { x: cx, y: cy };
+    }
 
     let i = 0;
     for (; i < text.length; i++) {

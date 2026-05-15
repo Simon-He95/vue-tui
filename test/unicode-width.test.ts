@@ -1,6 +1,17 @@
+import { createApp, defineComponent, h, nextTick } from "vue";
 import { describe, expect, it } from "vitest";
 import { charCellWidth, createTerminal } from "../src/core.js";
-import { clearTextCaches, sliceByCells, textCellWidth, wrapByCells } from "../src/vue.js";
+import {
+  TerminalProvider,
+  TText,
+  clearTextCaches,
+  sliceByCells,
+  textCellWidth,
+  useTerminal,
+  wrapByCells,
+} from "../src/vue.js";
+import { createTerminalApp } from "../src/cli.js";
+import type { Terminal } from "../src/core.js";
 
 function segmentGraphemes(text: string): string[] {
   try {
@@ -78,6 +89,90 @@ describe("unicode width + grapheme safety", () => {
     expect(terminal.getCell(1, 0).width).toBe(2);
     expect(terminal.getCell(2, 0).continuation).toBe(true);
     expect(terminal.getCell(3, 0).ch).toBe("b");
+  });
+
+  it("terminal.write keeps ASCII-leading combining graphemes intact", () => {
+    const terminal = createTerminal({ cols: 6, rows: 1 });
+
+    terminal.write("e\u0301x", { x: 0, y: 0 });
+
+    expect(terminal.getCell(0, 0).ch).toBe("e\u0301");
+    expect(terminal.getCell(1, 0).ch).toBe("x");
+  });
+
+  it("terminal.write keeps keycap emoji as one wide grapheme", () => {
+    const terminal = createTerminal({ cols: 6, rows: 1 });
+
+    terminal.write("1️⃣x", { x: 0, y: 0 });
+
+    expect(terminal.getCell(0, 0).ch).toBe("1️⃣");
+    expect(terminal.getCell(0, 0).width).toBe(2);
+    expect(terminal.getCell(1, 0).continuation).toBe(true);
+    expect(terminal.getCell(2, 0).ch).toBe("x");
+  });
+
+  it("passes widthProvider through Vue text layout in createTerminalApp", async () => {
+    const App = defineComponent({
+      name: "WidthProviderTextLayoutTest",
+      setup() {
+        return () => h(TText, { x: 0, y: 0, w: 2, h: 1, value: "Ωx" });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 4, rows: 1, widthProvider: "cjk", component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flush();
+
+      expect(app.terminal.getCell(0, 0).ch).toBe("Ω");
+      expect(app.terminal.getCell(0, 0).width).toBe(2);
+      expect(app.terminal.getCell(1, 0).continuation).toBe(true);
+      expect(app.terminal.getCell(2, 0).ch).toBe(" ");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("passes widthProvider through TerminalProvider", async () => {
+    let terminal: Terminal | null = null;
+    const Probe = defineComponent({
+      name: "TerminalProviderWidthProviderProbe",
+      setup() {
+        terminal = useTerminal().terminal;
+        return () => null;
+      },
+    });
+    const root = document.createElement("div");
+    const app = createApp({
+      name: "TerminalProviderWidthProviderTest",
+      render() {
+        return h(
+          TerminalProvider,
+          { cols: 4, rows: 1, widthProvider: "cjk" },
+          { default: () => h(Probe) },
+        );
+      },
+    });
+
+    try {
+      app.mount(root);
+      await nextTick();
+      terminal!.write("Ωx", { x: 0, y: 0 });
+
+      expect(terminal!.getCell(0, 0).ch).toBe("Ω");
+      expect(terminal!.getCell(0, 0).width).toBe(2);
+      expect(terminal!.getCell(1, 0).continuation).toBe(true);
+      expect(terminal!.getCell(2, 0).ch).toBe("x");
+    } finally {
+      app.unmount();
+    }
+  });
+
+  it("Vue text utilities accept the same widthProvider", () => {
+    expect(textCellWidth("Ωx", "cjk")).toBe(3);
+    expect(sliceByCells("Ωx", 2, "cjk")).toBe("Ω");
+    expect(wrapByCells("Ωx", 2, "cjk")).toEqual(["Ω", "x"]);
   });
 
   it("clearTextCaches preserves wrapByCells output", () => {

@@ -6,6 +6,7 @@ import { computed, inject, onBeforeUnmount, ref, watchEffect } from "vue";
 import { RenderPlaneContextKey } from "../context.js";
 import { useRenderStack } from "./use-render-stack.js";
 import { useTerminal } from "./use-terminal.js";
+import { withTextWidthProvider } from "../utils/text.js";
 
 export interface RenderNodeOptions {
   zIndex?: number;
@@ -78,13 +79,13 @@ function requestBatchedInvalidate(
 export function useRenderNode(getOptions: () => RenderNodeOptions): {
   id: Ref<string | null>;
 } {
-  const { scheduler, render } = useTerminal();
+  const { scheduler, render, widthProvider } = useTerminal();
   const parentStack = useRenderStack();
   const plane = inject(RenderPlaneContextKey, ref("default")) as Ref<TerminalRenderPlane>;
   const id = ref<string | null>(null);
   const lastPlane = ref<TerminalRenderPlane>(plane.value);
 
-  const options = computed(() => getOptions());
+  const options = computed(() => withTextWidthProvider(widthProvider, getOptions));
 
   const stop = watchEffect(() => {
     const opt = options.value;

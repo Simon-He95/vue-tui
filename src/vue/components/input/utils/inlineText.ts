@@ -1,5 +1,8 @@
-import { charCellWidth } from "../../../../core/buffer/width.js";
-import { textCellWidth as baseTextCellWidth, spaces } from "../../../utils/text.js";
+import {
+  hasTextWidthAsciiFastPath,
+  textCellWidth as baseTextCellWidth,
+  spaces,
+} from "../../../utils/text.js";
 import { mentionLabelFromAbsPath } from "../plugins/mentionUtils.js";
 
 function clamp(n: number, min: number, max: number): number {
@@ -26,27 +29,14 @@ export function sliceByCellsWindow(text: string, startCell: number, width: numbe
   width = Math.max(0, Math.floor(width));
   if (width <= 0) return "";
   if (!text) return "";
-  if (isAscii(text)) return text.slice(startCell, startCell + width);
+  if (hasTextWidthAsciiFastPath() && isAscii(text)) return text.slice(startCell, startCell + width);
   let out = "";
   let skipped = 0;
   let used = 0;
   for (let i = 0; i < text.length; ) {
-    const code = text.charCodeAt(i);
-    if (code <= 0x7f) {
-      if (skipped < startCell) {
-        skipped++;
-        i++;
-        continue;
-      }
-      if (used >= width) break;
-      out += text[i]!;
-      used++;
-      i++;
-      continue;
-    }
-    const cp = text.codePointAt(i) ?? 0;
-    const seg = String.fromCodePoint(cp);
-    const w = charCellWidth(seg);
+    const seg =
+      text.charCodeAt(i) <= 0x7f ? text[i]! : String.fromCodePoint(text.codePointAt(i) ?? 0);
+    const w = baseTextCellWidth(seg);
     if (skipped + w <= startCell) {
       skipped += w;
       i += seg.length;
@@ -137,6 +127,7 @@ export function textCellWidthInline(
 ): number {
   const safeStart = clamp(start, 0, value.length);
   const safeEnd = clamp(end, safeStart, value.length);
+  const asciiFastPath = hasTextWidthAsciiFastPath();
   let cells = 0;
   let tokenIndex = 0;
   let mentionIndex = 0;
@@ -162,13 +153,13 @@ export function textCellWidthInline(
     }
     const code = value.charCodeAt(i);
     if (code <= 0x7f) {
-      if (i >= safeStart) cells += 1;
+      if (i >= safeStart) cells += asciiFastPath ? 1 : baseTextCellWidth(value[i]!);
       i += 1;
       continue;
     }
     const cp = value.codePointAt(i) ?? 0;
     const seg = String.fromCodePoint(cp);
-    if (i >= safeStart) cells += charCellWidth(seg);
+    if (i >= safeStart) cells += baseTextCellWidth(seg);
     i += seg.length;
   }
   return cells;
@@ -184,6 +175,7 @@ export function wrapToLinesInline(
 ): WrappedLineInfo[] {
   width = Math.max(1, Math.floor(width));
   const out: WrappedLineInfo[] = [];
+  const asciiFastPath = hasTextWidthAsciiFastPath();
   let start = 0;
   let cells = 0;
   let tokenIndex = 0;
@@ -215,12 +207,12 @@ export function wrapToLinesInline(
       const code = value.charCodeAt(i);
       if (code <= 0x7f) {
         segLen = 1;
-        w = 1;
+        w = asciiFastPath ? 1 : baseTextCellWidth(value[i]!);
       } else {
         const cp = value.codePointAt(i) ?? 0;
         const seg = String.fromCodePoint(cp);
         segLen = seg.length;
-        w = charCellWidth(seg);
+        w = baseTextCellWidth(seg);
       }
     }
 
@@ -260,6 +252,7 @@ export function wrapToLinesFirstWidthInline(
   }
 
   const out: WrappedLineInfo[] = [];
+  const asciiFastPath = hasTextWidthAsciiFastPath();
   let start = 0;
   let cells = 0;
   let currentWidth = firstWidth;
@@ -295,12 +288,12 @@ export function wrapToLinesFirstWidthInline(
       const code = value.charCodeAt(i);
       if (code <= 0x7f) {
         segLen = 1;
-        w = 1;
+        w = asciiFastPath ? 1 : baseTextCellWidth(value[i]!);
       } else {
         const cp = value.codePointAt(i) ?? 0;
         const seg = String.fromCodePoint(cp);
         segLen = seg.length;
-        w = charCellWidth(seg);
+        w = baseTextCellWidth(seg);
       }
     }
 
@@ -441,6 +434,7 @@ export function lineCellColToIndexInline(
   col: number,
 ): { index: number; hit: InlineHit | null } {
   const target = Math.max(0, Math.floor(col));
+  const asciiFastPath = hasTextWidthAsciiFastPath();
   let cells = 0;
   let tokenIndex = countMultilineTokens(value, multilineToken, lineStart);
   let mentionIndex = countMentionTokens(value, mentionToken, lineStart);
@@ -468,15 +462,16 @@ export function lineCellColToIndexInline(
     }
     const code = value.charCodeAt(i);
     if (code <= 0x7f) {
-      if (cells + 1 > target) return { index: i, hit: null };
-      cells += 1;
+      const w = asciiFastPath ? 1 : baseTextCellWidth(value[i]!);
+      if (cells + w > target) return { index: i, hit: null };
+      cells += w;
       i += 1;
       if (cells >= target) return { index: i, hit: null };
       continue;
     }
     const cp = value.codePointAt(i) ?? 0;
     const seg = String.fromCodePoint(cp);
-    const w = charCellWidth(seg);
+    const w = baseTextCellWidth(seg);
     if (cells + w > target) return { index: i, hit: null };
     cells += w;
     i += seg.length;
@@ -507,6 +502,7 @@ export function buildInlineRow(
 ): { text: string; chips: InlineChipRender[] } {
   const windowStart = Math.max(0, Math.floor(offX));
   const windowEnd = windowStart + Math.max(0, Math.floor(rowTextW));
+  const asciiFastPath = hasTextWidthAsciiFastPath();
   let cells = 0;
   let tokenIndex = countMultilineTokens(value, multilineToken, lineStart);
   let mentionIndex = countMentionTokens(value, mentionToken, lineStart);
@@ -550,13 +546,13 @@ export function buildInlineRow(
       if (code <= 0x7f) {
         seg = displayValue[i] ?? value[i]!;
         segLen = 1;
-        w = 1;
+        w = asciiFastPath ? 1 : baseTextCellWidth(seg);
       } else {
         const cp = value.codePointAt(i) ?? 0;
         const rawSeg = String.fromCodePoint(cp);
         seg = displayValue.slice(i, i + rawSeg.length);
         segLen = rawSeg.length;
-        w = charCellWidth(seg);
+        w = baseTextCellWidth(seg);
       }
     }
 
@@ -649,7 +645,7 @@ export function buildInlineSelectionSegments(
       const rawSeg = String.fromCodePoint(cp);
       seg = displayValue.slice(i, i + rawSeg.length);
       segLen = rawSeg.length;
-      w = charCellWidth(seg);
+      w = baseTextCellWidth(seg);
     }
 
     if (i >= selection.end || i + segLen <= selection.start) {
