@@ -1,6 +1,11 @@
-import type { FsEntryKind, PathPickerProvider } from "./path-provider-types.js";
+import type { FsEntryKind, PathPickerProvider } from "../core/path-provider-types.js";
 import { importNodeModule } from "../utils/node-module.js";
-export type { FsDirEntry, FsEntryKind, FsStat, PathPickerProvider } from "./path-provider-types.js";
+export type {
+  FsDirEntry,
+  FsEntryKind,
+  FsStat,
+  PathPickerProvider,
+} from "../core/path-provider-types.js";
 
 async function loadFsPromises(): Promise<typeof import("node:fs/promises")> {
   return (await importNodeModule<typeof import("node:fs/promises")>("node:fs/promises"))!;

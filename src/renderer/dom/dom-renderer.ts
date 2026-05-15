@@ -214,8 +214,6 @@ const ACCESSIBILITY_ATTRS = [
   "aria-readonly",
 ];
 
-const styleKeyCache = new WeakMap<object, string>();
-
 type RowRenderMutableStats = {
   -readonly [K in keyof DomRendererRowRenderStats]: DomRendererRowRenderStats[K];
 };
@@ -285,9 +283,8 @@ function applyAccessibilityOptions(
   }
 }
 
-function styleKey(style: Style): string {
-  const cached = styleKeyCache.get(style as any);
-  if (cached) return cached;
+function visualStyleKey(style: Style, linkOptions: NormalizedDomRendererLinkOptions): string {
+  const href = renderableHref(style, linkOptions) ?? "";
   const key = [
     style.fg ?? "",
     style.bg ?? "",
@@ -296,9 +293,8 @@ function styleKey(style: Style): string {
     style.italic ? "1" : "0",
     style.underline ? "1" : "0",
     style.inverse ? "1" : "0",
-    style.href ?? "",
+    href,
   ].join("|");
-  styleKeyCache.set(style as any, key);
   return key;
 }
 
@@ -444,14 +440,20 @@ function formatSingleRowKey(
   cols: number,
   wide: boolean,
   style: Style,
+  linkOptions: NormalizedDomRendererLinkOptions,
 ): string {
-  const plain = isPlainStyle(style);
+  const plain = isPlainVisualStyle(style, linkOptions);
+  const hasRenderableHref = renderableHref(style, linkOptions) != null;
   if (!wide && plain) return `p:${text}:${cols}`;
-  if (!wide && !style.href && !plain) return `s:${key}:${text}:${cols}`;
+  if (!wide && !hasRenderableHref && !plain) return `s:${key}:${text}:${cols}`;
   return `1:${formatRowSegmentKeyPart(key, text, cols, wide)}`;
 }
 
-function computeRowSegmentsWithKey(terminal: Terminal, y: number): RowSegmentsResult {
+function computeRowSegmentsWithKey(
+  terminal: Terminal,
+  y: number,
+  linkOptions: NormalizedDomRendererLinkOptions,
+): RowSegmentsResult {
   const cells = terminal.getRow(y);
   let currentKey: string | null = null;
   let currentStyle: Style | null = null;
@@ -480,7 +482,9 @@ function computeRowSegmentsWithKey(terminal: Terminal, y: number): RowSegmentsRe
     const wide = cols === 2;
     const nextStyle = cell.style;
     const key: string =
-      nextStyle === currentStyle && currentKey != null ? currentKey : styleKey(nextStyle);
+      nextStyle === currentStyle && currentKey != null
+        ? currentKey
+        : visualStyleKey(nextStyle, linkOptions);
     if (currentKey == null) {
       currentKey = key;
       currentStyle = nextStyle;
@@ -521,13 +525,20 @@ function computeRowSegmentsWithKey(terminal: Terminal, y: number): RowSegmentsRe
 
   if (segmentCount === 1) {
     const s = segments[0]!;
-    return { segments, key: formatSingleRowKey(s.key, s.text, s.cols, s.wide, s.style) };
+    return {
+      segments,
+      key: formatSingleRowKey(s.key, s.text, s.cols, s.wide, s.style, linkOptions),
+    };
   }
 
   return { segments, key: `${segmentCount}${keyBody}` };
 }
 
-function computeRowKey(terminal: Terminal, y: number): string {
+function computeRowKey(
+  terminal: Terminal,
+  y: number,
+  linkOptions: NormalizedDomRendererLinkOptions,
+): string {
   const cells = terminal.getRow(y);
   let currentKey: string | null = null;
   let currentStyle: Style | null = null;
@@ -564,7 +575,9 @@ function computeRowKey(terminal: Terminal, y: number): string {
     const wide = cols === 2;
     const nextStyle = cell.style;
     const key: string =
-      nextStyle === currentStyle && currentKey != null ? currentKey : styleKey(nextStyle);
+      nextStyle === currentStyle && currentKey != null
+        ? currentKey
+        : visualStyleKey(nextStyle, linkOptions);
     if (currentKey == null) {
       currentKey = key;
       currentStyle = nextStyle;
@@ -590,7 +603,7 @@ function computeRowKey(terminal: Terminal, y: number): string {
 
   if (segmentCount === 0) return "0";
   if (segmentCount === 1)
-    return formatSingleRowKey(firstKey, firstText, firstCols, firstWide, firstStyle!);
+    return formatSingleRowKey(firstKey, firstText, firstCols, firstWide, firstStyle!, linkOptions);
   return `${segmentCount}${keyBody}`;
 }
 
@@ -601,19 +614,6 @@ function nowMs(): number {
   const p = (globalThis as any).performance;
   if (p && typeof p.now === "function") return p.now();
   return Date.now();
-}
-
-function isPlainStyle(style: Style): boolean {
-  return (
-    !style.fg &&
-    !style.bg &&
-    !style.bold &&
-    !style.dim &&
-    !style.italic &&
-    !style.underline &&
-    !style.inverse &&
-    !style.href
-  );
 }
 
 function isPlainVisualStyle(style: Style, linkOptions: NormalizedDomRendererLinkOptions): boolean {
@@ -823,7 +823,7 @@ function renderRow(
   const cachedKey = rowCache.get(lineEl);
   if (enableRowKeyPrepass && cachedKey != null) {
     stats.rowKeyPrepassChecks++;
-    const prepassKey = `${rowModeKey}|${computeRowKey(terminal, y)}`;
+    const prepassKey = `${rowModeKey}|${computeRowKey(terminal, y, linkOptions)}`;
     if (cachedKey === prepassKey) {
       stats.rowKeyPrepassHits++;
       stats.cacheHits++;
@@ -833,7 +833,7 @@ function renderRow(
     stats.rowKeyPrepassMisses++;
   }
 
-  const { segments, key } = computeRowSegmentsWithKey(terminal, y);
+  const { segments, key } = computeRowSegmentsWithKey(terminal, y, linkOptions);
   const newKey = `${rowModeKey}|${key}`;
   if (cachedKey === newKey) {
     stats.cacheHits++;

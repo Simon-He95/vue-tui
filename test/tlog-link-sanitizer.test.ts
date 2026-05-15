@@ -14,6 +14,7 @@ describe("TLog link sanitizing", () => {
     expect(sanitizeTerminalHref("https://example.com ")).toBeNull();
     expect(sanitizeTerminalHref("file:///tmp/a")).toBeNull();
     expect(sanitizeTerminalHref("file:///tmp/a", { allowFileUrls: true })).toBe("file:///tmp/a");
+    expect(sanitizeTerminalHref("file:///tmp/a%0d", { allowFileUrls: true })).toBeNull();
     expect(sanitizeTerminalHref("docs/intro.md")).toBeNull();
     expect(sanitizeTerminalHref("foo:bar")).toBeNull();
     expect(sanitizeTerminalHref("https:example.com")).toBeNull();

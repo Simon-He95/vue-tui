@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ParsedNode } from "stream-markdown-parser";
 import type { Style, Terminal } from "../src/index.js";
 import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
 import { buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
@@ -11,6 +10,7 @@ import {
 } from "../src/vue/markdown/parser.js";
 import { paintMarkdownVisualRow } from "../src/vue/markdown/render.js";
 import { DEFAULT_TUI_MARKDOWN_THEME } from "../src/vue/markdown/theme.js";
+import type { TuiMarkdownNode } from "../src/vue/markdown/types.js";
 
 describe("markdown layout", () => {
   it("maps headings, links, and unsafe links into terminal blocks", () => {
@@ -211,7 +211,7 @@ describe("markdown layout", () => {
               children: [{ type: "text", raw: "unsafe", content: "unsafe" }],
             },
           ],
-        } as ParsedNode,
+        } as TuiMarkdownNode,
       ],
       DEFAULT_TUI_MARKDOWN_THEME,
     );

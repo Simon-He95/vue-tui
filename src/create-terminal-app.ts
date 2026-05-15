@@ -1,5 +1,5 @@
 import type { App, Component, Ref } from "vue";
-import type { PathPickerProvider } from "./cli/path-provider.js";
+import type { PathPickerProvider } from "./core/path-provider-types.js";
 import { TERMINAL_RENDER_PLANES } from "./core/render-plane.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "./core/render-plane.js";
 import type { Style, Terminal } from "./core/types.js";

@@ -1,4 +1,14 @@
+import { builtinModules } from "node:module";
 import { build } from "esbuild";
+
+const nodeBuiltins = Array.from(
+  new Set([
+    ...builtinModules,
+    ...builtinModules.map((name) => `node:${name}`),
+    "process",
+    "node:process",
+  ]),
+);
 
 // Keep CJS as a separate esbuild step so the package can publish named `.cjs`
 // files alongside tsdown's ESM and declaration output.
@@ -17,7 +27,7 @@ await build({
   sourcemap: false,
   // CJS intentionally bundles stream-markdown-parser because it only exposes
   // ESM entrypoints. ESM keeps it external via tsdown.
-  external: ["vue"],
+  external: ["vue", ...nodeBuiltins],
 });
 
 await build({

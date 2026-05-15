@@ -12,5 +12,5 @@
     "skipLibCheck": true
   },
   "include": ["src", "test"],
-  "exclude": ["examples", "dist", "node_modules"]
+  "exclude": ["examples", "dist", "node_modules", "test/fixtures/package-types"]
 }

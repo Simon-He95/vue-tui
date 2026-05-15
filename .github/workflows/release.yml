@@ -48,6 +48,10 @@ jobs:
 
       - run: pnpm run release:pack-smoke:existing
 
+      - run: node scripts/smoke-packed-types.mjs .release/*.tgz 3.3.0
+
+      - run: node scripts/smoke-packed-types.mjs .release/*.tgz 3.5.33
+
       - name: Record tarball digest
         run: |
           cd .release

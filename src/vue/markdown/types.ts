@@ -1,5 +1,12 @@
 import type { Style } from "../../core/types.js";
 
+export type TuiMarkdownNode = Readonly<{
+  type: string;
+  raw?: string;
+  children?: readonly TuiMarkdownNode[];
+  [key: string]: unknown;
+}>;
+
 export type TuiMarkdownInlineSegment = Readonly<{
   text: string;
   style?: Style;

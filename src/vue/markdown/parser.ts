@@ -1,10 +1,6 @@
-import {
-  getMarkdown,
-  parseMarkdownToStructure,
-  type ParseOptions,
-  type ParsedNode,
-} from "stream-markdown-parser";
+import { getMarkdown, parseMarkdownToStructure, type ParseOptions } from "stream-markdown-parser";
 import { sanitizeDomHref } from "../../core/hyperlink.js";
+import type { TuiMarkdownNode } from "./types.js";
 
 export interface TuiMarkdownParseConfig {
   streaming?: boolean;
@@ -12,7 +8,7 @@ export interface TuiMarkdownParseConfig {
 }
 
 export interface TuiMarkdownParser {
-  parse: (content: string, final: boolean) => ParsedNode[];
+  parse: (content: string, final: boolean) => TuiMarkdownNode[];
 }
 
 const markdownInstanceCache = new Map<string, ReturnType<typeof getMarkdown>>();
@@ -53,13 +49,13 @@ export function createTuiMarkdownParser(config?: TuiMarkdownParseConfig): TuiMar
   const customHtmlTags = config?.customHtmlTags?.filter(Boolean);
   const md = getCachedMarkdownInstance(config);
 
-  function parse(content: string, final: boolean): ParsedNode[] {
+  function parse(content: string, final: boolean): TuiMarkdownNode[] {
     return parseMarkdownToStructure(content, md, {
       final,
       customHtmlTags,
       requireClosingStrong: final || !config?.streaming,
       validateLink: isSafeMarkdownLink,
-    } satisfies ParseOptions);
+    } satisfies ParseOptions) as TuiMarkdownNode[];
   }
 
   return { parse };

@@ -66,6 +66,13 @@ describe("cli input", () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+    const originalListenerCount = process.listenerCount.bind(process);
+    const listenerCount = vi.spyOn(process, "listenerCount").mockImplementation(((
+      event: string | symbol,
+    ) => {
+      if (event === "SIGTERM") return 0;
+      return originalListenerCount(event as any);
+    }) as any);
     const before = new Set(process.rawListeners("SIGTERM"));
     const uninstall = installTerminalCleanup(dispose);
 
@@ -82,12 +89,43 @@ describe("cli input", () => {
       uninstall();
       exit.mockRestore();
       kill.mockRestore();
+      listenerCount.mockRestore();
+    }
+  });
+
+  it("does not re-dispatch signal when another host listener remains", async () => {
+    const calls: string[] = [];
+    const host = () => calls.push("host");
+    process.on("SIGINT", host);
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const uninstall = installTerminalCleanup(() => calls.push("cleanup"));
+
+    try {
+      process.emit("SIGINT");
+      await new Promise<void>((resolve) => process.nextTick(resolve));
+
+      expect(calls).toEqual(["host", "cleanup"]);
+      expect(kill).not.toHaveBeenCalled();
+      expect(exit).not.toHaveBeenCalled();
+    } finally {
+      uninstall();
+      process.off("SIGINT", host);
+      kill.mockRestore();
+      exit.mockRestore();
     }
   });
 
   it("can preserve signal default when explicitly configured", async () => {
     const dispose = vi.fn();
     const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+    const originalListenerCount = process.listenerCount.bind(process);
+    const listenerCount = vi.spyOn(process, "listenerCount").mockImplementation(((
+      event: string | symbol,
+    ) => {
+      if (event === "SIGTERM") return 0;
+      return originalListenerCount(event as any);
+    }) as any);
     const before = new Set(process.rawListeners("SIGTERM"));
     const uninstall = installTerminalCleanup(dispose, {
       preserveSignalDefault: true,
@@ -104,6 +142,7 @@ describe("cli input", () => {
     } finally {
       uninstall();
       kill.mockRestore();
+      listenerCount.mockRestore();
     }
   });
 

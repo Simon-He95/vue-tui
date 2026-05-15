@@ -1,5 +1,5 @@
 import type { PropType, Ref, ShallowRef } from "vue";
-import type { PathPickMode } from "../../cli/path-suggest-core.js";
+import type { PathPickMode } from "../../core/path-suggest.js";
 import type { Cell, Style } from "../../core/types.js";
 import type {
   Rect,

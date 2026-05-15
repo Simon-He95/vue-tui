@@ -92,6 +92,11 @@ describe("package exports", () => {
     expect(source).not.toContain("./renderer/index.js");
   });
 
+  it("does not import cli modules from the browser root entry", () => {
+    const source = readFileSync(resolve("src/index.ts"), "utf8");
+    expect(source).not.toMatch(/from "\.\/cli\//);
+  });
+
   it("detects bare Node builtins in browser forbidden code scans", () => {
     for (const bad of [
       `const fs = require("fs")`,

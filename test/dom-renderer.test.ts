@@ -27,7 +27,7 @@ describe("DomRenderer row rendering", () => {
   it("sanitizes DOM hrefs with an explicit allowlist", () => {
     expect(sanitizeDomHref("vbscript:msgbox(1)")).toBeNull();
     expect(sanitizeDomHref("JaVaScRiPt:alert(1)")).toBeNull();
-    expect(sanitizeDomHref("data:text/html,boom")).toBeNull();
+    expect(sanitizeDomHref("data:text/html,<script>alert(1)</script>")).toBeNull();
     expect(sanitizeDomHref("foo:bar")).toBeNull();
     expect(sanitizeDomHref("https://example.com")).toBe("https://example.com/");
     expect(sanitizeDomHref("https://example.com/a")).toBe("https://example.com/a");
@@ -51,9 +51,11 @@ describe("DomRenderer row rendering", () => {
     expect(sanitizeDomHref("docs/`x`", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBeNull();
     expect(sanitizeDomHref("https://example.com/%0aevil")).toBeNull();
+    expect(sanitizeDomHref("https://example.com/%0d%0aevil")).toBeNull();
     expect(sanitizeDomHref("/docs/%0dheader", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("guide%0aintro", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("guide%zzintro", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("foo bar", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("https://example.com/a%20b")).toBe("https://example.com/a%20b");
   });
 
@@ -1160,6 +1162,49 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("does not repaint when only href changes and DOM links are disabled", () => {
+    const { terminal, container, renderer } = setup(20, 1, { links: false });
+
+    try {
+      terminal.write("link", { x: 0, y: 0, style: { href: "https://a.test" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const before = renderer.debugStats.rowRender.total.replaceChildren;
+
+      terminal.write("link", { x: 0, y: 0, style: { href: "https://b.test" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(renderer.debugStats.rowRender.total.replaceChildren).toBe(before);
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("updates anchors when href changes and DOM links are enabled", () => {
+    const { terminal, container, renderer } = setup(4, 1, { links: {} });
+
+    try {
+      terminal.write("link", { x: 0, y: 0, style: { href: "https://a.test" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const before = renderer.debugStats.rowRender.total.replaceChildren;
+
+      terminal.write("link", { x: 0, y: 0, style: { href: "https://b.test" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(renderer.debugStats.rowRender.total.replaceChildren).toBeGreaterThan(before);
+      expect(lineEl(container).querySelector("a")?.href).toBe("https://b.test/");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("keeps wide styled rows on the fragment span path", () => {
     const { terminal, container, renderer } = setup(2);
 
@@ -1695,8 +1740,11 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("invalidates the opt-in row prepass when href changes", () => {
-    const { terminal, container, renderer } = setup(3, 1, { enableRowKeyPrepass: true });
+  it("invalidates the opt-in row prepass when rendered href changes", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      enableRowKeyPrepass: true,
+      links: {},
+    });
 
     try {
       terminal.fill(0, 0, 3, 1, "A", { href: "https://example.com/a" });
@@ -1712,8 +1760,7 @@ describe("DomRenderer row rendering", () => {
         rowKeyPrepassChecks: 1,
         rowKeyPrepassHits: 0,
         rowKeyPrepassMisses: 1,
-        plainTextRows: 1,
-        textNodeUpdates: 1,
+        fragmentRows: 1,
       });
     } finally {
       renderer.dispose();

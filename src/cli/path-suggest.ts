@@ -1,14 +1,14 @@
-import type { FsDirEntry } from "./path-provider-types.js";
-import type { PathPickMode, SuggestPathsResult } from "./path-suggest-core.js";
+import type { FsDirEntry } from "../core/path-provider-types.js";
+import type { PathPickMode, SuggestPathsResult } from "../core/path-suggest.js";
 import { normalizePath, resolvePath } from "../utils/path.js";
 import { importNodeModule } from "../utils/node-module.js";
 import {
   resolveUserPath as resolveUserPathCore,
   suggestPaths as suggestPathsCore,
-} from "./path-suggest-core.js";
+} from "../core/path-suggest.js";
 
-export type { PathPickMode, PathSuggestion, SuggestPathsResult } from "./path-suggest-core.js";
-export { parsePathQuery, suggestParentHint } from "./path-suggest-core.js";
+export type { PathPickMode, PathSuggestion, SuggestPathsResult } from "../core/path-suggest.js";
+export { parsePathQuery, suggestParentHint } from "../core/path-suggest.js";
 
 type GitignoreRule =
   | Readonly<{

@@ -16,7 +16,7 @@ export type {
   FsEntryKind,
   FsStat,
   PathPickerProvider,
-} from "./cli/path-provider-types.js";
+} from "./core/path-provider-types.js";
 export {
   type PathPickMode,
   type PathSuggestion,
@@ -25,7 +25,7 @@ export {
   suggestParentHint,
   suggestPaths,
   type SuggestPathsResult,
-} from "./cli/path-suggest-core.js";
+} from "./core/path-suggest.js";
 export {
   detectTerminalColorCapability,
   type TerminalColorCapability,

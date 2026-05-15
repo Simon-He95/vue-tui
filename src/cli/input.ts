@@ -105,15 +105,17 @@ export function installTerminalCleanup(
       return;
     }
 
-    if (preserveSignalDefault) {
-      process.nextTick(() => {
-        try {
-          process.kill(process.pid, signal);
-        } catch {
-          process.exit(exitCodeForSignal(signal));
-        }
-      });
-    }
+    if (!preserveSignalDefault) return;
+
+    process.nextTick(() => {
+      if (process.listenerCount(signal) > 0) return;
+
+      try {
+        process.kill(process.pid, signal);
+      } catch {
+        process.exit(exitCodeForSignal(signal));
+      }
+    });
   };
 
   const onSigint = () => handleSignal("SIGINT");
