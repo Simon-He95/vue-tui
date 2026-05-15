@@ -322,7 +322,7 @@ export function createTerminal(opts: { cols: number; rows: number }): Terminal {
   let pendingCommit = false;
   let pendingCommitAllPlanes = false;
   let pendingCommitPlanes: TerminalRenderPlanes | null = null;
-  const pendingPlaneScrollOps = new Map<TerminalRenderPlane, TerminalScrollOperation>();
+  const pendingPlaneScrollOps = new Map<TerminalRenderPlane, TerminalScrollOperation[]>();
   const planeTerminals = new Map<TerminalRenderPlane, Terminal>();
   let base!: PlaneAwareTerminal;
 
@@ -506,22 +506,28 @@ export function createTerminal(opts: { cols: number; rows: number }): Terminal {
   }
 
   function recordPendingScrollOp(plane: TerminalRenderPlane, op: TerminalScrollOperation): void {
-    const prev = pendingPlaneScrollOps.get(plane);
-    if (prev && prev.startY === op.startY && prev.endY === op.endY) {
-      const nextDelta = prev.delta + op.delta;
-      if (nextDelta === 0) {
-        pendingPlaneScrollOps.delete(plane);
-        return;
-      }
-      const next = normalizeScrollOperation(op.startY, op.endY, nextDelta, compositeBuffer.rows);
-      if (!next) {
-        pendingPlaneScrollOps.delete(plane);
-        return;
-      }
-      pendingPlaneScrollOps.set(plane, next);
-      return;
+    const list = pendingPlaneScrollOps.get(plane) ?? [];
+    const last = list[list.length - 1];
+
+    if (
+      last &&
+      last.startY === op.startY &&
+      last.endY === op.endY &&
+      Math.sign(last.delta) === Math.sign(op.delta)
+    ) {
+      const next = normalizeScrollOperation(
+        op.startY,
+        op.endY,
+        last.delta + op.delta,
+        compositeBuffer.rows,
+      );
+      if (next) list[list.length - 1] = next;
+      else list.push(op);
+    } else {
+      list.push(op);
     }
-    pendingPlaneScrollOps.set(plane, op);
+
+    pendingPlaneScrollOps.set(plane, list);
   }
 
   function takePendingScrollOps(
@@ -530,10 +536,10 @@ export function createTerminal(opts: { cols: number; rows: number }): Terminal {
     const planesToTake = planes?.length ? planes : TERMINAL_RENDER_PLANES;
     const out: PendingPlaneScrollOperation[] = [];
     for (const plane of planesToTake) {
-      const op = pendingPlaneScrollOps.get(plane);
-      if (!op) continue;
+      const ops = pendingPlaneScrollOps.get(plane);
+      if (!ops?.length) continue;
       pendingPlaneScrollOps.delete(plane);
-      out.push({ plane, ...op });
+      for (const op of ops) out.push({ plane, ...op });
     }
     return out.length ? out : null;
   }
@@ -566,6 +572,33 @@ export function createTerminal(opts: { cols: number; rows: number }): Terminal {
     return 1;
   }
 
+  function addAffectedRows(out: Set<number>, op: Readonly<{ startY: number; endY: number }>): void {
+    for (let y = op.startY; y < op.endY; y++) out.add(y);
+  }
+
+  function areDisjointSorted(ops: readonly TerminalScrollOperation[]): boolean {
+    for (let i = 1; i < ops.length; i++) {
+      if (ops[i - 1]!.endY > ops[i]!.startY) return false;
+    }
+    return true;
+  }
+
+  function groupedPendingScrollOps(
+    pendingOps: readonly PendingPlaneScrollOperation[],
+  ): Map<TerminalRenderPlane, TerminalScrollOperation[]> {
+    const grouped = new Map<TerminalRenderPlane, TerminalScrollOperation[]>();
+    for (const pending of pendingOps) {
+      const list = grouped.get(pending.plane) ?? [];
+      list.push({
+        startY: pending.startY,
+        endY: pending.endY,
+        delta: pending.delta,
+      });
+      grouped.set(pending.plane, list);
+    }
+    return grouped;
+  }
+
   function prepareCompositeScrollOps(
     pendingOps: readonly PendingPlaneScrollOperation[] | null,
   ): Readonly<{
@@ -582,62 +615,72 @@ export function createTerminal(opts: { cols: number; rows: number }): Terminal {
     const scrollOperations: TerminalScrollOperation[] = [];
     const extraDirtyRows = new Set<number>();
 
-    for (const pending of pendingOps) {
-      const blockedRows = new Set<number>();
-      const partiallyBlockedRows = new Set<number>();
-      for (let y = pending.startY; y < pending.endY; y++) {
-        const coverageKind = higherPlaneCoverageKind(pending.plane, y);
-        if (coverageKind === 0) continue;
-        blockedRows.add(y);
-        if (coverageKind === 1) partiallyBlockedRows.add(y);
-      }
+    const grouped = groupedPendingScrollOps(pendingOps);
 
-      if (!blockedRows.size) {
-        scrollOperations.push({
-          startY: pending.startY,
-          endY: pending.endY,
-          delta: pending.delta,
-        });
+    for (const [plane, ops] of grouped) {
+      const sorted = [...ops].sort((a, b) => a.startY - b.startY || a.endY - b.endY);
+      if (!areDisjointSorted(sorted)) {
+        for (const op of ops) addAffectedRows(extraDirtyRows, op);
         continue;
       }
 
-      const absDelta = Math.abs(pending.delta);
-      for (let y = pending.startY; y < pending.endY; y++) {
-        if (partiallyBlockedRows.has(y)) extraDirtyRows.add(y);
-      }
-
-      let bandStart = -1;
-      const flushBand = (bandEnd: number) => {
-        if (bandStart < 0 || bandEnd <= bandStart) return;
-        const bandHeight = bandEnd - bandStart;
-        if (absDelta >= bandHeight) {
-          for (let y = bandStart; y < bandEnd; y++) extraDirtyRows.add(y);
-          bandStart = -1;
-          return;
+      for (const op of sorted) {
+        const blockedRows = new Set<number>();
+        const partiallyBlockedRows = new Set<number>();
+        for (let y = op.startY; y < op.endY; y++) {
+          const coverageKind = higherPlaneCoverageKind(plane, y);
+          if (coverageKind === 0) continue;
+          blockedRows.add(y);
+          if (coverageKind === 1) partiallyBlockedRows.add(y);
         }
 
-        scrollOperations.push({
-          startY: bandStart,
-          endY: bandEnd,
-          delta: pending.delta,
-        });
-
-        if (pending.delta > 0) {
-          for (let y = bandEnd - absDelta; y < bandEnd; y++) extraDirtyRows.add(y);
-        } else {
-          for (let y = bandStart; y < bandStart + absDelta; y++) extraDirtyRows.add(y);
-        }
-        bandStart = -1;
-      };
-
-      for (let y = pending.startY; y < pending.endY; y++) {
-        if (blockedRows.has(y)) {
-          flushBand(y);
+        if (!blockedRows.size) {
+          scrollOperations.push({
+            startY: op.startY,
+            endY: op.endY,
+            delta: op.delta,
+          });
           continue;
         }
-        if (bandStart < 0) bandStart = y;
+
+        const absDelta = Math.abs(op.delta);
+        for (let y = op.startY; y < op.endY; y++) {
+          if (partiallyBlockedRows.has(y)) extraDirtyRows.add(y);
+        }
+
+        let bandStart = -1;
+        const flushBand = (bandEnd: number) => {
+          if (bandStart < 0 || bandEnd <= bandStart) return;
+          const bandHeight = bandEnd - bandStart;
+          if (absDelta >= bandHeight) {
+            for (let y = bandStart; y < bandEnd; y++) extraDirtyRows.add(y);
+            bandStart = -1;
+            return;
+          }
+
+          scrollOperations.push({
+            startY: bandStart,
+            endY: bandEnd,
+            delta: op.delta,
+          });
+
+          if (op.delta > 0) {
+            for (let y = bandEnd - absDelta; y < bandEnd; y++) extraDirtyRows.add(y);
+          } else {
+            for (let y = bandStart; y < bandStart + absDelta; y++) extraDirtyRows.add(y);
+          }
+          bandStart = -1;
+        };
+
+        for (let y = op.startY; y < op.endY; y++) {
+          if (blockedRows.has(y)) {
+            flushBand(y);
+            continue;
+          }
+          if (bandStart < 0) bandStart = y;
+        }
+        flushBand(op.endY);
       }
-      flushBand(pending.endY);
     }
 
     return {

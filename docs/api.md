@@ -58,7 +58,7 @@ type Style = {
 
 `fg` / `bg` 推荐使用 `AnsiColorName`（16 色，如 `whiteBright` / `blue`）、hex（如 `#79c0ff`）或 `transparent`。未知颜色会被 renderer 忽略或回退到默认颜色。
 
-`href` 表示 hyperlink 目标。stdout renderer 会在通过 `sanitizeTerminalHref()` 后输出 OSC8 链接，只允许 safe absolute `http:` / `https:` / `mailto:`。DOM renderer 默认不把 `Style.href` 渲染为原生 `<a>`；如需启用链接，请显式传 `<TerminalProvider :dom-renderer-options="{ links: { activation: 'event', onActivate } }" />`。启用后，DOM renderer 允许 safe absolute 和 relative/hash/search href（例如 `/docs`、`./docs`、`../docs`、`#section`、`?q=1`）。unsafe href 始终按普通文本渲染。`onActivate` 或 `onLinkClick` 只有返回 `false` 时才会阻止浏览器默认打开行为。
+`href` 表示 hyperlink 目标。stdout renderer 会在通过 `sanitizeTerminalHref()` 后输出 OSC8 链接，只允许 safe absolute `http:` / `https:` / `mailto:`。DOM renderer 默认不把 `Style.href` 渲染为原生 `<a>`；启用后，DOM renderer 允许 safe absolute 和 relative/hash/search href（例如 `/docs`、`./docs`、`../docs`、`#section`、`?q=1`）。`links: true` 或 `links: { activation: "native" }` 使用原生 anchor，浏览器保留默认导航行为；`onLinkClick` 返回 `false` 时阻止导航。`links: { activation: "event", onActivate }` 始终 `preventDefault()`，由 `onActivate` 处理跳转、打开或路由。`links: { activation: "none" }` 不渲染原生 anchor，只保留文本。unsafe href 始终按普通文本渲染。
 
 ## Renderer (DOM)
 

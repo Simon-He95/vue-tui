@@ -62,7 +62,7 @@ describe("cli input", () => {
     }
   });
 
-  it("default signal policy cleans up without exiting or re-raising", () => {
+  it("default signal policy re-raises after cleanup", async () => {
     const dispose = vi.fn();
     const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
@@ -73,9 +73,11 @@ describe("cli input", () => {
       const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
       listener?.();
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       expect(dispose).toHaveBeenCalledTimes(1);
-      expect(kill).not.toHaveBeenCalled();
+      expect(process.rawListeners("SIGTERM").filter((item) => !before.has(item))).toHaveLength(0);
+      expect(kill).toHaveBeenCalledWith(process.pid, "SIGTERM");
       expect(exit).not.toHaveBeenCalled();
     } finally {
       cleanupHandle.uninstall();

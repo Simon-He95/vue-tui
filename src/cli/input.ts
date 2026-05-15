@@ -100,7 +100,7 @@ export function installTerminalCleanup(
   let cleaned = false;
   let uninstalled = false;
   const signals = options.signals ?? ["SIGINT", "SIGTERM"];
-  const signalPolicy = options.signalPolicy ?? "cleanup-only";
+  const signalPolicy = options.signalPolicy ?? "reraise";
   const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? false;
   const rethrowUnhandledRejection =
     options.rethrowUnhandledRejection ?? cleanupOnUnhandledRejection;
@@ -111,7 +111,10 @@ export function installTerminalCleanup(
     cleaned = true;
     try {
       dispose();
-    } catch {}
+    } catch {
+    } finally {
+      uninstall();
+    }
   };
 
   const uninstall = () => {

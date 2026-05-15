@@ -30,7 +30,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm audit --prod --audit-level high
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
   codeql:
     if: >

@@ -136,6 +136,35 @@ function applyAnsiToScreen(output: string, cols: number, rows: number): readonly
 }
 
 describe("stdout renderer", () => {
+  it("does not skip dirty rows on lossy fingerprint collisions", () => {
+    const terminal = createTerminal({ cols: 4, rows: 1 });
+    const output = {
+      isTTY: false,
+      chunks: [] as string[],
+      write(chunk: string) {
+        this.chunks.push(chunk);
+      },
+    };
+    const renderer = createStdoutRenderer(terminal, {
+      output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+    });
+
+    terminal.write("A", { x: 0, y: 0 });
+    terminal.commit({ sync: true });
+    output.chunks.length = 0;
+
+    terminal.write("\u0441", { x: 0, y: 0 });
+    terminal.commit({ sync: true });
+
+    expect(output.chunks.join("")).toContain("\u0441");
+
+    renderer.dispose();
+    terminal.dispose();
+  });
+
   it("sorts and clamps dirty rows for partial renders", () => {
     const terminal = createTerminal({ cols: 3, rows: 4 });
     let out = "";
@@ -220,7 +249,7 @@ describe("stdout renderer", () => {
     }
   });
 
-  it("does not rewrite a stable suffix when only the row prefix changes", () => {
+  it("rewrites the dirty row when only the row prefix changes", () => {
     const terminal = createTerminal({ cols: 24, rows: 4 });
     let out = "";
     const output = {
@@ -245,7 +274,7 @@ describe("stdout renderer", () => {
     terminal.commit();
 
     expect(out.includes("\u001B[2;1H")).toBe(true);
-    expect(out.includes("[ Exit ]")).toBe(false);
+    expect(out.includes("[ Exit ]")).toBe(true);
 
     renderer.dispose();
   });
@@ -351,7 +380,7 @@ describe("stdout renderer", () => {
     renderer.dispose();
   });
 
-  it("keeps span-only dirty row updates when overlay is on another row", () => {
+  it("rewrites the dirty row when overlay is on another row", () => {
     const terminal = createTerminal({ cols: 24, rows: 4 });
     const overlay = getPlaneTerminal(terminal, "overlay");
     let out = "";
@@ -378,7 +407,7 @@ describe("stdout renderer", () => {
     terminal.commit({ planes: ["default"] });
 
     expect(out.includes("\u001B[2;1H")).toBe(true);
-    expect(out.includes("[ Exit ]")).toBe(false);
+    expect(out.includes("[ Exit ]")).toBe(true);
     expect(out.includes("[Dialog]")).toBe(false);
 
     renderer.dispose();
@@ -448,7 +477,7 @@ describe("stdout renderer", () => {
     });
   });
 
-  it("skips repainting dirty rows whose fingerprints are unchanged", () => {
+  it("repaints dirty rows whose fingerprints are unchanged", () => {
     const terminal = createTerminal({ cols: 24, rows: 4 });
     let out = "";
     const output = {
@@ -473,8 +502,8 @@ describe("stdout renderer", () => {
     terminal.write("A task", { x: 0, y: 1 });
     terminal.commit({ planes: ["default"] });
 
-    expect(out).toBe("");
-    expect(out.includes("\u001B[2;1H")).toBe(false);
+    expect(out.includes("\u001B[2;1H")).toBe(true);
+    expect(out.includes("A task")).toBe(true);
 
     renderer.dispose();
   });
@@ -784,10 +813,12 @@ describe("stdout renderer", () => {
 
         const terminal = createTerminal({ cols: 8, rows: 6 });
         let out = "";
+        let transcriptOut = "";
         const output = {
           isTTY: true,
           write(chunk: string) {
             out += chunk;
+            transcriptOut += chunk;
           },
         };
         const renderer = createStdoutRenderer(terminal, {
@@ -827,7 +858,7 @@ describe("stdout renderer", () => {
         expect(out.includes("row0")).toBe(false);
         expect(out.includes("row5")).toBe(false);
         expect(out.includes("\u001B[2;1H")).toBe(true);
-        expect(out.includes("\u001B[5;1H")).toBe(true);
+        expect(applyAnsiToScreen(transcriptOut, 8, 6)).toEqual(terminal.snapshot().lines);
 
         renderer.dispose();
       } finally {
@@ -1022,8 +1053,7 @@ describe("stdout renderer", () => {
         nowRef.t += frameDelayMs;
         vi.advanceTimersByTime(frameDelayMs);
 
-        expect(out.includes("\u001B[6;4Hx")).toBe(true);
-        expect(out.includes("\u001B[6;1H   x")).toBe(false);
+        expect(out.includes("\u001B[6;1H   x")).toBe(true);
         expect(applyAnsiToScreen(transcriptOut, 8, 8)).toEqual(terminal.snapshot().lines);
 
         renderer.dispose();

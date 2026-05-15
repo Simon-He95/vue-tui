@@ -492,7 +492,7 @@ Experimental Markdown renderer / virtual scroller。它们走独立的 `parser -
 >
 > `TVirtualMarkdown` 默认保持文本可选中复制，即使它自身是 focusable 节点；如需列表式交互，可传 `selectable=false`。
 >
-> Markdown link 会写入 `Style.href` metadata。DOM renderer 默认不把 `Style.href` 渲染为原生 `<a>`。如需启用链接，请显式传 `<TerminalProvider :dom-renderer-options="{ links: { activation: 'event', onActivate } }" />`。启用后，safe absolute 和 relative/hash/search href 都会渲染为 `<a>`；CLI/stdout renderer 只会为 safe absolute href 发出 OSC8 hyperlink。
+> Markdown link 会写入 `Style.href` metadata。DOM renderer 默认不把 `Style.href` 渲染为原生 `<a>`。启用 `links: true` 或 `links: { activation: 'native' }` 后，safe absolute 和 relative/hash/search href 会渲染为原生 `<a>`，浏览器保留默认导航行为；`onLinkClick` 返回 `false` 时阻止导航。启用 `links: { activation: 'event', onActivate }` 后，点击始终 `preventDefault()`，由 `onActivate` 处理跳转、打开或路由。`links: { activation: 'none' }` 不渲染原生 anchor，只保留文本。CLI/stdout renderer 只会为 safe absolute href 发出 OSC8 hyperlink。
 >
 > `TVirtualMarkdown` 当前仍是 **viewport-level repaint**，不是 row-local dirty diff；streaming append 也不会自动 follow tail，默认保持 absolute `scrollTop` / absolute visual-row index 语义。
 >
