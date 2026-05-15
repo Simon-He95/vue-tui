@@ -134,7 +134,12 @@ export interface DomRenderer {
       palette?: ThemePalette | null;
     }>,
   ) => void;
-  updateOptions: (next: Readonly<{ links?: DomRendererLinkOptions }>) => void;
+  updateOptions: (
+    next: Readonly<{
+      links?: DomRendererLinkOptions;
+      onLinkClick?: DomRendererOptions["onLinkClick"];
+    }>,
+  ) => void;
   setPlaneOffset: (plane: TerminalRenderPlane, offsetPx: number) => void;
   setPlaneViewport: (
     plane: TerminalRenderPlane,
@@ -933,6 +938,7 @@ export function createDomRenderer(
 ): DomRenderer {
   const doc = container.ownerDocument;
   let rendererLinkOptions = normalizeLinkOptions(options.links);
+  let rendererOnLinkClick = options.onLinkClick;
   let rendererLinkOptionsKey = linkOptionsKey(rendererLinkOptions);
   let rendererLinkVersion = 0;
   const onAnchorClick: DomRendererAnchorClickHandler = (event) => {
@@ -940,7 +946,7 @@ export function createDomRenderer(
     const href = anchor.dataset.vtHref;
     if (!href || !rendererLinkOptions) return;
 
-    const linkClickResult = options.onLinkClick?.(event, href);
+    const linkClickResult = rendererOnLinkClick?.(event, href);
     if (rendererLinkOptions.activation === "event") {
       const activateResult = rendererLinkOptions.onActivate?.(href, event);
       if (linkClickResult === false || activateResult === false) {
@@ -1658,8 +1664,18 @@ export function createDomRenderer(
     }
   }
 
-  function updateOptions(next: Readonly<{ links?: DomRendererLinkOptions }>): void {
+  function updateOptions(
+    next: Readonly<{
+      links?: DomRendererLinkOptions;
+      onLinkClick?: DomRendererOptions["onLinkClick"];
+    }>,
+  ): void {
     if (disposed) return;
+
+    if (Object.prototype.hasOwnProperty.call(next, "onLinkClick")) {
+      rendererOnLinkClick = next.onLinkClick;
+    }
+
     if (!Object.prototype.hasOwnProperty.call(next, "links")) return;
 
     const normalized = normalizeLinkOptions(next.links);

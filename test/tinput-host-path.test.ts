@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pathToTerminalFileHref } from "../src/vue/components/input/host.js";
+import { fileUrlToPathLike, pathToTerminalFileHref } from "../src/vue/components/input/host.js";
 
 describe("TInput host path hrefs", () => {
   it("normalizes file URLs through URL parsing", () => {
@@ -28,6 +28,16 @@ describe("TInput host path hrefs", () => {
     expect(pathToTerminalFileHref("file:///tmp/a%1Bb")).toBeUndefined();
     expect(pathToTerminalFileHref("file:///tmp/a%7fb")).toBeUndefined();
     expect(pathToTerminalFileHref("file:///tmp/a%20b")).toBe("file:///tmp/a%20b");
+  });
+
+  it("rejects encoded control characters in pasted file URLs", () => {
+    expect(fileUrlToPathLike("file:///tmp/%00bad")).toBeNull();
+    expect(fileUrlToPathLike("file:///tmp/%0abad")).toBeNull();
+    expect(fileUrlToPathLike("file:///tmp/%7fbad")).toBeNull();
+  });
+
+  it("still accepts encoded spaces in file URLs", () => {
+    expect(fileUrlToPathLike("file:///tmp/a%20b.txt")).toBe("/tmp/a b.txt");
   });
 
   it("keeps absolute platform paths encoded as file URLs", () => {

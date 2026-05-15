@@ -695,8 +695,11 @@ export const TerminalProvider = defineComponent({
         renderer.value = r;
         rendererCapabilities.value = r.capabilities;
         watch(
-          () => props.domRendererOptions?.links,
-          (links) => r.updateOptions({ links: links ?? false }),
+          () => ({
+            links: props.domRendererOptions?.links ?? false,
+            onLinkClick: props.domRendererOptions?.onLinkClick,
+          }),
+          (next) => r.updateOptions(next),
           { deep: true },
         );
 

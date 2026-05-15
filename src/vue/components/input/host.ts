@@ -61,11 +61,24 @@ export function resolveDefaultTInputPath(info: ResolveTInputPathInfo): string {
 
 export function fileUrlToPathLike(input: string): string | null {
   try {
-    const url = new URL(String(input ?? ""));
+    const raw = String(input ?? "");
+    if (!raw) return null;
+    if (hasControlChar(raw)) return null;
+    if (raw !== raw.trim()) return null;
+    if (/\s/u.test(raw)) return null;
+    if (ENCODED_CONTROL_RE.test(raw)) return null;
+
+    const url = new URL(raw);
     if (url.protocol !== "file:") return null;
     let pathname = decodeURIComponent(url.pathname || "");
+    if (hasControlChar(pathname)) return null;
+
     if (/^\/[A-Z]:\//i.test(pathname)) pathname = pathname.slice(1);
-    if (url.host) return `//${url.host}${pathname}`;
+    if (url.host) {
+      if (hasControlChar(url.host)) return null;
+      return `//${url.host}${pathname}`;
+    }
+
     return pathname || "/";
   } catch {
     return null;

@@ -723,6 +723,33 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("updates top-level onLinkClick without recreating the renderer", () => {
+    const first = vi.fn();
+    const second = vi.fn(() => false);
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: {},
+      onLinkClick: first,
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      renderer.updateOptions({ onLinkClick: second });
+
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(false);
+
+      expect(first).not.toHaveBeenCalled();
+      expect(second).toHaveBeenCalledWith(event, "https://example.com/");
+      expect(event.defaultPrevented).toBe(true);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
   it("lets host-handled DOM link activation bubble to the terminal container", () => {
     const onActivate = vi.fn();
     const { terminal, container, renderer } = setup(3, 1, {

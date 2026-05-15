@@ -14,6 +14,7 @@ describe("path utils", () => {
     expect(resolvePath("/root/ws", "../x")).toBe("/root/x");
     expect(resolvePath("/root/ws", "./a/..")).toBe("/root/ws");
     expect(stripTrailingSlash("/a/b/")).toBe("/a/b");
+    expect(stripTrailingSlash(`/a/b${"/".repeat(200_000)}`)).toBe("/a/b");
     expect(dirname("/a/b/c")).toBe("/a/b");
   });
 

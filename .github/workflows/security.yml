@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    continue-on-error: false
 
     steps:
       - uses: actions/checkout@v4

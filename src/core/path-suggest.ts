@@ -21,6 +21,62 @@ function lower(s: string): string {
   return s.toLowerCase();
 }
 
+function normalizePathInputSeparators(input: string): string {
+  let out = "";
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]!;
+    if (ch === "\r") continue;
+    out += ch === "\\" ? "/" : ch;
+  }
+  return out;
+}
+
+function stripLeadingDotSlash(input: string): string {
+  let i = 0;
+  while (i + 1 < input.length && input.charCodeAt(i) === 46 && input.charCodeAt(i + 1) === 47) {
+    i += 2;
+  }
+  return i === 0 ? input : input.slice(i);
+}
+
+function stripLeadingSlashes(input: string): string {
+  let i = 0;
+  while (i < input.length && input.charCodeAt(i) === 47) i++;
+  return i === 0 ? input : input.slice(i);
+}
+
+function stripTrailingSlashes(input: string): string {
+  let end = input.length;
+  while (end > 0 && input.charCodeAt(end - 1) === 47) end--;
+  return end === input.length ? input : input.slice(0, end);
+}
+
+function collapseSlashes(input: string): string {
+  let out = "";
+  let previousWasSlash = false;
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]!;
+    const isSlash = ch === "/";
+    if (isSlash) {
+      if (!previousWasSlash) out += "/";
+      previousWasSlash = true;
+      continue;
+    }
+
+    out += ch;
+    previousWasSlash = false;
+  }
+
+  return out;
+}
+
+function normalizeRelativePathForIgnore(input: string): string {
+  return stripTrailingSlashes(
+    collapseSlashes(stripLeadingSlashes(stripLeadingDotSlash(normalizePathInputSeparators(input)))),
+  );
+}
+
 function fuzzyScore(name: string, query: string): number | null {
   const n = lower(name);
   const q = lower(query);
@@ -52,7 +108,7 @@ export function parsePathQuery(rawInput: string): {
   dirPrefix: string;
   query: string;
 } {
-  const input = rawInput.replace(/\\/g, "/");
+  const input = normalizePathInputSeparators(rawInput);
   const lastSlash = input.lastIndexOf("/");
   if (lastSlash < 0) return { dirPrefix: "", query: input };
   return {
@@ -86,7 +142,7 @@ export async function suggestPaths(
   }
 
   const workspaceAbs = normalizePath(rawWorkspace);
-  const input = rawInput.replace(/\r/g, "").replace(/\\/g, "/");
+  const input = normalizePathInputSeparators(rawInput);
   const parsed = parsePathQuery(input);
   let dirPrefix = parsed.dirPrefix;
   let query = parsed.query;
@@ -178,13 +234,7 @@ export async function suggestPaths(
       if (!allowHidden && !query && e.name.startsWith(".")) continue;
 
       const itemRelPath = currentRelPath ? `${currentRelPath}/${e.name}` : e.name;
-      const normalizedRelPath = String(`${dirPrefix}${itemRelPath}`)
-        .replace(/\r/g, "")
-        .replace(/\\/g, "/")
-        .replace(/^(?:\.\/)+/g, "")
-        .replace(/^\/+/g, "")
-        .replace(/\/+/g, "/")
-        .replace(/\/+$/g, "");
+      const normalizedRelPath = normalizeRelativePathForIgnore(`${dirPrefix}${itemRelPath}`);
       const isDir = e.kind === "directory";
       if (options.shouldIgnore?.({ normalizedRelPath, isDir })) continue;
 
@@ -230,7 +280,7 @@ export async function suggestPaths(
     ok = false;
   }
   if (!ok && dirPrefix) {
-    const fallbackQuery = input.replace(/\/+$/g, "");
+    const fallbackQuery = stripTrailingSlashes(input);
     dirPrefix = "";
     query = fallbackQuery;
     baseDirAbs = workspaceAbs;
