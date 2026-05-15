@@ -31,6 +31,15 @@ function normalizePathInputSeparators(input: string): string {
   return out;
 }
 
+function stripCarriageReturns(input: string): string {
+  let out = "";
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]!;
+    if (ch !== "\r") out += ch;
+  }
+  return out;
+}
+
 function stripLeadingDotSlash(input: string): string {
   let i = 0;
   while (i + 1 < input.length && input.charCodeAt(i) === 46 && input.charCodeAt(i + 1) === 47) {
@@ -309,7 +318,7 @@ export function resolveUserPath(
   input: string,
   options?: Readonly<{ homeDir?: string }>,
 ): string {
-  const raw = (input ?? "").replace(/\r/g, "").trim();
+  const raw = stripCarriageReturns(input ?? "").trim();
   if (!raw) return resolvePath(normalizePath(workspaceAbs), ".");
 
   if (raw === "~" || raw.startsWith("~/")) {
@@ -320,7 +329,7 @@ export function resolveUserPath(
     }
   }
 
-  const normalized = raw.replace(/\\/g, "/");
+  const normalized = normalizePathInputSeparators(raw);
   if (isAbsolutePath(normalized)) return normalizePath(normalized);
   return resolvePath(normalizePath(workspaceAbs), normalized);
 }

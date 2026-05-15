@@ -50,7 +50,7 @@ describe("docs cleanup policy contract", () => {
     const entries = new Map<string, any>();
 
     for (const [symbol, target, modulePath] of movedRootExportMigrations) {
-      expect(migration).toContain(`| \`${symbol}\` |`);
+      expect(migration).toMatch(new RegExp(String.raw`\|\s+\`${symbol}\`\s+\|`));
       expect(migration).toContain(target);
       expect(symbol in root).toBe(false);
 

@@ -7,7 +7,7 @@ export default defineConfig({
   testDir: "./e2e",
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
-  projects: [{ name: "smoke", testMatch: ["basic.spec.ts", "csp.spec.ts"] }],
+  projects: [{ name: "smoke", testMatch: ["basic.spec.ts", "csp.spec.ts", "dom-links.spec.ts"] }],
   use: {
     baseURL: `http://127.0.0.1:${port}`,
   },

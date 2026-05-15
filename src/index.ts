@@ -5,6 +5,7 @@ export { TerminalProvider } from "./vue/components/TerminalProvider.js";
 export { TBox } from "./vue/components/TBox.js";
 export { TDialog } from "./vue/components/TDialog.js";
 export { TInput } from "./vue/components/TInput.js";
+export type { TInputHostAdapter } from "./vue/components/input/host.js";
 export { createTInputHostPlugin } from "./vue/components/input/plugins/hostPlugin.js";
 export { TList } from "./vue/components/TList.js";
 export { TSelect } from "./vue/components/TSelect.js";

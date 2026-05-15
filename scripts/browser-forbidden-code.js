@@ -12,6 +12,7 @@ export const FORBIDDEN_BROWSER_CODE = [
   new RegExp(String.raw`\bimport\s*\(\s*["']${BROWSER_FORBIDDEN_IMPORT_TARGET}["']\s*\)`, "u"),
   new RegExp(String.raw`\brequire\s*\(\s*["']${BROWSER_FORBIDDEN_IMPORT_TARGET}["']\s*\)`, "u"),
   /\bprocess\.(?:stdout|stderr|stdin|env)\b/u,
+  /(?<!\.)\bprocess\b\s*\?\.\s*(?:stdout|stderr|stdin|env)\b/u,
   /\bnew Function\b/u,
   /\bOSC52\b/iu,
   /\bhostPlugin\.node\b/u,
@@ -19,6 +20,10 @@ export const FORBIDDEN_BROWSER_CODE = [
   /\bcreateDefaultTInputHostAdapter\b/u,
   /\bcreateNodeMentionPathProvider\b/u,
 ];
+
+// Guarded globalThis.process probes are allowed in shared browser/Node entries.
+// The browser policy forbids Node imports and direct bare process usage, while
+// runtime feature detection may still inspect globalThis.process defensively.
 
 export function findBrowserForbiddenCode(source) {
   return FORBIDDEN_BROWSER_CODE.find((pattern) => pattern.test(source)) ?? null;

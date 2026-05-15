@@ -2,9 +2,11 @@ import {
   TerminalProvider,
   TBox,
   TText,
+  createTInputHostPlugin,
   createTerminal,
   type Style,
   type Terminal,
+  type TInputHostAdapter,
 } from "@simon_he/vue-tui";
 
 import { sanitizeDomHref } from "@simon_he/vue-tui/core";
@@ -57,6 +59,10 @@ const linkConfig: DomRendererLinkConfig = {
 const terminal: Terminal = createTerminal({ cols: 80, rows: 24 });
 const runtime = createRuntime();
 const plugin: TInputPlugin = { name: "test", install: () => {} };
+const hostAdapter: TInputHostAdapter = {
+  isTerminalLike: false,
+};
+const hostPlugin = createTInputHostPlugin(hostAdapter);
 
 console.log(
   TerminalProvider,
@@ -92,6 +98,7 @@ console.log(
   terminal,
   runtime,
   plugin,
+  hostPlugin,
 );
 
 const driver: StdinDriver | null = null;

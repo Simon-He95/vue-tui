@@ -138,9 +138,11 @@ describe("package exports", () => {
       `await import("child_process")`,
       `await import("node:child_process")`,
       `process.env.NODE_ENV`,
+      `process?.env?.NODE_ENV`,
     ]) {
       expect(() => assertNoBrowserForbiddenCode(bad)).toThrow(/forbidden code/);
     }
+    expect(() => assertNoBrowserForbiddenCode(`globalThis.process?.env?.NODE_ENV`)).not.toThrow();
   });
 
   it("keeps Vue declaration compatibility patch output stable", () => {

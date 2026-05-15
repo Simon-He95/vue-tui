@@ -139,14 +139,17 @@ describe("runtime (terminal/node)", () => {
 
   it("raf wrapper runs via timers with a finite timestamp", () => {
     vi.useFakeTimers();
-    const r = createRuntime();
-    const cb = vi.fn();
-    r.raf.request(cb as any);
-    vi.advanceTimersByTime(20);
-    expect(cb).toHaveBeenCalled();
-    const timestamp = cb.mock.calls[0]?.[0];
-    expect(typeof timestamp).toBe("number");
-    expect(Number.isFinite(timestamp)).toBe(true);
-    vi.useRealTimers();
+    try {
+      const r = createRuntime("terminal");
+      const cb = vi.fn();
+      r.raf.request(cb as any);
+      vi.advanceTimersByTime(20);
+      expect(cb).toHaveBeenCalled();
+      const timestamp = cb.mock.calls[0]?.[0];
+      expect(typeof timestamp).toBe("number");
+      expect(Number.isFinite(timestamp)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
