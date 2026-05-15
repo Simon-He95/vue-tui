@@ -28,6 +28,10 @@ export type TerminalCleanupSignalPolicy = "cleanup-only" | "exit" | "reraise";
 
 export type TerminalCleanupOptions = Readonly<{
   signals?: readonly CleanupSignal[];
+  /**
+   * Defaults to "reraise" so SIGINT/SIGTERM preserve normal process semantics
+   * after terminal cleanup.
+   */
   signalPolicy?: TerminalCleanupSignalPolicy;
   cleanupOnUnhandledRejection?: boolean;
   rethrowUnhandledRejection?: boolean;
@@ -117,6 +121,21 @@ export function installTerminalCleanup(
     }
   };
 
+  const onUncaughtExceptionMonitor = () => {
+    cleanup();
+    uninstall();
+  };
+
+  const onUnhandledRejection = (reason: unknown) => {
+    cleanup();
+    uninstall();
+    if (rethrowUnhandledRejection) {
+      process.nextTick(() => {
+        throw normalizeUnhandledRejection(reason);
+      });
+    }
+  };
+
   const uninstall = () => {
     if (uninstalled) return;
     uninstalled = true;
@@ -154,19 +173,6 @@ export function installTerminalCleanup(
     const handler = () => handleSignal(signal);
     if (addProcessOnce(signal, handler)) signalHandlers.set(signal, handler);
   }
-  const onUncaughtExceptionMonitor = () => {
-    cleanup();
-    uninstall();
-  };
-  const onUnhandledRejection = (reason: unknown) => {
-    cleanup();
-    uninstall();
-    if (rethrowUnhandledRejection) {
-      process.nextTick(() => {
-        throw normalizeUnhandledRejection(reason);
-      });
-    }
-  };
 
   addProcessOnce("exit", cleanup);
   addProcessOnce("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);

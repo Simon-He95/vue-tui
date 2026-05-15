@@ -145,7 +145,7 @@ driver = createStdinDriver({
 });
 ```
 
-Signal cleanup restores terminal state first. `installTerminalCleanup()` returns a cleanup handle: call `handle.uninstall()` to remove process listeners without disposing the app, or `handle.cleanup()` to run cleanup manually. By default, signal handling is cleanup-only. Set `signalPolicy: "reraise"` when the host wants the original signal to terminate the process after cleanup, or `signalPolicy: "exit"` to exit with the conventional signal exit code.
+Signal cleanup restores terminal state first. `installTerminalCleanup()` returns a cleanup handle: call `handle.uninstall()` to remove process listeners without disposing the app, or `handle.cleanup()` to run cleanup manually. By default, signal handling uses `signalPolicy: "reraise"`: the helper cleans up, removes its own listeners, and re-sends the original signal so the host process keeps normal signal semantics. Set `signalPolicy: "cleanup-only"` only when the host explicitly owns termination, or `signalPolicy: "exit"` to exit with the conventional signal exit code.
 
 Unhandled promise rejections stay host-owned by default. Setting `cleanupOnUnhandledRejection: true` cleans up and rethrows by default. Set `rethrowUnhandledRejection: false` only when the host explicitly wants to suppress the rejection.
 

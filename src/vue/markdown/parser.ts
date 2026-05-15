@@ -18,21 +18,24 @@ export function isSafeMarkdownLink(url: string): boolean {
   return sanitizeDomHref(url, { allowRelative: true }) != null;
 }
 
-function markdownInstanceCacheKey(config?: TuiMarkdownParseConfig): string {
+function normalizeCustomHtmlTags(config?: TuiMarkdownParseConfig): readonly string[] {
+  return Array.from(new Set(config?.customHtmlTags?.filter(Boolean) ?? [])).sort();
+}
+
+function markdownInstanceCacheKey(customHtmlTags: readonly string[]): string {
   return JSON.stringify({
-    customHtmlTags: [...(config?.customHtmlTags?.filter(Boolean) ?? [])].sort(),
+    customHtmlTags,
   });
 }
 
-function getCachedMarkdownInstance(config?: TuiMarkdownParseConfig) {
-  const cacheKey = markdownInstanceCacheKey(config);
+function getCachedMarkdownInstance(customHtmlTags: readonly string[]) {
+  const cacheKey = markdownInstanceCacheKey(customHtmlTags);
   const cached = markdownInstanceCache.get(cacheKey);
   if (cached) {
     markdownInstanceCache.delete(cacheKey);
     markdownInstanceCache.set(cacheKey, cached);
     return cached;
   }
-  const customHtmlTags = config?.customHtmlTags?.filter(Boolean);
   const created = getMarkdown(`vue-tui-markdown:${cacheKey}`, {
     customHtmlTags,
   });
@@ -46,8 +49,8 @@ function getCachedMarkdownInstance(config?: TuiMarkdownParseConfig) {
 }
 
 export function createTuiMarkdownParser(config?: TuiMarkdownParseConfig): TuiMarkdownParser {
-  const customHtmlTags = config?.customHtmlTags?.filter(Boolean);
-  const md = getCachedMarkdownInstance(config);
+  const customHtmlTags = normalizeCustomHtmlTags(config);
+  const md = getCachedMarkdownInstance(customHtmlTags);
 
   function parse(content: string, final: boolean): TuiMarkdownNode[] {
     return parseMarkdownToStructure(content, md, {

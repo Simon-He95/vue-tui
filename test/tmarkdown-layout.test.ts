@@ -173,6 +173,43 @@ describe("markdown layout", () => {
     }
   });
 
+  it("uses canonical custom HTML tags for cache and parsing", async () => {
+    vi.resetModules();
+    const getMarkdownMock = vi.fn((name: string, options: unknown) => ({ name, options }));
+    const parseMarkdownToStructureMock = vi.fn(() => []);
+    vi.doMock("stream-markdown-parser", () => ({
+      getMarkdown: getMarkdownMock,
+      parseMarkdownToStructure: parseMarkdownToStructureMock,
+    }));
+    try {
+      const parserModule = await import("../src/vue/markdown/parser.js");
+      const first = parserModule.createTuiMarkdownParser({
+        customHtmlTags: ["foo-card", "bar-card", "foo-card", ""],
+      });
+      const second = parserModule.createTuiMarkdownParser({
+        customHtmlTags: ["bar-card", "foo-card"],
+      });
+
+      first.parse("<foo-card>x</foo-card>", true);
+      second.parse("<foo-card>x</foo-card>", true);
+
+      expect(getMarkdownMock).toHaveBeenCalledTimes(1);
+      expect(getMarkdownMock).toHaveBeenCalledWith(expect.any(String), {
+        customHtmlTags: ["bar-card", "foo-card"],
+      });
+      expect(parseMarkdownToStructureMock).toHaveBeenCalledWith(
+        "<foo-card>x</foo-card>",
+        expect.anything(),
+        expect.objectContaining({
+          customHtmlTags: ["bar-card", "foo-card"],
+        }),
+      );
+    } finally {
+      vi.doUnmock("stream-markdown-parser");
+      vi.resetModules();
+    }
+  });
+
   it("lays out long markdown paragraphs without changing row counts", () => {
     const parser = createTuiMarkdownParser();
     const rows = buildMarkdownVisualRows("a".repeat(100_000), 80, parser);

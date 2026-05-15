@@ -1,7 +1,7 @@
 import type { Plugin } from "esbuild";
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { builtinModules, createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -46,6 +46,13 @@ const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as
   exports?: Record<string, unknown>;
   peerDependencies?: Record<string, string>;
 };
+
+function readFixtureDir(dir: string): string {
+  return readdirSync(resolve(dir))
+    .sort()
+    .map((file) => readFileSync(resolve(dir, file), "utf8"))
+    .join("");
+}
 
 const forbidNodeBuiltins: Plugin = {
   name: "forbid-node-builtins",
@@ -140,9 +147,7 @@ describe("package exports", () => {
       { cwd: process.cwd(), encoding: "utf8", input: output },
     );
 
-    expect(formatted).toBe(
-      readFileSync(resolve("test/fixtures/dts-after/vue-component.d.ts"), "utf8"),
-    );
+    expect(formatted).toBe(readFixtureDir("test/fixtures/dts-after"));
   });
 
   it("checks already patched Vue declaration compatibility output", () => {

@@ -150,11 +150,29 @@ function trimTypeArguments(source, target, maxArgs) {
   return out;
 }
 
+function importsNamedVueType(source, name) {
+  const importPattern = /import\s+(?:type\s+)?\{([^}]+)\}\s+from\s+["']vue["']/g;
+  let match;
+
+  while ((match = importPattern.exec(source))) {
+    const specifiers = match[1].split(",");
+    for (const specifier of specifiers) {
+      const cleaned = specifier.trim().replace(/^type\s+/, "");
+      const [imported, local = imported] = cleaned.split(/\s+as\s+/);
+      if (imported?.trim() === name && local?.trim() === name) return true;
+    }
+  }
+
+  return false;
+}
+
 function patchDts(source) {
   let out = trimTypeArguments(source, 'import("vue").DefineComponent', 13);
   out = trimTypeArguments(out, "DefineComponent", 13);
   out = trimTypeArguments(out, 'import("vue").Ref', 1);
-  out = trimTypeArguments(out, "Ref", 1);
+  if (importsNamedVueType(source, "Ref")) {
+    out = trimTypeArguments(out, "Ref", 1);
+  }
   return out.replaceAll(
     'import("vue").PublicProps',
     '(import("vue").VNodeProps & import("vue").AllowedComponentProps & import("vue").ComponentCustomProps)',
