@@ -19,6 +19,9 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     env:
       HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
 
@@ -56,7 +59,7 @@ jobs:
         if: ${{ env.HAS_NPM_TOKEN == 'true' }}
         run: |
           TARBALL=$(ls .release/*.tgz | head -n 1)
-          npm publish "$TARBALL" --access public --dry-run
+          npm publish "$TARBALL" --access public --dry-run --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VUE_TUI_ALLOW_DIRECT_PUBLISH: "1"

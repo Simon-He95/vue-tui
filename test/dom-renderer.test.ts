@@ -698,7 +698,7 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("prevents native DOM link activation in event mode even without a handler", () => {
+  it("falls back to native DOM link activation when event activation has no handler", () => {
     const { terminal, container, renderer } = setup(3, 1, {
       links: { activation: "event" },
     });
@@ -710,15 +710,15 @@ describe("DomRenderer row rendering", () => {
       const anchor = lineEl(container).querySelector("a");
       expect(anchor).toBeInstanceOf(HTMLAnchorElement);
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
-      expect(anchor?.dispatchEvent(event)).toBe(false);
-      expect(event.defaultPrevented).toBe(true);
+      expect(anchor?.dispatchEvent(event)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
     } finally {
       renderer.dispose();
       container.remove();
     }
   });
 
-  it("does not bubble event-without-handler DOM link activation to the terminal container", () => {
+  it("does not bubble native fallback DOM link activation to the terminal container", () => {
     const { terminal, container, renderer } = setup(3, 1, {
       links: { activation: "event" },
     });
@@ -734,7 +734,7 @@ describe("DomRenderer row rendering", () => {
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
       anchor?.dispatchEvent(event);
 
-      expect(event.defaultPrevented).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
       expect(bubbled).not.toHaveBeenCalled();
     } finally {
       renderer.dispose();

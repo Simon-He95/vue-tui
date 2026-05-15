@@ -61,12 +61,11 @@ function normalizeClipboardPathList(raw: string): string {
   const text = String(raw ?? "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
-    .trim();
+    .replace(/\n+$/g, "");
   if (!text) return "";
   return text
     .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
+    .filter((line) => line.length > 0)
     .join("\n");
 }
 

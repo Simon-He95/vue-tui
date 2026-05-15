@@ -658,7 +658,12 @@ function normalizeLinkOptions(
 ): NormalizedDomRendererLinkOptions {
   if (value === true) return {};
   if (value === false || value == null) return false;
-  return value;
+  const activation =
+    value.activation ?? (typeof value.onActivate === "function" ? "event" : "native");
+  if (activation === "event" && typeof value.onActivate !== "function") {
+    return { ...value, activation: "native" };
+  }
+  return { ...value, activation };
 }
 
 function linkOptionsKey(options: NormalizedDomRendererLinkOptions): string {
@@ -668,8 +673,7 @@ function linkOptionsKey(options: NormalizedDomRendererLinkOptions): string {
     allowRelative: options.allowRelative === true,
     externalTarget: options.externalTarget ?? "_blank",
     tabIndex: options.tabIndex ?? -1,
-    activation:
-      options.activation ?? (typeof options.onActivate === "function" ? "event" : "native"),
+    activation: options.activation ?? "native",
     hasOnActivate: typeof options.onActivate === "function",
   });
 }
@@ -938,9 +942,7 @@ export function createDomRenderer(
     const href = anchor.dataset.vtHref;
     if (!href || !rendererLinkOptions) return;
 
-    const hasActivateHandler = typeof rendererLinkOptions.onActivate === "function";
-    const activation = rendererLinkOptions.activation ?? (hasActivateHandler ? "event" : "native");
-    if (activation === "event") {
+    if (rendererLinkOptions.activation === "event") {
       stopNativeAndTerminalActivation(event);
       rendererLinkOptions.onActivate?.(href, event);
       return;

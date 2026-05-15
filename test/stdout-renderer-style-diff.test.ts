@@ -54,6 +54,29 @@ describe("stdout renderer style diffing", () => {
     }
   });
 
+  it("recomputes terminal row fingerprints when stdout theme defaultBg changes", () => {
+    const terminal = createTerminal({ cols: 4, rows: 1 });
+    const renderer = createStdoutRenderer(terminal, {
+      output: { isTTY: false, write: () => {} },
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      defaultBg: "black",
+    });
+
+    try {
+      const before = Array.from(terminal.getRowFingerprints(0)!);
+
+      renderer.updateTheme?.({ defaultBg: "blue" });
+
+      const after = Array.from(terminal.getRowFingerprints(0)!);
+      expect(after).not.toEqual(before);
+    } finally {
+      renderer.dispose();
+      terminal.dispose();
+    }
+  });
+
   it("passes file writer to stdout profiler", () => {
     const previousProfile = process.env.VUE_TUI_PROFILE;
     const previousFormat = process.env.VUE_TUI_PROFILE_FORMAT;

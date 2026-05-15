@@ -92,28 +92,29 @@ function encodeFilePathForUrl(path: string): string {
   return encodePathSegments(normalized);
 }
 
-export function pathToTerminalFileHref(pathLike: string): string | undefined {
-  const raw = String(pathLike ?? "").trim();
-  if (!raw) return undefined;
-
-  for (let i = 0; i < raw.length; i++) {
-    const code = raw.charCodeAt(i);
-    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return undefined;
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true;
   }
+  return false;
+}
+
+function sanitizeRawFileUrl(raw: string): string | undefined {
+  if (raw !== raw.trim()) return undefined;
+  if (/\s/u.test(raw)) return undefined;
   if (ENCODED_CRLF_RE.test(raw)) return undefined;
 
-  if (raw.toLowerCase().startsWith("file://")) {
-    if (/\s/u.test(raw)) return undefined;
-
-    try {
-      const url = new URL(raw);
-      if (url.protocol !== "file:") return undefined;
-      return url.toString();
-    } catch {
-      return undefined;
-    }
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "file:") return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
   }
+}
 
+function filesystemPathToFileUrl(raw: string): string | undefined {
   const backslashUnc = raw.match(/^\\\\([^\\/]+)[\\/](.+)$/);
   if (backslashUnc) {
     const host = encodeURIComponent(backslashUnc[1]!);
@@ -133,4 +134,12 @@ export function pathToTerminalFileHref(pathLike: string): string | undefined {
   if (!isAbsolutePath(normalized)) return undefined;
 
   return `file:///${encodeFilePathForUrl(normalized)}`;
+}
+
+export function pathToTerminalFileHref(pathLike: string): string | undefined {
+  const raw = String(pathLike ?? "");
+  if (!raw) return undefined;
+  if (hasControlChar(raw)) return undefined;
+  if (/^file:\/\//i.test(raw)) return sanitizeRawFileUrl(raw);
+  return filesystemPathToFileUrl(raw);
 }

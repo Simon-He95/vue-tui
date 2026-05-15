@@ -2049,12 +2049,16 @@ export function createStdoutRenderer(
     }
   }
 
+  function installFingerprintFn(): void {
+    terminal.setFingerprintFn((ch: string, style: Style) => {
+      return cellFingerprint(ch, style);
+    });
+  }
+
   // Register fingerprint function on the terminal's composite buffer.
   // This enables SoA pre-computation: fingerprints are computed during composeRows()
   // and fingerprintRow() becomes a TypedArray copy instead of per-cell hash computation.
-  terminal.setFingerprintFn((ch: string, style: Style) => {
-    return cellFingerprint(ch, style);
-  });
+  installFingerprintFn();
 
   // Initial setup - these are one-time writes, not part of render loop
   if (altScreen && out.isTTY) out.write("\u001B[?1049h");
@@ -2176,6 +2180,7 @@ export function createStdoutRenderer(
       if (!(key in BUILTIN_COLOR_INDEX)) delete COLOR_INDEX[key];
     }
     nextColorIdx = 17;
+    installFingerprintFn();
     fpRows = 0;
     fpPrevValid = false;
     prevOverlayBlockedRows = [];

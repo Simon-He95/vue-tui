@@ -12,20 +12,29 @@ describe("TInput host path hrefs", () => {
     expect(pathToTerminalFileHref("file://server/share/a b")).toBeUndefined();
   });
 
+  it("rejects whitespace around raw file URLs", () => {
+    expect(pathToTerminalFileHref(" file:///tmp/a")).toBeUndefined();
+    expect(pathToTerminalFileHref("file:///tmp/a ")).toBeUndefined();
+  });
+
   it("rejects invalid or control-character file URLs", () => {
     expect(pathToTerminalFileHref("file:///tmp/a\u0007b")).toBeUndefined();
     expect(pathToTerminalFileHref("file://[::1")).toBeUndefined();
   });
 
-  it("rejects encoded CRLF in file hrefs", () => {
+  it("rejects encoded CRLF in raw file URLs", () => {
     expect(pathToTerminalFileHref("file:///tmp/a%0ab")).toBeUndefined();
     expect(pathToTerminalFileHref("file:///tmp/a%0Db")).toBeUndefined();
-    expect(pathToTerminalFileHref("/tmp/a%0ab")).toBeUndefined();
   });
 
   it("keeps absolute platform paths encoded as file URLs", () => {
     expect(pathToTerminalFileHref("/tmp/a b")).toBe("file:///tmp/a%20b");
+    expect(pathToTerminalFileHref("/tmp/a ")).toBe("file:///tmp/a%20");
     expect(pathToTerminalFileHref("C:\\tmp\\a b")).toBe("file:///C:/tmp/a%20b");
+  });
+
+  it("encodes percent-looking filesystem paths instead of rejecting them", () => {
+    expect(pathToTerminalFileHref("/tmp/a%0a.txt")).toBe("file:///tmp/a%250a.txt");
   });
 
   it("encodes reserved path characters in absolute file paths", () => {

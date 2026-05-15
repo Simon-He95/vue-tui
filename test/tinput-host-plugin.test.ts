@@ -211,6 +211,59 @@ describe("TInput host plugins", () => {
     }
   });
 
+  it("does not trim clipboard file paths", async () => {
+    const originalProcess = (globalThis as any).process;
+    const originalSpawn = (globalThis as any).__VT_NODE_SPAWN__;
+
+    (globalThis as any).__VT_NODE_SPAWN__ = vi.fn(() => {
+      const handlers = new Map<string, Function>();
+      const child = {
+        stdout: {
+          setEncoding: vi.fn(),
+          on(event: string, fn: Function) {
+            handlers.set(`stdout:${event}`, fn);
+          },
+        },
+        on(event: string, fn: Function) {
+          handlers.set(event, fn);
+        },
+        kill: vi.fn(),
+      };
+
+      queueMicrotask(() => {
+        handlers.get("stdout:data")?.("/tmp/a \n/tmp/ leading\n");
+        handlers.get("close")?.(0);
+      });
+
+      return child;
+    });
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        env: {},
+        platform: "darwin",
+        stdout: { isTTY: true },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter();
+
+      await expect(host.readClipboardText?.()).resolves.toBe("/tmp/a \n/tmp/ leading");
+      expect((globalThis as any).__VT_NODE_SPAWN__).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+      if (originalSpawn === undefined) delete (globalThis as any).__VT_NODE_SPAWN__;
+      else (globalThis as any).__VT_NODE_SPAWN__ = originalSpawn;
+    }
+  });
+
   it("caps clipboard command stdout", async () => {
     const originalProcess = (globalThis as any).process;
     const originalSpawn = (globalThis as any).__VT_NODE_SPAWN__;
