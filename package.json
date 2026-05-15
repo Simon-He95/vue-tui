@@ -38,6 +38,30 @@
   "types": "./dist/index.d.ts",
   "typesVersions": {
     "*": {
+      "core": [
+        "./dist/core.d.ts"
+      ],
+      "runtime": [
+        "./dist/runtime.d.ts"
+      ],
+      "renderer/dom": [
+        "./dist/renderer-dom.d.ts"
+      ],
+      "observability": [
+        "./dist/observability.d.ts"
+      ],
+      "vue": [
+        "./dist/vue.d.ts"
+      ],
+      "cli": [
+        "./dist/cli.d.ts"
+      ],
+      "markdown": [
+        "./dist/markdown.d.ts"
+      ],
+      "experimental": [
+        "./dist/experimental.d.ts"
+      ],
       "*": [
         "./dist/*",
         "./dist/index.d.ts"

@@ -7,6 +7,7 @@ import type {
 } from "../../core/types.js";
 import type { RendererCapabilities } from "../capabilities.js";
 import { Buffer } from "node:buffer";
+import { writeSync as fsWriteSync } from "node:fs";
 import process from "node:process";
 import {
   defaultVueTuiProfileLogPath,
@@ -53,19 +54,8 @@ function getDebugLog() {
   return debugLog;
 }
 
-// Try to use synchronous write for atomic output (reduces flickering in Bun binaries)
-let writeSync: ((fd: number, data: string) => void) | null = null;
-try {
-  // Dynamic import to avoid bundling issues
-  const fs = (globalThis as any).require?.("node:fs") ?? (globalThis as any).require?.("fs");
-  if (fs?.writeSync) {
-    writeSync = (fd: number, data: string) => {
-      const buffer = Buffer.from(data, "utf8");
-      fs.writeSync(fd, buffer);
-    };
-  }
-} catch {
-  // Ignore - will fall back to stream write
+function writeFdSync(fd: number, data: string): void {
+  fsWriteSync(fd, Buffer.from(data, "utf8"));
 }
 
 // Synchronized output control sequences (DEC Private Mode 2026)
@@ -1790,7 +1780,7 @@ export function createStdoutRenderer(
     const resolveWriteMode = (frameSizeBytes: number): "stream" | "sync" | "chunked" => {
       if (isGhostty) return "chunked";
 
-      const canWriteSync = Boolean(writeSync && (out as any).fd === 1);
+      const canWriteSync = (out as any).fd === 1;
       const preferChunked = frameSizeBytes >= chunkThresholdBytes || writeEmaMs >= 24;
       if (preferChunked) return "chunked";
       if (canWriteSync && frameSizeBytes <= syncMaxBytes) return "sync";
@@ -1808,10 +1798,10 @@ export function createStdoutRenderer(
           );
         }
         writeChunked(frame);
-      } else if (writeMode === "sync" && writeSync && (out as any).fd === 1) {
+      } else if (writeMode === "sync" && (out as any).fd === 1) {
         if (isDebugEnabled()) getDebugLog().render(` Using writeSync`);
         try {
-          writeSync(1, frame);
+          writeFdSync(1, frame);
         } catch {
           // Fall back to stream write if sync fails
           if (isDebugEnabled()) {

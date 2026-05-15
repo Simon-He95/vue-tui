@@ -27,7 +27,8 @@ Development, release validation, and documentation builds are run on Node.js 20 
 
 | Import                           | Stability    | Use it for                                                                                                             |
 | -------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `@simon_he/vue-tui`              | Core         | Browser-safe terminal runtime, root Vue components, DOM renderer, events, layout, inputs, router, and runtime helpers  |
+| `@simon_he/vue-tui`              | Core         | Browser-safe terminal core, DOM renderer, stable Vue components, and input host plugin factory                         |
+| `@simon_he/vue-tui/vue`          | Advanced     | Extended Vue components, composables, router helpers, and Vue runtime internals                                        |
 | `@simon_he/vue-tui/cli`          | Node/CLI     | Headless Vue app runtime, stdin driver, stdout renderer, Node path provider, recording, and terminal clipboard helpers |
 | `@simon_he/vue-tui/markdown`     | Focused      | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources              |
 | `@simon_he/vue-tui/experimental` | Experimental | `TVirtualList`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins               |
@@ -159,16 +160,17 @@ Unhandled promise rejections stay host-owned by default. Setting `cleanupOnUnhan
 
 ## Components
 
-| Area          | Import                           | Components                                                                                    |
-| ------------- | -------------------------------- | --------------------------------------------------------------------------------------------- |
-| Layout        | `@simon_he/vue-tui`              | `TBox`, `TView`, `TAnchor`, `TFlow`, `TRenderPlane`, `TRenderLayer`                           |
-| Text          | `@simon_he/vue-tui`              | `TText`, `TTransition`                                                                        |
-| Markdown      | `@simon_he/vue-tui/markdown`     | `TMarkdownText`, `TVirtualMarkdown`                                                           |
-| Input         | `@simon_he/vue-tui`              | `TInput`, `TInputBox`, `TSelect`, `TPathPicker`, `TJsonEditor`                                |
-| Overlay       | `@simon_he/vue-tui`              | `TDialog`, `TMultilineModal`, `TDebugOverlay`                                                 |
-| Experimental  | `@simon_he/vue-tui/experimental` | `TVirtualList`, `TLogView`, `TLogSearchBar`, `TLogLinksPanel`, `TLogScrollbar`, `TLogMinimap` |
-| Runtime tools | `@simon_he/vue-tui`              | `createTerminal`, `createDomRenderer`, event APIs                                             |
-| CLI tools     | `@simon_he/vue-tui/cli`          | `createTerminalApp`, `createStdoutRenderer`, `createStdinDriver`                              |
+| Area           | Import                           | Components / APIs                                                                                                                                                          |
+| -------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stable layout  | `@simon_he/vue-tui`              | `TBox`, `TView`                                                                                                                                                            |
+| Stable text    | `@simon_he/vue-tui`              | `TText`                                                                                                                                                                    |
+| Stable input   | `@simon_he/vue-tui`              | `TInput`, `TList`, `TSelect`                                                                                                                                               |
+| Stable overlay | `@simon_he/vue-tui`              | `TDialog`                                                                                                                                                                  |
+| Vue extended   | `@simon_he/vue-tui/vue`          | `TAnchor`, `TFlow`, `TRenderPlane`, `TRenderLayer`, `TTransition`, `TInputBox`, `TPathPicker`, `TJsonEditor`, `TMultilineModal`, `TDebugOverlay`, composables, router APIs |
+| Markdown       | `@simon_he/vue-tui/markdown`     | `TMarkdownText`, `TVirtualMarkdown`                                                                                                                                        |
+| Experimental   | `@simon_he/vue-tui/experimental` | `TVirtualList`, `TLogView`, `TLogSearchBar`, `TLogLinksPanel`, `TLogScrollbar`, `TLogMinimap`                                                                              |
+| Runtime        | `@simon_he/vue-tui/runtime`      | runtime, event, and selection APIs                                                                                                                                         |
+| CLI            | `@simon_he/vue-tui/cli`          | `createTerminalApp`, `createStdoutRenderer`, `createStdinDriver`, Node host adapters                                                                                       |
 
 See [docs/components.md](./docs/components.md) and [docs/generated/components-api.md](./docs/generated/components-api.md) for props and events.
 

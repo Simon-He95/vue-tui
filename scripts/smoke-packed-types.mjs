@@ -25,8 +25,60 @@ try {
     "@types/node@^18.19.0",
   ]);
 
+  const source = `
+import { TerminalProvider, TBox, TText, createTerminal, type Style } from "@simon_he/vue-tui";
+import { createDomRenderer, type DomRendererOptions } from "@simon_he/vue-tui/renderer/dom";
+import type { TerminalEventRecord } from "@simon_he/vue-tui/runtime";
+import { TAnchor, TDebugOverlay, TFlow, TInputBox, TJsonEditor, TMultilineModal, TPathPicker, TRenderLayer, TRenderPlane, TTransition, useTerminal, type TInputPlugin } from "@simon_he/vue-tui/vue";
+import { createDefaultTInputHostAdapter, createStdoutRenderer, createTerminalApp, defaultTInputHostPlugin, installTerminalCleanup, type TerminalCleanupSignalPolicy } from "@simon_he/vue-tui/cli";
+import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
+import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
+
+const style: Style = { fg: "whiteBright", href: "https://example.com" };
+const domOptions: DomRendererOptions = { links: true };
+const event: TerminalEventRecord = { type: "keydown", key: "Enter" };
+const plugin: TInputPlugin = { name: "test", install: () => {} };
+const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
+
+console.log(
+  createTerminal,
+  TerminalProvider,
+  TBox,
+  TText,
+  createDomRenderer,
+  TAnchor,
+  TDebugOverlay,
+  TFlow,
+  TInputBox,
+  TJsonEditor,
+  TMultilineModal,
+  TPathPicker,
+  TRenderLayer,
+  TRenderPlane,
+  TTransition,
+  useTerminal,
+  createStdoutRenderer,
+  createTerminalApp,
+  createDefaultTInputHostAdapter,
+  defaultTInputHostPlugin,
+  installTerminalCleanup,
+  createTuiMarkdownParser,
+  TMarkdownText,
+  TLogView,
+  TVirtualList,
+  createAppendOnlyLogStore,
+  style,
+  domOptions,
+  event,
+  plugin,
+  signalPolicy,
+);
+`;
+
+  writeFileSync(join(dir, "index.ts"), source);
+
   writeFileSync(
-    join(dir, "tsconfig.json"),
+    join(dir, "tsconfig.bundler.json"),
     JSON.stringify(
       {
         compilerOptions: {
@@ -44,41 +96,25 @@ try {
   );
 
   writeFileSync(
-    join(dir, "index.ts"),
-    `
-import { TerminalProvider, TBox, TText, createTerminal, type Style } from "@simon_he/vue-tui";
-import type { TerminalEventRecord } from "@simon_he/vue-tui/runtime";
-import { createDefaultTInputHostAdapter, createStdoutRenderer, createTerminalApp, defaultTInputHostPlugin, installTerminalCleanup, type TerminalCleanupSignalPolicy } from "@simon_he/vue-tui/cli";
-import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
-import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
-
-const style: Style = { fg: "whiteBright", href: "https://example.com" };
-const event: TerminalEventRecord = { type: "keydown", key: "Enter" };
-const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
-
-console.log(
-  createTerminal,
-  TerminalProvider,
-  TBox,
-  TText,
-  createStdoutRenderer,
-  createTerminalApp,
-  createDefaultTInputHostAdapter,
-  defaultTInputHostPlugin,
-  installTerminalCleanup,
-  createTuiMarkdownParser,
-  TMarkdownText,
-  TLogView,
-  TVirtualList,
-  createAppendOnlyLogStore,
-  style,
-  event,
-  signalPolicy,
-);
-`,
+    join(dir, "tsconfig.node.json"),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2020",
+          module: "CommonJS",
+          moduleResolution: "node",
+          strict: true,
+          skipLibCheck: false,
+        },
+        include: ["index.ts"],
+      },
+      null,
+      2,
+    ),
   );
 
-  run("npx", ["tsc", "--noEmit"]);
+  run("npx", ["tsc", "-p", "tsconfig.bundler.json", "--noEmit"]);
+  run("npx", ["tsc", "-p", "tsconfig.node.json", "--noEmit"]);
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }

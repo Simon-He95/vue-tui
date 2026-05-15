@@ -8,7 +8,22 @@ import {
 } from "@simon_he/vue-tui";
 
 import { sanitizeDomHref } from "@simon_he/vue-tui/core";
+import { createDomRenderer, type DomRendererOptions } from "@simon_he/vue-tui/renderer/dom";
 import { createRuntime, type TerminalEventRecord } from "@simon_he/vue-tui/runtime";
+import {
+  TAnchor,
+  TDebugOverlay,
+  TFlow,
+  TInputBox,
+  TJsonEditor,
+  TMultilineModal,
+  TPathPicker,
+  TRenderLayer,
+  TRenderPlane,
+  TTransition,
+  useTerminal,
+  type TInputPlugin,
+} from "@simon_he/vue-tui/vue";
 
 import {
   createStdinDriver,
@@ -27,8 +42,10 @@ import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdo
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
+const domOptions: DomRendererOptions = { links: true };
 const terminal: Terminal = createTerminal({ cols: 80, rows: 24 });
 const runtime = createRuntime();
+const plugin: TInputPlugin = { name: "test", install: () => {} };
 
 console.log(
   TerminalProvider,
@@ -40,6 +57,18 @@ console.log(
   createTerminalApp,
   createStdoutRenderer,
   createStdinDriver,
+  createDomRenderer,
+  TAnchor,
+  TDebugOverlay,
+  TFlow,
+  TInputBox,
+  TJsonEditor,
+  TMultilineModal,
+  TPathPicker,
+  TRenderLayer,
+  TRenderPlane,
+  TTransition,
+  useTerminal,
   createDefaultTInputHostAdapter,
   defaultTInputHostPlugin,
   installTerminalCleanup,
@@ -47,8 +76,10 @@ console.log(
   createAppendOnlyLogStore,
   sanitizeDomHref,
   style,
+  domOptions,
   terminal,
   runtime,
+  plugin,
 );
 
 const driver: StdinDriver | null = null;
