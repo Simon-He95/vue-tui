@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { charCellWidth } from "../src/core.js";
+import { charCellWidth, createTerminal } from "../src/core.js";
 import { clearTextCaches, sliceByCells, textCellWidth, wrapByCells } from "../src/vue.js";
 
 function segmentGraphemes(text: string): string[] {
@@ -53,6 +53,31 @@ describe("unicode width + grapheme safety", () => {
     expect(charCellWidth("#️⃣")).toBe(2);
     expect(charCellWidth("*️⃣")).toBe(2);
     expect(charCellWidth("1\u20E3")).toBe(2); // legacy keycap form: 1⃣
+  });
+
+  it("keeps ambiguous-width symbols narrow by default and wide in cjk mode", () => {
+    const ambiguous = ["·", "Ω", "—", "①", "─", "★"];
+    for (const ch of ambiguous) {
+      expect(charCellWidth(ch)).toBe(1);
+      expect(charCellWidth(ch, "narrow-ambiguous")).toBe(1);
+      expect(charCellWidth(ch, "cjk")).toBe(2);
+    }
+  });
+
+  it("uses custom width providers in terminal buffers", () => {
+    const terminal = createTerminal({
+      cols: 5,
+      rows: 1,
+      widthProvider: (text) => (text === "·" ? 2 : charCellWidth(text)),
+    });
+
+    terminal.write("a·b", { x: 0, y: 0 });
+
+    expect(terminal.getCell(0, 0).ch).toBe("a");
+    expect(terminal.getCell(1, 0).ch).toBe("·");
+    expect(terminal.getCell(1, 0).width).toBe(2);
+    expect(terminal.getCell(2, 0).continuation).toBe(true);
+    expect(terminal.getCell(3, 0).ch).toBe("b");
   });
 
   it("clearTextCaches preserves wrapByCells output", () => {

@@ -6,7 +6,8 @@
 
 | 标签         | 适用范围                                                        | 兼容性承诺                                                        |
 | ------------ | --------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Public       | `@simon_he/vue-tui`、`/cli`、`/markdown` 中已文档化的导出       | patch/minor 不做破坏性改动；需要破坏时进入下一个明确版本窗口      |
+| Public       | root、`/core`、`/cli`、`/markdown` 中已文档化的导出             | patch/minor 不做破坏性改动；需要破坏时进入下一个明确版本窗口      |
+| Advanced     | `/vue`、`/runtime`、`/observability` 中面向集成者的扩展导出     | 0.x 内可调整，但需要 changelog 或 migration note                  |
 | Experimental | `@simon_he/vue-tui/experimental`                                | 可以在 0.x 内调整 props、types、事件和行为，但必须有 release note |
 | Internal     | 未从 package entrypoint 导出的模块、helper、scheduler primitive | 不承诺兼容；应用代码不应 deep import                              |
 
@@ -14,13 +15,16 @@
 
 ## Entrypoint 边界
 
-| Entrypoint                       | 标签         | 内容                                                                      |
-| -------------------------------- | ------------ | ------------------------------------------------------------------------- |
-| `@simon_he/vue-tui`              | Public       | core terminal、DOM renderer、稳定基础 Vue 组件、browser-safe helpers      |
-| `@simon_he/vue-tui/vue`          | Public       | 扩展 Vue 组件、composables、router helpers 和 Vue runtime internals       |
-| `@simon_he/vue-tui/cli`          | Public       | stdout renderer、stdin driver、headless app、Node providers、recording    |
-| `@simon_he/vue-tui/markdown`     | Public       | markdown parser / block source / markdown components                      |
-| `@simon_he/vue-tui/experimental` | Experimental | `TVirtualList`、`TLogView`、TLog companions、retained index、TLog plugins |
+| Entrypoint                        | 标签         | 内容                                                                      | Breaking policy                                       |
+| --------------------------------- | ------------ | ------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `@simon_he/vue-tui`               | Public       | core terminal、DOM renderer、稳定基础 Vue 组件、browser-safe helpers      | 0.x minor 也尽量不破；需要 migration note             |
+| `@simon_he/vue-tui/core`          | Public       | terminal core、buffer-facing types、ANSI/theme/path/hyperlink helpers     | 类型或语义变更需要 migration note                     |
+| `@simon_he/vue-tui/vue`           | Advanced     | 扩展 Vue 组件、composables、router helpers 和 Vue runtime internals       | 可变，但需要 changelog；不保证与 Internal helper 同步 |
+| `@simon_he/vue-tui/runtime`       | Advanced     | runtime wiring、selection helpers、clipboard abstraction                  | 可变，但必须保持默认无副作用 contract                 |
+| `@simon_he/vue-tui/observability` | Advanced     | trace、frame perf、profiler hooks                                         | 可变；输出 schema 变更需要 release note               |
+| `@simon_he/vue-tui/cli`           | Public       | stdout renderer、stdin driver、headless app、Node providers、recording    | Node-only contract；破坏性变更需要 migration note     |
+| `@simon_he/vue-tui/markdown`      | Public       | markdown parser / block source / markdown components                      | 文档化 API patch/minor 不做破坏性改动                 |
+| `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`、`TLogView`、TLog companions、retained index、TLog plugins | 可随 0.x 调整，但必须有 release note                  |
 
 规则：
 

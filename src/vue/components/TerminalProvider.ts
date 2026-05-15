@@ -1,7 +1,5 @@
-import type { Component, PropType } from "vue";
+import type { PropType } from "vue";
 import type { PathPickerProvider } from "../../core/path-provider-types.js";
-import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
-import type { TerminalRenderPlane, TerminalRenderPlanes } from "../../core/render-plane.js";
 import type { Style, Terminal } from "../../core/types.js";
 import type { TerminalEventRecord } from "../../events/recording.js";
 import type { EventManager } from "../../events/manager/event-manager.js";
@@ -10,24 +8,14 @@ import type { ClipboardApi } from "../../runtime/index.js";
 import type {
   SelectionTextProvider,
   TerminalSelectionCopyPayload,
-  TerminalSelectionOptions,
   TerminalSelectionRefreshOptions,
 } from "../../selection/terminal-selection.js";
-import type {
-  ImeAnchor,
-  LayoutContext,
-  TerminalContext,
-  TerminalRuntime,
-  TerminalRuntimeHandle,
-  TerminalScheduler,
-  TerminalSchedulerInvalidateOptions,
-} from "../context.js";
+import type { ImeAnchor, LayoutContext, TerminalContext } from "../context.js";
 import type { TInputPlugin } from "./input/plugins/types.js";
 import {
   defineComponent,
   effectScope,
   h,
-  nextTick,
   onBeforeUnmount,
   onMounted,
   onScopeDispose,
@@ -43,7 +31,6 @@ import {
 import { createTerminal } from "../../core/index.js";
 import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
 import { createEventManager } from "../../events/manager/event-manager.js";
-import { framePerfNow, mergeFramePerfReason } from "../../observability/frame-perf.js";
 import { createFramePerfStore } from "../../observability/frame-perf-store.js";
 import { createTraceStore } from "../../observability/trace.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
@@ -62,121 +49,27 @@ import {
 } from "../context.js";
 import { RenderStackKey } from "../render/context.js";
 import { createRenderManager } from "../render/render-manager.js";
-import {
-  EMPTY_FRAME_TASK_RUN_STATS,
-  type SchedulerFrameTaskRunStats,
-  createSchedulerFrameTasks,
-} from "../scheduler/frame-scheduler.js";
 import { clearTextCaches } from "../utils/text.js";
 import { defaultTInputHostPlugin } from "./input/plugins/hostPlugin.js";
 import { TRenderPlane } from "./TRenderPlane.js";
+import { createCopyToastState } from "./terminal-provider/copy-toast.js";
+import { createTerminalPortals } from "./terminal-provider/portals.js";
+import {
+  type TerminalProviderSelectionConfig,
+  resolveSelectionConfig,
+  selectionCopyToastText,
+} from "./terminal-provider/selection-config.js";
+import { createTerminalProviderScheduler } from "./terminal-provider/scheduler.js";
+import { pickInitOnlyDomOptions, shallowEqualRecord, warnDev } from "./terminal-provider/utils.js";
 import {
   SUPPRESS_TERMINAL_POINTER_DOWN,
   SUPPRESS_TERMINAL_POINTER_MOVE,
   SUPPRESS_TERMINAL_POINTER_UP,
 } from "../../events/manager/selection-suppression.js";
-
-interface Portal {
-  id: string;
-  component: Component;
-  plane: TerminalRenderPlane;
-  props: Record<string, unknown>;
-}
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  if (!v || typeof v !== "object") return false;
-  const proto = Object.getPrototypeOf(v);
-  return proto === Object.prototype || proto === null;
-}
-
-function shallowEqualValue(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (!isPlainObject(a) || !isPlainObject(b)) return false;
-  const aKeys = Object.keys(a);
-  const bKeys = Object.keys(b);
-  if (aKeys.length !== bKeys.length) return false;
-  for (const k of aKeys) {
-    if (!(k in b)) return false;
-    if ((a as any)[k] !== (b as any)[k]) return false;
-  }
-  return true;
-}
-
-function shallowEqualRecord(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-  if (a === b) return true;
-  const aKeys = Object.keys(a);
-  const bKeys = Object.keys(b);
-  if (aKeys.length !== bKeys.length) return false;
-  for (const k of aKeys) {
-    if (!(k in b)) return false;
-    if (!shallowEqualValue(a[k], b[k])) return false;
-  }
-  return true;
-}
-
-function warnDev(message: string): void {
-  const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
-    ?.NODE_ENV;
-  if (nodeEnv === "production") return;
-  console.warn(message);
-}
-
-function pickInitOnlyDomOptions(options: DomRendererOptions | undefined): Record<string, unknown> {
-  const accessibility = options?.accessibility;
-  return {
-    accessibility: isPlainObject(accessibility) ? { ...accessibility } : accessibility,
-    syncFlushMaxRows: options?.syncFlushMaxRows,
-    syncFlushCellBudget: options?.syncFlushCellBudget,
-    enableScrollOperations: options?.enableScrollOperations,
-    enableRowKeyPrepass: options?.enableRowKeyPrepass,
-  };
-}
-
-let portalId = 0;
-
-type ResolvedTerminalSelectionConfig = Readonly<{
-  enabled: boolean;
-  autoCopy: boolean;
-  copyOnMouseUp: boolean;
-  style: Style;
-  toast: boolean;
-}>;
-
-export type TerminalProviderSelectionOptions = TerminalSelectionOptions &
-  Readonly<{
-    toast?: boolean;
-  }>;
-
-export type TerminalProviderSelectionConfig = boolean | TerminalProviderSelectionOptions;
-
-function resolveSelectionConfig(
-  config: TerminalProviderSelectionConfig,
-): ResolvedTerminalSelectionConfig {
-  if (config === false) {
-    return {
-      enabled: false,
-      autoCopy: true,
-      copyOnMouseUp: true,
-      style: { inverse: true },
-      toast: true,
-    };
-  }
-  const value = config === true ? {} : config;
-  return {
-    enabled: true,
-    autoCopy: value.autoCopy ?? true,
-    copyOnMouseUp: value.copyOnMouseUp ?? true,
-    style: value.style ?? { inverse: true },
-    toast: value.toast ?? true,
-  };
-}
-
-function selectionCopyToastText(payload: TerminalSelectionCopyPayload): string {
-  if (payload.ok) return `Copied ${payload.rows} ${payload.rows === 1 ? "line" : "lines"}`;
-  if (payload.error instanceof Error && /unavailable/i.test(payload.error.message))
-    return "Clipboard unavailable";
-  return "Copy failed";
-}
+export type {
+  TerminalProviderSelectionConfig,
+  TerminalProviderSelectionOptions,
+} from "./terminal-provider/selection-config.js";
 
 export const TerminalProvider = defineComponent({
   name: "TerminalProvider",
@@ -226,8 +119,7 @@ export const TerminalProvider = defineComponent({
     const containerRef = ref<HTMLElement | null>(null);
     const imeRef = ref<HTMLTextAreaElement | null>(null);
     const imeAnchor = shallowRef<ImeAnchor | null>(null);
-    const copyToastVisible = ref(false);
-    const copyToastText = ref("Copied to clipboard");
+    const copyToast = createCopyToastState();
     const renderer = shallowRef<DomRenderer | null>(null);
     const rendererCapabilities = shallowRef(DOM_RENDERER_CAPABILITIES);
     const events = shallowRef<EventManager | null>(null);
@@ -266,42 +158,23 @@ export const TerminalProvider = defineComponent({
       if (imeTimeline.length > keep) imeTimeline.splice(0, imeTimeline.length - keep);
     };
 
-    let raf = 0;
-    let rafToken = 0;
-    let pendingInvalidate = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let holdNormalInvalidates = false;
-    let holdReleaseToken = 0;
-    let pendingInvalidateDuringFrame = false;
-    let pendingInvalidateAllPlanes = false;
-    const pendingInvalidatePlanes = new Set<TerminalRenderPlane>();
-    let frameId = 0;
-    let pendingFrameReason: TerminalSchedulerInvalidateOptions["reason"] = "unknown";
-    let pendingCoalescedInvalidates = 0;
     let imeComposing = false;
     let unmounting = false;
     let updateImePositionAfterFlush: (() => void) | null = null;
     const render = createRenderManager(terminal);
     const profiler = createTuiProfiler("dom-scheduler");
     const scope = effectScope();
-    let schedulerApi: TerminalScheduler;
-    let toastTimer: ReturnType<typeof setTimeout> | null = null;
-
-    function clearCopyToastTimer(): void {
-      if (toastTimer == null) return;
-      clearTimeout(toastTimer);
-      toastTimer = null;
-    }
-
-    function showCopyToast(message = "Copied to clipboard"): void {
-      copyToastText.value = message;
-      copyToastVisible.value = true;
-      clearCopyToastTimer();
-      toastTimer = setTimeout(() => {
-        copyToastVisible.value = false;
-        toastTimer = null;
-      }, 1200);
-    }
+    const scheduler = createTerminalProviderScheduler({
+      terminal,
+      renderer,
+      render,
+      framePerf,
+      profiler,
+      isUnmounting: () => unmounting,
+      afterFlush: () => updateImePositionAfterFlush?.(),
+    });
+    const schedulerApi = scheduler.api;
+    const invalidate = schedulerApi.invalidate;
 
     const platformRuntime = createRuntime();
     const selectionClipboard: ClipboardApi = {
@@ -375,7 +248,7 @@ export const TerminalProvider = defineComponent({
           });
         }
         const config = resolveSelectionConfig(props.selection);
-        if (config.enabled && config.toast) showCopyToast(selectionCopyToastText(payload));
+        if (config.enabled && config.toast) copyToast.show(selectionCopyToastText(payload));
       },
     });
     const selectionRenderNode = render.register({
@@ -387,298 +260,13 @@ export const TerminalProvider = defineComponent({
     });
     selectionRenderNodeId = selectionRenderNode.id;
 
-    function queueInvalidatePlane(plane?: TerminalRenderPlane): void {
-      if (!plane) {
-        pendingInvalidateAllPlanes = true;
-        pendingInvalidatePlanes.clear();
-        return;
-      }
-      if (pendingInvalidateAllPlanes) return;
-      pendingInvalidatePlanes.add(plane);
-    }
-
-    const sortRenderPlanes = (planes: TerminalRenderPlanes): TerminalRenderPlanes => {
-      const order = new Map<TerminalRenderPlane, number>(
-        TERMINAL_RENDER_PLANES.map((plane, index) => [plane, index]),
-      );
-      return [...planes].sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
-    };
-
-    function takeActivePlanes(): TerminalRenderPlanes | null {
-      if (pendingInvalidateAllPlanes) {
-        pendingInvalidateAllPlanes = false;
-        pendingInvalidatePlanes.clear();
-        return null;
-      }
-      if (pendingInvalidatePlanes.size === 0) return null;
-      const activePlanes = sortRenderPlanes(Array.from(pendingInvalidatePlanes));
-      pendingInvalidatePlanes.clear();
-      return activePlanes;
-    }
-
-    function queueDepth(): number {
-      return (
-        (raf ? 1 : 0) + (timer ? 1 : 0) + (pendingInvalidate ? 1 : 0) + frameScheduler.queueDepth()
-      );
-    }
-
-    function noteFrameReason(reason: TerminalSchedulerInvalidateOptions["reason"]): void {
-      if (!reason || reason === "unknown") return;
-      pendingFrameReason = mergeFramePerfReason(pendingFrameReason, reason);
-    }
-
-    function resetPendingFramePerfState(): void {
-      pendingFrameReason = "unknown";
-      pendingCoalescedInvalidates = 0;
-    }
-
-    function rendererFlushCount(): number {
-      return renderer.value?.debugStats.flush.count ?? 0;
-    }
-
-    function latestRendererFlushMs(previousCount: number): number | undefined {
-      const flush = renderer.value?.debugStats.flush;
-      if (!flush || flush.count === previousCount) return undefined;
-      return flush.last?.durationMs;
-    }
-
-    const frameScheduler = createSchedulerFrameTasks({
-      isActive: () => !unmounting,
-      invalidate: (options) => schedulerApi.invalidate(options),
-      flushFrame: (stats) => {
-        if (!pendingInvalidateDuringFrame) return;
-        pendingInvalidateDuringFrame = false;
-        flush(stats.sync, stats);
-      },
-    });
-
-    function flush(
-      sync = false,
-      frameTasks: SchedulerFrameTaskRunStats = EMPTY_FRAME_TASK_RUN_STATS,
-    ): void {
-      if (unmounting) return;
-      const activePlanes = takeActivePlanes();
-      if (!framePerf.enabled.value) {
-        render.render({ activePlanes });
-        terminal.commit({ planes: activePlanes, sync });
-        resetPendingFramePerfState();
-        updateImePositionAfterFlush?.();
-        return;
-      }
-
-      const startedAt = framePerfNow();
-      const currentFrameId = ++frameId;
-      const reason = mergeFramePerfReason(pendingFrameReason, frameTasks.reason);
-      const coalescedInvalidates = pendingCoalescedInvalidates;
-      resetPendingFramePerfState();
-      const renderStartedAt = framePerfNow();
-      const stats = render.render({ activePlanes });
-      const renderManagerMs = framePerfNow() - renderStartedAt;
-      const flushCountBeforeCommit = rendererFlushCount();
-      const commitStartedAt = framePerfNow();
-      const dirtyRows = terminal.commit({ planes: activePlanes, sync });
-      const commitMs = framePerfNow() - commitStartedAt;
-      framePerf.push({
-        frameId: currentFrameId,
-        reason,
-        startedAt,
-        durationMs: framePerfNow() - startedAt,
-        renderManagerMs,
-        commitMs,
-        domFlushMs: latestRendererFlushMs(flushCountBeforeCommit),
-        dirtyRows: dirtyRows === null ? null : dirtyRows.length,
-        activePlanes: activePlanes ? [...activePlanes] : null,
-        scannedNodes: stats?.scannedNodes ?? 0,
-        paintedNodes: stats?.paintedNodes ?? 0,
-        rowBucketFallbacks: stats?.rowBucketFallbacks,
-        coalescedInvalidates,
-        frameTaskCount: frameTasks.frameTaskCount,
-        coalescedFrameTasks: frameTasks.coalescedFrameTasks,
-        frameTaskQueueDepthBeforeRun: frameTasks.frameTaskQueueDepthBeforeRun,
-        frameTaskQueueDepthAfterRun: frameTasks.frameTaskQueueDepthAfterRun,
-        remainingFrameTasks: frameTasks.remainingFrameTasks,
-        droppedUpdates: frameTasks.droppedUpdates,
-        ...(frameTasks.mailboxFailure ? { mailboxFailure: frameTasks.mailboxFailure } : {}),
-        queueDepth: queueDepth(),
-        liveReasons: (() => {
-          const reasons = frameScheduler.liveReasonList();
-          return reasons.length ? reasons : undefined;
-        })(),
-      });
-      updateImePositionAfterFlush?.();
-    }
-
-    function clearTimer(): void {
-      if (!timer) return;
-      clearTimeout(timer);
-      timer = null;
-    }
-
-    function scheduleNormalInvalidateRelease(): void {
-      const token = ++holdReleaseToken;
-      void nextTick(() => {
-        if (token !== holdReleaseToken) return;
-        holdNormalInvalidates = false;
-        if (unmounting || !pendingInvalidate) return;
-        pendingInvalidate = false;
-        invalidate({ priority: "normal" });
-      });
-    }
-
-    function flushNow(): void {
-      if (unmounting) return;
-      if (frameScheduler.isInsideFrame()) return;
-      pendingInvalidate = false;
-      if (raf) {
-        rafToken++;
-        if (raf > 0) cancelAnimationFrame(raf);
-        raf = 0;
-      }
-      clearTimer();
-      frameScheduler.cancelScheduledFrame();
-      const frameTasks = frameScheduler.runPendingFrameTasks({ force: true });
-      pendingInvalidateDuringFrame = false;
-      holdNormalInvalidates = true;
-      scheduleNormalInvalidateRelease();
-      flush(true, frameTasks);
-      frameScheduler.scheduleIfNeeded(frameTasks.requestMore);
-      if (Object.prototype.hasOwnProperty.call(frameTasks, "error")) throw frameTasks.error;
-    }
-
-    function invalidate(options?: TerminalSchedulerInvalidateOptions): void {
-      if (unmounting) return;
-
-      const priority = options?.priority ?? "normal";
-      noteFrameReason(options?.reason);
-      queueInvalidatePlane(options?.plane);
-      if (frameScheduler.isInsideFrame()) {
-        pendingInvalidateDuringFrame = true;
-        profiler?.recordInvalidate({ plane: options?.plane ?? null });
-        return;
-      }
-      if (priority === "high") {
-        profiler?.recordInvalidate({ plane: options?.plane ?? null });
-        flushNow();
-        return;
-      }
-
-      if (holdNormalInvalidates) {
-        pendingInvalidate = true;
-        return;
-      }
-
-      if (priority === "low") {
-        if (timer || raf) {
-          pendingCoalescedInvalidates++;
-          return;
-        }
-        profiler?.recordInvalidate({ plane: options?.plane ?? null });
-        timer = setTimeout(() => {
-          timer = null;
-          invalidate({ priority: "normal", plane: options?.plane });
-        }, 16);
-        return;
-      }
-
-      if (raf) {
-        pendingInvalidate = true;
-        pendingCoalescedInvalidates++;
-        return;
-      }
-      profiler?.recordInvalidate({ plane: options?.plane ?? null });
-      const token = ++rafToken;
-      pendingInvalidate = false;
-
-      // Support test environments that stub rAF synchronously by preventing re-entrant invalidates
-      // from resetting `raf` to 0 before `requestAnimationFrame()` returns.
-      raf = -1;
-      const id = requestAnimationFrame(() => {
-        if (unmounting) return;
-        if (token !== rafToken) return;
-        flush();
-        queueMicrotask(() => {
-          if (unmounting) return;
-          if (token !== rafToken) return;
-          raf = 0;
-          if (pendingInvalidate) {
-            pendingInvalidate = false;
-            invalidate({ priority: "normal" });
-          }
-        });
-      });
-      if (raf === -1) raf = id;
-    }
-
-    const portals = shallowReactive<Portal[]>([]);
-
-    const runtime: TerminalRuntime = {
-      mount(component, initialProps, options) {
-        const id = `p${portalId++}`;
-        // Portal entries must be reactive so prop updates (e.g. teleported dialogs)
-        // trigger a Vue re-render of the portal VNode tree.
-        let currentProps: Record<string, unknown> = { ...initialProps };
-        const portal = shallowReactive<Portal>({
-          id,
-          component,
-          plane: options?.plane ?? "overlay",
-          props: currentProps,
-        });
-        portals.push(portal);
-        let alive = true;
-        const handle: TerminalRuntimeHandle = {
-          update(nextProps) {
-            if (!alive) return;
-            // Avoid reading reactive portal fields here; `update()` is often called
-            // from userland `watchEffect()`, and tracking `portal.props` would
-            // create a self-triggering effect loop.
-            const next = { ...currentProps, ...nextProps };
-            if (shallowEqualRecord(currentProps, next)) return;
-            currentProps = next;
-            portal.props = currentProps;
-            invalidate({ plane: portal.plane });
-          },
-          move(x, y) {
-            if (!alive) return;
-            const next = { ...currentProps, x, y };
-            if (shallowEqualRecord(currentProps, next)) return;
-            currentProps = next;
-            portal.props = currentProps;
-            invalidate({ plane: portal.plane });
-          },
-          unmount() {
-            if (!alive) return;
-            const idx = portals.findIndex((p) => p.id === id);
-            if (idx < 0) {
-              alive = false;
-              return;
-            }
-            alive = false;
-            if (idx >= 0) portals.splice(idx, 1);
-            invalidate({ plane: portal.plane });
-          },
-        };
-        invalidate({ plane: portal.plane });
-        return handle;
-      },
-    };
+    const { portals, runtime } = createTerminalPortals(invalidate);
 
     const rootLayout = shallowReactive<LayoutContext>({
       originX: 0,
       originY: 0,
       clipRect: { x: 0, y: 0, w: props.cols, h: props.rows },
     });
-
-    schedulerApi = {
-      invalidate,
-      flush,
-      flushNow,
-      configure: frameScheduler.configure,
-      queueFrameTask: frameScheduler.queueFrameTask,
-      cancelFrameTask: frameScheduler.cancelFrameTask,
-      requestLive: frameScheduler.requestLive,
-      dropLive: frameScheduler.dropLive,
-      isInsideFrame: frameScheduler.isInsideFrame,
-    };
 
     const ctx: TerminalContext = {
       terminal,
@@ -1013,14 +601,14 @@ export const TerminalProvider = defineComponent({
           const inContainer = (n: Node | null | undefined) =>
             !!n && (n === container || container.contains(n));
           if (!inContainer(a) && !inContainer(f)) return;
-          showCopyToast();
+          copyToast.show();
         };
 
         const doc = el.ownerDocument;
         doc.addEventListener("copy", onCopy, true);
         onScopeDispose(() => {
           doc.removeEventListener("copy", onCopy, true);
-          clearCopyToastTimer();
+          copyToast.dispose();
         });
 
         // Keep IME textarea anchored even if scroll/resize happens without caret movement.
@@ -1770,12 +1358,8 @@ export const TerminalProvider = defineComponent({
     onBeforeUnmount(() => {
       unmounting = true;
       offCommit?.();
-      clearTimer();
-      clearCopyToastTimer();
-      holdReleaseToken++;
-      frameScheduler.cancelScheduledFrame();
-      if (raf > 0) cancelAnimationFrame(raf);
-      raf = 0;
+      scheduler.dispose();
+      copyToast.dispose();
       render.unregister(selectionRenderNode.id);
       profiler?.dispose();
       render.dispose();
@@ -1820,7 +1404,7 @@ export const TerminalProvider = defineComponent({
           },
         },
         [
-          copyToastVisible.value
+          copyToast.visible.value
             ? h(
                 "div",
                 {
@@ -1843,7 +1427,7 @@ export const TerminalProvider = defineComponent({
                     zIndex: 9999,
                   },
                 },
-                copyToastText.value,
+                copyToast.text.value,
               )
             : null,
           h("div", {

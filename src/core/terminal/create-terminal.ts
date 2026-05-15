@@ -6,6 +6,7 @@ import type {
   Style,
   Terminal,
   TerminalEventMap,
+  TerminalOptions,
   TerminalScrollOperation,
 } from "../types.js";
 import { parseAnsiSgr } from "../ansi/sgr.js";
@@ -98,8 +99,8 @@ function setBufferClean(buffer: GridBuffer): void {
   buffer.dirtyAll = false;
 }
 
-function createPlaneState(cols: number, rows: number): PlaneBufferState {
-  const buffer = createGridBuffer(cols, rows);
+function createPlaneState(cols: number, rows: number, opts: TerminalOptions): PlaneBufferState {
+  const buffer = createGridBuffer(cols, rows, { widthProvider: opts.widthProvider });
   setBufferClean(buffer);
   buffer.cursorVisible = false;
   return {
@@ -313,9 +314,11 @@ export function scrollPlaneRows(
   internals?.scrollRows(plane, startY, endY, lines);
 }
 
-export function createTerminal(opts: { cols: number; rows: number }): Terminal {
+export function createTerminal(opts: TerminalOptions): Terminal {
   const emitter = new Emitter<TerminalEventMap>();
-  const compositeBuffer = createGridBuffer(opts.cols, opts.rows);
+  const compositeBuffer = createGridBuffer(opts.cols, opts.rows, {
+    widthProvider: opts.widthProvider,
+  });
   const planeStates = new Map<TerminalRenderPlane, PlaneBufferState>();
   let disposed = false;
   let batchingDepth = 0;
@@ -335,7 +338,7 @@ export function createTerminal(opts: { cols: number; rows: number }): Terminal {
   function getPlaneState(plane: TerminalRenderPlane): PlaneBufferState {
     let state = planeStates.get(plane);
     if (!state) {
-      state = createPlaneState(compositeBuffer.cols, compositeBuffer.rows);
+      state = createPlaneState(compositeBuffer.cols, compositeBuffer.rows, opts);
       planeStates.set(plane, state);
     }
     return state;

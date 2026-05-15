@@ -13,7 +13,9 @@ export type {
   Terminal,
   TerminalCommitEvent,
   TerminalEventMap,
+  TerminalOptions,
   TerminalResizeEvent,
   TerminalScrollOperation,
   ThemeModeId,
 } from "./types.js";
+export type { BuiltinWidthProvider, CellWidth, WidthProvider } from "./buffer/width.js";

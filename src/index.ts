@@ -1,5 +1,13 @@
 export { createTerminal } from "./core/index.js";
-export type { Cell, Style, Terminal } from "./core/index.js";
+export type {
+  BuiltinWidthProvider,
+  Cell,
+  CellWidth,
+  Style,
+  Terminal,
+  TerminalOptions,
+  WidthProvider,
+} from "./core/index.js";
 export { createDomRenderer } from "./renderer/dom/dom-renderer.js";
 export { TerminalProvider } from "./vue/components/TerminalProvider.js";
 export { TBox } from "./vue/components/TBox.js";

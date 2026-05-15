@@ -1,4 +1,5 @@
 import type { TerminalRenderPlanes } from "./render-plane.js";
+import type { WidthProvider } from "./buffer/width.js";
 
 export type ThemeModeId = "dark" | "light";
 
@@ -66,6 +67,12 @@ export type BufferSnapshot = Readonly<{
 export type TerminalSize = Readonly<{
   cols: number;
   rows: number;
+}>;
+
+export type TerminalOptions = Readonly<{
+  cols: number;
+  rows: number;
+  widthProvider?: WidthProvider;
 }>;
 
 export type TerminalScrollOperation = Readonly<{
