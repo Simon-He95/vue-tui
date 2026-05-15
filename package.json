@@ -61,10 +61,6 @@
       ],
       "experimental": [
         "./dist/experimental.d.ts"
-      ],
-      "*": [
-        "./dist/*",
-        "./dist/index.d.ts"
       ]
     }
   },
