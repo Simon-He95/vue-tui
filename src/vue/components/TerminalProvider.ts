@@ -701,6 +701,16 @@ export const TerminalProvider = defineComponent({
     provide(ImeAnchorContextKey, imeAnchor);
     provide(TInputPluginsContextKey, toRef(props, "inputPlugins") as any);
     provide(TPathPickerProviderContextKey, toRef(props, "pathPickerProvider") as any);
+    const initialInputPlugins = props.inputPlugins;
+    watch(
+      () => props.inputPlugins,
+      (next) => {
+        if (next === initialInputPlugins) return;
+        warnDev(
+          "[vue-tui] TerminalProvider inputPlugins is init-only. Remount TerminalProvider/TInput to apply plugin changes.",
+        );
+      },
+    );
 
     let offResize: (() => void) | null = null;
 

@@ -69,6 +69,13 @@ import { findWordLeft, findWordRight, tokenRangeAt } from "./input/utils/wordNav
 
 // Inline text measurements are handled by `./input/utils/inlineText.ts`.
 
+function warnDev(message: string): void {
+  const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
+    ?.NODE_ENV;
+  if (nodeEnv === "production") return;
+  console.warn(message);
+}
+
 function isPrintableKey(e: TerminalKeyboardEvent): boolean {
   if (e.ctrlKey || e.metaKey || e.altKey) return false;
   return e.key.length === 1;
@@ -267,6 +274,14 @@ export const TInput = defineComponent({
       ...((injectedPlugins?.value ?? []) as readonly TInputPlugin[]),
       ...(props.plugins ?? []),
     ];
+    const initialLocalPlugins = props.plugins;
+    watch(
+      () => props.plugins,
+      (next) => {
+        if (next === initialLocalPlugins) return;
+        warnDev("[vue-tui] TInput plugins is init-only. Remount TInput to apply plugin changes.");
+      },
+    );
     let hostAdapter: TInputHostAdapter = {};
 
     const PADDING_X = 1;

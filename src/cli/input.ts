@@ -124,6 +124,7 @@ export function installTerminalCleanup(
   const rethrowUnhandledRejection =
     options.rethrowUnhandledRejection ?? cleanupOnUnhandledRejection;
   const signalHandlers = new Map<CleanupSignal, () => void>();
+  const hostOwnedSignals = new Set<CleanupSignal>();
 
   const cleanup = () => {
     if (cleaned) return;
@@ -165,7 +166,8 @@ export function installTerminalCleanup(
   };
 
   const handleSignal = (signal: CleanupSignal, ownHandler: () => void) => {
-    const hasHostSignalListener = hasOtherSignalListeners(signal, ownHandler);
+    const hasHostSignalListener =
+      hostOwnedSignals.has(signal) || hasOtherSignalListeners(signal, ownHandler);
 
     cleanup();
     uninstall();
@@ -190,6 +192,7 @@ export function installTerminalCleanup(
   for (const signal of signals) {
     if (!shouldRegisterSignal(signal)) continue;
     if (signalHandlers.has(signal)) continue;
+    if (process.rawListeners(signal).length > 0) hostOwnedSignals.add(signal);
     const handler = () => handleSignal(signal, handler);
     if (addProcessOnce(signal, handler)) signalHandlers.set(signal, handler);
   }

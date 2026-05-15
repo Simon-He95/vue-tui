@@ -14,8 +14,12 @@ export interface TuiMarkdownParser {
 const markdownInstanceCache = new Map<string, ReturnType<typeof getMarkdown>>();
 const MAX_MARKDOWN_INSTANCE_CACHE = 32;
 
+export function sanitizeMarkdownLink(url: string): string | null {
+  return sanitizeDomHref(url, { allowRelative: true });
+}
+
 export function isSafeMarkdownLink(url: string): boolean {
-  return sanitizeDomHref(url, { allowRelative: true }) != null;
+  return sanitizeMarkdownLink(url) != null;
 }
 
 function normalizeCustomHtmlTags(config?: TuiMarkdownParseConfig): readonly string[] {

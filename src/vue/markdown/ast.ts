@@ -1,5 +1,5 @@
 import { sanitizeInlineText, sanitizeTextBlock, spaces, textCellWidth } from "../utils/text.js";
-import { isSafeMarkdownLink } from "./parser.js";
+import { sanitizeMarkdownLink } from "./parser.js";
 import { type TuiMarkdownTheme } from "./theme.js";
 import type { TuiMarkdownBlock, TuiMarkdownInlineSegment, TuiMarkdownNode } from "./types.js";
 
@@ -148,7 +148,7 @@ function inlineNodeSegments(
         break;
       case "link": {
         const href = stringProp(node, "href");
-        const safeHref = href && isSafeMarkdownLink(href) ? href : "";
+        const safeHref = href ? sanitizeMarkdownLink(href) : null;
         const linkStyle = safeHref
           ? mergeStyle(inheritedStyle, { ...theme.link, href: safeHref })
           : inheritedStyle;

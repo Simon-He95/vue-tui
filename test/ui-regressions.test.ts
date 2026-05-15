@@ -494,6 +494,183 @@ describe("ui regressions", () => {
     }
   });
 
+  it("warns when TerminalProvider inputPlugins changes after mount", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const providerProps = reactive<{ inputPlugins: any[] }>({
+      inputPlugins: [],
+    });
+
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, w: 4, value: "text" }),
+      8,
+      1,
+      providerProps,
+    );
+
+    try {
+      providerProps.inputPlugins = [];
+      await nextTick();
+      await Promise.resolve();
+
+      expect(warn).toHaveBeenCalledWith(
+        "[vue-tui] TerminalProvider inputPlugins is init-only. Remount TerminalProvider/TInput to apply plugin changes.",
+      );
+    } finally {
+      mounted.unmount();
+      warn.mockRestore();
+    }
+  });
+
+  it("warns when TInput local plugins change after mount", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const inputProps = reactive<{ plugins: any[] }>({
+      plugins: [],
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TInput, {
+          x: 0,
+          y: 0,
+          w: 8,
+          modelValue: "",
+          cursorBlink: false,
+          ...inputProps,
+        }),
+      12,
+      2,
+    );
+
+    try {
+      inputProps.plugins = [];
+      await nextTick();
+      await Promise.resolve();
+
+      expect(warn).toHaveBeenCalledWith(
+        "[vue-tui] TInput plugins is init-only. Remount TInput to apply plugin changes.",
+      );
+    } finally {
+      mounted.unmount();
+      warn.mockRestore();
+    }
+  });
+
+  it("TerminalProvider allows native DOM link activation when links are enabled", async () => {
+    const bubbled = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TText, {
+          x: 0,
+          y: 0,
+          value: "url",
+          style: { href: "https://example.com" },
+        }),
+      16,
+      2,
+      { domRendererOptions: { links: true } },
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+      const container = mounted.container()!;
+      const anchor = container.querySelector("a");
+      expect(anchor?.tagName).toBe("A");
+      container.addEventListener("click", bubbled);
+
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      const dispatched = anchor!.dispatchEvent(event);
+
+      expect(anchor!.getAttribute("href")).toBe("https://example.com/");
+      expect(bubbled).toHaveBeenCalledOnce();
+      expect(event.defaultPrevented).toBe(false);
+      expect(dispatched).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("TerminalProvider calls onLinkClick for DOM links", async () => {
+    const onLinkClick = vi.fn(() => false);
+    const mounted = await mountTerminal(
+      () =>
+        h(TText, {
+          x: 0,
+          y: 0,
+          value: "url",
+          style: { href: "https://example.com" },
+        }),
+      16,
+      2,
+      { domRendererOptions: { links: true, onLinkClick } },
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+      const anchor = mounted.container()!.querySelector("a");
+      expect(anchor?.tagName).toBe("A");
+
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      const dispatched = anchor!.dispatchEvent(event);
+
+      expect(onLinkClick).toHaveBeenCalledWith(expect.any(MouseEvent), "https://example.com/");
+      expect(event.defaultPrevented).toBe(true);
+      expect(dispatched).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("selection drag does not activate DOM links", async () => {
+    const onLinkClick = vi.fn(() => false);
+    const mounted = await mountTerminal(
+      () =>
+        h(TView, { x: 0, y: 0, w: 8, h: 1, selectable: true }, () =>
+          h(TText, {
+            x: 0,
+            y: 0,
+            value: "docs",
+            style: { href: "https://example.com" },
+          }),
+        ),
+      12,
+      2,
+      {
+        selection: { autoCopy: false },
+        domRendererOptions: { links: true, onLinkClick },
+      },
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+      const container = mounted.container()!;
+      const anchor = container.querySelector("a");
+      expect(anchor?.tagName).toBe("A");
+
+      anchor!.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 4, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 4, clientY: 0, bubbles: true }));
+      const clickEvent = new MouseEvent("click", {
+        clientX: 4,
+        clientY: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      const dispatched = anchor!.dispatchEvent(clickEvent);
+
+      expect(mounted.terminal.getCell(1, 0).style.inverse).toBe(true);
+      expect(onLinkClick).not.toHaveBeenCalled();
+      expect(clickEvent.defaultPrevented).toBe(true);
+      expect(dispatched).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("keeps terminal node click handling when a DOM link is activated", async () => {
     const onActivate = vi.fn();
     const terminalClick = vi.fn();
@@ -518,7 +695,7 @@ describe("ui regressions", () => {
       await Promise.resolve();
 
       const anchor = mounted.container()!.querySelector("a");
-      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      expect(anchor?.tagName).toBe("A");
 
       anchor!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 

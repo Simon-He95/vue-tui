@@ -60,7 +60,7 @@
 - `recordEvents` `(fn?)`: 录制事件回调（用于 record/replay）
 - `selection` `(boolean | TerminalProviderSelectionOptions)`: 开启 terminal cell selection；鼠标松开时可自动复制；`toast` 只影响 `TerminalProvider` 的复制提示 UI
 - `clipboard` `(ClipboardApi?)`: 给 selection auto-copy 注入 clipboard；不传时 browser 使用运行时 clipboard
-- `inputPlugins` `(TInputPlugin[])`: 给子树里的 `TInput` / `TInputBox` 注入宿主插件（例如 terminal clipboard、TTY 风格快捷键）
+- `inputPlugins` `(TInputPlugin[])`: 给子树里的 `TInput` / `TInputBox` 注入宿主插件（例如 terminal clipboard、TTY 风格快捷键）；init-only，修改后需重新挂载 provider/input
 - `pathPickerProvider` `(PathPickerProvider?)`: 给子树里的 `TPathPicker` 注入宿主路径 provider
 - `debugIme` `(boolean)`: 输出 IME 调试信息
 - `debugTrace` `(boolean)`: 开启 trace（commit/event/focus）
@@ -197,7 +197,7 @@
 - `cursorShape` `('block'|'underline'|'bar')`
 - `style` `(Style?)`
 - `secret` `(boolean)` / `maskChar` `(string)`：密码模式
-- `plugins` `(TInputPlugin[])`：输入增强插件（见下方）
+- `plugins` `(TInputPlugin[])`：输入增强插件（见下方）；init-only，修改后需重新挂载 `TInput`
 
 > `TInput` 功能较多，完整参数以源码为准：`packages/tui/src/vue/components/TInput.ts`。
 >
@@ -212,13 +212,15 @@
 
 ## TInput Plugins
 
-用于扩展 `TInput` 的输入体验：通过 `:plugins="[...]"` 注入。
+用于扩展 `TInput` 的输入体验：通过 `:plugins="[...]"` 注入。插件列表是 init-only；如果需要切换宿主插件、path provider 或 prompt plugin，请重新挂载对应的 `TInput`。
 
 宿主级插件也可以统一从上层注入：
 
 - `TerminalProvider.inputPlugins`
 - `createTerminalApp({ inputPlugins })`
 - `createTerminalApp({ clipboard })`：只需要接入 clipboard 时的简化入口；传入 `inputPlugins` 时仍由宿主完全控制插件组合
+
+`TerminalProvider.inputPlugins` 也是 init-only；已经挂载的 `TInput` 不会重新安装插件列表。
 
 ### `createTInputHostPlugin()`
 

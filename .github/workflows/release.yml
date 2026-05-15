@@ -28,6 +28,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Require npm token for real publish
+        if: ${{ inputs.dry_run == false && env.HAS_NPM_TOKEN != 'true' }}
+        run: |
+          echo "NPM_TOKEN is required when dry_run=false"
+          exit 1
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4

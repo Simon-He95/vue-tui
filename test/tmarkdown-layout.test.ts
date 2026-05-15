@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Style, Terminal } from "../src/index.js";
 import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
-import { buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
+import { buildMarkdownBlocks, buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
 import { layoutMarkdownBlocks, layoutMarkdownBlocksCached } from "../src/vue/markdown/layout.js";
 import {
   createTuiMarkdownParser,
@@ -28,7 +28,7 @@ describe("markdown layout", () => {
     if (paragraph?.type !== "inline") throw new Error("expected paragraph block");
     expect(paragraph.segments.some((segment) => segment.style?.bold)).toBe(true);
     expect(
-      paragraph.segments.some((segment) => segment.style?.href === "https://example.com"),
+      paragraph.segments.some((segment) => segment.style?.href === "https://example.com/"),
     ).toBe(true);
     expect(
       paragraph.segments.some((segment) => segment.style?.href?.startsWith("javascript:")),
@@ -54,7 +54,7 @@ describe("markdown layout", () => {
     expect(paragraph?.type).toBe("inline");
     if (paragraph?.type !== "inline") throw new Error("expected inline block");
     expect(
-      paragraph.segments.some((segment) => segment.style?.href === "https://example.com"),
+      paragraph.segments.some((segment) => segment.style?.href === "https://example.com/"),
     ).toBe(true);
     expect(
       paragraph.segments.some((segment) => segment.style?.href === "mailto:test@example.com"),
@@ -109,7 +109,7 @@ describe("markdown layout", () => {
     if (paragraph?.type !== "inline") throw new Error("expected inline block");
     const safeSegment = paragraph.segments.find((segment) => segment.text === "safe");
     const unsafeSegment = paragraph.segments.find((segment) => segment.text === "unsafe");
-    expect(safeSegment?.style?.href).toBe("https://example.com");
+    expect(safeSegment?.style?.href).toBe("https://example.com/");
     expect(safeSegment?.style?.underline).toBe(true);
     expect(unsafeSegment?.style?.href).toBeUndefined();
     expect(unsafeSegment?.style?.underline).not.toBe(true);
@@ -144,6 +144,26 @@ describe("markdown layout", () => {
     expect(isSafeMarkdownLink("guide%0aintro")).toBe(false);
     expect(isSafeMarkdownLink("guide%0dintro")).toBe(false);
     expect(isSafeMarkdownLink("guide%zzintro")).toBe(false);
+  });
+
+  it("stores sanitized markdown href in inline segment style", () => {
+    const parser = createTuiMarkdownParser();
+    const { blocks } = buildMarkdownBlocks("[x](https://example.com)", parser);
+    const segment = blocks
+      .flatMap((block: any) => block.segments ?? [])
+      .find((seg: any) => seg.text === "x");
+
+    expect(segment.style.href).toBe("https://example.com/");
+  });
+
+  it("does not store unsafe markdown href", () => {
+    const parser = createTuiMarkdownParser();
+    const { blocks } = buildMarkdownBlocks("[x](javascript:alert(1))", parser);
+    const segment = blocks
+      .flatMap((block: any) => block.segments ?? [])
+      .find((seg: any) => seg.text === "x");
+
+    expect(segment?.style?.href).toBeUndefined();
   });
 
   it("evicts only the oldest markdown parser cache entry", async () => {

@@ -4,6 +4,22 @@
 
 `@simon_he/vue-tui` now keeps only stable browser-safe API at the root. Move imports that depend on Vue internals, runtime wiring, observability, core sanitizers, or Node-aware CLI helpers to the explicit subpath entrypoints below.
 
+Before:
+
+```ts
+import { TAnchor, createRuntime, createStdoutRenderer } from "@simon_he/vue-tui";
+```
+
+After:
+
+```ts
+import { createStdoutRenderer } from "@simon_he/vue-tui/cli";
+import { createRuntime } from "@simon_he/vue-tui/runtime";
+import { TAnchor } from "@simon_he/vue-tui/vue";
+```
+
+Node-only APIs such as `createDefaultTInputHostAdapter`, `defaultTInputHostPlugin`, `createNodePathPickerProvider`, and stdout renderer helpers now live under `/cli`.
+
 | Old import from `@simon_he/vue-tui` | New import                                                                                   |
 | ----------------------------------- | -------------------------------------------------------------------------------------------- |
 | `TAnchor`                           | `@simon_he/vue-tui/vue`                                                                      |

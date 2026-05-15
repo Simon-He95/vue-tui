@@ -99,7 +99,7 @@ import DocsExtensibilityTerminal from './.vitepress/components/DocsExtensibility
 - root 导出的 `createTInputHostPlugin()` 不携带 Node 能力；CLI 默认 host plugin 保留底层宿主能力；像 copy toast 这种 UI 反馈需要由宿主显式通过 `createTInputHostPlugin({ showToast })` 注入
 - prompt mention 的路径补全/路径类型识别也已经可以通过 `mentionPathProvider` 注入；Node 宿主可显式接入 `createNodeMentionPathProvider()`
 - `TPathPicker` 也不再在组件本体里兜底 Node provider；宿主可以通过 `TerminalProvider.pathPickerProvider`、`createTerminalApp({ pathPickerProvider })` 或局部 `provider` 显式接入
-- 宿主可以通过 `TerminalProvider.inputPlugins`、`createTerminalApp({ inputPlugins })` 或局部 `TInput.plugins` 自定义接入
+- 宿主可以通过 `TerminalProvider.inputPlugins`、`createTerminalApp({ inputPlugins })` 或局部 `TInput.plugins` 自定义接入；这些插件列表按 mount-time 安装，运行时变更需要 remount 对应 provider/input
 
 但这件事还没有完全收口，残余风险主要转移到了两个地方：
 

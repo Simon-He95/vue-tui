@@ -195,6 +195,28 @@ describe("cli input", () => {
     }
   });
 
+  it("does not re-raise when a host once listener registered before vue-tui handles the signal", async () => {
+    const dispose = vi.fn();
+    const hostListener = vi.fn();
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+
+    process.once("SIGTERM", hostListener);
+    const cleanupHandle = installTerminalCleanup(dispose, { signalPolicy: "reraise" });
+
+    try {
+      process.emit("SIGTERM" as any);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(hostListener).toHaveBeenCalledOnce();
+      expect(dispose).toHaveBeenCalledOnce();
+      expect(kill).not.toHaveBeenCalled();
+    } finally {
+      cleanupHandle.uninstall();
+      process.off("SIGTERM", hostListener);
+      kill.mockRestore();
+    }
+  });
+
   it("honors explicit cleanup signals", () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);

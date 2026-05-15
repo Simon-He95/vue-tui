@@ -48,7 +48,7 @@ describe("markdown components", () => {
     expect(rowText(mounted, 2)).toBe("hello world ok");
     expect(mounted.terminal.getCell(0, 0).style.bold).toBe(true);
     expect(mounted.terminal.getCell(6, 2).style.bold).toBe(true);
-    expect(mounted.terminal.getCell(12, 2).style.href).toBe("https://example.com");
+    expect(mounted.terminal.getCell(12, 2).style.href).toBe("https://example.com/");
     mounted.unmount();
   });
 
@@ -67,13 +67,13 @@ describe("markdown components", () => {
       4,
     );
 
-    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://a.example");
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://a.example/");
 
     content.value = "[ok](https://b.example)";
     await nextTick();
     await nextTick();
 
-    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://b.example");
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://b.example/");
     mounted.unmount();
   });
 
@@ -109,7 +109,7 @@ describe("markdown components", () => {
       4,
     );
 
-    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://example.com");
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://example.com/");
     expect(mounted.terminal.getCell(0, 0).style.underline).toBe(true);
     expect(mounted.terminal.getCell(5, 0).style.href).toBeUndefined();
     expect(mounted.terminal.getCell(5, 0).style.underline).not.toBe(true);
@@ -202,13 +202,13 @@ describe("markdown components", () => {
       4,
     );
 
-    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://a.example");
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://a.example/");
 
     content.value = "[ok](https://b.example)";
     await nextTick();
     await nextTick();
 
-    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://b.example");
+    expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://b.example/");
     mounted.unmount();
   });
 
