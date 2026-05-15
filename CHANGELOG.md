@@ -40,7 +40,7 @@
 - Release benchmark validation now uses `bench:baseline`; timing budgets are only checked by `bench:baseline:timing`.
 - DOM renderer no longer renders `Style.href` as native anchors unless `links` are explicitly configured.
 - DOM renderer link callbacks preserve native browser behavior unless they return `false`; safe relative/hash/search hrefs are allowed when DOM links are enabled.
-- `installTerminalCleanup()` now uses explicit `signalPolicy: "cleanup-only" | "exit" | "reraise"` instead of inferring process behavior from existing signal listeners.
+- `installTerminalCleanup()` now returns an explicit `{ cleanup, uninstall }` handle and uses `signalPolicy: "cleanup-only" | "exit" | "reraise"` instead of inferring process behavior from existing signal listeners.
 - Opted-in unhandled rejection cleanup now rethrows by default. Set `rethrowUnhandledRejection: false` to suppress it explicitly.
 - `release:ci` now points users to the GitHub Release workflow instead of publishing from a second scripted path.
 
@@ -102,7 +102,7 @@ Experimental APIs remain under `@simon_he/vue-tui/experimental` and may change b
 - `TLogView` custom mutable sources should bump `version`, provide changing `getLineKey(index)`, or call `refreshViewport()` / `invalidateLine()` / `invalidateRange()`.
 - Browser and terminal examples now have separate smoke paths. Run headless smoke in CI and reserve real terminal runners for manual checks.
 - High-throughput APIs remain outside the root entrypoint.
-- `createDefaultTInputHostAdapter()` moved from `@simon_he/vue-tui` to `@simon_he/vue-tui/cli`; the root `defaultTInputHostPlugin` is now browser-safe no-op.
+- `createDefaultTInputHostAdapter()` and the Node-aware `defaultTInputHostPlugin` moved from `@simon_he/vue-tui` to `@simon_he/vue-tui/cli`. The root entry now exports only `createTInputHostPlugin()` for browser-safe host adapters.
 - DOM renderer `Style.href` output is no longer clickable by default. Pass `domRendererOptions.links` when the host wants native DOM anchors.
 - DOM renderer anchors now keep native click behavior by default and support safe relative/hash/search hrefs.
 

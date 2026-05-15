@@ -198,6 +198,8 @@ describe("stdout renderer style diffing", () => {
     expect(sanitizeTerminalHref("https://example.com/a b")).toBeNull();
     expect(sanitizeTerminalHref("https://example.com/a%20b")).toBe("https://example.com/a%20b");
     expect(sanitizeTerminalHref("https://example.com/%0aevil")).toBeNull();
+    expect(sanitizeTerminalHref("https://example.com/%80")).toBeNull();
+    expect(sanitizeTerminalHref("https://example.com/%9f")).toBeNull();
     expect(sanitizeTerminalHref("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBeNull();
     expect(sanitizeTerminalHref("mailto:a@b.com?subject=x%0DBCC:c@d.com")).toBeNull();
     expect(sanitizeTerminalHref("mailto:a@b.com?subject=ok")).toBe("mailto:a@b.com?subject=ok");

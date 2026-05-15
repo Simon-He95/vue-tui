@@ -55,6 +55,8 @@ describe("DomRenderer row rendering", () => {
     expect(sanitizeDomHref("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBeNull();
     expect(sanitizeDomHref("https://example.com/%0aevil")).toBeNull();
     expect(sanitizeDomHref("https://example.com/%0d%0aevil")).toBeNull();
+    expect(sanitizeDomHref("/docs/%80", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("#%9f", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("/docs/%0dheader", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("guide%0aintro", { allowRelative: true })).toBeNull();
     expect(sanitizeDomHref("guide%zzintro", { allowRelative: true })).toBeNull();

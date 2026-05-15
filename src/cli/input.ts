@@ -33,6 +33,17 @@ export type TerminalCleanupOptions = Readonly<{
   rethrowUnhandledRejection?: boolean;
 }>;
 
+export type TerminalCleanupHandle = Readonly<{
+  cleanup: () => void;
+  uninstall: () => void;
+}>;
+
+type ProcessCleanupEvent =
+  | CleanupSignal
+  | "exit"
+  | "uncaughtExceptionMonitor"
+  | "unhandledRejection";
+
 function exitCodeForSignal(signal: CleanupSignal): number {
   if (signal === "SIGINT") return 130;
   if (signal === "SIGTERM") return 143;
@@ -46,6 +57,28 @@ function normalizeUnhandledRejection(reason: unknown): Error {
   const error = new Error("Unhandled promise rejection");
   (error as Error & { cause?: unknown }).cause = reason;
   return error;
+}
+
+function addProcessOnce(event: ProcessCleanupEvent, handler: (...args: any[]) => void): boolean {
+  try {
+    process.once(event as any, handler);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeProcessListener(
+  event: ProcessCleanupEvent,
+  handler: (...args: any[]) => void,
+): void {
+  try {
+    process.off(event as any, handler);
+  } catch {}
+}
+
+function shouldRegisterSignal(signal: CleanupSignal): boolean {
+  return signal !== "SIGBREAK" || process.platform === "win32";
 }
 
 function writeTTYSyncOrStream(stdout: NodeJS.WriteStream, chunk: string): void {
@@ -63,7 +96,7 @@ function writeTTYSyncOrStream(stdout: NodeJS.WriteStream, chunk: string): void {
 export function installTerminalCleanup(
   dispose: () => void,
   options: TerminalCleanupOptions = {},
-): () => void {
+): TerminalCleanupHandle {
   let cleaned = false;
   let uninstalled = false;
   const signals = options.signals ?? ["SIGINT", "SIGTERM"];
@@ -84,13 +117,13 @@ export function installTerminalCleanup(
   const uninstall = () => {
     if (uninstalled) return;
     uninstalled = true;
-    process.off("exit", cleanup);
+    removeProcessListener("exit", cleanup);
     for (const [signal, handler] of signalHandlers) {
-      process.off(signal, handler);
+      removeProcessListener(signal, handler);
     }
-    process.off("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
+    removeProcessListener("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
     if (cleanupOnUnhandledRejection) {
-      process.off("unhandledRejection", onUnhandledRejection);
+      removeProcessListener("unhandledRejection", onUnhandledRejection);
     }
   };
 
@@ -113,7 +146,10 @@ export function installTerminalCleanup(
   };
 
   for (const signal of signals) {
-    signalHandlers.set(signal, () => handleSignal(signal));
+    if (!shouldRegisterSignal(signal)) continue;
+    if (signalHandlers.has(signal)) continue;
+    const handler = () => handleSignal(signal);
+    if (addProcessOnce(signal, handler)) signalHandlers.set(signal, handler);
   }
   const onUncaughtExceptionMonitor = () => {
     cleanup();
@@ -129,19 +165,13 @@ export function installTerminalCleanup(
     }
   };
 
-  process.once("exit", cleanup);
-  for (const [signal, handler] of signalHandlers) {
-    process.once(signal, handler);
-  }
-  process.once("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
+  addProcessOnce("exit", cleanup);
+  addProcessOnce("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
   if (cleanupOnUnhandledRejection) {
-    process.once("unhandledRejection", onUnhandledRejection);
+    addProcessOnce("unhandledRejection", onUnhandledRejection);
   }
 
-  return () => {
-    cleanup();
-    uninstall();
-  };
+  return { cleanup, uninstall };
 }
 
 function isPrintable(ch: string): boolean {
@@ -287,7 +317,7 @@ export function createStdinDriver(
   });
   const keyboardProtocolSequences = getKeyboardProtocolSequences(keyboardProtocol);
   let disposed = false;
-  let uninstallCleanup: (() => void) | null = null;
+  let cleanupHandle: TerminalCleanupHandle | null = null;
 
   let swallowNextLF = false;
   let lastMouseDown: {
@@ -576,8 +606,8 @@ export function createStdinDriver(
   const dispose = () => {
     if (disposed) return;
     disposed = true;
-    uninstallCleanup?.();
-    uninstallCleanup = null;
+    cleanupHandle?.uninstall();
+    cleanupHandle = null;
     stdin.off("data", onData);
     stdinBuffer.destroy();
     try {
@@ -607,7 +637,7 @@ export function createStdinDriver(
   const autoCleanup = options.autoCleanup ?? false;
   if (autoCleanup) {
     const cleanupOptions = typeof autoCleanup === "object" ? autoCleanup : {};
-    uninstallCleanup = installTerminalCleanup(dispose, {
+    cleanupHandle = installTerminalCleanup(dispose, {
       ...cleanupOptions,
       signalPolicy:
         typeof autoCleanup === "object" ? (cleanupOptions.signalPolicy ?? "reraise") : "reraise",

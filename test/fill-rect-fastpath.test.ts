@@ -220,7 +220,7 @@ describe("buffer scroll fingerprints", () => {
     putCell(buffer, 3, 3, "D");
     buffer.soaFingerprints!.fill(999);
 
-    scrollBuffer(buffer, 1);
+    scrollBuffer(buffer, 100);
 
     for (let y = 0; y < buffer.rows; y++) {
       const actual = Array.from(getRowFingerprints(buffer, y)!);

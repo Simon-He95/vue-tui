@@ -1,5 +1,6 @@
 export type {
   StdinDriver,
+  TerminalCleanupHandle,
   TerminalCleanupOptions,
   TerminalCleanupSignalPolicy,
 } from "./cli/input.js";

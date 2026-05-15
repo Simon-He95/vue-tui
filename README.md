@@ -89,6 +89,7 @@ import {
   createStdoutRenderer,
   createTerminalApp,
   installTerminalCleanup,
+  type TerminalCleanupHandle,
 } from "@simon_he/vue-tui/cli";
 import App from "./App.vue";
 
@@ -111,13 +112,13 @@ const renderer = createStdoutRenderer(app.terminal, {
 app.scheduler.flush();
 
 let driver: ReturnType<typeof createStdinDriver> | null = null;
-let uninstallCleanup: (() => void) | null = null;
+let terminalCleanup: TerminalCleanupHandle | null = null;
 let disposed = false;
 
 const cleanup = () => {
   if (disposed) return;
   disposed = true;
-  uninstallCleanup?.();
+  terminalCleanup?.uninstall();
   driver?.dispose();
   renderer.dispose();
   app.dispose();
@@ -128,7 +129,7 @@ const exit = () => {
   process.exit(0);
 };
 
-uninstallCleanup = installTerminalCleanup(cleanup, {
+terminalCleanup = installTerminalCleanup(cleanup, {
   signalPolicy: "reraise",
   cleanupOnUnhandledRejection: false,
 });
@@ -143,7 +144,7 @@ driver = createStdinDriver({
 });
 ```
 
-Signal cleanup restores terminal state first. By default, `installTerminalCleanup()` is cleanup-only. Set `signalPolicy: "reraise"` when the host wants the original signal to terminate the process after cleanup, or `signalPolicy: "exit"` to exit with the conventional signal exit code.
+Signal cleanup restores terminal state first. `installTerminalCleanup()` returns a cleanup handle: call `handle.uninstall()` to remove process listeners without disposing the app, or `handle.cleanup()` to run cleanup manually. By default, signal handling is cleanup-only. Set `signalPolicy: "reraise"` when the host wants the original signal to terminate the process after cleanup, or `signalPolicy: "exit"` to exit with the conventional signal exit code.
 
 Unhandled promise rejections stay host-owned by default. Setting `cleanupOnUnhandledRejection: true` cleans up and rethrows by default. Set `rethrowUnhandledRejection: false` only when the host explicitly wants to suppress the rejection.
 

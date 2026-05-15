@@ -27,6 +27,7 @@ describe("TInput host path hrefs", () => {
     expect(pathToTerminalFileHref("file:///tmp/a%0Db")).toBeUndefined();
     expect(pathToTerminalFileHref("file:///tmp/a%1Bb")).toBeUndefined();
     expect(pathToTerminalFileHref("file:///tmp/a%7fb")).toBeUndefined();
+    expect(pathToTerminalFileHref("file:///tmp/%80bad")).toBeUndefined();
     expect(pathToTerminalFileHref("file:///tmp/a%20b")).toBe("file:///tmp/a%20b");
   });
 
@@ -34,6 +35,8 @@ describe("TInput host path hrefs", () => {
     expect(fileUrlToPathLike("file:///tmp/%00bad")).toBeNull();
     expect(fileUrlToPathLike("file:///tmp/%0abad")).toBeNull();
     expect(fileUrlToPathLike("file:///tmp/%7fbad")).toBeNull();
+    expect(fileUrlToPathLike("file:///tmp/%80bad")).toBeNull();
+    expect(fileUrlToPathLike("file:///tmp/%9fbad")).toBeNull();
   });
 
   it("still accepts encoded spaces in file URLs", () => {

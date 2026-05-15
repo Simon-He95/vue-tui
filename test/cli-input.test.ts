@@ -50,7 +50,7 @@ describe("cli input", () => {
   it("installs terminal cleanup for process exit", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("exit"));
-    const uninstall = installTerminalCleanup(dispose);
+    const cleanupHandle = installTerminalCleanup(dispose);
     try {
       const listener = process.rawListeners("exit").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
@@ -58,7 +58,7 @@ describe("cli input", () => {
       listener?.(0);
       expect(dispose).toHaveBeenCalledTimes(1);
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
     }
   });
 
@@ -67,7 +67,7 @@ describe("cli input", () => {
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
     const before = new Set(process.rawListeners("SIGTERM"));
-    const uninstall = installTerminalCleanup(dispose);
+    const cleanupHandle = installTerminalCleanup(dispose);
 
     try {
       const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
@@ -78,7 +78,7 @@ describe("cli input", () => {
       expect(exit).not.toHaveBeenCalled();
       expect(kill).not.toHaveBeenCalled();
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
       exit.mockRestore();
       kill.mockRestore();
     }
@@ -88,7 +88,7 @@ describe("cli input", () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const before = new Set(process.rawListeners("SIGINT"));
-    const uninstall = installTerminalCleanup(dispose, { signalPolicy: "exit" });
+    const cleanupHandle = installTerminalCleanup(dispose, { signalPolicy: "exit" });
 
     try {
       const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));
@@ -98,7 +98,7 @@ describe("cli input", () => {
       expect(dispose).toHaveBeenCalledTimes(1);
       expect(exit).toHaveBeenCalledWith(130);
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
       exit.mockRestore();
     }
   });
@@ -108,7 +108,7 @@ describe("cli input", () => {
     const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const before = new Set(process.rawListeners("SIGTERM"));
-    const uninstall = installTerminalCleanup(dispose, { signalPolicy: "reraise" });
+    const cleanupHandle = installTerminalCleanup(dispose, { signalPolicy: "reraise" });
 
     try {
       const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
@@ -121,7 +121,7 @@ describe("cli input", () => {
       expect(kill).toHaveBeenCalledWith(process.pid, "SIGTERM");
       expect(exit).not.toHaveBeenCalled();
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
       kill.mockRestore();
       exit.mockRestore();
     }
@@ -130,64 +130,107 @@ describe("cli input", () => {
   it("honors explicit cleanup signals", () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
-    const before = new Set(process.rawListeners("SIGBREAK"));
-    const uninstall = installTerminalCleanup(dispose, {
-      signals: ["SIGBREAK"],
+    const before = new Set(process.rawListeners("SIGINT"));
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      signals: ["SIGINT"],
       signalPolicy: "exit",
     });
 
     try {
-      const listener = process.rawListeners("SIGBREAK").find((item) => !before.has(item));
+      const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));
       expect(listener).toBeTypeOf("function");
       listener?.();
 
       expect(dispose).toHaveBeenCalledTimes(1);
       expect(exit).toHaveBeenCalledWith(130);
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
       exit.mockRestore();
     }
   });
 
-  it("returned cleanup dispose is idempotent", () => {
+  it("skips unsupported SIGBREAK listeners outside Windows", () => {
     const dispose = vi.fn();
-    const before = new Set(process.rawListeners("SIGTERM"));
-    const cleanup = installTerminalCleanup(dispose);
+    const before = new Set(process.rawListeners("SIGBREAK"));
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      signals: ["SIGBREAK"],
+      signalPolicy: "exit",
+    });
 
     try {
-      cleanup();
-      cleanup();
+      const added = process.rawListeners("SIGBREAK").filter((item) => !before.has(item));
+      expect(added).toHaveLength(process.platform === "win32" ? 1 : 0);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("deduplicates cleanup signals", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      signals: ["SIGTERM", "SIGTERM"],
+    });
+
+    try {
+      const added = process.rawListeners("SIGTERM").filter((item) => !before.has(item));
+      expect(added).toHaveLength(1);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("cleanup handle cleanup is idempotent", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose);
+
+    try {
+      cleanupHandle.cleanup();
+      cleanupHandle.cleanup();
 
       expect(dispose).toHaveBeenCalledTimes(1);
+      cleanupHandle.uninstall();
       expect(process.rawListeners("SIGTERM").filter((item) => !before.has(item))).toHaveLength(0);
     } finally {
-      cleanup();
+      cleanupHandle.uninstall();
     }
+  });
+
+  it("cleanup handle uninstall does not run cleanup", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose);
+
+    cleanupHandle.uninstall();
+
+    expect(dispose).not.toHaveBeenCalled();
+    expect(process.rawListeners("SIGTERM").filter((item) => !before.has(item))).toHaveLength(0);
   });
 
   it("does not register unhandledRejection cleanup by default", () => {
     const dispose = vi.fn();
     const before = process.listenerCount("unhandledRejection");
-    const uninstall = installTerminalCleanup(dispose);
+    const cleanupHandle = installTerminalCleanup(dispose);
 
     try {
       expect(process.listenerCount("unhandledRejection")).toBe(before);
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
     }
   });
 
   it("registers unhandledRejection cleanup only when explicitly enabled", () => {
     const dispose = vi.fn();
     const before = process.listenerCount("unhandledRejection");
-    const uninstall = installTerminalCleanup(dispose, {
+    const cleanupHandle = installTerminalCleanup(dispose, {
       cleanupOnUnhandledRejection: true,
     });
 
     try {
       expect(process.listenerCount("unhandledRejection")).toBe(before + 1);
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
     }
   });
 
@@ -195,7 +238,7 @@ describe("cli input", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("unhandledRejection"));
     const error = new Error("boom");
-    const uninstall = installTerminalCleanup(dispose, {
+    const cleanupHandle = installTerminalCleanup(dispose, {
       cleanupOnUnhandledRejection: true,
     });
 
@@ -227,7 +270,7 @@ describe("cli input", () => {
         }),
       ).toBe(true);
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
     }
   });
 
@@ -235,7 +278,7 @@ describe("cli input", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("unhandledRejection"));
     const reason = { code: "boom" };
-    const uninstall = installTerminalCleanup(dispose, {
+    const cleanupHandle = installTerminalCleanup(dispose, {
       cleanupOnUnhandledRejection: true,
     });
 
@@ -270,14 +313,14 @@ describe("cli input", () => {
         }),
       ).toBe(true);
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
     }
   });
 
   it("can suppress rethrow when explicitly configured", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("unhandledRejection"));
-    const uninstall = installTerminalCleanup(dispose, {
+    const cleanupHandle = installTerminalCleanup(dispose, {
       cleanupOnUnhandledRejection: true,
       rethrowUnhandledRejection: false,
     });
@@ -295,14 +338,14 @@ describe("cli input", () => {
       expect(dispose).toHaveBeenCalledTimes(1);
       expect(nextTick).not.toHaveBeenCalled();
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
     }
   });
 
   it("can explicitly skip unhandledRejection cleanup", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("unhandledRejection"));
-    const uninstall = installTerminalCleanup(dispose, {
+    const cleanupHandle = installTerminalCleanup(dispose, {
       cleanupOnUnhandledRejection: false,
     });
 
@@ -310,14 +353,14 @@ describe("cli input", () => {
       const added = process.rawListeners("unhandledRejection").filter((item) => !before.has(item));
       expect(added).toHaveLength(0);
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
     }
   });
 
   it("cleans up on uncaughtExceptionMonitor", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("uncaughtExceptionMonitor"));
-    const uninstall = installTerminalCleanup(dispose);
+    const cleanupHandle = installTerminalCleanup(dispose);
 
     try {
       const listener = process
@@ -328,7 +371,7 @@ describe("cli input", () => {
       listener?.(new Error("boom"), "uncaughtException");
       expect(dispose).toHaveBeenCalledTimes(1);
     } finally {
-      uninstall();
+      cleanupHandle.uninstall();
     }
   });
 

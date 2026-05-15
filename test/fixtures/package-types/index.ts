@@ -18,6 +18,7 @@ import {
   defaultTInputHostPlugin,
   installTerminalCleanup,
   type StdinDriver,
+  type TerminalCleanupHandle,
   type TerminalCleanupSignalPolicy,
 } from "@simon_he/vue-tui/cli";
 
@@ -51,6 +52,7 @@ console.log(
 );
 
 const driver: StdinDriver | null = null;
+const cleanupHandle: TerminalCleanupHandle | null = null;
 const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
 const record: TerminalEventRecord = { type: "keydown", key: "Enter" };
-console.log(driver, signalPolicy, record);
+console.log(driver, cleanupHandle, signalPolicy, record);

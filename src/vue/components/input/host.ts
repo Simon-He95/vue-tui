@@ -1,6 +1,5 @@
 import { isAbsolutePath, normalizePath, resolvePath } from "../../../utils/path.js";
-
-const ENCODED_CONTROL_RE = /%(?:0[\da-f]|1[\da-f]|7f)/i;
+import { hasEncodedControl } from "../../../utils/url-safety.js";
 
 export type ResolveTInputPathInfo = Readonly<{
   workspace: string;
@@ -66,7 +65,7 @@ export function fileUrlToPathLike(input: string): string | null {
     if (hasControlChar(raw)) return null;
     if (raw !== raw.trim()) return null;
     if (/\s/u.test(raw)) return null;
-    if (ENCODED_CONTROL_RE.test(raw)) return null;
+    if (hasEncodedControl(raw)) return null;
 
     const url = new URL(raw);
     if (url.protocol !== "file:") return null;
@@ -116,7 +115,7 @@ function hasControlChar(value: string): boolean {
 function sanitizeRawFileUrl(raw: string): string | undefined {
   if (raw !== raw.trim()) return undefined;
   if (/\s/u.test(raw)) return undefined;
-  if (ENCODED_CONTROL_RE.test(raw)) return undefined;
+  if (hasEncodedControl(raw)) return undefined;
 
   try {
     const url = new URL(raw);
