@@ -2,13 +2,13 @@ import {
   TerminalProvider,
   TBox,
   TText,
-  createRuntime,
   createTerminal,
-  sanitizeDomHref,
   type Style,
   type Terminal,
-  type TerminalEventRecord,
 } from "@simon_he/vue-tui";
+
+import { sanitizeDomHref } from "@simon_he/vue-tui/core";
+import { createRuntime, type TerminalEventRecord } from "@simon_he/vue-tui/runtime";
 
 import {
   createStdinDriver,

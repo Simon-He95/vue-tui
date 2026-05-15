@@ -87,6 +87,7 @@ type DomRendererLinkConfig = Readonly<{
    * Set to 0 when the host explicitly wants native anchor keyboard focus.
    */
   tabIndex?: number;
+  /** `none` disables native anchor rendering for Style.href segments. */
   activation?: "native" | "event" | "none";
   onActivate?: (href: string, event: MouseEvent) => boolean | void;
 }>;
@@ -947,15 +948,17 @@ export function createDomRenderer(
     if (!href || !rendererLinkOptions) return;
 
     const linkClickResult = rendererOnLinkClick?.(event, href);
-    if (rendererLinkOptions.activation === "event") {
-      const activateResult = rendererLinkOptions.onActivate?.(href, event);
-      if (linkClickResult === false || activateResult === false) {
-        event.preventDefault();
-      }
+    if (linkClickResult === false) {
+      event.preventDefault();
       return;
     }
 
-    if (linkClickResult === false) event.preventDefault();
+    if (rendererLinkOptions.activation === "event") {
+      event.preventDefault();
+      const activateResult = rendererLinkOptions.onActivate?.(href, event);
+      if (activateResult === false) event.preventDefault();
+      return;
+    }
   };
   const onAnchorPointerDown: DomRendererAnchorPointerDownHandler = () => {
     try {

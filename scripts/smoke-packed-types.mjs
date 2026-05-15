@@ -46,7 +46,8 @@ try {
   writeFileSync(
     join(dir, "index.ts"),
     `
-import { TerminalProvider, TBox, TText, createTerminal, type Style, type TerminalEventRecord } from "@simon_he/vue-tui";
+import { TerminalProvider, TBox, TText, createTerminal, type Style } from "@simon_he/vue-tui";
+import type { TerminalEventRecord } from "@simon_he/vue-tui/runtime";
 import { createDefaultTInputHostAdapter, createStdoutRenderer, createTerminalApp, defaultTInputHostPlugin, installTerminalCleanup, type TerminalCleanupSignalPolicy } from "@simon_he/vue-tui/cli";
 import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";

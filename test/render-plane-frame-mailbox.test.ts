@@ -5,7 +5,7 @@ import {
   TText,
   useTerminal,
   type TerminalSchedulerInvalidateOptions,
-} from "../src/index.js";
+} from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 import { createFrameMailbox } from "../src/vue/scheduler/frame-mailbox.js";
 

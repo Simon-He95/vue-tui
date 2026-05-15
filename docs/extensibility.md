@@ -128,7 +128,7 @@ import DocsExtensibilityTerminal from './.vitepress/components/DocsExtensibility
 ## 一个最小的自定义插件写法
 
 ```ts
-import type { TInputPlugin } from "@simon_he/vue-tui";
+import type { TInputPlugin } from "@simon_he/vue-tui/vue";
 
 export const routePlugin: TInputPlugin = {
   name: "route-normalizer",

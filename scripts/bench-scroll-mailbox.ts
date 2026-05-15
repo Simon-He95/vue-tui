@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import type { FramePerfSample } from "../src/index.js";
+import type { FramePerfSample } from "../src/observability.js";
 import { defineComponent, h, nextTick, ref, vShow, withDirectives } from "vue";
-import { TList, TText, useTerminal } from "../src/index.js";
+import { TList, TText } from "../src/index.js";
+import { useTerminal } from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 import { createAppendOnlyLogStore, TLogView, TVirtualList } from "../src/experimental.js";
 import { createFrameMailbox } from "../src/vue/scheduler/frame-mailbox.js";

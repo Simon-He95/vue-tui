@@ -1,7 +1,8 @@
 import { afterEach, beforeAll, expect, vi } from "vitest";
 import { EventEmitter } from "node:events";
-import type { EventManager, Terminal } from "../src/index.js";
-import type { TerminalRuntime } from "../src/index.js";
+import type { Terminal } from "../src/index.js";
+import type { EventManager } from "../src/runtime.js";
+import type { TerminalRuntime } from "../src/vue.js";
 
 if (!(globalThis as any).document) {
   const { Window } = await import("happy-dom");
@@ -52,8 +53,9 @@ const {
   useLayout,
   useTerminal,
   useTerminalNode,
-  createEventManager,
-} = await import("../src/index.js");
+} = await import("../src/vue.js");
+
+const { createEventManager } = await import("../src/runtime.js");
 
 const { createCliEventManager, defaultTInputHostPlugin } = await import("../src/cli.js");
 const { TVirtualList } = await import("../src/experimental.js");

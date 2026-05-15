@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { TRenderPlane, TText } from "../src/index.js";
+import { TText } from "../src/index.js";
+import { TRenderPlane } from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 
 const getFrameDelayMs = () => 16;

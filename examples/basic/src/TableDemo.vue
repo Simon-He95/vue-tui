@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { TBox, TText, useLayout } from "@simon_he/vue-tui";
+import { TBox, TText } from "@simon_he/vue-tui";
+import { useLayout } from "@simon_he/vue-tui/vue";
 
 const layout = useLayout();
 const cols = computed(() => layout.clipRect?.w ?? 0);

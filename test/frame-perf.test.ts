@@ -1,16 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createApp, defineComponent, h, nextTick, ref } from "vue";
-import {
-  createDomRenderer,
-  createFramePerfStore,
-  createTerminal,
-  TerminalProvider,
-  TList,
-  TText,
-  useTerminal,
-  type FramePerfStore,
-  type TerminalScheduler,
-} from "../src/index.js";
+import { createTerminal } from "../src/index.js";
+import { createDomRenderer } from "../src/renderer-dom.js";
+import { createFramePerfStore, type FramePerfStore } from "../src/observability.js";
+import { TerminalProvider, TList, TText, useTerminal, type TerminalScheduler } from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 import { TVirtualList } from "../src/experimental.js";
 

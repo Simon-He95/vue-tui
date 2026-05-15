@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { charCellWidth, createTerminal } from "../src/index.js";
+import { createTerminal } from "../src/index.js";
+import { charCellWidth } from "../src/core.js";
 import { createStdoutRenderer } from "../src/cli.js";
 import { getPlaneTerminal, scrollPlaneRows } from "../src/core/terminal/create-terminal.js";
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createApp, defineComponent, h, nextTick } from "vue";
-import { TerminalProvider, useTerminal } from "../src/index.js";
+import { TerminalProvider } from "../src/index.js";
+import { useTerminal } from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 import { defaultActiveStyle, defaultDimStyle } from "../src/vue/utils/style-cache.js";
 

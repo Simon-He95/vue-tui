@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, nextTick, ref, watchEffect } from "vue";
-import type { EventManager, Terminal } from "../src/index.js";
+import type { Terminal } from "../src/index.js";
+import type { EventManager } from "../src/runtime.js";
 import {
   TAnchor,
   TDebugOverlay,
@@ -10,7 +11,7 @@ import {
   TText,
   TView,
   useTerminal,
-} from "../src/index.js";
+} from "../src/vue.js";
 
 // Make rAF deterministic in tests (TerminalProvider scheduler uses it).
 globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {

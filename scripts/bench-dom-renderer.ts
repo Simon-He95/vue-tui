@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { Window } from "happy-dom";
 import type { DomRendererRowRenderStats } from "../src/renderer/dom/dom-renderer.js";
 import type { Style } from "../src/core/types.js";
-import { createDomRenderer, createTerminal } from "../src/index.js";
+import { createTerminal } from "../src/index.js";
+import { createDomRenderer } from "../src/renderer-dom.js";
 
 const ROWS = 100;
 const COLS = 24;

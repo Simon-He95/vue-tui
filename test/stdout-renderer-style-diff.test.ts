@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { defaultVueTuiProfileLogPath } from "../src/cli/node-file-writers.js";
-import { createTerminal, sanitizeTerminalHref } from "../src/index.js";
+import { createTerminal } from "../src/index.js";
+import { sanitizeTerminalHref } from "../src/core.js";
 import { createStdoutRenderer, STDOUT_RENDERER_CAPABILITIES } from "../src/cli.js";
 
 function hrefHash10Legacy(href: string): number {

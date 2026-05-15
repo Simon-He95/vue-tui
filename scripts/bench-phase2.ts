@@ -99,8 +99,9 @@ function installManualRaf(): RafHarness {
 }
 
 const { createApp, defineComponent, h, nextTick, ref } = await import("vue");
-const { createDomRenderer, createTerminal, TerminalProvider, TText, useTerminal } =
+const { createDomRenderer, createTerminal, TerminalProvider, TText } =
   await import("../src/index.js");
+const { useTerminal } = await import("../src/vue.js");
 const { createTerminalApp } = await import("../src/cli.js");
 const { createAppendOnlyLogStore, TLogView, TVirtualList } = await import("../src/experimental.js");
 const { TLOG_VIEW_LAB_LAYOUT, TLogViewLabApp } = await import("../examples/tlog-view-lab/App.js");

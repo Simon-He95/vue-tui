@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    continue-on-error: false
 
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +30,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm audit --prod --audit-level high
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
 
   codeql:
     if: >

@@ -1,4 +1,4 @@
-import type { TerminalKeyboardEvent } from "@simon_he/vue-tui";
+import type { TerminalKeyboardEvent } from "@simon_he/vue-tui/runtime";
 
 export type AgentConsoleKeymapActions = Readonly<{
   inputFocused: () => boolean;

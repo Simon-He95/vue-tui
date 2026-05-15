@@ -62,12 +62,37 @@ describe("cli input", () => {
     }
   });
 
+  it("default signal policy cleans up and re-raises", async () => {
+    const dispose = vi.fn();
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose);
+
+    try {
+      const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(kill).toHaveBeenCalledWith(process.pid, "SIGTERM");
+      expect(exit).not.toHaveBeenCalled();
+    } finally {
+      cleanupHandle.uninstall();
+      kill.mockRestore();
+      exit.mockRestore();
+    }
+  });
+
   it("cleanup-only signal policy cleans up without exiting", () => {
     const dispose = vi.fn();
     const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
     const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
     const before = new Set(process.rawListeners("SIGTERM"));
-    const cleanupHandle = installTerminalCleanup(dispose);
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      signalPolicy: "cleanup-only",
+    });
 
     try {
       const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));

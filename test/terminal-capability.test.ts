@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectTerminalColorCapability } from "../src/index.js";
+import { detectTerminalColorCapability } from "../src/core.js";
 
 describe("terminal capability", () => {
   it("folds truecolor into 256 level", () => {

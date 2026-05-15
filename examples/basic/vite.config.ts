@@ -6,6 +6,7 @@ const vueTuiSrc = fileURLToPath(new URL("../../src/index.ts", import.meta.url));
 const vueTuiCliSrc = fileURLToPath(new URL("../../src/cli.ts", import.meta.url));
 const vueTuiMarkdownSrc = fileURLToPath(new URL("../../src/markdown.ts", import.meta.url));
 const vueTuiExperimentalSrc = fileURLToPath(new URL("../../src/experimental.ts", import.meta.url));
+const vueTuiVueSrc = fileURLToPath(new URL("../../src/vue.ts", import.meta.url));
 
 const terminalExternal = [
   "fs",
@@ -37,6 +38,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: [
         { find: /^@simon_he\/vue-tui$/, replacement: vueTuiSrc },
+        { find: /^@simon_he\/vue-tui\/vue$/, replacement: vueTuiVueSrc },
         { find: /^@simon_he\/vue-tui\/cli$/, replacement: vueTuiCliSrc },
         { find: /^@simon_he\/vue-tui\/markdown$/, replacement: vueTuiMarkdownSrc },
         { find: /^@simon_he\/vue-tui\/experimental$/, replacement: vueTuiExperimentalSrc },

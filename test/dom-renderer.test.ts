@@ -658,7 +658,7 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("calls host link activation without preventing native activation by default", () => {
+  it("host link activation prevents native activation by default", () => {
     const onActivate = vi.fn();
     const { terminal, container, renderer } = setup(3, 1, {
       links: { onActivate },
@@ -670,9 +670,9 @@ describe("DomRenderer row rendering", () => {
 
       const anchor = lineEl(container).querySelector("a");
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
-      expect(anchor?.dispatchEvent(event)).toBe(true);
+      expect(anchor?.dispatchEvent(event)).toBe(false);
 
-      expect(event.defaultPrevented).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
       expect(onActivate).toHaveBeenCalledWith("https://example.com/", event);
     } finally {
       renderer.dispose();
@@ -768,7 +768,7 @@ describe("DomRenderer row rendering", () => {
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
       anchor?.dispatchEvent(event);
 
-      expect(event.defaultPrevented).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
       expect(onActivate).toHaveBeenCalledOnce();
       expect(bubbled).toHaveBeenCalledOnce();
     } finally {
@@ -955,8 +955,8 @@ describe("DomRenderer row rendering", () => {
       expect(onActivate).not.toHaveBeenCalled();
 
       const click = new MouseEvent("click", { bubbles: true, cancelable: true });
-      expect(anchor!.dispatchEvent(click)).toBe(true);
-      expect(click.defaultPrevented).toBe(false);
+      expect(anchor!.dispatchEvent(click)).toBe(false);
+      expect(click.defaultPrevented).toBe(true);
       expect(onActivate).toHaveBeenCalledWith("https://example.com/", click);
     } finally {
       renderer.dispose();
@@ -1010,8 +1010,8 @@ describe("DomRenderer row rendering", () => {
       expect(anchor?.getAttribute("href")).toBe("docs/intro.md");
 
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
-      expect(anchor?.dispatchEvent(event)).toBe(true);
-      expect(event.defaultPrevented).toBe(false);
+      expect(anchor?.dispatchEvent(event)).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
       expect(onActivate).toHaveBeenCalledWith("docs/intro.md", event);
     } finally {
       renderer.dispose();

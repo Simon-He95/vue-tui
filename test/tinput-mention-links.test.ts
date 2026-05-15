@@ -20,7 +20,8 @@ if (!(globalThis as any).document) {
 }
 
 const { createApp, defineComponent, h, nextTick, ref, watchEffect } = await import("vue");
-const { TerminalProvider, TInput, useTerminal } = await import("../src/index.js");
+const { TerminalProvider, TInput } = await import("../src/index.js");
+const { useTerminal } = await import("../src/vue.js");
 
 // Make rAF deterministic in tests (TerminalProvider scheduler uses it).
 globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {

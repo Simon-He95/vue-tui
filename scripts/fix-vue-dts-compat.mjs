@@ -4,10 +4,16 @@ import { join, resolve } from "node:path";
 const args = process.argv.slice(2);
 const inputArg = args.indexOf("--input");
 if (inputArg >= 0 && !args[inputArg + 1]) {
-  throw new Error("Usage: node scripts/fix-vue-dts-compat.mjs [--input <dir>] [--stdout]");
+  throw new Error(
+    "Usage: node scripts/fix-vue-dts-compat.mjs [--input <dir>] [--stdout] [--check]",
+  );
 }
 const inputDir = resolve(inputArg >= 0 ? args[inputArg + 1] : "dist");
 const stdout = args.includes("--stdout");
+const check = args.includes("--check");
+if (stdout && check) {
+  throw new Error("--stdout and --check cannot be used together");
+}
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -155,6 +161,8 @@ function patchDts(source) {
   );
 }
 
+const changed = [];
+
 for (const file of walk(inputDir).sort()) {
   const before = readFileSync(file, "utf8");
   const after = patchDts(before);
@@ -162,5 +170,20 @@ for (const file of walk(inputDir).sort()) {
     process.stdout.write(after);
     continue;
   }
-  if (after !== before) writeFileSync(file, after);
+  if (after === before) continue;
+
+  if (!/DefineComponent|PublicProps|import\("vue"\)\.Ref|\bRef</.test(before)) {
+    throw new Error(`Unexpected d.ts rewrite target: ${file}`);
+  }
+
+  changed.push(file);
+  if (!check) writeFileSync(file, after);
+}
+
+if (process.env.VUE_TUI_DEBUG_DTS_PATCH === "1") {
+  for (const file of changed) console.log(`[dts-patch] ${file}`);
+}
+
+if (check && changed.length > 0) {
+  throw new Error(`Vue d.ts compatibility patch is not applied:\n${changed.join("\n")}`);
 }

@@ -1,5 +1,5 @@
 import type { FsEntryKind, PathPickerProvider } from "../core/path-provider-types.js";
-import { importNodeModule } from "../utils/node-module.js";
+import { importNodeModule } from "./node-module.js";
 export type {
   FsDirEntry,
   FsEntryKind,

@@ -432,6 +432,41 @@ describe("ui regressions", () => {
     }
   });
 
+  it("TerminalProvider updates DOM palette after mount", async () => {
+    const providerProps = reactive<{ domRendererOptions: any }>({
+      domRendererOptions: { palette: { red: "#112233" } },
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TText, {
+          x: 0,
+          y: 0,
+          w: 3,
+          value: "red",
+          style: { fg: "red" },
+        }),
+      8,
+      1,
+      providerProps,
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+      const container = mounted.container()!;
+      expect(container.style.getPropertyValue("--vt-color-red")).toBe("#112233");
+
+      providerProps.domRendererOptions = { palette: { red: "#445566" } };
+      await nextTick();
+      await Promise.resolve();
+
+      expect(container.style.getPropertyValue("--vt-color-red")).toBe("#445566");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("keeps terminal node click handling when a DOM link is activated", async () => {
     const onActivate = vi.fn();
     const terminalClick = vi.fn();

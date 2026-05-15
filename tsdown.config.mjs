@@ -17,6 +17,11 @@ export default defineConfig([
     target: "es2020",
     entry: {
       index: "src/index.ts",
+      core: "src/core.ts",
+      runtime: "src/runtime.ts",
+      "renderer-dom": "src/renderer-dom.ts",
+      observability: "src/observability.ts",
+      vue: "src/vue.ts",
       markdown: "src/markdown.ts",
       experimental: "src/experimental.ts",
     },

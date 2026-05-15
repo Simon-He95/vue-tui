@@ -702,6 +702,14 @@ export const TerminalProvider = defineComponent({
           (next) => r.updateOptions(next),
           { deep: true },
         );
+        watch(
+          () => props.domRendererOptions?.palette ?? null,
+          (palette) => {
+            r.updateTheme({ palette });
+            r.refresh();
+          },
+          { deep: true },
+        );
 
         let lastPointerImeAt = 0;
         let focusImeFn: ((e?: PointerEvent | MouseEvent) => void) | null = null;

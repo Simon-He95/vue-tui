@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Component } from "vue";
-import { createTerminalRouter } from "../src/index.js";
+import { createTerminalRouter } from "../src/vue.js";
 
 const Dummy: Component = {} as any;
 

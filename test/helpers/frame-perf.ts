@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import type { Component } from "vue";
-import type { FramePerfReason, FramePerfSample, FramePerfStore } from "../../src/index.js";
+import type { FramePerfReason, FramePerfSample, FramePerfStore } from "../../src/observability.js";
 import { defineComponent } from "vue";
-import { useTerminal } from "../../src/index.js";
+import { useTerminal } from "../../src/vue.js";
 
 export type FramePerfProbe = Readonly<{
   component: Component;

@@ -11,7 +11,8 @@
     "lib": ["ES2020", "DOM"],
     "types": ["vite/client"],
     "paths": {
-      "@simon_he/vue-tui": ["../../src/index.ts"]
+      "@simon_he/vue-tui": ["../../src/index.ts"],
+      "@simon_he/vue-tui/vue": ["../../src/vue.ts"]
     }
   },
   "include": ["src"]

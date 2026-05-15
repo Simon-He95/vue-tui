@@ -1,7 +1,7 @@
 import type { FsDirEntry } from "../core/path-provider-types.js";
 import type { PathPickMode, SuggestPathsResult } from "../core/path-suggest.js";
 import { normalizePath, resolvePath } from "../utils/path.js";
-import { importNodeModule } from "../utils/node-module.js";
+import { importNodeModule } from "./node-module.js";
 import {
   resolveUserPath as resolveUserPathCore,
   suggestPaths as suggestPathsCore,

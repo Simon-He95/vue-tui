@@ -12,6 +12,10 @@
     "types": ["vite/client"],
     "paths": {
       "@simon_he/vue-tui": ["../../src/index.ts"],
+      "@simon_he/vue-tui/core": ["../../src/core.ts"],
+      "@simon_he/vue-tui/runtime": ["../../src/runtime.ts"],
+      "@simon_he/vue-tui/observability": ["../../src/observability.ts"],
+      "@simon_he/vue-tui/vue": ["../../src/vue.ts"],
       "@simon_he/vue-tui/experimental": ["../../src/experimental.ts"],
       "@simon_he/vue-tui/markdown": ["../../src/markdown.ts"]
     }

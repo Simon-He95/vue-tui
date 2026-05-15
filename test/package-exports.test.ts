@@ -8,13 +8,28 @@ import { pathToFileURL } from "node:url";
 import { assertNoBrowserForbiddenCode } from "../scripts/browser-forbidden-code.js";
 
 const distIndex = resolve("dist/index.js");
+const distCore = resolve("dist/core.js");
+const distRuntime = resolve("dist/runtime.js");
+const distRendererDom = resolve("dist/renderer-dom.js");
+const distObservability = resolve("dist/observability.js");
+const distVue = resolve("dist/vue.js");
 const distCli = resolve("dist/cli.js");
 const distMarkdown = resolve("dist/markdown.js");
 const distExperimental = resolve("dist/experimental.js");
 const distIndexCjs = resolve("dist/index.cjs");
+const distCoreCjs = resolve("dist/core.cjs");
+const distRuntimeCjs = resolve("dist/runtime.cjs");
+const distRendererDomCjs = resolve("dist/renderer-dom.cjs");
+const distObservabilityCjs = resolve("dist/observability.cjs");
+const distVueCjs = resolve("dist/vue.cjs");
 const distMarkdownCjs = resolve("dist/markdown.cjs");
 const distExperimentalCjs = resolve("dist/experimental.cjs");
 const distTypes = resolve("dist/index.d.ts");
+const distCoreTypes = resolve("dist/core.d.ts");
+const distRuntimeTypes = resolve("dist/runtime.d.ts");
+const distRendererDomTypes = resolve("dist/renderer-dom.d.ts");
+const distObservabilityTypes = resolve("dist/observability.d.ts");
+const distVueTypes = resolve("dist/vue.d.ts");
 const distCliTypes = resolve("dist/cli.d.ts");
 const distMarkdownTypes = resolve("dist/markdown.d.ts");
 const distExperimentalTypes = resolve("dist/experimental.d.ts");
@@ -130,8 +145,21 @@ describe("package exports", () => {
     );
   });
 
+  it("checks already patched Vue declaration compatibility output", () => {
+    execFileSync(
+      process.execPath,
+      ["scripts/fix-vue-dts-compat.mjs", "--input", "test/fixtures/dts-after", "--check"],
+      { cwd: process.cwd(), encoding: "utf8" },
+    );
+  });
+
   it("keeps high-throughput components behind the experimental entrypoint", async () => {
     const root = await import("../src/index.js");
+    const core = await import("../src/core.js");
+    const runtime = await import("../src/runtime.js");
+    const observability = await import("../src/observability.js");
+    const rendererDom = await import("../src/renderer-dom.js");
+    const vue = await import("../src/vue.js");
     const cli = await import("../src/cli.js");
     const markdown = await import("../src/markdown.js");
     const experimental = await import("../src/experimental.js");
@@ -149,6 +177,19 @@ describe("package exports", () => {
     expect("createOsc52ClipboardProvider" in root).toBe(false);
     expect("createDefaultTInputHostAdapter" in root).toBe(false);
     expect("defaultTInputHostPlugin" in root).toBe(false);
+    expect(Object.keys(root).sort()).toEqual([
+      "TBox",
+      "TDialog",
+      "TInput",
+      "TList",
+      "TSelect",
+      "TText",
+      "TView",
+      "TerminalProvider",
+      "createDomRenderer",
+      "createTInputHostPlugin",
+      "createTerminal",
+    ]);
     expect(cli.createTerminalApp).toBeTruthy();
     expect(cli.createStdoutRenderer).toBeTruthy();
     expect(cli.createStdinDriver).toBeTruthy();
@@ -183,12 +224,20 @@ describe("package exports", () => {
     expect("useTLogSearchResultsPage" in root).toBe(false);
     expect("useTLogLinkController" in root).toBe(false);
     expect("createAppendOnlyLogStore" in root).toBe(false);
-    expect(root.createRuntime).toBeTruthy();
-    expect(root.createFramePerfStore).toBeTruthy();
-    expect(root.framePerfNow).toBeTruthy();
-    expect(root.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
-    expect(root.isSafeRelativeHref("#section")).toBe(true);
-    expect(root.terminalSelectionVisibleRowSpans).toBeTruthy();
+    expect("createRuntime" in root).toBe(false);
+    expect("createFramePerfStore" in root).toBe(false);
+    expect("framePerfNow" in root).toBe(false);
+    expect("sanitizeDomHref" in root).toBe(false);
+    expect("isSafeRelativeHref" in root).toBe(false);
+    expect("terminalSelectionVisibleRowSpans" in root).toBe(false);
+    expect(core.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
+    expect(core.isSafeRelativeHref("#section")).toBe(true);
+    expect(runtime.createRuntime).toBeTruthy();
+    expect(runtime.terminalSelectionVisibleRowSpans).toBeTruthy();
+    expect(observability.createFramePerfStore).toBeTruthy();
+    expect(observability.framePerfNow).toBeTruthy();
+    expect(rendererDom.createDomRenderer).toBe(root.createDomRenderer);
+    expect(vue.useTerminal).toBeTruthy();
     expect("TMarkdownText" in experimental).toBe(false);
     expect(experimental.TVirtualList).toBeTruthy();
     expect("TVirtualMarkdown" in experimental).toBe(false);
@@ -288,9 +337,14 @@ describe("package exports", () => {
       stdin: {
         contents: `
           import * as root from "./src/index.ts";
+          import * as core from "./src/core.ts";
+          import * as runtime from "./src/runtime.ts";
+          import * as rendererDom from "./src/renderer-dom.ts";
+          import * as observability from "./src/observability.ts";
+          import * as vue from "./src/vue.ts";
           import * as markdown from "./src/markdown.ts";
           import * as experimental from "./src/experimental.ts";
-          console.log(root, markdown, experimental);
+          console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental);
         `,
         resolveDir: process.cwd(),
         sourcefile: "vue-tui-browser-smoke.ts",
@@ -320,9 +374,14 @@ describe("package exports", () => {
         stdin: {
           contents: `
             import * as root from "./dist/index.js";
+            import * as core from "./dist/core.js";
+            import * as runtime from "./dist/runtime.js";
+            import * as rendererDom from "./dist/renderer-dom.js";
+            import * as observability from "./dist/observability.js";
+            import * as vue from "./dist/vue.js";
             import * as markdown from "./dist/markdown.js";
             import * as experimental from "./dist/experimental.js";
-            console.log(root, markdown, experimental);
+            console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental);
           `,
           resolveDir: process.cwd(),
           sourcefile: "vue-tui-dist-browser-smoke.ts",
@@ -344,12 +403,27 @@ describe("package exports", () => {
   it.skipIf(!requireDistExports)("does not emit Node-only code into browser dist entries", () => {
     for (const file of [
       distIndex,
+      distCore,
+      distRuntime,
+      distRendererDom,
+      distObservability,
+      distVue,
       distMarkdown,
       distExperimental,
       distIndexCjs,
+      distCoreCjs,
+      distRuntimeCjs,
+      distRendererDomCjs,
+      distObservabilityCjs,
+      distVueCjs,
       distMarkdownCjs,
       distExperimentalCjs,
       distTypes,
+      distCoreTypes,
+      distRuntimeTypes,
+      distRendererDomTypes,
+      distObservabilityTypes,
+      distVueTypes,
       distMarkdownTypes,
       distExperimentalTypes,
     ]) {
@@ -360,21 +434,41 @@ describe("package exports", () => {
 
   it.skipIf(!requireDistExports)("keeps built ESM/CJS experimental exports usable", async () => {
     expect(existsSync(distIndex)).toBe(true);
+    expect(existsSync(distCore)).toBe(true);
+    expect(existsSync(distRuntime)).toBe(true);
+    expect(existsSync(distRendererDom)).toBe(true);
+    expect(existsSync(distObservability)).toBe(true);
+    expect(existsSync(distVue)).toBe(true);
     expect(existsSync(distCli)).toBe(true);
     expect(existsSync(distMarkdown)).toBe(true);
     expect(existsSync(distExperimental)).toBe(true);
     expect(existsSync(distTypes)).toBe(true);
+    expect(existsSync(distCoreTypes)).toBe(true);
+    expect(existsSync(distRuntimeTypes)).toBe(true);
+    expect(existsSync(distRendererDomTypes)).toBe(true);
+    expect(existsSync(distObservabilityTypes)).toBe(true);
+    expect(existsSync(distVueTypes)).toBe(true);
     expect(existsSync(distCliTypes)).toBe(true);
     expect(existsSync(distMarkdownTypes)).toBe(true);
     expect(existsSync(distExperimentalTypes)).toBe(true);
     expect(readFileSync(distCliTypes, "utf8")).toContain("Osc52ClipboardOptions");
 
     const root = await import(/* @vite-ignore */ pathToFileURL(distIndex).href);
+    const core = await import(/* @vite-ignore */ pathToFileURL(distCore).href);
+    const runtime = await import(/* @vite-ignore */ pathToFileURL(distRuntime).href);
+    const rendererDom = await import(/* @vite-ignore */ pathToFileURL(distRendererDom).href);
+    const observability = await import(/* @vite-ignore */ pathToFileURL(distObservability).href);
+    const vue = await import(/* @vite-ignore */ pathToFileURL(distVue).href);
     const cli = await import(/* @vite-ignore */ pathToFileURL(distCli).href);
     const markdown = await import(/* @vite-ignore */ pathToFileURL(distMarkdown).href);
     const experimental = await import(/* @vite-ignore */ pathToFileURL(distExperimental).href);
     const require = createRequire(import.meta.url);
     const rootCjs = require("../dist/index.cjs");
+    const coreCjs = require("../dist/core.cjs");
+    const runtimeCjs = require("../dist/runtime.cjs");
+    const rendererDomCjs = require("../dist/renderer-dom.cjs");
+    const observabilityCjs = require("../dist/observability.cjs");
+    const vueCjs = require("../dist/vue.cjs");
     const cliCjs = require("../dist/cli.cjs");
     const markdownCjs = require("../dist/markdown.cjs");
     const experimentalCjs = require("../dist/experimental.cjs");
@@ -385,12 +479,20 @@ describe("package exports", () => {
     expect("createDefaultTInputHostAdapter" in root).toBe(false);
     expect("defaultTInputHostPlugin" in root).toBe(false);
     expect(root.TerminalProvider).toBeTruthy();
-    expect(root.createRuntime).toBeTruthy();
-    expect(root.createFramePerfStore).toBeTruthy();
-    expect(root.framePerfNow).toBeTruthy();
-    expect(root.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
-    expect(root.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
-    expect(root.isSafeRelativeHref("#section")).toBe(true);
+    expect("createRuntime" in root).toBe(false);
+    expect("createFramePerfStore" in root).toBe(false);
+    expect("framePerfNow" in root).toBe(false);
+    expect("sanitizeTerminalHref" in root).toBe(false);
+    expect("sanitizeDomHref" in root).toBe(false);
+    expect(core.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
+    expect(core.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
+    expect(core.isSafeRelativeHref("#section")).toBe(true);
+    expect(runtime.createRuntime).toBeTruthy();
+    expect(runtime.terminalSelectionVisibleRowSpans).toBeTruthy();
+    expect(rendererDom.createDomRenderer).toBeTruthy();
+    expect(observability.createFramePerfStore).toBeTruthy();
+    expect(observability.framePerfNow).toBeTruthy();
+    expect(vue.useTerminal).toBeTruthy();
     expect(cli.createTerminalApp).toBeTruthy();
     expect(cli.createStdoutRenderer).toBeTruthy();
     expect(cli.createStdinDriver).toBeTruthy();
@@ -410,12 +512,20 @@ describe("package exports", () => {
     expect("createDefaultTInputHostAdapter" in rootCjs).toBe(false);
     expect("defaultTInputHostPlugin" in rootCjs).toBe(false);
     expect(rootCjs.TerminalProvider).toBeTruthy();
-    expect(rootCjs.createRuntime).toBeTruthy();
-    expect(rootCjs.createFramePerfStore).toBeTruthy();
-    expect(rootCjs.framePerfNow).toBeTruthy();
-    expect(rootCjs.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
-    expect(rootCjs.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
-    expect(rootCjs.isSafeRelativeHref("#section")).toBe(true);
+    expect("createRuntime" in rootCjs).toBe(false);
+    expect("createFramePerfStore" in rootCjs).toBe(false);
+    expect("framePerfNow" in rootCjs).toBe(false);
+    expect("sanitizeTerminalHref" in rootCjs).toBe(false);
+    expect("sanitizeDomHref" in rootCjs).toBe(false);
+    expect(coreCjs.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
+    expect(coreCjs.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
+    expect(coreCjs.isSafeRelativeHref("#section")).toBe(true);
+    expect(runtimeCjs.createRuntime).toBeTruthy();
+    expect(runtimeCjs.terminalSelectionVisibleRowSpans).toBeTruthy();
+    expect(rendererDomCjs.createDomRenderer).toBeTruthy();
+    expect(observabilityCjs.createFramePerfStore).toBeTruthy();
+    expect(observabilityCjs.framePerfNow).toBeTruthy();
+    expect(vueCjs.useTerminal).toBeTruthy();
     expect(cliCjs.createTerminalApp).toBeTruthy();
     expect(cliCjs.createStdoutRenderer).toBeTruthy();
     expect(cliCjs.createStdinDriver).toBeTruthy();
