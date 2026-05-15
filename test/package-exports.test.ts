@@ -235,6 +235,9 @@ describe("package exports", () => {
     expect("sanitizeDomHref" in root).toBe(false);
     expect("isSafeRelativeHref" in root).toBe(false);
     expect("terminalSelectionVisibleRowSpans" in root).toBe(false);
+    expect("createOsc52ClipboardProvider" in runtime).toBe(false);
+    expect("createDefaultTInputHostAdapter" in vue).toBe(false);
+    expect("defaultTInputHostPlugin" in vue).toBe(false);
     expect(core.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
     expect(core.isSafeRelativeHref("#section")).toBe(true);
     expect(runtime.createRuntime).toBeTruthy();
@@ -489,6 +492,9 @@ describe("package exports", () => {
     expect("framePerfNow" in root).toBe(false);
     expect("sanitizeTerminalHref" in root).toBe(false);
     expect("sanitizeDomHref" in root).toBe(false);
+    expect("createOsc52ClipboardProvider" in runtime).toBe(false);
+    expect("createDefaultTInputHostAdapter" in vue).toBe(false);
+    expect("defaultTInputHostPlugin" in vue).toBe(false);
     expect(core.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
     expect(core.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
     expect(core.isSafeRelativeHref("#section")).toBe(true);
@@ -522,6 +528,9 @@ describe("package exports", () => {
     expect("framePerfNow" in rootCjs).toBe(false);
     expect("sanitizeTerminalHref" in rootCjs).toBe(false);
     expect("sanitizeDomHref" in rootCjs).toBe(false);
+    expect("createOsc52ClipboardProvider" in runtimeCjs).toBe(false);
+    expect("createDefaultTInputHostAdapter" in vueCjs).toBe(false);
+    expect("defaultTInputHostPlugin" in vueCjs).toBe(false);
     expect(coreCjs.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
     expect(coreCjs.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
     expect(coreCjs.isSafeRelativeHref("#section")).toBe(true);

@@ -205,6 +205,31 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("refreshes rows when updateTheme changes palette", () => {
+    const terminal = createTerminal({ cols: 4, rows: 1 });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    terminal.write("A", { x: 0, y: 0, style: { fg: "blue", inverse: true } });
+    const renderer = createDomRenderer(terminal, container, {
+      palette: { blue: "#0000ff" },
+    });
+
+    try {
+      const before = (lineEl(container).firstChild as HTMLSpanElement).style.color;
+
+      renderer.updateTheme({
+        palette: { blue: "#ffffff" },
+      });
+
+      expect((lineEl(container).firstChild as HTMLSpanElement).style.color).not.toBe(before);
+    } finally {
+      renderer.dispose();
+      terminal.dispose();
+      container.remove();
+    }
+  });
+
   it("renders single styled rows as one span", () => {
     const { terminal, container, renderer } = setup(3);
 

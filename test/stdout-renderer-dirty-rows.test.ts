@@ -1345,4 +1345,58 @@ describe("stdout renderer", () => {
       }
     });
   });
+
+  it("keeps stdout screen equal to terminal snapshot after multiple scroll ops", () => {
+    const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
+
+    withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
+      vi.useFakeTimers();
+      const nowRef = { t: 0 };
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowRef.t);
+      try {
+        process.env.DIMCODE_TUI_SCROLL_REGIONS = "1";
+
+        const terminal = createTerminal({ cols: 4, rows: 8 });
+        let out = "";
+        let transcriptOut = "";
+        const output = {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+            transcriptOut += chunk;
+          },
+        };
+        const renderer = createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+        });
+
+        for (let y = 0; y < 8; y++) terminal.write(String(y).repeat(4), { x: 0, y });
+        terminal.commit({ sync: true });
+        const frameDelayMs = getFrameDelayMs();
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        out = "";
+        scrollPlaneRows(terminal, "default", 0, 3, 1);
+        scrollPlaneRows(terminal, "default", 5, 8, -1);
+        terminal.commit({ planes: ["default"], sync: true });
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        expect(out.includes("\u001B[1;3r")).toBe(true);
+        expect(out.includes("\u001B[6;8r")).toBe(true);
+        expect(applyAnsiToScreen(transcriptOut, 4, 8)).toEqual(terminal.snapshot().lines);
+
+        renderer.dispose();
+      } finally {
+        nowSpy.mockRestore();
+        vi.useRealTimers();
+        if (prevScrollRegions == null) delete process.env.DIMCODE_TUI_SCROLL_REGIONS;
+        else process.env.DIMCODE_TUI_SCROLL_REGIONS = prevScrollRegions;
+      }
+    });
+  });
 });

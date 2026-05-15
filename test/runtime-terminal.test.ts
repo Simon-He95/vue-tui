@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createOsc52ClipboardProvider, createRuntime } from "../src/runtime/index.js";
+import { createRuntime } from "../src/runtime/index.js";
+import { createOsc52ClipboardProvider } from "../src/runtime/osc52.js";
 
 function restoreGlobal(key: string, value: unknown): void {
   if (value === undefined) {

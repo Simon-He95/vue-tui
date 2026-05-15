@@ -1661,10 +1661,13 @@ export function createDomRenderer(
     }>,
   ): void {
     if (disposed) return;
+    let changed = false;
     if ("palette" in next) {
       palette = next.palette ?? null;
       installAnsiPaletteCssVars(container, palette);
+      changed = true;
     }
+    if (changed) refresh();
   }
 
   function updateOptions(

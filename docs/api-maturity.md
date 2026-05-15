@@ -10,13 +10,14 @@
 | Experimental | `@simon_he/vue-tui/experimental`                                | 可以在 0.x 内调整 props、types、事件和行为，但必须有 release note |
 | Internal     | 未从 package entrypoint 导出的模块、helper、scheduler primitive | 不承诺兼容；应用代码不应 deep import                              |
 
-生成的 [组件 API](/generated/components-api) 会给每个组件标出 `API maturity` 和 import entrypoint。Public 组件从 root entrypoint 引入；Experimental 组件只从 `/experimental` 引入。
+生成的 [组件 API](/generated/components-api) 会给每个组件标出 `API maturity` 和 import entrypoint。稳定基础组件从 root entrypoint 引入，扩展 Vue 组件从 `/vue` 引入；Experimental 组件只从 `/experimental` 引入。
 
 ## Entrypoint 边界
 
 | Entrypoint                       | 标签         | 内容                                                                      |
 | -------------------------------- | ------------ | ------------------------------------------------------------------------- |
-| `@simon_he/vue-tui`              | Public       | core terminal、DOM renderer、runtime、基础 Vue 组件、browser-safe helpers |
+| `@simon_he/vue-tui`              | Public       | core terminal、DOM renderer、稳定基础 Vue 组件、browser-safe helpers      |
+| `@simon_he/vue-tui/vue`          | Public       | 扩展 Vue 组件、composables、router helpers 和 Vue runtime internals       |
 | `@simon_he/vue-tui/cli`          | Public       | stdout renderer、stdin driver、headless app、Node providers、recording    |
 | `@simon_he/vue-tui/markdown`     | Public       | markdown parser / block source / markdown components                      |
 | `@simon_he/vue-tui/experimental` | Experimental | `TVirtualList`、`TLogView`、TLog companions、retained index、TLog plugins |

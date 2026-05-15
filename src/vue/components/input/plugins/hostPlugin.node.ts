@@ -1,6 +1,6 @@
 import type { ResolveTInputPathInfo, TInputHostAdapter } from "../host.js";
 import { Buffer } from "node:buffer";
-import { createOsc52ClipboardProvider } from "../../../../runtime/index.js";
+import { createOsc52ClipboardProvider } from "../../../../runtime/osc52.js";
 import { importNodeModule } from "../../../../cli/node-module.js";
 import { pathToTerminalFileHref, resolveDefaultTInputPath } from "../host.js";
 import { createTInputHostPlugin } from "./hostPlugin.js";

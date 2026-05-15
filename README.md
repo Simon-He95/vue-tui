@@ -52,6 +52,35 @@ import { createTInputHostPlugin } from "@simon_he/vue-tui";
 import { createDefaultTInputHostAdapter, defaultTInputHostPlugin } from "@simon_he/vue-tui/cli";
 ```
 
+### Migration: Root Entry Was Narrowed
+
+The root entrypoint now keeps only stable browser-safe APIs. Extended Vue components and Vue router/composable helpers move to `@simon_he/vue-tui/vue`.
+
+| Before root import | New import              |
+| ------------------ | ----------------------- |
+| `TAnchor`          | `@simon_he/vue-tui/vue` |
+| `TFlow`            | `@simon_he/vue-tui/vue` |
+| `TInputBox`        | `@simon_he/vue-tui/vue` |
+| `TPathPicker`      | `@simon_he/vue-tui/vue` |
+| `TJsonEditor`      | `@simon_he/vue-tui/vue` |
+| `TRenderPlane`     | `@simon_he/vue-tui/vue` |
+| `TRenderLayer`     | `@simon_he/vue-tui/vue` |
+| `TTransition`      | `@simon_he/vue-tui/vue` |
+| router/composables | `@simon_he/vue-tui/vue` |
+| Node host defaults | `@simon_he/vue-tui/cli` |
+
+Before:
+
+```ts
+import { TAnchor, TFlow } from "@simon_he/vue-tui";
+```
+
+After:
+
+```ts
+import { TAnchor, TFlow } from "@simon_he/vue-tui/vue";
+```
+
 ### Hyperlinks
 
 DOM renderer link rendering is opt-in through `domRendererOptions.links`. Once enabled, DOM anchors allow safe absolute and relative targets such as `https:`, `http:`, `mailto:`, `/path`, `./path`, `../path`, `#hash`, and `?q=1`. Link callbacks preserve native browser behavior unless they return `false`.

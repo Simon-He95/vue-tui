@@ -706,7 +706,6 @@ export const TerminalProvider = defineComponent({
           () => props.domRendererOptions?.palette ?? null,
           (palette) => {
             r.updateTheme({ palette });
-            r.refresh();
           },
           { deep: true },
         );

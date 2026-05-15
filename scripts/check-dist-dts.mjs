@@ -69,6 +69,32 @@ function collectReachableJs(file, seen = new Set()) {
   return seen;
 }
 
+function collectReachableDts(file, seen = new Set()) {
+  const abs = resolve(dist, file);
+  if (seen.has(abs)) return seen;
+  if (!existsSync(abs)) {
+    missing.push(abs);
+    return seen;
+  }
+
+  seen.add(abs);
+  const text = readFileSync(abs, "utf8");
+  const dir = dirname(abs);
+  const importRe =
+    /\b(?:import|export)\s+(?:[^"']*?\s+from\s+)?["'](\.\/[^"']+)\.js["']|\bimport\s*\(\s*["'](\.\/[^"']+)\.js["']\s*\)/g;
+
+  for (const match of text.matchAll(importRe)) {
+    const rel = match[1] ?? match[2];
+    if (!rel) continue;
+
+    const next = resolve(dir, `${rel}.d.ts`);
+    if (!next.startsWith(`${dist}${sep}`)) continue;
+    collectReachableDts(next.slice(dist.length + 1), seen);
+  }
+
+  return seen;
+}
+
 for (const file of walk(dist)) {
   const text = readFileSync(file, "utf8");
   const re = /from\s+["'](\.[^"']+)\.js["']/g;
@@ -96,13 +122,14 @@ for (const file of browserJsFiles) {
   }
 }
 
+const browserDtsFiles = new Set();
 for (const entry of browserFacingDtsFiles) {
-  const file = join(dist, entry);
-  if (!existsSync(file)) {
-    missing.push(file);
-    continue;
+  for (const file of collectReachableDts(entry)) {
+    browserDtsFiles.add(file);
   }
+}
 
+for (const file of browserDtsFiles) {
   try {
     assertNoBrowserForbiddenCode(readFileSync(file, "utf8"), file);
   } catch (error) {

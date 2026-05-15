@@ -26,7 +26,7 @@ export { createTerminalApp } from "./create-terminal-app.js";
 export type { CliEventManager } from "./events/manager/cli-event-manager.js";
 export { createCliEventManager } from "./events/manager/cli-event-manager.js";
 export { getCliLatencyProfiler } from "./observability/cli-latency-node.js";
-export { createOsc52ClipboardProvider, type Osc52ClipboardOptions } from "./runtime/index.js";
+export { createOsc52ClipboardProvider, type Osc52ClipboardOptions } from "./runtime/osc52.js";
 export type { StdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export { getStdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export type { StdoutRenderer, ThemePalette } from "./renderer/cli/stdout-renderer.js";
