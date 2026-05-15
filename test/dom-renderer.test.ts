@@ -616,8 +616,39 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("focuses the terminal container and lets DOM link pointer events bubble", () => {
+  it("does not focus the terminal container for native DOM link pointerdown", () => {
     const { terminal, container, renderer } = setup(3, 1, { links: {} });
+    const pointerDown = vi.fn();
+    const pointerUp = vi.fn();
+    const focusSpy = vi.spyOn(container, "focus");
+    container.addEventListener("pointerdown", pointerDown);
+    container.addEventListener("pointerup", pointerUp);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      anchor!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      anchor!.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
+
+      expect(focusSpy).not.toHaveBeenCalled();
+      expect(pointerDown).toHaveBeenCalledOnce();
+      expect(pointerUp).toHaveBeenCalledOnce();
+    } finally {
+      renderer.dispose();
+      focusSpy.mockRestore();
+      container.removeEventListener("pointerdown", pointerDown);
+      container.removeEventListener("pointerup", pointerUp);
+      container.remove();
+    }
+  });
+
+  it("focuses the terminal container for event-driven DOM link pointerdown", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { activation: "event", onActivate: vi.fn() },
+    });
     const pointerDown = vi.fn();
     const pointerUp = vi.fn();
     container.addEventListener("pointerdown", pointerDown);

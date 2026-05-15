@@ -6,6 +6,7 @@ describe("docs cleanup policy contract", () => {
     const readme = readFileSync("README.md", "utf8");
 
     expect(readme).toContain('By default, signal handling uses `signalPolicy: "reraise"`');
+    expect(readme).toContain("those listeners keep ownership of termination");
     expect(readme).not.toContain("By default, signal handling is cleanup-only");
   });
 });

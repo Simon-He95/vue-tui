@@ -8,7 +8,11 @@ import {
 } from "@simon_he/vue-tui";
 
 import { sanitizeDomHref } from "@simon_he/vue-tui/core";
-import { createDomRenderer, type DomRendererOptions } from "@simon_he/vue-tui/renderer/dom";
+import {
+  createDomRenderer,
+  type DomRendererLinkConfig,
+  type DomRendererOptions,
+} from "@simon_he/vue-tui/renderer/dom";
 import { createRuntime, type TerminalEventRecord } from "@simon_he/vue-tui/runtime";
 import {
   TAnchor,
@@ -43,6 +47,13 @@ import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
 const domOptions: DomRendererOptions = { links: true };
+const linkConfig: DomRendererLinkConfig = {
+  activation: "event",
+  allowRelative: true,
+  onActivate(href) {
+    return href.length > 0;
+  },
+};
 const terminal: Terminal = createTerminal({ cols: 80, rows: 24 });
 const runtime = createRuntime();
 const plugin: TInputPlugin = { name: "test", install: () => {} };
@@ -77,6 +88,7 @@ console.log(
   sanitizeDomHref,
   style,
   domOptions,
+  linkConfig,
   terminal,
   runtime,
   plugin,

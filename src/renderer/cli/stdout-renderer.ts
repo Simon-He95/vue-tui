@@ -434,6 +434,14 @@ export function createStdoutRenderer(
   let prevOverlayPartialRows: readonly number[] = [];
   const hrefIndex = new Map<string, number>();
   let nextHrefId = 1;
+  const MAX_HREF_IDS = 8192;
+  let hrefIndexResetRequiresBaseline = false;
+  function resetHrefIndex(): void {
+    hrefIndex.clear();
+    nextHrefId = 1;
+    fpPrevValid = false;
+    hrefIndexResetRequiresBaseline = true;
+  }
   function ensureFingerprints(cols: number, rows: number): void {
     if (cols === fpCols && rows === fpRows) return;
     fpCols = cols;
@@ -461,6 +469,9 @@ export function createStdoutRenderer(
     if (!href) return 0;
     const cached = hrefIndex.get(href);
     if (cached != null) return cached;
+    if (hrefIndex.size >= MAX_HREF_IDS || nextHrefId >= 0xffff_ffff) {
+      resetHrefIndex();
+    }
     const id = nextHrefId++;
     hrefIndex.set(href, id);
     return id;
@@ -874,6 +885,8 @@ export function createStdoutRenderer(
     const bgKey = styleKeyFromParts({ bg: defaultBg });
     const blankFP = (bgKey << 10) | charHash10(" ");
     let dirtySorted = true;
+    const forceFullRender = hrefIndexResetRequiresBaseline;
+    if (forceFullRender) hrefIndexResetRequiresBaseline = false;
     const normalizedScrollOperations = (() => {
       if (!scrollOperations?.length) return null;
       const outOps: TerminalScrollOperation[] = [];
@@ -888,6 +901,7 @@ export function createStdoutRenderer(
       return outOps;
     })();
     let rowsToRender = (() => {
+      if (forceFullRender) return null;
       if (!dirtyRows || dirtyRows.length === 0) return null;
       const outRows: number[] = [];
       outRows.length = dirtyRows.length;
@@ -1424,7 +1438,7 @@ export function createStdoutRenderer(
     const tmpHrefIds = prevHrefIds;
     prevHrefIds = currentHrefIds;
     currentHrefIds = tmpHrefIds;
-    fpPrevValid = true;
+    fpPrevValid = !hrefIndexResetRequiresBaseline;
     prevOverlayBlockedRows = overlayCoverage.blockedRows;
     prevOverlayPartialRows = overlayCoverage.partialRows;
 

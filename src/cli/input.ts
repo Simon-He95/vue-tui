@@ -29,8 +29,8 @@ export type TerminalCleanupSignalPolicy = "cleanup-only" | "exit" | "reraise";
 export type TerminalCleanupOptions = Readonly<{
   signals?: readonly CleanupSignal[];
   /**
-   * Defaults to "reraise" so SIGINT/SIGTERM preserve normal process semantics
-   * after terminal cleanup.
+   * Defaults to "reraise": cleanup runs, vue-tui removes its own listener,
+   * then the signal is sent again for any remaining host listeners.
    */
   signalPolicy?: TerminalCleanupSignalPolicy;
   cleanupOnUnhandledRejection?: boolean;

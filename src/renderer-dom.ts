@@ -8,6 +8,7 @@ export type {
   DomRendererDebugStats,
   DomRendererFlushSample,
   DomRendererFlushStats,
+  DomRendererLinkConfig,
   DomRendererLinkOptions,
   DomRendererOptions,
   DomRendererRowKeyPrepassDebugStats,

@@ -136,6 +136,47 @@ function applyAnsiToScreen(output: string, cols: number, rows: number): readonly
 }
 
 describe("stdout renderer", () => {
+  it("bounds stdout hyperlink id cache without stale diffs", () => {
+    const terminal = createTerminal({ cols: 40, rows: 1 });
+    const output = {
+      isTTY: false,
+      chunks: [] as string[],
+      write(chunk: string) {
+        this.chunks.push(chunk);
+      },
+    };
+    const renderer = createStdoutRenderer(terminal, {
+      output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+    });
+
+    try {
+      for (let i = 0; i < 10_000; i++) {
+        terminal.write("x", {
+          x: 0,
+          y: 0,
+          style: { href: `https://example.com/${i}` },
+        });
+        terminal.commit({ sync: true });
+      }
+
+      output.chunks.length = 0;
+      terminal.write("y", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com/final" },
+      });
+      terminal.commit({ sync: true });
+
+      expect(output.chunks.join("")).toContain("y");
+    } finally {
+      renderer.dispose();
+      terminal.dispose();
+    }
+  });
+
   it("does not skip dirty rows on lossy fingerprint collisions", () => {
     const terminal = createTerminal({ cols: 4, rows: 1 });
     const output = {

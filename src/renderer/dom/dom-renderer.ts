@@ -79,7 +79,7 @@ export type DomRendererRowRenderDebugStats = Readonly<{
 
 export type DomRendererRowKeyPrepassMode = boolean | "auto";
 
-type DomRendererLinkConfig = Readonly<{
+export type DomRendererLinkConfig = Readonly<{
   allowRelative?: boolean;
   externalTarget?: "_blank" | "_self";
   /**
@@ -96,7 +96,7 @@ export type DomRendererLinkOptions = boolean | DomRendererLinkConfig;
 
 type NormalizedDomRendererLinkOptions = false | DomRendererLinkConfig;
 type DomRendererAnchorClickHandler = (event: MouseEvent) => void;
-type DomRendererAnchorPointerDownHandler = () => void;
+type DomRendererAnchorPointerDownHandler = (event: PointerEvent) => void;
 
 export type DomRendererRowKeyPrepassDecision =
   | "forced-enabled"
@@ -961,6 +961,8 @@ export function createDomRenderer(
     }
   };
   const onAnchorPointerDown: DomRendererAnchorPointerDownHandler = () => {
+    if (!rendererLinkOptions || rendererLinkOptions.activation !== "event") return;
+
     try {
       container.focus({ preventScroll: true });
     } catch {
