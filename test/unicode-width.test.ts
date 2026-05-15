@@ -11,7 +11,7 @@ import {
   wrapByCells,
 } from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
-import type { Terminal } from "../src/core.js";
+import type { Terminal, WidthProvider } from "../src/core.js";
 
 function segmentGraphemes(text: string): string[] {
   try {
@@ -73,6 +73,17 @@ describe("unicode width + grapheme safety", () => {
       expect(charCellWidth(ch, "narrow-ambiguous")).toBe(1);
       expect(charCellWidth(ch, "cjk")).toBe(2);
     }
+  });
+
+  it("keeps empty text width stable for custom width providers", () => {
+    let calls = 0;
+    const provider: WidthProvider = () => {
+      calls++;
+      return 2;
+    };
+
+    expect(charCellWidth("", provider)).toBe(1);
+    expect(calls).toBe(0);
   });
 
   it("uses custom width providers in terminal buffers", () => {

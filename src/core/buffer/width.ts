@@ -227,9 +227,9 @@ function normalizeCustomWidth(width: CellWidth): CellWidth {
 }
 
 export function charCellWidth(text: string, provider: WidthProvider = "default"): CellWidth {
-  if (typeof provider === "function") return normalizeCustomWidth(provider(text));
-
   if (!text) return 1;
+
+  if (typeof provider === "function") return normalizeCustomWidth(provider(text));
 
   // Fast path: single BMP character below all full-width / emoji ranges.
   // Covers ASCII, Latin Extended, Greek, Cyrillic, Arabic, Thai, etc.

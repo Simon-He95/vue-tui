@@ -297,6 +297,16 @@ export const TerminalProvider = defineComponent({
     provide(ImeAnchorContextKey, imeAnchor);
     provide(TInputPluginsContextKey, toRef(props, "inputPlugins") as any);
     provide(TPathPickerProviderContextKey, toRef(props, "pathPickerProvider") as any);
+    const initialWidthProvider = props.widthProvider;
+    watch(
+      () => props.widthProvider,
+      (next) => {
+        if (next === initialWidthProvider) return;
+        warnDev(
+          "[vue-tui] TerminalProvider widthProvider is init-only. Remount TerminalProvider to apply it.",
+        );
+      },
+    );
     const initialInputPlugins = props.inputPlugins;
     watch(
       () => props.inputPlugins,
