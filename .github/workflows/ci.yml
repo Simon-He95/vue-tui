@@ -29,8 +29,6 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - uses: oven-sh/setup-bun@v2
-
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm run check:hidden-unicode
@@ -52,9 +50,15 @@ jobs:
 
       - run: git diff --exit-code docs/generated/components-api.md
 
-      - run: pnpm run build
+      - run: pnpm run build:checked
 
-      - run: pnpm run test:package-exports
+      - run: pnpm run check:dist-dts
+
+      - run: pnpm run test:types:dist
+
+      - run: pnpm run test:package-exports:dist
+
+      - run: pnpm run test:browser-vite-import:dist
 
       - run: pnpm exec playwright install --with-deps chromium
 

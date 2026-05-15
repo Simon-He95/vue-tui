@@ -39,8 +39,13 @@ export type Style = Readonly<{
   underline?: boolean;
   inverse?: boolean;
   /**
-   * Optional terminal hyperlink target (OSC 8).
-   * When set, renderers may emit a clickable hyperlink while keeping text width unchanged.
+   * Optional hyperlink target associated with this styled text.
+   *
+   * Renderer behavior:
+   * - stdout renderer may emit OSC 8 hyperlinks after sanitization.
+   * - DOM renderer may render <a> elements when DomRendererOptions.links is enabled.
+   *
+   * Unsafe protocols/control characters are ignored by renderers.
    */
   href?: string;
 }>;

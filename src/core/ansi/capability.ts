@@ -1,4 +1,5 @@
 import type { TerminalColorLevel, TerminalColorMode } from "./colors.js";
+import { firstNonEmptyEnv } from "../../utils/env.js";
 
 export type TerminalColorCapability = Readonly<{
   mode: TerminalColorMode;
@@ -33,8 +34,8 @@ function levelForMode(mode: TerminalColorMode): TerminalColorLevel {
  * - `level` is the CLI theme tier (256/16/8). `truecolor` folds into `256`.
  * - Pass `platform` (e.g. `process.platform`) to improve Windows detection.
  *
- * Env overrides (prefer `DIMCODE_` but keep `VUE_TUI_*` for library consumers):
- * - `DIMCODE_COLOR_MODE` / `VUE_TUI_COLOR_MODE`
+ * Env overrides:
+ * - `VUE_TUI_COLOR_MODE` / legacy `DIMCODE_COLOR_MODE`
  */
 export function detectTerminalColorCapability(
   opts?: Readonly<{
@@ -54,7 +55,7 @@ export function detectTerminalColorCapability(
       .trim()
       .toLowerCase() === "windows_nt";
 
-  const forced = parseColorMode(env.DIMCODE_COLOR_MODE ?? env.VUE_TUI_COLOR_MODE);
+  const forced = parseColorMode(firstNonEmptyEnv(env, "VUE_TUI_COLOR_MODE", "DIMCODE_COLOR_MODE"));
   if (forced) return { mode: forced, level: levelForMode(forced) };
 
   // Non-TTY outputs (tests, logs) should be deterministic.

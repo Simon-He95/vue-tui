@@ -63,7 +63,7 @@ DOM renderer 的 `scrollOperations` 是输出层优化：terminal/compositor 先
 - 关注 FramePerf：`frameMs`、`renderManagerMs`、`commitMs`、`domFlushMs`、`scannedNodes` 和 `paintedNodes`
 - stdout 模式：是否频繁输出大量 `\u001B[row;colH` + 多行文本（说明 repaint 行多）
 - DOM 模式：是否每次交互都重建大量 span（说明 repaint 范围大或节点过多）
-- 开启 `DIMCODE_PROFILE_TUI=1` 后，重点看：
+- 开启 `VUE_TUI_PROFILE=1` 后，重点看（`DIMCODE_PROFILE_TUI` 仍作为 legacy alias 保留）：
   - `planes.invalidate`
   - `planes.render`
   - `avgNodes`

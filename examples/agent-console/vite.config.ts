@@ -7,6 +7,22 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: "@simon_he/vue-tui/core",
+        replacement: fileURLToPath(new URL("../../src/core.ts", import.meta.url)),
+      },
+      {
+        find: "@simon_he/vue-tui/runtime",
+        replacement: fileURLToPath(new URL("../../src/runtime.ts", import.meta.url)),
+      },
+      {
+        find: "@simon_he/vue-tui/observability",
+        replacement: fileURLToPath(new URL("../../src/observability.ts", import.meta.url)),
+      },
+      {
+        find: "@simon_he/vue-tui/vue",
+        replacement: fileURLToPath(new URL("../../src/vue.ts", import.meta.url)),
+      },
+      {
         find: "@simon_he/vue-tui/experimental",
         replacement: fileURLToPath(new URL("../../src/experimental.ts", import.meta.url)),
       },

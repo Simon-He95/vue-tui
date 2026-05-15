@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createOsc52ClipboardProvider, createRuntime } from "../src/runtime/index.js";
+import { createRuntime } from "../src/runtime/index.js";
+import { createOsc52ClipboardProvider } from "../src/runtime/osc52.js";
 
 function restoreGlobal(key: string, value: unknown): void {
   if (value === undefined) {
@@ -79,13 +80,76 @@ describe("runtime (terminal/node)", () => {
     expect(writes).toEqual(["\u001B]52;c;Y29weSBtZQ==\u0007"]);
   });
 
-  it("raf wrapper runs via timers", () => {
+  it("rejects oversized OSC52 clipboard payloads", async () => {
+    const writes: string[] = [];
+    const clipboard = createOsc52ClipboardProvider({
+      supported: true,
+      maxBytes: 4,
+      write: (sequence) => {
+        writes.push(sequence);
+      },
+    });
+
+    await expect(clipboard.writeText("12345")).rejects.toThrow(/payload too large/);
+    expect(writes).toEqual([]);
+  });
+
+  it("does not let invalid OSC52 maxBytes disable the payload limit", async () => {
+    const writes: string[] = [];
+    const clipboard = createOsc52ClipboardProvider({
+      supported: true,
+      maxBytes: Number.NaN,
+      write: (sequence) => {
+        writes.push(sequence);
+      },
+    });
+
+    await expect(clipboard.writeText("x".repeat(101 * 1024))).rejects.toThrow(/payload too large/i);
+    expect(writes).toEqual([]);
+  });
+
+  it("does not allow Infinity as an OSC52 payload limit", async () => {
+    const writes: string[] = [];
+    const clipboard = createOsc52ClipboardProvider({
+      supported: true,
+      maxBytes: Infinity,
+      write: (sequence) => {
+        writes.push(sequence);
+      },
+    });
+
+    await expect(clipboard.writeText("x".repeat(101 * 1024))).rejects.toThrow(/payload too large/i);
+    expect(writes).toEqual([]);
+  });
+
+  it("sanitizes OSC52 target", async () => {
+    const writes: string[] = [];
+    const clipboard = createOsc52ClipboardProvider({
+      supported: true,
+      target: "c;\u0007bad",
+      write: (sequence) => {
+        writes.push(sequence);
+      },
+    });
+
+    await clipboard.writeText("x");
+
+    expect(writes).toEqual(["\u001B]52;c;eA==\u0007"]);
+  });
+
+  it("raf wrapper runs via timers with a finite timestamp", () => {
     vi.useFakeTimers();
-    const r = createRuntime();
-    const cb = vi.fn();
-    r.raf.request(cb as any);
-    vi.advanceTimersByTime(20);
-    expect(cb).toHaveBeenCalled();
-    vi.useRealTimers();
+    try {
+      const r = createRuntime("terminal");
+      const cb = vi.fn();
+      r.raf.request(cb as any);
+      vi.advanceTimersByTime(20);
+      expect(cb).toHaveBeenCalled();
+      const timestamp = cb.mock.calls[0]?.[0];
+      expect(typeof timestamp).toBe("number");
+      expect(Number.isFinite(timestamp)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

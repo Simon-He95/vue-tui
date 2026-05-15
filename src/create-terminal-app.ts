@@ -1,5 +1,5 @@
 import type { App, Component, Ref } from "vue";
-import type { PathPickerProvider } from "./cli/path-provider.js";
+import type { PathPickerProvider } from "./core/path-provider-types.js";
 import { TERMINAL_RENDER_PLANES } from "./core/render-plane.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "./core/render-plane.js";
 import type { Style, Terminal } from "./core/types.js";
@@ -9,6 +9,7 @@ import type {
   SelectionTextProvider,
   TerminalSelectionConfig,
   TerminalSelectionCopyPayload,
+  TerminalSelectionRefreshOptions,
 } from "./selection/terminal-selection.js";
 import type { TInputPlugin } from "./vue/components/input/plugins/types.js";
 
@@ -24,6 +25,12 @@ import type {
 import process from "node:process";
 import { defineComponent, h, provide, ref, shallowReactive, shallowRef } from "vue";
 import { createHeadlessApp, createHeadlessRoot } from "./cli/headless-renderer.js";
+import {
+  defaultVueTuiProfileLogPath,
+  installNodeFileWriters,
+  nodeProfilerFileWriter,
+  shouldInstallFileWriters,
+} from "./cli/node-file-writers.js";
 import { createNodePathPickerProvider } from "./cli/path-provider.js";
 import { createTerminal } from "./core/index.js";
 import { getPlaneTerminal } from "./core/terminal/create-terminal.js";
@@ -33,13 +40,13 @@ import { framePerfNow, mergeFramePerfReason } from "./observability/frame-perf.j
 import { createFramePerfStore } from "./observability/frame-perf-store.js";
 import { createTraceStore } from "./observability/trace.js";
 import { createTuiProfiler } from "./observability/tui-profiler.js";
-import { HEADLESS_RENDERER_CAPABILITIES } from "./renderer/index.js";
+import { HEADLESS_RENDERER_CAPABILITIES } from "./renderer/capabilities.js";
 import { createTerminalSelectionController } from "./selection/terminal-selection.js";
+import { createTInputHostPlugin } from "./vue/components/input/plugins/hostPlugin.js";
 import {
   createDefaultTInputHostAdapter,
-  createTInputHostPlugin,
   defaultTInputHostPlugin,
-} from "./vue/components/input/plugins/hostPlugin.js";
+} from "./vue/components/input/plugins/hostPlugin.node.js";
 import { TRenderPlane } from "./vue/components/TRenderPlane.js";
 import {
   EventZIndexContextKey,
@@ -62,6 +69,7 @@ import {
   SUPPRESS_TERMINAL_POINTER_MOVE,
   SUPPRESS_TERMINAL_POINTER_UP,
 } from "./events/manager/selection-suppression.js";
+import { firstNonEmptyEnv } from "./utils/env.js";
 
 interface Portal {
   id: string;
@@ -166,6 +174,9 @@ export type CreateTerminalAppOptions = Readonly<{
 }>;
 
 export function createTerminalApp(options: CreateTerminalAppOptions): TerminalApp {
+  const env = (process?.env ?? {}) as Record<string, unknown>;
+  if (shouldInstallFileWriters(env)) installNodeFileWriters();
+
   const terminal: Terminal = createTerminal({
     cols: options.cols,
     rows: options.rows,
@@ -177,7 +188,11 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     enabled: Boolean((globalThis as any).__VT_DEBUG_PERF__),
   });
   const latency = getCliLatencyProfiler();
-  const profiler = createTuiProfiler("cli-scheduler");
+  const profiler = createTuiProfiler("cli-scheduler", {
+    fileWriter: nodeProfilerFileWriter,
+    defaultLogDest: "file",
+    defaultLogPath: defaultVueTuiProfileLogPath(),
+  });
   const baseEvents = createCliEventManager({
     record: (event) => {
       if (!trace.enabled.value) return;
@@ -188,7 +203,13 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       trace.push({ type: "focus", at: Date.now(), prev, next });
     },
   });
-  const render = createRenderManager(terminal);
+  const render = createRenderManager(terminal, {
+    profiler: {
+      fileWriter: nodeProfilerFileWriter,
+      defaultLogDest: "file",
+      defaultLogPath: defaultVueTuiProfileLogPath(),
+    },
+  });
   const offCommit = terminal.on("commit", ({ dirtyRows, planes, sync }) => {
     latency?.recordCommit({ dirtyRows, planes, sync });
     if (!trace.enabled.value) return;
@@ -217,12 +238,15 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   let pendingFrameReason: TerminalSchedulerInvalidateOptions["reason"] = "unknown";
   let pendingCoalescedInvalidates = 0;
   let schedulerApi: TerminalScheduler;
-  const env = (process?.env ?? {}) as Record<string, unknown>;
   const throttleMs = (() => {
-    const raw = env.DIMCODE_TUI_THROTTLE_MS;
-    if (!raw) return 0;
-    const v = Number(raw);
-    return Number.isFinite(v) && v > 0 ? v : 0;
+    const parseThrottle = (raw: unknown): number | null => {
+      if (raw == null) return null;
+      const v = Number(raw);
+      return Number.isFinite(v) && v >= 0 ? v : null;
+    };
+    return (
+      parseThrottle(firstNonEmptyEnv(env, "VUE_TUI_THROTTLE_MS", "DIMCODE_TUI_THROTTLE_MS")) ?? 0
+    );
   })();
   const frameThrottleMs = (() => {
     if (!process?.stdout?.isTTY) return 0;
@@ -549,7 +573,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       selectionCopyHandlers.add(handler);
       return () => selectionCopyHandlers.delete(handler);
     },
-    refresh(options) {
+    refresh(options?: TerminalSelectionRefreshOptions) {
       selection.refresh(options);
     },
     clear() {
@@ -873,6 +897,8 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       if (selectionRenderNodeId) render.unregister(selectionRenderNodeId);
       offResize?.();
       offCommit?.();
+      profiler?.dispose();
+      render.dispose();
       events.dispose();
       terminal.dispose();
     },

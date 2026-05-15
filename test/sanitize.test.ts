@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeInlineText, sanitizeTextBlock } from "../src/index.js";
+import { sanitizeInlineText, sanitizeTextBlock } from "../src/vue.js";
 
 describe("text sanitization", () => {
   it("sanitizeInlineText replaces newlines/tabs with spaces", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { TDebugOverlay, useTerminal, type FramePerfStore } from "../src/index.js";
+import type { FramePerfStore } from "../src/observability.js";
+import { TDebugOverlay, useTerminal } from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 
 describe("TDebugOverlay", () => {

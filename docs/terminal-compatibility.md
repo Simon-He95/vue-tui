@@ -25,13 +25,13 @@ ANSI16 颜色会被终端主题重定义，不同终端/不同主题下颜色必
 
 可通过环境变量强制 `StdoutRenderer` 的颜色模式（适用于 GoatChain CLI 与库使用方）：
 
-- `DIMCODE_COLOR_MODE=truecolor|ansi256|ansi16`
 - `VUE_TUI_COLOR_MODE=truecolor|ansi256|ansi16`
+- `DIMCODE_COLOR_MODE=truecolor|ansi256|ansi16`（legacy alias）
 
 示例：
 
 ```bash
-DIMCODE_COLOR_MODE=ansi256 bun run cli
+VUE_TUI_COLOR_MODE=ansi256 pnpm run cli
 ```
 
 ## Palette（调色板）一致性

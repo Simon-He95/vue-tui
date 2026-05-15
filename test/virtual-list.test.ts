@@ -1378,7 +1378,7 @@ describe("TVirtualList", () => {
       raf.runNext();
       await nextTick();
 
-      restoreInvalidate?.();
+      (restoreInvalidate as (() => void) | null)?.();
       app.scheduler.flushNow();
 
       expect(onScroll).toHaveBeenCalledWith(16);
@@ -1390,7 +1390,7 @@ describe("TVirtualList", () => {
       ]);
       expect(getItem.mock.calls.every((call) => (call[0] as number) < 20)).toBe(true);
     } finally {
-      restoreInvalidate?.();
+      (restoreInvalidate as (() => void) | null)?.();
       app.dispose();
       raf.restore();
     }
@@ -2517,7 +2517,7 @@ describe("TVirtualList", () => {
 
       version.value++;
       await nextTick();
-      restoreInvalidate?.();
+      (restoreInvalidate as (() => void) | null)?.();
       app.scheduler.flushNow();
       off();
 
@@ -2529,7 +2529,7 @@ describe("TVirtualList", () => {
         "v2-item-4",
       ]);
     } finally {
-      restoreInvalidate?.();
+      (restoreInvalidate as (() => void) | null)?.();
       app.dispose();
       raf.restore();
     }
@@ -2594,7 +2594,7 @@ describe("TVirtualList", () => {
 
       style.value = { fg: "greenBright" };
       await nextTick();
-      restoreInvalidate?.();
+      (restoreInvalidate as (() => void) | null)?.();
       app.scheduler.flushNow();
       off();
 
@@ -2612,7 +2612,7 @@ describe("TVirtualList", () => {
         "greenBright",
       ]);
     } finally {
-      restoreInvalidate?.();
+      (restoreInvalidate as (() => void) | null)?.();
       app.dispose();
       raf.restore();
     }

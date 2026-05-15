@@ -1,6 +1,10 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
+import type {
+  Rect,
+  TerminalKeyboardEvent,
+  TerminalPointerEvent,
+} from "../../events/manager/types.js";
 import { computed, defineComponent, h, inject, ref, watchEffect } from "vue";
 import { charCellWidth } from "../../core/buffer/width.js";
 import { useLayout } from "../composables/use-layout.js";

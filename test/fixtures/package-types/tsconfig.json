@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": false,
+    "baseUrl": "../../..",
+    "paths": {
+      "@simon_he/vue-tui": ["dist/index.d.ts"],
+      "@simon_he/vue-tui/core": ["dist/core.d.ts"],
+      "@simon_he/vue-tui/runtime": ["dist/runtime.d.ts"],
+      "@simon_he/vue-tui/renderer/dom": ["dist/renderer-dom.d.ts"],
+      "@simon_he/vue-tui/observability": ["dist/observability.d.ts"],
+      "@simon_he/vue-tui/vue": ["dist/vue.d.ts"],
+      "@simon_he/vue-tui/cli": ["dist/cli.d.ts"],
+      "@simon_he/vue-tui/markdown": ["dist/markdown.d.ts"],
+      "@simon_he/vue-tui/experimental": ["dist/experimental.d.ts"]
+    }
+  },
+  "include": ["index.ts"]
+}

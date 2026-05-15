@@ -1,10 +1,14 @@
 import type { PropType } from "vue";
-import type { PathPickerProvider } from "../../cli/path-provider.js";
-import type { PathPickMode, PathSuggestion } from "../../cli/path-suggest-core.js";
+import type { PathPickerProvider } from "../../core/path-provider-types.js";
+import type { PathPickMode, PathSuggestion } from "../../core/path-suggest.js";
 import type { Style } from "../../core/types.js";
-import type { Rect, TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/index.js";
+import type {
+  Rect,
+  TerminalKeyboardEvent,
+  TerminalPointerEvent,
+} from "../../events/manager/types.js";
 import { computed, defineComponent, h, inject, ref, watch, watchEffect } from "vue";
-import { parsePathQuery, resolveUserPath, suggestPaths } from "../../cli/path-suggest-core.js";
+import { parsePathQuery, resolveUserPath, suggestPaths } from "../../core/path-suggest.js";
 import { charCellWidth } from "../../core/buffer/width.js";
 import { normalizePath, stripTrailingSlash } from "../../utils/path.js";
 import { useLayout } from "../composables/use-layout.js";

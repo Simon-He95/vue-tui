@@ -4,7 +4,7 @@
 
 > 坐标/尺寸单位：所有 `x/y/w/h` 均以「cell（字符格）」为单位，而不是像素。
 
-> 完整的 Props/Events 列表请以自动生成文件为准：`docs/generated/components-api.md`（运行 `bun run --filter '@simon_he/vue-tui' docs:gen` 生成）。
+> 完整的 Props/Events 列表请以自动生成文件为准：`docs/generated/components-api.md`（运行 `pnpm run docs:gen` 生成）。
 
 ## 组件速读
 
@@ -60,11 +60,11 @@
 - `recordEvents` `(fn?)`: 录制事件回调（用于 record/replay）
 - `selection` `(boolean | TerminalProviderSelectionOptions)`: 开启 terminal cell selection；鼠标松开时可自动复制；`toast` 只影响 `TerminalProvider` 的复制提示 UI
 - `clipboard` `(ClipboardApi?)`: 给 selection auto-copy 注入 clipboard；不传时 browser 使用运行时 clipboard
-- `inputPlugins` `(TInputPlugin[])`: 给子树里的 `TInput` / `TInputBox` 注入宿主插件（例如 terminal clipboard、TTY 风格快捷键）
+- `inputPlugins` `(TInputPlugin[])`: 给子树里的 `TInput` / `TInputBox` 注入宿主插件（例如 terminal clipboard、TTY 风格快捷键）；init-only，修改后需重新挂载 provider/input
 - `pathPickerProvider` `(PathPickerProvider?)`: 给子树里的 `TPathPicker` 注入宿主路径 provider
 - `debugIme` `(boolean)`: 输出 IME 调试信息
 - `debugTrace` `(boolean)`: 开启 trace（commit/event/focus）
-- `domRendererOptions` `(DomRendererOptions?)`: DOM renderer 挂载时配置，例如 `syncFlushMaxRows` / `syncFlushCellBudget`；该选项按 mount-time 使用，修改后需重新挂载 provider
+- `domRendererOptions` `(DomRendererOptions?)`: DOM renderer 配置，例如 `syncFlushMaxRows` / `syncFlushCellBudget`；link options 会在更新时刷新，其他选项按 mount-time 使用，修改后需重新挂载 provider
 
 ### Slots
 
@@ -197,7 +197,7 @@
 - `cursorShape` `('block'|'underline'|'bar')`
 - `style` `(Style?)`
 - `secret` `(boolean)` / `maskChar` `(string)`：密码模式
-- `plugins` `(TInputPlugin[])`：输入增强插件（见下方）
+- `plugins` `(TInputPlugin[])`：输入增强插件（见下方）；init-only，修改后需重新挂载 `TInput`
 
 > `TInput` 功能较多，完整参数以源码为准：`packages/tui/src/vue/components/TInput.ts`。
 >
@@ -212,13 +212,15 @@
 
 ## TInput Plugins
 
-用于扩展 `TInput` 的输入体验：通过 `:plugins="[...]"` 注入。
+用于扩展 `TInput` 的输入体验：通过 `:plugins="[...]"` 注入。插件列表是 init-only；如果需要切换宿主插件、path provider 或 prompt plugin，请重新挂载对应的 `TInput`。
 
 宿主级插件也可以统一从上层注入：
 
 - `TerminalProvider.inputPlugins`
 - `createTerminalApp({ inputPlugins })`
 - `createTerminalApp({ clipboard })`：只需要接入 clipboard 时的简化入口；传入 `inputPlugins` 时仍由宿主完全控制插件组合
+
+`TerminalProvider.inputPlugins` 也是 init-only；已经挂载的 `TInput` 不会重新安装插件列表。
 
 ### `createTInputHostPlugin()`
 
@@ -229,14 +231,15 @@
 - `resolvePath` / `pathToHref`
 - `isTerminalLike`
 
-默认 host plugin 只负责 Node-like 的 clipboard / path 行为，不会自动附带 UI toast；如果宿主希望保留 `Copied` / `Copy failed` 这类提示，需要显式提供 `showToast`。
+`@simon_he/vue-tui` 导出 browser-safe 的 `createTInputHostPlugin()`。CLI 侧的 `defaultTInputHostPlugin` 和 `createDefaultTInputHostAdapter()` 从 `@simon_he/vue-tui/cli` 导出，负责 Node-like 的 clipboard / path 行为，不会自动附带 UI toast。如果宿主希望保留 `Copied` / `Copy failed` 这类提示，需要显式提供 `showToast`。
 
 `createOsc52ClipboardProvider()` 可作为 terminal clipboard 写入 provider 显式传给 `createTerminalApp({ clipboard })`。它不会默认执行系统剪贴板命令。
 
 一个最小宿主接线示例：
 
 ```ts
-import { createDefaultTInputHostAdapter, createTInputHostPlugin } from "@simon_he/vue-tui";
+import { createTInputHostPlugin } from "@simon_he/vue-tui";
+import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 import { createTerminalApp } from "@simon_he/vue-tui/cli";
 
 const baseHost = createDefaultTInputHostAdapter();
@@ -491,7 +494,7 @@ Experimental Markdown renderer / virtual scroller。它们走独立的 `parser -
 >
 > `TVirtualMarkdown` 默认保持文本可选中复制，即使它自身是 focusable 节点；如需列表式交互，可传 `selectable=false`。
 >
-> Markdown link 在 DOM renderer 中当前仍表现为带 `Style.href` metadata 的样式文本，不会生成原生可点击 `<a>`；CLI/stdout renderer 才会在支持时发出 OSC8 hyperlink。
+> Markdown link 会写入 `Style.href` metadata。DOM renderer 默认不把 `Style.href` 渲染为原生 `<a>`。启用 `links: true` 或 `links: { activation: 'native' }` 后，safe absolute 和 relative/hash/search href 会渲染为原生 `<a>`，浏览器保留默认导航行为；`onLinkClick` 返回 `false` 时阻止导航。启用 `links: { activation: 'event', onActivate }` 后，点击始终 `preventDefault()`，由 `onActivate` 处理跳转、打开或路由。`links: { activation: 'none' }` 不渲染原生 anchor，只保留文本。CLI/stdout renderer 只会为 safe absolute href 发出 OSC8 hyperlink。
 >
 > `TVirtualMarkdown` 当前仍是 **viewport-level repaint**，不是 row-local dirty diff；streaming append 也不会自动 follow tail，默认保持 absolute `scrollTop` / absolute visual-row index 语义。
 >

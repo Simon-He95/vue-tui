@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createDomRenderer, createTerminal } from "../src/index.js";
+import { isSafeRelativeHref, sanitizeDomHref } from "../src/core/hyperlink.js";
 
 function setup(cols = 8, rows = 1, options: Parameters<typeof createDomRenderer>[2] = {}) {
   const terminal = createTerminal({ cols, rows });
@@ -23,6 +24,63 @@ function lastRowStats(renderer: ReturnType<typeof createDomRenderer>) {
 }
 
 describe("DomRenderer row rendering", () => {
+  it("sanitizes DOM hrefs with an explicit allowlist", () => {
+    expect(sanitizeDomHref("vbscript:msgbox(1)")).toBeNull();
+    expect(sanitizeDomHref("JaVaScRiPt:alert(1)")).toBeNull();
+    expect(sanitizeDomHref("data:text/html,<script>alert(1)</script>")).toBeNull();
+    expect(sanitizeDomHref("foo:bar")).toBeNull();
+    expect(sanitizeDomHref("https://example.com")).toBe("https://example.com/");
+    expect(sanitizeDomHref("https://example.com/a")).toBe("https://example.com/a");
+    expect(sanitizeDomHref(" https://example.com")).toBeNull();
+    expect(sanitizeDomHref("https://example.com ")).toBeNull();
+    expect(sanitizeDomHref("https:example.com")).toBeNull();
+    expect(sanitizeDomHref("http:\\example.com")).toBeNull();
+    expect(sanitizeDomHref("docs/intro.md")).toBe("docs/intro.md");
+    expect(sanitizeDomHref("./intro.md")).toBe("./intro.md");
+    expect(sanitizeDomHref("../intro.md")).toBe("../intro.md");
+    expect(sanitizeDomHref("#section")).toBe("#section");
+    expect(sanitizeDomHref("/docs")).toBe("/docs");
+    expect(sanitizeDomHref("?q=1")).toBe("?q=1");
+    expect(sanitizeDomHref("docs/intro.md", { allowRelative: false })).toBeNull();
+    expect(sanitizeDomHref("docs/intro.md", { allowRelative: true })).toBe("docs/intro.md");
+    expect(sanitizeDomHref("\\evil", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("//evil.test", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("../ok", { allowRelative: true })).toBe("../ok");
+    expect(sanitizeDomHref("#section", { allowRelative: true })).toBe("#section");
+    expect(sanitizeDomHref("guide%20intro", { allowRelative: true })).toBe("guide%20intro");
+    expect(sanitizeDomHref("docs/<img>", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref('docs/"x"', { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("docs/'x'", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("docs/`x`", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("mailto:a@b.com?subject=x%0aBCC:c@d.com")).toBeNull();
+    expect(sanitizeDomHref("https://example.com/%0aevil")).toBeNull();
+    expect(sanitizeDomHref("https://example.com/%0d%0aevil")).toBeNull();
+    expect(sanitizeDomHref("/docs/%80", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("#%9f", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("/docs/%0dheader", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("guide%0aintro", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("guide%zzintro", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("foo bar", { allowRelative: true })).toBeNull();
+    expect(sanitizeDomHref("https://example.com/a%20b")).toBe("https://example.com/a%20b");
+  });
+
+  it("rejects unsafe relative hrefs through exported helper", () => {
+    expect(isSafeRelativeHref("#section")).toBe(true);
+    expect(isSafeRelativeHref("/docs/a%20b")).toBe(true);
+    expect(isSafeRelativeHref("docs/a%20b")).toBe(true);
+
+    expect(isSafeRelativeHref("#x\n")).toBe(false);
+    expect(isSafeRelativeHref("docs/<img>")).toBe(false);
+    expect(isSafeRelativeHref('docs/"x"')).toBe(false);
+    expect(isSafeRelativeHref("docs/'x'")).toBe(false);
+    expect(isSafeRelativeHref("docs/`x`")).toBe(false);
+    expect(isSafeRelativeHref("/docs/a b")).toBe(false);
+    expect(isSafeRelativeHref("./a\tb")).toBe(false);
+    expect(isSafeRelativeHref("../a%0a")).toBe(false);
+    expect(isSafeRelativeHref("//evil.test")).toBe(false);
+    expect(isSafeRelativeHref("https://example.com")).toBe(false);
+  });
+
   it("applies the default browser accessibility contract", () => {
     const { container, renderer } = setup(4, 2);
 
@@ -143,6 +201,31 @@ describe("DomRenderer row rendering", () => {
       expect(span!.style.color).toBe("var(--vt-color-red)");
     } finally {
       renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("refreshes rows when updateTheme changes palette", () => {
+    const terminal = createTerminal({ cols: 4, rows: 1 });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    terminal.write("A", { x: 0, y: 0, style: { fg: "blue", inverse: true } });
+    const renderer = createDomRenderer(terminal, container, {
+      palette: { blue: "#0000ff" },
+    });
+
+    try {
+      const before = (lineEl(container).firstChild as HTMLSpanElement).style.color;
+
+      renderer.updateTheme({
+        palette: { blue: "#ffffff" },
+      });
+
+      expect((lineEl(container).firstChild as HTMLSpanElement).style.color).not.toBe(before);
+    } finally {
+      renderer.dispose();
+      terminal.dispose();
       container.remove();
     }
   });
@@ -395,8 +478,8 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("does not mark href multi-segment rows for reuse", () => {
-    const { terminal, container, renderer } = setup(4);
+  it("does not mark href multi-segment rows for reuse when links are enabled", () => {
+    const { terminal, container, renderer } = setup(4, 1, { links: {} });
 
     try {
       terminal.fill(0, 0, 2, 1, "A", { href: "https://example.com" });
@@ -407,6 +490,46 @@ describe("DomRenderer row rendering", () => {
       expect(line.childNodes).toHaveLength(2);
       for (const child of Array.from(line.children) as HTMLSpanElement[])
         expect(child.dataset.vtFastRow).toBeUndefined();
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("keeps styled href rows on the fast path by default", () => {
+    const { terminal, container, renderer } = setup(4, 2);
+
+    try {
+      terminal.fill(0, 0, 4, 1, "L", { href: "https://example.com", underline: true });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(container.querySelector("a")).toBeNull();
+      expect(renderer.debugStats.rowRender.total.singleStyledRows).toBeGreaterThan(0);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not render href anchors by default", () => {
+    const { terminal, container, renderer } = setup(3);
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      expect(line.querySelector("a")).toBeNull();
+      expect(line.firstChild?.nodeType).toBe(Node.TEXT_NODE);
+      expect(lastRowStats(renderer)).toMatchObject({
+        plainTextRows: 1,
+        textNodeUpdates: 1,
+        fragmentRows: 0,
+      });
     } finally {
       renderer.dispose();
       container.remove();
@@ -430,8 +553,8 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("keeps href rows on the fragment span path", () => {
-    const { terminal, container, renderer } = setup(3);
+  it("renders safe href rows as anchors on the fragment path when links are enabled", () => {
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
 
     try {
       terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
@@ -439,8 +562,14 @@ describe("DomRenderer row rendering", () => {
 
       const line = lineEl(container);
       expect(line.childNodes).toHaveLength(1);
-      expect(line.firstChild).toBeInstanceOf(HTMLSpanElement);
-      expect((line.firstChild as HTMLSpanElement).dataset.vtFastRow).toBeUndefined();
+      expect(line.firstChild).toBeInstanceOf(HTMLAnchorElement);
+      const anchor = line.firstChild as HTMLAnchorElement;
+      expect(anchor.href).toBe("https://example.com/");
+      expect(anchor.target).toBe("_blank");
+      expect(anchor.rel).toBe("noopener noreferrer");
+      expect(anchor.tabIndex).toBe(-1);
+      expect(anchor.draggable).toBe(false);
+      expect(anchor.dataset.vtFastRow).toBeUndefined();
       expect(lastRowStats(renderer)).toMatchObject({
         rows: 1,
         fragmentRows: 1,
@@ -452,8 +581,695 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
+  it("accepts links: true as default DOM link rendering config", () => {
+    const { terminal, container, renderer } = setup(4, 1, { links: true });
+
+    try {
+      terminal.write("docs", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")?.href).toBe("https://example.com/");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("makes DOM href anchors pointer-interactive", () => {
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      expect(anchor?.style.pointerEvents).toBe("auto");
+      expect(anchor?.style.cursor).toBe("pointer");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not focus the terminal container for native DOM link pointerdown", () => {
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
+    const pointerDown = vi.fn();
+    const pointerUp = vi.fn();
+    const focusSpy = vi.spyOn(container, "focus");
+    container.addEventListener("pointerdown", pointerDown);
+    container.addEventListener("pointerup", pointerUp);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      anchor!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      anchor!.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
+
+      expect(focusSpy).not.toHaveBeenCalled();
+      expect(pointerDown).toHaveBeenCalledOnce();
+      expect(pointerUp).toHaveBeenCalledOnce();
+    } finally {
+      renderer.dispose();
+      focusSpy.mockRestore();
+      container.removeEventListener("pointerdown", pointerDown);
+      container.removeEventListener("pointerup", pointerUp);
+      container.remove();
+    }
+  });
+
+  it("focuses the terminal container for event-driven DOM link pointerdown", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { activation: "event", onActivate: vi.fn() },
+    });
+    const pointerDown = vi.fn();
+    const pointerUp = vi.fn();
+    container.addEventListener("pointerdown", pointerDown);
+    container.addEventListener("pointerup", pointerUp);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      anchor!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      anchor!.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
+
+      expect(document.activeElement).toBe(container);
+      expect(pointerDown).toHaveBeenCalledOnce();
+      expect(pointerUp).toHaveBeenCalledOnce();
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("pointerdown", pointerDown);
+      container.removeEventListener("pointerup", pointerUp);
+      container.remove();
+    }
+  });
+
+  it("allows native DOM link activation when links are explicitly enabled", () => {
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("lets native DOM link activation bubble to the terminal container", () => {
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
+    const bubbled = vi.fn();
+    container.addEventListener("click", bubbled);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor!.dispatchEvent(event)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
+      expect(bubbled).toHaveBeenCalledOnce();
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("click", bubbled);
+      container.remove();
+    }
+  });
+
+  it("host link activation prevents native activation by default", () => {
+    const onActivate = vi.fn();
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { onActivate },
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(false);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(onActivate).toHaveBeenCalledWith("https://example.com/", event);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("allows host link activation to prevent default by returning false", () => {
+    const onActivate = vi.fn(() => false);
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { onActivate },
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(false);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(onActivate).toHaveBeenCalledWith("https://example.com/", event);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("allows onLinkClick to prevent default", () => {
+    const onLinkClick = vi.fn(() => false);
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: {},
+      onLinkClick,
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(false);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(onLinkClick).toHaveBeenCalledWith(event, "https://example.com/");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("updates top-level onLinkClick without recreating the renderer", () => {
+    const first = vi.fn();
+    const second = vi.fn(() => false);
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: {},
+      onLinkClick: first,
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      renderer.updateOptions({ onLinkClick: second });
+
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(false);
+
+      expect(first).not.toHaveBeenCalled();
+      expect(second).toHaveBeenCalledWith(event, "https://example.com/");
+      expect(event.defaultPrevented).toBe(true);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("lets host-handled DOM link activation bubble to the terminal container", () => {
+    const onActivate = vi.fn();
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { onActivate },
+    });
+    const bubbled = vi.fn();
+    container.addEventListener("click", bubbled);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      anchor?.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(onActivate).toHaveBeenCalledOnce();
+      expect(bubbled).toHaveBeenCalledOnce();
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("click", bubbled);
+      container.remove();
+    }
+  });
+
+  it("falls back to native DOM link activation when event activation has no handler", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { activation: "event" },
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("lets native fallback DOM link activation bubble to the terminal container", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { activation: "event" },
+    });
+    const bubbled = vi.fn();
+    container.addEventListener("click", bubbled);
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      anchor?.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(bubbled).toHaveBeenCalledOnce();
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("click", bubbled);
+      container.remove();
+    }
+  });
+
+  it("does not render native anchors when DOM link activation is disabled", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { activation: "none" },
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const line = lineEl(container);
+      expect(line.querySelector("a")).toBeNull();
+      expect(line.firstChild?.nodeType).toBe(Node.TEXT_NODE);
+      expect(line.textContent).toContain("url");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("keeps href rows on the styled fast path when link activation is none", () => {
+    const { terminal, container, renderer } = setup(4, 1, {
+      links: { activation: "none" },
+    });
+
+    try {
+      terminal.fill(0, 0, 4, 1, "L", {
+        href: "https://example.com",
+        underline: true,
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(container.querySelector("a")).toBeNull();
+      expect(lastRowStats(renderer)).toMatchObject({
+        singleStyledRows: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("allows native DOM link activation when explicitly configured", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { activation: "native" },
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("lets hosts customize DOM link tabIndex", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { tabIndex: 0 },
+    });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")?.tabIndex).toBe(0);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("lets focused DOM link keyboard events bubble to the terminal container", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { tabIndex: 0, activation: "native" },
+    });
+    const keydown = vi.fn();
+    const keyup = vi.fn();
+    container.addEventListener("keydown", keydown);
+    container.addEventListener("keyup", keyup);
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      anchor!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      anchor!.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+
+      expect(keydown).toHaveBeenCalledOnce();
+      expect(keyup).toHaveBeenCalledOnce();
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("keydown", keydown);
+      container.removeEventListener("keyup", keyup);
+      container.remove();
+    }
+  });
+
+  it("lets focused event-mode link keyboard events bubble and only activates on click", () => {
+    const onActivate = vi.fn();
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { tabIndex: 0, onActivate },
+    });
+    const keydown = vi.fn();
+    container.addEventListener("keydown", keydown);
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      anchor!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+      expect(keydown).toHaveBeenCalledOnce();
+      expect(onActivate).not.toHaveBeenCalled();
+
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor!.dispatchEvent(click)).toBe(false);
+      expect(click.defaultPrevented).toBe(true);
+      expect(onActivate).toHaveBeenCalledWith("https://example.com/", click);
+    } finally {
+      renderer.dispose();
+      container.removeEventListener("keydown", keydown);
+      container.remove();
+    }
+  });
+
+  it("renders relative hrefs as anchors by default", () => {
+    const { terminal, container, renderer } = setup(10, 1, { links: {} });
+
+    try {
+      terminal.write("docs", { x: 0, y: 0, style: { href: "docs/intro.md" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")?.getAttribute("href")).toBe("docs/intro.md");
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("can explicitly disable relative href anchors", () => {
+    const { terminal, container, renderer } = setup(10, 1, {
+      links: { allowRelative: false },
+    });
+
+    try {
+      terminal.write("docs", { x: 0, y: 0, style: { href: "docs/intro.md" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")).toBeNull();
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("updates DOM link options after creation", () => {
+    const onActivate = vi.fn();
+    const { terminal, container, renderer } = setup(10, 1, { links: false });
+
+    try {
+      terminal.write("docs", { x: 0, y: 0, style: { href: "docs/intro.md" } });
+      terminal.commit({ planes: ["default"], sync: true });
+      expect(lineEl(container).querySelector("a")).toBeNull();
+
+      renderer.updateOptions({ links: { onActivate } });
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      expect(anchor?.getAttribute("href")).toBe("docs/intro.md");
+
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(anchor?.dispatchEvent(event)).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
+      expect(onActivate).toHaveBeenCalledWith("docs/intro.md", event);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("updates href rows when DOM link options are enabled after first render", () => {
+    const { terminal, container, renderer } = setup(3, 1);
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")).toBeNull();
+
+      renderer.updateOptions({ links: {} });
+
+      expect(lineEl(container).querySelector("a")).toBeInstanceOf(HTMLAnchorElement);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("removes href anchors when DOM link options are disabled", () => {
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(lineEl(container).querySelector("a")).toBeInstanceOf(HTMLAnchorElement);
+
+      renderer.updateOptions({ links: false });
+
+      expect(lineEl(container).querySelector("a")).toBeNull();
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not reset link options when updateOptions receives no links field", () => {
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+      expect(container.querySelector("a")).toBeTruthy();
+
+      renderer.updateOptions({});
+      expect(container.querySelector("a")).toBeTruthy();
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not refresh DOM rows when link options are semantically unchanged", () => {
+    const { renderer, container } = setup(3, 1, {
+      links: { activation: "event", allowRelative: false },
+    });
+
+    try {
+      const before = renderer.debugStats.rowRender.total.replaceChildren;
+
+      renderer.updateOptions({
+        links: { activation: "event", allowRelative: false },
+      });
+
+      expect(renderer.debugStats.rowRender.total.replaceChildren).toBe(before);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("updates DOM link activation handler without repainting semantically unchanged options", () => {
+    const firstActivate = vi.fn();
+    const nextActivate = vi.fn();
+    const { terminal, container, renderer } = setup(3, 1, {
+      links: { onActivate: firstActivate },
+    });
+
+    try {
+      terminal.write("url", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ planes: ["default"], sync: true });
+      const anchor = lineEl(container).querySelector("a");
+      const before = renderer.debugStats.rowRender.total.replaceChildren;
+
+      renderer.updateOptions({ links: { onActivate: nextActivate } });
+
+      expect(renderer.debugStats.rowRender.total.replaceChildren).toBe(before);
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      anchor?.dispatchEvent(event);
+
+      expect(firstActivate).not.toHaveBeenCalled();
+      expect(nextActivate).toHaveBeenCalledWith("https://example.com/", event);
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("creates row nodes using the container ownerDocument", () => {
+    const iframe = document.createElement("iframe");
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument!;
+    const terminal = createTerminal({ cols: 3, rows: 1 });
+    const container = doc.createElement("div");
+    doc.body.appendChild(container);
+    const renderer = createDomRenderer(terminal, container, { links: {} });
+
+    try {
+      terminal.write("url", { x: 0, y: 0, style: { href: "https://example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = container.querySelector("a");
+      expect(anchor?.ownerDocument).toBe(doc);
+    } finally {
+      renderer.dispose();
+      terminal.dispose();
+      iframe.remove();
+    }
+  });
+
+  it("does not force hash links into a new tab", () => {
+    const { terminal, container, renderer } = setup(8, 1, { links: {} });
+
+    try {
+      terminal.write("hash", { x: 0, y: 0, style: { href: "#section" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      expect(anchor?.getAttribute("href")).toBe("#section");
+      expect(anchor?.getAttribute("target")).toBeNull();
+      expect(anchor?.getAttribute("rel")).toBeNull();
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not force mailto links into a new tab", () => {
+    const { terminal, container, renderer } = setup(4, 1, { links: {} });
+
+    try {
+      terminal.write("mail", { x: 0, y: 0, style: { href: "mailto:test@example.com" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const anchor = lineEl(container).querySelector("a");
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      expect(anchor?.getAttribute("href")).toBe("mailto:test@example.com");
+      expect(anchor?.getAttribute("target")).toBeNull();
+      expect(anchor?.getAttribute("rel")).toBeNull();
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("renders unsafe href-only rows as plain text", () => {
+    for (const href of [
+      "//evil.example",
+      "javascript:alert(1)",
+      "JaVaScRiPt:alert(1)",
+      "data:text/html,boom",
+      "vbscript:msgbox(1)",
+    ]) {
+      const { terminal, container, renderer } = setup(3, 1, { links: {} });
+
+      try {
+        terminal.write("url", { x: 0, y: 0, style: { href } });
+        terminal.commit({ planes: ["default"], sync: true });
+
+        const line = lineEl(container);
+        expect(line.firstChild?.nodeType).toBe(Node.TEXT_NODE);
+        expect(line.querySelector("a")).toBeNull();
+      } finally {
+        renderer.dispose();
+        container.remove();
+      }
+    }
+  });
+
   it("invalidates the row cache when href changes", () => {
-    const { terminal, container, renderer } = setup(3);
+    const { terminal, container, renderer } = setup(3, 1, { links: {} });
 
     try {
       terminal.write("url", { x: 0, y: 0, style: { href: "https://a.example" } });
@@ -467,6 +1283,49 @@ describe("DomRenderer row rendering", () => {
         cacheHits: 0,
         fragmentRows: 1,
       });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("does not repaint when only href changes and DOM links are disabled", () => {
+    const { terminal, container, renderer } = setup(20, 1, { links: false });
+
+    try {
+      terminal.write("link", { x: 0, y: 0, style: { href: "https://a.test" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const before = renderer.debugStats.rowRender.total.replaceChildren;
+
+      terminal.write("link", { x: 0, y: 0, style: { href: "https://b.test" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(renderer.debugStats.rowRender.total.replaceChildren).toBe(before);
+      expect(lastRowStats(renderer)).toMatchObject({
+        rows: 1,
+        cacheHits: 1,
+      });
+    } finally {
+      renderer.dispose();
+      container.remove();
+    }
+  });
+
+  it("updates anchors when href changes and DOM links are enabled", () => {
+    const { terminal, container, renderer } = setup(4, 1, { links: {} });
+
+    try {
+      terminal.write("link", { x: 0, y: 0, style: { href: "https://a.test" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const before = renderer.debugStats.rowRender.total.replaceChildren;
+
+      terminal.write("link", { x: 0, y: 0, style: { href: "https://b.test" } });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      expect(renderer.debugStats.rowRender.total.replaceChildren).toBeGreaterThan(before);
+      expect(lineEl(container).querySelector("a")?.href).toBe("https://b.test/");
     } finally {
       renderer.dispose();
       container.remove();
@@ -1008,8 +1867,11 @@ describe("DomRenderer row rendering", () => {
     }
   });
 
-  it("invalidates the opt-in row prepass when href changes", () => {
-    const { terminal, container, renderer } = setup(3, 1, { enableRowKeyPrepass: true });
+  it("invalidates the opt-in row prepass when rendered href changes", () => {
+    const { terminal, container, renderer } = setup(3, 1, {
+      enableRowKeyPrepass: true,
+      links: {},
+    });
 
     try {
       terminal.fill(0, 0, 3, 1, "A", { href: "https://example.com/a" });

@@ -386,6 +386,7 @@ export function clearRect(
       row.length = buffer.cols;
       for (let xx = 0; xx < buffer.cols; xx++) row[xx] = blank;
     }
+    recomputeFingerprintsForRows(buffer, 0, buffer.rows);
     markAllDirty(buffer);
     buffer.cursorX = 0;
     buffer.cursorY = 0;
@@ -436,9 +437,15 @@ function recomputeFingerprintsForRows(buffer: GridBuffer, startY: number, endY: 
   }
 }
 
+function recomputeAllVisibleFingerprints(buffer: GridBuffer): void {
+  recomputeFingerprintsForRows(buffer, 0, buffer.rows);
+}
+
 export function scrollBuffer(buffer: GridBuffer, lines: number): void {
-  const n = Math.trunc(lines);
-  if (n === 0 || buffer.rows === 0) return;
+  const raw = Math.trunc(lines);
+  if (raw === 0 || buffer.rows === 0) return;
+  const abs = Math.min(Math.abs(raw), buffer.rows);
+  const n = raw > 0 ? abs : -abs;
 
   if (n > 0) {
     for (let i = 0; i < n; i++) {
@@ -468,6 +475,15 @@ export function scrollBuffer(buffer: GridBuffer, lines: number): void {
       buffer.gridStart = (buffer.gridStart - 1 + buffer.rows) % buffer.rows;
       buffer.grid[buffer.gridStart] = blankRow(buffer);
     }
+  }
+
+  const inserted = Math.abs(n);
+  if (inserted >= buffer.rows) {
+    recomputeAllVisibleFingerprints(buffer);
+  } else if (n > 0) {
+    recomputeFingerprintsForRows(buffer, buffer.rows - inserted, buffer.rows);
+  } else {
+    recomputeFingerprintsForRows(buffer, 0, inserted);
   }
 
   markAllDirty(buffer);

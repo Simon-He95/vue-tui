@@ -2,7 +2,12 @@ export type PathStyle = "posix";
 
 function normalizeSeparators(input: string): string {
   // Treat backslashes as separators too (helps on Windows-ish input).
-  return input.replace(/\\/g, "/");
+  let out = "";
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]!;
+    out += ch === "\\" ? "/" : ch;
+  }
+  return out;
 }
 
 export function isAbsolutePath(path: string): boolean {
@@ -15,7 +20,9 @@ export function isAbsolutePath(path: string): boolean {
 export function stripTrailingSlash(path: string): string {
   const p = normalizeSeparators(path);
   if (p === "/") return p;
-  return p.replace(/\/+$/g, "");
+  let end = p.length;
+  while (end > 0 && p.charCodeAt(end - 1) === 47) end--;
+  return end === p.length ? p : p.slice(0, end);
 }
 
 export function joinPath(base: string, next: string): string {

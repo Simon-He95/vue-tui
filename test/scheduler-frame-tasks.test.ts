@@ -1,12 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, nextTick, onBeforeUnmount } from "vue";
-import {
-  TerminalProvider,
-  TText,
-  useTerminal,
-  type FramePerfStore,
-  type TerminalScheduler,
-} from "../src/index.js";
+import type { FramePerfStore } from "../src/observability.js";
+import { TerminalProvider, TText, useTerminal, type TerminalScheduler } from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 
 function installRaf() {
@@ -137,7 +132,7 @@ describe("scheduler frame tasks", () => {
           },
         });
       }
-      probe.scheduler.cancelFrameTask("canceled");
+      probe.scheduler.cancelFrameTask?.("canceled");
       probe.scheduler.queueFrameTask({
         id: "kept",
         reason: "input",

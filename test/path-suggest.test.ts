@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveUserPath, suggestPaths } from "../src/cli/path-suggest.js";
+import { suggestPaths as suggestCorePaths } from "../src/core/path-suggest.js";
 
 describe("path suggest", () => {
   it("suggests directories and files with fuzzy matching", async () => {
@@ -197,5 +198,42 @@ describe("path suggest", () => {
     });
 
     expect(res.suggestions).toEqual([]);
+  });
+
+  it("normalizes slash-heavy path input without regex backtracking", async () => {
+    const input = `./${"/".repeat(200_000)}foo${"/".repeat(200_000)}`;
+    const seen: string[] = [];
+
+    const result = await suggestCorePaths({
+      workspaceAbs: "/workspace",
+      input,
+      mode: "any",
+      max: 5,
+      async listDir() {
+        return [{ name: "bar", kind: "file" as const }];
+      },
+      shouldIgnore({ normalizedRelPath }) {
+        seen.push(normalizedRelPath);
+        return true;
+      },
+    });
+
+    expect(seen).toEqual(["foo/bar"]);
+    expect(result.suggestions).toEqual([]);
+  });
+
+  it("handles long slash-heavy input without regex backtracking", async () => {
+    const input = `.${"/".repeat(50_000)}target`;
+
+    const result = await suggestCorePaths({
+      workspaceAbs: "/workspace",
+      input,
+      mode: "any",
+      max: 10,
+      listDir: async () => [],
+    });
+
+    expect(result.suggestions).toEqual([]);
+    expect(result.baseDirAbs).toBeTruthy();
   });
 });

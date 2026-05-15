@@ -1,5 +1,5 @@
 import type { Component, PropType } from "vue";
-import type { PathPickerProvider } from "../../cli/path-provider.js";
+import type { PathPickerProvider } from "../../core/path-provider-types.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../../core/render-plane.js";
 import type { Style, Terminal } from "../../core/types.js";
@@ -11,6 +11,7 @@ import type {
   SelectionTextProvider,
   TerminalSelectionCopyPayload,
   TerminalSelectionOptions,
+  TerminalSelectionRefreshOptions,
 } from "../../selection/terminal-selection.js";
 import type {
   ImeAnchor,
@@ -36,6 +37,7 @@ import {
   shallowReactive,
   shallowRef,
   toRef,
+  watch,
   watchEffect,
 } from "vue";
 import { createTerminal } from "../../core/index.js";
@@ -110,6 +112,24 @@ function shallowEqualRecord(a: Record<string, unknown>, b: Record<string, unknow
     if (!shallowEqualValue(a[k], b[k])) return false;
   }
   return true;
+}
+
+function warnDev(message: string): void {
+  const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
+    ?.NODE_ENV;
+  if (nodeEnv === "production") return;
+  console.warn(message);
+}
+
+function pickInitOnlyDomOptions(options: DomRendererOptions | undefined): Record<string, unknown> {
+  const accessibility = options?.accessibility;
+  return {
+    accessibility: isPlainObject(accessibility) ? { ...accessibility } : accessibility,
+    syncFlushMaxRows: options?.syncFlushMaxRows,
+    syncFlushCellBudget: options?.syncFlushCellBudget,
+    enableScrollOperations: options?.enableScrollOperations,
+    enableRowKeyPrepass: options?.enableRowKeyPrepass,
+  };
 }
 
 let portalId = 0;
@@ -310,7 +330,7 @@ export const TerminalProvider = defineComponent({
         selectionCopyHandlers.add(handler);
         return () => selectionCopyHandlers.delete(handler);
       },
-      refresh(options) {
+      refresh(options?: TerminalSelectionRefreshOptions) {
         selection.refresh(options);
       },
       clear() {
@@ -681,6 +701,16 @@ export const TerminalProvider = defineComponent({
     provide(ImeAnchorContextKey, imeAnchor);
     provide(TInputPluginsContextKey, toRef(props, "inputPlugins") as any);
     provide(TPathPickerProviderContextKey, toRef(props, "pathPickerProvider") as any);
+    const initialInputPlugins = props.inputPlugins;
+    watch(
+      () => props.inputPlugins,
+      (next) => {
+        if (next === initialInputPlugins) return;
+        warnDev(
+          "[vue-tui] TerminalProvider inputPlugins is init-only. Remount TerminalProvider/TInput to apply plugin changes.",
+        );
+      },
+    );
 
     let offResize: (() => void) | null = null;
 
@@ -692,6 +722,33 @@ export const TerminalProvider = defineComponent({
         const r = createDomRenderer(terminal, el, props.domRendererOptions ?? {});
         renderer.value = r;
         rendererCapabilities.value = r.capabilities;
+        let currentInitOnlyDomOptions = pickInitOnlyDomOptions(props.domRendererOptions);
+        watch(
+          () => pickInitOnlyDomOptions(props.domRendererOptions),
+          (next) => {
+            if (shallowEqualRecord(currentInitOnlyDomOptions, next)) return;
+            currentInitOnlyDomOptions = next;
+            warnDev(
+              "[vue-tui] domRendererOptions.accessibility/syncFlushMaxRows/syncFlushCellBudget/enableScrollOperations/enableRowKeyPrepass are init-only. Remount TerminalProvider to apply them.",
+            );
+          },
+          { deep: true },
+        );
+        watch(
+          () => ({
+            links: props.domRendererOptions?.links ?? false,
+            onLinkClick: props.domRendererOptions?.onLinkClick,
+          }),
+          (next) => r.updateOptions(next),
+          { deep: true },
+        );
+        watch(
+          () => props.domRendererOptions?.palette ?? null,
+          (palette) => {
+            r.updateTheme({ palette });
+          },
+          { deep: true },
+        );
 
         let lastPointerImeAt = 0;
         let focusImeFn: ((e?: PointerEvent | MouseEvent) => void) | null = null;
@@ -1720,6 +1777,8 @@ export const TerminalProvider = defineComponent({
       if (raf > 0) cancelAnimationFrame(raf);
       raf = 0;
       render.unregister(selectionRenderNode.id);
+      profiler?.dispose();
+      render.dispose();
       scope.stop();
     });
 

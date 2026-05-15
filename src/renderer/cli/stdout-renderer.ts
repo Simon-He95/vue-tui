@@ -7,7 +7,14 @@ import type {
 } from "../../core/types.js";
 import type { RendererCapabilities } from "../capabilities.js";
 import { Buffer } from "node:buffer";
+import { writeSync as fsWriteSync } from "node:fs";
 import process from "node:process";
+import {
+  defaultVueTuiProfileLogPath,
+  installNodeFileWriters,
+  nodeProfilerFileWriter,
+  shouldInstallFileWriters,
+} from "../../cli/node-file-writers.js";
 import type { ThemePalette } from "../../core/ansi-palette.js";
 import { ansiColorRgb, ansiHexToRgb, isAnsiColorName } from "../../core/ansi-palette.js";
 import { detectTerminalColorCapability } from "../../core/ansi/capability.js";
@@ -34,6 +41,7 @@ import { sanitizeTerminalHref } from "../../core/hyperlink.js";
 import { getPlaneRowCoverageKind } from "../../core/terminal/create-terminal.js";
 import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
+import { firstNonEmptyEnv } from "../../utils/env.js";
 import { STDOUT_RENDERER_CAPABILITIES } from "../capabilities.js";
 import { recordStdoutFrame } from "./stdout-metrics.js";
 
@@ -46,19 +54,8 @@ function getDebugLog() {
   return debugLog;
 }
 
-// Try to use synchronous write for atomic output (reduces flickering in Bun binaries)
-let writeSync: ((fd: number, data: string) => void) | null = null;
-try {
-  // Dynamic import to avoid bundling issues
-  const fs = (globalThis as any).require?.("node:fs") ?? (globalThis as any).require?.("fs");
-  if (fs?.writeSync) {
-    writeSync = (fd: number, data: string) => {
-      const buffer = Buffer.from(data, "utf8");
-      fs.writeSync(fd, buffer);
-    };
-  }
-} catch {
-  // Ignore - will fall back to stream write
+function writeFdSync(fd: number, data: string): void {
+  fsWriteSync(fd, Buffer.from(data, "utf8"));
 }
 
 // Synchronized output control sequences (DEC Private Mode 2026)
@@ -114,8 +111,13 @@ export function createStdoutRenderer(
     getImeAnchor?: () => { cellX: number; cellY: number } | null;
     /** Use DEC 2026 synchronized output mode (default: false for compatibility) */
     useSyncOutput?: boolean;
+    allowFileUrls?: boolean;
+    profileFileWriter?: { appendFileSync?: (path: string, data: string) => void };
   }>,
 ): StdoutRenderer {
+  const env = (process?.env ?? {}) as Record<string, unknown>;
+  if (shouldInstallFileWriters(env)) installNodeFileWriters();
+
   const output: CliOutput | undefined = options?.output ?? (process.stdout as any);
   if (!output) throw new Error("createStdoutRenderer requires a Node stdout-like output");
   const out = output;
@@ -129,16 +131,19 @@ export function createStdoutRenderer(
   let palette: ThemePalette | null = options?.palette ?? null;
   const trackResize = options?.trackResize ?? true;
   const getImeAnchor = options?.getImeAnchor;
+  const allowFileUrls = options?.allowFileUrls ?? false;
   const cliLatency = getCliLatencyProfiler();
-  const profiler = createTuiProfiler("stdout-renderer");
+  const profiler = createTuiProfiler("stdout-renderer", {
+    fileWriter: options?.profileFileWriter ?? nodeProfilerFileWriter,
+    defaultLogDest: "file",
+    defaultLogPath: defaultVueTuiProfileLogPath(),
+  });
 
   // Resolve whether to use synchronized output mode (DEC 2026)
   // Disabled by default for terminal compatibility (ghostty, etc.)
   function resolveUseSyncOutput(): boolean {
     // Explicit option takes precedence
     if (options?.useSyncOutput != null) return options.useSyncOutput;
-
-    const env = (process?.env ?? {}) as Record<string, unknown>;
 
     // Detect terminal type and disable for known incompatible terminals
     const term = String(env.TERM ?? "").toLowerCase();
@@ -195,7 +200,6 @@ export function createStdoutRenderer(
   // Detect if running in ghostty for special handling
   const isGhostty = "GHOSTTY_RESOURCES_DIR" in (process?.env ?? {});
 
-  const env = (process?.env ?? {}) as Record<string, unknown>;
   const chunkSize = 8 * 1024;
   const chunkThresholdBytes = 64 * 1024;
   const syncMaxBytes = 128 * 1024;
@@ -205,29 +209,8 @@ export function createStdoutRenderer(
   const termProgram = String(env.TERM_PROGRAM ?? "")
     .trim()
     .toLowerCase();
-  const term = String(env.TERM ?? "")
-    .trim()
-    .toLowerCase();
   const isVscodeTerminal =
     termProgram === "vscode" || "VSCODE_PID" in env || "VSCODE_IPC_HOOK_CLI" in env;
-  // GPU-accelerated terminals like kitty/alacritty/wezterm can visually keep
-  // stale cells when we only patch a narrow dirty span, so prefer full-row
-  // rewrites for dirty rows in those environments.
-  const useConservativeDirtyRowRendering =
-    out.isTTY !== false &&
-    !isVscodeTerminal &&
-    (isGhostty ||
-      "KITTY_WINDOW_ID" in env ||
-      "ALACRITTY_WINDOW_ID" in env ||
-      "ALACRITTY_LOG" in env ||
-      "WEZTERM_PANE" in env ||
-      "WEZTERM_EXECUTABLE" in env ||
-      termProgram.includes("kitty") ||
-      termProgram.includes("alacritty") ||
-      termProgram.includes("wezterm") ||
-      term.includes("kitty") ||
-      term.includes("alacritty"));
-
   const enableOsc8Links = out.isTTY !== false && !isVscodeTerminal;
 
   let disposed = false;
@@ -245,7 +228,6 @@ export function createStdoutRenderer(
   let accumulatedDirtyMin = Number.POSITIVE_INFINITY;
   let accumulatedDirtyMax = -1;
   let accumulatedScrollOperations: TerminalScrollOperation[] | null = null;
-  let accumulatedSkipUnchangedDirtyRows = true;
   // Minimum frame interval for stdout rendering (16ms = ~60fps max).
   // For non-TTY outputs (tests/logs), render immediately for determinism.
   const MIN_FRAME_MS = !out.isTTY ? 0 : 16;
@@ -314,11 +296,13 @@ export function createStdoutRenderer(
   }
 
   let styleKeyCache = new WeakMap<Style, number>();
+  const normalizedHrefCache = new Map<string, string | null>();
+  const MAX_HREF_CACHE = 2048;
   const HREF_STYLE_FLAG = 1 << 21;
   function styleKey(style: Style): number {
     const cached = styleKeyCache.get(style);
     if (cached !== undefined) return cached;
-    const href = sanitizeTerminalHref(style.href);
+    const href = normalizeHref(style.href);
     const key =
       colorIndex(style.fg) |
       (colorIndex(style.bg ?? defaultBg) << 8) |
@@ -352,12 +336,25 @@ export function createStdoutRenderer(
       (style.italic ? 1 << 18 : 0) |
       (style.underline ? 1 << 19 : 0) |
       (style.inverse ? 1 << 20 : 0) |
-      (sanitizeTerminalHref(style.href) ? HREF_STYLE_FLAG : 0)
+      (normalizeHref(style.href) ? HREF_STYLE_FLAG : 0)
     );
   }
 
   function normalizeHref(value: unknown): string | null {
-    return sanitizeTerminalHref(value);
+    if (typeof value !== "string") return null;
+
+    const cached = normalizedHrefCache.get(value);
+    if (cached !== undefined) return cached;
+
+    const normalized = sanitizeTerminalHref(value, { allowFileUrls });
+    normalizedHrefCache.set(value, normalized);
+
+    if (normalizedHrefCache.size > MAX_HREF_CACHE) {
+      const oldest = normalizedHrefCache.keys().next().value;
+      if (oldest != null) normalizedHrefCache.delete(oldest);
+    }
+
+    return normalized;
   }
 
   function resolveAnsiColorRgb(name: string) {
@@ -437,6 +434,14 @@ export function createStdoutRenderer(
   let prevOverlayPartialRows: readonly number[] = [];
   const hrefIndex = new Map<string, number>();
   let nextHrefId = 1;
+  const MAX_HREF_IDS = 8192;
+  let hrefIndexResetRequiresBaseline = false;
+  function resetHrefIndex(): void {
+    hrefIndex.clear();
+    nextHrefId = 1;
+    fpPrevValid = false;
+    hrefIndexResetRequiresBaseline = true;
+  }
   function ensureFingerprints(cols: number, rows: number): void {
     if (cols === fpCols && rows === fpRows) return;
     fpCols = cols;
@@ -464,6 +469,9 @@ export function createStdoutRenderer(
     if (!href) return 0;
     const cached = hrefIndex.get(href);
     if (cached != null) return cached;
+    if (hrefIndex.size >= MAX_HREF_IDS || nextHrefId >= 0xffff_ffff) {
+      resetHrefIndex();
+    }
     const id = nextHrefId++;
     hrefIndex.set(href, id);
     return id;
@@ -519,127 +527,6 @@ export function createStdoutRenderer(
 
   // ensureRenderedRowCache removed — replaced by typed-array fingerprints
 
-  const expandSpanStart = (row: readonly Cell[], startX: number): number => {
-    let x = Math.max(0, Math.min(row.length, startX));
-    while (x > 0 && row[x]?.continuation) x--;
-    return x;
-  };
-
-  const expandSpanEnd = (row: readonly Cell[], endXExclusive: number): number => {
-    let x = Math.max(0, Math.min(row.length, endXExclusive));
-    while (x < row.length && row[x]?.continuation) x++;
-    if (x > 0) {
-      const cell = row[x - 1];
-      if (cell?.width === 2 && !cell.continuation) x = Math.min(row.length, x + 1);
-    }
-    return x;
-  };
-
-  const resolveChangedSpan = (
-    row: readonly Cell[],
-    y: number,
-    cols: number,
-  ): Readonly<{ startX: number; endXExclusive: number }> | null => {
-    if (!fpCols || y >= fpRows || !fpPrevValid)
-      return row.length ? { startX: 0, endXExclusive: row.length } : null;
-
-    const base = y * fpCols;
-    let startX = -1;
-    let endXExclusive = -1;
-    for (let x = 0; x < cols; x++) {
-      if (
-        currentFP[base + x] === prevFP[base + x] &&
-        currentHrefIds[base + x] === prevHrefIds[base + x]
-      )
-        continue;
-      if (startX === -1) startX = x;
-      endXExclusive = x + 1;
-    }
-
-    if (startX === -1) return null;
-
-    const expandedStart = expandSpanStart(row, startX);
-    const expandedEnd = expandSpanEnd(row, endXExclusive);
-
-    return expandedEnd > expandedStart
-      ? { startX: expandedStart, endXExclusive: expandedEnd }
-      : null;
-  };
-
-  const resolveChangedSpanAgainstFill = (
-    row: readonly Cell[],
-    y: number,
-    cols: number,
-    fillFingerprint: number,
-  ): Readonly<{ startX: number; endXExclusive: number }> | null => {
-    if (!fpCols || y >= fpRows) return row.length ? { startX: 0, endXExclusive: row.length } : null;
-
-    const base = y * fpCols;
-    let startX = -1;
-    let endXExclusive = -1;
-    for (let x = 0; x < cols; x++) {
-      if (currentFP[base + x] === fillFingerprint) continue;
-      if (startX === -1) startX = x;
-      endXExclusive = x + 1;
-    }
-
-    if (startX === -1) return null;
-
-    const expandedStart = expandSpanStart(row, startX);
-    const expandedEnd = expandSpanEnd(row, endXExclusive);
-
-    return expandedEnd > expandedStart
-      ? { startX: expandedStart, endXExclusive: expandedEnd }
-      : null;
-  };
-
-  const resolveChangedSpanAgainstReference = (
-    row: readonly Cell[],
-    y: number,
-    cols: number,
-  ): Readonly<{ startX: number; endXExclusive: number }> | null => {
-    if (!fpCols || y >= fpRows) return row.length ? { startX: 0, endXExclusive: row.length } : null;
-
-    const rowFP = terminal.getRowFingerprints(y);
-    const base = y * fpCols;
-    let startX = -1;
-    let endXExclusive = -1;
-    for (let x = 0; x < cols; x++) {
-      const rowHrefId = hrefId(normalizeHref(row[x]!.style.href));
-      const fingerprint =
-        rowFP && rowFP.length >= cols ? rowFP[x]! : cellFingerprint(row[x]!.ch, row[x]!.style);
-      if (fingerprint === currentFP[base + x] && rowHrefId === currentHrefIds[base + x]) continue;
-      if (startX === -1) startX = x;
-      endXExclusive = x + 1;
-    }
-
-    if (startX === -1) return null;
-
-    const expandedStart = expandSpanStart(row, startX);
-    const expandedEnd = expandSpanEnd(row, endXExclusive);
-
-    return expandedEnd > expandedStart
-      ? { startX: expandedStart, endXExclusive: expandedEnd }
-      : null;
-  };
-
-  const rowMatchesPreviousFrame = (y: number, cols: number): boolean => {
-    if (!fpCols || y < 0 || y >= fpRows || !fpPrevValid) return false;
-
-    const rowFP = terminal.getRowFingerprints(y);
-    const row = rowFP && rowFP.length >= cols ? null : (terminal.getRow(y) as Cell[]);
-    const base = y * fpCols;
-    for (let x = 0; x < cols; x++) {
-      const rowHrefId = hrefId(
-        normalizeHref((row ?? (terminal.getRow(y) as Cell[]))[x]!.style.href),
-      );
-      const fingerprint =
-        rowFP && rowFP.length >= cols ? rowFP[x]! : cellFingerprint(row![x]!.ch, row![x]!.style);
-      if (fingerprint !== prevFP[base + x] || rowHrefId !== prevHrefIds[base + x]) return false;
-    }
-    return true;
-  };
-
   const rowHasNonDefaultBlankCell = (source: Uint32Array, y: number, cols: number): boolean => {
     if (!fpCols || y < 0 || y >= fpRows) return false;
     const blankFP = (styleKeyFromParts({ bg: defaultBg }) << 10) | charHash10(" ");
@@ -668,9 +555,11 @@ export function createStdoutRenderer(
 
   // Terminal scroll regions: use DECSTBM + \e[S/\e[T to let the terminal shift
   // content natively instead of redrawing the entire viewport on scroll.
-  // Disable via DIMCODE_TUI_SCROLL_REGIONS=0 for debugging.
+  // Disable via VUE_TUI_SCROLL_REGIONS=0 (or legacy DIMCODE_TUI_SCROLL_REGIONS=0) for debugging.
   const enableScrollRegions = (() => {
-    const raw = String(env.DIMCODE_TUI_SCROLL_REGIONS ?? "").trim();
+    const raw = String(
+      firstNonEmptyEnv(env, "VUE_TUI_SCROLL_REGIONS", "DIMCODE_TUI_SCROLL_REGIONS") ?? "",
+    ).trim();
     if (raw === "0" || raw === "false") return false;
     // Ghostty has issues with DECSTBM in some versions; disable by default
     if (isGhostty || isVscodeTerminal) return false;
@@ -970,7 +859,6 @@ export function createStdoutRenderer(
   function doRender(
     dirtyRows?: readonly number[] | null,
     scrollOperations?: readonly TerminalScrollOperation[] | null,
-    skipUnchangedDirtyRows = false,
   ): void {
     if (isDebugEnabled()) {
       getDebugLog().render(`doRender() START: dirtyRows=${dirtyRows?.length ?? "null"}`);
@@ -985,7 +873,6 @@ export function createStdoutRenderer(
     accumulatedDirtyMin = Number.POSITIVE_INFINITY;
     accumulatedDirtyMax = -1;
     accumulatedScrollOperations = null;
-    accumulatedSkipUnchangedDirtyRows = true;
     lastFrameTime = Date.now();
 
     const renderStart = performance.now();
@@ -997,35 +884,9 @@ export function createStdoutRenderer(
     const bgOnlyStyle: Style = { bg: defaultBg };
     const bgKey = styleKeyFromParts({ bg: defaultBg });
     const blankFP = (bgKey << 10) | charHash10(" ");
-    const cellFP = (cell: Cell): number => cellFingerprint(cell.ch, cell.style);
-    const lastOccupiedColumnInRow = (row: readonly Cell[], cols: number): number => {
-      const limit = Math.min(row.length, cols);
-      for (let x = limit - 1; x >= 0; x--) {
-        if (cellFP(row[x]!) !== blankFP) return x;
-      }
-      return -1;
-    };
-    const lastOccupiedColumnInReference = (
-      source: Uint32Array,
-      y: number,
-      cols: number,
-    ): number => {
-      if (!fpCols || y < 0 || y >= fpRows) return -1;
-      const limit = Math.min(fpCols, cols);
-      const base = y * fpCols;
-      for (let x = limit - 1; x >= 0; x--) {
-        if (source[base + x] !== blankFP) return x;
-      }
-      return -1;
-    };
-    const shouldRewriteRowTail = (
-      row: readonly Cell[],
-      y: number,
-      cols: number,
-      reference: Uint32Array,
-    ): boolean =>
-      lastOccupiedColumnInRow(row, cols) < lastOccupiedColumnInReference(reference, y, cols);
     let dirtySorted = true;
+    const forceFullRender = hrefIndexResetRequiresBaseline;
+    if (forceFullRender) hrefIndexResetRequiresBaseline = false;
     const normalizedScrollOperations = (() => {
       if (!scrollOperations?.length) return null;
       const outOps: TerminalScrollOperation[] = [];
@@ -1037,10 +898,10 @@ export function createStdoutRenderer(
         outOps.push({ startY, endY, delta });
       }
       if (!outOps.length) return null;
-      outOps.sort((a, b) => a.startY - b.startY);
       return outOps;
     })();
     let rowsToRender = (() => {
+      if (forceFullRender) return null;
       if (!dirtyRows || dirtyRows.length === 0) return null;
       const outRows: number[] = [];
       outRows.length = dirtyRows.length;
@@ -1153,6 +1014,9 @@ export function createStdoutRenderer(
       activeStyle = next;
     };
 
+    const shouldEmitStyle = (style: Style, key: number): boolean =>
+      activeStyleKey !== key || activeStyle.href !== normalizeHref(style.href);
+
     const renderRow = (
       y: number,
       row: readonly Cell[],
@@ -1210,7 +1074,7 @@ export function createStdoutRenderer(
           continue;
         }
         // Only emit SGR if style actually changed from what's active
-        if (activeStyleKey !== currentKey) {
+        if (shouldEmitStyle(currentStyle!, currentKey)) {
           emitStyle(currentStyle!, currentKey);
         }
         frameParts.push(currentTextParts.join(""));
@@ -1223,7 +1087,7 @@ export function createStdoutRenderer(
       }
 
       if (currentKey != null) {
-        if (activeStyleKey !== currentKey) {
+        if (shouldEmitStyle(currentStyle!, currentKey)) {
           emitStyle(currentStyle!, currentKey);
         }
         frameParts.push(currentTextParts.join(""));
@@ -1341,7 +1205,6 @@ export function createStdoutRenderer(
         currentHrefIds.set(prevHrefIds);
       }
 
-      const insertedRows = new Set<number>();
       const explicitRowsToRender = new Set<number>();
       for (const y of scrollRowsCandidate) {
         if (hiddenExplicitDirtyRows?.has(y)) continue;
@@ -1369,7 +1232,6 @@ export function createStdoutRenderer(
           }
           for (let y = op.endY - op.delta; y < op.endY; y++) {
             const base = y * fpCols;
-            insertedRows.add(y);
             explicitRowsToRender.add(y);
             for (let x = 0; x < size.cols; x++) {
               currentFP[base + x] = blankFP;
@@ -1390,7 +1252,6 @@ export function createStdoutRenderer(
           }
           for (let y = op.startY; y < op.startY + absDelta; y++) {
             const base = y * fpCols;
-            insertedRows.add(y);
             explicitRowsToRender.add(y);
             for (let x = 0; x < size.cols; x++) {
               currentFP[base + x] = blankFP;
@@ -1408,38 +1269,8 @@ export function createStdoutRenderer(
       const paintedExplicitRows: number[] = [];
       for (const y of explicitDirtyRows) {
         const row = terminal.getRow(y) as Cell[];
-        const overlayRow = overlayTouchedRowSet?.has(y);
-        if (overlayRow || useConservativeDirtyRowRendering) {
-          fingerprintRow(row, y, size.cols);
-          renderRow(y, row);
-          paintedExplicitRows.push(y);
-          continue;
-        }
-        const span = (() => {
-          if (insertedRows.has(y)) {
-            fingerprintRow(row, y, size.cols);
-            return resolveChangedSpanAgainstFill(row, y, size.cols, blankFP);
-          }
-          return resolveChangedSpanAgainstReference(row, y, size.cols);
-        })();
-        if (!span) {
-          if (!skipUnchangedDirtyRows) fingerprintRow(row, y, size.cols);
-          if (!skipUnchangedDirtyRows) {
-            renderRow(y, row);
-            paintedExplicitRows.push(y);
-          }
-          continue;
-        }
-        const rewriteTail =
-          !insertedRows.has(y) && shouldRewriteRowTail(row, y, size.cols, currentFP);
         fingerprintRow(row, y, size.cols);
-        renderRow(
-          y,
-          row,
-          span.startX,
-          rewriteTail ? row.length : span.endXExclusive,
-          rewriteTail || span.endXExclusive >= row.length,
-        );
+        renderRow(y, row);
         paintedExplicitRows.push(y);
       }
 
@@ -1534,29 +1365,8 @@ export function createStdoutRenderer(
         // (e.g., scrollbar column changes)
         for (const y of extraDirtyRows) {
           const row = terminal.getRow(y) as Cell[];
-          const overlayRow = overlayTouchedRowSet?.has(y);
-          if (overlayRow || useConservativeDirtyRowRendering) {
-            fingerprintRow(row, y, size.cols);
-            renderRow(y, row);
-            continue;
-          }
-          const span = resolveChangedSpanAgainstReference(row, y, size.cols);
-          if (!span) {
-            if (!skipUnchangedDirtyRows) {
-              fingerprintRow(row, y, size.cols);
-              renderRow(y, row);
-            }
-            continue;
-          }
-          const rewriteTail = shouldRewriteRowTail(row, y, size.cols, currentFP);
-          renderRow(
-            y,
-            row,
-            span.startX,
-            rewriteTail ? row.length : span.endXExclusive,
-            rewriteTail || span.endXExclusive >= row.length,
-          );
           fingerprintRow(row, y, size.cols);
+          renderRow(y, row);
         }
         for (let y = shift.newRowStart; y < shift.newRowEnd; y++) {
           fingerprintRow(terminal.getRow(y) as Cell[], y, size.cols);
@@ -1602,24 +1412,7 @@ export function createStdoutRenderer(
       for (const y of rowsToRender) {
         const row = terminal.getRow(y) as Cell[];
         fingerprintRow(row, y, size.cols);
-        const overlayRow = overlayTouchedRowSet?.has(y);
-        if (overlayRow || useConservativeDirtyRowRendering) {
-          renderRow(y, row);
-          continue;
-        }
-        const span = resolveChangedSpan(row, y, size.cols);
-        if (!span) {
-          if (!skipUnchangedDirtyRows) renderRow(y, row);
-          continue;
-        }
-        const rewriteTail = shouldRewriteRowTail(row, y, size.cols, prevFP);
-        renderRow(
-          y,
-          row,
-          span.startX,
-          rewriteTail ? row.length : span.endXExclusive,
-          rewriteTail || span.endXExclusive >= row.length,
-        );
+        renderRow(y, row);
       }
     }
 
@@ -1645,7 +1438,7 @@ export function createStdoutRenderer(
     const tmpHrefIds = prevHrefIds;
     prevHrefIds = currentHrefIds;
     currentHrefIds = tmpHrefIds;
-    fpPrevValid = true;
+    fpPrevValid = !hrefIndexResetRequiresBaseline;
     prevOverlayBlockedRows = overlayCoverage.blockedRows;
     prevOverlayPartialRows = overlayCoverage.partialRows;
 
@@ -1757,7 +1550,7 @@ export function createStdoutRenderer(
     const resolveWriteMode = (frameSizeBytes: number): "stream" | "sync" | "chunked" => {
       if (isGhostty) return "chunked";
 
-      const canWriteSync = Boolean(writeSync && (out as any).fd === 1);
+      const canWriteSync = (out as any).fd === 1;
       const preferChunked = frameSizeBytes >= chunkThresholdBytes || writeEmaMs >= 24;
       if (preferChunked) return "chunked";
       if (canWriteSync && frameSizeBytes <= syncMaxBytes) return "sync";
@@ -1775,10 +1568,10 @@ export function createStdoutRenderer(
           );
         }
         writeChunked(frame);
-      } else if (writeMode === "sync" && writeSync && (out as any).fd === 1) {
+      } else if (writeMode === "sync" && (out as any).fd === 1) {
         if (isDebugEnabled()) getDebugLog().render(` Using writeSync`);
         try {
-          writeSync(1, frame);
+          writeFdSync(1, frame);
         } catch {
           // Fall back to stream write if sync fails
           if (isDebugEnabled()) {
@@ -1853,7 +1646,6 @@ export function createStdoutRenderer(
     dirtyRows?: readonly number[] | null,
     sync?: boolean,
     scrollOperations?: readonly TerminalScrollOperation[] | null,
-    skipUnchangedDirtyRows = false,
   ): void {
     if (disposed) return;
 
@@ -1861,29 +1653,6 @@ export function createStdoutRenderer(
       getDebugLog().render(
         `render() called: dirtyRows=${dirtyRows?.length ?? "null"}, pending=${pendingRender}, elapsed=${Date.now() - lastFrameTime}ms`,
       );
-    }
-
-    const isSmallSyncPatch = Boolean(
-      sync && dirtyRows?.length && dirtyRows.length <= 12 && !scrollOperations?.length,
-    );
-    if (isSmallSyncPatch) skipUnchangedDirtyRows = false;
-
-    if (
-      dirtyRows?.length &&
-      skipUnchangedDirtyRows &&
-      fpPrevValid &&
-      !scrollOperations?.length &&
-      dirtyRows.length < terminal.size().rows
-    ) {
-      const cols = terminal.size().cols;
-      const nextDirtyRows = dirtyRows.filter((y) => !rowMatchesPreviousFrame(y, cols));
-      if (nextDirtyRows.length === 0) {
-        if (isDebugEnabled()) {
-          getDebugLog().render(`Skipped unchanged dirty commit: ${dirtyRows.length} rows`);
-        }
-        return;
-      }
-      dirtyRows = nextDirtyRows;
     }
 
     const ensureDirtyBits = (rowCount: number): Uint8Array => {
@@ -1927,17 +1696,7 @@ export function createStdoutRenderer(
         const endY = Math.floor(op.endY);
         const delta = Math.trunc(op.delta);
         if (endY <= startY || delta === 0) continue;
-        const existingIndex = merged.findIndex(
-          (existing) => existing.startY === startY && existing.endY === endY,
-        );
-        if (existingIndex >= 0) {
-          const existing = merged[existingIndex]!;
-          const nextDelta = existing.delta + delta;
-          if (nextDelta === 0) merged.splice(existingIndex, 1);
-          else merged[existingIndex] = { startY, endY, delta: nextDelta };
-        } else {
-          merged.push({ startY, endY, delta });
-        }
+        merged.push({ startY, endY, delta });
       }
       accumulatedScrollOperations = merged.length ? merged : null;
     };
@@ -1950,7 +1709,6 @@ export function createStdoutRenderer(
       accumulatedDirtyMin = Number.POSITIVE_INFINITY;
       accumulatedDirtyMax = -1;
       accumulatedScrollOperations = null;
-      accumulatedSkipUnchangedDirtyRows = false;
     } else if (!accumulatedAllRows) {
       const rowCount = terminal.size().rows;
       const bits = ensureDirtyBits(rowCount);
@@ -1965,7 +1723,6 @@ export function createStdoutRenderer(
         }
       }
       mergeScrollOperations(scrollOperations);
-      accumulatedSkipUnchangedDirtyRows &&= skipUnchangedDirtyRows;
     }
 
     const now = Date.now();
@@ -1990,7 +1747,7 @@ export function createStdoutRenderer(
       const rows = buildAccumulatedRows();
       const pendingScrolls = buildAccumulatedScrollOperations();
       cliLatency?.recordStdoutQueued(0);
-      doRender(rows, pendingScrolls, accumulatedSkipUnchangedDirtyRows);
+      doRender(rows, pendingScrolls);
       return;
     }
 
@@ -1999,7 +1756,7 @@ export function createStdoutRenderer(
       const rows = buildAccumulatedRows();
       const pendingScrolls = buildAccumulatedScrollOperations();
       cliLatency?.recordStdoutQueued(0);
-      doRender(rows, pendingScrolls, accumulatedSkipUnchangedDirtyRows);
+      doRender(rows, pendingScrolls);
     } else {
       // Too soon, schedule render for later
       pendingRender = true;
@@ -2009,19 +1766,23 @@ export function createStdoutRenderer(
         if (!disposed) {
           const rows = buildAccumulatedRows();
           const pendingScrolls = buildAccumulatedScrollOperations();
-          doRender(rows, pendingScrolls, accumulatedSkipUnchangedDirtyRows);
+          doRender(rows, pendingScrolls);
         }
       }, queuedDelayMs);
       cliLatency?.recordStdoutQueued(queuedDelayMs);
     }
   }
 
+  function installFingerprintFn(): void {
+    terminal.setFingerprintFn((ch: string, style: Style) => {
+      return cellFingerprint(ch, style);
+    });
+  }
+
   // Register fingerprint function on the terminal's composite buffer.
   // This enables SoA pre-computation: fingerprints are computed during composeRows()
   // and fingerprintRow() becomes a TypedArray copy instead of per-cell hash computation.
-  terminal.setFingerprintFn((ch: string, style: Style) => {
-    return cellFingerprint(ch, style);
-  });
+  installFingerprintFn();
 
   // Initial setup - these are one-time writes, not part of render loop
   if (altScreen && out.isTTY) out.write("\u001B[?1049h");
@@ -2036,7 +1797,7 @@ export function createStdoutRenderer(
         `Commit event: dirtyRows=${dirtyRows?.length ?? "null"}, rows=${dirtyRows?.join(",") ?? "all"}${scrollOperations?.length ? `, scrollOps=${scrollOperations.map((op) => `${op.startY}-${op.endY - 1}:${op.delta}`).join("|")}` : ""}${sync ? " (sync)" : ""}`,
       );
     }
-    render(dirtyRows, sync, scrollOperations, true);
+    render(dirtyRows, sync, scrollOperations);
   });
 
   const resizeSource: any = (options?.output as any) ?? process.stdout;
@@ -2113,6 +1874,7 @@ export function createStdoutRenderer(
     }
     if (hideCursor) out.write("\u001B[?25h");
     if (altScreen && out.isTTY) out.write("\u001B[?1049l");
+    profiler?.dispose();
   }
 
   const updateTheme = (
@@ -2133,15 +1895,15 @@ export function createStdoutRenderer(
     }
     if ("palette" in next) palette = next.palette ?? null;
     styleKeyCache = new WeakMap<Style, number>();
-    // Reset dynamic hex color indices so the new theme's colors get fresh
-    // slots.  The 5-bit color index only has 15 dynamic slots (17-31);
-    // without resetting, switching themes accumulates hex colors until they
-    // all saturate at MAX_COLOR_INDEX, causing fingerprint collisions that
-    // make the diff renderer skip rows that actually changed.
+    // Reset dynamic color indices so theme changes get fresh slots. The color
+    // index uses 8 bits: built-in ANSI colors occupy 1-16, dynamic colors use
+    // 17-255. Resetting avoids stale cache entries and fingerprint collisions
+    // after theme/palette changes.
     for (const key of Object.keys(COLOR_INDEX)) {
       if (!(key in BUILTIN_COLOR_INDEX)) delete COLOR_INDEX[key];
     }
     nextColorIdx = 17;
+    installFingerprintFn();
     fpRows = 0;
     fpPrevValid = false;
     prevOverlayBlockedRows = [];

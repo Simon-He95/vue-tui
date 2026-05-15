@@ -20,6 +20,9 @@
 - `TRenderPlane.plane` mount 后按 immutable 处理；需要迁移 plane 时使用 `:key` remount。
 - `scheduler.queueFrameTask()` 可能返回 `false`；producer 必须在被拒绝时清理自己的 pending state。
 - 高吞吐组件继续从 `@simon_he/vue-tui/experimental` 引入，应用代码应把这些 imports 隔离在少量边界文件内。
+- root entrypoint 迁移表见 [Migration to 0.1.0-rc.1](./migration-0.1.0-rc.1.md)。
+- root entrypoint 收窄为稳定 browser-safe API；`TAnchor`、`TFlow`、`TInputBox`、`TPathPicker`、`TJsonEditor`、`TRenderPlane`、`TRenderLayer`、`TTransition`、router/composables 改从 `@simon_he/vue-tui/vue` 引入。
+- root entrypoint 只导出 browser-safe 的 `createTInputHostPlugin()`；Node-aware 的 `createDefaultTInputHostAdapter()` / `defaultTInputHostPlugin` 继续从 `@simon_he/vue-tui/cli` 引入。
 - 自定义 `TLogView` source 仍应通过 `version` 或 `getLineKey(index)` 表达内容变化，避免复用 stale line cache。
 
 完整行为变更列表以 [CHANGELOG](https://github.com/Simon-He95/vue-tui/blob/main/CHANGELOG.md) 的 `0.1.0-rc.0` 为准。
@@ -46,7 +49,7 @@ pnpm run release:smoke
 pnpm run release:pack-smoke
 ```
 
-`release:dry-run` 是发布前最后一道本地 gate。它会跑 `release:check`、`release:bench`、`release:smoke` 和 packed package install smoke，确认当前构建可以从 `.tgz` 安装到外部项目后使用。
+`release:dry-run` 是发布前最后一道本地 gate。它会跑 `release:check`、`release:bench`、`release:smoke` 和 packed package install smoke，确认当前构建可以从 `.tgz` 安装到外部项目后使用。实际发布只走 GitHub Release workflow。
 
 展开命令：
 
@@ -87,4 +90,4 @@ pnpm run example:agent-console:terminal
 3. 跑 `pnpm run release:dry-run`。
 4. 如果 `docs:build` 更新 generated API，提交 generated docs；否则保持工作区干净。
 5. 更新 `CHANGELOG.md`，把 `Unreleased` 的内容整理成目标版本。
-6. 只在发布验证完成后运行 `pnpm run release`。
+6. 只在发布验证完成后通过 GitHub Release workflow 发布已验证的 tarball；`pnpm run release:ci` 只做 dry-run 验证，`pnpm run release`、`pnpm run release:local` 和 `pnpm run release:workflow-only` 会阻止本地手动发布。

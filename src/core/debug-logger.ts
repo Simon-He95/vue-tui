@@ -1,33 +1,48 @@
-/**
- * Debug logger that writes to a file instead of stderr.
- * This allows debugging terminal rendering issues without polluting the terminal output.
- */
+import { envFlag, envString } from "../utils/env.js";
 
-import { importNodeModule } from "../utils/node-module.js";
+const DEFAULT_LOG_FILE = "vue-tui-debug.log";
+let debugFileWriter: DebugFileWriter | null = null;
+let debugLogDefaultPath = DEFAULT_LOG_FILE;
+const initializedDebugLogPaths = new Set<string>();
 
-const LOG_FILE = "/tmp/goatchain-debug.log";
-let enabled = false;
-
-type FsLike = Readonly<{
+type DebugFileWriter = Readonly<{
   appendFileSync?: (path: string, data: string) => void;
   writeFileSync?: (path: string, data: string) => void;
 }>;
 
-let fsPromise: Promise<FsLike | null> | null = null;
-
-function getFsSync(): FsLike | null {
-  const req = (globalThis as any).require;
-  if (typeof req !== "function") return null;
-  try {
-    return req("node:fs") ?? req("fs") ?? null;
-  } catch {
-    return null;
-  }
+function getFileWriter(): DebugFileWriter | null {
+  const writer = (globalThis as any).__VT_DEBUG_FILE_WRITER__;
+  if (writer && typeof writer === "object") return writer as DebugFileWriter;
+  return debugFileWriter;
 }
 
-function getFsAsync(): Promise<FsLike | null> {
-  fsPromise ??= importNodeModule<FsLike>("node:fs");
-  return fsPromise;
+export function setDebugFileWriter(writer: DebugFileWriter | null): void {
+  debugFileWriter = writer;
+  if (!writer) initializedDebugLogPaths.clear();
+}
+
+export function resolveDebugLogPath(
+  env: Record<string, unknown> | undefined,
+  fallback = DEFAULT_LOG_FILE,
+): string {
+  return envString(env, "VUE_TUI_DEBUG_LOG_PATH", "DIMCODE_DEBUG_LOG_PATH", fallback);
+}
+
+export function setDebugLogDefaultPath(path: string | null): void {
+  debugLogDefaultPath = path || DEFAULT_LOG_FILE;
+}
+
+function debugLogPath(): string {
+  const env = (globalThis as any).process?.env as Record<string, unknown> | undefined;
+  return resolveDebugLogPath(env, debugLogDefaultPath);
+}
+
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
 }
 
 export interface DebugLogger {
@@ -36,25 +51,38 @@ export interface DebugLogger {
   error: (message: string, ...args: any[]) => void;
 }
 
-/**
- * Initialize the debug logger.
- * @param enable Whether to enable debug logging
- * @returns DebugLogger instance
- */
 export function createDebugLogger(enable = false): DebugLogger {
-  enabled = enable;
+  const enabled = enable;
 
-  if (enabled) {
-    // Clear the log file on start
+  const ensureHeader = () => {
+    if (!enabled) return;
+    const writer = getFileWriter();
+    if (!writer?.writeFileSync) return;
+    const path = debugLogPath();
+    if (initializedDebugLogPaths.has(path)) return;
+
     try {
-      const data = `=== GoatChain Debug Log Started at ${new Date().toISOString()} ===\n\n`;
-      const fs = getFsSync();
-      if (fs?.writeFileSync) fs.writeFileSync(LOG_FILE, data);
-      else void getFsAsync().then((mod) => mod?.writeFileSync?.(LOG_FILE, data));
-    } catch {
-      // Ignore errors
-    }
-  }
+      const data = `=== Vue TUI Debug Log Started at ${new Date().toISOString()} ===\n\n`;
+      writer.writeFileSync(path, data);
+      initializedDebugLogPaths.add(path);
+    } catch {}
+  };
+
+  const write = (data: string) => {
+    if (!enabled) return;
+    ensureHeader();
+    try {
+      getFileWriter()?.appendFileSync?.(debugLogPath(), data);
+    } catch {}
+  };
+
+  const log = (category: string, message: string) => {
+    if (!enabled) return;
+    const timestamp = new Date().toISOString().split("T")[1].slice(0, -1);
+    write(`[${timestamp}] ${category} ${message}\n`);
+  };
+
+  ensureHeader();
 
   return {
     render: (message: string) => log("[RENDER]", message),
@@ -63,28 +91,11 @@ export function createDebugLogger(enable = false): DebugLogger {
       if (!enabled) return;
       const timestamp = new Date().toISOString().split("T")[1].slice(0, -1);
       const fullMessage = `[${timestamp}] [ERROR] ${message}${
-        args.length ? ` ${JSON.stringify(args)}` : ""
+        args.length ? ` ${safeJson(args)}` : ""
       }`;
       write(`${fullMessage}\n`);
     },
   };
-}
-
-function log(category: string, message: string): void {
-  if (!enabled) return;
-  const timestamp = new Date().toISOString().split("T")[1].slice(0, -1);
-  write(`[${timestamp}] ${category} ${message}\n`);
-}
-
-function write(data: string): void {
-  if (!enabled) return;
-  try {
-    const fs = getFsSync();
-    if (fs?.appendFileSync) fs.appendFileSync(LOG_FILE, data);
-    else void getFsAsync().then((mod) => mod?.appendFileSync?.(LOG_FILE, data));
-  } catch {
-    // If we can't write to the file, just give up silently
-  }
 }
 
 /**
@@ -92,5 +103,5 @@ function write(data: string): void {
  */
 export function isDebugEnabled(): boolean {
   const env = (globalThis as any).process?.env;
-  return env?.DIMCODE_DEBUG === "1" || env?.DEBUG === "1";
+  return envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG") || env?.DEBUG === "1";
 }

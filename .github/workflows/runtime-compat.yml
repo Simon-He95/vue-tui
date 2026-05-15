@@ -1,0 +1,79 @@
+name: Runtime compatibility
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run release:pack
+
+      - run: node scripts/smoke-packed-types.mjs .release/*.tgz 3.3.0
+
+      - run: node scripts/smoke-packed-types.mjs .release/*.tgz 3.5.33
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz 3.3.0
+
+      - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz 3.5.33
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-tarball
+          path: .release/*.tgz
+          include-hidden-files: true
+          if-no-files-found: error
+
+  smoke:
+    needs: pack
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["16.17.1", "18", "20", "22", "24"]
+        vue: ["3.3.0", "3.5.33"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-tarball
+          path: package
+
+      - run: |
+          TARBALL=$(ls package/*.tgz | head -n 1)
+          node scripts/smoke-packed-runtime.mjs "$TARBALL" "${{ matrix.vue }}"
+
+  required:
+    needs: smoke
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - run: |
+          if [ "${{ needs.smoke.result }}" != "success" ]; then
+            echo "Runtime compatibility matrix failed"
+            exit 1
+          fi

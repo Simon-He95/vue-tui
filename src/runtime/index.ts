@@ -22,13 +22,6 @@ export type RuntimeOptions = Readonly<{
   clipboard?: ClipboardApi;
 }>;
 
-export type Osc52ClipboardOptions = Readonly<{
-  target?: string;
-  supported?: boolean;
-  write?: (sequence: string) => void | Promise<void>;
-  readText?: () => Promise<string>;
-}>;
-
 export type Runtime = Readonly<{
   env: Readonly<{ kind: RuntimeEnv; isBrowser: boolean; isTerminal: boolean }>;
   now: () => number;
@@ -86,51 +79,10 @@ function createClipboard(kind: RuntimeEnv): ClipboardApi {
   return createUnsupportedClipboard();
 }
 
-function base64EncodeBytes(bytes: Uint8Array): string {
-  const table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i] ?? 0;
-    const b = bytes[i + 1] ?? 0;
-    const c = bytes[i + 2] ?? 0;
-    const triple = (a << 16) | (b << 8) | c;
-    out += table[(triple >> 18) & 63] ?? "";
-    out += table[(triple >> 12) & 63] ?? "";
-    out += i + 1 < bytes.length ? (table[(triple >> 6) & 63] ?? "") : "=";
-    out += i + 2 < bytes.length ? (table[triple & 63] ?? "") : "=";
-  }
-  return out;
-}
-
-function base64EncodeText(text: string): string {
-  if (typeof TextEncoder !== "undefined") return base64EncodeBytes(new TextEncoder().encode(text));
-  const bin = unescape(encodeURIComponent(text));
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return base64EncodeBytes(bytes);
-}
-
-export function createOsc52ClipboardProvider(options: Osc52ClipboardOptions = {}): ClipboardApi {
-  const stdout = (globalThis as any).process?.stdout;
-  const write =
-    options.write ??
-    ((sequence: string) => {
-      stdout?.write?.(sequence);
-    });
-  const supported = options.supported ?? Boolean(options.write || (stdout?.write && stdout.isTTY));
-  const target = options.target ?? "c";
-
-  return {
-    supported,
-    async readText() {
-      if (!options.readText) throw new Error("Clipboard read not available in this runtime");
-      return options.readText();
-    },
-    async writeText(text: string) {
-      if (!supported) throw new Error("Clipboard not available in this runtime");
-      await write(`\u001B]52;${target};${base64EncodeText(text)}\u0007`);
-    },
-  };
+function nowMs(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
 }
 
 function createRaf(kind: RuntimeEnv, timer: TimerApi): RafApi {
@@ -148,8 +100,7 @@ function createRaf(kind: RuntimeEnv, timer: TimerApi): RafApi {
 
   return {
     request(cb) {
-      // Roughly 60Hz; callers relying on determinism should not use `raf` for time-based animation.
-      return timer.setTimeout(() => cb(timer.setTimeout as any as number), 16) as any;
+      return timer.setTimeout(() => cb(nowMs()), 16) as any;
     },
     cancel(id) {
       timer.clearTimeout(id as any);
@@ -196,9 +147,7 @@ export function createRuntime(
   return {
     env,
     now() {
-      return typeof performance !== "undefined" && typeof performance.now === "function"
-        ? performance.now()
-        : Date.now();
+      return nowMs();
     },
     timer,
     raf: createRaf(kind, timer),

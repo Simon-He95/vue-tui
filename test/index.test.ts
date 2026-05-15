@@ -175,6 +175,31 @@ describe("terminal core", () => {
     expect(t.snapshot().lines).toEqual(["    ", "B   ", "C   ", "D   ", "    "]);
   });
 
+  it("keeps composite buffer correct after multiple scroll ranges before one commit", () => {
+    const terminal = createTerminal({ cols: 5, rows: 6 });
+    const plane = getPlaneTerminal(terminal, "default");
+
+    ["aaaaa", "bbbbb", "ccccc", "ddddd", "eeeee", "fffff"].forEach((line, y) => {
+      terminal.write(line, { x: 0, y });
+    });
+    terminal.commit();
+
+    scrollPlaneRows(terminal, "default", 0, 3, 1);
+    scrollPlaneRows(terminal, "default", 3, 6, -1);
+
+    terminal.commit({ sync: true });
+
+    expect(terminal.snapshot().lines).toEqual(plane.snapshot().lines);
+    expect(terminal.snapshot().lines).toEqual([
+      "bbbbb",
+      "ccccc",
+      "     ",
+      "     ",
+      "ddddd",
+      "eeeee",
+    ]);
+  });
+
   it("drops scroll operations covered by dirty rows", () => {
     const t = createTerminal({ cols: 4, rows: 5 });
     const transcript = getPlaneTerminal(t, "transcript");

@@ -1,5 +1,5 @@
 import type { Ref } from "vue";
-import type { Rect } from "../events/index.js";
+import type { Rect } from "../events/manager/types.js";
 import type { ClipboardApi } from "../runtime/index.js";
 import type { Cell, Style, Terminal } from "../core/types.js";
 import { shallowRef } from "vue";
@@ -362,22 +362,28 @@ export function createTerminalSelectionController(
 
   const selectedText = (): string => {
     if (!range) return "";
+    const currentRange = range;
 
     if (providerAnchor && providerFocus && providerAnchor.providerId === providerFocus.providerId) {
       const provider = providerById(providerAnchor.providerId);
       if (provider) {
-        const providerRange = providerRangeFor(provider, range, providerAnchor, providerFocus);
+        const providerRange = providerRangeFor(
+          provider,
+          currentRange,
+          providerAnchor,
+          providerFocus,
+        );
         if (providerRange) return provider.getText(providerRange);
       }
     }
 
-    const provider = providers().find((candidate) => candidate.canHandle(range));
+    const provider = providers().find((candidate) => candidate.canHandle(currentRange));
     if (provider) {
-      const providerRange = providerRangeFor(provider, range);
+      const providerRange = providerRangeFor(provider, currentRange);
       if (providerRange) return provider.getText(providerRange);
     }
 
-    return textFromTerminalBuffer(range);
+    return textFromTerminalBuffer(currentRange);
   };
 
   const setResolvedText = (text: string): void => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { createPromptMentionPlugin, TInput } from "../src/index.js";
+import { TInput } from "../src/index.js";
+import { createPromptMentionPlugin } from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 
 describe("TInput prompt navigation wrap", () => {

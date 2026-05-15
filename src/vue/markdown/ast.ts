@@ -1,16 +1,7 @@
-import type {
-  CodeBlockNode,
-  HeadingNode,
-  HtmlBlockNode,
-  ListItemNode,
-  ListNode,
-  ParagraphNode,
-  ParsedNode,
-} from "stream-markdown-parser";
 import { sanitizeInlineText, sanitizeTextBlock, spaces, textCellWidth } from "../utils/text.js";
-import { isSafeMarkdownLink } from "./parser.js";
+import { sanitizeMarkdownLink } from "./parser.js";
 import { type TuiMarkdownTheme } from "./theme.js";
-import type { TuiMarkdownBlock, TuiMarkdownInlineSegment } from "./types.js";
+import type { TuiMarkdownBlock, TuiMarkdownInlineSegment, TuiMarkdownNode } from "./types.js";
 
 type BlockContext = Readonly<{
   prefixSegments: readonly TuiMarkdownInlineSegment[];
@@ -40,17 +31,27 @@ function trimBlockArray(blocks: TuiMarkdownBlock[]): TuiMarkdownBlock[] {
   return blocks.slice(start, end);
 }
 
-function nodeChildren(node: ParsedNode): readonly ParsedNode[] {
+function nodeChildren(node: TuiMarkdownNode): readonly TuiMarkdownNode[] {
   return "children" in node && Array.isArray(node.children) ? node.children : [];
 }
 
-function stringProp(node: ParsedNode, key: string): string {
+function stringProp(node: TuiMarkdownNode, key: string): string {
   const value = (node as Record<string, unknown>)[key];
   return typeof value === "string" ? value : "";
 }
 
-function booleanProp(node: ParsedNode, key: string): boolean {
+function booleanProp(node: TuiMarkdownNode, key: string): boolean {
   return (node as Record<string, unknown>)[key] === true;
+}
+
+function numberProp(node: TuiMarkdownNode, key: string): number | null {
+  const value = (node as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function nodeItems(node: TuiMarkdownNode): readonly TuiMarkdownNode[] {
+  const value = (node as Record<string, unknown>).items;
+  return Array.isArray(value) ? (value as readonly TuiMarkdownNode[]) : [];
 }
 
 function pushTextSegments(
@@ -85,7 +86,7 @@ function sanitizeCodeBlockText(text: string, tabSize = 4): string {
 }
 
 function inlineNodeSegments(
-  nodes: readonly ParsedNode[],
+  nodes: readonly TuiMarkdownNode[],
   theme: TuiMarkdownTheme,
   inheritedStyle?: TuiMarkdownInlineSegment["style"],
 ): TuiMarkdownInlineSegment[] {
@@ -147,7 +148,7 @@ function inlineNodeSegments(
         break;
       case "link": {
         const href = stringProp(node, "href");
-        const safeHref = href && isSafeMarkdownLink(href) ? href : "";
+        const safeHref = href ? sanitizeMarkdownLink(href) : null;
         const linkStyle = safeHref
           ? mergeStyle(inheritedStyle, { ...theme.link, href: safeHref })
           : inheritedStyle;
@@ -184,7 +185,7 @@ function inlineNodeSegments(
       case "reference":
       case "footnote_reference":
       case "footnote_anchor":
-        pushTextSegments(out, node.raw, inheritedStyle);
+        pushTextSegments(out, stringProp(node, "raw"), inheritedStyle);
         break;
       case "html_inline":
         pushTextSegments(out, stringProp(node, "content"), mergeStyle(inheritedStyle, theme.html));
@@ -197,7 +198,7 @@ function inlineNodeSegments(
           out.push(...inlineNodeSegments(nodeChildren(node), theme, inheritedStyle));
           break;
         }
-        pushTextSegments(out, node.raw, inheritedStyle);
+        pushTextSegments(out, stringProp(node, "raw"), inheritedStyle);
         break;
     }
   }
@@ -219,30 +220,30 @@ function inlineBlock(
 }
 
 function blockFromParagraph(
-  node: ParagraphNode,
+  node: TuiMarkdownNode,
   key: string,
   context: BlockContext,
   theme: TuiMarkdownTheme,
 ): TuiMarkdownBlock {
-  return inlineBlock(key, inlineNodeSegments(node.children, theme), context);
+  return inlineBlock(key, inlineNodeSegments(nodeChildren(node), theme), context);
 }
 
 function blockFromHeading(
-  node: HeadingNode,
+  node: TuiMarkdownNode,
   key: string,
   context: BlockContext,
   theme: TuiMarkdownTheme,
 ): TuiMarkdownBlock {
-  const level = Math.min(6, Math.max(1, Math.floor(node.level || 1)));
+  const level = Math.min(6, Math.max(1, Math.floor(numberProp(node, "level") ?? 1)));
   return inlineBlock(
     key,
-    inlineNodeSegments(node.children, theme, theme.heading[level - 1]),
+    inlineNodeSegments(nodeChildren(node), theme, theme.heading[level - 1]),
     context,
   );
 }
 
 function blockFromCodeBlock(
-  node: CodeBlockNode,
+  node: TuiMarkdownNode,
   key: string,
   context: BlockContext,
   theme: TuiMarkdownTheme,
@@ -250,7 +251,7 @@ function blockFromCodeBlock(
   return {
     type: "code_block",
     key,
-    lines: sanitizeCodeBlockText(node.code ?? "").split("\n"),
+    lines: sanitizeCodeBlockText(stringProp(node, "code")).split("\n"),
     style: theme.codeBlock,
     prefixSegments: context.prefixSegments,
     continuationPrefixSegments: context.continuationPrefixSegments,
@@ -258,7 +259,7 @@ function blockFromCodeBlock(
 }
 
 function blockFromHtmlBlock(
-  node: HtmlBlockNode,
+  node: TuiMarkdownNode,
   key: string,
   context: BlockContext,
   theme: TuiMarkdownTheme,
@@ -266,7 +267,13 @@ function blockFromHtmlBlock(
   return inlineBlock(
     key,
     inlineNodeSegments(
-      [{ type: "html_block", raw: node.raw, content: node.content } as ParsedNode],
+      [
+        {
+          type: "html_block",
+          raw: stringProp(node, "raw"),
+          content: stringProp(node, "content"),
+        },
+      ],
       theme,
     ),
     context,
@@ -274,7 +281,7 @@ function blockFromHtmlBlock(
 }
 
 function childSequenceToBlocks(
-  nodes: readonly ParsedNode[],
+  nodes: readonly TuiMarkdownNode[],
   context: BlockContext,
   theme: TuiMarkdownTheme,
   keyPrefix: string,
@@ -294,7 +301,7 @@ function childSequenceToBlocks(
 }
 
 function listItemBlocks(
-  item: ListItemNode,
+  item: TuiMarkdownNode,
   index: number,
   ordered: boolean,
   start: number,
@@ -320,12 +327,13 @@ function listItemBlocks(
     continuationPrefixSegments: [...context.continuationPrefixSegments, indentSegment],
   };
 
-  if (!item.children.length) return [inlineBlock(`${keyPrefix}-empty`, [], firstContext)];
+  const children = nodeChildren(item);
+  if (!children.length) return [inlineBlock(`${keyPrefix}-empty`, [], firstContext)];
 
   const out: TuiMarkdownBlock[] = [];
   let usedLead = false;
-  for (let i = 0; i < item.children.length; i++) {
-    const child = item.children[i]!;
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i]!;
     const useLeadContext =
       !usedLead &&
       (child.type === "paragraph" || child.type === "heading" || child.type === "code_block");
@@ -364,19 +372,20 @@ function listItemBlocks(
 }
 
 function listBlocks(
-  node: ListNode,
+  node: TuiMarkdownNode,
   context: BlockContext,
   theme: TuiMarkdownTheme,
   keyPrefix: string,
 ): TuiMarkdownBlock[] {
   const out: TuiMarkdownBlock[] = [];
-  for (let i = 0; i < node.items.length; i++) {
+  const items = nodeItems(node);
+  for (let i = 0; i < items.length; i++) {
     out.push(
       ...listItemBlocks(
-        node.items[i]!,
+        items[i]!,
         i,
-        node.ordered,
-        node.start ?? 1,
+        booleanProp(node, "ordered"),
+        numberProp(node, "start") ?? 1,
         context,
         theme,
         `${keyPrefix}-${i}`,
@@ -387,7 +396,7 @@ function listBlocks(
 }
 
 function nodeToBlocks(
-  node: ParsedNode,
+  node: TuiMarkdownNode,
   context: BlockContext,
   theme: TuiMarkdownTheme,
   keyPrefix: string,
@@ -395,15 +404,14 @@ function nodeToBlocks(
   switch (node.type) {
     case "paragraph":
       if ("children" in node && Array.isArray(node.children))
-        return [blockFromParagraph(node as ParagraphNode, keyPrefix, context, theme)];
+        return [blockFromParagraph(node, keyPrefix, context, theme)];
       break;
     case "heading":
       if ("children" in node && Array.isArray(node.children) && "level" in node)
-        return [blockFromHeading(node as HeadingNode, keyPrefix, context, theme)];
+        return [blockFromHeading(node, keyPrefix, context, theme)];
       break;
     case "code_block":
-      if ("code" in node)
-        return [blockFromCodeBlock(node as CodeBlockNode, keyPrefix, context, theme)];
+      if ("code" in node) return [blockFromCodeBlock(node, keyPrefix, context, theme)];
       break;
     case "thematic_break":
       return [
@@ -428,13 +436,12 @@ function nodeToBlocks(
     }
     case "list":
       if ("items" in node && Array.isArray(node.items))
-        return listBlocks(node as ListNode, context, theme, keyPrefix);
+        return listBlocks(node, context, theme, keyPrefix);
       break;
     case "inline":
       return [inlineBlock(keyPrefix, inlineNodeSegments(nodeChildren(node), theme), context)];
     case "html_block":
-      if ("content" in node)
-        return [blockFromHtmlBlock(node as HtmlBlockNode, keyPrefix, context, theme)];
+      if ("content" in node) return [blockFromHtmlBlock(node, keyPrefix, context, theme)];
       break;
     case "text":
       return [inlineBlock(keyPrefix, inlineNodeSegments([node], theme), context)];
@@ -445,7 +452,7 @@ function nodeToBlocks(
 }
 
 export function markdownAstToBlocks(
-  nodes: readonly ParsedNode[],
+  nodes: readonly TuiMarkdownNode[],
   theme: TuiMarkdownTheme,
 ): readonly TuiMarkdownBlock[] {
   const blocks = trimBlockArray(

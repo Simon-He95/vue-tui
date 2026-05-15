@@ -8,6 +8,7 @@ import {
   installAnsiPaletteCssVars,
   isAnsiColorName,
 } from "../../core/ansi-palette.js";
+import { sanitizeDomHref } from "../../core/hyperlink.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
 import { DOM_RENDERER_CAPABILITIES } from "../capabilities.js";
@@ -78,6 +79,25 @@ export type DomRendererRowRenderDebugStats = Readonly<{
 
 export type DomRendererRowKeyPrepassMode = boolean | "auto";
 
+export type DomRendererLinkConfig = Readonly<{
+  allowRelative?: boolean;
+  externalTarget?: "_blank" | "_self";
+  /**
+   * Defaults to -1 so terminal links do not enter the browser tab order.
+   * Set to 0 when the host explicitly wants native anchor keyboard focus.
+   */
+  tabIndex?: number;
+  /** `none` disables native anchor rendering for Style.href segments. */
+  activation?: "native" | "event" | "none";
+  onActivate?: (href: string, event: MouseEvent) => boolean | void;
+}>;
+
+export type DomRendererLinkOptions = boolean | DomRendererLinkConfig;
+
+type NormalizedDomRendererLinkOptions = false | DomRendererLinkConfig;
+type DomRendererAnchorClickHandler = (event: MouseEvent) => void;
+type DomRendererAnchorPointerDownHandler = (event: PointerEvent) => void;
+
 export type DomRendererRowKeyPrepassDecision =
   | "forced-enabled"
   | "forced-disabled"
@@ -115,6 +135,12 @@ export interface DomRenderer {
       palette?: ThemePalette | null;
     }>,
   ) => void;
+  updateOptions: (
+    next: Readonly<{
+      links?: DomRendererLinkOptions;
+      onLinkClick?: DomRendererOptions["onLinkClick"];
+    }>,
+  ) => void;
   setPlaneOffset: (plane: TerminalRenderPlane, offsetPx: number) => void;
   setPlaneViewport: (
     plane: TerminalRenderPlane,
@@ -124,26 +150,38 @@ export interface DomRenderer {
 
 export interface DomRendererOptions {
   /**
+   * Init-only. Changing this after renderer creation requires recreating the renderer.
    * Browser accessibility contract for the renderer container.
    * Pass false when the host owns the accessible wrapper.
    */
   accessibility?: false | DomRendererAccessibilityOptions;
   /**
+   * Init-only. Changing this after renderer creation requires recreating the renderer.
    * Maximum dirty row count allowed for same-call DOM flush when commit({ sync: true }).
    * Larger updates are rAF-batched to avoid blocking the main thread.
    */
   syncFlushMaxRows?: number;
   /**
+   * Init-only. Changing this after renderer creation requires recreating the renderer.
    * Maximum estimated cell work for sync DOM flush: dirtyRows * cols * activePlanes.
    */
   syncFlushCellBudget?: number;
   /**
+   * Init-only because renderer capabilities are frozen at creation time.
    * Enables DOM line-node shifting for terminal scrollOperations.
    */
   enableScrollOperations?: boolean;
-  /** Optional ANSI-name palette exposed as DOM CSS variables. */
+  /**
+   * Runtime-updatable.
+   * Controls DOM anchor rendering for Style.href segments.
+   */
+  links?: DomRendererLinkOptions;
+  /** Runtime-updatable. */
+  onLinkClick?: (event: MouseEvent, href: string) => boolean | void;
+  /** Runtime-updatable ANSI-name palette exposed as DOM CSS variables. */
   palette?: ThemePalette | null;
   /**
+   * Init-only. Changing this after renderer creation requires recreating the renderer.
    * Controls a key-only early bailout before row segment allocation.
    * The normal row cache remains enabled regardless of this option.
    * Defaults to "auto": sample cached-row hit ratio and keep prepass enabled only
@@ -189,8 +227,6 @@ const ACCESSIBILITY_ATTRS = [
   "aria-multiline",
   "aria-readonly",
 ];
-
-const styleKeyCache = new WeakMap<object, string>();
 
 type RowRenderMutableStats = {
   -readonly [K in keyof DomRendererRowRenderStats]: DomRendererRowRenderStats[K];
@@ -261,9 +297,8 @@ function applyAccessibilityOptions(
   }
 }
 
-function styleKey(style: Style): string {
-  const cached = styleKeyCache.get(style as any);
-  if (cached) return cached;
+function visualStyleKey(style: Style, linkOptions: NormalizedDomRendererLinkOptions): string {
+  const href = renderableHref(style, linkOptions) ?? "";
   const key = [
     style.fg ?? "",
     style.bg ?? "",
@@ -272,9 +307,8 @@ function styleKey(style: Style): string {
     style.italic ? "1" : "0",
     style.underline ? "1" : "0",
     style.inverse ? "1" : "0",
-    style.href ?? "",
+    href,
   ].join("|");
-  styleKeyCache.set(style as any, key);
   return key;
 }
 
@@ -296,7 +330,47 @@ function resolveColorCss(color: string | undefined): string | undefined {
   return ansiCssVar(color);
 }
 
-function applyStyle(span: HTMLSpanElement, style: Style, palette?: ThemePalette | null): void {
+function parseColorToRgb(color: string): { r: number; g: number; b: number } | null {
+  if (color.startsWith("#")) {
+    const hex = color.slice(1);
+    if (hex.length === 3) {
+      const r = Number.parseInt(hex[0] + hex[0], 16);
+      const g = Number.parseInt(hex[1] + hex[1], 16);
+      const b = Number.parseInt(hex[2] + hex[2], 16);
+      return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b) ? { r, g, b } : null;
+    }
+    if (hex.length === 6) {
+      const r = Number.parseInt(hex.slice(0, 2), 16);
+      const g = Number.parseInt(hex.slice(2, 4), 16);
+      const b = Number.parseInt(hex.slice(4, 6), 16);
+      return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b) ? { r, g, b } : null;
+    }
+  }
+  const m = color.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (m) {
+    const r = Number.parseInt(m[1]!, 10);
+    const g = Number.parseInt(m[2]!, 10);
+    const b = Number.parseInt(m[3]!, 10);
+    return { r, g, b };
+  }
+  return null;
+}
+
+function luminance({ r, g, b }: { r: number; g: number; b: number }): number {
+  const srgb = [r, g, b].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * srgb[0]! + 0.7152 * srgb[1]! + 0.0722 * srgb[2]!;
+}
+
+function contrastText(bgColor: string): string {
+  const rgb = parseColorToRgb(bgColor);
+  if (!rgb) return "#111827";
+  return luminance(rgb) > 0.6 ? "#111827" : "#e5e7eb";
+}
+
+function applyStyle(span: HTMLElement, style: Style, palette?: ThemePalette | null): void {
   const fgHex = resolveColorHex(style.fg, palette);
   const bgHex = resolveColorHex(style.bg, palette);
   const fgCss = resolveColorCss(style.fg);
@@ -307,46 +381,12 @@ function applyStyle(span: HTMLSpanElement, style: Style, palette?: ThemePalette 
   const effectiveFgHex = style.inverse ? bgHex : fgHex;
   const effectiveBgHex = style.inverse ? fgHex : bgHex;
 
-  function parseColorToRgb(color: string): { r: number; g: number; b: number } | null {
-    if (color.startsWith("#")) {
-      const hex = color.slice(1);
-      if (hex.length === 3) {
-        const r = Number.parseInt(hex[0] + hex[0], 16);
-        const g = Number.parseInt(hex[1] + hex[1], 16);
-        const b = Number.parseInt(hex[2] + hex[2], 16);
-        return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b) ? { r, g, b } : null;
-      }
-      if (hex.length === 6) {
-        const r = Number.parseInt(hex.slice(0, 2), 16);
-        const g = Number.parseInt(hex.slice(2, 4), 16);
-        const b = Number.parseInt(hex.slice(4, 6), 16);
-        return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b) ? { r, g, b } : null;
-      }
-    }
-    const m = color.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-    if (m) {
-      const r = Number.parseInt(m[1]!, 10);
-      const g = Number.parseInt(m[2]!, 10);
-      const b = Number.parseInt(m[3]!, 10);
-      return { r, g, b };
-    }
-    return null;
+  if (span.tagName === "A") {
+    span.style.pointerEvents = "auto";
+    span.style.cursor = "pointer";
+    span.style.color = "inherit";
+    span.style.textDecoration = "inherit";
   }
-
-  function luminance({ r, g, b }: { r: number; g: number; b: number }): number {
-    const srgb = [r, g, b].map((v) => {
-      const c = v / 255;
-      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    });
-    return 0.2126 * srgb[0]! + 0.7152 * srgb[1]! + 0.0722 * srgb[2]!;
-  }
-
-  function contrastText(bgColor: string): string {
-    const rgb = parseColorToRgb(bgColor);
-    if (!rgb) return "#111827";
-    return luminance(rgb) > 0.6 ? "#111827" : "#e5e7eb";
-  }
-
   if (effectiveFg) {
     span.style.color = effectiveFg;
     // JSDOM (tests) does not support CSS variables for color values; fall back to hex.
@@ -365,7 +405,7 @@ function applyStyle(span: HTMLSpanElement, style: Style, palette?: ThemePalette 
 }
 
 function measureCell(container: HTMLElement): CellMetrics {
-  const probe = document.createElement("span");
+  const probe = container.ownerDocument.createElement("span");
   probe.textContent = "M";
   probe.style.position = "absolute";
   probe.style.visibility = "hidden";
@@ -380,7 +420,7 @@ function measureCell(container: HTMLElement): CellMetrics {
 }
 
 function measureCharWidth(container: HTMLElement, ch: string): number {
-  const probe = document.createElement("span");
+  const probe = container.ownerDocument.createElement("span");
   probe.textContent = ch;
   probe.style.position = "absolute";
   probe.style.visibility = "hidden";
@@ -414,14 +454,20 @@ function formatSingleRowKey(
   cols: number,
   wide: boolean,
   style: Style,
+  linkOptions: NormalizedDomRendererLinkOptions,
 ): string {
-  const plain = isPlainStyle(style);
+  const plain = isPlainVisualStyle(style, linkOptions);
+  const hasRenderableHref = renderableHref(style, linkOptions) != null;
   if (!wide && plain) return `p:${text}:${cols}`;
-  if (!wide && !style.href && !plain) return `s:${key}:${text}:${cols}`;
+  if (!wide && !hasRenderableHref && !plain) return `s:${key}:${text}:${cols}`;
   return `1:${formatRowSegmentKeyPart(key, text, cols, wide)}`;
 }
 
-function computeRowSegmentsWithKey(terminal: Terminal, y: number): RowSegmentsResult {
+function computeRowSegmentsWithKey(
+  terminal: Terminal,
+  y: number,
+  linkOptions: NormalizedDomRendererLinkOptions,
+): RowSegmentsResult {
   const cells = terminal.getRow(y);
   let currentKey: string | null = null;
   let currentStyle: Style | null = null;
@@ -450,7 +496,9 @@ function computeRowSegmentsWithKey(terminal: Terminal, y: number): RowSegmentsRe
     const wide = cols === 2;
     const nextStyle = cell.style;
     const key: string =
-      nextStyle === currentStyle && currentKey != null ? currentKey : styleKey(nextStyle);
+      nextStyle === currentStyle && currentKey != null
+        ? currentKey
+        : visualStyleKey(nextStyle, linkOptions);
     if (currentKey == null) {
       currentKey = key;
       currentStyle = nextStyle;
@@ -491,13 +539,20 @@ function computeRowSegmentsWithKey(terminal: Terminal, y: number): RowSegmentsRe
 
   if (segmentCount === 1) {
     const s = segments[0]!;
-    return { segments, key: formatSingleRowKey(s.key, s.text, s.cols, s.wide, s.style) };
+    return {
+      segments,
+      key: formatSingleRowKey(s.key, s.text, s.cols, s.wide, s.style, linkOptions),
+    };
   }
 
   return { segments, key: `${segmentCount}${keyBody}` };
 }
 
-function computeRowKey(terminal: Terminal, y: number): string {
+function computeRowKey(
+  terminal: Terminal,
+  y: number,
+  linkOptions: NormalizedDomRendererLinkOptions,
+): string {
   const cells = terminal.getRow(y);
   let currentKey: string | null = null;
   let currentStyle: Style | null = null;
@@ -534,7 +589,9 @@ function computeRowKey(terminal: Terminal, y: number): string {
     const wide = cols === 2;
     const nextStyle = cell.style;
     const key: string =
-      nextStyle === currentStyle && currentKey != null ? currentKey : styleKey(nextStyle);
+      nextStyle === currentStyle && currentKey != null
+        ? currentKey
+        : visualStyleKey(nextStyle, linkOptions);
     if (currentKey == null) {
       currentKey = key;
       currentStyle = nextStyle;
@@ -560,7 +617,7 @@ function computeRowKey(terminal: Terminal, y: number): string {
 
   if (segmentCount === 0) return "0";
   if (segmentCount === 1)
-    return formatSingleRowKey(firstKey, firstText, firstCols, firstWide, firstStyle!);
+    return formatSingleRowKey(firstKey, firstText, firstCols, firstWide, firstStyle!, linkOptions);
   return `${segmentCount}${keyBody}`;
 }
 
@@ -573,7 +630,9 @@ function nowMs(): number {
   return Date.now();
 }
 
-function isPlainStyle(style: Style): boolean {
+function isPlainVisualStyle(style: Style, linkOptions: NormalizedDomRendererLinkOptions): boolean {
+  const hasRenderableHref = renderableHref(style, linkOptions) != null;
+
   return (
     !style.fg &&
     !style.bg &&
@@ -582,37 +641,128 @@ function isPlainStyle(style: Style): boolean {
     !style.italic &&
     !style.underline &&
     !style.inverse &&
-    !style.href
+    !hasRenderableHref
   );
 }
 
-function isTransparentBlankRow(segments: readonly RowSegment[]): boolean {
+function isTransparentBlankRow(
+  segments: readonly RowSegment[],
+  linkOptions: NormalizedDomRendererLinkOptions,
+): boolean {
   return (
     segments.length === 1 &&
-    isPlainStyle(segments[0]!.style) &&
+    isPlainVisualStyle(segments[0]!.style, linkOptions) &&
     segments[0]!.text.trim().length === 0
   );
 }
 
-function isPlainTextRow(segments: readonly RowSegment[]): boolean {
-  return segments.length === 1 && !segments[0]!.wide && isPlainStyle(segments[0]!.style);
-}
-
-function isSingleStyledTextRow(segments: readonly RowSegment[]): boolean {
+function isPlainTextRow(
+  segments: readonly RowSegment[],
+  linkOptions: NormalizedDomRendererLinkOptions,
+): boolean {
   return (
     segments.length === 1 &&
     !segments[0]!.wide &&
-    !segments[0]!.style.href &&
-    !isPlainStyle(segments[0]!.style)
+    isPlainVisualStyle(segments[0]!.style, linkOptions)
   );
 }
 
-function canReuseSegmentSpans(segments: readonly RowSegment[]): boolean {
-  return segments.length > 1 && segments.every((segment) => !segment.wide && !segment.style.href);
+function normalizeLinkOptions(
+  value: DomRendererLinkOptions | undefined,
+): NormalizedDomRendererLinkOptions {
+  if (value === true) return {};
+  if (value === false || value == null) return false;
+  const activation =
+    value.activation ?? (typeof value.onActivate === "function" ? "event" : "native");
+  if (activation === "event" && typeof value.onActivate !== "function") {
+    return { ...value, activation: "native" };
+  }
+  return { ...value, activation };
 }
 
-function resetSpanStyle(span: HTMLSpanElement): void {
+function linkOptionsKey(options: NormalizedDomRendererLinkOptions): string {
+  if (!options) return "disabled";
+
+  return JSON.stringify({
+    allowRelative: options.allowRelative !== false,
+    externalTarget: options.externalTarget ?? "_blank",
+    tabIndex: options.tabIndex ?? -1,
+    activation: options.activation ?? "native",
+    hasOnActivate: typeof options.onActivate === "function",
+  });
+}
+
+function renderableHref(
+  style: Style,
+  linkOptions: NormalizedDomRendererLinkOptions,
+): string | null {
+  if (!linkOptions) return null;
+  if (linkOptions.activation === "none") return null;
+  return sanitizeDomHref(style.href, {
+    allowRelative: linkOptions.allowRelative !== false,
+  });
+}
+
+function isSingleStyledTextRow(
+  segments: readonly RowSegment[],
+  linkOptions: NormalizedDomRendererLinkOptions,
+): boolean {
+  return (
+    segments.length === 1 &&
+    !segments[0]!.wide &&
+    !renderableHref(segments[0]!.style, linkOptions) &&
+    !isPlainVisualStyle(segments[0]!.style, linkOptions)
+  );
+}
+
+function canReuseSegmentSpans(
+  segments: readonly RowSegment[],
+  linkOptions: NormalizedDomRendererLinkOptions,
+): boolean {
+  return (
+    segments.length > 1 &&
+    segments.every((segment) => !segment.wide && !renderableHref(segment.style, linkOptions))
+  );
+}
+
+function resetSpanStyle(span: HTMLElement): void {
   span.removeAttribute("style");
+  if (span.tagName === "A") {
+    span.removeAttribute("href");
+    span.removeAttribute("target");
+    span.removeAttribute("rel");
+    delete span.dataset.vtHref;
+  }
+}
+
+function createSegmentElement(
+  doc: Document,
+  style: Style,
+  options: Readonly<{
+    links: NormalizedDomRendererLinkOptions;
+    onAnchorClick: DomRendererAnchorClickHandler;
+    onAnchorPointerDown: DomRendererAnchorPointerDownHandler;
+  }>,
+): HTMLSpanElement | HTMLAnchorElement {
+  const linkOptions = options.links;
+  if (!linkOptions) return doc.createElement("span");
+
+  const href = renderableHref(style, linkOptions);
+  if (!href) return doc.createElement("span");
+
+  const anchor = doc.createElement("a");
+  anchor.href = href;
+  anchor.dataset.vtHref = href;
+  const protocol = href.match(/^[a-z][a-z0-9+.-]*:/i)?.[0].toLowerCase() ?? null;
+  if (protocol === "http:" || protocol === "https:") {
+    anchor.target = linkOptions.externalTarget ?? "_blank";
+    anchor.rel = "noopener noreferrer";
+  }
+  anchor.tabIndex = linkOptions.tabIndex ?? -1;
+  anchor.draggable = false;
+  anchor.addEventListener("pointerdown", options.onAnchorPointerDown);
+  anchor.addEventListener("click", options.onAnchorClick);
+  return anchor;
 }
 
 function isSpanNode(
@@ -665,12 +815,18 @@ function renderRow(
   stats: RowRenderMutableStats,
   enableRowKeyPrepass: boolean,
   palette: ThemePalette | null,
+  linkOptions: NormalizedDomRendererLinkOptions,
+  onAnchorClick: DomRendererAnchorClickHandler,
+  onAnchorPointerDown: DomRendererAnchorPointerDownHandler,
+  linkVersion: number,
 ): void {
   stats.rows++;
+  const doc = lineEl.ownerDocument;
+  const rowModeKey = `links:${linkVersion}`;
   const cachedKey = rowCache.get(lineEl);
   if (enableRowKeyPrepass && cachedKey != null) {
     stats.rowKeyPrepassChecks++;
-    const prepassKey = computeRowKey(terminal, y);
+    const prepassKey = `${rowModeKey}|${computeRowKey(terminal, y, linkOptions)}`;
     if (cachedKey === prepassKey) {
       stats.rowKeyPrepassHits++;
       stats.cacheHits++;
@@ -680,7 +836,8 @@ function renderRow(
     stats.rowKeyPrepassMisses++;
   }
 
-  const { segments, key: newKey } = computeRowSegmentsWithKey(terminal, y);
+  const { segments, key } = computeRowSegmentsWithKey(terminal, y, linkOptions);
+  const newKey = `${rowModeKey}|${key}`;
   if (cachedKey === newKey) {
     stats.cacheHits++;
     return;
@@ -688,14 +845,14 @@ function renderRow(
 
   rowCache.set(lineEl, newKey);
 
-  if (isTransparentBlankRow(segments)) {
+  if (isTransparentBlankRow(segments, linkOptions)) {
     stats.transparentBlankRows++;
     stats.replaceChildren++;
     lineEl.replaceChildren();
     return;
   }
 
-  if (isPlainTextRow(segments)) {
+  if (isPlainTextRow(segments, linkOptions)) {
     stats.plainTextRows++;
     stats.textNodeUpdates++;
     const text = segments[0]!.text;
@@ -708,10 +865,10 @@ function renderRow(
     return;
   }
 
-  if (isSingleStyledTextRow(segments)) {
+  if (isSingleStyledTextRow(segments, linkOptions)) {
     const seg = segments[0]!;
     const firstChild = lineEl.firstChild;
-    let span: HTMLSpanElement;
+    let span: HTMLElement;
 
     if (
       lineEl.childNodes.length === 1 &&
@@ -721,7 +878,11 @@ function renderRow(
       span = firstChild;
       stats.spansReused++;
     } else {
-      span = document.createElement("span");
+      span = createSegmentElement(doc, seg.style, {
+        links: linkOptions,
+        onAnchorClick,
+        onAnchorPointerDown,
+      });
       span.dataset.vtFastRow = "styled";
       stats.spansCreated++;
       stats.replaceChildren++;
@@ -736,7 +897,7 @@ function renderRow(
     return;
   }
 
-  const canReuseSpans = canReuseSegmentSpans(segments);
+  const canReuseSpans = canReuseSegmentSpans(segments, linkOptions);
   if (canReuseSpans && tryUpdateSegmentSpans(lineEl, segments, metrics, palette)) {
     stats.segmentReuseRows++;
     stats.spansReused += segments.length;
@@ -748,17 +909,21 @@ function renderRow(
   stats.replaceChildren++;
 
   // Use DocumentFragment to batch DOM operations and avoid layout thrashing
-  const fragment = document.createDocumentFragment();
+  const fragment = doc.createDocumentFragment();
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]!;
-    const span = document.createElement("span");
+    const span = createSegmentElement(doc, seg.style, {
+      links: linkOptions,
+      onAnchorClick,
+      onAnchorPointerDown,
+    });
     if (canReuseSpans) {
       span.dataset.vtFastRow = "segment";
       span.dataset.vtSegmentIndex = String(i);
     }
     if (seg.wide && wideScaleX > 1.01) {
-      const inner = document.createElement("span");
+      const inner = doc.createElement("span");
       inner.textContent = seg.text;
       inner.style.cssText = `display:inline-block;white-space:pre;transform:scaleX(${wideScaleX});transform-origin:left`;
       span.appendChild(inner);
@@ -779,6 +944,38 @@ export function createDomRenderer(
   container: HTMLElement,
   options: DomRendererOptions = {},
 ): DomRenderer {
+  const doc = container.ownerDocument;
+  let rendererLinkOptions = normalizeLinkOptions(options.links);
+  let rendererOnLinkClick = options.onLinkClick;
+  let rendererLinkOptionsKey = linkOptionsKey(rendererLinkOptions);
+  let rendererLinkVersion = 0;
+  const onAnchorClick: DomRendererAnchorClickHandler = (event) => {
+    const anchor = event.currentTarget as HTMLAnchorElement;
+    const href = anchor.dataset.vtHref;
+    if (!href || !rendererLinkOptions) return;
+
+    const linkClickResult = rendererOnLinkClick?.(event, href);
+    if (linkClickResult === false) {
+      event.preventDefault();
+      return;
+    }
+
+    if (rendererLinkOptions.activation === "event") {
+      event.preventDefault();
+      const activateResult = rendererLinkOptions.onActivate?.(href, event);
+      if (activateResult === false) event.preventDefault();
+      return;
+    }
+  };
+  const onAnchorPointerDown: DomRendererAnchorPointerDownHandler = () => {
+    if (!rendererLinkOptions || rendererLinkOptions.activation !== "event") return;
+
+    try {
+      container.focus({ preventScroll: true });
+    } catch {
+      container.focus();
+    }
+  };
   container.style.fontFamily = DEFAULT_FONT_FAMILY;
   container.style.whiteSpace = "pre";
   container.style.display = "inline-block";
@@ -960,14 +1157,14 @@ export function createDomRenderer(
     container.style.width = `${cols * metrics.cellWidth}px`;
     container.style.height = `${rows * metrics.cellHeight}px`;
 
-    const fragment = document.createDocumentFragment();
+    const fragment = doc.createDocumentFragment();
     for (let i = 0; i < TERMINAL_RENDER_PLANES.length; i++) {
       const plane = TERMINAL_RENDER_PLANES[i]!;
       const planeTerminal = getPlaneTerminal(terminal, plane);
       let layer = planeLayers.get(plane);
       if (!layer) {
-        const el = document.createElement("div");
-        const contentEl = document.createElement("div");
+        const el = doc.createElement("div");
+        const contentEl = doc.createElement("div");
         el.dataset.vtPlane = plane;
         el.style.pointerEvents = "none";
         contentEl.style.position = "absolute";
@@ -1005,9 +1202,9 @@ export function createDomRenderer(
             },
       );
 
-      const lineFragment = document.createDocumentFragment();
+      const lineFragment = doc.createDocumentFragment();
       layer.lines = Array.from({ length: rows }, () => {
-        const line = document.createElement("div");
+        const line = doc.createElement("div");
         line.style.cssText = `height:${metrics.cellHeight}px;width:${cols * metrics.cellWidth}px;overflow:hidden;contain:layout style`;
         lineFragment.appendChild(line);
         return line;
@@ -1041,6 +1238,10 @@ export function createDomRenderer(
           rowStats,
           shouldUseRowKeyPrepass(),
           palette,
+          rendererLinkOptions,
+          onAnchorClick,
+          onAnchorPointerDown,
+          rendererLinkVersion,
         );
     }
     recordRowKeyPrepassAutoStats(rowStats);
@@ -1119,7 +1320,7 @@ export function createDomRenderer(
 
   function reorderLayerDomRows(layer: PlaneLayer, startY: number, endY: number): void {
     const before = layer.lines[endY] ?? null;
-    const fragment = document.createDocumentFragment();
+    const fragment = layer.contentEl.ownerDocument.createDocumentFragment();
     for (let y = startY; y < endY; y++) {
       const line = layer.lines[y];
       if (line) fragment.appendChild(line);
@@ -1349,6 +1550,10 @@ export function createDomRenderer(
             rowStats,
             useRowKeyPrepass,
             palette,
+            rendererLinkOptions,
+            onAnchorClick,
+            onAnchorPointerDown,
+            rendererLinkVersion,
           );
         deletePendingRow(plane, rows, y);
         flushedRows++;
@@ -1465,10 +1670,37 @@ export function createDomRenderer(
     }>,
   ): void {
     if (disposed) return;
+    let changed = false;
     if ("palette" in next) {
       palette = next.palette ?? null;
       installAnsiPaletteCssVars(container, palette);
+      changed = true;
     }
+    if (changed) refresh();
+  }
+
+  function updateOptions(
+    next: Readonly<{
+      links?: DomRendererLinkOptions;
+      onLinkClick?: DomRendererOptions["onLinkClick"];
+    }>,
+  ): void {
+    if (disposed) return;
+
+    if (Object.prototype.hasOwnProperty.call(next, "onLinkClick")) {
+      rendererOnLinkClick = next.onLinkClick;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(next, "links")) return;
+
+    const normalized = normalizeLinkOptions(next.links);
+    const nextKey = linkOptionsKey(normalized);
+    rendererLinkOptions = normalized;
+    if (nextKey === rendererLinkOptionsKey) return;
+
+    rendererLinkOptionsKey = nextKey;
+    rendererLinkVersion++;
+    refresh();
   }
 
   refresh();
@@ -1484,6 +1716,7 @@ export function createDomRenderer(
     },
     refresh,
     updateTheme,
+    updateOptions,
     dispose() {
       disposed = true;
       offCommit();

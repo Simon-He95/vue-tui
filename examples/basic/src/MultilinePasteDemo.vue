@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { TBox, TInput, TMultilineModal, TText } from "@simon_he/vue-tui";
+import { TBox, TInput, TText } from "@simon_he/vue-tui";
+import { TMultilineModal } from "@simon_he/vue-tui/vue";
 
 const inputValue = ref("");
 const multilineTexts = ref<string[]>([]);

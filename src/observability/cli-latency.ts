@@ -1,6 +1,6 @@
-import type { CliLatencyProfiler } from "./cli-latency-node.js";
+import type { CliLatencyProfiler } from "./cli-latency-types.js";
 
-export type { CliLatencyProfiler } from "./cli-latency-node.js";
+export type { CliLatencyProfiler } from "./cli-latency-types.js";
 
 const GLOBAL_PROFILER_KEY = "__vueTuiCliLatencyProfiler" as const;
 

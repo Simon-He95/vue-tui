@@ -1,16 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
+  createTLogLineMatcherPlugin,
   createTLogOsc8LinkPlugin,
   detectTLogUrls,
   parseTLogAnnotatedText,
   sanitizeTerminalHref,
 } from "../src/experimental.js";
+import { detectTLogLevel } from "../src/vue/log/tlog-plugins.js";
 
 describe("TLog link sanitizing", () => {
   it("exports the shared terminal href sanitizer", () => {
-    expect(sanitizeTerminalHref(" https://example.com ")).toBe("https://example.com");
+    expect(sanitizeTerminalHref(" https://example.com")).toBeNull();
+    expect(sanitizeTerminalHref("https://example.com ")).toBeNull();
     expect(sanitizeTerminalHref("file:///tmp/a")).toBeNull();
     expect(sanitizeTerminalHref("file:///tmp/a", { allowFileUrls: true })).toBe("file:///tmp/a");
+    expect(sanitizeTerminalHref("file:///tmp/a%0d", { allowFileUrls: true })).toBeNull();
+    expect(sanitizeTerminalHref("docs/intro.md")).toBeNull();
+    expect(sanitizeTerminalHref("foo:bar")).toBeNull();
+    expect(sanitizeTerminalHref("https:example.com")).toBeNull();
+    expect(sanitizeTerminalHref("http:\\example.com")).toBeNull();
   });
 
   it("drops unsafe OSC8 links while preserving visible text", () => {
@@ -83,5 +91,35 @@ describe("TLog link sanitizing", () => {
     const links = detectTLogUrls("file:///tmp/a https://example.com", { allowFileUrls: true });
 
     expect(links.map((link) => link.href)).toEqual(["file:///tmp/a", "https://example.com"]);
+  });
+
+  it("does not loop forever when a custom URL regex matches empty strings", () => {
+    expect(detectTLogUrls("abc", { pattern: /(?:)/g })).toEqual([]);
+  });
+
+  it("treats global level regexes as stateless across lines", () => {
+    const options = { errorPattern: /ERROR/g };
+    expect(detectTLogLevel("ERROR one", options)).toBe("error");
+    expect(detectTLogLevel("ERROR two", options)).toBe("error");
+  });
+
+  it("treats global line matcher regexes as stateless", () => {
+    const plugin = createTLogLineMatcherPlugin({
+      name: "err",
+      pattern: /ERROR/g,
+    });
+
+    const ctx = (plainText: string) =>
+      ({
+        lineIndex: 0,
+        absoluteLineIndex: 0,
+        lineKey: "0",
+        text: plainText,
+        plainText,
+        osc8Links: [],
+      }) as any;
+
+    expect(plugin.parseLine?.(ctx("ERROR one"))).toBeTruthy();
+    expect(plugin.parseLine?.(ctx("ERROR two"))).toBeTruthy();
   });
 });

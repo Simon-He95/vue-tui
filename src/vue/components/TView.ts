@@ -1,4 +1,4 @@
-import type { Rect } from "../../events/index.js";
+import type { Rect } from "../../events/manager/types.js";
 import type { LayoutContext } from "../context.js";
 import type { PropType } from "vue";
 import { computed, defineComponent, h, inject, provide, shallowReactive, watchEffect } from "vue";

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { TRenderPlane, TText, useTerminal } from "../src/index.js";
+import {
+  TRenderPlane,
+  TText,
+  useTerminal,
+  type TerminalSchedulerInvalidateOptions,
+} from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 import { createFrameMailbox } from "../src/vue/scheduler/frame-mailbox.js";
 
@@ -226,7 +231,7 @@ describe("render-plane frame mailbox", () => {
     const app = createTerminalApp({ cols: 20, rows: 4, component: App });
     const invalidations: Array<string | undefined> = [];
     const originalInvalidate = app.scheduler.invalidate.bind(app.scheduler);
-    (app.scheduler as any).invalidate = (options?: { plane?: string }) => {
+    (app.scheduler as any).invalidate = (options?: TerminalSchedulerInvalidateOptions) => {
       invalidations.push(options?.plane);
       return originalInvalidate(options);
     };
@@ -368,7 +373,7 @@ describe("render-plane frame mailbox", () => {
     const app = createTerminalApp({ cols: 20, rows: 4, component: App });
     const invalidations: Array<string | undefined> = [];
     const originalInvalidate = app.scheduler.invalidate.bind(app.scheduler);
-    (app.scheduler as any).invalidate = (options?: { plane?: string }) => {
+    (app.scheduler as any).invalidate = (options?: TerminalSchedulerInvalidateOptions) => {
       invalidations.push(options?.plane);
       return originalInvalidate(options);
     };

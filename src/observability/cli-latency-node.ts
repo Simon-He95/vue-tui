@@ -1,11 +1,9 @@
 import { appendFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import process from "node:process";
-
-type StageEvent = Readonly<Record<string, unknown>> & {
-  type?: unknown;
-  key?: unknown;
-  code?: unknown;
-};
+import type { CliLatencyProfiler, CliLatencyStageEvent } from "./cli-latency-types.js";
+import { envFlag, envString } from "../utils/env.js";
 
 interface CliLatencyOp {
   id: number;
@@ -87,44 +85,8 @@ type CliLatencyLogRecord = Readonly<{
   outcome: string;
 }>;
 
-export type CliLatencyProfiler = Readonly<{
-  enabled: true;
-  recordRawInput: (info?: Readonly<{ bytes?: number }>) => void;
-  recordStdinDispatch: (event: StageEvent, info?: Readonly<{ parser?: string | null }>) => void;
-  recordEventDispatchStart: (event: StageEvent) => void;
-  recordEventDispatchEnd: (
-    event: StageEvent,
-    info: Readonly<{ defaultPrevented: boolean }>,
-  ) => void;
-  recordSchedulerInvalidate: (
-    info?: Readonly<{ priority?: string | null; plane?: string | null }>,
-  ) => void;
-  recordFlushStart: (
-    info?: Readonly<{ sync?: boolean; activePlanes?: readonly string[] | null }>,
-  ) => void;
-  recordFlushEnd: () => void;
-  recordCommit: (
-    info?: Readonly<{
-      sync?: boolean;
-      dirtyRows?: readonly number[] | null;
-      planes?: readonly string[] | null;
-    }>,
-  ) => void;
-  recordStdoutQueued: (delayMs: number) => void;
-  recordStdoutRenderStart: () => void;
-  recordStdoutNoOutput: () => void;
-  recordStdoutWrite: (
-    info: Readonly<{
-      durationMs: number;
-      bytes: number;
-      mode: string;
-    }>,
-  ) => void;
-  markOperation: (operation: string) => void;
-}>;
-
 const EVENT_OP_ID = Symbol("dimcode.cliLatencyOpId");
-const DEFAULT_LOG_PATH = "/tmp/dimcode-cli-latency.jsonl";
+const DEFAULT_LOG_FILE = "vue-tui-cli-latency.jsonl";
 const INVALIDATE_ASSOCIATION_WINDOW_MS = 32;
 const MAX_OP_AGE_MS = 5000;
 const GLOBAL_PROFILER_KEY = "__vueTuiCliLatencyProfiler" as const;
@@ -147,18 +109,11 @@ function diffMs(end: number | null, start: number | null): number | null {
   return Math.max(0, end - start);
 }
 
-function parseEnabled(value: unknown): boolean {
-  const raw = String(value ?? "")
-    .trim()
-    .toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes";
-}
-
 function isTrackedEventType(type: string): boolean {
   return type === "keydown" || type === "beforeinput" || type === "input" || type === "paste";
 }
 
-function defineOpId(target: StageEvent, id: number): void {
+function defineOpId(target: CliLatencyStageEvent, id: number): void {
   try {
     Object.defineProperty(target, EVENT_OP_ID, {
       configurable: true,
@@ -171,7 +126,7 @@ function defineOpId(target: StageEvent, id: number): void {
   }
 }
 
-function readOpId(target: StageEvent): number | null {
+function readOpId(target: CliLatencyStageEvent): number | null {
   const value = (target as any)?.[EVENT_OP_ID];
   return typeof value === "number" ? value : null;
 }
@@ -180,14 +135,22 @@ function createDisabledProfiler(): null {
   return null;
 }
 
+export function defaultCliLatencyLogPath(): string {
+  return join(tmpdir(), DEFAULT_LOG_FILE);
+}
+
 function createProfiler(): CliLatencyProfiler | null {
   const processLike = process;
   const env = (processLike?.env ?? {}) as Record<string, unknown>;
-  if (!parseEnabled(env.DIMCODE_PROFILE_INPUT_LATENCY)) return createDisabledProfiler();
+  if (!envFlag(env, "VUE_TUI_PROFILE_INPUT_LATENCY", "DIMCODE_PROFILE_INPUT_LATENCY"))
+    return createDisabledProfiler();
 
-  const logPath =
-    String(env.DIMCODE_PROFILE_INPUT_LATENCY_LOG_PATH ?? DEFAULT_LOG_PATH).trim() ||
-    DEFAULT_LOG_PATH;
+  const logPath = envString(
+    env,
+    "VUE_TUI_PROFILE_INPUT_LATENCY_LOG_PATH",
+    "DIMCODE_PROFILE_INPUT_LATENCY_LOG_PATH",
+    defaultCliLatencyLogPath(),
+  );
 
   const ops = new Map<number, CliLatencyOp>();
   const pendingCommitIds = new Set<number>();
@@ -285,7 +248,7 @@ function createProfiler(): CliLatencyProfiler | null {
       flushOp(op, op.writeEndAt != null ? "completed" : outcome);
   };
 
-  const ensureOp = (event: StageEvent): CliLatencyOp | null => {
+  const ensureOp = (event: CliLatencyStageEvent): CliLatencyOp | null => {
     const type = String(event?.type ?? "");
     if (!isTrackedEventType(type)) return null;
 

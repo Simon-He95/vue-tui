@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  charCellWidth,
-  clearTextCaches,
-  sliceByCells,
-  textCellWidth,
-  wrapByCells,
-} from "../src/index.js";
+import { charCellWidth } from "../src/core.js";
+import { clearTextCaches, sliceByCells, textCellWidth, wrapByCells } from "../src/vue.js";
 
 function segmentGraphemes(text: string): string[] {
   try {

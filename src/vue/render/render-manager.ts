@@ -3,7 +3,11 @@ import type { Terminal } from "../../core/types.js";
 import { createDebugLogger, isDebugEnabled } from "../../core/debug-logger.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import { resetPlaneRowsForRender, scrollPlaneRows } from "../../core/terminal/create-terminal.js";
-import { createTuiProfiler } from "../../observability/tui-profiler.js";
+import {
+  createTuiProfiler,
+  type CreateTuiProfilerOptions,
+} from "../../observability/tui-profiler.js";
+import { envFlag } from "../../utils/env.js";
 import { clearTextCaches, withTextRenderPass } from "../utils/text.js";
 
 const renderMgrDebugLog = createDebugLogger(isDebugEnabled());
@@ -97,6 +101,11 @@ export type RenderManager = Readonly<{
   markDirtyRows: (id: string, rows: readonly number[]) => boolean;
   unregister: (id: string) => void;
   render: (options?: { activePlanes?: TerminalRenderPlanes | null }) => RenderStats | null;
+  dispose: () => void;
+}>;
+
+export type CreateRenderManagerOptions = Readonly<{
+  profiler?: CreateTuiProfilerOptions;
 }>;
 
 let nextStackId = 0;
@@ -149,7 +158,10 @@ function sameRect(a: RenderRect | null, b: RenderRect | null): boolean {
   return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 }
 
-export function createRenderManager(terminal: Terminal): RenderManager {
+export function createRenderManager(
+  terminal: Terminal,
+  options: CreateRenderManagerOptions = {},
+): RenderManager {
   let orderCounter = 0;
   const nodes = new Map<string, RenderNode>();
   const planeDirtyStates = new Map<TerminalRenderPlane, DirtyPlaneState>();
@@ -171,11 +183,13 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   let candidateGeneration = 1;
   const candidateNodesScratch: RenderNode[] = [];
   const warnedLocalDirtyRows = new Set<string>();
+  let disposed = false;
 
   const stackPathCache = new WeakMap<RenderStack, readonly PathSegment[]>();
-  const profiler = createTuiProfiler("render-manager");
+  const profiler = createTuiProfiler("render-manager", options.profiler);
 
-  terminal.on("resize", ({ rows }) => {
+  const offResize = terminal.on("resize", ({ rows }) => {
+    if (disposed) return;
     terminalRows = rows;
     allRows = Array.from({ length: terminalRows }, (_, index) => index);
     for (const state of planeDirtyStates.values()) {
@@ -455,10 +469,12 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     endY: number,
     delta: number,
   ): void {
+    if (disposed) return;
     scrollPlaneRows(terminal, plane, startY, endY, delta);
   }
 
   function invalidatePlane(plane: TerminalRenderPlane): void {
+    if (disposed) return;
     getDirtyState(plane).allRowsDirty = true;
   }
 
@@ -483,6 +499,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       rectY1: y1,
       paint: node.paint,
     });
+    if (disposed) return full;
     nodes.set(id, full);
     addToRowBuckets(full);
     markRect(full.plane, full.rect);
@@ -501,6 +518,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       paint: (dirtyRows?: readonly number[]) => void;
     }>,
   ): void {
+    if (disposed) return;
     const prev = nodes.get(id);
     if (!prev) return;
     const sortChanged =
@@ -553,6 +571,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   }
 
   function markDirtyRows(id: string, rows: readonly number[]): boolean {
+    if (disposed) return false;
     if (!rows.length) return false;
     const node = nodes.get(id);
     if (!node) return false;
@@ -560,6 +579,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   }
 
   function unregister(id: string): void {
+    if (disposed) return;
     const prev = nodes.get(id);
     if (prev) {
       markRect(prev.plane, prev.rect);
@@ -611,6 +631,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
   }
 
   function render(options?: { activePlanes?: TerminalRenderPlanes | null }): RenderStats | null {
+    if (disposed) return null;
     const renderStart = profiler?.now();
     const activePlanes = options?.activePlanes ?? null;
     const requestedPlanes = activePlanes ?? TERMINAL_RENDER_PLANES;
@@ -629,10 +650,11 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       return y != null && y < y1;
     }
 
-    if (env?.DIMCODE_DEBUG === "1") renderMgrDebugLog.render("[RENDER-MANAGER] render() called");
+    if (envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG"))
+      renderMgrDebugLog.render("[RENDER-MANAGER] render() called");
 
     if (!hasPendingDirtyWork(requestedPlanes)) {
-      if (env?.DIMCODE_DEBUG === "1")
+      if (envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG"))
         renderMgrDebugLog.render("[RENDER-MANAGER] render() skipped (no dirty rows)");
       return null;
     }
@@ -812,7 +834,7 @@ export function createRenderManager(terminal: Terminal): RenderManager {
       });
     }
 
-    if (env?.DIMCODE_DEBUG === "1")
+    if (envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG"))
       renderMgrDebugLog.render("[RENDER-MANAGER] terminal.batch() completed");
 
     const stats: RenderStats = {
@@ -840,5 +862,11 @@ export function createRenderManager(terminal: Terminal): RenderManager {
     markDirtyRows,
     unregister,
     render,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      offResize();
+      profiler?.dispose();
+    },
   };
 }

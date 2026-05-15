@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { TInput, createTInputHostPlugin } from "../src/index.js";
-import { createTerminalApp } from "../src/cli.js";
+import { createDefaultTInputHostAdapter, createTerminalApp } from "../src/cli.js";
 
 describe("TInput host plugins", () => {
+  it("allows createTInputHostPlugin() as a browser-safe no-op", () => {
+    const plugin = createTInputHostPlugin();
+    expect(plugin.name).toBe("tinput-host");
+  });
+
   it("lets hosts inject terminal clipboard behavior via inputPlugins", async () => {
     const value = ref("");
 
@@ -107,5 +112,347 @@ describe("TInput host plugins", () => {
     expect(readText).toHaveBeenCalled();
     expect(value.value).toBe("app-clipboard");
     app.dispose();
+  });
+
+  it("times out hanging default clipboard commands", async () => {
+    vi.useFakeTimers();
+    const originalProcess = (globalThis as any).process;
+    const originalSpawn = (globalThis as any).__VT_NODE_SPAWN__;
+    let killCount = 0;
+    (globalThis as any).__VT_NODE_SPAWN__ = vi.fn(() => ({
+      stdout: {
+        setEncoding: vi.fn(),
+        on: vi.fn(),
+      },
+      on: vi.fn(),
+      kill() {
+        killCount++;
+      },
+    }));
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        env: {},
+        platform: "linux",
+        stdout: { isTTY: true },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter();
+      const read = host.readClipboardText?.() ?? Promise.resolve("missing");
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(read).resolves.toBe("");
+      expect((globalThis as any).__VT_NODE_SPAWN__).toHaveBeenCalledTimes(3);
+      expect(killCount).toBe(3);
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+      if (originalSpawn === undefined) delete (globalThis as any).__VT_NODE_SPAWN__;
+      else (globalThis as any).__VT_NODE_SPAWN__ = originalSpawn;
+      vi.useRealTimers();
+    }
+  });
+
+  it("respects total clipboard timeout budget", async () => {
+    vi.useFakeTimers();
+    const originalProcess = (globalThis as any).process;
+    const originalSpawn = (globalThis as any).__VT_NODE_SPAWN__;
+    let killCount = 0;
+    (globalThis as any).__VT_NODE_SPAWN__ = vi.fn(() => ({
+      stdout: {
+        setEncoding: vi.fn(),
+        on: vi.fn(),
+      },
+      on: vi.fn(),
+      kill() {
+        killCount++;
+      },
+    }));
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        env: {},
+        platform: "linux",
+        stdout: { isTTY: true },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter({
+        clipboardCommandTimeoutMs: 800,
+        clipboardTotalTimeoutMs: 900,
+      });
+      const read = host.readClipboardText?.() ?? Promise.resolve("missing");
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(read).resolves.toBe("");
+      expect((globalThis as any).__VT_NODE_SPAWN__).toHaveBeenCalledTimes(2);
+      expect(killCount).toBe(2);
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+      if (originalSpawn === undefined) delete (globalThis as any).__VT_NODE_SPAWN__;
+      else (globalThis as any).__VT_NODE_SPAWN__ = originalSpawn;
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not trim clipboard file paths", async () => {
+    const originalProcess = (globalThis as any).process;
+    const originalSpawn = (globalThis as any).__VT_NODE_SPAWN__;
+
+    (globalThis as any).__VT_NODE_SPAWN__ = vi.fn(() => {
+      const handlers = new Map<string, Function>();
+      const child = {
+        stdout: {
+          setEncoding: vi.fn(),
+          on(event: string, fn: Function) {
+            handlers.set(`stdout:${event}`, fn);
+          },
+        },
+        on(event: string, fn: Function) {
+          handlers.set(event, fn);
+        },
+        kill: vi.fn(),
+      };
+
+      queueMicrotask(() => {
+        handlers.get("stdout:data")?.("/tmp/a \n/tmp/ leading\n");
+        handlers.get("close")?.(0);
+      });
+
+      return child;
+    });
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        env: {},
+        platform: "darwin",
+        stdout: { isTTY: true },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter();
+
+      await expect(host.readClipboardText?.()).resolves.toBe("/tmp/a \n/tmp/ leading");
+      expect((globalThis as any).__VT_NODE_SPAWN__).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+      if (originalSpawn === undefined) delete (globalThis as any).__VT_NODE_SPAWN__;
+      else (globalThis as any).__VT_NODE_SPAWN__ = originalSpawn;
+    }
+  });
+
+  it("caps clipboard command stdout", async () => {
+    const originalProcess = (globalThis as any).process;
+    const originalSpawn = (globalThis as any).__VT_NODE_SPAWN__;
+    let killCount = 0;
+
+    (globalThis as any).__VT_NODE_SPAWN__ = vi.fn(() => {
+      const handlers = new Map<string, Function>();
+      const child = {
+        stdout: {
+          setEncoding: vi.fn(),
+          on(event: string, fn: Function) {
+            handlers.set(`stdout:${event}`, fn);
+          },
+        },
+        on(event: string, fn: Function) {
+          handlers.set(event, fn);
+        },
+        kill() {
+          killCount++;
+        },
+      };
+
+      queueMicrotask(() => {
+        handlers.get("stdout:data")?.("x".repeat(2048));
+        handlers.get("close")?.(0);
+      });
+
+      return child;
+    });
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        env: {},
+        platform: "linux",
+        stdout: { isTTY: true },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter({
+        clipboardReadMaxBytes: 1024,
+      });
+
+      await expect(host.readClipboardText?.()).resolves.toBe("");
+      expect(killCount).toBeGreaterThan(0);
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+      if (originalSpawn === undefined) delete (globalThis as any).__VT_NODE_SPAWN__;
+      else (globalThis as any).__VT_NODE_SPAWN__ = originalSpawn;
+    }
+  });
+
+  it("ignores clipboard stdout after command settlement", async () => {
+    const originalProcess = (globalThis as any).process;
+    const originalSpawn = (globalThis as any).__VT_NODE_SPAWN__;
+    const lateToString = vi.fn(() => "late");
+    let callCount = 0;
+
+    (globalThis as any).__VT_NODE_SPAWN__ = vi.fn(() => {
+      callCount++;
+      const handlers = new Map<string, Function>();
+      const child = {
+        stdout: {
+          setEncoding: vi.fn(),
+          on(event: string, fn: Function) {
+            handlers.set(`stdout:${event}`, fn);
+          },
+        },
+        on(event: string, fn: Function) {
+          handlers.set(event, fn);
+        },
+        kill: vi.fn(),
+      };
+
+      queueMicrotask(() => {
+        if (callCount === 1) {
+          handlers.get("stdout:data")?.("x".repeat(2048));
+          handlers.get("stdout:data")?.({ toString: lateToString });
+        }
+        handlers.get("close")?.(1);
+      });
+
+      return child;
+    });
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        env: {},
+        platform: "linux",
+        stdout: { isTTY: true },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter({
+        clipboardReadMaxBytes: 1024,
+      });
+
+      await expect(host.readClipboardText?.()).resolves.toBe("");
+      expect(lateToString).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+      if (originalSpawn === undefined) delete (globalThis as any).__VT_NODE_SPAWN__;
+      else (globalThis as any).__VT_NODE_SPAWN__ = originalSpawn;
+    }
+  });
+
+  it("passes clipboardMaxBytes to OSC52 provider", async () => {
+    const originalProcess = (globalThis as any).process;
+    const writes: string[] = [];
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        stdout: {
+          isTTY: true,
+          write(sequence: string) {
+            writes.push(sequence);
+          },
+        },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter({
+        clipboardMaxBytes: 4,
+      });
+      const writeClipboardText = host.writeClipboardText;
+      expect(writeClipboardText).toBeTypeOf("function");
+
+      await expect(writeClipboardText!("12345")).resolves.toBe(false);
+      await expect(writeClipboardText!("1234")).resolves.toBe(true);
+      expect(writes).toEqual(["\u001B]52;c;MTIzNA==\u0007"]);
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+    }
+  });
+
+  it("prefers clipboardWriteMaxBytes for OSC52 writes", async () => {
+    const originalProcess = (globalThis as any).process;
+    const writes: string[] = [];
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      writable: true,
+      value: {
+        stdout: {
+          isTTY: true,
+          write(sequence: string) {
+            writes.push(sequence);
+          },
+        },
+        versions: { node: "20.0.0" },
+      },
+    });
+
+    try {
+      const host = createDefaultTInputHostAdapter({
+        clipboardWriteMaxBytes: 4,
+        clipboardMaxBytes: 100,
+      });
+      const writeClipboardText = host.writeClipboardText;
+      expect(writeClipboardText).toBeTypeOf("function");
+
+      await expect(writeClipboardText!("12345")).resolves.toBe(false);
+      await expect(writeClipboardText!("1234")).resolves.toBe(true);
+      expect(writes).toEqual(["\u001B]52;c;MTIzNA==\u0007"]);
+    } finally {
+      Object.defineProperty(globalThis, "process", {
+        configurable: true,
+        writable: true,
+        value: originalProcess,
+      });
+    }
   });
 });

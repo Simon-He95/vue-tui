@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { TerminalProvider, TBox, TText, TInput, useLayout } from "@simon_he/vue-tui";
+import { TerminalProvider, TBox, TText, TInput } from "@simon_he/vue-tui";
+import { useLayout } from "@simon_he/vue-tui/vue";
 
 // 获取终端布局信息
 const layout = useLayout();

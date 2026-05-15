@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { TRenderPlane, TText } from "../src/index.js";
+import { TText } from "../src/index.js";
+import { TRenderPlane } from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 
 const getFrameDelayMs = () => 16;
@@ -72,8 +73,12 @@ describe("scheduler priority", () => {
   it("can reschedule a throttled flush earlier with high priority", async () => {
     vi.useFakeTimers();
     const proc: any = (globalThis as any).process;
-    const prev = proc?.env?.DIMCODE_TUI_THROTTLE_MS;
-    if (proc?.env) proc.env.DIMCODE_TUI_THROTTLE_MS = "50";
+    const prevNew = proc?.env?.VUE_TUI_THROTTLE_MS;
+    const prevLegacy = proc?.env?.DIMCODE_TUI_THROTTLE_MS;
+    if (proc?.env) {
+      proc.env.VUE_TUI_THROTTLE_MS = "";
+      proc.env.DIMCODE_TUI_THROTTLE_MS = "50";
+    }
 
     const msg = ref("a");
     const App = defineComponent({
@@ -115,8 +120,10 @@ describe("scheduler priority", () => {
       t.commit = prevCommit;
       app.dispose();
       if (proc?.env) {
-        if (prev == null) delete proc.env.DIMCODE_TUI_THROTTLE_MS;
-        else proc.env.DIMCODE_TUI_THROTTLE_MS = prev;
+        if (prevNew == null) delete proc.env.VUE_TUI_THROTTLE_MS;
+        else proc.env.VUE_TUI_THROTTLE_MS = prevNew;
+        if (prevLegacy == null) delete proc.env.DIMCODE_TUI_THROTTLE_MS;
+        else proc.env.DIMCODE_TUI_THROTTLE_MS = prevLegacy;
       }
       vi.useRealTimers();
     }

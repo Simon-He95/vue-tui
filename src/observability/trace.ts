@@ -1,7 +1,7 @@
 import type { Ref } from "vue";
 import type { TerminalRenderPlanes } from "../core/render-plane.js";
 import type { TerminalEventRecord } from "../events/recording.js";
-import type { DomRendererSyncFlushDecision } from "../renderer/index.js";
+import type { DomRendererSyncFlushDecision } from "../renderer/dom/dom-renderer.js";
 import { ref, shallowReactive } from "vue";
 
 export type TraceRecord =

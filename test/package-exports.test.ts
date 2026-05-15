@@ -1,18 +1,43 @@
+import type { Plugin } from "esbuild";
 import { describe, expect, it } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { builtinModules, createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { assertNoBrowserForbiddenCode } from "../scripts/browser-forbidden-code.js";
 
 const distIndex = resolve("dist/index.js");
+const distCore = resolve("dist/core.js");
+const distRuntime = resolve("dist/runtime.js");
+const distRendererDom = resolve("dist/renderer-dom.js");
+const distObservability = resolve("dist/observability.js");
+const distVue = resolve("dist/vue.js");
 const distCli = resolve("dist/cli.js");
 const distMarkdown = resolve("dist/markdown.js");
 const distExperimental = resolve("dist/experimental.js");
+const distIndexCjs = resolve("dist/index.cjs");
+const distCoreCjs = resolve("dist/core.cjs");
+const distRuntimeCjs = resolve("dist/runtime.cjs");
+const distRendererDomCjs = resolve("dist/renderer-dom.cjs");
+const distObservabilityCjs = resolve("dist/observability.cjs");
+const distVueCjs = resolve("dist/vue.cjs");
+const distMarkdownCjs = resolve("dist/markdown.cjs");
+const distExperimentalCjs = resolve("dist/experimental.cjs");
 const distTypes = resolve("dist/index.d.ts");
+const distCoreTypes = resolve("dist/core.d.ts");
+const distRuntimeTypes = resolve("dist/runtime.d.ts");
+const distRendererDomTypes = resolve("dist/renderer-dom.d.ts");
+const distObservabilityTypes = resolve("dist/observability.d.ts");
+const distVueTypes = resolve("dist/vue.d.ts");
 const distCliTypes = resolve("dist/cli.d.ts");
 const distMarkdownTypes = resolve("dist/markdown.d.ts");
 const distExperimentalTypes = resolve("dist/experimental.d.ts");
 const requireDistExports = process.env.VUE_TUI_REQUIRE_DIST_EXPORTS === "1";
+const forbiddenNodeBuiltins = new Set([
+  ...builtinModules,
+  ...builtinModules.map((name) => `node:${name}`),
+]);
 const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as {
   files?: string[];
   main?: string;
@@ -20,6 +45,29 @@ const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as
   types?: string;
   exports?: Record<string, unknown>;
   peerDependencies?: Record<string, string>;
+};
+
+function readFixtureDir(dir: string): string {
+  return readdirSync(resolve(dir))
+    .sort()
+    .map((file) => readFileSync(resolve(dir, file), "utf8"))
+    .join("");
+}
+
+const forbidNodeBuiltins: Plugin = {
+  name: "forbid-node-builtins",
+  setup(build) {
+    build.onResolve({ filter: /.*/ }, (args) => {
+      if (!forbiddenNodeBuiltins.has(args.path)) return null;
+      return {
+        errors: [
+          {
+            text: `Browser-safe entry resolved Node builtin: ${args.path} imported by ${args.importer}`,
+          },
+        ],
+      };
+    });
+  },
 };
 
 function collectExportTargets(value: unknown, out: string[] = []): string[] {
@@ -33,9 +81,17 @@ function collectExportTargets(value: unknown, out: string[] = []): string[] {
   return out;
 }
 
+function expectNoBrowserForbiddenCode(file: string): void {
+  const source = readFileSync(file, "utf8");
+  assertNoBrowserForbiddenCode(source, file);
+}
+
 describe("package exports", () => {
   it("publishes every package export target through the files allowlist", () => {
     expect(packageJson.files).toEqual(["dist"]);
+    expect(packageJson.main).toBe("./dist/index.cjs");
+    expect(packageJson.module).toBe("./dist/index.js");
+    expect(packageJson.types).toBe("./dist/index.d.ts");
 
     const targets = [
       packageJson.main,
@@ -46,16 +102,79 @@ describe("package exports", () => {
 
     expect(targets.length).toBeGreaterThan(0);
     for (const target of targets) {
+      if (target === "./package.json") continue;
       expect(target).toMatch(/^\.\/dist\//);
     }
+  });
+
+  it("exports package metadata for tooling", async () => {
+    const specifier = "@simon_he/vue-tui/package.json";
+    const pkg = await import(specifier, { with: { type: "json" } });
+
+    expect(pkg.default.name).toBe("@simon_he/vue-tui");
   });
 
   it("does not pin Vue consumers to a single patch line", () => {
     expect(packageJson.peerDependencies?.vue).toBe(">=3.3.0 <4");
   });
 
+  it("does not import the mixed renderer barrel from CLI app runtime", () => {
+    const source = readFileSync(resolve("src/create-terminal-app.ts"), "utf8");
+    expect(source).not.toContain("./renderer/index.js");
+  });
+
+  it("does not import cli modules from the browser root entry", () => {
+    const source = readFileSync(resolve("src/index.ts"), "utf8");
+    expect(source).not.toMatch(/from "\.\/cli\//);
+  });
+
+  it("detects bare Node builtins in browser forbidden code scans", () => {
+    for (const bad of [
+      `const fs = require("fs")`,
+      `const fs = require("node:fs")`,
+      `import path from "path"`,
+      `import "path"`,
+      `export { readFile } from "fs"`,
+      `await import("child_process")`,
+      `await import("node:child_process")`,
+      `process.env.NODE_ENV`,
+      `process?.env?.NODE_ENV`,
+    ]) {
+      expect(() => assertNoBrowserForbiddenCode(bad)).toThrow(/forbidden code/);
+    }
+    expect(() => assertNoBrowserForbiddenCode(`globalThis.process?.env?.NODE_ENV`)).not.toThrow();
+  });
+
+  it("keeps Vue declaration compatibility patch output stable", () => {
+    const output = execFileSync(
+      process.execPath,
+      ["scripts/fix-vue-dts-compat.mjs", "--input", "test/fixtures/dts-before", "--stdout"],
+      { cwd: process.cwd(), encoding: "utf8" },
+    );
+    const formatted = execFileSync(
+      "pnpm",
+      ["exec", "oxfmt", "--stdin-filepath", "test/fixtures/dts-after/vue-component.d.ts"],
+      { cwd: process.cwd(), encoding: "utf8", input: output },
+    );
+
+    expect(formatted).toBe(readFixtureDir("test/fixtures/dts-after"));
+  });
+
+  it("checks already patched Vue declaration compatibility output", () => {
+    execFileSync(
+      process.execPath,
+      ["scripts/fix-vue-dts-compat.mjs", "--input", "test/fixtures/dts-after", "--check"],
+      { cwd: process.cwd(), encoding: "utf8" },
+    );
+  });
+
   it("keeps high-throughput components behind the experimental entrypoint", async () => {
     const root = await import("../src/index.js");
+    const core = await import("../src/core.js");
+    const runtime = await import("../src/runtime.js");
+    const observability = await import("../src/observability.js");
+    const rendererDom = await import("../src/renderer-dom.js");
+    const vue = await import("../src/vue.js");
     const cli = await import("../src/cli.js");
     const markdown = await import("../src/markdown.js");
     const experimental = await import("../src/experimental.js");
@@ -71,6 +190,21 @@ describe("package exports", () => {
     expect("writeSnapshot" in root).toBe(false);
     expect("getCliLatencyProfiler" in root).toBe(false);
     expect("createOsc52ClipboardProvider" in root).toBe(false);
+    expect("createDefaultTInputHostAdapter" in root).toBe(false);
+    expect("defaultTInputHostPlugin" in root).toBe(false);
+    expect(Object.keys(root).sort()).toEqual([
+      "TBox",
+      "TDialog",
+      "TInput",
+      "TList",
+      "TSelect",
+      "TText",
+      "TView",
+      "TerminalProvider",
+      "createDomRenderer",
+      "createTInputHostPlugin",
+      "createTerminal",
+    ]);
     expect(cli.createTerminalApp).toBeTruthy();
     expect(cli.createStdoutRenderer).toBeTruthy();
     expect(cli.createStdinDriver).toBeTruthy();
@@ -82,6 +216,10 @@ describe("package exports", () => {
     expect(cli.writeSnapshot).toBeTruthy();
     expect(cli.getCliLatencyProfiler).toBeTruthy();
     expect(cli.createOsc52ClipboardProvider).toBeTruthy();
+    expect(cli.createDefaultTInputHostAdapter).toBeTruthy();
+    expect(cli.defaultTInputHostPlugin).toBeTruthy();
+    expect(cli.installNodeFileWriters).toBeTruthy();
+    expect(cli.resetNodeFileWriters).toBeTruthy();
     expect(cli.STDOUT_RENDERER_CAPABILITIES).toEqual({
       syncFlush: true,
       scrollOperations: true,
@@ -101,10 +239,23 @@ describe("package exports", () => {
     expect("useTLogSearchResultsPage" in root).toBe(false);
     expect("useTLogLinkController" in root).toBe(false);
     expect("createAppendOnlyLogStore" in root).toBe(false);
-    expect(root.createRuntime).toBeTruthy();
-    expect(root.createFramePerfStore).toBeTruthy();
-    expect(root.framePerfNow).toBeTruthy();
-    expect(root.terminalSelectionVisibleRowSpans).toBeTruthy();
+    expect("createRuntime" in root).toBe(false);
+    expect("createFramePerfStore" in root).toBe(false);
+    expect("framePerfNow" in root).toBe(false);
+    expect("sanitizeDomHref" in root).toBe(false);
+    expect("isSafeRelativeHref" in root).toBe(false);
+    expect("terminalSelectionVisibleRowSpans" in root).toBe(false);
+    expect("createOsc52ClipboardProvider" in runtime).toBe(false);
+    expect("createDefaultTInputHostAdapter" in vue).toBe(false);
+    expect("defaultTInputHostPlugin" in vue).toBe(false);
+    expect(core.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
+    expect(core.isSafeRelativeHref("#section")).toBe(true);
+    expect(runtime.createRuntime).toBeTruthy();
+    expect(runtime.terminalSelectionVisibleRowSpans).toBeTruthy();
+    expect(observability.createFramePerfStore).toBeTruthy();
+    expect(observability.framePerfNow).toBeTruthy();
+    expect(rendererDom.createDomRenderer).toBe(root.createDomRenderer);
+    expect(vue.useTerminal).toBeTruthy();
     expect("TMarkdownText" in experimental).toBe(false);
     expect(experimental.TVirtualList).toBeTruthy();
     expect("TVirtualMarkdown" in experimental).toBe(false);
@@ -198,59 +349,144 @@ describe("package exports", () => {
     expect(useTLogVirtualSearchResults).toBeTruthy();
   });
 
-  it("keeps the root entrypoint browser-bundleable without Node built-ins", async () => {
+  it("keeps the root/markdown/experimental entrypoints browser-bundleable without Node built-ins", async () => {
     const { build } = await import("esbuild");
-    await build({
+    const result = await build({
       stdin: {
         contents: `
-          import { createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText } from "./src/index.ts";
-          console.log(createPromptMentionPlugin, TerminalProvider, TBox, TInput, TText);
+          import * as root from "./src/index.ts";
+          import * as core from "./src/core.ts";
+          import * as runtime from "./src/runtime.ts";
+          import * as rendererDom from "./src/renderer-dom.ts";
+          import * as observability from "./src/observability.ts";
+          import * as vue from "./src/vue.ts";
+          import * as markdown from "./src/markdown.ts";
+          import * as experimental from "./src/experimental.ts";
+          console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental);
         `,
         resolveDir: process.cwd(),
-        sourcefile: "vue-tui-root-browser-smoke.ts",
+        sourcefile: "vue-tui-browser-smoke.ts",
       },
       bundle: true,
       write: false,
       platform: "browser",
       format: "esm",
       external: ["vue"],
+      plugins: [forbidNodeBuiltins],
     });
+    const output = result.outputFiles
+      .map((file) => new TextDecoder().decode(file.contents))
+      .join("\n");
+    assertNoBrowserForbiddenCode(output, "source browser bundle");
   });
 
   it.skipIf(!requireDistExports)(
-    "keeps the built root entrypoint browser-bundleable without Node built-ins",
+    "keeps the built browser entrypoints browser-bundleable without Node built-ins",
     async () => {
       expect(existsSync(distIndex)).toBe(true);
+      expect(existsSync(distMarkdown)).toBe(true);
+      expect(existsSync(distExperimental)).toBe(true);
 
       const { build } = await import("esbuild");
-      await build({
-        entryPoints: [distIndex],
+      const result = await build({
+        stdin: {
+          contents: `
+            import * as root from "./dist/index.js";
+            import * as core from "./dist/core.js";
+            import * as runtime from "./dist/runtime.js";
+            import * as rendererDom from "./dist/renderer-dom.js";
+            import * as observability from "./dist/observability.js";
+            import * as vue from "./dist/vue.js";
+            import * as markdown from "./dist/markdown.js";
+            import * as experimental from "./dist/experimental.js";
+            console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental);
+          `,
+          resolveDir: process.cwd(),
+          sourcefile: "vue-tui-dist-browser-smoke.ts",
+        },
         bundle: true,
         write: false,
         platform: "browser",
         format: "esm",
         external: ["vue"],
+        plugins: [forbidNodeBuiltins],
       });
+      const output = result.outputFiles
+        .map((file) => new TextDecoder().decode(file.contents))
+        .join("\n");
+      assertNoBrowserForbiddenCode(output, "dist browser bundle");
     },
   );
 
+  it.skipIf(!requireDistExports)("does not emit Node-only code into browser dist entries", () => {
+    for (const file of [
+      distIndex,
+      distCore,
+      distRuntime,
+      distRendererDom,
+      distObservability,
+      distVue,
+      distMarkdown,
+      distExperimental,
+      distIndexCjs,
+      distCoreCjs,
+      distRuntimeCjs,
+      distRendererDomCjs,
+      distObservabilityCjs,
+      distVueCjs,
+      distMarkdownCjs,
+      distExperimentalCjs,
+      distTypes,
+      distCoreTypes,
+      distRuntimeTypes,
+      distRendererDomTypes,
+      distObservabilityTypes,
+      distVueTypes,
+      distMarkdownTypes,
+      distExperimentalTypes,
+    ]) {
+      expect(existsSync(file)).toBe(true);
+      expectNoBrowserForbiddenCode(file);
+    }
+  });
+
   it.skipIf(!requireDistExports)("keeps built ESM/CJS experimental exports usable", async () => {
     expect(existsSync(distIndex)).toBe(true);
+    expect(existsSync(distCore)).toBe(true);
+    expect(existsSync(distRuntime)).toBe(true);
+    expect(existsSync(distRendererDom)).toBe(true);
+    expect(existsSync(distObservability)).toBe(true);
+    expect(existsSync(distVue)).toBe(true);
     expect(existsSync(distCli)).toBe(true);
     expect(existsSync(distMarkdown)).toBe(true);
     expect(existsSync(distExperimental)).toBe(true);
     expect(existsSync(distTypes)).toBe(true);
+    expect(existsSync(distCoreTypes)).toBe(true);
+    expect(existsSync(distRuntimeTypes)).toBe(true);
+    expect(existsSync(distRendererDomTypes)).toBe(true);
+    expect(existsSync(distObservabilityTypes)).toBe(true);
+    expect(existsSync(distVueTypes)).toBe(true);
     expect(existsSync(distCliTypes)).toBe(true);
     expect(existsSync(distMarkdownTypes)).toBe(true);
     expect(existsSync(distExperimentalTypes)).toBe(true);
     expect(readFileSync(distCliTypes, "utf8")).toContain("Osc52ClipboardOptions");
 
     const root = await import(/* @vite-ignore */ pathToFileURL(distIndex).href);
+    const core = await import(/* @vite-ignore */ pathToFileURL(distCore).href);
+    const runtime = await import(/* @vite-ignore */ pathToFileURL(distRuntime).href);
+    const rendererDom = await import(/* @vite-ignore */ pathToFileURL(distRendererDom).href);
+    const observability = await import(/* @vite-ignore */ pathToFileURL(distObservability).href);
+    const vue = await import(/* @vite-ignore */ pathToFileURL(distVue).href);
     const cli = await import(/* @vite-ignore */ pathToFileURL(distCli).href);
     const markdown = await import(/* @vite-ignore */ pathToFileURL(distMarkdown).href);
     const experimental = await import(/* @vite-ignore */ pathToFileURL(distExperimental).href);
     const require = createRequire(import.meta.url);
     const rootCjs = require("../dist/index.cjs");
+    const coreCjs = require("../dist/core.cjs");
+    const runtimeCjs = require("../dist/runtime.cjs");
+    const rendererDomCjs = require("../dist/renderer-dom.cjs");
+    const observabilityCjs = require("../dist/observability.cjs");
+    const vueCjs = require("../dist/vue.cjs");
     const cliCjs = require("../dist/cli.cjs");
     const markdownCjs = require("../dist/markdown.cjs");
     const experimentalCjs = require("../dist/experimental.cjs");
@@ -258,15 +494,34 @@ describe("package exports", () => {
     expect("createTerminalApp" in root).toBe(false);
     expect("createStdoutRenderer" in root).toBe(false);
     expect("TVirtualList" in root).toBe(false);
+    expect("createDefaultTInputHostAdapter" in root).toBe(false);
+    expect("defaultTInputHostPlugin" in root).toBe(false);
     expect(root.TerminalProvider).toBeTruthy();
-    expect(root.createRuntime).toBeTruthy();
-    expect(root.createFramePerfStore).toBeTruthy();
-    expect(root.framePerfNow).toBeTruthy();
-    expect(root.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
+    expect("createRuntime" in root).toBe(false);
+    expect("createFramePerfStore" in root).toBe(false);
+    expect("framePerfNow" in root).toBe(false);
+    expect("sanitizeTerminalHref" in root).toBe(false);
+    expect("sanitizeDomHref" in root).toBe(false);
+    expect("createOsc52ClipboardProvider" in runtime).toBe(false);
+    expect("createDefaultTInputHostAdapter" in vue).toBe(false);
+    expect("defaultTInputHostPlugin" in vue).toBe(false);
+    expect(core.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
+    expect(core.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
+    expect(core.isSafeRelativeHref("#section")).toBe(true);
+    expect(runtime.createRuntime).toBeTruthy();
+    expect(runtime.terminalSelectionVisibleRowSpans).toBeTruthy();
+    expect(rendererDom.createDomRenderer).toBeTruthy();
+    expect(observability.createFramePerfStore).toBeTruthy();
+    expect(observability.framePerfNow).toBeTruthy();
+    expect(vue.useTerminal).toBeTruthy();
     expect(cli.createTerminalApp).toBeTruthy();
     expect(cli.createStdoutRenderer).toBeTruthy();
     expect(cli.createStdinDriver).toBeTruthy();
     expect(cli.createOsc52ClipboardProvider).toBeTruthy();
+    expect(cli.createDefaultTInputHostAdapter).toBeTruthy();
+    expect(cli.defaultTInputHostPlugin).toBeTruthy();
+    expect(cli.installNodeFileWriters).toBeTruthy();
+    expect(cli.resetNodeFileWriters).toBeTruthy();
     expect(cli.STDOUT_RENDERER_CAPABILITIES).toEqual({
       syncFlush: true,
       scrollOperations: true,
@@ -275,15 +530,34 @@ describe("package exports", () => {
     expect(cli.sanitizeTerminalHref("file:///tmp/a")).toBeNull();
     expect("createTerminalApp" in rootCjs).toBe(false);
     expect("createStdoutRenderer" in rootCjs).toBe(false);
+    expect("createDefaultTInputHostAdapter" in rootCjs).toBe(false);
+    expect("defaultTInputHostPlugin" in rootCjs).toBe(false);
     expect(rootCjs.TerminalProvider).toBeTruthy();
-    expect(rootCjs.createRuntime).toBeTruthy();
-    expect(rootCjs.createFramePerfStore).toBeTruthy();
-    expect(rootCjs.framePerfNow).toBeTruthy();
-    expect(rootCjs.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
+    expect("createRuntime" in rootCjs).toBe(false);
+    expect("createFramePerfStore" in rootCjs).toBe(false);
+    expect("framePerfNow" in rootCjs).toBe(false);
+    expect("sanitizeTerminalHref" in rootCjs).toBe(false);
+    expect("sanitizeDomHref" in rootCjs).toBe(false);
+    expect("createOsc52ClipboardProvider" in runtimeCjs).toBe(false);
+    expect("createDefaultTInputHostAdapter" in vueCjs).toBe(false);
+    expect("defaultTInputHostPlugin" in vueCjs).toBe(false);
+    expect(coreCjs.sanitizeTerminalHref("https://example.com")).toBe("https://example.com");
+    expect(coreCjs.sanitizeDomHref("https://example.com")).toBe("https://example.com/");
+    expect(coreCjs.isSafeRelativeHref("#section")).toBe(true);
+    expect(runtimeCjs.createRuntime).toBeTruthy();
+    expect(runtimeCjs.terminalSelectionVisibleRowSpans).toBeTruthy();
+    expect(rendererDomCjs.createDomRenderer).toBeTruthy();
+    expect(observabilityCjs.createFramePerfStore).toBeTruthy();
+    expect(observabilityCjs.framePerfNow).toBeTruthy();
+    expect(vueCjs.useTerminal).toBeTruthy();
     expect(cliCjs.createTerminalApp).toBeTruthy();
     expect(cliCjs.createStdoutRenderer).toBeTruthy();
     expect(cliCjs.createStdinDriver).toBeTruthy();
     expect(cliCjs.createOsc52ClipboardProvider).toBeTruthy();
+    expect(cliCjs.createDefaultTInputHostAdapter).toBeTruthy();
+    expect(cliCjs.defaultTInputHostPlugin).toBeTruthy();
+    expect(cliCjs.installNodeFileWriters).toBeTruthy();
+    expect(cliCjs.resetNodeFileWriters).toBeTruthy();
     expect(cliCjs.STDOUT_RENDERER_CAPABILITIES).toEqual({
       syncFlush: true,
       scrollOperations: true,

@@ -1,6 +1,27 @@
 # Changelog
 
-## 0.1.0-rc.0 - Unreleased
+## 0.1.0-rc.1 - Unreleased
+
+### Breaking
+
+- Narrowed the browser-safe root entrypoint.
+- Moved extended Vue APIs to `@simon_he/vue-tui/vue`.
+- Moved Node input host defaults to `@simon_he/vue-tui/cli`.
+
+### Migration
+
+Before:
+
+```ts
+import { TAnchor, createDefaultTInputHostAdapter } from "@simon_he/vue-tui";
+```
+
+After:
+
+```ts
+import { TAnchor } from "@simon_he/vue-tui/vue";
+import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
+```
 
 ### Added
 
@@ -38,11 +59,16 @@
 - `Style` objects are treated as immutable after first normalization. Pass a new object when style values change.
 - `createTLogUrlPlugin()` no longer detects `file://` URLs by default. Use `{ allowFileUrls: true }` to opt in.
 - Release benchmark validation now uses `bench:baseline`; timing budgets are only checked by `bench:baseline:timing`.
+- DOM renderer no longer renders `Style.href` as native anchors unless `links` are explicitly configured.
+- DOM renderer link callbacks preserve native browser behavior unless they return `false`; safe relative/hash/search hrefs are allowed when DOM links are enabled.
+- `installTerminalCleanup()` now returns an explicit `{ cleanup, uninstall }` handle and uses `signalPolicy: "cleanup-only" | "exit" | "reraise"` while leaving termination ownership with existing host signal listeners.
+- Opted-in unhandled rejection cleanup now rethrows by default. Set `rethrowUnhandledRejection: false` to suppress it explicitly.
+- `release:ci` now points users to the GitHub Release workflow instead of publishing from a second scripted path.
 
 ### Security
 
 - Sanitized terminal OSC8 hyperlinks before stdout output, TLog visible-link rendering, TLog plugins, and retained-index link collection.
-- Rejected control characters, raw whitespace, protocol-relative URLs, `javascript:`, `data:`, and `file://` by default for terminal hyperlinks.
+- Rejected control characters, encoded controls, raw whitespace, protocol-relative URLs, `javascript:`, `data:`, and `file://` by default for terminal hyperlinks.
 
 ### Fixed
 
@@ -55,6 +81,8 @@
 - CI now runs the VitePress docs build during verification so broken docs links fail before release.
 - Preserved wide-glyph buffer invariants when `fillRect()`, `putCell()`, `clearRect()`, and resize operations overlap CJK or emoji continuation cells.
 - Recomputed SoA row fingerprints when wide-glyph boundary operations clear cells outside the direct write range.
+- Encoded reserved path characters when converting absolute file paths to terminal file hrefs.
+- Terminal cleanup now also runs for unhandled promise rejections.
 
 ### Performance
 
@@ -95,6 +123,9 @@ Experimental APIs remain under `@simon_he/vue-tui/experimental` and may change b
 - `TLogView` custom mutable sources should bump `version`, provide changing `getLineKey(index)`, or call `refreshViewport()` / `invalidateLine()` / `invalidateRange()`.
 - Browser and terminal examples now have separate smoke paths. Run headless smoke in CI and reserve real terminal runners for manual checks.
 - High-throughput APIs remain outside the root entrypoint.
+- `createDefaultTInputHostAdapter()` and the Node-aware `defaultTInputHostPlugin` moved from `@simon_he/vue-tui` to `@simon_he/vue-tui/cli`. The root entry now exports only `createTInputHostPlugin()` for browser-safe host adapters.
+- DOM renderer `Style.href` output is no longer clickable by default. Pass `domRendererOptions.links` when the host wants native DOM anchors.
+- DOM renderer anchors now keep native click behavior by default and support safe relative/hash/search hrefs.
 
 ### Release Validation
 

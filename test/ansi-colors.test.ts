@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANSI16_COLORS, ANSI256_COLORS, ANSI8_COLORS, rgbToAnsi256 } from "../src/index.js";
+import { ANSI16_COLORS, ANSI256_COLORS, ANSI8_COLORS, rgbToAnsi256 } from "../src/core.js";
 
 const SGR_RESET = "\u001B[0m";
 

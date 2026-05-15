@@ -1,12 +1,12 @@
 import type { PropType, Ref, ShallowRef } from "vue";
-import type { PathPickMode } from "../../cli/path-suggest.js";
+import type { PathPickMode } from "../../core/path-suggest.js";
 import type { Cell, Style } from "../../core/types.js";
 import type {
   Rect,
   TerminalInputEvent,
   TerminalKeyboardEvent,
   TerminalPointerEvent,
-} from "../../events/index.js";
+} from "../../events/manager/types.js";
 import type { ImeAnchor } from "../context.js";
 import type { TInputHostAdapter } from "./input/host.js";
 import type { PromptSuggestion, TInputPlugin } from "./input/plugins/types.js";
@@ -68,6 +68,13 @@ import { clamp } from "./input/utils/primitives.js";
 import { findWordLeft, findWordRight, tokenRangeAt } from "./input/utils/wordNavigation.js";
 
 // Inline text measurements are handled by `./input/utils/inlineText.ts`.
+
+function warnDev(message: string): void {
+  const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env
+    ?.NODE_ENV;
+  if (nodeEnv === "production") return;
+  console.warn(message);
+}
 
 function isPrintableKey(e: TerminalKeyboardEvent): boolean {
   if (e.ctrlKey || e.metaKey || e.altKey) return false;
@@ -267,6 +274,14 @@ export const TInput = defineComponent({
       ...((injectedPlugins?.value ?? []) as readonly TInputPlugin[]),
       ...(props.plugins ?? []),
     ];
+    const initialLocalPlugins = props.plugins;
+    watch(
+      () => props.plugins,
+      (next) => {
+        if (next === initialLocalPlugins) return;
+        warnDev("[vue-tui] TInput plugins is init-only. Remount TInput to apply plugin changes.");
+      },
+    );
     let hostAdapter: TInputHostAdapter = {};
 
     const PADDING_X = 1;

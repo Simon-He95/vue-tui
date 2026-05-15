@@ -1,4 +1,6 @@
-import type { Style, ThemePalette, TuiMarkdownThemeOverrides } from "@simon_he/vue-tui";
+import type { Style } from "@simon_he/vue-tui";
+import type { ThemePalette } from "@simon_he/vue-tui/core";
+import type { TuiMarkdownThemeOverrides } from "@simon_he/vue-tui/vue";
 import { resolveTLogViewTheme, tlogDarkPreset } from "@simon_he/vue-tui/experimental";
 
 export const consoleDefaultStyle: Style = Object.freeze({

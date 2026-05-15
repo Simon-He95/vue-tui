@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
-import { createPromptMentionPlugin, TInput } from "../src/index.js";
+import { TInput } from "../src/index.js";
+import { createPromptMentionPlugin } from "../src/vue.js";
 import { createStdoutRenderer, createTerminalApp } from "../src/cli.js";
 
 const ambientTerminalEnvKeys = ["TERM_PROGRAM", "VSCODE_PID"] as const;

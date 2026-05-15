@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectTerminalColorCapability } from "../src/index.js";
+import { detectTerminalColorCapability } from "../src/core.js";
 
 describe("terminal capability", () => {
   it("folds truecolor into 256 level", () => {
@@ -64,13 +64,44 @@ describe("terminal capability", () => {
     expect(cap).toEqual({ mode: "truecolor", level: 256 });
   });
 
-  it("supports DIMCODE_COLOR_MODE as primary override alias", () => {
+  it("supports DIMCODE_COLOR_MODE as legacy override alias", () => {
     const cap = detectTerminalColorCapability({
       env: { DIMCODE_COLOR_MODE: "ansi16" },
       isTTY: true,
       platform: "darwin",
     });
     expect(cap).toEqual({ mode: "ansi16", level: 16 });
+  });
+
+  it("prefers VUE_TUI_COLOR_MODE over the legacy DIMCODE alias", () => {
+    const cap = detectTerminalColorCapability({
+      env: { VUE_TUI_COLOR_MODE: "ansi8", DIMCODE_COLOR_MODE: "truecolor" },
+      isTTY: true,
+    });
+    expect(cap).toEqual({ mode: "ansi8", level: 8 });
+  });
+
+  it("falls back to legacy color env when the new env is empty", () => {
+    const cap = detectTerminalColorCapability({
+      env: {
+        VUE_TUI_COLOR_MODE: "",
+        DIMCODE_COLOR_MODE: "ansi256",
+      },
+      isTTY: true,
+    });
+    expect(cap).toEqual({ mode: "ansi256", level: 256 });
+  });
+
+  it("does not fall back to legacy color env when the new env is invalid", () => {
+    const cap = detectTerminalColorCapability({
+      env: {
+        TERM: "xterm-256color",
+        VUE_TUI_COLOR_MODE: "bogus",
+        DIMCODE_COLOR_MODE: "ansi8",
+      },
+      isTTY: true,
+    });
+    expect(cap).toEqual({ mode: "ansi256", level: 256 });
   });
 
   it("keeps Windows hint-based truecolor detection intact", () => {

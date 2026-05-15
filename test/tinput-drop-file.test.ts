@@ -18,7 +18,8 @@ if (!(globalThis as any).document) {
 
 const { createApp, defineComponent, h, nextTick, ref, watchEffect } = await import("vue");
 const nextDomTick = nextTick;
-const { TerminalProvider, TInput, useTerminal } = await import("../src/index.js");
+const { TerminalProvider, TInput } = await import("../src/index.js");
+const { useTerminal } = await import("../src/vue.js");
 
 globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
   cb(0);

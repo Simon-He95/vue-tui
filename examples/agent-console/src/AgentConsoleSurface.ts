@@ -1,8 +1,6 @@
-import type {
-  FramePerfSample,
-  TerminalKeyboardEvent,
-  TerminalRenderPlane,
-} from "@simon_he/vue-tui";
+import type { TerminalRenderPlane } from "@simon_he/vue-tui/core";
+import type { FramePerfSample } from "@simon_he/vue-tui/observability";
+import type { TerminalKeyboardEvent } from "@simon_he/vue-tui/runtime";
 import type {
   TLogViewHandle,
   TLogViewLinkActivatePayload,
@@ -25,16 +23,8 @@ import {
   watch,
   watchEffect,
 } from "vue";
-import {
-  TBox,
-  TDialog,
-  TInputBox,
-  TRenderPlane,
-  TSelect,
-  TText,
-  TView,
-  useTerminal,
-} from "@simon_he/vue-tui";
+import { TBox, TDialog, TSelect, TText, TView } from "@simon_he/vue-tui";
+import { TInputBox, TRenderPlane, useTerminal } from "@simon_he/vue-tui/vue";
 import { TVirtualMarkdown } from "@simon_he/vue-tui/markdown";
 import { TLogView } from "@simon_he/vue-tui/experimental";
 import { handleAgentConsoleKeymap } from "./keymap";

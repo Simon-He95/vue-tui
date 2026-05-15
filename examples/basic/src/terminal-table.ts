@@ -1,23 +1,71 @@
-import { createTerminalApp } from "@simon_he/vue-tui/cli";
+import {
+  createStdinDriver,
+  createStdoutRenderer,
+  createTerminalApp,
+  installTerminalCleanup,
+} from "@simon_he/vue-tui/cli";
 import TableDemo from "./TableDemo.vue";
 
-const { app, terminal } = createTerminalApp({
-  cols: 60,
-  rows: 16,
+const cols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : 60;
+const rows = Number.isFinite(process.stdout.rows) ? process.stdout.rows : 16;
+const smoke = process.env.VT_SMOKE === "1";
+
+const app = createTerminalApp({
+  cols,
+  rows,
+  component: TableDemo as any,
   defaultStyle: { fg: "whiteBright" },
-  renderComponent: TableDemo,
 });
 
-// 启动终端
-app.start?.();
+app.mount();
 
-// 处理退出
-process.on("SIGINT", () => {
-  terminal.dispose();
+const renderer = createStdoutRenderer(
+  app.terminal,
+  smoke
+    ? {
+        output: { isTTY: false, write: () => {} },
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+      }
+    : {
+        output: process.stdout,
+        hideCursor: true,
+      },
+);
+
+app.scheduler.flushNow();
+
+let driver: ReturnType<typeof createStdinDriver> | null = null;
+let uninstallCleanup: (() => void) | null = null;
+let disposed = false;
+
+const cleanup = () => {
+  if (disposed) return;
+  disposed = true;
+  uninstallCleanup?.();
+  uninstallCleanup = null;
+  driver?.dispose();
+  renderer.dispose();
+  app.dispose();
+};
+
+const exit = () => {
+  cleanup();
   process.exit(0);
-});
+};
 
-process.on("SIGTERM", () => {
-  terminal.dispose();
-  process.exit(0);
-});
+if (smoke) {
+  exit();
+} else {
+  uninstallCleanup = installTerminalCleanup(cleanup, { exitOnSignal: true });
+  driver = createStdinDriver({
+    dispatch(event) {
+      const prevented = app.events.dispatch(event);
+      app.scheduler.flushNow();
+      return prevented;
+    },
+    enableMouse: true,
+    onExit: exit,
+  });
+}

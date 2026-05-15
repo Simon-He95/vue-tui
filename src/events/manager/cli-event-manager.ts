@@ -12,6 +12,9 @@ import type {
 } from "./types.js";
 import { appendFileSync } from "node:fs";
 import process from "node:process";
+import { defaultVueTuiDebugLogPath } from "../../cli/node-file-writers.js";
+import { resolveDebugLogPath } from "../../core/debug-logger.js";
+import { envFlag } from "../../utils/env.js";
 import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
 import {
   SUPPRESS_TERMINAL_POINTER_DOWN,
@@ -305,11 +308,11 @@ export function createCliEventManager(
       } catch (err) {
         // Log handler error but don't crash
         try {
-          const env = process?.env;
-          if (env?.DIMCODE_DEBUG === "1") {
+          const env = process?.env as Record<string, unknown> | undefined;
+          if (envFlag(env, "VUE_TUI_DEBUG", "DIMCODE_DEBUG")) {
             const timestamp = new Date().toISOString().split("T")[1].slice(0, -1);
             appendFileSync(
-              "/tmp/goatchain-debug.log",
+              resolveDebugLogPath(env, defaultVueTuiDebugLogPath()),
               `[${timestamp}] [EVENT-MGR] ERROR in handler ${node.id}.${handlerKey}: ${err}\n`,
             );
           }

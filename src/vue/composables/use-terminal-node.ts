@@ -1,5 +1,5 @@
 import type { Ref } from "vue";
-import type { Rect, TerminalEventHandlerMap } from "../../events/index.js";
+import type { Rect, TerminalEventHandlerMap } from "../../events/manager/types.js";
 import { computed, onBeforeUnmount, ref, watchEffect } from "vue";
 import { useTerminal } from "./use-terminal.js";
 

@@ -1,6 +1,8 @@
 import type { TerminalEventRecord } from "../events/recording.js";
+import { writeSync } from "node:fs";
 import process from "node:process";
 import { getCliLatencyProfiler } from "../observability/cli-latency-node.js";
+import { firstNonEmptyEnv } from "../utils/env.js";
 import { normalizeNewlines } from "../utils/newlines.js";
 import { parseKittySequence } from "./parse-kitty.js";
 import { parseMouseSequence } from "./parse-mouse.js";
@@ -20,6 +22,189 @@ const XTERM_MODIFY_OTHER_KEYS_DISABLE = "\u001B[>4n";
 export type StdinDriver = Readonly<{
   dispose: () => void;
 }>;
+
+type CleanupSignal = "SIGINT" | "SIGTERM" | "SIGHUP" | "SIGBREAK";
+export type TerminalCleanupSignalPolicy = "cleanup-only" | "exit" | "reraise";
+
+export type TerminalCleanupOptions = Readonly<{
+  signals?: readonly CleanupSignal[];
+  /**
+   * Defaults to "reraise": cleanup runs, vue-tui removes its own listener,
+   * then the signal is sent again when no other listener owns the signal.
+   */
+  signalPolicy?: TerminalCleanupSignalPolicy;
+  cleanupOnUnhandledRejection?: boolean;
+  rethrowUnhandledRejection?: boolean;
+}>;
+
+export type TerminalCleanupHandle = Readonly<{
+  cleanup: () => void;
+  uninstall: () => void;
+}>;
+
+type ProcessCleanupEvent =
+  | CleanupSignal
+  | "exit"
+  | "uncaughtExceptionMonitor"
+  | "unhandledRejection";
+
+function exitCodeForSignal(signal: CleanupSignal): number {
+  if (signal === "SIGINT") return 130;
+  if (signal === "SIGTERM") return 143;
+  if (signal === "SIGBREAK") return 130;
+  return 129;
+}
+
+export function resolveCleanupSignalAction(
+  signal: CleanupSignal,
+  policy: TerminalCleanupSignalPolicy,
+): { type: "none" } | { type: "exit"; code: number } | { type: "reraise"; signal: CleanupSignal } {
+  if (policy === "cleanup-only") return { type: "none" };
+  if (policy === "exit") return { type: "exit", code: exitCodeForSignal(signal) };
+  return { type: "reraise", signal };
+}
+
+function normalizeUnhandledRejection(reason: unknown): Error {
+  if (reason instanceof Error) return reason;
+
+  const error = new Error("Unhandled promise rejection");
+  (error as Error & { cause?: unknown }).cause = reason;
+  return error;
+}
+
+function addProcessOnce(event: ProcessCleanupEvent, handler: (...args: any[]) => void): boolean {
+  try {
+    process.once(event as any, handler);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeProcessListener(
+  event: ProcessCleanupEvent,
+  handler: (...args: any[]) => void,
+): void {
+  try {
+    process.off(event as any, handler);
+  } catch {}
+}
+
+function shouldRegisterSignal(signal: CleanupSignal): boolean {
+  return signal !== "SIGBREAK" || process.platform === "win32";
+}
+
+function hasOtherSignalListeners(signal: CleanupSignal, ownHandler: () => void): boolean {
+  return process.rawListeners(signal).some((listener: any) => {
+    return listener !== ownHandler && listener.listener !== ownHandler;
+  });
+}
+
+function writeTTYSyncOrStream(stdout: NodeJS.WriteStream, chunk: string): void {
+  const fd = (stdout as any).fd;
+  if (typeof fd === "number") {
+    try {
+      writeSync(fd, chunk);
+      return;
+    } catch {}
+  }
+
+  stdout.write(chunk);
+}
+
+export function installTerminalCleanup(
+  dispose: () => void,
+  options: TerminalCleanupOptions = {},
+): TerminalCleanupHandle {
+  let cleaned = false;
+  let uninstalled = false;
+  const signals = options.signals ?? ["SIGINT", "SIGTERM"];
+  const signalPolicy = options.signalPolicy ?? "reraise";
+  const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? false;
+  const rethrowUnhandledRejection =
+    options.rethrowUnhandledRejection ?? cleanupOnUnhandledRejection;
+  const signalHandlers = new Map<CleanupSignal, () => void>();
+  const hostOwnedSignals = new Set<CleanupSignal>();
+
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    try {
+      dispose();
+    } catch {
+    } finally {
+      uninstall();
+    }
+  };
+
+  const onUncaughtExceptionMonitor = () => {
+    cleanup();
+    uninstall();
+  };
+
+  const onUnhandledRejection = (reason: unknown) => {
+    cleanup();
+    uninstall();
+    if (rethrowUnhandledRejection) {
+      process.nextTick(() => {
+        throw normalizeUnhandledRejection(reason);
+      });
+    }
+  };
+
+  const uninstall = () => {
+    if (uninstalled) return;
+    uninstalled = true;
+    removeProcessListener("exit", cleanup);
+    for (const [signal, handler] of signalHandlers) {
+      removeProcessListener(signal, handler);
+    }
+    removeProcessListener("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
+    if (cleanupOnUnhandledRejection) {
+      removeProcessListener("unhandledRejection", onUnhandledRejection);
+    }
+  };
+
+  const handleSignal = (signal: CleanupSignal, ownHandler: () => void) => {
+    const hasHostSignalListener =
+      hostOwnedSignals.has(signal) || hasOtherSignalListeners(signal, ownHandler);
+
+    cleanup();
+    uninstall();
+
+    const action = resolveCleanupSignalAction(signal, signalPolicy);
+    if (action.type === "none") {
+      return;
+    }
+
+    if (action.type === "exit") {
+      process.exit(action.code);
+      return;
+    }
+
+    if (hasHostSignalListener) return;
+
+    setImmediate(() => {
+      process.kill(process.pid, action.signal);
+    });
+  };
+
+  for (const signal of signals) {
+    if (!shouldRegisterSignal(signal)) continue;
+    if (signalHandlers.has(signal)) continue;
+    if (process.rawListeners(signal).length > 0) hostOwnedSignals.add(signal);
+    const handler = () => handleSignal(signal, handler);
+    if (addProcessOnce(signal, handler)) signalHandlers.set(signal, handler);
+  }
+
+  addProcessOnce("exit", cleanup);
+  addProcessOnce("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
+  if (cleanupOnUnhandledRejection) {
+    addProcessOnce("unhandledRejection", onUnhandledRejection);
+  }
+
+  return { cleanup, uninstall };
+}
 
 function isPrintable(ch: string): boolean {
   if (ch.length === 0) return false;
@@ -107,8 +292,11 @@ function resolveKeyboardProtocol(
   const configured = parseKeyboardProtocol(options.keyboardProtocol) ?? "auto";
   if (configured !== "auto") return configured;
 
-  const envOverride = parseKeyboardProtocol(options.env?.DIMCODE_KEYBOARD_PROTOCOL);
-  if (envOverride && envOverride !== "auto") return envOverride;
+  const envOverride = parseKeyboardProtocol(
+    firstNonEmptyEnv(options.env, "VUE_TUI_KEYBOARD_PROTOCOL", "DIMCODE_KEYBOARD_PROTOCOL"),
+  );
+  if (envOverride === "auto") return detectKeyboardProtocol(options.env ?? {});
+  if (envOverride) return envOverride;
 
   return detectKeyboardProtocol(options.env ?? {});
 }
@@ -146,6 +334,7 @@ export function createStdinDriver(
     enableMouseMotion?: boolean;
     onTerminalFocusChange?: (focused: boolean) => void;
     onExit?: () => void;
+    autoCleanup?: boolean | TerminalCleanupOptions;
   }>,
 ): StdinDriver {
   const stdin = options.stdin ?? process.stdin;
@@ -160,6 +349,7 @@ export function createStdinDriver(
   });
   const keyboardProtocolSequences = getKeyboardProtocolSequences(keyboardProtocol);
   let disposed = false;
+  let cleanupHandle: TerminalCleanupHandle | null = null;
 
   let swallowNextLF = false;
   let lastMouseDown: {
@@ -448,6 +638,8 @@ export function createStdinDriver(
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    cleanupHandle?.uninstall();
+    cleanupHandle = null;
     stdin.off("data", onData);
     stdinBuffer.destroy();
     try {
@@ -462,16 +654,27 @@ export function createStdinDriver(
     }
     if (stdin.isTTY) stdin.setRawMode(Boolean(wasRaw));
     if (stdout.isTTY) {
-      stdout.write("\u001B[?2004l");
-      stdout.write("\u001B[?1004l");
-      if (keyboardProtocolSequences) stdout.write(keyboardProtocolSequences.disable);
+      let restore = "\u001B[?2004l\u001B[?1004l";
+      if (keyboardProtocolSequences) restore += keyboardProtocolSequences.disable;
       if (enableMouse) {
-        stdout.write("\u001B[?1007l");
-        if (enableMouseMotion) stdout.write("\u001B[?1000l\u001B[?1003l\u001B[?1006l");
-        else stdout.write("\u001B[?1000l\u001B[?1002l\u001B[?1006l");
+        restore += "\u001B[?1007l";
+        restore += enableMouseMotion
+          ? "\u001B[?1000l\u001B[?1003l\u001B[?1006l"
+          : "\u001B[?1000l\u001B[?1002l\u001B[?1006l";
       }
+      writeTTYSyncOrStream(stdout, restore);
     }
   };
+
+  const autoCleanup = options.autoCleanup ?? false;
+  if (autoCleanup) {
+    const cleanupOptions = typeof autoCleanup === "object" ? autoCleanup : {};
+    cleanupHandle = installTerminalCleanup(dispose, {
+      ...cleanupOptions,
+      signalPolicy:
+        typeof autoCleanup === "object" ? (cleanupOptions.signalPolicy ?? "reraise") : "reraise",
+    });
+  }
 
   return { dispose };
 }

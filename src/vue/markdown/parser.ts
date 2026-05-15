@@ -1,9 +1,6 @@
-import {
-  getMarkdown,
-  parseMarkdownToStructure,
-  type ParseOptions,
-  type ParsedNode,
-} from "stream-markdown-parser";
+import { getMarkdown, parseMarkdownToStructure, type ParseOptions } from "stream-markdown-parser";
+import { sanitizeDomHref } from "../../core/hyperlink.js";
+import type { TuiMarkdownNode } from "./types.js";
 
 export interface TuiMarkdownParseConfig {
   streaming?: boolean;
@@ -11,73 +8,61 @@ export interface TuiMarkdownParseConfig {
 }
 
 export interface TuiMarkdownParser {
-  parse: (content: string, final: boolean) => ParsedNode[];
+  parse: (content: string, final: boolean) => TuiMarkdownNode[];
 }
 
-const RELATIVE_LINK_PREFIXES = ["#", "/", "./", "../"] as const;
-const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 const markdownInstanceCache = new Map<string, ReturnType<typeof getMarkdown>>();
 const MAX_MARKDOWN_INSTANCE_CACHE = 32;
-const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
-function hasControlChars(value: string): boolean {
-  for (const ch of value) {
-    const code = ch.codePointAt(0)!;
-    if ((code >= 0x00 && code <= 0x1f) || (code >= 0x7f && code <= 0x9f)) return true;
-  }
-  return false;
+export function sanitizeMarkdownLink(url: string): string | null {
+  return sanitizeDomHref(url, { allowRelative: true });
 }
 
 export function isSafeMarkdownLink(url: string): boolean {
-  const raw = String(url ?? "").trim();
-  if (!raw) return false;
-  if (hasControlChars(raw)) return false;
-  if (raw.startsWith("//")) return false;
-
-  const value = raw.toLowerCase();
-  if (value.startsWith("javascript:")) return false;
-  if (value.startsWith("data:")) return false;
-  if (RELATIVE_LINK_PREFIXES.some((prefix) => raw.startsWith(prefix))) return true;
-  if (!SCHEME_RE.test(raw)) return true;
-
-  try {
-    const parsed = new URL(raw);
-    return SAFE_PROTOCOLS.has(parsed.protocol);
-  } catch {
-    return false;
-  }
+  return sanitizeMarkdownLink(url) != null;
 }
 
-function markdownInstanceCacheKey(config?: TuiMarkdownParseConfig): string {
+function normalizeCustomHtmlTags(config?: TuiMarkdownParseConfig): readonly string[] {
+  return Array.from(new Set(config?.customHtmlTags?.filter(Boolean) ?? [])).sort();
+}
+
+function markdownInstanceCacheKey(customHtmlTags: readonly string[]): string {
   return JSON.stringify({
-    customHtmlTags: [...(config?.customHtmlTags?.filter(Boolean) ?? [])].sort(),
+    customHtmlTags,
   });
 }
 
-function getCachedMarkdownInstance(config?: TuiMarkdownParseConfig) {
-  const cacheKey = markdownInstanceCacheKey(config);
+function getCachedMarkdownInstance(customHtmlTags: readonly string[]) {
+  const cacheKey = markdownInstanceCacheKey(customHtmlTags);
   const cached = markdownInstanceCache.get(cacheKey);
-  if (cached) return cached;
-  const customHtmlTags = config?.customHtmlTags?.filter(Boolean);
+  if (cached) {
+    markdownInstanceCache.delete(cacheKey);
+    markdownInstanceCache.set(cacheKey, cached);
+    return cached;
+  }
   const created = getMarkdown(`vue-tui-markdown:${cacheKey}`, {
     customHtmlTags,
   });
-  if (markdownInstanceCache.size >= MAX_MARKDOWN_INSTANCE_CACHE) markdownInstanceCache.clear();
   markdownInstanceCache.set(cacheKey, created);
+  while (markdownInstanceCache.size > MAX_MARKDOWN_INSTANCE_CACHE) {
+    const oldest = markdownInstanceCache.keys().next().value;
+    if (oldest == null) break;
+    markdownInstanceCache.delete(oldest);
+  }
   return created;
 }
 
 export function createTuiMarkdownParser(config?: TuiMarkdownParseConfig): TuiMarkdownParser {
-  const customHtmlTags = config?.customHtmlTags?.filter(Boolean);
-  const md = getCachedMarkdownInstance(config);
+  const customHtmlTags = normalizeCustomHtmlTags(config);
+  const md = getCachedMarkdownInstance(customHtmlTags);
 
-  function parse(content: string, final: boolean): ParsedNode[] {
+  function parse(content: string, final: boolean): TuiMarkdownNode[] {
     return parseMarkdownToStructure(content, md, {
       final,
       customHtmlTags,
       requireClosingStrong: final || !config?.streaming,
       validateLink: isSafeMarkdownLink,
-    } satisfies ParseOptions);
+    } satisfies ParseOptions) as TuiMarkdownNode[];
   }
 
   return { parse };

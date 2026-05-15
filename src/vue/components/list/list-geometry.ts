@@ -1,4 +1,4 @@
-import type { Rect } from "../../../events/index.js";
+import type { Rect } from "../../../events/manager/types.js";
 
 export type ListClipOffsets = Readonly<{
   x: number;

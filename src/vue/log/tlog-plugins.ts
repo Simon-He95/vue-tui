@@ -144,12 +144,25 @@ export type TLogUrlPluginOptions = Readonly<{
   allowFileUrls?: boolean;
 }>;
 
+type ActiveTLogOsc8Link = {
+  href: string;
+  startIndex: number;
+  endIndex: number;
+};
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function stringIndexToCell(text: string, index: number): number {
   return textCellWidth(text.slice(0, Math.max(0, index)));
+}
+
+function testRegex(pattern: RegExp, text: string): boolean {
+  pattern.lastIndex = 0;
+  const ok = pattern.test(text);
+  pattern.lastIndex = 0;
+  return ok;
 }
 
 export function stripTLogAnsiText(text: string): string {
@@ -163,7 +176,7 @@ export function parseTLogAnnotatedText(text: string): Readonly<{
   const out: string[] = [];
   const links: TLogParsedOsc8Link[] = [];
   let currentHref: string | undefined;
-  let activeLink: { href: string; startIndex: number; endIndex: number } | null = null;
+  let activeLink: ActiveTLogOsc8Link | null = null;
   let plainLength = 0;
 
   const flushLink = (): void => {
@@ -190,7 +203,8 @@ export function parseTLogAnnotatedText(text: string): Readonly<{
       out.push(ch);
       plainLength += ch.length;
       if (currentHref) {
-        if (activeLink?.href === currentHref) activeLink.endIndex += ch.length;
+        const link = activeLink as ActiveTLogOsc8Link | null;
+        if (link && link.href === currentHref) link.endIndex += ch.length;
         else
           activeLink = {
             href: currentHref,
@@ -264,7 +278,10 @@ export function detectTLogUrls(
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) != null) {
     const rawHref = match[0] ?? "";
-    if (!rawHref) continue;
+    if (rawHref.length === 0) {
+      regex.lastIndex = Math.max(regex.lastIndex, match.index + 1);
+      continue;
+    }
     const href = sanitizeTerminalHref(rawHref, {
       allowFileUrls: options.allowFileUrls === true,
     });
@@ -281,7 +298,6 @@ export function detectTLogUrls(
       endCell,
       source: "url",
     });
-    if (!rawHref.length) regex.lastIndex += 1;
   }
 
   return links;
@@ -294,9 +310,9 @@ export function detectTLogLevel(
   const errorPattern = options.errorPattern ?? /\b(?:ERROR|FATAL|ERR)\b/u;
   const warningPattern = options.warningPattern ?? /\b(?:WARN|WARNING)\b/u;
   const infoPattern = options.infoPattern ?? /\bINFO\b/u;
-  if (errorPattern.test(text)) return "error";
-  if (warningPattern.test(text)) return "warning";
-  if (options.includeInfo !== false && infoPattern.test(text)) return "info";
+  if (testRegex(errorPattern, text)) return "error";
+  if (testRegex(warningPattern, text)) return "warning";
+  if (options.includeInfo !== false && testRegex(infoPattern, text)) return "info";
   return null;
 }
 
@@ -474,7 +490,7 @@ export function createTLogLineMatcherPlugin(options: {
   return {
     name: options.name,
     parseLine(ctx) {
-      if (!pattern.test(ctx.plainText)) return;
+      if (!testRegex(pattern, ctx.plainText)) return;
       return {
         markers: [
           {

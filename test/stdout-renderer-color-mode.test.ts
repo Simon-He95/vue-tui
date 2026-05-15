@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createTerminal, detectTerminalColorCapability, rgbToAnsi256 } from "../src/index.js";
+import { createTerminal } from "../src/index.js";
+import { detectTerminalColorCapability, rgbToAnsi256 } from "../src/core.js";
 import { createStdoutRenderer } from "../src/cli.js";
 
 const getFrameDelayMs = () => ("GHOSTTY_RESOURCES_DIR" in process.env ? 24 : 16);

@@ -1,6 +1,6 @@
 import type { PropType } from "vue";
 import type { AnsiColorName, Style } from "../../core/types.js";
-import type { TerminalKeyboardEvent } from "../../events/index.js";
+import type { TerminalKeyboardEvent } from "../../events/manager/types.js";
 import { defineComponent, h, watch } from "vue";
 import { TInput } from "./TInput.js";
 import { TText } from "./TText.js";

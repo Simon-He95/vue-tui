@@ -12,6 +12,7 @@ export type {
 export type {
   TuiMarkdownBlock,
   TuiMarkdownInlineSegment,
+  TuiMarkdownNode,
   TuiMarkdownVisualRow,
   TuiMarkdownVisualSegment,
 } from "./vue/markdown/types.js";

@@ -1,4 +1,5 @@
 import { isAbsolutePath, normalizePath, resolvePath } from "../../../utils/path.js";
+import { hasEncodedControl } from "../../../utils/url-safety.js";
 
 export type ResolveTInputPathInfo = Readonly<{
   workspace: string;
@@ -59,32 +60,100 @@ export function resolveDefaultTInputPath(info: ResolveTInputPathInfo): string {
 
 export function fileUrlToPathLike(input: string): string | null {
   try {
-    const url = new URL(String(input ?? ""));
+    const raw = String(input ?? "");
+    if (!raw) return null;
+    if (hasControlChar(raw)) return null;
+    if (raw !== raw.trim()) return null;
+    if (/\s/u.test(raw)) return null;
+    if (hasEncodedControl(raw)) return null;
+
+    const url = new URL(raw);
     if (url.protocol !== "file:") return null;
     let pathname = decodeURIComponent(url.pathname || "");
+    if (hasControlChar(pathname)) return null;
+
     if (/^\/[A-Z]:\//i.test(pathname)) pathname = pathname.slice(1);
-    if (url.host) return `//${url.host}${pathname}`;
+    if (url.host) {
+      if (hasControlChar(url.host)) return null;
+      return `//${url.host}${pathname}`;
+    }
+
     return pathname || "/";
   } catch {
     return null;
   }
 }
 
-export function pathToTerminalFileHref(pathLike: string): string | undefined {
-  const raw = String(pathLike ?? "").trim();
-  if (!raw) return undefined;
-  if (raw.startsWith("file://")) return raw;
+function encodePathSegments(path: string): string {
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
+
+function encodeFilePathForUrl(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const windowsDrive = normalized.match(/^([A-Z]:)(?:\/(.*))?$/i);
+  if (windowsDrive) {
+    const drive = windowsDrive[1]!;
+    const rest = encodePathSegments(windowsDrive[2] ?? "");
+    if (rest) return `${drive}/${rest}`;
+    return normalized.endsWith("/") ? `${drive}/` : drive;
+  }
+  return encodePathSegments(normalized);
+}
+
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true;
+  }
+  return false;
+}
+
+function sanitizeRawFileUrl(raw: string): string | undefined {
+  if (raw !== raw.trim()) return undefined;
+  if (/\s/u.test(raw)) return undefined;
+  if (raw.includes("\\")) return undefined;
+  if (hasControlChar(raw)) return undefined;
+  if (hasEncodedControl(raw)) return undefined;
+
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "file:") return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function filesystemPathToFileUrl(raw: string): string | undefined {
+  const backslashUnc = raw.match(/^\\\\([^\\/]+)[\\/](.+)$/);
+  if (backslashUnc) {
+    const host = encodeURIComponent(backslashUnc[1]!);
+    const path = encodePathSegments(backslashUnc[2]!.replace(/\\/g, "/"));
+    return `file://${host}/${path}`;
+  }
+
+  const slashUnc = raw.match(/^\/\/([^/]+)\/(.+)$/);
+  if (slashUnc) {
+    const host = encodeURIComponent(slashUnc[1]!);
+    const path = encodePathSegments(slashUnc[2]!);
+    return `file://${host}/${path}`;
+  }
 
   const normalizedRaw = raw.replace(/\\/g, "/");
   const normalized = normalizePath(normalizedRaw);
   if (!isAbsolutePath(normalized)) return undefined;
 
-  try {
-    if (/^[A-Z]:\//i.test(normalized)) {
-      return new URL(`file:///${normalized}`).toString();
-    }
-    return new URL(`file://${normalized}`).toString();
-  } catch {
-    return undefined;
-  }
+  return `file:///${encodeFilePathForUrl(normalized)}`;
+}
+
+export function pathToTerminalFileHref(pathLike: string): string | undefined {
+  const raw = String(pathLike ?? "");
+  if (!raw) return undefined;
+  if (hasControlChar(raw)) return undefined;
+  if (/^file:\/\//i.test(raw)) return sanitizeRawFileUrl(raw);
+  return filesystemPathToFileUrl(raw);
 }

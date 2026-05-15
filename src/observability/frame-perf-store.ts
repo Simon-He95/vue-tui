@@ -43,7 +43,7 @@ export function createFramePerfStore(
   }
 
   function latest(): FramePerfSample | null {
-    return samples.at(-1) ?? null;
+    return samples.length > 0 ? samples[samples.length - 1]! : null;
   }
 
   function list(): FramePerfSample[] {

@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { createStdinDriver } from "../src/cli.js";
+import { createStdinDriver, installTerminalCleanup } from "../src/cli.js";
+import { resolveCleanupSignalAction } from "../src/cli/input.js";
 import { normalizeNewlines } from "../src/utils/newlines.js";
 
 class FakeStdin extends EventEmitter {
@@ -47,6 +48,496 @@ function collectDriverOutput(
 }
 
 describe("cli input", () => {
+  it("resolves cleanup signal policy actions", () => {
+    expect(resolveCleanupSignalAction("SIGINT", "cleanup-only")).toEqual({
+      type: "none",
+    });
+    expect(resolveCleanupSignalAction("SIGINT", "exit")).toEqual({
+      type: "exit",
+      code: 130,
+    });
+    expect(resolveCleanupSignalAction("SIGTERM", "reraise")).toEqual({
+      type: "reraise",
+      signal: "SIGTERM",
+    });
+  });
+
+  it("installs terminal cleanup for process exit", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("exit"));
+    const cleanupHandle = installTerminalCleanup(dispose);
+    try {
+      const listener = process.rawListeners("exit").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.(0);
+      listener?.(0);
+      expect(dispose).toHaveBeenCalledTimes(1);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("default signal policy re-raises after cleanup", async () => {
+    const dispose = vi.fn();
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose);
+
+    try {
+      const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(process.rawListeners("SIGTERM").filter((item) => !before.has(item))).toHaveLength(0);
+      expect(kill).toHaveBeenCalledWith(process.pid, "SIGTERM");
+      expect(exit).not.toHaveBeenCalled();
+    } finally {
+      cleanupHandle.uninstall();
+      kill.mockRestore();
+      exit.mockRestore();
+    }
+  });
+
+  it("cleanup-only signal policy cleans up without exiting", () => {
+    const dispose = vi.fn();
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      signalPolicy: "cleanup-only",
+    });
+
+    try {
+      const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(exit).not.toHaveBeenCalled();
+      expect(kill).not.toHaveBeenCalled();
+    } finally {
+      cleanupHandle.uninstall();
+      exit.mockRestore();
+      kill.mockRestore();
+    }
+  });
+
+  it("exit signal policy exits with signal code", () => {
+    const dispose = vi.fn();
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const before = new Set(process.rawListeners("SIGINT"));
+    const cleanupHandle = installTerminalCleanup(dispose, { signalPolicy: "exit" });
+
+    try {
+      const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(130);
+    } finally {
+      cleanupHandle.uninstall();
+      exit.mockRestore();
+    }
+  });
+
+  it("reraise signal policy removes its listener and kills the current process", async () => {
+    const dispose = vi.fn();
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose, { signalPolicy: "reraise" });
+
+    try {
+      const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(process.rawListeners("SIGTERM").filter((item) => !before.has(item))).toHaveLength(0);
+      expect(kill).toHaveBeenCalledWith(process.pid, "SIGTERM");
+      expect(exit).not.toHaveBeenCalled();
+    } finally {
+      cleanupHandle.uninstall();
+      kill.mockRestore();
+      exit.mockRestore();
+    }
+  });
+
+  it("does not re-raise when another host signal listener exists", async () => {
+    const dispose = vi.fn();
+    const hostListener = vi.fn();
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+
+    process.once("SIGTERM", hostListener);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      signalPolicy: "reraise",
+    });
+
+    try {
+      const ownListener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
+      expect(ownListener).toBeTypeOf("function");
+
+      ownListener?.();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(kill).not.toHaveBeenCalled();
+    } finally {
+      cleanupHandle.uninstall();
+      process.off("SIGTERM", hostListener);
+      kill.mockRestore();
+    }
+  });
+
+  it("does not re-raise when a host once listener registered before vue-tui handles the signal", async () => {
+    const dispose = vi.fn();
+    const hostListener = vi.fn();
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+
+    process.once("SIGTERM", hostListener);
+    const cleanupHandle = installTerminalCleanup(dispose, { signalPolicy: "reraise" });
+
+    try {
+      process.emit("SIGTERM" as any);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(hostListener).toHaveBeenCalledOnce();
+      expect(dispose).toHaveBeenCalledOnce();
+      expect(kill).not.toHaveBeenCalled();
+    } finally {
+      cleanupHandle.uninstall();
+      process.off("SIGTERM", hostListener);
+      kill.mockRestore();
+    }
+  });
+
+  it("honors explicit cleanup signals", () => {
+    const dispose = vi.fn();
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined as never) as any);
+    const before = new Set(process.rawListeners("SIGINT"));
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      signals: ["SIGINT"],
+      signalPolicy: "exit",
+    });
+
+    try {
+      const listener = process.rawListeners("SIGINT").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(130);
+    } finally {
+      cleanupHandle.uninstall();
+      exit.mockRestore();
+    }
+  });
+
+  it("skips unsupported SIGBREAK listeners outside Windows", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("SIGBREAK"));
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      signals: ["SIGBREAK"],
+      signalPolicy: "exit",
+    });
+
+    try {
+      const added = process.rawListeners("SIGBREAK").filter((item) => !before.has(item));
+      expect(added).toHaveLength(process.platform === "win32" ? 1 : 0);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("deduplicates cleanup signals", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      signals: ["SIGTERM", "SIGTERM"],
+    });
+
+    try {
+      const added = process.rawListeners("SIGTERM").filter((item) => !before.has(item));
+      expect(added).toHaveLength(1);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("cleanup handle cleanup is idempotent", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose);
+
+    try {
+      cleanupHandle.cleanup();
+      cleanupHandle.cleanup();
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      cleanupHandle.uninstall();
+      expect(process.rawListeners("SIGTERM").filter((item) => !before.has(item))).toHaveLength(0);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("cleanup handle uninstall does not run cleanup", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const cleanupHandle = installTerminalCleanup(dispose);
+
+    cleanupHandle.uninstall();
+
+    expect(dispose).not.toHaveBeenCalled();
+    expect(process.rawListeners("SIGTERM").filter((item) => !before.has(item))).toHaveLength(0);
+  });
+
+  it("does not register unhandledRejection cleanup by default", () => {
+    const dispose = vi.fn();
+    const before = process.listenerCount("unhandledRejection");
+    const cleanupHandle = installTerminalCleanup(dispose);
+
+    try {
+      expect(process.listenerCount("unhandledRejection")).toBe(before);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("registers unhandledRejection cleanup only when explicitly enabled", () => {
+    const dispose = vi.fn();
+    const before = process.listenerCount("unhandledRejection");
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      cleanupOnUnhandledRejection: true,
+    });
+
+    try {
+      expect(process.listenerCount("unhandledRejection")).toBe(before + 1);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("rethrows after opted-in unhandledRejection cleanup by default", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("unhandledRejection"));
+    const error = new Error("boom");
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      cleanupOnUnhandledRejection: true,
+    });
+
+    try {
+      const listener = process.rawListeners("unhandledRejection").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      const scheduled: Array<() => void> = [];
+      const nextTick = vi.spyOn(process, "nextTick").mockImplementation(((
+        callback: (...args: any[]) => void,
+        ...args: any[]
+      ) => {
+        scheduled.push(() => callback(...args));
+      }) as any);
+      try {
+        listener?.(error, Promise.resolve());
+      } finally {
+        nextTick.mockRestore();
+      }
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(
+        scheduled.some((callback) => {
+          try {
+            callback();
+            return false;
+          } catch (caught) {
+            return caught === error;
+          }
+        }),
+      ).toBe(true);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("preserves non-error unhandledRejection reasons as cause", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("unhandledRejection"));
+    const reason = { code: "boom" };
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      cleanupOnUnhandledRejection: true,
+    });
+
+    try {
+      const listener = process.rawListeners("unhandledRejection").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      const scheduled: Array<() => void> = [];
+      const nextTick = vi.spyOn(process, "nextTick").mockImplementation(((
+        callback: (...args: any[]) => void,
+        ...args: any[]
+      ) => {
+        scheduled.push(() => callback(...args));
+      }) as any);
+      try {
+        listener?.(reason, Promise.resolve());
+      } finally {
+        nextTick.mockRestore();
+      }
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(
+        scheduled.some((callback) => {
+          try {
+            callback();
+            return false;
+          } catch (caught) {
+            expect(caught).toBeInstanceOf(Error);
+            expect((caught as Error).message).toBe("Unhandled promise rejection");
+            expect((caught as Error).cause).toBe(reason);
+            return true;
+          }
+        }),
+      ).toBe(true);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("can suppress rethrow when explicitly configured", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("unhandledRejection"));
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      cleanupOnUnhandledRejection: true,
+      rethrowUnhandledRejection: false,
+    });
+
+    try {
+      const listener = process.rawListeners("unhandledRejection").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      const nextTick = vi.spyOn(process, "nextTick");
+      try {
+        listener?.(new Error("boom"), Promise.resolve());
+      } finally {
+        nextTick.mockRestore();
+      }
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(nextTick).not.toHaveBeenCalled();
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("can explicitly skip unhandledRejection cleanup", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("unhandledRejection"));
+    const cleanupHandle = installTerminalCleanup(dispose, {
+      cleanupOnUnhandledRejection: false,
+    });
+
+    try {
+      const added = process.rawListeners("unhandledRejection").filter((item) => !before.has(item));
+      expect(added).toHaveLength(0);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("cleans up on uncaughtExceptionMonitor", () => {
+    const dispose = vi.fn();
+    const before = new Set(process.rawListeners("uncaughtExceptionMonitor"));
+    const cleanupHandle = installTerminalCleanup(dispose);
+
+    try {
+      const listener = process
+        .rawListeners("uncaughtExceptionMonitor")
+        .find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.(new Error("boom"), "uncaughtException");
+      listener?.(new Error("boom"), "uncaughtException");
+      expect(dispose).toHaveBeenCalledTimes(1);
+    } finally {
+      cleanupHandle.uninstall();
+    }
+  });
+
+  it("does not auto-install terminal cleanup by default", () => {
+    const stdin = new FakeStdin() as any;
+    const stdout = new FakeStdout() as any;
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const driver = createStdinDriver({
+      stdin,
+      stdout,
+      dispatch: () => {},
+      enableMouse: false,
+    });
+
+    try {
+      const added = process.rawListeners("SIGTERM").filter((item) => !before.has(item));
+      expect(added).toHaveLength(0);
+    } finally {
+      driver.dispose();
+    }
+  });
+
+  it("can opt into stdin driver terminal cleanup", async () => {
+    const stdin = new FakeStdin() as any;
+    const stdout = new FakeStdout() as any;
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const driver = createStdinDriver({
+      stdin,
+      stdout,
+      dispatch: () => {},
+      enableMouse: false,
+      autoCleanup: true,
+    });
+
+    try {
+      const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(stdin.isRaw).toBe(false);
+      expect(stdout.writes.join("")).toContain("\u001B[?2004l");
+      expect(kill).toHaveBeenCalledWith(process.pid, "SIGTERM");
+    } finally {
+      driver.dispose();
+      kill.mockRestore();
+    }
+  });
+
+  it("autoCleanup object defaults to re-raising signals", async () => {
+    const stdin = new FakeStdin() as any;
+    const stdout = new FakeStdout() as any;
+    const kill = vi.spyOn(process, "kill").mockImplementation((() => true) as any);
+    const before = new Set(process.rawListeners("SIGTERM"));
+    const driver = createStdinDriver({
+      stdin,
+      stdout,
+      dispatch: () => {},
+      enableMouse: false,
+      autoCleanup: {},
+    });
+
+    try {
+      const listener = process.rawListeners("SIGTERM").find((item) => !before.has(item));
+      expect(listener).toBeTypeOf("function");
+      listener?.();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(kill).toHaveBeenCalledWith(process.pid, "SIGTERM");
+    } finally {
+      driver.dispose();
+      kill.mockRestore();
+    }
+  });
+
   it("enables/disables mouse any-motion tracking when configured", () => {
     const stdin = new FakeStdin() as any;
     const stdout = new FakeStdout() as any;
@@ -159,6 +650,33 @@ describe("cli input", () => {
     expect(offOutput).not.toContain("\u001B[<u");
     expect(offOutput).not.toContain("\u001B[>4;2m");
     expect(offOutput).not.toContain("\u001B[>4n");
+  });
+
+  it("prefers VUE_TUI_KEYBOARD_PROTOCOL over the legacy DIMCODE alias", () => {
+    const output = collectDriverOutput({
+      env: {
+        TERM: "vt100",
+        VUE_TUI_KEYBOARD_PROTOCOL: "xterm",
+        DIMCODE_KEYBOARD_PROTOCOL: "kitty",
+      },
+    });
+
+    expect(output).toContain("\u001B[>4;2m");
+    expect(output).toContain("\u001B[>4n");
+    expect(output).not.toContain("\u001B[>1u");
+  });
+
+  it("does not fall back to legacy keyboard env when the new env is invalid", () => {
+    const output = collectDriverOutput({
+      env: {
+        TERM: "vt100",
+        VUE_TUI_KEYBOARD_PROTOCOL: "bogus",
+        DIMCODE_KEYBOARD_PROTOCOL: "kitty",
+      },
+    });
+
+    expect(output).not.toContain("\u001B[>1u");
+    expect(output).not.toContain("\u001B[<u");
   });
 
   it("reports terminal focus in/out changes", () => {

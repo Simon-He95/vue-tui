@@ -3,9 +3,12 @@ import {
   clearRect,
   createGridBuffer,
   fillRect,
+  getBufferCell,
   getRowFingerprints,
   putCell,
+  scrollBuffer,
   setFingerprintFn,
+  snapshotText,
 } from "../src/core/buffer/buffer.js";
 
 describe("buffer fillRect fast path", () => {
@@ -119,6 +122,27 @@ describe("buffer fillRect fast path", () => {
 });
 
 describe("buffer clearRect wide boundaries", () => {
+  test("recomputes fingerprints after full clear", () => {
+    const buffer = createGridBuffer(4, 2);
+    const fp = (ch: string, style: any) =>
+      ((style.fg === "red" ? 1 : 0) << 16) | (ch.charCodeAt(0) || 0);
+    setFingerprintFn(buffer, fp);
+    putCell(buffer, 0, 0, "A", { fg: "red" });
+    putCell(buffer, 1, 1, "B", { fg: "red" });
+
+    clearRect(buffer);
+
+    for (let y = 0; y < buffer.rows; y++) {
+      const row = buffer.grid[y]!;
+      const fingerprints = getRowFingerprints(buffer, y);
+      expect(fingerprints).not.toBeNull();
+      for (let x = 0; x < buffer.cols; x++) {
+        const cell = row[x]!;
+        expect(fingerprints![x]).toBe(fp(cell.ch, cell.style));
+      }
+    }
+  });
+
   test("clears wide base when range starts at continuation", () => {
     const buffer = createGridBuffer(4, 1);
     putCell(buffer, 0, 0, "中");
@@ -154,5 +178,69 @@ describe("buffer clearRect wide boundaries", () => {
     clearRect(buffer, 1, 0, 1, 1);
 
     expect(Array.from(getRowFingerprints(buffer, 0)!)).toEqual([3, 3, 3, 3]);
+  });
+});
+
+describe("buffer scroll fingerprints", () => {
+  test("recomputes inserted bottom rows after scrolling up", () => {
+    const buffer = createGridBuffer(3, 3);
+    setFingerprintFn(buffer, (ch) => (ch === " " ? 0 : ch.charCodeAt(0)));
+    putCell(buffer, 0, 0, "A");
+    putCell(buffer, 0, 1, "B");
+    putCell(buffer, 0, 2, "C");
+
+    scrollBuffer(buffer, 1);
+
+    expect(Array.from(getRowFingerprints(buffer, 0)!)).toEqual([66, 0, 0]);
+    expect(Array.from(getRowFingerprints(buffer, 1)!)).toEqual([67, 0, 0]);
+    expect(Array.from(getRowFingerprints(buffer, 2)!)).toEqual([0, 0, 0]);
+  });
+
+  test("recomputes inserted top rows after scrolling down", () => {
+    const buffer = createGridBuffer(3, 3);
+    setFingerprintFn(buffer, (ch) => (ch === " " ? 0 : ch.charCodeAt(0)));
+    putCell(buffer, 0, 0, "A");
+    putCell(buffer, 0, 1, "B");
+    putCell(buffer, 0, 2, "C");
+
+    scrollBuffer(buffer, -1);
+
+    expect(Array.from(getRowFingerprints(buffer, 0)!)).toEqual([0, 0, 0]);
+    expect(Array.from(getRowFingerprints(buffer, 1)!)).toEqual([65, 0, 0]);
+    expect(Array.from(getRowFingerprints(buffer, 2)!)).toEqual([66, 0, 0]);
+  });
+
+  test("keeps all visible fingerprints in sync after full-buffer scroll", () => {
+    const buffer = createGridBuffer(4, 4);
+    const fingerprint = (ch: string) => (ch === " " ? 0 : ch.charCodeAt(0));
+    setFingerprintFn(buffer, fingerprint);
+    putCell(buffer, 0, 0, "A");
+    putCell(buffer, 1, 1, "B");
+    putCell(buffer, 2, 2, "C");
+    putCell(buffer, 3, 3, "D");
+    buffer.soaFingerprints!.fill(999);
+
+    scrollBuffer(buffer, 100);
+
+    for (let y = 0; y < buffer.rows; y++) {
+      const actual = Array.from(getRowFingerprints(buffer, y)!);
+      const expected = Array.from({ length: buffer.cols }, (_, x) =>
+        fingerprint(getBufferCell(buffer, x, y).ch),
+      );
+      expect(actual).toEqual(expected);
+    }
+  });
+
+  test("clamps large scrollBuffer operations to visible rows", () => {
+    const buffer = createGridBuffer(5, 3);
+    setFingerprintFn(buffer, (ch) => ch.charCodeAt(0) || 0);
+    putCell(buffer, 0, 0, "a");
+    putCell(buffer, 0, 1, "b");
+    putCell(buffer, 0, 2, "c");
+
+    scrollBuffer(buffer, 100);
+
+    expect(snapshotText(buffer)).toEqual(["     ", "     ", "     "]);
+    expect(buffer.scrollback.length).toBeLessThanOrEqual(3);
   });
 });
