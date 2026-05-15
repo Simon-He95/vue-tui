@@ -16,6 +16,49 @@ const packageName = packageJson.name;
 const vueVersion = process.argv[3] ?? packageJson.devDependencies?.vue ?? "vue";
 const viteVersion = packageJson.devDependencies?.vite ?? "vite";
 const dir = mkdtempSync(join(tmpdir(), "vue-tui-browser-smoke-"));
+const requiredBrowserSubpaths = [
+  packageName,
+  `${packageName}/core`,
+  `${packageName}/runtime`,
+  `${packageName}/renderer/dom`,
+  `${packageName}/observability`,
+  `${packageName}/vue`,
+  `${packageName}/markdown`,
+  `${packageName}/experimental`,
+];
+const browserSmokeSource = `
+import * as root from "${packageName}";
+import * as core from "${packageName}/core";
+import * as runtime from "${packageName}/runtime";
+import * as rendererDom from "${packageName}/renderer/dom";
+import * as observability from "${packageName}/observability";
+import * as vueEntry from "${packageName}/vue";
+import * as markdown from "${packageName}/markdown";
+import * as experimental from "${packageName}/experimental";
+
+const terminal = root.createTerminal({ cols: 4, rows: 1 });
+terminal.write("OK", { x: 0, y: 0 });
+
+globalThis.__VUE_TUI_BROWSER_SMOKE__ = Boolean(
+  root.TerminalProvider &&
+    core.charCellWidth &&
+    runtime.createRuntime &&
+    rendererDom.createDomRenderer &&
+    observability.createTraceStore &&
+    vueEntry.TerminalProvider &&
+    markdown.TMarkdownText &&
+    experimental.TVirtualList &&
+    terminal.snapshot().lines[0]?.startsWith("OK"),
+);
+
+console.log("vue-tui-browser-smoke", globalThis.__VUE_TUI_BROWSER_SMOKE__);
+`;
+
+for (const subpath of requiredBrowserSubpaths) {
+  if (!browserSmokeSource.includes(`from "${subpath}"`)) {
+    throw new Error(`Browser smoke fixture must import ${subpath}`);
+  }
+}
 
 function run(command, args) {
   console.log(`$ ${[command, ...args].join(" ")}`);
@@ -133,27 +176,7 @@ try {
     join(dir, "index.html"),
     `<div id="app"></div><script type="module" src="/src/main.ts"></script>\n`,
   );
-  writeFileSync(
-    join(dir, "src/main.ts"),
-    `
-import { TerminalProvider, TText, createTerminal } from "${packageName}";
-import { TMarkdownText } from "${packageName}/markdown";
-import { TVirtualList } from "${packageName}/experimental";
-
-const terminal = createTerminal({ cols: 4, rows: 1 });
-terminal.write("OK", { x: 0, y: 0 });
-
-globalThis.__VUE_TUI_BROWSER_SMOKE__ = Boolean(
-  TerminalProvider &&
-    TText &&
-    TMarkdownText &&
-    TVirtualList &&
-    terminal.snapshot().lines[0]?.startsWith("OK"),
-);
-
-console.log("vue-tui-browser-smoke", globalThis.__VUE_TUI_BROWSER_SMOKE__);
-`,
-  );
+  writeFileSync(join(dir, "src/main.ts"), browserSmokeSource);
 
   run("npx", ["vite", "build"]);
   assertNoForbiddenBrowserCode();

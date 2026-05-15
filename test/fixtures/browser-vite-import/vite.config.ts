@@ -12,6 +12,11 @@ export default {
   resolve: {
     alias: [
       { find: /^@simon_he\/vue-tui$/, replacement: distEntry("index.js") },
+      { find: /^@simon_he\/vue-tui\/core$/, replacement: distEntry("core.js") },
+      { find: /^@simon_he\/vue-tui\/runtime$/, replacement: distEntry("runtime.js") },
+      { find: /^@simon_he\/vue-tui\/renderer\/dom$/, replacement: distEntry("renderer-dom.js") },
+      { find: /^@simon_he\/vue-tui\/observability$/, replacement: distEntry("observability.js") },
+      { find: /^@simon_he\/vue-tui\/vue$/, replacement: distEntry("vue.js") },
       { find: /^@simon_he\/vue-tui\/markdown$/, replacement: distEntry("markdown.js") },
       { find: /^@simon_he\/vue-tui\/experimental$/, replacement: distEntry("experimental.js") },
     ],
