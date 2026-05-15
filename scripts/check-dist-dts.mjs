@@ -1,32 +1,34 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { assertNoBrowserForbiddenCode } from "./browser-forbidden-code.js";
 
 const dist = resolve("dist");
-const browserFacingDistFiles = [
+const browserFacingJsEntries = [
   "index.js",
-  "index.cjs",
-  "index.d.ts",
   "core.js",
-  "core.cjs",
-  "core.d.ts",
   "runtime.js",
-  "runtime.cjs",
-  "runtime.d.ts",
   "renderer-dom.js",
-  "renderer-dom.cjs",
-  "renderer-dom.d.ts",
   "observability.js",
-  "observability.cjs",
-  "observability.d.ts",
   "vue.js",
-  "vue.cjs",
-  "vue.d.ts",
   "markdown.js",
-  "markdown.cjs",
-  "markdown.d.ts",
   "experimental.js",
+  "index.cjs",
+  "core.cjs",
+  "runtime.cjs",
+  "renderer-dom.cjs",
+  "observability.cjs",
+  "vue.cjs",
+  "markdown.cjs",
   "experimental.cjs",
+];
+const browserFacingDtsFiles = [
+  "index.d.ts",
+  "core.d.ts",
+  "runtime.d.ts",
+  "renderer-dom.d.ts",
+  "observability.d.ts",
+  "vue.d.ts",
+  "markdown.d.ts",
   "experimental.d.ts",
 ];
 
@@ -41,6 +43,32 @@ function walk(dir, out = []) {
 
 const missing = [];
 
+function collectReachableJs(file, seen = new Set()) {
+  const abs = resolve(dist, file);
+  if (seen.has(abs)) return seen;
+  if (!existsSync(abs)) {
+    missing.push(abs);
+    return seen;
+  }
+
+  seen.add(abs);
+  const text = readFileSync(abs, "utf8");
+  const dir = dirname(abs);
+  const importRe =
+    /\b(?:import|export)\s+(?:[^"']*?\s+from\s+)?["'](\.\/[^"']+\.(?:js|cjs))["']|\bimport\s*\(\s*["'](\.\/[^"']+\.(?:js|cjs))["']\s*\)|\brequire\s*\(\s*["'](\.\/[^"']+\.(?:js|cjs))["']\s*\)/g;
+
+  for (const match of text.matchAll(importRe)) {
+    const rel = match[1] ?? match[2] ?? match[3];
+    if (!rel) continue;
+
+    const next = resolve(dir, rel);
+    if (!next.startsWith(`${dist}${sep}`)) continue;
+    collectReachableJs(next.slice(dist.length + 1), seen);
+  }
+
+  return seen;
+}
+
 for (const file of walk(dist)) {
   const text = readFileSync(file, "utf8");
   const re = /from\s+["'](\.[^"']+)\.js["']/g;
@@ -52,8 +80,23 @@ for (const file of walk(dist)) {
   }
 }
 
+const browserJsFiles = new Set();
+for (const entry of browserFacingJsEntries) {
+  for (const file of collectReachableJs(entry)) {
+    browserJsFiles.add(file);
+  }
+}
+
 const browserForbidden = [];
-for (const entry of browserFacingDistFiles) {
+for (const file of browserJsFiles) {
+  try {
+    assertNoBrowserForbiddenCode(readFileSync(file, "utf8"), file);
+  } catch (error) {
+    browserForbidden.push(error instanceof Error ? error.message : String(error));
+  }
+}
+
+for (const entry of browserFacingDtsFiles) {
   const file = join(dist, entry);
   if (!existsSync(file)) {
     missing.push(file);
