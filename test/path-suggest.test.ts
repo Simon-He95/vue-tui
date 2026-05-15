@@ -221,4 +221,19 @@ describe("path suggest", () => {
     expect(seen).toEqual(["foo/bar"]);
     expect(result.suggestions).toEqual([]);
   });
+
+  it("handles long slash-heavy input without regex backtracking", async () => {
+    const input = `.${"/".repeat(50_000)}target`;
+
+    const result = await suggestCorePaths({
+      workspaceAbs: "/workspace",
+      input,
+      mode: "any",
+      max: 10,
+      listDir: async () => [],
+    });
+
+    expect(result.suggestions).toEqual([]);
+    expect(result.baseDirAbs).toBeTruthy();
+  });
 });

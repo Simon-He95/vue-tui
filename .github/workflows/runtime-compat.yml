@@ -32,6 +32,8 @@ jobs:
 
       - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz 3.3.0
 
+      - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz 3.5.33
+
       - uses: actions/upload-artifact@v4
         with:
           name: package-tarball
@@ -63,3 +65,15 @@ jobs:
       - run: |
           TARBALL=$(ls package/*.tgz | head -n 1)
           node scripts/smoke-packed-runtime.mjs "$TARBALL" "${{ matrix.vue }}"
+
+  required:
+    needs: smoke
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - run: |
+          if [ "${{ needs.smoke.result }}" != "success" ]; then
+            echo "Runtime compatibility matrix failed"
+            exit 1
+          fi

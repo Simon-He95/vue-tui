@@ -9,11 +9,23 @@ function hasControlCodePoint(value: string): boolean {
 }
 
 export function hasEncodedControl(value: string): boolean {
-  if (ENCODED_ASCII_CONTROL_RE.test(value)) return true;
+  let current = String(value ?? "");
 
-  try {
-    return hasControlCodePoint(decodeURIComponent(value));
-  } catch {
-    return true;
+  for (let depth = 0; depth < 3; depth++) {
+    if (ENCODED_ASCII_CONTROL_RE.test(current)) return true;
+
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(current);
+    } catch {
+      return true;
+    }
+
+    if (hasControlCodePoint(decoded)) return true;
+    if (decoded === current) return false;
+
+    current = decoded;
   }
+
+  return ENCODED_ASCII_CONTROL_RE.test(current) || hasControlCodePoint(current);
 }

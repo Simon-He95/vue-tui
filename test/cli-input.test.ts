@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { createStdinDriver, installTerminalCleanup } from "../src/cli.js";
+import { resolveCleanupSignalAction } from "../src/cli/input.js";
 import { normalizeNewlines } from "../src/utils/newlines.js";
 
 class FakeStdin extends EventEmitter {
@@ -47,6 +48,20 @@ function collectDriverOutput(
 }
 
 describe("cli input", () => {
+  it("resolves cleanup signal policy actions", () => {
+    expect(resolveCleanupSignalAction("SIGINT", "cleanup-only")).toEqual({
+      type: "none",
+    });
+    expect(resolveCleanupSignalAction("SIGINT", "exit")).toEqual({
+      type: "exit",
+      code: 130,
+    });
+    expect(resolveCleanupSignalAction("SIGTERM", "reraise")).toEqual({
+      type: "reraise",
+      signal: "SIGTERM",
+    });
+  });
+
   it("installs terminal cleanup for process exit", () => {
     const dispose = vi.fn();
     const before = new Set(process.rawListeners("exit"));

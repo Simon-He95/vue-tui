@@ -1895,11 +1895,10 @@ export function createStdoutRenderer(
     }
     if ("palette" in next) palette = next.palette ?? null;
     styleKeyCache = new WeakMap<Style, number>();
-    // Reset dynamic hex color indices so the new theme's colors get fresh
-    // slots.  The 5-bit color index only has 15 dynamic slots (17-31);
-    // without resetting, switching themes accumulates hex colors until they
-    // all saturate at MAX_COLOR_INDEX, causing fingerprint collisions that
-    // make the diff renderer skip rows that actually changed.
+    // Reset dynamic color indices so theme changes get fresh slots. The color
+    // index uses 8 bits: built-in ANSI colors occupy 1-16, dynamic colors use
+    // 17-255. Resetting avoids stale cache entries and fingerprint collisions
+    // after theme/palette changes.
     for (const key of Object.keys(COLOR_INDEX)) {
       if (!(key in BUILTIN_COLOR_INDEX)) delete COLOR_INDEX[key];
     }

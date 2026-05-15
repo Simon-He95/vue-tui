@@ -23,11 +23,24 @@ try {
     "-e",
     `
 const root = require("@simon_he/vue-tui");
+const core = require("@simon_he/vue-tui/core");
+const runtime = require("@simon_he/vue-tui/runtime");
+const rendererDom = require("@simon_he/vue-tui/renderer/dom");
+const observability = require("@simon_he/vue-tui/observability");
+const vueEntry = require("@simon_he/vue-tui/vue");
 const cli = require("@simon_he/vue-tui/cli");
 const markdown = require("@simon_he/vue-tui/markdown");
 const experimental = require("@simon_he/vue-tui/experimental");
 
 if (!root.createTerminal) throw new Error("root CJS export missing");
+if (!core.sanitizeDomHref) throw new Error("core CJS export missing");
+if (!core.createTerminal) throw new Error("core createTerminal CJS export missing");
+if (!runtime.createRuntime) throw new Error("runtime CJS export missing");
+if (!runtime.createTerminalSelectionController) throw new Error("runtime selection CJS export missing");
+if (!rendererDom.createDomRenderer) throw new Error("renderer/dom CJS export missing");
+if (!observability.createFramePerfStore) throw new Error("observability CJS export missing");
+if (!vueEntry.useTerminal) throw new Error("vue CJS export missing");
+if (!vueEntry.TAnchor) throw new Error("vue component CJS export missing");
 if (!cli.createStdoutRenderer) throw new Error("cli CJS export missing");
 if (!markdown.createTuiMarkdownParser) throw new Error("markdown CJS export missing");
 if (!experimental.createAppendOnlyLogStore) throw new Error("experimental CJS export missing");
@@ -82,11 +95,29 @@ console.log("CJS smoke ok");
     "-e",
     `
 import { createTerminal } from "@simon_he/vue-tui";
+import {
+  createTerminal as createCoreTerminal,
+  sanitizeDomHref,
+} from "@simon_he/vue-tui/core";
+import {
+  createRuntime,
+  createTerminalSelectionController,
+} from "@simon_he/vue-tui/runtime";
+import { createDomRenderer } from "@simon_he/vue-tui/renderer/dom";
+import { createFramePerfStore } from "@simon_he/vue-tui/observability";
+import { TAnchor, useTerminal } from "@simon_he/vue-tui/vue";
 import { createStdoutRenderer } from "@simon_he/vue-tui/cli";
 import { createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
 import { createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 
 if (!createTerminal) throw new Error("root ESM export missing");
+if (!createCoreTerminal) throw new Error("core ESM export missing");
+if (!sanitizeDomHref) throw new Error("core sanitizer ESM export missing");
+if (!createRuntime) throw new Error("runtime ESM export missing");
+if (!createTerminalSelectionController) throw new Error("runtime selection ESM export missing");
+if (!createDomRenderer) throw new Error("renderer/dom ESM export missing");
+if (!createFramePerfStore) throw new Error("observability ESM export missing");
+if (!TAnchor || !useTerminal) throw new Error("vue ESM export missing");
 if (!createStdoutRenderer) throw new Error("cli ESM export missing");
 if (!createTuiMarkdownParser) throw new Error("markdown ESM export missing");
 if (!createAppendOnlyLogStore) throw new Error("experimental ESM export missing");

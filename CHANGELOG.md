@@ -1,6 +1,27 @@
 # Changelog
 
-## 0.1.0-rc.0 - Unreleased
+## 0.1.0-rc.1 - Unreleased
+
+### Breaking
+
+- Narrowed the browser-safe root entrypoint.
+- Moved extended Vue APIs to `@simon_he/vue-tui/vue`.
+- Moved Node input host defaults to `@simon_he/vue-tui/cli`.
+
+### Migration
+
+Before:
+
+```ts
+import { TAnchor, createDefaultTInputHostAdapter } from "@simon_he/vue-tui";
+```
+
+After:
+
+```ts
+import { TAnchor } from "@simon_he/vue-tui/vue";
+import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
+```
 
 ### Added
 

@@ -55,6 +55,15 @@ function exitCodeForSignal(signal: CleanupSignal): number {
   return 129;
 }
 
+export function resolveCleanupSignalAction(
+  signal: CleanupSignal,
+  policy: TerminalCleanupSignalPolicy,
+): { type: "none" } | { type: "exit"; code: number } | { type: "reraise"; signal: CleanupSignal } {
+  if (policy === "cleanup-only") return { type: "none" };
+  if (policy === "exit") return { type: "exit", code: exitCodeForSignal(signal) };
+  return { type: "reraise", signal };
+}
+
 function normalizeUnhandledRejection(reason: unknown): Error {
   if (reason instanceof Error) return reason;
 
@@ -153,17 +162,18 @@ export function installTerminalCleanup(
     cleanup();
     uninstall();
 
-    if (signalPolicy === "cleanup-only") {
+    const action = resolveCleanupSignalAction(signal, signalPolicy);
+    if (action.type === "none") {
       return;
     }
 
-    if (signalPolicy === "exit") {
-      process.exit(exitCodeForSignal(signal));
+    if (action.type === "exit") {
+      process.exit(action.code);
       return;
     }
 
     setImmediate(() => {
-      process.kill(process.pid, signal);
+      process.kill(process.pid, action.signal);
     });
   };
 

@@ -61,6 +61,8 @@ jobs:
 
       - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz 3.3.0
 
+      - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz 3.5.33
+
       - name: Dry-run npm publish from validated tarball
         if: ${{ env.HAS_NPM_TOKEN == 'true' }}
         run: |

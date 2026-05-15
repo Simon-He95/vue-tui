@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeDomHref, sanitizeTerminalHref } from "../src/core/hyperlink.js";
+import {
+  isSafeRelativeHref,
+  sanitizeDomHref,
+  sanitizeTerminalHref,
+} from "../src/core/hyperlink.js";
 import { hasEncodedControl } from "../src/utils/url-safety.js";
-import { isSafeMarkdownLink } from "../src/vue/markdown/parser.js";
+import { createTuiMarkdownParser, isSafeMarkdownLink } from "../src/vue/markdown/parser.js";
 
 describe("href sanitizer semantics", () => {
   it("keeps markdown, DOM, and terminal href rules aligned", () => {
@@ -33,6 +37,10 @@ describe("href sanitizer semantics", () => {
     expect(hasEncodedControl("%1f")).toBe(true);
     expect(hasEncodedControl("%7F")).toBe(true);
     expect(hasEncodedControl("%C2%80")).toBe(true);
+    expect(hasEncodedControl("%0a")).toBe(true);
+    expect(hasEncodedControl("%250a")).toBe(true);
+    expect(hasEncodedControl("%25250a")).toBe(true);
+    expect(hasEncodedControl("%20")).toBe(false);
   });
 
   it("allows safe UTF-8 percent-encoded Unicode", () => {
@@ -48,5 +56,26 @@ describe("href sanitizer semantics", () => {
 
   it("still rejects encoded controls in terminal links", () => {
     expect(sanitizeTerminalHref("https://example.com/%00")).toBeNull();
+  });
+
+  it("blocks vbscript links everywhere", () => {
+    expect(sanitizeDomHref("vbscript:msgbox(1)")).toBeNull();
+    expect(sanitizeTerminalHref("vbscript:msgbox(1)")).toBeNull();
+
+    const parser = createTuiMarkdownParser();
+    const nodes = parser.parse("[x](vbscript:msgbox(1))", true);
+    expect(JSON.stringify(nodes)).not.toContain('"href":"vbscript:');
+  });
+
+  it("blocks encoded control characters", () => {
+    expect(sanitizeDomHref("https://example.com/%0aevil")).toBeNull();
+    expect(sanitizeTerminalHref("https://example.com/%0Devil")).toBeNull();
+  });
+
+  it("allows safe relative links only when normalized", () => {
+    expect(isSafeRelativeHref("#section")).toBe(true);
+    expect(isSafeRelativeHref("./docs")).toBe(true);
+    expect(isSafeRelativeHref("//evil.example")).toBe(false);
+    expect(isSafeRelativeHref("a b")).toBe(false);
   });
 });
