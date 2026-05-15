@@ -1,5 +1,6 @@
 import {
   TerminalProvider,
+  TBox,
   TText,
   createRuntime,
   createTerminal,
@@ -13,13 +14,16 @@ import {
   createStdinDriver,
   createStdoutRenderer,
   createTerminalApp,
+  createDefaultTInputHostAdapter,
+  defaultTInputHostPlugin,
   installTerminalCleanup,
   type StdinDriver,
+  type TerminalCleanupSignalPolicy,
 } from "@simon_he/vue-tui/cli";
 
 import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
 
-import { TLogView, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
+import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
 const terminal: Terminal = createTerminal({ cols: 80, rows: 24 });
@@ -27,12 +31,16 @@ const runtime = createRuntime();
 
 console.log(
   TerminalProvider,
+  TBox,
   TText,
   TMarkdownText,
   TLogView,
+  TVirtualList,
   createTerminalApp,
   createStdoutRenderer,
   createStdinDriver,
+  createDefaultTInputHostAdapter,
+  defaultTInputHostPlugin,
   installTerminalCleanup,
   createTuiMarkdownParser,
   createAppendOnlyLogStore,
@@ -43,5 +51,6 @@ console.log(
 );
 
 const driver: StdinDriver | null = null;
+const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
 const record: TerminalEventRecord = { type: "keydown", key: "Enter" };
-console.log(driver, record);
+console.log(driver, signalPolicy, record);

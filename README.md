@@ -51,6 +51,12 @@ import { createTInputHostPlugin } from "@simon_he/vue-tui";
 import { createDefaultTInputHostAdapter, defaultTInputHostPlugin } from "@simon_he/vue-tui/cli";
 ```
 
+### Hyperlinks
+
+DOM renderer link rendering is opt-in through `domRendererOptions.links`. Once enabled, DOM anchors allow safe absolute and relative targets such as `https:`, `http:`, `mailto:`, `/path`, `./path`, `../path`, `#hash`, and `?q=1`. Link callbacks preserve native browser behavior unless they return `false`.
+
+CLI/stdout rendering uses OSC8 hyperlinks and keeps a stricter boundary: only safe absolute `https:`, `http:`, and `mailto:` hrefs are emitted by default. `file:` links stay opt-in for terminal-specific providers.
+
 ## Browser Usage
 
 ```vue
@@ -123,7 +129,7 @@ const exit = () => {
 };
 
 uninstallCleanup = installTerminalCleanup(cleanup, {
-  exitOnSignal: true,
+  signalPolicy: "reraise",
   cleanupOnUnhandledRejection: false,
 });
 driver = createStdinDriver({
@@ -137,7 +143,7 @@ driver = createStdinDriver({
 });
 ```
 
-Signal cleanup restores terminal state first. By default, `installTerminalCleanup()` preserves the original signal behavior after cleanup, which usually terminates the process. Set `exitOnSignal: true` to exit explicitly with the conventional signal exit code after cleanup. Set `preserveSignalDefault: false` only when the host wants cleanup-only handling and will decide process lifetime itself.
+Signal cleanup restores terminal state first. By default, `installTerminalCleanup()` is cleanup-only. Set `signalPolicy: "reraise"` when the host wants the original signal to terminate the process after cleanup, or `signalPolicy: "exit"` to exit with the conventional signal exit code.
 
 Unhandled promise rejections stay host-owned by default. Setting `cleanupOnUnhandledRejection: true` cleans up and rethrows by default. Set `rethrowUnhandledRejection: false` only when the host explicitly wants to suppress the rejection.
 

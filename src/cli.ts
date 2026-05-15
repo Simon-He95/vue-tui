@@ -1,4 +1,8 @@
-export type { StdinDriver, TerminalCleanupOptions } from "./cli/input.js";
+export type {
+  StdinDriver,
+  TerminalCleanupOptions,
+  TerminalCleanupSignalPolicy,
+} from "./cli/input.js";
 export { createStdinDriver, installTerminalCleanup } from "./cli/input.js";
 export { installNodeFileWriters, resetNodeFileWriters } from "./cli/node-file-writers.js";
 export type {

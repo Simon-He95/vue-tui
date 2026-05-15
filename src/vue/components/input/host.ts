@@ -1,6 +1,6 @@
 import { isAbsolutePath, normalizePath, resolvePath } from "../../../utils/path.js";
 
-const ENCODED_CRLF_RE = /%(?:0d|0a)/i;
+const ENCODED_CONTROL_RE = /%(?:0[\da-f]|1[\da-f]|7f)/i;
 
 export type ResolveTInputPathInfo = Readonly<{
   workspace: string;
@@ -103,7 +103,7 @@ function hasControlChar(value: string): boolean {
 function sanitizeRawFileUrl(raw: string): string | undefined {
   if (raw !== raw.trim()) return undefined;
   if (/\s/u.test(raw)) return undefined;
-  if (ENCODED_CRLF_RE.test(raw)) return undefined;
+  if (ENCODED_CONTROL_RE.test(raw)) return undefined;
 
   try {
     const url = new URL(raw);

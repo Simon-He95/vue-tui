@@ -8,7 +8,7 @@ export type SanitizeDomHrefOptions = Readonly<{
 
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 const BLOCKED_SCHEME_RE = /^(?:javascript|data|vbscript):/i;
-const ENCODED_CRLF_RE = /%(?:0d|0a)/i;
+const ENCODED_CONTROL_RE = /%(?:0[\da-f]|1[\da-f]|7f)/i;
 const SAFE_RELATIVE_HREF_RE = /^(?:[A-Za-z0-9._~!$&()*+,;=:@/?#-]|%[0-9A-Fa-f]{2})+$/u;
 
 function normalizeRawHref(value: unknown): string | null {
@@ -26,7 +26,7 @@ function normalizeRawHref(value: unknown): string | null {
   if (/\s/u.test(raw)) return null;
   if (raw.startsWith("//")) return null;
   if (BLOCKED_SCHEME_RE.test(raw)) return null;
-  if (ENCODED_CRLF_RE.test(raw)) return null;
+  if (ENCODED_CONTROL_RE.test(raw)) return null;
 
   return raw;
 }
@@ -66,11 +66,12 @@ function isSafeNormalizedRelativeHref(raw: string): boolean {
   if (raw.includes("\\")) return false;
   if (raw.startsWith("//")) return false;
   if (SCHEME_RE.test(raw)) return false;
-  if (ENCODED_CRLF_RE.test(raw)) return false;
+  if (ENCODED_CONTROL_RE.test(raw)) return false;
   if (!SAFE_RELATIVE_HREF_RE.test(raw)) return false;
 
   return (
     raw.startsWith("#") ||
+    raw.startsWith("?") ||
     raw.startsWith("/") ||
     raw.startsWith("./") ||
     raw.startsWith("../") ||
@@ -109,7 +110,9 @@ export function sanitizeDomHref(
   if (!raw) return null;
 
   const scheme = hrefScheme(raw);
-  if (!scheme) return options.allowRelative && isSafeNormalizedRelativeHref(raw) ? raw : null;
+  if (!scheme) {
+    return options.allowRelative !== false && isSafeNormalizedRelativeHref(raw) ? raw : null;
+  }
 
   return sanitizeAbsoluteHref(raw);
 }

@@ -46,26 +46,33 @@ try {
   writeFileSync(
     join(dir, "index.ts"),
     `
-import { TerminalProvider, createTerminal, type Style, type TerminalEventRecord } from "@simon_he/vue-tui";
-import { createStdoutRenderer, createTerminalApp, installTerminalCleanup } from "@simon_he/vue-tui/cli";
+import { TerminalProvider, TBox, TText, createTerminal, type Style, type TerminalEventRecord } from "@simon_he/vue-tui";
+import { createDefaultTInputHostAdapter, createStdoutRenderer, createTerminalApp, defaultTInputHostPlugin, installTerminalCleanup, type TerminalCleanupSignalPolicy } from "@simon_he/vue-tui/cli";
 import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
-import { TLogView, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
+import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
 const event: TerminalEventRecord = { type: "keydown", key: "Enter" };
+const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
 
 console.log(
   createTerminal,
   TerminalProvider,
+  TBox,
+  TText,
   createStdoutRenderer,
   createTerminalApp,
+  createDefaultTInputHostAdapter,
+  defaultTInputHostPlugin,
   installTerminalCleanup,
   createTuiMarkdownParser,
   TMarkdownText,
   TLogView,
+  TVirtualList,
   createAppendOnlyLogStore,
   style,
   event,
+  signalPolicy,
 );
 `,
   );

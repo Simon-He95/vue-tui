@@ -422,7 +422,7 @@ describe("ui regressions", () => {
       const container = mounted.container()!;
       expect(container.querySelector("a")).toBeNull();
 
-      providerProps.domRendererOptions = { links: { allowRelative: true } };
+      providerProps.domRendererOptions = { links: {} };
       await nextTick();
       await Promise.resolve();
 
@@ -432,7 +432,7 @@ describe("ui regressions", () => {
     }
   });
 
-  it("does not dispatch terminal node click when a DOM link is activated", async () => {
+  it("keeps terminal node click handling when a DOM link is activated", async () => {
     const onActivate = vi.fn();
     const terminalClick = vi.fn();
 
@@ -461,7 +461,7 @@ describe("ui regressions", () => {
       anchor!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 
       expect(onActivate).toHaveBeenCalledOnce();
-      expect(terminalClick).not.toHaveBeenCalled();
+      expect(terminalClick).toHaveBeenCalledOnce();
     } finally {
       mounted.unmount();
     }

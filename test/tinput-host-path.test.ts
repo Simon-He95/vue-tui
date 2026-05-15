@@ -22,9 +22,12 @@ describe("TInput host path hrefs", () => {
     expect(pathToTerminalFileHref("file://[::1")).toBeUndefined();
   });
 
-  it("rejects encoded CRLF in raw file URLs", () => {
+  it("rejects encoded controls in raw file URLs", () => {
     expect(pathToTerminalFileHref("file:///tmp/a%0ab")).toBeUndefined();
     expect(pathToTerminalFileHref("file:///tmp/a%0Db")).toBeUndefined();
+    expect(pathToTerminalFileHref("file:///tmp/a%1Bb")).toBeUndefined();
+    expect(pathToTerminalFileHref("file:///tmp/a%7fb")).toBeUndefined();
+    expect(pathToTerminalFileHref("file:///tmp/a%20b")).toBe("file:///tmp/a%20b");
   });
 
   it("keeps absolute platform paths encoded as file URLs", () => {

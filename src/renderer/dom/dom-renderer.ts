@@ -88,13 +88,14 @@ type DomRendererLinkConfig = Readonly<{
    */
   tabIndex?: number;
   activation?: "native" | "event" | "none";
-  onActivate?: (href: string, event: MouseEvent) => void;
+  onActivate?: (href: string, event: MouseEvent) => boolean | void;
 }>;
 
 export type DomRendererLinkOptions = boolean | DomRendererLinkConfig;
 
 type NormalizedDomRendererLinkOptions = false | DomRendererLinkConfig;
 type DomRendererAnchorClickHandler = (event: MouseEvent) => void;
+type DomRendererAnchorPointerDownHandler = () => void;
 
 export type DomRendererRowKeyPrepassDecision =
   | "forced-enabled"
@@ -162,9 +163,9 @@ export interface DomRendererOptions {
   enableScrollOperations?: boolean;
   /**
    * Controls DOM anchor rendering for Style.href segments.
-   * Relative hrefs are disabled by default to avoid same-origin navigation from untrusted output.
    */
   links?: DomRendererLinkOptions;
+  onLinkClick?: (event: MouseEvent, href: string) => boolean | void;
   /** Optional ANSI-name palette exposed as DOM CSS variables. */
   palette?: ThemePalette | null;
   /**
@@ -670,7 +671,7 @@ function linkOptionsKey(options: NormalizedDomRendererLinkOptions): string {
   if (!options) return "disabled";
 
   return JSON.stringify({
-    allowRelative: options.allowRelative === true,
+    allowRelative: options.allowRelative !== false,
     externalTarget: options.externalTarget ?? "_blank",
     tabIndex: options.tabIndex ?? -1,
     activation: options.activation ?? "native",
@@ -685,7 +686,7 @@ function renderableHref(
   if (!linkOptions) return null;
   if (linkOptions.activation === "none") return null;
   return sanitizeDomHref(style.href, {
-    allowRelative: linkOptions.allowRelative === true,
+    allowRelative: linkOptions.allowRelative !== false,
   });
 }
 
@@ -721,21 +722,13 @@ function resetSpanStyle(span: HTMLElement): void {
   }
 }
 
-function stopNativeAndTerminalActivation(event: MouseEvent): void {
-  event.preventDefault();
-  event.stopPropagation();
-}
-
-function stopTerminalPropagation(event: Event): void {
-  event.stopPropagation();
-}
-
 function createSegmentElement(
   doc: Document,
   style: Style,
   options: Readonly<{
     links: NormalizedDomRendererLinkOptions;
     onAnchorClick: DomRendererAnchorClickHandler;
+    onAnchorPointerDown: DomRendererAnchorPointerDownHandler;
   }>,
 ): HTMLSpanElement | HTMLAnchorElement {
   const linkOptions = options.links;
@@ -754,11 +747,7 @@ function createSegmentElement(
   }
   anchor.tabIndex = linkOptions.tabIndex ?? -1;
   anchor.draggable = false;
-  anchor.addEventListener("pointerdown", stopTerminalPropagation);
-  anchor.addEventListener("pointerup", stopTerminalPropagation);
-  anchor.addEventListener("dblclick", stopTerminalPropagation);
-  anchor.addEventListener("keydown", stopTerminalPropagation);
-  anchor.addEventListener("keyup", stopTerminalPropagation);
+  anchor.addEventListener("pointerdown", options.onAnchorPointerDown);
   anchor.addEventListener("click", options.onAnchorClick);
   return anchor;
 }
@@ -815,6 +804,7 @@ function renderRow(
   palette: ThemePalette | null,
   linkOptions: NormalizedDomRendererLinkOptions,
   onAnchorClick: DomRendererAnchorClickHandler,
+  onAnchorPointerDown: DomRendererAnchorPointerDownHandler,
   linkVersion: number,
 ): void {
   stats.rows++;
@@ -875,7 +865,11 @@ function renderRow(
       span = firstChild;
       stats.spansReused++;
     } else {
-      span = createSegmentElement(doc, seg.style, { links: linkOptions, onAnchorClick });
+      span = createSegmentElement(doc, seg.style, {
+        links: linkOptions,
+        onAnchorClick,
+        onAnchorPointerDown,
+      });
       span.dataset.vtFastRow = "styled";
       stats.spansCreated++;
       stats.replaceChildren++;
@@ -906,7 +900,11 @@ function renderRow(
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]!;
-    const span = createSegmentElement(doc, seg.style, { links: linkOptions, onAnchorClick });
+    const span = createSegmentElement(doc, seg.style, {
+      links: linkOptions,
+      onAnchorClick,
+      onAnchorPointerDown,
+    });
     if (canReuseSpans) {
       span.dataset.vtFastRow = "segment";
       span.dataset.vtSegmentIndex = String(i);
@@ -942,13 +940,23 @@ export function createDomRenderer(
     const href = anchor.dataset.vtHref;
     if (!href || !rendererLinkOptions) return;
 
+    const linkClickResult = options.onLinkClick?.(event, href);
     if (rendererLinkOptions.activation === "event") {
-      stopNativeAndTerminalActivation(event);
-      rendererLinkOptions.onActivate?.(href, event);
+      const activateResult = rendererLinkOptions.onActivate?.(href, event);
+      if (linkClickResult === false || activateResult === false) {
+        event.preventDefault();
+      }
       return;
     }
 
-    stopTerminalPropagation(event);
+    if (linkClickResult === false) event.preventDefault();
+  };
+  const onAnchorPointerDown: DomRendererAnchorPointerDownHandler = () => {
+    try {
+      container.focus({ preventScroll: true });
+    } catch {
+      container.focus();
+    }
   };
   container.style.fontFamily = DEFAULT_FONT_FAMILY;
   container.style.whiteSpace = "pre";
@@ -1214,6 +1222,7 @@ export function createDomRenderer(
           palette,
           rendererLinkOptions,
           onAnchorClick,
+          onAnchorPointerDown,
           rendererLinkVersion,
         );
     }
@@ -1525,6 +1534,7 @@ export function createDomRenderer(
             palette,
             rendererLinkOptions,
             onAnchorClick,
+            onAnchorPointerDown,
             rendererLinkVersion,
           );
         deletePendingRow(plane, rows, y);

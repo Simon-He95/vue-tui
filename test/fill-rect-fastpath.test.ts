@@ -3,6 +3,7 @@ import {
   clearRect,
   createGridBuffer,
   fillRect,
+  getBufferCell,
   getRowFingerprints,
   putCell,
   scrollBuffer,
@@ -207,6 +208,27 @@ describe("buffer scroll fingerprints", () => {
     expect(Array.from(getRowFingerprints(buffer, 0)!)).toEqual([0, 0, 0]);
     expect(Array.from(getRowFingerprints(buffer, 1)!)).toEqual([65, 0, 0]);
     expect(Array.from(getRowFingerprints(buffer, 2)!)).toEqual([66, 0, 0]);
+  });
+
+  test("keeps all visible fingerprints in sync after full-buffer scroll", () => {
+    const buffer = createGridBuffer(4, 4);
+    const fingerprint = (ch: string) => (ch === " " ? 0 : ch.charCodeAt(0));
+    setFingerprintFn(buffer, fingerprint);
+    putCell(buffer, 0, 0, "A");
+    putCell(buffer, 1, 1, "B");
+    putCell(buffer, 2, 2, "C");
+    putCell(buffer, 3, 3, "D");
+    buffer.soaFingerprints!.fill(999);
+
+    scrollBuffer(buffer, 1);
+
+    for (let y = 0; y < buffer.rows; y++) {
+      const actual = Array.from(getRowFingerprints(buffer, y)!);
+      const expected = Array.from({ length: buffer.cols }, (_, x) =>
+        fingerprint(getBufferCell(buffer, x, y).ch),
+      );
+      expect(actual).toEqual(expected);
+    }
   });
 
   test("clamps large scrollBuffer operations to visible rows", () => {

@@ -13,6 +13,8 @@ export const FORBIDDEN_BROWSER_CODE = [
   new RegExp(String.raw`\brequire\s*\(\s*["']${BROWSER_FORBIDDEN_IMPORT_TARGET}["']\s*\)`, "u"),
   /\bprocess\.(?:stdout|stderr|stdin|env)\b/u,
   /\bnew Function\b/u,
+  /\bOSC52\b/iu,
+  /\bhostPlugin\.node\b/u,
   /\bcreateOsc52ClipboardProvider\b/u,
   /\bcreateDefaultTInputHostAdapter\b/u,
   /\bcreateNodeMentionPathProvider\b/u,

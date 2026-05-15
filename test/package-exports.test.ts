@@ -1,5 +1,6 @@
 import type { Plugin } from "esbuild";
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { builtinModules, createRequire } from "node:module";
 import { resolve } from "node:path";
@@ -110,6 +111,23 @@ describe("package exports", () => {
     ]) {
       expect(() => assertNoBrowserForbiddenCode(bad)).toThrow(/forbidden code/);
     }
+  });
+
+  it("keeps Vue declaration compatibility patch output stable", () => {
+    const output = execFileSync(
+      process.execPath,
+      ["scripts/fix-vue-dts-compat.mjs", "--input", "test/fixtures/dts-before", "--stdout"],
+      { cwd: process.cwd(), encoding: "utf8" },
+    );
+    const formatted = execFileSync(
+      "pnpm",
+      ["exec", "oxfmt", "--stdin-filepath", "test/fixtures/dts-after/vue-component.d.ts"],
+      { cwd: process.cwd(), encoding: "utf8", input: output },
+    );
+
+    expect(formatted).toBe(
+      readFileSync(resolve("test/fixtures/dts-after/vue-component.d.ts"), "utf8"),
+    );
   });
 
   it("keeps high-throughput components behind the experimental entrypoint", async () => {
@@ -331,6 +349,9 @@ describe("package exports", () => {
       distIndexCjs,
       distMarkdownCjs,
       distExperimentalCjs,
+      distTypes,
+      distMarkdownTypes,
+      distExperimentalTypes,
     ]) {
       expect(existsSync(file)).toBe(true);
       expectNoBrowserForbiddenCode(file);

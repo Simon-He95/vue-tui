@@ -437,6 +437,10 @@ function recomputeFingerprintsForRows(buffer: GridBuffer, startY: number, endY: 
   }
 }
 
+function recomputeAllVisibleFingerprints(buffer: GridBuffer): void {
+  recomputeFingerprintsForRows(buffer, 0, buffer.rows);
+}
+
 export function scrollBuffer(buffer: GridBuffer, lines: number): void {
   const raw = Math.trunc(lines);
   if (raw === 0 || buffer.rows === 0) return;
@@ -473,14 +477,7 @@ export function scrollBuffer(buffer: GridBuffer, lines: number): void {
     }
   }
 
-  if (buffer.soaFingerprints && buffer.fingerprintFn) {
-    const inserted = Math.abs(n);
-    if (n > 0) {
-      recomputeFingerprintsForRows(buffer, buffer.rows - inserted, buffer.rows);
-    } else {
-      recomputeFingerprintsForRows(buffer, 0, inserted);
-    }
-  }
+  recomputeAllVisibleFingerprints(buffer);
 
   markAllDirty(buffer);
   buffer.cursorY = clamp(buffer.cursorY - raw, 0, Math.max(0, buffer.rows - 1));

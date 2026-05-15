@@ -24,10 +24,11 @@ export type StdinDriver = Readonly<{
 }>;
 
 type CleanupSignal = "SIGINT" | "SIGTERM" | "SIGHUP" | "SIGBREAK";
+export type TerminalCleanupSignalPolicy = "cleanup-only" | "exit" | "reraise";
 
 export type TerminalCleanupOptions = Readonly<{
-  exitOnSignal?: boolean;
-  preserveSignalDefault?: boolean;
+  signals?: readonly CleanupSignal[];
+  signalPolicy?: TerminalCleanupSignalPolicy;
   cleanupOnUnhandledRejection?: boolean;
   rethrowUnhandledRejection?: boolean;
 }>;
@@ -65,11 +66,12 @@ export function installTerminalCleanup(
 ): () => void {
   let cleaned = false;
   let uninstalled = false;
-  const exitOnSignal = options.exitOnSignal ?? false;
-  const preserveSignalDefault = options.preserveSignalDefault ?? !exitOnSignal;
+  const signals = options.signals ?? ["SIGINT", "SIGTERM"];
+  const signalPolicy = options.signalPolicy ?? "cleanup-only";
   const cleanupOnUnhandledRejection = options.cleanupOnUnhandledRejection ?? false;
   const rethrowUnhandledRejection =
     options.rethrowUnhandledRejection ?? cleanupOnUnhandledRejection;
+  const signalHandlers = new Map<CleanupSignal, () => void>();
 
   const cleanup = () => {
     if (cleaned) return;
@@ -83,10 +85,9 @@ export function installTerminalCleanup(
     if (uninstalled) return;
     uninstalled = true;
     process.off("exit", cleanup);
-    process.off("SIGINT", onSigint);
-    process.off("SIGTERM", onSigterm);
-    process.off("SIGHUP", onSighup);
-    process.off("SIGBREAK", onSigbreak);
+    for (const [signal, handler] of signalHandlers) {
+      process.off(signal, handler);
+    }
     process.off("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
     if (cleanupOnUnhandledRejection) {
       process.off("unhandledRejection", onUnhandledRejection);
@@ -97,31 +98,23 @@ export function installTerminalCleanup(
     cleanup();
     uninstall();
 
-    if (exitOnSignal) {
-      const code = exitCodeForSignal(signal);
-      process.nextTick(() => {
-        process.exit(code);
-      });
+    if (signalPolicy === "cleanup-only") {
       return;
     }
 
-    if (!preserveSignalDefault) return;
+    if (signalPolicy === "exit") {
+      process.exit(exitCodeForSignal(signal));
+      return;
+    }
 
-    process.nextTick(() => {
-      if (process.listenerCount(signal) > 0) return;
-
-      try {
-        process.kill(process.pid, signal);
-      } catch {
-        process.exit(exitCodeForSignal(signal));
-      }
+    setImmediate(() => {
+      process.kill(process.pid, signal);
     });
   };
 
-  const onSigint = () => handleSignal("SIGINT");
-  const onSigterm = () => handleSignal("SIGTERM");
-  const onSighup = () => handleSignal("SIGHUP");
-  const onSigbreak = () => handleSignal("SIGBREAK");
+  for (const signal of signals) {
+    signalHandlers.set(signal, () => handleSignal(signal));
+  }
   const onUncaughtExceptionMonitor = () => {
     cleanup();
     uninstall();
@@ -137,16 +130,18 @@ export function installTerminalCleanup(
   };
 
   process.once("exit", cleanup);
-  process.once("SIGINT", onSigint);
-  process.once("SIGTERM", onSigterm);
-  process.once("SIGHUP", onSighup);
-  process.once("SIGBREAK", onSigbreak);
+  for (const [signal, handler] of signalHandlers) {
+    process.once(signal, handler);
+  }
   process.once("uncaughtExceptionMonitor", onUncaughtExceptionMonitor);
   if (cleanupOnUnhandledRejection) {
     process.once("unhandledRejection", onUnhandledRejection);
   }
 
-  return uninstall;
+  return () => {
+    cleanup();
+    uninstall();
+  };
 }
 
 function isPrintable(ch: string): boolean {
@@ -614,7 +609,8 @@ export function createStdinDriver(
     const cleanupOptions = typeof autoCleanup === "object" ? autoCleanup : {};
     uninstallCleanup = installTerminalCleanup(dispose, {
       ...cleanupOptions,
-      exitOnSignal: typeof autoCleanup === "object" ? (cleanupOptions.exitOnSignal ?? true) : true,
+      signalPolicy:
+        typeof autoCleanup === "object" ? (cleanupOptions.signalPolicy ?? "reraise") : "reraise",
     });
   }
 

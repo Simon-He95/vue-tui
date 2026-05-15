@@ -39,14 +39,15 @@
 - `createTLogUrlPlugin()` no longer detects `file://` URLs by default. Use `{ allowFileUrls: true }` to opt in.
 - Release benchmark validation now uses `bench:baseline`; timing budgets are only checked by `bench:baseline:timing`.
 - DOM renderer no longer renders `Style.href` as native anchors unless `links` are explicitly configured.
-- `installTerminalCleanup()` cleans up and preserves default signal behavior unless `exitOnSignal: true` or `preserveSignalDefault: false` is set.
+- DOM renderer link callbacks preserve native browser behavior unless they return `false`; safe relative/hash/search hrefs are allowed when DOM links are enabled.
+- `installTerminalCleanup()` now uses explicit `signalPolicy: "cleanup-only" | "exit" | "reraise"` instead of inferring process behavior from existing signal listeners.
 - Opted-in unhandled rejection cleanup now rethrows by default. Set `rethrowUnhandledRejection: false` to suppress it explicitly.
 - `release:ci` now points users to the GitHub Release workflow instead of publishing from a second scripted path.
 
 ### Security
 
 - Sanitized terminal OSC8 hyperlinks before stdout output, TLog visible-link rendering, TLog plugins, and retained-index link collection.
-- Rejected control characters, raw whitespace, protocol-relative URLs, `javascript:`, `data:`, and `file://` by default for terminal hyperlinks.
+- Rejected control characters, encoded controls, raw whitespace, protocol-relative URLs, `javascript:`, `data:`, and `file://` by default for terminal hyperlinks.
 
 ### Fixed
 
@@ -103,6 +104,7 @@ Experimental APIs remain under `@simon_he/vue-tui/experimental` and may change b
 - High-throughput APIs remain outside the root entrypoint.
 - `createDefaultTInputHostAdapter()` moved from `@simon_he/vue-tui` to `@simon_he/vue-tui/cli`; the root `defaultTInputHostPlugin` is now browser-safe no-op.
 - DOM renderer `Style.href` output is no longer clickable by default. Pass `domRendererOptions.links` when the host wants native DOM anchors.
+- DOM renderer anchors now keep native click behavior by default and support safe relative/hash/search hrefs.
 
 ### Release Validation
 

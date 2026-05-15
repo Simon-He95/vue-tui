@@ -1,7 +1,13 @@
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const dist = resolve("dist");
+const args = process.argv.slice(2);
+const inputArg = args.indexOf("--input");
+if (inputArg >= 0 && !args[inputArg + 1]) {
+  throw new Error("Usage: node scripts/fix-vue-dts-compat.mjs [--input <dir>] [--stdout]");
+}
+const inputDir = resolve(inputArg >= 0 ? args[inputArg + 1] : "dist");
+const stdout = args.includes("--stdout");
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -138,15 +144,23 @@ function trimTypeArguments(source, target, maxArgs) {
   return out;
 }
 
-for (const file of walk(dist)) {
-  const before = readFileSync(file, "utf8");
-  let after = trimTypeArguments(before, 'import("vue").DefineComponent', 13);
-  after = trimTypeArguments(after, "DefineComponent", 13);
-  after = trimTypeArguments(after, 'import("vue").Ref', 1);
-  after = trimTypeArguments(after, "Ref", 1);
-  after = after.replaceAll(
+function patchDts(source) {
+  let out = trimTypeArguments(source, 'import("vue").DefineComponent', 13);
+  out = trimTypeArguments(out, "DefineComponent", 13);
+  out = trimTypeArguments(out, 'import("vue").Ref', 1);
+  out = trimTypeArguments(out, "Ref", 1);
+  return out.replaceAll(
     'import("vue").PublicProps',
     '(import("vue").VNodeProps & import("vue").AllowedComponentProps & import("vue").ComponentCustomProps)',
   );
+}
+
+for (const file of walk(inputDir).sort()) {
+  const before = readFileSync(file, "utf8");
+  const after = patchDts(before);
+  if (stdout) {
+    process.stdout.write(after);
+    continue;
+  }
   if (after !== before) writeFileSync(file, after);
 }
