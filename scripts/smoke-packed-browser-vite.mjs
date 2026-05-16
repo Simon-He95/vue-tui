@@ -117,13 +117,63 @@ function waitForUrl(url) {
   });
 }
 
+function waitForExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      child.off("exit", onExit);
+      resolve(false);
+    }, timeoutMs);
+    const onExit = () => {
+      clearTimeout(timeout);
+      resolve(true);
+    };
+    child.once("exit", onExit);
+  });
+}
+
+function killProcessGroup(child, signal) {
+  if (!child.pid) {
+    child.kill(signal);
+    return;
+  }
+
+  if (process.platform === "win32") {
+    child.kill(signal);
+    return;
+  }
+
+  process.kill(-child.pid, signal);
+}
+
+async function stopServer(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+
+  try {
+    killProcessGroup(child, "SIGTERM");
+  } catch (error) {
+    if (error?.code !== "ESRCH") throw error;
+  }
+
+  if (await waitForExit(child, 5000)) return;
+
+  try {
+    killProcessGroup(child, "SIGKILL");
+  } catch (error) {
+    if (error?.code !== "ESRCH") throw error;
+  }
+
+  await waitForExit(child, 1000);
+}
+
 async function assertBrowserRuntimeSmoke() {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}/`;
   const server = spawn(
     "npx",
     ["vite", "preview", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
-    { cwd: dir, stdio: ["ignore", "pipe", "pipe"] },
+    { cwd: dir, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] },
   );
   let logs = "";
   server.stdout.on("data", (chunk) => {
@@ -163,7 +213,7 @@ async function assertBrowserRuntimeSmoke() {
     if (logs.trim()) console.error(logs.trim());
     throw error;
   } finally {
-    server.kill();
+    await stopServer(server);
   }
 }
 
