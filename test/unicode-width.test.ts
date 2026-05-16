@@ -67,11 +67,19 @@ describe("unicode width + grapheme safety", () => {
   });
 
   it("keeps ambiguous-width symbols narrow by default and wide in cjk mode", () => {
-    const ambiguous = ["·", "Ω", "—", "①", "─", "★"];
+    const ambiguous = ["·", "Ω", "—", "①", "★"];
     for (const ch of ambiguous) {
       expect(charCellWidth(ch)).toBe(1);
       expect(charCellWidth(ch, "narrow-ambiguous")).toBe(1);
       expect(charCellWidth(ch, "cjk")).toBe(2);
+    }
+  });
+
+  it("keeps box drawing glyphs narrow in cjk mode", () => {
+    const boxDrawing = ["┌", "┐", "└", "┘", "─", "│", "═", "╳"];
+    for (const ch of boxDrawing) {
+      expect(charCellWidth(ch)).toBe(1);
+      expect(charCellWidth(ch, "cjk")).toBe(1);
     }
   });
 

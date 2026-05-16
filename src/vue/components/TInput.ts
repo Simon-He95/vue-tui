@@ -35,7 +35,12 @@ import {
   TInputPluginsContextKey,
 } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
-import { graphemeRangeAt, sanitizeTextBlock, spaces } from "../utils/text.js";
+import {
+  graphemeRangeAt,
+  sanitizeTextBlock,
+  spaces,
+  withTextWidthProvider,
+} from "../utils/text.js";
 import {
   fileUrlToPathLike,
   pathToTerminalFileHref,
@@ -256,7 +261,8 @@ export const TInput = defineComponent({
     "validationError",
   ],
   setup(props, { emit }) {
-    const { terminal, scheduler, defaultStyle, events, render } = useTerminal();
+    const { terminal, scheduler, defaultStyle, events, render, widthProvider } = useTerminal();
+    const withInputWidth = <T>(fn: () => T): T => withTextWidthProvider(widthProvider, fn);
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const injectedPlugins = inject(TInputPluginsContextKey, null) as Readonly<
@@ -576,90 +582,94 @@ export const TInput = defineComponent({
     }
 
     function ensureCursorVisible(): void {
-      const r = absRect.value;
-      const { hAll, w: contentW } = measureContent(r);
-      const width = Math.max(1, contentW);
-      const height = Math.max(1, hAll);
-      const value = getValue();
-      const composed = getComposedTextAndCursor(value);
-      const wrap = wrapMode.value;
-      const firstWidth = width;
-      const { line, col, lines } = wrap
-        ? indexToWrappedCellColFirstWidthInline(
-            composed.text,
-            props.multilineTexts,
-            props.mentions,
-            composed.cursor,
-            firstWidth,
-            width,
-          )
-        : indexToLineCellColInline(
-            composed.text,
-            props.multilineTexts,
-            props.mentions,
-            composed.cursor,
-          );
+      withInputWidth(() => {
+        const r = absRect.value;
+        const { hAll, w: contentW } = measureContent(r);
+        const width = Math.max(1, contentW);
+        const height = Math.max(1, hAll);
+        const value = getValue();
+        const composed = getComposedTextAndCursor(value);
+        const wrap = wrapMode.value;
+        const firstWidth = width;
+        const { line, col, lines } = wrap
+          ? indexToWrappedCellColFirstWidthInline(
+              composed.text,
+              props.multilineTexts,
+              props.mentions,
+              composed.cursor,
+              firstWidth,
+              width,
+            )
+          : indexToLineCellColInline(
+              composed.text,
+              props.multilineTexts,
+              props.mentions,
+              composed.cursor,
+            );
 
-      if (wrap) {
-        scrollX.value = 0;
-      } else if (width <= 0) {
-        scrollX.value = 0;
-      } else {
-        const viewW = line === 0 ? firstWidth : width;
-        if (col < scrollX.value) scrollX.value = col;
-        else if (col > scrollX.value + viewW - 1) scrollX.value = Math.max(0, col - (viewW - 1));
-      }
+        if (wrap) {
+          scrollX.value = 0;
+        } else if (width <= 0) {
+          scrollX.value = 0;
+        } else {
+          const viewW = line === 0 ? firstWidth : width;
+          if (col < scrollX.value) scrollX.value = col;
+          else if (col > scrollX.value + viewW - 1) scrollX.value = Math.max(0, col - (viewW - 1));
+        }
 
-      const maxTop = Math.max(0, lines.length - height);
-      scrollY.value = clamp(scrollY.value, 0, maxTop);
-      if (line < scrollY.value) scrollY.value = line;
-      else if (line > scrollY.value + height - 1)
-        scrollY.value = clamp(line - (height - 1), 0, maxTop);
+        const maxTop = Math.max(0, lines.length - height);
+        scrollY.value = clamp(scrollY.value, 0, maxTop);
+        if (line < scrollY.value) scrollY.value = line;
+        else if (line > scrollY.value + height - 1)
+          scrollY.value = clamp(line - (height - 1), 0, maxTop);
+      });
     }
 
     function computeImeAnchorCell(): { cellX: number; cellY: number } | null {
-      if (!visible.value) return null;
-      const r = absRect.value;
-      if (r.w <= 0 || r.h <= 0) return null;
+      return withInputWidth(() => {
+        if (!visible.value) return null;
+        const r = absRect.value;
+        if (r.w <= 0 || r.h <= 0) return null;
 
-      const placeholderVisible = shouldShowPlaceholder.value;
-      const offX = placeholderVisible ? 0 : scrollX.value;
-      const offY = placeholderVisible ? 0 : scrollY.value;
-      const wrap = wrapMode.value && !placeholderVisible;
+        const placeholderVisible = shouldShowPlaceholder.value;
+        const offX = placeholderVisible ? 0 : scrollX.value;
+        const offY = placeholderVisible ? 0 : scrollY.value;
+        const wrap = wrapMode.value && !placeholderVisible;
 
-      const valueTextRaw = getValue();
-      const composed = getComposedTextAndCursor(valueTextRaw);
-      const cursorTextRaw = placeholderVisible ? "" : composed.text;
-      const cursorText =
-        props.secret && !placeholderVisible ? maskText(cursorTextRaw) : cursorTextRaw;
+        const valueTextRaw = getValue();
+        const composed = getComposedTextAndCursor(valueTextRaw);
+        const cursorTextRaw = placeholderVisible ? "" : composed.text;
+        const cursorText =
+          props.secret && !placeholderVisible ? maskText(cursorTextRaw) : cursorTextRaw;
 
-      const { padX, w: contentW } = measureContent(r);
-      const width = Math.max(1, contentW);
-      const firstWidth = width;
-      const pos = wrap
-        ? indexToWrappedCellColFirstWidthInline(
-            cursorText,
-            props.multilineTexts,
-            props.mentions,
-            composed.cursor,
-            firstWidth,
-            width,
-          )
-        : indexToLineCellColInline(
-            cursorText,
-            props.multilineTexts,
-            props.mentions,
-            composed.cursor,
-          );
+        const { padX, w: contentW } = measureContent(r);
+        const width = Math.max(1, contentW);
+        const firstWidth = width;
+        const pos = wrap
+          ? indexToWrappedCellColFirstWidthInline(
+              cursorText,
+              props.multilineTexts,
+              props.mentions,
+              composed.cursor,
+              firstWidth,
+              width,
+            )
+          : indexToLineCellColInline(
+              cursorText,
+              props.multilineTexts,
+              props.mentions,
+              composed.cursor,
+            );
 
-      const cx0 = pos.col - offX;
-      const cy = pos.line - offY;
-      const cx = clamp(cx0, 0, Math.max(0, width - 1));
-      const cyClamped = clamp(cy, 0, Math.max(0, r.h - 1));
-      return {
-        cellX: r.x + padX + cx,
-        cellY: r.y + cyClamped,
-      };
+        const cx0 = pos.col - offX;
+        const cy = pos.line - offY;
+        const cx = clamp(cx0, 0, Math.max(0, width - 1));
+        const cyClamped = clamp(cy, 0, Math.max(0, r.h - 1));
+        return {
+          cellX: r.x + padX + cx,
+          cellY: r.y + cyClamped,
+        };
+      });
     }
 
     function syncImeAnchorNow(): void {
@@ -692,159 +702,165 @@ export const TInput = defineComponent({
       e?: TerminalPointerEvent,
       allowInlineAction = true,
     ): void {
-      const r = absRect.value;
-      const { w: contentW, padX } = measureContent(r);
-      const width = Math.max(1, contentW);
-      const localX = clamp(cellX - (r.x + padX), 0, Math.max(0, contentW - 1));
-      const localY = clamp(cellY - r.y, 0, Math.max(0, r.h - 1));
+      withInputWidth(() => {
+        const r = absRect.value;
+        const { w: contentW, padX } = measureContent(r);
+        const width = Math.max(1, contentW);
+        const localX = clamp(cellX - (r.x + padX), 0, Math.max(0, contentW - 1));
+        const localY = clamp(cellY - r.y, 0, Math.max(0, r.h - 1));
 
-      const value = getValue();
-      const wrap = wrapMode.value;
-      const xText = localX;
-      const firstWidth = width;
+        const value = getValue();
+        const wrap = wrapMode.value;
+        const xText = localX;
+        const firstWidth = width;
 
-      let next = 0;
-      let hit: InlineHit | null = null;
-      if (wrap) {
-        const lines = wrapToLinesFirstWidthInline(
-          value,
-          props.multilineTexts,
-          props.mentions,
-          firstWidth,
-          width,
-        );
-        const line = clamp(scrollY.value + localY, 0, lines.length - 1);
-        const col = xText;
-        const hit2 = wrappedCellColToIndexInline(
-          value,
-          props.multilineTexts,
-          props.mentions,
-          lines[line]!,
-          col,
-        );
-        next = hit2.index;
-        hit = hit2.hit;
-      } else {
-        const lines = computeLines(value);
-        const line = clamp(scrollY.value + localY, 0, lines.length - 1);
-        const col = scrollX.value + xText;
-        const info = lines[line]!;
-        const hit2 = lineCellColToIndexInline(
-          value,
-          props.multilineTexts,
-          props.mentions,
-          info.start,
-          info.end,
-          col,
-        );
-        next = hit2.index;
-        hit = hit2.hit;
-      }
-
-      if (hit && allowInlineAction && !extendSelection) {
-        cursor.value = next;
-        anchor.value = null;
-        ensureCursorVisible();
-        if (hit.kind === "multiline") {
-          emit("multilineClick", hit.index);
-        } else {
-          const absPath = String(props.mentions?.[hit.index] ?? "");
-          if (absPath) emit("mentionClick", absPath, e);
-        }
-        e?.preventDefault?.();
-        scheduler.invalidate();
-        return;
-      }
-
-      if (!extendSelection) anchor.value = null;
-      else if (anchor.value == null) anchor.value = cursor.value;
-
-      cursor.value = next;
-      desiredCol.value = wrap
-        ? indexToWrappedCellColFirstWidthInline(
+        let next = 0;
+        let hit: InlineHit | null = null;
+        if (wrap) {
+          const lines = wrapToLinesFirstWidthInline(
             value,
             props.multilineTexts,
             props.mentions,
-            cursor.value,
             firstWidth,
             width,
-          ).col
-        : indexToLineCellColInline(value, props.multilineTexts, props.mentions, cursor.value).col;
-      ensureCursorVisible();
-      syncImeAnchorNow();
+          );
+          const line = clamp(scrollY.value + localY, 0, lines.length - 1);
+          const col = xText;
+          const hit2 = wrappedCellColToIndexInline(
+            value,
+            props.multilineTexts,
+            props.mentions,
+            lines[line]!,
+            col,
+          );
+          next = hit2.index;
+          hit = hit2.hit;
+        } else {
+          const lines = computeLines(value);
+          const line = clamp(scrollY.value + localY, 0, lines.length - 1);
+          const col = scrollX.value + xText;
+          const info = lines[line]!;
+          const hit2 = lineCellColToIndexInline(
+            value,
+            props.multilineTexts,
+            props.mentions,
+            info.start,
+            info.end,
+            col,
+          );
+          next = hit2.index;
+          hit = hit2.hit;
+        }
+
+        if (hit && allowInlineAction && !extendSelection) {
+          cursor.value = next;
+          anchor.value = null;
+          ensureCursorVisible();
+          if (hit.kind === "multiline") {
+            emit("multilineClick", hit.index);
+          } else {
+            const absPath = String(props.mentions?.[hit.index] ?? "");
+            if (absPath) emit("mentionClick", absPath, e);
+          }
+          e?.preventDefault?.();
+          scheduler.invalidate();
+          return;
+        }
+
+        if (!extendSelection) anchor.value = null;
+        else if (anchor.value == null) anchor.value = cursor.value;
+
+        cursor.value = next;
+        desiredCol.value = wrap
+          ? indexToWrappedCellColFirstWidthInline(
+              value,
+              props.multilineTexts,
+              props.mentions,
+              cursor.value,
+              firstWidth,
+              width,
+            ).col
+          : indexToLineCellColInline(value, props.multilineTexts, props.mentions, cursor.value).col;
+        ensureCursorVisible();
+        syncImeAnchorNow();
+      });
     }
 
     function applyEdit(nextValue: string, nextCursor: number, commit = false): void {
-      const c = clamp(nextCursor, 0, nextValue.length);
-      cursor.value = c;
-      anchor.value = null;
-      composing.value = false;
-      compositionText.value = "";
-      // Cache the new value to handle rapid keystrokes before props update.
-      pendingValue.value = nextValue;
-      if (wrapMode.value) {
-        const { w: contentW } = measureContent(absRect.value);
-        const w = Math.max(1, contentW);
-        const firstW = w;
-        desiredCol.value = indexToWrappedCellColFirstWidthInline(
-          nextValue,
-          props.multilineTexts,
-          props.mentions,
-          c,
-          firstW,
-          w,
-        ).col;
-      } else {
-        desiredCol.value = indexToLineCellColInline(
-          nextValue,
-          props.multilineTexts,
-          props.mentions,
-          c,
-        ).col;
-      }
-      ensureCursorVisible();
-      syncImeAnchorNow();
-      emit("update:modelValue", nextValue);
-      emit("input", nextValue);
-      if (commit) emit("change", nextValue);
-      scheduler.flushNow();
+      withInputWidth(() => {
+        const c = clamp(nextCursor, 0, nextValue.length);
+        cursor.value = c;
+        anchor.value = null;
+        composing.value = false;
+        compositionText.value = "";
+        // Cache the new value to handle rapid keystrokes before props update.
+        pendingValue.value = nextValue;
+        if (wrapMode.value) {
+          const { w: contentW } = measureContent(absRect.value);
+          const w = Math.max(1, contentW);
+          const firstW = w;
+          desiredCol.value = indexToWrappedCellColFirstWidthInline(
+            nextValue,
+            props.multilineTexts,
+            props.mentions,
+            c,
+            firstW,
+            w,
+          ).col;
+        } else {
+          desiredCol.value = indexToLineCellColInline(
+            nextValue,
+            props.multilineTexts,
+            props.mentions,
+            c,
+          ).col;
+        }
+        ensureCursorVisible();
+        syncImeAnchorNow();
+        emit("update:modelValue", nextValue);
+        emit("input", nextValue);
+        if (commit) emit("change", nextValue);
+        scheduler.flushNow();
+      });
       void nextTick(() => {
         scheduler.flushNow();
       });
     }
 
     function applyMove(nextCursor: number, extend: boolean): void {
-      const prev = cursor.value;
-      const value = getValue();
-      if (extend) {
-        if (anchor.value == null) anchor.value = prev;
-      } else {
-        anchor.value = null;
-      }
-      cursor.value = clamp(nextCursor, 0, value.length);
-      if (wrapMode.value) {
-        const { w: contentW } = measureContent(absRect.value);
-        const w = Math.max(1, contentW);
-        const firstW = w;
-        desiredCol.value = indexToWrappedCellColFirstWidthInline(
-          value,
-          props.multilineTexts,
-          props.mentions,
-          cursor.value,
-          firstW,
-          w,
-        ).col;
-      } else {
-        desiredCol.value = indexToLineCellColInline(
-          value,
-          props.multilineTexts,
-          props.mentions,
-          cursor.value,
-        ).col;
-      }
-      ensureCursorVisible();
-      syncImeAnchorNow();
-      scheduler.flushNow();
+      withInputWidth(() => {
+        const prev = cursor.value;
+        const value = getValue();
+        if (extend) {
+          if (anchor.value == null) anchor.value = prev;
+        } else {
+          anchor.value = null;
+        }
+        cursor.value = clamp(nextCursor, 0, value.length);
+        if (wrapMode.value) {
+          const { w: contentW } = measureContent(absRect.value);
+          const w = Math.max(1, contentW);
+          const firstW = w;
+          desiredCol.value = indexToWrappedCellColFirstWidthInline(
+            value,
+            props.multilineTexts,
+            props.mentions,
+            cursor.value,
+            firstW,
+            w,
+          ).col;
+        } else {
+          desiredCol.value = indexToLineCellColInline(
+            value,
+            props.multilineTexts,
+            props.mentions,
+            cursor.value,
+          ).col;
+        }
+        ensureCursorVisible();
+        syncImeAnchorNow();
+        scheduler.flushNow();
+      });
     }
 
     watch([() => absRect.value.w, () => absRect.value.h, () => wrapMode.value], () => {
@@ -1959,22 +1975,26 @@ export const TInput = defineComponent({
     }
 
     function applyFocus(): void {
-      focused.value = true;
-      emit("focus");
-      const valueLen = getValue().length;
-      const shouldCursorToEnd =
-        props.cursorToEndOnFirstFocus && !hasFocusedOnce.value && !skipCursorToEndOnNextFocus.value;
-      skipCursorToEndOnNextFocus.value = false;
-      if (shouldCursorToEnd) {
-        cursor.value = valueLen;
-        anchor.value = null;
-      }
-      hasFocusedOnce.value = true;
-      cursor.value = clamp(cursor.value, 0, valueLen);
-      ensureCursorVisible();
-      syncImeAnchorNow();
-      startBlink();
-      scheduler.invalidate();
+      withInputWidth(() => {
+        focused.value = true;
+        emit("focus");
+        const valueLen = getValue().length;
+        const shouldCursorToEnd =
+          props.cursorToEndOnFirstFocus &&
+          !hasFocusedOnce.value &&
+          !skipCursorToEndOnNextFocus.value;
+        skipCursorToEndOnNextFocus.value = false;
+        if (shouldCursorToEnd) {
+          cursor.value = valueLen;
+          anchor.value = null;
+        }
+        hasFocusedOnce.value = true;
+        cursor.value = clamp(cursor.value, 0, valueLen);
+        ensureCursorVisible();
+        syncImeAnchorNow();
+        startBlink();
+        scheduler.invalidate();
+      });
     }
 
     function applyBlur(): void {
