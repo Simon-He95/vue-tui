@@ -36,17 +36,17 @@ Vue 是 peer dependency。当前发布包支持 Vue `>=3.3.0 <4`。
 
 ## 入口选择
 
-| 入口                              | 稳定性       | 主要用途                                                                    |
-| --------------------------------- | ------------ | --------------------------------------------------------------------------- |
-| `@simon_he/vue-tui`               | Public       | Browser-safe terminal core、DOM renderer、稳定 Vue 组件和 input host plugin |
-| `@simon_he/vue-tui/core`          | Public       | terminal core、buffer-facing types、ANSI/theme/path/hyperlink helpers       |
-| `@simon_he/vue-tui/renderer/dom`  | Public       | DOM renderer factory 和 renderer capabilities                               |
-| `@simon_he/vue-tui/vue`           | Advanced     | 扩展 Vue 组件、composables、router helpers 和 Vue runtime internals         |
-| `@simon_he/vue-tui/runtime`       | Advanced     | runtime wiring、selection helpers 和 clipboard abstraction                  |
-| `@simon_he/vue-tui/observability` | Advanced     | frame perf store、profiler hooks 和 trace helpers                           |
-| `@simon_he/vue-tui/cli`           | Node/CLI     | headless app、stdin driver、stdout renderer、Node path provider、recording  |
-| `@simon_he/vue-tui/markdown`      | Public       | `TMarkdownText`、`TVirtualMarkdown`、markdown parser、block source          |
-| `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`、`TLogView`、TLog companions、append-only log store          |
+| 入口                              | 稳定性       | 主要用途                                                                        |
+| --------------------------------- | ------------ | ------------------------------------------------------------------------------- |
+| `@simon_he/vue-tui`               | Public       | Browser-safe terminal core、DOM renderer、稳定 Vue 组件和 input host plugin     |
+| `@simon_he/vue-tui/core`          | Public       | terminal core、buffer-facing types、ANSI/theme/path/hyperlink helpers           |
+| `@simon_he/vue-tui/renderer/dom`  | Public       | DOM renderer factory 和 renderer capabilities                                   |
+| `@simon_he/vue-tui/vue`           | Advanced     | 扩展 Vue 组件、composables、router helpers 和 Vue runtime internals             |
+| `@simon_he/vue-tui/runtime`       | Advanced     | runtime wiring、selection helpers 和 clipboard abstraction                      |
+| `@simon_he/vue-tui/observability` | Advanced     | frame perf store、profiler hooks 和 trace helpers                               |
+| `@simon_he/vue-tui/cli`           | Public       | Node-only headless app、stdin driver、stdout renderer、path provider、recording |
+| `@simon_he/vue-tui/markdown`      | Public       | `TMarkdownText`、`TVirtualMarkdown`、markdown parser、block source              |
+| `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`、`TLogView`、TLog companions、append-only log store              |
 
 稳定面是 terminal core、DOM renderer、CLI runtime、基础 Vue 组件和 markdown API。`/experimental` API 仍可能在下一个 stable release 前变化；生产应用建议把这些 import 隔离在少量边界文件内。
 
@@ -54,7 +54,7 @@ Vue 是 peer dependency。当前发布包支持 Vue `>=3.3.0 <4`。
 
 | 目标         | 先读这些页面                                                                                                                           |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 了解能力边界 | [Live Showcase](/showcase)、[组件总览](/components)、[核心 API](/api)                                                                  |
+| 了解能力边界 | [Live Showcase](/showcase)、[组件总览](/components)、[组件验收](/components-acceptance)、[核心 API](/api)                              |
 | 跑示例       | [Examples Index](/examples)、[Agent Console 示例](/agent-console)                                                                      |
 | 做 CLI       | [Runtime](/runtime)、[CLI Events](/cli-events)、[Platform Contracts](/platform-contracts)                                              |
 | 做高吞吐 UI  | [Performance](/performance)、[高吞吐渲染](/high-throughput-rendering)、[TLogView Lab](/tlog-view-lab)                                  |

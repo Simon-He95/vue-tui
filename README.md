@@ -25,17 +25,17 @@ Development, release validation, and documentation builds are run on Node.js 20 
 
 ## Entry Points
 
-| Import                            | Stability    | Use it for                                                                                                             |
-| --------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `@simon_he/vue-tui`               | Public       | Browser-safe terminal core, DOM renderer, stable Vue components, and input host plugin factory                         |
-| `@simon_he/vue-tui/core`          | Public       | Terminal core, buffer-facing types, ANSI/theme/path/hyperlink helpers                                                  |
-| `@simon_he/vue-tui/renderer/dom`  | Public       | DOM renderer factory and renderer capabilities                                                                         |
-| `@simon_he/vue-tui/vue`           | Advanced     | Extended Vue components, composables, router helpers, and Vue runtime internals                                        |
-| `@simon_he/vue-tui/runtime`       | Advanced     | Runtime wiring, selection helpers, and clipboard abstraction                                                           |
-| `@simon_he/vue-tui/observability` | Advanced     | Frame perf store, profiler hooks, and trace helpers                                                                    |
-| `@simon_he/vue-tui/cli`           | Node/CLI     | Headless Vue app runtime, stdin driver, stdout renderer, Node path provider, recording, and terminal clipboard helpers |
-| `@simon_he/vue-tui/markdown`      | Public       | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources              |
-| `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins               |
+| Import                            | Stability    | Use it for                                                                                                                  |
+| --------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `@simon_he/vue-tui`               | Public       | Browser-safe terminal core, DOM renderer, stable Vue components, and input host plugin factory                              |
+| `@simon_he/vue-tui/core`          | Public       | Terminal core, buffer-facing types, ANSI/theme/path/hyperlink helpers                                                       |
+| `@simon_he/vue-tui/renderer/dom`  | Public       | DOM renderer factory and renderer capabilities                                                                              |
+| `@simon_he/vue-tui/vue`           | Advanced     | Extended Vue components, composables, router helpers, and Vue runtime internals                                             |
+| `@simon_he/vue-tui/runtime`       | Advanced     | Runtime wiring, selection helpers, and clipboard abstraction                                                                |
+| `@simon_he/vue-tui/observability` | Advanced     | Frame perf store, profiler hooks, and trace helpers                                                                         |
+| `@simon_he/vue-tui/cli`           | Public       | Node-only headless Vue app runtime, stdin driver, stdout renderer, path provider, recording, and terminal clipboard helpers |
+| `@simon_he/vue-tui/markdown`      | Public       | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources                   |
+| `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins                    |
 
 The stable surface is terminal core, DOM rendering, CLI runtime, basic Vue components, and markdown APIs. High-throughput log and virtualization APIs stay under `/experimental` until their public surface settles; keep those imports isolated in application code.
 
@@ -218,6 +218,7 @@ See [docs/components.md](./docs/components.md) and [docs/generated/components-ap
 | [Core API](./docs/api.md)                                        | Terminal, renderer, events, runtime, planes, and scheduler contracts |
 | [Performance](./docs/performance.md)                             | Practical performance guidance                                       |
 | [High-throughput rendering](./docs/high-throughput-rendering.md) | Scheduler, dirty rows, mailbox, log, and renderer architecture       |
+| [Component acceptance](./docs/components-acceptance.md)          | Release readiness checks for component API and behavior              |
 | [Agent Console](./docs/agent-console.md)                         | Streaming transcript example stack                                   |
 | [Release candidate](./docs/release-candidate.md)                 | 1.0 RC validation, package export checks, and migration notes        |
 | [Security policy](./SECURITY.md)                                 | Vulnerability reporting and terminal permission boundaries           |

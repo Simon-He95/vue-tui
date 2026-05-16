@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0-rc.0 - Unreleased
+## 1.0.0-rc.0 - 2026-05-16
 
 ### Breaking
 
@@ -66,6 +66,7 @@ import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 - `stream-markdown-parser` is pinned to `1.0.0-rc.0` for release candidate reproducibility.
 - CJS package export conditions now use `.d.cts` declaration entries for require consumers.
 - README, docs home, API maturity, and release candidate docs now list every exported package entrypoint and its stability level.
+- Component acceptance docs now define the release readiness checks for stable, advanced, and experimental Vue components.
 - DOM renderer no longer renders `Style.href` as native anchors unless `links` are explicitly configured.
 - DOM renderer link callbacks preserve native browser behavior unless they return `false`; safe relative/hash/search hrefs are allowed when DOM links are enabled.
 - `installTerminalCleanup()` now returns an explicit `{ cleanup, uninstall }` handle and uses `signalPolicy: "cleanup-only" | "exit" | "reraise"` while leaving termination ownership with existing host signal listeners.
