@@ -210,7 +210,7 @@
 - `secret` `(boolean)` / `maskChar` `(string)`：密码模式
 - `plugins` `(TInputPlugin[])`：输入增强插件（见下方）；init-only，修改后需重新挂载 `TInput`
 
-> `TInput` 功能较多，完整参数以源码为准：`packages/tui/src/vue/components/TInput.ts`。
+> `TInput` 功能较多，完整参数以源码为准：`src/vue/components/TInput.ts`。
 >
 > 跨宿主注意：`TInput` 本体已经开始把 terminal clipboard、TTY 判定、路径 href 这类宿主行为往 plugin 边界迁移。现在更推荐通过 `TerminalProvider.inputPlugins`、`createTerminalApp({ inputPlugins })` 或局部 `plugins` 注入宿主能力，而不是继续把平台差异写死到组件里。像 copy toast 这种 UI 反馈也应由宿主显式提供，不再依赖默认全局 hook。
 
@@ -1333,7 +1333,7 @@ function onPanelActiveChange(payload: TLogLinksPanelActiveChangePayload) {
 
 > 跨宿主注意：`TPathPicker` 不再在组件本体里兜底 Node 文件系统实现。更推荐由宿主显式传入 `provider`，或通过 `TerminalProvider.pathPickerProvider` / `createTerminalApp({ pathPickerProvider })` 注入；CLI 宿主可直接复用 `createNodePathPickerProvider()`。
 >
-> 细节以实现与回归测试为准：`packages/tui/src/vue/components/TPathPicker.ts`。
+> 细节以实现与回归测试为准：`src/vue/components/TPathPicker.ts`。
 
 ## TDialog
 

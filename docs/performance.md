@@ -34,7 +34,7 @@ DOM renderer 的 `scrollOperations` 是输出层优化：terminal/compositor 先
 - `render-manager` 的 active planes 只有 `chrome`
 - `commit` 的 `planes` 只有 `chrome`
 
-对应回归测试：`packages/tui/test/perf-budgets.test.ts`
+对应回归测试：`test/perf-budgets.test.ts`
 
 ### 2) 大内容场景必须可控
 
