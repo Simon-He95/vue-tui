@@ -291,7 +291,7 @@ pnpm run release:dry-run
 ```
 
 `release:dry-run` runs checks, tests, docs build, benchmarks, examples smoke, and packed package install smoke.
-`release:ci` aliases `release:dry-run` for validation-only CI usage. The GitHub Release workflow publishes the already-verified tarball with npm provenance. `release`, `release:local`, and `release:workflow-only` intentionally fail so publishing stays on that workflow path.
+`release:ci` aliases `release:dry-run` for validation-only CI usage. The GitHub Release workflow is preferred because it publishes the already-verified tarball with npm provenance. If workflow token/provenance is unavailable, `release:local:dry-run` and `release:local` publish the locally verified tarball with the `rc` dist-tag. `release` and `release:workflow-only` intentionally fail to avoid accidental direct publishing.
 
 ## Package Notes
 
