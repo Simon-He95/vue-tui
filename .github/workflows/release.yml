@@ -81,6 +81,13 @@ jobs:
             echo "npm_tag workflow input is required"
             exit 1
           fi
+          case "$NPM_TAG" in
+            next|rc|beta|latest) ;;
+            *)
+              echo "npm_tag must be one of: next, rc, beta, latest"
+              exit 1
+              ;;
+          esac
           if [[ "$VERSION" == *-* && "$NPM_TAG" == "latest" ]]; then
             echo "Prerelease versions must not be published with latest dist-tag"
             exit 1
@@ -187,6 +194,13 @@ jobs:
             echo "npm_tag workflow input is required"
             exit 1
           fi
+          case "$NPM_TAG" in
+            next|rc|beta|latest) ;;
+            *)
+              echo "npm_tag must be one of: next, rc, beta, latest"
+              exit 1
+              ;;
+          esac
           if [[ "$VERSION" == *-* && "$NPM_TAG" == "latest" ]]; then
             echo "Prerelease versions must not be published with latest dist-tag"
             exit 1

@@ -94,7 +94,7 @@ import { TBox } from "@simon_he/vue-tui/dist/index.js";
 
 - Prerelease 版本必须用 `rc` dist-tag 发布，例如 `1.0.0-rc.0`。
 - Stable 版本必须用 `latest` dist-tag 发布。
-- GitHub Release workflow 的 `npm_tag` 输入默认为 `rc`，并会阻止 prerelease 使用 `latest` 或 stable 使用非 `latest` tag。
+- GitHub Release workflow 的 `npm_tag` 输入默认为 `rc`，只允许 `next`、`rc`、`beta`、`latest`，并会阻止 prerelease 使用 `latest` 或 stable 使用非 `latest` tag。
 - 真实发布命令必须发布 workflow 验证过的 tarball：`npm publish "$TARBALL" --access public --provenance --tag "$NPM_TAG"`。
 
 ## GitHub Release Template

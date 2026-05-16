@@ -19,6 +19,18 @@ Useful reports include:
 - Relevant boundary: terminal hyperlinks, OSC8, OSC52 clipboard, file URLs, path providers, markdown links, input handling, or generated ANSI output.
 - Minimal reproduction steps and expected impact.
 
+## Response Process
+
+Maintainers aim to acknowledge private vulnerability reports within 3 business days.
+
+For confirmed vulnerabilities, the expected path is:
+
+- Fix the issue on the supported release line or active release candidate.
+- Publish a patched npm version with provenance.
+- Document the affected boundary and upgrade guidance in release notes.
+- Deprecate compromised or unsafe npm versions when users should not install them.
+- Restore npm dist-tags if a prerelease, compromised package, or bad tarball was tagged incorrectly.
+
 ## Scope
 
 The package treats these as security boundaries:
