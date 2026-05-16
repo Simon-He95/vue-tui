@@ -63,7 +63,7 @@ import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 - `Style` objects are treated as immutable after first normalization. Pass a new object when style values change.
 - `createTLogUrlPlugin()` no longer detects `file://` URLs by default. Use `{ allowFileUrls: true }` to opt in.
 - Release benchmark validation now uses `bench:baseline`; timing budgets are only checked by `bench:baseline:timing`.
-- `stream-markdown-parser` is pinned to `0.0.95` for release candidate reproducibility.
+- `stream-markdown-parser` is pinned to `1.0.0-rc.0` for release candidate reproducibility.
 - CJS package export conditions now use `.d.cts` declaration entries for require consumers.
 - README, docs home, API maturity, and release candidate docs now list every exported package entrypoint and its stability level.
 - DOM renderer no longer renders `Style.href` as native anchors unless `links` are explicitly configured.

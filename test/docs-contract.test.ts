@@ -45,7 +45,7 @@ describe("docs cleanup policy contract", () => {
   });
 
   it("documents every moved root export migration", async () => {
-    const migration = readFileSync("docs/migration-0.1.0-rc.1.md", "utf8");
+    const migration = readFileSync("docs/migration-1.0.0-rc.0.md", "utf8");
     const root = await import("../src/index.js");
     const entries = new Map<string, any>();
 

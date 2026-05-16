@@ -1,4 +1,4 @@
-# Migration to 0.1.0-rc.1
+# Migration to 1.0.0-rc.0
 
 ## Root Entrypoint Narrowed
 
