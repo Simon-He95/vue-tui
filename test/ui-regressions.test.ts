@@ -521,6 +521,33 @@ describe("ui regressions", () => {
     }
   });
 
+  it("warns when TerminalProvider widthProvider changes after mount", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const providerProps = reactive<{ widthProvider: "default" | "cjk" }>({
+      widthProvider: "default",
+    });
+
+    const mounted = await mountTerminal(
+      () => h(TText, { x: 0, y: 0, w: 4, value: "text" }),
+      8,
+      1,
+      providerProps,
+    );
+
+    try {
+      providerProps.widthProvider = "cjk";
+      await nextTick();
+      await Promise.resolve();
+
+      expect(warn).toHaveBeenCalledWith(
+        "[vue-tui] TerminalProvider widthProvider is init-only. Remount TerminalProvider to apply it.",
+      );
+    } finally {
+      mounted.unmount();
+      warn.mockRestore();
+    }
+  });
+
   it("warns when TInput local plugins change after mount", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const inputProps = reactive<{ plugins: any[] }>({

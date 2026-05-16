@@ -609,6 +609,35 @@ describe("ui regressions input editing", () => {
     mounted.unmount();
   });
 
+  it("TInput autoFocus cursor visibility uses TerminalProvider widthProvider", async () => {
+    const value = ref("Ωx");
+    const mounted = await mountTerminal(
+      () =>
+        h(TInput, {
+          x: 0,
+          y: 0,
+          w: 4,
+          modelValue: value.value,
+          "onUpdate:modelValue": (v: string) => (value.value = v),
+          autoFocus: true,
+          cursorToEndOnFirstFocus: true,
+          cursorBlink: false,
+        }),
+      4,
+      2,
+      { widthProvider: "cjk" },
+    );
+
+    await nextTick();
+    await nextTick();
+
+    expect(mounted.terminal.getCell(1, 0).ch).toBe("x");
+    expect(mounted.terminal.getCell(2, 0).ch).toBe(" ");
+    expect(mounted.terminal.getCell(2, 0).style.inverse).toBe(true);
+
+    mounted.unmount();
+  });
+
   it("TInput bar cursor never hides underlying glyph", async () => {
     const value = ref("");
     const mounted = await mountTerminal(() =>

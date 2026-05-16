@@ -851,6 +851,27 @@ describe("ui regressions portal select and text", () => {
     mounted.unmount();
   });
 
+  it("TBox keeps box drawing borders one cell wide with cjk widthProvider", async () => {
+    const mounted = await mountTerminal(
+      () => h(TBox, { x: 0, y: 0, w: 10, h: 4, border: true, title: "x", padding: 0 }),
+      10,
+      4,
+      { widthProvider: "cjk" },
+    );
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe("┌");
+    expect(mounted.terminal.getCell(9, 0).ch).toBe("┐");
+    expect(mounted.terminal.getCell(0, 1).ch).toBe("│");
+    expect(mounted.terminal.getCell(9, 1).ch).toBe("│");
+    expect(mounted.terminal.getCell(0, 3).ch).toBe("└");
+    expect(mounted.terminal.getCell(9, 3).ch).toBe("┘");
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 10; x++)
+        expect(Boolean(mounted.terminal.getCell(x, y).continuation)).toBe(false);
+    }
+    mounted.unmount();
+  });
+
   it("TBox clipRect prevents child overflow into border/neighbor", async () => {
     const mounted = await mountTerminal(
       () =>

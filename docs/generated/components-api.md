@@ -196,6 +196,7 @@ Import: `@simon_he/vue-tui`
 | ------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- | ---- | ---- |
 | <code>cols</code>               | <code>number</code>                                                 | —                                               | 是   | —    |
 | <code>rows</code>               | <code>number</code>                                                 | —                                               | 是   | —    |
+| <code>widthProvider</code>      | <code>WidthProvider</code>                                          | <code>&quot;default&quot;</code>                | 否   | —    |
 | <code>defaultStyle</code>       | <code>Style</code>                                                  | <code>() =&gt; ({})</code>                      | 否   | —    |
 | <code>autoResize</code>         | <code>boolean</code>                                                | <code>false</code>                              | 否   | —    |
 | <code>minCols</code>            | <code>number</code>                                                 | <code>1</code>                                  | 否   | —    |

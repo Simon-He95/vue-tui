@@ -18,6 +18,7 @@ export {
 export type { ThemePalette } from "./core/ansi-palette.js";
 export { parseAnsiSgr } from "./core/ansi/sgr.js";
 export { charCellWidth } from "./core/buffer/width.js";
+export type { BuiltinWidthProvider, CellWidth, WidthProvider } from "./core/buffer/width.js";
 export {
   isSafeRelativeHref,
   sanitizeDomHref,
@@ -38,6 +39,7 @@ export type {
   Terminal,
   TerminalCommitEvent,
   TerminalEventMap,
+  TerminalOptions,
   TerminalResizeEvent,
   TerminalScrollOperation,
   ThemeModeId,

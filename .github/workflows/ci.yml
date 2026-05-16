@@ -43,6 +43,8 @@ jobs:
 
       - run: pnpm run test:unit
 
+      - run: pnpm run test:coverage:core
+
       # Deterministic smoke bench: behavior thresholds only, no runner-timing gate.
       - run: pnpm run bench:scroll-mailbox
 
@@ -60,9 +62,11 @@ jobs:
 
       - run: pnpm run test:browser-vite-import:dist
 
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
 
       - run: pnpm run e2e:smoke
+
+      - run: pnpm run e2e:browser-regressions
 
   benchmark:
     if: ${{ github.event_name == 'schedule' || github.event.inputs.benchmark == 'true' }}

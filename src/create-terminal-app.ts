@@ -1,4 +1,5 @@
 import type { App, Component, Ref } from "vue";
+import type { WidthProvider } from "./core/buffer/width.js";
 import type { PathPickerProvider } from "./core/path-provider-types.js";
 import { TERMINAL_RENDER_PLANES } from "./core/render-plane.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "./core/render-plane.js";
@@ -164,6 +165,7 @@ export type CreateTerminalAppOptions = Readonly<{
   cols: number;
   rows: number;
   component: Component;
+  widthProvider?: WidthProvider;
   props?: Record<string, unknown>;
   defaultStyle?: Style;
   clipboard?: ClipboardApi;
@@ -176,10 +178,12 @@ export type CreateTerminalAppOptions = Readonly<{
 export function createTerminalApp(options: CreateTerminalAppOptions): TerminalApp {
   const env = (process?.env ?? {}) as Record<string, unknown>;
   if (shouldInstallFileWriters(env)) installNodeFileWriters();
+  const widthProvider = options.widthProvider ?? "default";
 
   const terminal: Terminal = createTerminal({
     cols: options.cols,
     rows: options.rows,
+    widthProvider,
   });
   const trace = createTraceStore({
     enabled: Boolean((globalThis as any).__VT_DEBUG_TRACE__),
@@ -204,6 +208,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     },
   });
   const render = createRenderManager(terminal, {
+    widthProvider,
     profiler: {
       fileWriter: nodeProfilerFileWriter,
       defaultLogDest: "file",
@@ -839,6 +844,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     observability: { trace, framePerf },
     selection: selectionContext,
     defaultStyle: ref(options.defaultStyle ?? {}),
+    widthProvider,
     render,
   };
 

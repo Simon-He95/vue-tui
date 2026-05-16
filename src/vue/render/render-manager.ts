@@ -1,5 +1,6 @@
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../../core/render-plane.js";
 import type { Terminal } from "../../core/types.js";
+import type { WidthProvider } from "../../core/buffer/width.js";
 import { createDebugLogger, isDebugEnabled } from "../../core/debug-logger.js";
 import { TERMINAL_RENDER_PLANES } from "../../core/render-plane.js";
 import { resetPlaneRowsForRender, scrollPlaneRows } from "../../core/terminal/create-terminal.js";
@@ -106,6 +107,7 @@ export type RenderManager = Readonly<{
 
 export type CreateRenderManagerOptions = Readonly<{
   profiler?: CreateTuiProfilerOptions;
+  widthProvider?: WidthProvider;
 }>;
 
 let nextStackId = 0;
@@ -162,6 +164,8 @@ export function createRenderManager(
   terminal: Terminal,
   options: CreateRenderManagerOptions = {},
 ): RenderManager {
+  const widthProvider = options.widthProvider ?? "default";
+  const withRenderTextPass = <T>(fn: () => T): T => withTextRenderPass(fn, widthProvider);
   let orderCounter = 0;
   const nodes = new Map<string, RenderNode>();
   const planeDirtyStates = new Map<TerminalRenderPlane, DirtyPlaneState>();
@@ -701,7 +705,7 @@ export function createRenderManager(
       }
     };
 
-    withTextRenderPass(() =>
+    withRenderTextPass(() =>
       terminal.batch(() => {
         for (const plane of requestedPlanes) {
           const state = planeDirtyStates.get(plane);

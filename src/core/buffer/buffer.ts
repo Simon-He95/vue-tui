@@ -1,5 +1,6 @@
 import type { Cell, Style } from "../types.js";
 import { charCellWidth } from "./width.js";
+import type { WidthProvider } from "./width.js";
 
 const DEFAULT_STYLE: Style = Object.freeze({});
 const styleCache = new WeakMap<object, Style>();
@@ -30,11 +31,11 @@ function getOrCreateCellCache(
   return next;
 }
 
-export function createCell(ch: string, style?: Style): Cell {
+export function createCell(ch: string, style?: Style, widthProvider?: WidthProvider): Cell {
   if (ch === " ") return createBlankCell(style);
 
   const normalizedStyle = normalizeStyle(style);
-  const width = charCellWidth(ch);
+  const width = charCellWidth(ch, widthProvider);
 
   const map =
     width === 2
@@ -100,9 +101,14 @@ export interface GridBuffer {
   // Pre-computed during cell writes when fingerprintFn is set.
   soaFingerprints: Uint32Array | null;
   fingerprintFn: CellFingerprintFn | null;
+  widthProvider: WidthProvider;
 }
 
-export function createGridBuffer(cols: number, rows: number): GridBuffer {
+export function createGridBuffer(
+  cols: number,
+  rows: number,
+  options: Readonly<{ widthProvider?: WidthProvider }> = {},
+): GridBuffer {
   const safeCols = Math.max(0, Math.floor(cols));
   const safeRows = Math.max(0, Math.floor(rows));
   const blank = createBlankCell();
@@ -128,6 +134,7 @@ export function createGridBuffer(cols: number, rows: number): GridBuffer {
     rowPool: [],
     soaFingerprints: null,
     fingerprintFn: null,
+    widthProvider: options.widthProvider ?? "default",
   };
 }
 
@@ -256,7 +263,7 @@ export function putCell(buffer: GridBuffer, x: number, y: number, ch: string, st
   if (x < 0 || x >= buffer.cols) return;
 
   const row = getBufferRow(buffer, y);
-  const width = charCellWidth(ch);
+  const width = charCellWidth(ch, buffer.widthProvider);
   const previous = row[x];
   const next = width === 2 && x + 1 < buffer.cols ? row[x + 1] : undefined;
   const previousWideOverlap = Boolean(
@@ -279,7 +286,7 @@ export function putCell(buffer: GridBuffer, x: number, y: number, ch: string, st
     markDirty(buffer, y);
     return;
   }
-  const cell = createCell(ch, style);
+  const cell = createCell(ch, style, buffer.widthProvider);
   row[x] = cell;
   if (width === 2 && x + 1 < buffer.cols) row[x + 1] = createContinuationCell(style);
 
@@ -315,11 +322,11 @@ export function fillRect(
   const y1 = clamp(Math.floor(y + h), 0, buffer.rows);
   if (x1 <= x0 || y1 <= y0) return;
 
-  const width = charCellWidth(ch);
+  const width = charCellWidth(ch, buffer.widthProvider);
   // Fast path for single-cell fills (most common). Avoid per-cell `createCell()`/`normalizeStyle()`
   // calls by reusing the cached Cell instance and letting the JS engine optimize `Array.fill`.
   if (width === 1) {
-    const fillCell = createCell(ch, style);
+    const fillCell = createCell(ch, style, buffer.widthProvider);
     const blank = createBlankCell();
     for (let yy = y0; yy < y1; yy++) {
       const row = getBufferRow(buffer, yy);
@@ -346,7 +353,7 @@ export function fillRect(
     return;
   }
 
-  const fillCell = createCell(ch, style);
+  const fillCell = createCell(ch, style, buffer.widthProvider);
   const continuationCell = createContinuationCell(style);
   const blank = createBlankCell();
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildInlineRow,
+  buildInlineSelectionSegments,
   lineCellColToIndexInline,
   sliceByCellsWindow,
   textCellWidthInline,
@@ -10,6 +11,7 @@ import {
   MENTION_TOKEN,
   MULTILINE_TOKEN,
 } from "../src/vue/components/input/utils/inlineTextTokens.js";
+import { withTextWidthProvider } from "../src/vue/utils/text.js";
 
 describe("inlineText ASCII fast paths", () => {
   it("sliceByCellsWindow matches ASCII slicing", () => {
@@ -88,5 +90,130 @@ describe("inlineText ASCII fast paths", () => {
     );
     expect(res.text.length).toBe(5);
     expect(res.text.startsWith("hi")).toBe(true);
+  });
+
+  it("keeps TInput inline grapheme clusters intact under CJK width", () => {
+    withTextWidthProvider("cjk", () => {
+      const accent = "e\u0301";
+      const womanTechnologist = "\u{1F469}\u200D\u{1F4BB}";
+      const keycapOne = "1\uFE0F\u20E3";
+      const flagUS = "\u{1F1FA}\u{1F1F8}";
+      const value = `${accent}${womanTechnologist}${keycapOne}${flagUS}Ω`;
+      const accentEnd = accent.length;
+      const zwjEnd = accentEnd + womanTechnologist.length;
+      const keycapEnd = zwjEnd + keycapOne.length;
+      const flagEnd = keycapEnd + flagUS.length;
+
+      expect(
+        textCellWidthInline(
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+        ),
+      ).toBe(9);
+      expect(sliceByCellsWindow(value, 0, 1)).toBe(accent);
+      expect(sliceByCellsWindow(value, 1, 2)).toBe(womanTechnologist);
+      expect(sliceByCellsWindow(value, 3, 2)).toBe(keycapOne);
+      expect(sliceByCellsWindow(value, 5, 2)).toBe(flagUS);
+      expect(sliceByCellsWindow(value, 7, 2)).toBe("Ω");
+
+      const lines = wrapToLinesInline(
+        value,
+        MULTILINE_TOKEN,
+        MENTION_TOKEN,
+        undefined,
+        undefined,
+        3,
+      );
+      expect(lines.map((line) => value.slice(line.start, line.end))).toEqual([
+        `${accent}${womanTechnologist}`,
+        keycapOne,
+        flagUS,
+        "Ω",
+      ]);
+
+      expect(
+        lineCellColToIndexInline(
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          1,
+        ).index,
+      ).toBe(accentEnd);
+      expect(
+        lineCellColToIndexInline(
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          2,
+        ).index,
+      ).toBe(accentEnd);
+      expect(
+        lineCellColToIndexInline(
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          3,
+        ).index,
+      ).toBe(zwjEnd);
+      expect(
+        lineCellColToIndexInline(
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          8,
+        ).index,
+      ).toBe(flagEnd);
+
+      expect(
+        buildInlineRow(
+          value,
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          3,
+          0,
+        ).text,
+      ).toBe(`${accent}${womanTechnologist}`);
+      expect(
+        buildInlineSelectionSegments(
+          value,
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          { start: 0, end: zwjEnd },
+          9,
+          0,
+        ).map((segment) => segment.text),
+      ).toEqual([accent, womanTechnologist]);
+    });
   });
 });

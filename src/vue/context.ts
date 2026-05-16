@@ -1,6 +1,7 @@
 import type { Component, InjectionKey, Ref, ShallowRef } from "vue";
 import type { PathPickerProvider } from "../core/path-provider-types.js";
 import type { TerminalRenderPlane } from "../core/render-plane.js";
+import type { WidthProvider } from "../core/buffer/width.js";
 import type { Style, Terminal } from "../core/types.js";
 import type { EventManager } from "../events/manager/event-manager.js";
 import type { Rect } from "../events/manager/types.js";
@@ -133,6 +134,7 @@ export type TerminalContext = Readonly<{
   }>;
   selection: TerminalSelectionContext;
   defaultStyle: Ref<Style>;
+  widthProvider: WidthProvider;
   render: RenderManager;
 }>;
 

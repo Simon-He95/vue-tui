@@ -38,8 +38,29 @@ VUE_TUI_COLOR_MODE=ansi256 pnpm run cli
 
 为确保同一套 UI 在不同终端中更接近一致，建议始终使用仓库内置的固定 palette，并在 CLI 侧显式传入 `palette`（或使用默认的内置 palette 映射到 RGB 序列）。
 
+## Unicode 宽度策略
+
+`createTerminal` 默认使用内置宽度模型：CJK full-width、emoji presentation、keycap 和高位 emoji 按 2 cells，ambiguous-width 符号按 1 cell。需要匹配 CJK locale 或特定终端配置时，可以传入 `widthProvider`：
+
+```ts
+createTerminal({
+  cols: 80,
+  rows: 24,
+  widthProvider: "cjk",
+});
+```
+
+可选值：
+
+| widthProvider      | 行为                                              |
+| ------------------ | ------------------------------------------------- |
+| `default`          | 默认模型；ambiguous-width 符号按 1 cell           |
+| `narrow-ambiguous` | 显式窄 ambiguous-width；等同当前默认语义          |
+| `cjk`              | ambiguous-width 符号按 2 cells，适合 CJK 宽度环境 |
+| `(text) => 1 \| 2` | 自定义 grapheme 宽度函数；返回值只接受 `1` 或 `2` |
+
 ## 常见差异（需要接受/规避）
 
-- **emoji / East Asian 宽度**：部分终端对 emoji 的 cell 宽度判断不同，可能导致对齐轻微偏差；尽量避免用 emoji 做布局关键字符。
+- **emoji / East Asian 宽度**：部分终端对 emoji、ambiguous-width 符号和字体 fallback 的 cell 宽度判断不同，可能导致对齐轻微偏差；需要固定 CJK ambiguous-width 语义时使用 `widthProvider`。
 - **字体与字形**：边框字符（`┌─┐│└┘`）在某些字体下可能不对齐；建议使用等宽字体并开启 box drawing 支持。
 - **换行与滚动**：终端可能自动换行或在输出时滚屏；`StdoutRenderer` 渲染时会控制换行与逐行定位，减少滚动跳动。

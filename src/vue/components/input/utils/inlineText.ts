@@ -1,5 +1,9 @@
-import { charCellWidth } from "../../../../core/buffer/width.js";
-import { textCellWidth as baseTextCellWidth, spaces } from "../../../utils/text.js";
+import {
+  forEachTextCellSegment,
+  hasTextWidthAsciiFastPath,
+  textCellWidth as baseTextCellWidth,
+  spaces,
+} from "../../../utils/text.js";
 import { mentionLabelFromAbsPath } from "../plugins/mentionUtils.js";
 
 function clamp(n: number, min: number, max: number): number {
@@ -26,37 +30,22 @@ export function sliceByCellsWindow(text: string, startCell: number, width: numbe
   width = Math.max(0, Math.floor(width));
   if (width <= 0) return "";
   if (!text) return "";
-  if (isAscii(text)) return text.slice(startCell, startCell + width);
+  if (hasTextWidthAsciiFastPath() && isAscii(text)) return text.slice(startCell, startCell + width);
   let out = "";
   let skipped = 0;
   let used = 0;
-  for (let i = 0; i < text.length; ) {
-    const code = text.charCodeAt(i);
-    if (code <= 0x7f) {
-      if (skipped < startCell) {
-        skipped++;
-        i++;
-        continue;
-      }
-      if (used >= width) break;
-      out += text[i]!;
-      used++;
-      i++;
-      continue;
-    }
-    const cp = text.codePointAt(i) ?? 0;
-    const seg = String.fromCodePoint(cp);
-    const w = charCellWidth(seg);
+  forEachTextCellSegment(text, (segment) => {
+    const seg = segment.text;
+    const w = segment.cells;
     if (skipped + w <= startCell) {
       skipped += w;
-      i += seg.length;
-      continue;
+      return;
     }
-    if (used + w > width) break;
+    if (used + w > width) return false;
     out += seg;
     used += w;
-    i += seg.length;
-  }
+    return undefined;
+  });
   return out;
 }
 
@@ -102,6 +91,127 @@ function countTokens(value: string, token: string, endIndex = value.length): num
   return count;
 }
 
+type InlineUnit = Readonly<
+  | {
+      kind: "text";
+      text: string;
+      start: number;
+      end: number;
+      cells: number;
+    }
+  | {
+      kind: "multiline" | "mention";
+      text: string;
+      start: number;
+      end: number;
+      cells: number;
+      index: number;
+      absPath?: string;
+    }
+>;
+
+function nextInlineBoundary(
+  value: string,
+  multilineToken: string,
+  mentionToken: string,
+  start: number,
+  end: number,
+): number {
+  let next = end;
+  const newline = value.indexOf("\n", start);
+  if (newline >= 0 && newline < next) next = newline;
+  const multiline = value.indexOf(multilineToken, start);
+  if (multiline >= 0 && multiline < next) next = multiline;
+  const mention = value.indexOf(mentionToken, start);
+  if (mention >= 0 && mention < next) next = mention;
+  return next;
+}
+
+function forEachInlineUnit(
+  value: string,
+  multilineToken: string,
+  mentionToken: string,
+  multilineTexts: readonly string[] | undefined,
+  mentions: readonly string[] | undefined,
+  start: number,
+  end: number,
+  cb: (unit: InlineUnit) => void | false,
+): void {
+  const safeStart = clamp(start, 0, value.length);
+  const safeEnd = clamp(end, safeStart, value.length);
+  let tokenIndex = countMultilineTokens(value, multilineToken, safeStart);
+  let mentionIndex = countMentionTokens(value, mentionToken, safeStart);
+
+  for (let i = safeStart; i < safeEnd; ) {
+    const ch = value[i]!;
+    if (ch === multilineToken) {
+      const label = tokenLabelAt(multilineTexts, tokenIndex);
+      const result = cb({
+        kind: "multiline",
+        text: label,
+        start: i,
+        end: i + 1,
+        cells: baseTextCellWidth(label),
+        index: tokenIndex,
+      });
+      tokenIndex++;
+      if (result === false) return;
+      i += 1;
+      continue;
+    }
+    if (ch === mentionToken) {
+      const absPath = String(mentions?.[mentionIndex] ?? "");
+      const label = mentionLabelAt(mentions, mentionIndex);
+      const result = cb({
+        kind: "mention",
+        text: label,
+        start: i,
+        end: i + 1,
+        cells: baseTextCellWidth(label),
+        index: mentionIndex,
+        ...(absPath ? { absPath } : {}),
+      });
+      mentionIndex++;
+      if (result === false) return;
+      i += 1;
+      continue;
+    }
+
+    const next = nextInlineBoundary(value, multilineToken, mentionToken, i, safeEnd);
+    if (next === i) {
+      const result = cb({
+        kind: "text",
+        text: value[i]!,
+        start: i,
+        end: i + 1,
+        cells: baseTextCellWidth(value[i]!),
+      });
+      if (result === false) return;
+      i += 1;
+      continue;
+    }
+
+    let stopped = false;
+    const chunkStart = i;
+    forEachTextCellSegment(value.slice(chunkStart, next), (segment) => {
+      const result = cb({
+        kind: "text",
+        text: segment.text,
+        start: chunkStart + segment.start,
+        end: chunkStart + segment.end,
+        cells: segment.cells,
+      });
+      if (result === false) {
+        stopped = true;
+        return false;
+      }
+      return undefined;
+    });
+    if (stopped) return;
+    i = next;
+  }
+}
+
 export function countMultilineTokens(
   value: string,
   multilineToken: string,
@@ -138,39 +248,18 @@ export function textCellWidthInline(
   const safeStart = clamp(start, 0, value.length);
   const safeEnd = clamp(end, safeStart, value.length);
   let cells = 0;
-  let tokenIndex = 0;
-  let mentionIndex = 0;
-  for (let i = 0; i < safeEnd; ) {
-    const ch = value[i]!;
-    if (ch === multilineToken) {
-      if (i >= safeStart) {
-        const label = tokenLabelAt(multilineTexts, tokenIndex);
-        cells += baseTextCellWidth(label);
-      }
-      tokenIndex++;
-      i += 1;
-      continue;
-    }
-    if (ch === mentionToken) {
-      if (i >= safeStart) {
-        const label = mentionLabelAt(mentions, mentionIndex);
-        cells += baseTextCellWidth(label);
-      }
-      mentionIndex++;
-      i += 1;
-      continue;
-    }
-    const code = value.charCodeAt(i);
-    if (code <= 0x7f) {
-      if (i >= safeStart) cells += 1;
-      i += 1;
-      continue;
-    }
-    const cp = value.codePointAt(i) ?? 0;
-    const seg = String.fromCodePoint(cp);
-    if (i >= safeStart) cells += charCellWidth(seg);
-    i += seg.length;
-  }
+  forEachInlineUnit(
+    value,
+    multilineToken,
+    mentionToken,
+    multilineTexts,
+    mentions,
+    0,
+    safeEnd,
+    (unit) => {
+      if (unit.end > safeStart) cells += unit.cells;
+    },
+  );
   return cells;
 }
 
@@ -186,59 +275,39 @@ export function wrapToLinesInline(
   const out: WrappedLineInfo[] = [];
   let start = 0;
   let cells = 0;
-  let tokenIndex = 0;
-  let mentionIndex = 0;
 
-  for (let i = 0; i < value.length; ) {
-    const ch = value[i]!;
-    if (ch === "\n") {
-      out.push({ start, end: i });
-      i += 1;
-      start = i;
-      cells = 0;
-      continue;
-    }
-
-    let segLen = 0;
-    let w = 0;
-    if (ch === multilineToken) {
-      const label = tokenLabelAt(multilineTexts, tokenIndex);
-      w = baseTextCellWidth(label);
-      segLen = 1;
-      tokenIndex++;
-    } else if (ch === mentionToken) {
-      const label = mentionLabelAt(mentions, mentionIndex);
-      w = baseTextCellWidth(label);
-      segLen = 1;
-      mentionIndex++;
-    } else {
-      const code = value.charCodeAt(i);
-      if (code <= 0x7f) {
-        segLen = 1;
-        w = 1;
-      } else {
-        const cp = value.codePointAt(i) ?? 0;
-        const seg = String.fromCodePoint(cp);
-        segLen = seg.length;
-        w = charCellWidth(seg);
+  forEachInlineUnit(
+    value,
+    multilineToken,
+    mentionToken,
+    multilineTexts,
+    mentions,
+    0,
+    value.length,
+    (unit) => {
+      if (unit.kind === "text" && unit.text === "\n") {
+        out.push({ start, end: unit.start });
+        start = unit.end;
+        cells = 0;
+        return;
       }
-    }
 
-    if (cells > 0 && cells + w > width) {
-      out.push({ start, end: i });
-      start = i;
-      cells = 0;
-    }
+      const w = unit.cells;
+      if (cells > 0 && cells + w > width) {
+        out.push({ start, end: unit.start });
+        start = unit.start;
+        cells = 0;
+      }
 
-    cells += w;
-    i += segLen;
+      cells += w;
 
-    if (cells >= width) {
-      out.push({ start, end: i });
-      start = i;
-      cells = 0;
-    }
-  }
+      if (cells >= width) {
+        out.push({ start, end: unit.end });
+        start = unit.end;
+        cells = 0;
+      }
+    },
+  );
 
   out.push({ start, end: value.length });
   return out.length ? out : [{ start: 0, end: 0 }];
@@ -264,70 +333,49 @@ export function wrapToLinesFirstWidthInline(
   let cells = 0;
   let currentWidth = firstWidth;
   let isFirstLine = true;
-  let tokenIndex = 0;
-  let mentionIndex = 0;
 
-  for (let i = 0; i < value.length; ) {
-    const ch = value[i]!;
-    if (ch === "\n") {
-      out.push({ start, end: i });
-      i += 1;
-      start = i;
-      cells = 0;
-      isFirstLine = false;
-      currentWidth = width;
-      continue;
-    }
-
-    let segLen = 0;
-    let w = 0;
-    if (ch === multilineToken) {
-      const label = tokenLabelAt(multilineTexts, tokenIndex);
-      w = baseTextCellWidth(label);
-      segLen = 1;
-      tokenIndex++;
-    } else if (ch === mentionToken) {
-      const label = mentionLabelAt(mentions, mentionIndex);
-      w = baseTextCellWidth(label);
-      segLen = 1;
-      mentionIndex++;
-    } else {
-      const code = value.charCodeAt(i);
-      if (code <= 0x7f) {
-        segLen = 1;
-        w = 1;
-      } else {
-        const cp = value.codePointAt(i) ?? 0;
-        const seg = String.fromCodePoint(cp);
-        segLen = seg.length;
-        w = charCellWidth(seg);
-      }
-    }
-
-    if (cells > 0 && cells + w > currentWidth) {
-      out.push({ start, end: i });
-      start = i;
-      cells = 0;
-      if (isFirstLine) {
+  forEachInlineUnit(
+    value,
+    multilineToken,
+    mentionToken,
+    multilineTexts,
+    mentions,
+    0,
+    value.length,
+    (unit) => {
+      if (unit.kind === "text" && unit.text === "\n") {
+        out.push({ start, end: unit.start });
+        start = unit.end;
+        cells = 0;
         isFirstLine = false;
         currentWidth = width;
+        return;
       }
-      continue;
-    }
 
-    cells += w;
-    i += segLen;
-
-    if (cells >= currentWidth) {
-      out.push({ start, end: i });
-      start = i;
-      cells = 0;
-      if (isFirstLine) {
-        isFirstLine = false;
-        currentWidth = width;
+      const w = unit.cells;
+      if (cells > 0 && cells + w > currentWidth) {
+        out.push({ start, end: unit.start });
+        start = unit.start;
+        cells = 0;
+        if (isFirstLine) {
+          isFirstLine = false;
+          currentWidth = width;
+        }
       }
-    }
-  }
+
+      cells += w;
+
+      if (cells >= currentWidth) {
+        out.push({ start, end: unit.end });
+        start = unit.end;
+        cells = 0;
+        if (isFirstLine) {
+          isFirstLine = false;
+          currentWidth = width;
+        }
+      }
+    },
+  );
 
   out.push({ start, end: value.length });
   return out.length ? out : [{ start: 0, end: 0 }];
@@ -442,47 +490,34 @@ export function lineCellColToIndexInline(
 ): { index: number; hit: InlineHit | null } {
   const target = Math.max(0, Math.floor(col));
   let cells = 0;
-  let tokenIndex = countMultilineTokens(value, multilineToken, lineStart);
-  let mentionIndex = countMentionTokens(value, mentionToken, lineStart);
-  for (let i = lineStart; i < lineEnd; ) {
-    const ch = value[i]!;
-    if (ch === multilineToken) {
-      const label = tokenLabelAt(multilineTexts, tokenIndex);
-      const w = baseTextCellWidth(label);
-      if (cells + w > target) return { index: i, hit: { kind: "multiline", index: tokenIndex } };
+  let result: { index: number; hit: InlineHit | null } | null = null;
+  forEachInlineUnit(
+    value,
+    multilineToken,
+    mentionToken,
+    multilineTexts,
+    mentions,
+    lineStart,
+    lineEnd,
+    (unit) => {
+      if (unit.kind === "text" && unit.text === "\n") return;
+      const w = unit.cells;
+      if (cells + w > target) {
+        result = {
+          index: unit.start,
+          hit: unit.kind === "text" ? null : { kind: unit.kind, index: unit.index },
+        };
+        return false;
+      }
       cells += w;
-      if (cells >= target) return { index: i + 1, hit: null };
-      tokenIndex++;
-      i += 1;
-      continue;
-    }
-    if (ch === mentionToken) {
-      const label = mentionLabelAt(mentions, mentionIndex);
-      const w = baseTextCellWidth(label);
-      if (cells + w > target) return { index: i, hit: { kind: "mention", index: mentionIndex } };
-      cells += w;
-      if (cells >= target) return { index: i + 1, hit: null };
-      mentionIndex++;
-      i += 1;
-      continue;
-    }
-    const code = value.charCodeAt(i);
-    if (code <= 0x7f) {
-      if (cells + 1 > target) return { index: i, hit: null };
-      cells += 1;
-      i += 1;
-      if (cells >= target) return { index: i, hit: null };
-      continue;
-    }
-    const cp = value.codePointAt(i) ?? 0;
-    const seg = String.fromCodePoint(cp);
-    const w = charCellWidth(seg);
-    if (cells + w > target) return { index: i, hit: null };
-    cells += w;
-    i += seg.length;
-    if (cells >= target) return { index: i, hit: null };
-  }
-  return { index: lineEnd, hit: null };
+      if (cells >= target) {
+        result = { index: unit.end, hit: null };
+        return false;
+      }
+      return undefined;
+    },
+  );
+  return result ?? { index: lineEnd, hit: null };
 }
 
 export type InlineChipRender = Readonly<{
@@ -508,91 +543,56 @@ export function buildInlineRow(
   const windowStart = Math.max(0, Math.floor(offX));
   const windowEnd = windowStart + Math.max(0, Math.floor(rowTextW));
   let cells = 0;
-  let tokenIndex = countMultilineTokens(value, multilineToken, lineStart);
-  let mentionIndex = countMentionTokens(value, mentionToken, lineStart);
   let out = "";
   let outCells = 0;
   const chips: InlineChipRender[] = [];
 
-  for (let i = lineStart; i < lineEnd; ) {
-    const ch = value[i]!;
-    if (ch === "\n") {
-      i += 1;
-      continue;
-    }
+  forEachInlineUnit(
+    value,
+    multilineToken,
+    mentionToken,
+    multilineTexts,
+    mentions,
+    lineStart,
+    lineEnd,
+    (unit) => {
+      if (unit.kind === "text" && unit.text === "\n") return;
+      const seg = unit.kind === "text" ? displayValue.slice(unit.start, unit.end) : unit.text;
+      const w = unit.kind === "text" ? baseTextCellWidth(seg) : unit.cells;
 
-    let seg = "";
-    let w = 0;
-    let segLen = 0;
-    let isToken = false;
-    let tokenKind: InlineChipRender["kind"] | null = null;
-    let token = 0;
-    let tokenAbsPath: string | undefined;
-    if (ch === multilineToken) {
-      seg = tokenLabelAt(multilineTexts, tokenIndex);
-      w = baseTextCellWidth(seg);
-      segLen = 1;
-      tokenKind = "multiline";
-      token = tokenIndex;
-      tokenIndex++;
-      isToken = true;
-    } else if (ch === mentionToken) {
-      seg = mentionLabelAt(mentions, mentionIndex);
-      w = baseTextCellWidth(seg);
-      segLen = 1;
-      tokenKind = "mention";
-      token = mentionIndex;
-      tokenAbsPath = String(mentions?.[mentionIndex] ?? "");
-      mentionIndex++;
-      isToken = true;
-    } else {
-      const code = value.charCodeAt(i);
-      if (code <= 0x7f) {
-        seg = displayValue[i] ?? value[i]!;
-        segLen = 1;
-        w = 1;
-      } else {
-        const cp = value.codePointAt(i) ?? 0;
-        const rawSeg = String.fromCodePoint(cp);
-        seg = displayValue.slice(i, i + rawSeg.length);
-        segLen = rawSeg.length;
-        w = charCellWidth(seg);
+      const unitStart = cells;
+      const unitEnd = cells + w;
+      if (unitEnd <= windowStart) {
+        cells = unitEnd;
+        return;
       }
-    }
+      if (unitStart >= windowEnd) return false;
 
-    const unitStart = cells;
-    const unitEnd = cells + w;
-    if (unitEnd <= windowStart) {
+      const visibleStart = Math.max(0, windowStart - unitStart);
+      const visibleCells = Math.min(unitEnd, windowEnd) - Math.max(unitStart, windowStart);
+      if (visibleCells > 0) {
+        let visibleText = sliceByCellsWindow(seg, visibleStart, visibleCells);
+        if (!visibleText && w > 1 && visibleStart > 0 && w <= rowTextW) visibleText = seg;
+
+        out += visibleText;
+        if (visibleText === seg) outCells += w;
+        else outCells += visibleCells;
+        if (unit.kind !== "text") {
+          const chipStart = Math.max(unitStart, windowStart) - windowStart;
+          chips.push({
+            startCell: chipStart,
+            label: visibleText,
+            kind: unit.kind,
+            index: unit.index,
+            ...(unit.absPath ? { absPath: unit.absPath } : {}),
+          });
+        }
+      }
+
       cells = unitEnd;
-      i += segLen;
-      continue;
-    }
-    if (unitStart >= windowEnd) break;
-
-    const visibleStart = Math.max(0, windowStart - unitStart);
-    const visibleCells = Math.min(unitEnd, windowEnd) - Math.max(unitStart, windowStart);
-    if (visibleCells > 0) {
-      let visibleText = sliceByCellsWindow(seg, visibleStart, visibleCells);
-      if (!visibleText && w > 1 && visibleStart > 0 && w <= rowTextW) visibleText = seg;
-
-      out += visibleText;
-      if (visibleText === seg) outCells += w;
-      else outCells += visibleCells;
-      if (isToken) {
-        const chipStart = Math.max(unitStart, windowStart) - windowStart;
-        chips.push({
-          startCell: chipStart,
-          label: visibleText,
-          kind: tokenKind!,
-          index: token,
-          ...(tokenAbsPath ? { absPath: tokenAbsPath } : {}),
-        });
-      }
-    }
-
-    cells = unitEnd;
-    i += segLen;
-  }
+      return undefined;
+    },
+  );
 
   if (outCells < rowTextW) out += spaces(rowTextW - outCells);
 
@@ -620,58 +620,41 @@ export function buildInlineSelectionSegments(
   const windowStart = Math.max(0, Math.floor(offX));
   const windowEnd = windowStart + Math.max(0, Math.floor(rowTextW));
   let cells = 0;
-  let tokenIndex = countMultilineTokens(value, multilineToken, lineStart);
-  let mentionIndex = countMentionTokens(value, mentionToken, lineStart);
   const segments: InlineSelectionSegment[] = [];
 
-  for (let i = lineStart; i < lineEnd; ) {
-    const ch = value[i]!;
-    if (ch === "\n") {
-      i += 1;
-      continue;
-    }
+  forEachInlineUnit(
+    value,
+    multilineToken,
+    mentionToken,
+    multilineTexts,
+    mentions,
+    lineStart,
+    lineEnd,
+    (unit) => {
+      if (unit.kind === "text" && unit.text === "\n") return;
+      const seg = unit.kind === "text" ? displayValue.slice(unit.start, unit.end) : unit.text;
+      const w = unit.kind === "text" ? baseTextCellWidth(seg) : unit.cells;
 
-    let seg = "";
-    let w = 0;
-    let segLen = 0;
-    if (ch === multilineToken) {
-      seg = tokenLabelAt(multilineTexts, tokenIndex);
-      w = textCellWidth(seg);
-      segLen = 1;
-      tokenIndex++;
-    } else if (ch === mentionToken) {
-      seg = mentionLabelAt(mentions, mentionIndex);
-      w = textCellWidth(seg);
-      segLen = 1;
-      mentionIndex++;
-    } else {
-      const cp = value.codePointAt(i) ?? 0;
-      const rawSeg = String.fromCodePoint(cp);
-      seg = displayValue.slice(i, i + rawSeg.length);
-      segLen = rawSeg.length;
-      w = charCellWidth(seg);
-    }
+      if (unit.start >= selection.end || unit.end <= selection.start) {
+        cells += w;
+        return;
+      }
 
-    if (i >= selection.end || i + segLen <= selection.start) {
-      cells += w;
-      i += segLen;
-      continue;
-    }
+      const unitStart = cells;
+      const unitEnd = cells + w;
+      const visibleStart = Math.max(0, windowStart - unitStart);
+      const visibleCells = Math.min(unitEnd, windowEnd) - Math.max(unitStart, windowStart);
+      const inWindow = unitEnd > windowStart && unitStart < windowEnd;
+      if (inWindow && visibleCells > 0) {
+        const visibleText = sliceByCellsWindow(seg, visibleStart, visibleCells);
+        const segStartCell = Math.max(unitStart, windowStart) - windowStart;
+        if (visibleText) segments.push({ startCell: segStartCell, text: visibleText });
+      }
 
-    const unitStart = cells;
-    const unitEnd = cells + w;
-    const visibleStart = Math.max(0, windowStart - unitStart);
-    const visibleCells = Math.min(unitEnd, windowEnd) - Math.max(unitStart, windowStart);
-    const inWindow = unitEnd > windowStart && unitStart < windowEnd;
-    if (inWindow && visibleCells > 0) {
-      const visibleText = sliceByCellsWindow(seg, visibleStart, visibleCells);
-      const segStartCell = Math.max(unitStart, windowStart) - windowStart;
-      if (visibleText) segments.push({ startCell: segStartCell, text: visibleText });
-    }
-
-    cells = unitEnd;
-    i += segLen;
-  }
+      cells = unitEnd;
+      return undefined;
+    },
+  );
 
   return segments;
 }
