@@ -1,5 +1,15 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -89,6 +99,57 @@ function assertTarballContents(tarballPath) {
       ),
       `Tarball includes package/${root}/`,
     );
+  }
+}
+
+function collectFiles(dir, out = []) {
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    const stats = statSync(path);
+    if (stats.isDirectory()) {
+      collectFiles(path, out);
+    } else {
+      out.push({ path, size: stats.size });
+    }
+  }
+  return out;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+}
+
+function printTarballSizeReport(tarballPath) {
+  const extractDir = mkdtempSync(join(tmpdir(), "vue-tui-pack-size-"));
+  try {
+    execFileSync("tar", ["-xzf", tarballPath, "-C", extractDir], { stdio: "ignore" });
+    const packageDir = join(extractDir, "package");
+    const files = collectFiles(packageDir);
+    const unpackedSize = files.reduce((sum, file) => sum + file.size, 0);
+    const largestJs = files
+      .filter((file) => file.path.endsWith(".js") || file.path.endsWith(".cjs"))
+      .sort((a, b) => b.size - a.size)[0];
+    const largestDts = files
+      .filter((file) => file.path.endsWith(".d.ts") || file.path.endsWith(".d.cts"))
+      .sort((a, b) => b.size - a.size)[0];
+
+    console.log("Package size report:");
+    console.log(`  tarball: ${formatBytes(statSync(tarballPath).size)}`);
+    console.log(`  unpacked: ${formatBytes(unpackedSize)}`);
+    if (largestJs) {
+      console.log(
+        `  largest JS: ${relative(packageDir, largestJs.path)} (${formatBytes(largestJs.size)})`,
+      );
+    }
+    if (largestDts) {
+      console.log(
+        `  largest d.ts: ${relative(packageDir, largestDts.path)} (${formatBytes(largestDts.size)})`,
+      );
+    }
+  } finally {
+    rmSync(extractDir, { recursive: true, force: true });
   }
 }
 
@@ -284,6 +345,7 @@ const tarballPath = resolve(existingTarball);
 assert(existsSync(tarballPath), `Tarball does not exist: ${tarballPath}`);
 
 assertTarballContents(tarballPath);
+printTarballSizeReport(tarballPath);
 
 for (const packageManager of ["pnpm", "npm"]) {
   const smokeDir = join(smokeRoot, packageManager);

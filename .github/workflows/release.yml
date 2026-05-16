@@ -34,10 +34,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Require npm token for real publish
-        if: ${{ inputs.dry_run == false && env.HAS_NPM_TOKEN != 'true' }}
+      - name: Require npm token for release verification
+        if: ${{ env.HAS_NPM_TOKEN != 'true' }}
         run: |
-          echo "NPM_TOKEN is required when dry_run=false"
+          echo "NPM_TOKEN is required so release verification runs authenticated npm publish --dry-run"
           exit 1
 
       - uses: pnpm/action-setup@v4
@@ -105,19 +105,12 @@ jobs:
       - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz 3.5.33
 
       - name: Dry-run npm publish from validated tarball
-        if: ${{ env.HAS_NPM_TOKEN == 'true' }}
         run: |
           TARBALL=$(ls .release/*.tgz | head -n 1)
           npm publish "$TARBALL" --access public --dry-run --provenance --tag "$NPM_TAG"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VUE_TUI_ALLOW_DIRECT_PUBLISH: "1"
-
-      - name: Skip authenticated npm dry-run
-        if: ${{ env.HAS_NPM_TOKEN != 'true' }}
-        run: |
-          echo "NPM_TOKEN is not configured; skipping authenticated npm publish --dry-run."
-          echo "Tarball pack, checksum, browser smoke, and runtime smoke still ran."
 
       - uses: actions/upload-artifact@v4
         with:

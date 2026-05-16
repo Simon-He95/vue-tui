@@ -113,13 +113,44 @@ Body:
 - 复制 CHANGELOG 中该版本的用户可见变更。
 - 明确这是 1.0 release candidate，npm dist-tag 是 `rc`。
 - 说明 `/experimental` 仍是 preview，不属于 stable 兼容性承诺。
+- 说明 `/vue`、`/runtime`、`/observability` 是 Advanced entrypoint，soft-stable 但不等同于 root-level SemVer 承诺。
+
+## Known boundaries
+
+- 不要 deep import `dist` 或内部源文件。
+- emoji、CJK 和 ambiguous width 仍受 terminal / font 组合影响。
+- OSC8 links 默认经过 sanitizer；OSC52 clipboard provider 必须显式 opt-in。
+- `/experimental` API 可以在 RC 阶段继续调整，应用代码应把这些 imports 隔离在少量边界文件内。
 
 ## Validation
 
 - `pnpm run release:dry-run`
-- GitHub Release workflow dry-run
+- GitHub Release workflow dry-run, with `NPM_TOKEN` configured so authenticated `npm publish --dry-run` runs
 - `npm dist-tag ls @simon_he/vue-tui`
 - npm 新项目安装 `@simon_he/vue-tui@rc`
+
+## Manual terminal validation
+
+| Target                          | Result      | Evidence                                      |
+| ------------------------------- | ----------- | --------------------------------------------- |
+| macOS Terminal 或 iTerm2        | pass / fail | terminal、OS、Node version                    |
+| Linux xterm-compatible terminal | pass / fail | terminal、distro、Node version                |
+| Windows Terminal 或 WSL         | pass / fail | terminal、Windows / WSL version、Node version |
+| Resize                          | pass / fail | demo command                                  |
+| Ctrl+C cleanup                  | pass / fail | demo command                                  |
+| Keyboard input                  | pass / fail | demo command                                  |
+| OSC8 links                      | pass / fail | sanitized / disabled by default               |
+| OSC52 clipboard                 | pass / fail | explicit opt-in only                          |
+
+## RC feedback format
+
+- OS and terminal:
+- Node version:
+- Vue version:
+- Package version:
+- Import entrypoint:
+- Renderer: CLI stdout / browser DOM / both
+- Reproduction:
 ```
 
 ## Validation
@@ -132,6 +163,7 @@ pnpm run release:check
 pnpm run release:bench
 pnpm run release:smoke
 pnpm run release:pack-smoke
+pnpm run test:ssr-import:package
 ```
 
 `release:dry-run` 是发布前最后一道本地 gate。它会跑 `release:check`、`release:bench`、`release:smoke` 和 packed package install smoke，确认当前构建可以从 `.tgz` 安装到外部项目后使用。实际发布只走 GitHub Release workflow。
@@ -151,7 +183,9 @@ pnpm run bench:baseline
 pnpm run docs:build
 ```
 
-`test:package-contract` 会对 packed tarball 跑 `publint` 和 ATTW package type analysis。`release:pack-smoke` 会把当前 tarball 安装到临时外部项目，并用 pnpm 和 npm 分别运行 root/cli/experimental 的真实 consumer 组合 smoke；它不是只检查 import 是否存在。
+`test:package-contract` 会对 packed tarball 跑 `publint` 和 ATTW package type analysis。`release:pack-smoke` 会把当前 tarball 安装到临时外部项目，并用 pnpm 和 npm 分别运行 root/cli/experimental 的真实 consumer 组合 smoke；它不是只检查 import 是否存在。packed smoke 还会输出 tarball size、unpacked size、largest JS 和 largest d.ts，作为 RC 体积基线。
+
+SSR/import-only smoke 会用 packed tarball 创建一个 Vite SSR consumer，导入 root、core、runtime、renderer/dom、observability、vue、markdown 和 experimental entrypoint，确认这些入口不会在 import-time 触发 `document` / `window`。
 
 Benchmark gate 策略：
 
@@ -176,16 +210,18 @@ pnpm run example:agent-console:terminal
 
 ## Manual Terminal Validation
 
-RC 发布记录至少说明这些手工验收结果：
+RC 发布记录至少说明这些手工验收结果，不要只保留 checklist：
 
-- macOS Terminal 或 iTerm2。
-- Linux xterm-compatible terminal。
-- Windows Terminal 或 WSL。
-- resize。
-- Ctrl+C cleanup。
-- keyboard input。
-- OSC8 links disabled/sanitized by default。
-- OSC52 provider requires explicit opt-in。
+| Target                                   | Result | Evidence |
+| ---------------------------------------- | ------ | -------- |
+| macOS Terminal 或 iTerm2                 |        |          |
+| Linux xterm-compatible terminal          |        |          |
+| Windows Terminal 或 WSL                  |        |          |
+| resize                                   |        |          |
+| Ctrl+C cleanup                           |        |          |
+| keyboard input                           |        |          |
+| OSC8 links disabled/sanitized by default |        |          |
+| OSC52 provider requires explicit opt-in  |        |          |
 
 ## Release Handoff
 
@@ -195,9 +231,10 @@ RC 发布记录至少说明这些手工验收结果：
 4. 跑 `pnpm run release:dry-run`。
 5. 如果 `docs:build` 更新 generated API，提交 generated docs；否则保持工作区干净。
 6. GitHub Release title 使用 `v1.0.0-rc.0`；body 摘录 `CHANGELOG.md` 的同版本内容，并保留 Experimental API 不稳定说明。
-7. 只在发布验证完成后通过 GitHub Release workflow 发布已验证的 tarball；prerelease 的 `npm_tag` 保持 `rc`。
-8. 发布后验证 `npm view @simon_he/vue-tui@rc version`、`npm dist-tag ls @simon_he/vue-tui`，并在临时新项目里用 npm 安装一次 `@simon_he/vue-tui@rc`。
-9. 如果发布错 tag，先用 `npm dist-tag add @simon_he/vue-tui@<stable-version> latest` 修正默认 tag；如果 tarball 本身有问题，deprecate 该版本并发布新的 RC。
+7. 跑 GitHub Release workflow dry-run；仓库必须配置 `NPM_TOKEN`，否则 workflow 会失败，避免跳过 authenticated `npm publish --dry-run`。
+8. 只在发布验证完成后通过 GitHub Release workflow 发布已验证的 tarball；prerelease 的 `npm_tag` 保持 `rc`。
+9. 发布后验证 `npm view @simon_he/vue-tui@rc version`、`npm dist-tag ls @simon_he/vue-tui`，并在临时新项目里用 npm 安装一次 `@simon_he/vue-tui@rc`。
+10. 如果发布错 tag，先用 `npm dist-tag add @simon_he/vue-tui@<stable-version> latest` 修正默认 tag；如果 tarball 本身有问题，deprecate 该版本并发布新的 RC。
 
 `pnpm run release:ci` 只做 dry-run 验证，`pnpm run release`、`pnpm run release:local` 和 `pnpm run release:workflow-only` 会阻止本地手动发布。
 
