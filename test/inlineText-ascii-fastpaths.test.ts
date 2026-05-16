@@ -94,11 +94,15 @@ describe("inlineText ASCII fast paths", () => {
 
   it("keeps TInput inline grapheme clusters intact under CJK width", () => {
     withTextWidthProvider("cjk", () => {
-      const value = "e\u0301👩‍💻1️⃣🇺🇸Ω";
-      const accentEnd = "e\u0301".length;
-      const zwjEnd = accentEnd + "👩‍💻".length;
-      const keycapEnd = zwjEnd + "1️⃣".length;
-      const flagEnd = keycapEnd + "🇺🇸".length;
+      const accent = "e\u0301";
+      const womanTechnologist = "\u{1F469}\u200D\u{1F4BB}";
+      const keycapOne = "1\uFE0F\u20E3";
+      const flagUS = "\u{1F1FA}\u{1F1F8}";
+      const value = `${accent}${womanTechnologist}${keycapOne}${flagUS}Ω`;
+      const accentEnd = accent.length;
+      const zwjEnd = accentEnd + womanTechnologist.length;
+      const keycapEnd = zwjEnd + keycapOne.length;
+      const flagEnd = keycapEnd + flagUS.length;
 
       expect(
         textCellWidthInline(
@@ -111,10 +115,10 @@ describe("inlineText ASCII fast paths", () => {
           value.length,
         ),
       ).toBe(9);
-      expect(sliceByCellsWindow(value, 0, 1)).toBe("e\u0301");
-      expect(sliceByCellsWindow(value, 1, 2)).toBe("👩‍💻");
-      expect(sliceByCellsWindow(value, 3, 2)).toBe("1️⃣");
-      expect(sliceByCellsWindow(value, 5, 2)).toBe("🇺🇸");
+      expect(sliceByCellsWindow(value, 0, 1)).toBe(accent);
+      expect(sliceByCellsWindow(value, 1, 2)).toBe(womanTechnologist);
+      expect(sliceByCellsWindow(value, 3, 2)).toBe(keycapOne);
+      expect(sliceByCellsWindow(value, 5, 2)).toBe(flagUS);
       expect(sliceByCellsWindow(value, 7, 2)).toBe("Ω");
 
       const lines = wrapToLinesInline(
@@ -126,9 +130,9 @@ describe("inlineText ASCII fast paths", () => {
         3,
       );
       expect(lines.map((line) => value.slice(line.start, line.end))).toEqual([
-        "e\u0301👩‍💻",
-        "1️⃣",
-        "🇺🇸",
+        `${accent}${womanTechnologist}`,
+        keycapOne,
+        flagUS,
         "Ω",
       ]);
 
@@ -194,7 +198,7 @@ describe("inlineText ASCII fast paths", () => {
           3,
           0,
         ).text,
-      ).toBe("e\u0301👩‍💻");
+      ).toBe(`${accent}${womanTechnologist}`);
       expect(
         buildInlineSelectionSegments(
           value,
@@ -209,7 +213,7 @@ describe("inlineText ASCII fast paths", () => {
           9,
           0,
         ).map((segment) => segment.text),
-      ).toEqual(["e\u0301", "👩‍💻"]);
+      ).toEqual([accent, womanTechnologist]);
     });
   });
 });
