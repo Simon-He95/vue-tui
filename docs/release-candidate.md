@@ -11,6 +11,7 @@ npm prerelease dist-tag：`rc`
 - 从最新 `main` 准备 release candidate；未合并 feature PR 不写进 release notes。
 - 不把 experimental API 提升到 root entrypoint。
 - 不新增 renderer、持久化层或外部 LLM API 集成。
+- rc.0 发布前冻结会改变 Node 支持范围、bundler 输出或 publish 流程的 toolchain 更新；除非该更新修复当前 release gate 的明确失败。
 - 保持 root、core、runtime、renderer/dom、observability、vue、cli、markdown、experimental entrypoint 的边界清晰。
 - API maturity、renderer capability、browser ARIA 和 terminal permission contract 以 [API Maturity](/api-maturity) 与 [Platform Contracts](/platform-contracts) 为准。
 
@@ -124,10 +125,14 @@ Body:
 
 ## Validation
 
-- `pnpm run release:dry-run`
-- GitHub Release workflow dry-run, with `NPM_TOKEN` configured so authenticated `npm publish --dry-run` runs
-- `npm dist-tag ls @simon_he/vue-tui`
-- npm 新项目安装 `@simon_he/vue-tui@rc`
+- Local release dry-run: `<pass/fail>` (`pnpm run release:dry-run`, run date, Node version)
+- GitHub Release workflow dry-run: `<pass/fail>` (`dry_run=true`, `npm_tag=rc`, run URL)
+- Authenticated npm dry-run: `<pass/fail>` (`NPM_TOKEN` configured; `npm publish --dry-run --provenance --tag rc` ran)
+- Tarball SHA256: `<sha256>  <tarball>`
+- Node/Vue runtime matrix: `<pass/fail>` (Node 16.17.1 / 18 / 20 / 22 / 24 with Vue 3.3.0 / 3.5.33)
+- Packed smoke: `<pass/fail>` (package contract, pnpm/npm consumer smoke, packed type smoke, browser Vite smoke)
+- Post-publish dist-tag verification: `<pass/fail>` (`npm view @simon_he/vue-tui@rc version`, `npm dist-tag ls @simon_he/vue-tui`)
+- npm new-project install: `<pass/fail>` (`npm install @simon_he/vue-tui@rc vue`)
 
 ## Manual terminal validation
 
@@ -211,6 +216,8 @@ pnpm run example:agent-console:terminal
 ## Manual Terminal Validation
 
 RC 发布记录至少说明这些手工验收结果，不要只保留 checklist：
+
+发布前把表格填成真实结果；空白结果表示当前 RC 还不能发布。
 
 | Target                                   | Result | Evidence |
 | ---------------------------------------- | ------ | -------- |
