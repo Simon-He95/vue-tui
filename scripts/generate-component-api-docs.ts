@@ -17,7 +17,7 @@ type EventMeta = {
   description: string | null;
 };
 
-type ApiMaturity = "public" | "experimental";
+type ApiMaturity = "public" | "advanced" | "experimental";
 
 type ComponentMeta = {
   name: string;
@@ -421,6 +421,12 @@ function extractComponentMeta(
   return { name: componentName, sourceRelPath: rel, maturity, entrypoint, props, events };
 }
 
+function maturityLabel(maturity: ApiMaturity): string {
+  if (maturity === "public") return "Public";
+  if (maturity === "advanced") return "Advanced";
+  return "Experimental";
+}
+
 async function listExportedComponents(
   vueIndexAbsPath: string,
   maturity: ApiMaturity,
@@ -465,13 +471,16 @@ async function listExportedComponents(
   return out;
 }
 
+async function listRootComponentExports(rootIndexAbsPath: string): Promise<Set<string>> {
+  const components = await listExportedComponents(rootIndexAbsPath, "public", "@simon_he/vue-tui");
+  return new Set(components.map((c) => c.name));
+}
+
 function renderMarkdown(components: ComponentMeta[]): string {
   const lines: string[] = [];
   lines.push("# 组件 Props / Events（自动生成）");
   lines.push("");
-  lines.push(
-    "> 此文件由 `packages/tui/scripts/generate-component-api-docs.ts` 自动生成，请勿手改。",
-  );
+  lines.push("> 此文件由 `scripts/generate-component-api-docs.ts` 自动生成，请勿手改。");
   lines.push("");
   lines.push("## 目录");
   lines.push("");
@@ -485,7 +494,7 @@ function renderMarkdown(components: ComponentMeta[]): string {
     lines.push("");
     lines.push(`源码：\`${c.sourceRelPath}\``);
     lines.push("");
-    lines.push(`API maturity: **${c.maturity === "experimental" ? "Experimental" : "Public"}**`);
+    lines.push(`API maturity: **${maturityLabel(c.maturity)}**`);
     lines.push("");
     lines.push(`Import: \`${c.entrypoint}\``);
     lines.push("");
@@ -538,11 +547,21 @@ function renderMarkdown(components: ComponentMeta[]): string {
 async function main(): Promise<void> {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const packageRoot = path.resolve(here, "..");
+  const rootIndex = path.join(packageRoot, "src/index.ts");
   const vueIndex = path.join(packageRoot, "src/vue/index.ts");
   const experimentalIndex = path.join(packageRoot, "src/experimental.ts");
 
+  const rootComponentExports = await listRootComponentExports(rootIndex);
+  const vueComponents = await listExportedComponents(vueIndex, "advanced", "@simon_he/vue-tui/vue");
+  for (const component of vueComponents) {
+    if (rootComponentExports.has(component.name)) {
+      component.maturity = "public";
+      component.entrypoint = "@simon_he/vue-tui";
+    }
+  }
+
   const components = [
-    ...(await listExportedComponents(vueIndex, "public", "@simon_he/vue-tui")),
+    ...vueComponents,
     ...(await listExportedComponents(
       experimentalIndex,
       "experimental",

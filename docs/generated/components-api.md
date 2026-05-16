@@ -1,6 +1,6 @@
 # 组件 Props / Events（自动生成）
 
-> 此文件由 `packages/tui/scripts/generate-component-api-docs.ts` 自动生成，请勿手改。
+> 此文件由 `scripts/generate-component-api-docs.ts` 自动生成，请勿手改。
 
 ## 目录
 
@@ -38,9 +38,9 @@
 
 源码：`src/vue/components/TAnchor.ts`
 
-API maturity: **Public**
+API maturity: **Advanced**
 
-Import: `@simon_he/vue-tui`
+Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
@@ -120,9 +120,9 @@ Import: `@simon_he/vue-tui`
 
 源码：`src/vue/components/TDebugOverlay.ts`
 
-API maturity: **Public**
+API maturity: **Advanced**
 
-Import: `@simon_he/vue-tui`
+Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
@@ -220,9 +220,9 @@ Import: `@simon_he/vue-tui`
 
 源码：`src/vue/components/TFlow.ts`
 
-API maturity: **Public**
+API maturity: **Advanced**
 
-Import: `@simon_he/vue-tui`
+Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
@@ -324,9 +324,9 @@ Import: `@simon_he/vue-tui`
 
 源码：`src/vue/components/TInputBox.ts`
 
-API maturity: **Public**
+API maturity: **Advanced**
 
-Import: `@simon_he/vue-tui`
+Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
@@ -363,9 +363,9 @@ Import: `@simon_he/vue-tui`
 
 源码：`src/vue/components/TJsonEditor.ts`
 
-API maturity: **Public**
+API maturity: **Advanced**
 
-Import: `@simon_he/vue-tui`
+Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
@@ -799,9 +799,9 @@ Import: `@simon_he/vue-tui/experimental`
 
 源码：`src/vue/components/TMultilineModal.ts`
 
-API maturity: **Public**
+API maturity: **Advanced**
 
-Import: `@simon_he/vue-tui`
+Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
@@ -823,9 +823,9 @@ Import: `@simon_he/vue-tui`
 
 源码：`src/vue/components/TPathPicker.ts`
 
-API maturity: **Public**
+API maturity: **Advanced**
 
-Import: `@simon_he/vue-tui`
+Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
@@ -864,9 +864,9 @@ Import: `@simon_he/vue-tui`
 
 源码：`src/vue/components/TRenderLayer.ts`
 
-API maturity: **Public**
+API maturity: **Advanced**
 
-Import: `@simon_he/vue-tui`
+Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
@@ -882,9 +882,9 @@ Import: `@simon_he/vue-tui`
 
 源码：`src/vue/components/TRenderPlane.ts`
 
-API maturity: **Public**
+API maturity: **Advanced**
 
-Import: `@simon_he/vue-tui`
+Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
@@ -900,9 +900,9 @@ Import: `@simon_he/vue-tui`
 
 源码：`src/vue/router/RouterView.ts`
 
-API maturity: **Public**
+API maturity: **Advanced**
 
-Import: `@simon_he/vue-tui`
+Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
@@ -986,9 +986,9 @@ Import: `@simon_he/vue-tui`
 
 源码：`src/vue/components/TTransition.ts`
 
-API maturity: **Public**
+API maturity: **Advanced**
 
-Import: `@simon_he/vue-tui`
+Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
