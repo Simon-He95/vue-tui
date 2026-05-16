@@ -1,6 +1,6 @@
 {
   "name": "@simon_he/vue-tui",
-  "version": "0.1.0-rc.1",
+  "version": "1.0.0-rc.0",
   "description": "Vue 3 terminal UI toolkit for browser DOM and CLI stdout renderers",
   "keywords": [
     "ansi",
@@ -226,7 +226,7 @@
     "bench:scroll-mailbox": "tsx scripts/bench-scroll-mailbox.ts"
   },
   "dependencies": {
-    "stream-markdown-parser": "0.0.90"
+    "stream-markdown-parser": "0.0.95"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.2",

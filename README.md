@@ -12,7 +12,7 @@ Use it when you want:
 ## Install
 
 ```bash
-pnpm add @simon_he/vue-tui vue
+pnpm add @simon_he/vue-tui@rc vue
 ```
 
 Vue is a peer dependency. The current package supports Vue `>=3.3.0 <4`.
@@ -38,6 +38,8 @@ Development, release validation, and documentation builds are run on Node.js 20 
 | `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins               |
 
 The stable surface is terminal core, DOM rendering, CLI runtime, basic Vue components, and markdown APIs. High-throughput log and virtualization APIs stay under `/experimental` until their public surface settles; keep those imports isolated in application code.
+
+Do not deep import from `@simon_he/vue-tui/dist/...`; only the entry points above are part of the supported package contract.
 
 ### Migration: Node Host Adapter Moved To `/cli`
 
@@ -217,7 +219,7 @@ See [docs/components.md](./docs/components.md) and [docs/generated/components-ap
 | [Performance](./docs/performance.md)                             | Practical performance guidance                                       |
 | [High-throughput rendering](./docs/high-throughput-rendering.md) | Scheduler, dirty rows, mailbox, log, and renderer architecture       |
 | [Agent Console](./docs/agent-console.md)                         | Streaming transcript example stack                                   |
-| [Release candidate](./docs/release-candidate.md)                 | 0.x validation, package export checks, and migration notes           |
+| [Release candidate](./docs/release-candidate.md)                 | 1.0 RC validation, package export checks, and migration notes        |
 | [Security policy](./SECURITY.md)                                 | Vulnerability reporting and terminal permission boundaries           |
 
 Run the docs locally:

@@ -11,7 +11,7 @@ on:
       npm_tag:
         description: npm dist-tag for dry-run and publish
         required: false
-        default: next
+        default: rc
         type: string
 
 permissions:

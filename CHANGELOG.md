@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-rc.1 - Unreleased
+## 1.0.0-rc.0 - Unreleased
 
 ### Breaking
 
@@ -63,7 +63,7 @@ import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 - `Style` objects are treated as immutable after first normalization. Pass a new object when style values change.
 - `createTLogUrlPlugin()` no longer detects `file://` URLs by default. Use `{ allowFileUrls: true }` to opt in.
 - Release benchmark validation now uses `bench:baseline`; timing budgets are only checked by `bench:baseline:timing`.
-- `stream-markdown-parser` is pinned to `0.0.90` for release candidate reproducibility.
+- `stream-markdown-parser` is pinned to `0.0.95` for release candidate reproducibility.
 - CJS package export conditions now use `.d.cts` declaration entries for require consumers.
 - README, docs home, API maturity, and release candidate docs now list every exported package entrypoint and its stability level.
 - DOM renderer no longer renders `Style.href` as native anchors unless `links` are explicitly configured.
@@ -90,6 +90,7 @@ import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 - Recomputed SoA row fingerprints when wide-glyph boundary operations clear cells outside the direct write range.
 - Encoded reserved path characters when converting absolute file paths to terminal file hrefs.
 - Terminal cleanup now also runs for unhandled promise rejections.
+- Render plane internals now work across separately bundled package entrypoints, so `/cli` apps can combine `/vue` `TRenderPlane` with root components from the published package.
 
 ### Performance
 

@@ -653,7 +653,7 @@ describe("package exports", () => {
     );
     expect(experimentalCjs.tlogDefaultPreset).toBeTruthy();
 
-    const { h, nextTick } = require("vue");
+    const { h, nextTick, ref } = require("vue");
     const log = experimentalCjs.createAppendOnlyLogStore({ maxLines: 4 });
     log.appendLines(["INFO cjs consumer", "WARN https://safe.dev"]);
     const Consumer = {
@@ -695,6 +695,47 @@ describe("package exports", () => {
       expect(screen).toContain("https://safe.dev");
     } finally {
       app.dispose();
+    }
+
+    const showOverlay = ref(true);
+    const PlaneConsumer = {
+      setup() {
+        return () =>
+          h(rootCjs.TView, { x: 0, y: 0, w: 24, h: 4 }, () => [
+            h(vueCjs.TRenderPlane, { plane: "transcript" }, () =>
+              h(rootCjs.TText, { x: 0, y: 0, w: 24, value: "transcript text" }),
+            ),
+            showOverlay.value
+              ? h(vueCjs.TRenderPlane, { plane: "overlay" }, () =>
+                  h(rootCjs.TText, { x: 0, y: 0, w: 24, value: "overlay text" }),
+                )
+              : null,
+          ]);
+      },
+    };
+    const planeApp = cliCjs.createTerminalApp({ cols: 24, rows: 4, component: PlaneConsumer });
+    try {
+      planeApp.mount();
+      await nextTick();
+      planeApp.scheduler.flushNow();
+      expect(
+        planeApp.terminal
+          .getRow(0)
+          .map((cell: any) => cell.ch)
+          .join(""),
+      ).toContain("overlay text");
+
+      showOverlay.value = false;
+      await nextTick();
+      planeApp.scheduler.flushNow();
+      expect(
+        planeApp.terminal
+          .getRow(0)
+          .map((cell: any) => cell.ch)
+          .join(""),
+      ).toContain("transcript text");
+    } finally {
+      planeApp.dispose();
     }
   });
 });

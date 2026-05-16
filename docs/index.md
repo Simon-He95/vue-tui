@@ -25,7 +25,7 @@ Vue TUI 是面向 Vue 3 的 terminal UI toolkit。你可以用同一套组件模
 ## 安装
 
 ```bash
-pnpm add @simon_he/vue-tui vue
+pnpm add @simon_he/vue-tui@rc vue
 ```
 
 Vue 是 peer dependency。当前发布包支持 Vue `>=3.3.0 <4`。
@@ -58,7 +58,7 @@ Vue 是 peer dependency。当前发布包支持 Vue `>=3.3.0 <4`。
 | 跑示例       | [Examples Index](/examples)、[Agent Console 示例](/agent-console)                                                                      |
 | 做 CLI       | [Runtime](/runtime)、[CLI Events](/cli-events)、[Platform Contracts](/platform-contracts)                                              |
 | 做高吞吐 UI  | [Performance](/performance)、[高吞吐渲染](/high-throughput-rendering)、[TLogView Lab](/tlog-view-lab)                                  |
-| 准备发布     | [API Maturity](/api-maturity)、[0.x Release Candidate](/release-candidate)、[TLogView Release Readiness](/tlog-view-release-readiness) |
+| 准备发布     | [API Maturity](/api-maturity)、[1.0 Release Candidate](/release-candidate)、[TLogView Release Readiness](/tlog-view-release-readiness) |
 
 完整 props / events 以 [组件 API（自动生成）](/generated/components-api) 为准。
 
