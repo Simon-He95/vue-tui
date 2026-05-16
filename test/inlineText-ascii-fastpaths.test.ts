@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildInlineRow,
+  buildInlineSelectionSegments,
   lineCellColToIndexInline,
   sliceByCellsWindow,
   textCellWidthInline,
@@ -10,6 +11,7 @@ import {
   MENTION_TOKEN,
   MULTILINE_TOKEN,
 } from "../src/vue/components/input/utils/inlineTextTokens.js";
+import { withTextWidthProvider } from "../src/vue/utils/text.js";
 
 describe("inlineText ASCII fast paths", () => {
   it("sliceByCellsWindow matches ASCII slicing", () => {
@@ -88,5 +90,126 @@ describe("inlineText ASCII fast paths", () => {
     );
     expect(res.text.length).toBe(5);
     expect(res.text.startsWith("hi")).toBe(true);
+  });
+
+  it("keeps TInput inline grapheme clusters intact under CJK width", () => {
+    withTextWidthProvider("cjk", () => {
+      const value = "e\u0301👩‍💻1️⃣🇺🇸Ω";
+      const accentEnd = "e\u0301".length;
+      const zwjEnd = accentEnd + "👩‍💻".length;
+      const keycapEnd = zwjEnd + "1️⃣".length;
+      const flagEnd = keycapEnd + "🇺🇸".length;
+
+      expect(
+        textCellWidthInline(
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+        ),
+      ).toBe(9);
+      expect(sliceByCellsWindow(value, 0, 1)).toBe("e\u0301");
+      expect(sliceByCellsWindow(value, 1, 2)).toBe("👩‍💻");
+      expect(sliceByCellsWindow(value, 3, 2)).toBe("1️⃣");
+      expect(sliceByCellsWindow(value, 5, 2)).toBe("🇺🇸");
+      expect(sliceByCellsWindow(value, 7, 2)).toBe("Ω");
+
+      const lines = wrapToLinesInline(
+        value,
+        MULTILINE_TOKEN,
+        MENTION_TOKEN,
+        undefined,
+        undefined,
+        3,
+      );
+      expect(lines.map((line) => value.slice(line.start, line.end))).toEqual([
+        "e\u0301👩‍💻",
+        "1️⃣",
+        "🇺🇸",
+        "Ω",
+      ]);
+
+      expect(
+        lineCellColToIndexInline(
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          1,
+        ).index,
+      ).toBe(accentEnd);
+      expect(
+        lineCellColToIndexInline(
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          2,
+        ).index,
+      ).toBe(accentEnd);
+      expect(
+        lineCellColToIndexInline(
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          3,
+        ).index,
+      ).toBe(zwjEnd);
+      expect(
+        lineCellColToIndexInline(
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          8,
+        ).index,
+      ).toBe(flagEnd);
+
+      expect(
+        buildInlineRow(
+          value,
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          3,
+          0,
+        ).text,
+      ).toBe("e\u0301👩‍💻");
+      expect(
+        buildInlineSelectionSegments(
+          value,
+          value,
+          MULTILINE_TOKEN,
+          MENTION_TOKEN,
+          undefined,
+          undefined,
+          0,
+          value.length,
+          { start: 0, end: zwjEnd },
+          9,
+          0,
+        ).map((segment) => segment.text),
+      ).toEqual(["e\u0301", "👩‍💻"]);
+    });
   });
 });

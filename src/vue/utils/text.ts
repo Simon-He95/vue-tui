@@ -39,7 +39,7 @@ export function hasTextWidthAsciiFastPath(): boolean {
 }
 
 function canUseDefaultTextCache(provider: WidthProvider): boolean {
-  return provider === "default";
+  return provider === "default" || provider === "narrow-ambiguous";
 }
 
 export function withTextWidthProvider<T>(provider: WidthProvider | undefined, fn: () => T): T {

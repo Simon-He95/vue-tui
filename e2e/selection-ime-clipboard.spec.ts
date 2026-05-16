@@ -167,7 +167,9 @@ test("selection finishes when mouseup happens outside the terminal", async ({ pa
     .toContain("23456789abcdef");
 });
 
-test("IME composition commits into TInput without scrolling the page", async ({ page }) => {
+test("synthetic IME composition commits into TInput without scrolling the page", async ({
+  page,
+}) => {
   await openFixture(page);
 
   const container = page.locator("[data-vt-container]");

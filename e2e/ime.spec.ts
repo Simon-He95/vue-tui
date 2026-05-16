@@ -28,7 +28,9 @@ async function clearEventLog(page: any): Promise<void> {
   await page.evaluate(() => (globalThis as any).__VT__?.clearEventLog?.());
 }
 
-test("ime: composition events can commit CJK into TInput (browser e2e)", async ({ page }) => {
+test("ime: synthetic composition events can commit CJK into TInput (browser e2e)", async ({
+  page,
+}) => {
   await page.goto("/");
 
   const container = page.locator("[data-vt-container]");
@@ -46,7 +48,7 @@ test("ime: composition events can commit CJK into TInput (browser e2e)", async (
 
   await clearEventLog(page);
 
-  // Focus the hidden IME textarea and synthesize a composition commit.
+  // Focus the hidden IME textarea and synthesize the browser composition event sequence.
   await page.evaluate(() => {
     (globalThis as any).__VT_DEBUG_IME__ = true;
     const el = document.querySelector("[data-vt-host] textarea") as HTMLTextAreaElement | null;
@@ -71,7 +73,7 @@ test("ime: composition events can commit CJK into TInput (browser e2e)", async (
   expect(snapshot.join("\n")).toContain("你");
 });
 
-test("ime: input isComposing fallback can commit CJK", async ({ page }) => {
+test("ime: synthetic input isComposing fallback can commit CJK", async ({ page }) => {
   await page.goto("/");
 
   const container = page.locator("[data-vt-container]");
