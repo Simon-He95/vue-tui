@@ -24,6 +24,15 @@ const distObservabilityCjs = resolve("dist/observability.cjs");
 const distVueCjs = resolve("dist/vue.cjs");
 const distMarkdownCjs = resolve("dist/markdown.cjs");
 const distExperimentalCjs = resolve("dist/experimental.cjs");
+const distIndexCjsTypes = resolve("dist/index.d.cts");
+const distCoreCjsTypes = resolve("dist/core.d.cts");
+const distRuntimeCjsTypes = resolve("dist/runtime.d.cts");
+const distRendererDomCjsTypes = resolve("dist/renderer-dom.d.cts");
+const distObservabilityCjsTypes = resolve("dist/observability.d.cts");
+const distVueCjsTypes = resolve("dist/vue.d.cts");
+const distCliCjsTypes = resolve("dist/cli.d.cts");
+const distMarkdownCjsTypes = resolve("dist/markdown.d.cts");
+const distExperimentalCjsTypes = resolve("dist/experimental.d.cts");
 const distTypes = resolve("dist/index.d.ts");
 const distCoreTypes = resolve("dist/core.d.ts");
 const distRuntimeTypes = resolve("dist/runtime.d.ts");
@@ -436,6 +445,14 @@ describe("package exports", () => {
       distVueCjs,
       distMarkdownCjs,
       distExperimentalCjs,
+      distIndexCjsTypes,
+      distCoreCjsTypes,
+      distRuntimeCjsTypes,
+      distRendererDomCjsTypes,
+      distObservabilityCjsTypes,
+      distVueCjsTypes,
+      distMarkdownCjsTypes,
+      distExperimentalCjsTypes,
       distTypes,
       distCoreTypes,
       distRuntimeTypes,
@@ -460,6 +477,15 @@ describe("package exports", () => {
     expect(existsSync(distCli)).toBe(true);
     expect(existsSync(distMarkdown)).toBe(true);
     expect(existsSync(distExperimental)).toBe(true);
+    expect(existsSync(distIndexCjsTypes)).toBe(true);
+    expect(existsSync(distCoreCjsTypes)).toBe(true);
+    expect(existsSync(distRuntimeCjsTypes)).toBe(true);
+    expect(existsSync(distRendererDomCjsTypes)).toBe(true);
+    expect(existsSync(distObservabilityCjsTypes)).toBe(true);
+    expect(existsSync(distVueCjsTypes)).toBe(true);
+    expect(existsSync(distCliCjsTypes)).toBe(true);
+    expect(existsSync(distMarkdownCjsTypes)).toBe(true);
+    expect(existsSync(distExperimentalCjsTypes)).toBe(true);
     expect(existsSync(distTypes)).toBe(true);
     expect(existsSync(distCoreTypes)).toBe(true);
     expect(existsSync(distRuntimeTypes)).toBe(true);
@@ -627,7 +653,7 @@ describe("package exports", () => {
     );
     expect(experimentalCjs.tlogDefaultPreset).toBeTruthy();
 
-    const { h, nextTick } = require("vue");
+    const { h, nextTick, ref } = require("vue");
     const log = experimentalCjs.createAppendOnlyLogStore({ maxLines: 4 });
     log.appendLines(["INFO cjs consumer", "WARN https://safe.dev"]);
     const Consumer = {
@@ -669,6 +695,47 @@ describe("package exports", () => {
       expect(screen).toContain("https://safe.dev");
     } finally {
       app.dispose();
+    }
+
+    const showOverlay = ref(true);
+    const PlaneConsumer = {
+      setup() {
+        return () =>
+          h(rootCjs.TView, { x: 0, y: 0, w: 24, h: 4 }, () => [
+            h(vueCjs.TRenderPlane, { plane: "transcript" }, () =>
+              h(rootCjs.TText, { x: 0, y: 0, w: 24, value: "transcript text" }),
+            ),
+            showOverlay.value
+              ? h(vueCjs.TRenderPlane, { plane: "overlay" }, () =>
+                  h(rootCjs.TText, { x: 0, y: 0, w: 24, value: "overlay text" }),
+                )
+              : null,
+          ]);
+      },
+    };
+    const planeApp = cliCjs.createTerminalApp({ cols: 24, rows: 4, component: PlaneConsumer });
+    try {
+      planeApp.mount();
+      await nextTick();
+      planeApp.scheduler.flushNow();
+      expect(
+        planeApp.terminal
+          .getRow(0)
+          .map((cell: any) => cell.ch)
+          .join(""),
+      ).toContain("overlay text");
+
+      showOverlay.value = false;
+      await nextTick();
+      planeApp.scheduler.flushNow();
+      expect(
+        planeApp.terminal
+          .getRow(0)
+          .map((cell: any) => cell.ch)
+          .join(""),
+      ).toContain("transcript text");
+    } finally {
+      planeApp.dispose();
     }
   });
 });

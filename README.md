@@ -12,7 +12,7 @@ Use it when you want:
 ## Install
 
 ```bash
-pnpm add @simon_he/vue-tui vue
+pnpm add @simon_he/vue-tui@rc vue
 ```
 
 Vue is a peer dependency. The current package supports Vue `>=3.3.0 <4`.
@@ -25,15 +25,21 @@ Development, release validation, and documentation builds are run on Node.js 20 
 
 ## Entry Points
 
-| Import                           | Stability    | Use it for                                                                                                             |
-| -------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `@simon_he/vue-tui`              | Core         | Browser-safe terminal core, DOM renderer, stable Vue components, and input host plugin factory                         |
-| `@simon_he/vue-tui/vue`          | Advanced     | Extended Vue components, composables, router helpers, and Vue runtime internals                                        |
-| `@simon_he/vue-tui/cli`          | Node/CLI     | Headless Vue app runtime, stdin driver, stdout renderer, Node path provider, recording, and terminal clipboard helpers |
-| `@simon_he/vue-tui/markdown`     | Focused      | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources              |
-| `@simon_he/vue-tui/experimental` | Experimental | `TVirtualList`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins               |
+| Import                            | Stability    | Use it for                                                                                                                  |
+| --------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `@simon_he/vue-tui`               | Public       | Browser-safe terminal core, DOM renderer, stable Vue components, and input host plugin factory                              |
+| `@simon_he/vue-tui/core`          | Public       | Terminal core, buffer-facing types, ANSI/theme/path/hyperlink helpers                                                       |
+| `@simon_he/vue-tui/renderer/dom`  | Public       | DOM renderer factory and renderer capabilities                                                                              |
+| `@simon_he/vue-tui/vue`           | Advanced     | Extended Vue components, composables, router helpers, and Vue runtime internals                                             |
+| `@simon_he/vue-tui/runtime`       | Advanced     | Runtime wiring, selection helpers, and clipboard abstraction                                                                |
+| `@simon_he/vue-tui/observability` | Advanced     | Frame perf store, profiler hooks, and trace helpers                                                                         |
+| `@simon_he/vue-tui/cli`           | Public       | Node-only headless Vue app runtime, stdin driver, stdout renderer, path provider, recording, and terminal clipboard helpers |
+| `@simon_he/vue-tui/markdown`      | Public       | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources                   |
+| `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins                    |
 
-High-throughput log and virtualization APIs stay under `/experimental` until their public surface settles. Keep those imports isolated in application code.
+The stable surface is terminal core, DOM rendering, CLI runtime, basic Vue components, and markdown APIs. High-throughput log and virtualization APIs stay under `/experimental` until their public surface settles; keep those imports isolated in application code.
+
+Do not deep import from `@simon_he/vue-tui/dist/...`; only the entry points above are part of the supported package contract.
 
 ### Migration: Node Host Adapter Moved To `/cli`
 
@@ -212,8 +218,10 @@ See [docs/components.md](./docs/components.md) and [docs/generated/components-ap
 | [Core API](./docs/api.md)                                        | Terminal, renderer, events, runtime, planes, and scheduler contracts |
 | [Performance](./docs/performance.md)                             | Practical performance guidance                                       |
 | [High-throughput rendering](./docs/high-throughput-rendering.md) | Scheduler, dirty rows, mailbox, log, and renderer architecture       |
+| [Component acceptance](./docs/components-acceptance.md)          | Release readiness checks for component API and behavior              |
 | [Agent Console](./docs/agent-console.md)                         | Streaming transcript example stack                                   |
-| [Release candidate](./docs/release-candidate.md)                 | 0.x validation, package export checks, and migration notes           |
+| [Release candidate](./docs/release-candidate.md)                 | 1.0 RC validation, package export checks, and migration notes        |
+| [Security policy](./SECURITY.md)                                 | Vulnerability reporting and terminal permission boundaries           |
 
 Run the docs locally:
 
@@ -258,6 +266,7 @@ pnpm run bench:phase2
 - Report bugs: [new bug report](https://github.com/Simon-He95/vue-tui/issues/new?template=bug_report.yml)
 - Request features: [new feature request](https://github.com/Simon-He95/vue-tui/issues/new?template=feature_request.yml)
 - Report documentation issues: [new docs issue](https://github.com/Simon-He95/vue-tui/issues/new?template=docs.yml)
+- Report vulnerabilities privately: [Security policy](./SECURITY.md)
 - Browse existing issues: [GitHub issues](https://github.com/Simon-He95/vue-tui/issues)
 
 For renderer, scheduler, or terminal behavior bugs, include the renderer target (`DOM`, `stdout`, or headless), the relevant command, and a minimal reproduction when possible.
@@ -287,7 +296,7 @@ pnpm run release:dry-run
 ## Package Notes
 
 - The published package ships `dist` only.
-- Root, CLI, markdown, and experimental entrypoints are available as ESM, CJS, and type declarations after build.
+- Root, core, runtime, DOM renderer, observability, Vue, CLI, markdown, and experimental entrypoints are available as ESM, CJS, and type declarations after build.
 - The root browser/core API does not require a Node runtime, but CLI usage expects a Node-like stdout/stdin environment.
 - Terminal emoji and East Asian width behavior still depends on the user terminal and font.
 

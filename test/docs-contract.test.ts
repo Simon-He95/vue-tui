@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import packageJson from "../package.json" with { type: "json" };
 import { describe, expect, it } from "vitest";
 
 const movedRootExportMigrations = [
@@ -35,7 +37,67 @@ const movedRootExportMigrations = [
   ["installTerminalCleanup", "@simon_he/vue-tui/cli", "../src/cli.js"],
 ] as const;
 
+const releaseDocsFiles = [
+  "README.md",
+  "CHANGELOG.md",
+  "package.json",
+  ...listMarkdownFiles("docs"),
+];
+
+const staleReleaseText = [
+  "0.1.0-rc",
+  "0.x Release Candidate",
+  "当前 npm 版本：0.0.8",
+  "下一候选版本：0.1.0-rc.0",
+  "migration-0.1.0",
+  "packages/tui",
+] as const;
+
+function listMarkdownFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return listMarkdownFiles(path);
+    return entry.isFile() && entry.name.endsWith(".md") ? [path] : [];
+  });
+}
+
 describe("docs cleanup policy contract", () => {
+  it("does not regress to stale 0.x release wording or old package paths", () => {
+    for (const file of releaseDocsFiles) {
+      const text = readFileSync(file, "utf8");
+
+      for (const staleText of staleReleaseText) {
+        expect(text, `${file} still contains ${staleText}`).not.toContain(staleText);
+      }
+    }
+  });
+
+  it("keeps package entrypoint docs aligned with exports", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const maturity = readFileSync("docs/api-maturity.md", "utf8");
+    const componentsApi = readFileSync("docs/generated/components-api.md", "utf8");
+    const entrypoints = Object.keys(packageJson.exports)
+      .filter((entrypoint) => entrypoint !== "./package.json")
+      .map((entrypoint) =>
+        entrypoint === "." ? "@simon_he/vue-tui" : `@simon_he/vue-tui/${entrypoint.slice(2)}`,
+      );
+
+    for (const entrypoint of entrypoints) {
+      expect(readme).toContain(`\`${entrypoint}\``);
+      expect(maturity).toContain(`\`${entrypoint}\``);
+    }
+
+    const exportedEntrypoints = new Set(entrypoints);
+    const componentEntrypoints = Array.from(
+      componentsApi.matchAll(/^Import: `([^`]+)`$/gm),
+      (match) => match[1],
+    );
+
+    for (const entrypoint of componentEntrypoints) {
+      expect(exportedEntrypoints.has(entrypoint)).toBe(true);
+    }
+  });
+
   it("documents installTerminalCleanup default signal policy as reraise", () => {
     const readme = readFileSync("README.md", "utf8");
 
@@ -45,7 +107,7 @@ describe("docs cleanup policy contract", () => {
   });
 
   it("documents every moved root export migration", async () => {
-    const migration = readFileSync("docs/migration-0.1.0-rc.1.md", "utf8");
+    const migration = readFileSync("docs/migration-1.0.0-rc.0.md", "utf8");
     const root = await import("../src/index.js");
     const entries = new Map<string, any>();
 

@@ -55,7 +55,7 @@ function mergePlanes(
   return Array.from(merged);
 }
 
-const TERMINAL_PLANE_INTERNALS = Symbol("terminal-plane-internals");
+const TERMINAL_PLANE_INTERNALS = Symbol.for("@simon_he/vue-tui:v1:terminal-plane-internals");
 
 interface PlaneBufferState {
   buffer: GridBuffer;

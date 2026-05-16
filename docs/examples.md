@@ -29,11 +29,11 @@
 
 Smoke 命令应保持 deterministic，不接真实 LLM API，不依赖真实 TTY，也不使用耗时阈值作为 pass/fail gate。
 
-Packed package smoke 由 `pnpm run release:pack-smoke` 运行。它会把 `.tgz` 安装到临时外部项目，并挂载一个使用 root 组件、`/cli` headless app 和 `/experimental` `TLogView` 的小型 consumer，而不是只断言 entrypoint 可 import。
+Packed package smoke 由 `pnpm run release:pack-smoke` 运行。它会用 pnpm 和 npm 把 `.tgz` 安装到临时外部项目，并挂载一个使用 root 组件、`/cli` headless app 和 `/experimental` `TLogView` 的小型 consumer，而不是只断言 entrypoint 可 import。
 
 ## Related Docs
 
 - [Agent Console 示例](/agent-console)
 - [TLogView Lab](/tlog-view-lab)
 - [Performance](/performance)
-- [0.x Release Candidate](/release-candidate)
+- [1.0 Release Candidate](/release-candidate)

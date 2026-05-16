@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-rc.1 - Unreleased
+## 1.0.0-rc.0 - 2026-05-16
 
 ### Breaking
 
@@ -35,6 +35,10 @@ import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 - Release candidate docs covering validation commands, package export boundaries, examples, migration notes, and experimental API warnings.
 - Release validation scripts for `release:check`, `release:bench`, `release:smoke`, `release:pack`, `release:pack-smoke`, and `release:dry-run`.
 - Packed package dry-run smoke that installs the generated `.tgz` into an external project and verifies ESM, CJS, and type export targets.
+- npm consumer coverage in the packed package smoke, alongside the existing pnpm consumer path.
+- Packed package contract lint with `publint` and ATTW analysis.
+- Release workflow `npm_tag` validation so prerelease tarballs cannot publish with `latest`.
+- `SECURITY.md` vulnerability reporting policy.
 - Internal `createFrameMailbox()` for coalescing latest-only producer updates into one scheduler frame task.
 - `RenderManager.markDirtyRows(id, rows)` for absolute dirty-row repaint within the node's plane.
 - `TerminalFrameContext.reportDroppedUpdates()` for coalesced producer metrics.
@@ -59,6 +63,10 @@ import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 - `Style` objects are treated as immutable after first normalization. Pass a new object when style values change.
 - `createTLogUrlPlugin()` no longer detects `file://` URLs by default. Use `{ allowFileUrls: true }` to opt in.
 - Release benchmark validation now uses `bench:baseline`; timing budgets are only checked by `bench:baseline:timing`.
+- `stream-markdown-parser` is pinned to `1.0.0-rc.0` for release candidate reproducibility.
+- CJS package export conditions now use `.d.cts` declaration entries for require consumers.
+- README, docs home, API maturity, and release candidate docs now list every exported package entrypoint and its stability level.
+- Component acceptance docs now define the release readiness checks for stable, advanced, and experimental Vue components.
 - DOM renderer no longer renders `Style.href` as native anchors unless `links` are explicitly configured.
 - DOM renderer link callbacks preserve native browser behavior unless they return `false`; safe relative/hash/search hrefs are allowed when DOM links are enabled.
 - `installTerminalCleanup()` now returns an explicit `{ cleanup, uninstall }` handle and uses `signalPolicy: "cleanup-only" | "exit" | "reraise"` while leaving termination ownership with existing host signal listeners.
@@ -83,6 +91,7 @@ import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 - Recomputed SoA row fingerprints when wide-glyph boundary operations clear cells outside the direct write range.
 - Encoded reserved path characters when converting absolute file paths to terminal file hrefs.
 - Terminal cleanup now also runs for unhandled promise rejections.
+- Render plane internals now work across separately bundled package entrypoints, so `/cli` apps can combine `/vue` `TRenderPlane` with root components from the published package.
 
 ### Performance
 

@@ -15,7 +15,7 @@ import DocsExtensibilityTerminal from './.vitepress/components/DocsExtensibility
 
 ## 结论先说
 
-- `packages/tui/src/core/*`、`renderer/*`、大部分 `src/vue/components/*` 已经是通用能力，不是 CLI 私货。
+- `src/core/*`、`src/renderer/*`、大部分 `src/vue/components/*` 已经是通用能力，不是 CLI 私货。
 - 当前最明显的“可继续插件化”区域不是基础布局，而是输入增强、消息渲染、宿主动作和数据提供者。
 
 ## 组件适配性评估
@@ -151,6 +151,6 @@ export const routePlugin: TInputPlugin = {
 
 ## 对当前仓库的建议
 
-1. 保持 `packages/tui` 继续做通用框架和 docs/live demo 基座。
+1. 保持当前 package 继续做通用框架和 docs/live demo 基座。
 2. 宿主应用里的 message renderer、theme pack、action adapters 应沿着 plugin/provider 边界逐步抽离，而不是塞回基础组件。
 3. 对外优先暴露“插件接口”和“provider 接口”，而不是继续向基础组件里塞业务 props。

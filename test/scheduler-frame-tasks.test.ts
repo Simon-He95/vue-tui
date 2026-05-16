@@ -676,6 +676,7 @@ describe("scheduler frame tasks", () => {
       app.mount();
       await nextTick();
       app.scheduler.flushNow();
+      app.scheduler.configure({ frameBudgetMs: 1_000_000 });
 
       app.scheduler.queueFrameTask({
         id: "first",
