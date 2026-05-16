@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import packageJson from "../package.json" with { type: "json" };
 import { describe, expect, it } from "vitest";
 
 const movedRootExportMigrations = [
@@ -36,6 +37,32 @@ const movedRootExportMigrations = [
 ] as const;
 
 describe("docs cleanup policy contract", () => {
+  it("keeps package entrypoint docs aligned with exports", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const maturity = readFileSync("docs/api-maturity.md", "utf8");
+    const componentsApi = readFileSync("docs/generated/components-api.md", "utf8");
+    const entrypoints = Object.keys(packageJson.exports)
+      .filter((entrypoint) => entrypoint !== "./package.json")
+      .map((entrypoint) =>
+        entrypoint === "." ? "@simon_he/vue-tui" : `@simon_he/vue-tui/${entrypoint.slice(2)}`,
+      );
+
+    for (const entrypoint of entrypoints) {
+      expect(readme).toContain(`\`${entrypoint}\``);
+      expect(maturity).toContain(`\`${entrypoint}\``);
+    }
+
+    const exportedEntrypoints = new Set(entrypoints);
+    const componentEntrypoints = Array.from(
+      componentsApi.matchAll(/^Import: `([^`]+)`$/gm),
+      (match) => match[1],
+    );
+
+    for (const entrypoint of componentEntrypoints) {
+      expect(exportedEntrypoints.has(entrypoint)).toBe(true);
+    }
+  });
+
   it("documents installTerminalCleanup default signal policy as reraise", () => {
     const readme = readFileSync("README.md", "utf8");
 
