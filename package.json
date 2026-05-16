@@ -226,30 +226,30 @@
     "bench:scroll-mailbox": "tsx scripts/bench-scroll-mailbox.ts"
   },
   "dependencies": {
-    "stream-markdown-parser": "0.0.95"
+    "stream-markdown-parser": "1.0.0-rc.0"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.2",
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^18.19.130",
-    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/coverage-v8": "^4.1.6",
     "bumpp": "^8.2.1",
     "esbuild": "^0.20.2",
     "happy-dom": "^17.6.3",
     "lint-staged": "^13.3.0",
     "oxfmt": "^0.47.0",
-    "oxlint": "^1.62.0",
+    "oxlint": "^1.65.0",
     "picocolors": "^1.1.1",
     "pinia": "^3.0.4",
     "publint": "^0.3.21",
     "rimraf": "^3.0.2",
     "tsdown": "^0.9.9",
-    "tsx": "^4.20.6",
+    "tsx": "^4.22.0",
     "typescript": "^5.9.3",
     "vite": "6.4.1",
     "vitepress": "^1.6.4",
-    "vitest": "^4.1.5",
-    "vue": "^3.5.33"
+    "vitest": "^4.1.6",
+    "vue": "^3.5.34"
   },
   "peerDependencies": {
     "vue": ">=3.3.0 <4"
@@ -261,5 +261,5 @@
   "engines": {
     "node": ">=16.17"
   },
-  "packageManager": "pnpm@10.32.1"
+  "packageManager": "pnpm@10.33.4"
 }
