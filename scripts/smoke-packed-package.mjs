@@ -4,13 +4,12 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const smokeDir = join(rootDir, ".tmp", "pack-smoke");
+const smokeRoot = join(rootDir, ".tmp", "pack-smoke");
 const existingTarball = process.argv[2];
 if (!existingTarball) throw new Error("Usage: node scripts/smoke-packed-package.mjs <package.tgz>");
 
 const packageJson = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
 const packageName = packageJson.name;
-const packageInstallDir = join(smokeDir, "node_modules", ...packageName.split("/"));
 
 function run(command, args, cwd = rootDir) {
   console.log(`$ ${[command, ...args].join(" ")}`);
@@ -93,7 +92,8 @@ function assertTarballContents(tarballPath) {
   }
 }
 
-function assertInstalledExportTargets() {
+function assertInstalledExportTargets(smokeDir) {
+  const packageInstallDir = join(smokeDir, "node_modules", ...packageName.split("/"));
   const installedPackageJson = readJson(join(packageInstallDir, "package.json"));
   for (const target of packageTargetPaths(installedPackageJson)) {
     const targetPath = join(packageInstallDir, target.slice(2));
@@ -101,7 +101,7 @@ function assertInstalledExportTargets() {
   }
 }
 
-function writeSmokeFiles() {
+function writeSmokeFiles(smokeDir) {
   writeFileSync(
     join(smokeDir, "package.json"),
     `${JSON.stringify({ private: true, type: "module" }, null, 2)}\n`,
@@ -278,29 +278,42 @@ main().catch((error) => {
   );
 }
 
-rmSync(smokeDir, { recursive: true, force: true });
-mkdirSync(smokeDir, { recursive: true });
+rmSync(smokeRoot, { recursive: true, force: true });
 
 const tarballPath = resolve(existingTarball);
 assert(existsSync(tarballPath), `Tarball does not exist: ${tarballPath}`);
 
 assertTarballContents(tarballPath);
-writeSmokeFiles();
 
-try {
+for (const packageManager of ["pnpm", "npm"]) {
+  const smokeDir = join(smokeRoot, packageManager);
+  mkdirSync(smokeDir, { recursive: true });
+  writeSmokeFiles(smokeDir);
+
   const tarballInstallPath = relative(smokeDir, tarballPath);
   const vueVersion = packageJson.devDependencies?.vue ?? packageJson.peerDependencies?.vue ?? "vue";
-  run("pnpm", ["add", "--ignore-workspace", tarballInstallPath, `vue@${vueVersion}`], smokeDir);
-  assertInstalledExportTargets();
-  run("node", ["smoke-esm.mjs"], smokeDir);
 
-  if (packageTargetPaths(packageJson).some((target) => target.endsWith(".cjs"))) {
-    run("node", ["smoke-cjs.cjs"], smokeDir);
+  try {
+    if (packageManager === "pnpm") {
+      run("pnpm", ["add", "--ignore-workspace", tarballInstallPath, `vue@${vueVersion}`], smokeDir);
+    } else {
+      run(
+        "npm",
+        ["install", "--no-audit", "--no-fund", tarballInstallPath, `vue@${vueVersion}`],
+        smokeDir,
+      );
+    }
+    assertInstalledExportTargets(smokeDir);
+    run("node", ["smoke-esm.mjs"], smokeDir);
+
+    if (packageTargetPaths(packageJson).some((target) => target.endsWith(".cjs"))) {
+      run("node", ["smoke-cjs.cjs"], smokeDir);
+    }
+  } catch (error) {
+    console.error(`Packed package ${packageManager} smoke project left at ${smokeDir}`);
+    throw error;
   }
-} catch (error) {
-  console.error(`Packed package smoke project left at ${smokeDir}`);
-  throw error;
 }
 
-rmSync(smokeDir, { recursive: true, force: true });
-console.log(`Packed package smoke passed: ${relative(rootDir, tarballPath)}`);
+rmSync(smokeRoot, { recursive: true, force: true });
+console.log(`Packed package smoke passed with pnpm and npm: ${relative(rootDir, tarballPath)}`);

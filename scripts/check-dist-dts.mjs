@@ -30,13 +30,21 @@ const browserFacingDtsFiles = [
   "vue.d.ts",
   "markdown.d.ts",
   "experimental.d.ts",
+  "index.d.cts",
+  "core.d.cts",
+  "runtime.d.cts",
+  "renderer-dom.d.cts",
+  "observability.d.cts",
+  "vue.d.cts",
+  "markdown.d.cts",
+  "experimental.d.cts",
 ];
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) walk(path, out);
-    else if (entry.name.endsWith(".d.ts")) out.push(path);
+    else if (entry.name.endsWith(".d.ts") || entry.name.endsWith(".d.cts")) out.push(path);
   }
   return out;
 }

@@ -8,6 +8,11 @@ on:
         required: false
         default: true
         type: boolean
+      npm_tag:
+        description: npm dist-tag for dry-run and publish
+        required: false
+        default: next
+        type: string
 
 permissions:
   contents: read
@@ -24,6 +29,7 @@ jobs:
       id-token: write
     env:
       HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+      NPM_TAG: ${{ inputs.npm_tag }}
 
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +58,8 @@ jobs:
 
       - run: pnpm run release:pack
 
+      - run: pnpm run test:package-contract:existing
+
       - run: pnpm run release:pack-smoke:existing
 
       - run: node scripts/smoke-packed-types.mjs .release/*.tgz 3.3.0
@@ -63,6 +71,26 @@ jobs:
           cd .release
           sha256sum *.tgz | tee SHA256SUMS
 
+      - name: Validate npm dist-tag
+        run: |
+          TARBALL=$(ls .release/*.tgz | head -n 1)
+          TMP=$(mktemp -d)
+          tar -xzf "$TARBALL" -C "$TMP"
+          VERSION=$(node -p "require('$TMP/package/package.json').version")
+          if [ -z "${NPM_TAG:-}" ]; then
+            echo "npm_tag workflow input is required"
+            exit 1
+          fi
+          if [[ "$VERSION" == *-* && "$NPM_TAG" == "latest" ]]; then
+            echo "Prerelease versions must not be published with latest dist-tag"
+            exit 1
+          fi
+          if [[ "$VERSION" != *-* && "$NPM_TAG" != "latest" ]]; then
+            echo "Stable versions should use latest dist-tag"
+            exit 1
+          fi
+          echo "Validated npm dist-tag '$NPM_TAG' for $VERSION"
+
       - run: pnpm exec playwright install --with-deps chromium
 
       - run: node scripts/smoke-packed-browser-vite.mjs .release/*.tgz 3.3.0
@@ -73,7 +101,7 @@ jobs:
         if: ${{ env.HAS_NPM_TOKEN == 'true' }}
         run: |
           TARBALL=$(ls .release/*.tgz | head -n 1)
-          npm publish "$TARBALL" --access public --dry-run --provenance
+          npm publish "$TARBALL" --access public --dry-run --provenance --tag "$NPM_TAG"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VUE_TUI_ALLOW_DIRECT_PUBLISH: "1"
@@ -126,6 +154,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      NPM_TAG: ${{ inputs.npm_tag }}
 
     steps:
       - uses: actions/setup-node@v4
@@ -146,17 +176,30 @@ jobs:
           cd package
           sha256sum -c SHA256SUMS
 
-      - name: Check version is not already published
+      - name: Check package version and npm dist-tag
         run: |
           TARBALL=$(ls package/*.tgz | head -n 1)
           TMP=$(mktemp -d)
           tar -xzf "$TARBALL" -C "$TMP"
           VERSION=$(node -p "require('$TMP/package/package.json').version")
           NAME=$(node -p "require('$TMP/package/package.json').name")
+          if [ -z "${NPM_TAG:-}" ]; then
+            echo "npm_tag workflow input is required"
+            exit 1
+          fi
+          if [[ "$VERSION" == *-* && "$NPM_TAG" == "latest" ]]; then
+            echo "Prerelease versions must not be published with latest dist-tag"
+            exit 1
+          fi
+          if [[ "$VERSION" != *-* && "$NPM_TAG" != "latest" ]]; then
+            echo "Stable versions should use latest dist-tag"
+            exit 1
+          fi
           if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
             echo "$NAME@$VERSION already exists on npm"
             exit 1
           fi
+          echo "Validated npm dist-tag '$NPM_TAG' for $NAME@$VERSION"
 
       - name: Require npm token
         run: |
@@ -170,7 +213,7 @@ jobs:
       - name: Publish validated tarball
         run: |
           TARBALL=$(ls package/*.tgz | head -n 1)
-          npm publish "$TARBALL" --access public --provenance
+          npm publish "$TARBALL" --access public --provenance --tag "$NPM_TAG"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VUE_TUI_ALLOW_DIRECT_PUBLISH: "1"
