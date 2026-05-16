@@ -1,10 +1,21 @@
-# Components 使用文档（@simon_he/vue-tui）
+# Components 使用文档
 
-本文档覆盖 `@simon_he/vue-tui` 当前内置的所有 Vue 组件（TUI 组件层），用于统一「渲染/参数/事件」的契约，便于实现一致的验收与测试。
+本文档覆盖 `@simon_he/vue-tui` 当前内置的 Vue 组件，用于统一「渲染/参数/事件」的契约，便于实现一致的验收与测试。
 
 > 坐标/尺寸单位：所有 `x/y/w/h` 均以「cell（字符格）」为单位，而不是像素。
 
 > 完整的 Props/Events 列表请以自动生成文件为准：`docs/generated/components-api.md`（运行 `pnpm run docs:gen` 生成）。
+
+## 导入入口
+
+| API maturity | Import                           | 组件                                                                                                                                                                              |
+| ------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TDialog` `TInput` `TList` `TSelect` `TText` `TView`                                                                                                    |
+| Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition`                             |
+| Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                |
+| Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap` |
+
+下面的组件速读按用途分组，不代表 root entrypoint 导出。每个组件的 primary import 以生成的 [组件 API](/generated/components-api) 为准。
 
 ## 组件速读
 
