@@ -30,6 +30,7 @@
 - [TRouterView](#trouterview)
 - [TSelect](#tselect)
 - [TText](#ttext)
+- [TTranscriptView](#ttranscriptview)
 - [TTransition](#ttransition)
 - [TView](#tview)
 - [TVirtualList](#tvirtuallist)
@@ -981,6 +982,52 @@ Import: `@simon_he/vue-tui`
 ### Events
 
 —
+
+## TTranscriptView
+
+源码：`src/vue/components/TTranscriptView.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
+
+### Props
+
+| 名称                           | 类型                               | 默认值                                   | 必填 | 说明 |
+| ------------------------------ | ---------------------------------- | ---------------------------------------- | ---- | ---- |
+| <code>x</code>                 | <code>number</code>                | —                                        | 是   | —    |
+| <code>y</code>                 | <code>number</code>                | —                                        | 是   | —    |
+| <code>w</code>                 | <code>number</code>                | —                                        | 是   | —    |
+| <code>h</code>                 | <code>number</code>                | —                                        | 是   | —    |
+| <code>zIndex</code>            | <code>number</code>                | <code>0</code>                           | 否   | —    |
+| <code>source</code>            | <code>TTranscriptDataSource</code> | —                                        | 是   | —    |
+| <code>version</code>           | <code>number</code>                | —                                        | 是   | —    |
+| <code>scrollTop</code>         | <code>number</code>                | <code>undefined</code>                   | 否   | —    |
+| <code>defaultScrollTop</code>  | <code>number</code>                | <code>0</code>                           | 否   | —    |
+| <code>autoStickToBottom</code> | <code>boolean</code>               | <code>false</code>                       | 否   | —    |
+| <code>selectable</code>        | <code>boolean</code>               | <code>true</code>                        | 否   | —    |
+| <code>wrap</code>              | <code>boolean</code>               | <code>false</code>                       | 否   | —    |
+| <code>style</code>             | <code>Style</code>                 | <code>undefined</code>                   | 否   | —    |
+| <code>hoverStyle</code>        | <code>Style</code>                 | <code>undefined</code>                   | 否   | —    |
+| <code>focusStyle</code>        | <code>Style</code>                 | <code>undefined</code>                   | 否   | —    |
+| <code>autoFocus</code>         | <code>boolean</code>               | <code>false</code>                       | 否   | —    |
+| <code>focusable</code>         | <code>boolean</code>               | <code>true</code>                        | 否   | —    |
+| <code>wheelScroll</code>       | <code>boolean</code>               | <code>true</code>                        | 否   | —    |
+| <code>keyboardRegions</code>   | <code>boolean</code>               | <code>true</code>                        | 否   | —    |
+| <code>rowScrollMode</code>     | <code>RowScrollMode</code>         | <code>&quot;unsafe-full-row&quot;</code> | 否   | —    |
+
+### Events
+
+| 名称                          | Payload | 说明 |
+| ----------------------------- | ------- | ---- |
+| <code>scroll</code>           | —       | —    |
+| <code>update:scrollTop</code> | —       | —    |
+| <code>rowClick</code>         | —       | —    |
+| <code>actionClick</code>      | —       | —    |
+| <code>linkClick</code>        | —       | —    |
+| <code>foldToggle</code>       | —       | —    |
+| <code>toolClick</code>        | —       | —    |
+| <code>hoverRegion</code>      | —       | —    |
 
 ## TTransition
 
