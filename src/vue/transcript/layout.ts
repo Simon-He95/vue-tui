@@ -46,6 +46,14 @@ export function transcriptLinkRegionId(
   return `link:${rowKey}:${tokenId ?? sourceSegmentIndex}`;
 }
 
+export function transcriptFoldToggleRegionId(rowKey: string | number): string {
+  return `fold-toggle:${rowKey}`;
+}
+
+export function transcriptToolCallRegionId(rowKey: string | number): string {
+  return `tool-call:${rowKey}`;
+}
+
 function sameVisualSegment(
   segment: TTranscriptVisualSegment | undefined,
   style: Style,
@@ -169,11 +177,15 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
     if (options.wrap !== false && x >= width) pushCurrentIfNeeded(true);
   }
 
-  function appendTextSegment(segment: TTranscriptSegment, sourceSegmentIndex: number): void {
+  function appendTextSegment(
+    segment: TTranscriptSegment,
+    sourceSegmentIndex: number,
+    fallbackRegion?: Omit<TTranscriptHitRegion, "x0" | "x1" | "visualRow">,
+  ): void {
     const raw = sanitizeInlineText(segment.text);
     if (!raw) return;
     const style = mergeStyle(options.baseStyle, segment.style);
-    const regionBase =
+    const linkRegion =
       segment.href != null
         ? {
             id: transcriptLinkRegionId(options.rowKey, sourceSegmentIndex, segment.tokenId),
@@ -184,6 +196,7 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
             focusStyle: options.focusStyle,
           }
         : undefined;
+    const regionBase = linkRegion ?? fallbackRegion;
     const activeStyle =
       regionBase?.id && regionBase.id === options.focusedRegionId
         ? mergeStyle(style, regionBase.focusStyle ?? options.focusStyle)
@@ -233,7 +246,29 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
   }
 
   const segments = rowSourceSegments(options.row);
-  for (let i = 0; i < segments.length; i++) appendTextSegment(segments[i]!, i);
+  if (options.row.kind === "tool-call") {
+    const foldRegion = {
+      id: transcriptFoldToggleRegionId(options.rowKey),
+      kind: "fold-toggle" as const,
+      rowIndex: options.rowIndex,
+      payload: { row: options.row, rowKey: options.rowKey, collapsed: options.row.collapsed },
+      hoverStyle: options.hoverStyle,
+      focusStyle: options.focusStyle,
+    };
+    const toolRegion = {
+      id: transcriptToolCallRegionId(options.rowKey),
+      kind: "tool-call" as const,
+      rowIndex: options.rowIndex,
+      payload: { row: options.row, rowKey: options.rowKey },
+      hoverStyle: options.hoverStyle,
+      focusStyle: options.focusStyle,
+    };
+    for (let i = 0; i < segments.length; i++) {
+      appendTextSegment(segments[i]!, i, i === 0 ? foldRegion : toolRegion);
+    }
+  } else {
+    for (let i = 0; i < segments.length; i++) appendTextSegment(segments[i]!, i);
+  }
   if ("actions" in options.row) {
     for (const action of options.row.actions ?? []) appendAction(action);
   }

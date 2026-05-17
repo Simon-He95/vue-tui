@@ -34,6 +34,14 @@ function rowText(
     .trimEnd();
 }
 
+function cellStyle(
+  mounted: { terminal: { getRow: (y: number) => readonly { style: Record<string, unknown> }[] } },
+  x: number,
+  y: number,
+): Record<string, unknown> {
+  return mounted.terminal.getRow(y)[x]?.style ?? {};
+}
+
 function installNavigatorClipboard(writes: string[]): () => void {
   const previous = (navigator as any).clipboard;
   Object.defineProperty(navigator, "clipboard", {
@@ -266,6 +274,205 @@ describe("TTranscriptView", () => {
       expect(actionX).toBeGreaterThanOrEqual(0);
 
       app.events.dispatch({ type: "click", cellX: actionX, cellY: 0, time: 1_000 } as any);
+      expect(viewRef.value?.focusNextRegion()).toBe(false);
+      expect(viewRef.value?.activateFocusedRegion()).toBe(false);
+      expect(actionClick).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("emits foldToggle from collapsed and expanded tool-call header clicks", async () => {
+    const foldToggle = vi.fn();
+    const rows: TTranscriptRow[] = [
+      {
+        kind: "tool-call",
+        key: "collapsed",
+        title: "read_file",
+        collapsed: true,
+        summary: [{ text: "src/index.ts" }],
+      },
+      {
+        kind: "tool-call",
+        key: "expanded",
+        title: "run_tests",
+        collapsed: false,
+        body: [{ text: "passed" }],
+      },
+    ];
+    const App = defineComponent({
+      name: "TranscriptToolFoldApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 2,
+            source: createSource(rows),
+            version: 1,
+            onFoldToggle: foldToggle,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 32, rows: 4, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 0, time: 1_000 } as any);
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 1, time: 1_001 } as any);
+
+      expect(foldToggle).toHaveBeenCalledTimes(2);
+      expect(foldToggle.mock.calls.map(([event]) => event.row.key)).toEqual([
+        "collapsed",
+        "expanded",
+      ]);
+      expect(foldToggle.mock.calls.map(([event]) => event.region.kind)).toEqual([
+        "fold-toggle",
+        "fold-toggle",
+      ]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("emits toolClick from tool-call body regions", async () => {
+    const toolClick = vi.fn();
+    const row: TTranscriptRow = {
+      kind: "tool-call",
+      key: "tool",
+      title: "run_tests",
+      collapsed: false,
+      body: [{ text: "passed" }],
+    };
+    const App = defineComponent({
+      name: "TranscriptToolClickApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 1,
+            source: createSource([row]),
+            version: 1,
+            onToolClick: toolClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 32, rows: 3, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const bodyX = rowText(app, 0).indexOf("passed");
+      expect(bodyX).toBeGreaterThanOrEqual(0);
+      app.events.dispatch({ type: "click", cellX: bodyX, cellY: 0, time: 1_000 } as any);
+
+      expect(toolClick).toHaveBeenCalledTimes(1);
+      expect(toolClick.mock.calls[0]?.[0].region.kind).toBe("tool-call");
+      expect(toolClick.mock.calls[0]?.[0].row).toBe(row);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints every wrapped visual row for hovered and focused links", async () => {
+    const viewRef = ref<TTranscriptViewHandle | null>(null);
+    const row: TTranscriptRow = {
+      kind: "message",
+      key: "msg",
+      segments: [{ text: "abcdef", href: "https://example.com" }],
+    };
+    const App = defineComponent({
+      name: "TranscriptWrappedLinkRepaintApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            ref: viewRef,
+            x: 0,
+            y: 0,
+            w: 3,
+            h: 2,
+            source: createSource([row]),
+            version: 1,
+            wrap: true,
+            hoverStyle: { inverse: true },
+            focusStyle: { underline: true },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 3, rows: 3, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("abc");
+      expect(rowText(app, 1)).toBe("def");
+
+      app.events.dispatch({ type: "pointermove", cellX: 0, cellY: 0, time: 1_000 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(cellStyle(app, 0, 0)).toMatchObject({ inverse: true });
+      expect(cellStyle(app, 0, 1)).toMatchObject({ inverse: true });
+
+      expect(viewRef.value?.focusNextRegion()).toBe(true);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(cellStyle(app, 0, 0)).toMatchObject({ underline: true });
+      expect(cellStyle(app, 0, 1)).toMatchObject({ underline: true });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not focus or activate offscreen regions by keyboard navigation", async () => {
+    const actionClick = vi.fn();
+    const viewRef = ref<TTranscriptViewHandle | null>(null);
+    const rows: TTranscriptRow[] = [
+      {
+        kind: "message",
+        key: "visible",
+        segments: [{ text: "visible" }],
+      },
+      {
+        kind: "approval",
+        key: "offscreen",
+        title: "Allow?",
+        actions: [{ id: "approve", label: "Approve" }],
+      },
+    ];
+    const App = defineComponent({
+      name: "TranscriptVisibleFocusApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            ref: viewRef,
+            x: 0,
+            y: 0,
+            w: 24,
+            h: 1,
+            source: createSource(rows),
+            version: 1,
+            onActionClick: actionClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 24, rows: 3, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
       expect(viewRef.value?.focusNextRegion()).toBe(false);
       expect(viewRef.value?.activateFocusedRegion()).toBe(false);
       expect(actionClick).not.toHaveBeenCalled();

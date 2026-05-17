@@ -151,6 +151,39 @@ describe("transcript row layout", () => {
     expect(rows[0]?.hitRegions).toEqual([]);
   });
 
+  it("creates fold and tool-call hit regions for tool-call rows", () => {
+    const row = {
+      kind: "tool-call" as const,
+      key: "tool",
+      title: "read_file",
+      collapsed: false,
+      summary: [{ text: "src/index.ts" }],
+      body: [{ text: "contents" }],
+      actions: [{ id: "retry", label: "Retry", disabled: true }],
+    };
+    const rows = layoutTranscriptRow({
+      row,
+      rowIndex: 1,
+      rowKey: row.key,
+      width: 80,
+      baseStyle: {},
+      wrap: false,
+    });
+
+    expect(rows[0]?.hitRegions.map((region) => region.kind)).toContain("fold-toggle");
+    expect(rows[0]?.hitRegions.map((region) => region.kind)).toContain("tool-call");
+    expect(rows[0]?.hitRegions.some((region) => region.kind === "action")).toBe(false);
+    expect(rows[0]?.hitRegions.find((region) => region.kind === "fold-toggle")).toMatchObject({
+      id: "fold-toggle:tool",
+      rowIndex: 1,
+      payload: { collapsed: false },
+    });
+    expect(rows[0]?.hitRegions.find((region) => region.kind === "tool-call")).toMatchObject({
+      id: "tool-call:tool",
+      rowIndex: 1,
+    });
+  });
+
   it("omits collapsed tool-call body from plain text", () => {
     const row = {
       kind: "tool-call" as const,

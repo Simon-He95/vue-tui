@@ -21,7 +21,9 @@ import { computed, defineComponent, getCurrentInstance, h, ref, watch } from "vu
 import {
   layoutTranscriptRow,
   transcriptActionRegionId,
+  transcriptFoldToggleRegionId,
   transcriptLinkRegionId,
+  transcriptToolCallRegionId,
 } from "../transcript/layout.js";
 import { plainTextForTranscriptRow } from "../transcript/plain-text.js";
 import { sliceByCellsRange } from "../utils/text.js";
@@ -91,6 +93,11 @@ function rowHasRegionId(row: TTranscriptRow, rowKey: string | number, id: string
   if (
     "actions" in row &&
     row.actions?.some((action) => transcriptActionRegionId(rowKey, action.id) === id)
+  )
+    return true;
+  if (
+    row.kind === "tool-call" &&
+    (transcriptFoldToggleRegionId(rowKey) === id || transcriptToolCallRegionId(rowKey) === id)
   )
     return true;
   const segments = sourceSegmentsForRegion(row);
@@ -292,18 +299,18 @@ export const TTranscriptView = defineComponent({
       else if (region.kind === "tool-call") emit("toolClick", event);
     }
 
-    function visualIndexForRegion(region: TTranscriptHitRegion | null): number {
-      if (!region) return -1;
+    function visualIndexesForRegion(region: TTranscriptHitRegion | null): number[] {
+      if (!region) return [];
       const rows = layoutState.value.visualRows;
+      const indexes: number[] = [];
       for (let i = 0; i < rows.length; i++) {
-        if (rows[i]!.hitRegions.some((candidate) => candidate.id === region.id)) return i;
+        if (rows[i]!.hitRegions.some((candidate) => candidate.id === region.id)) indexes.push(i);
       }
-      return -1;
+      return indexes;
     }
 
     function invalidateRegion(region: TTranscriptHitRegion | null): void {
-      const index = visualIndexForRegion(region);
-      if (index >= 0) rowsRef.value?.invalidateIndex(index);
+      for (const index of visualIndexesForRegion(region)) rowsRef.value?.invalidateIndex(index);
     }
 
     function setHoveredRegion(region: TTranscriptHitRegion | null): void {
@@ -323,8 +330,24 @@ export const TTranscriptView = defineComponent({
       invalidateRegion(region);
     }
 
+    function visibleFocusableRegions(): TTranscriptHitRegion[] {
+      const rows = layoutState.value.visualRows;
+      const top = clamp(currentScrollTop(), 0, rows.length);
+      const bottom = Math.min(rows.length, top + Math.max(0, normalizeInt(props.h)));
+      const seen = new Set<string>();
+      const regions: TTranscriptHitRegion[] = [];
+      for (let i = top; i < bottom; i++) {
+        for (const region of rows[i]?.hitRegions ?? []) {
+          if (seen.has(region.id)) continue;
+          seen.add(region.id);
+          regions.push(region);
+        }
+      }
+      return regions;
+    }
+
     function focusRegionByOffset(offset: number): boolean {
-      const regions = layoutState.value.regions.filter((region) => region.kind !== "custom");
+      const regions = visibleFocusableRegions();
       if (!regions.length) return false;
       const current = focusedRegion.value
         ? regions.findIndex((region) => region.id === focusedRegion.value?.id)
@@ -345,7 +368,7 @@ export const TTranscriptView = defineComponent({
     function activateFocusedRegion(): boolean {
       const region = focusedRegion.value;
       if (!region) return false;
-      if (!layoutState.value.regions.some((candidate) => candidate.id === region.id)) return false;
+      if (!visibleFocusableRegions().some((candidate) => candidate.id === region.id)) return false;
       emitRegion(region);
       return true;
     }

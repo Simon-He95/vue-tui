@@ -83,7 +83,7 @@ export type TTranscriptSelectionSegment = Readonly<{
 
 export type TTranscriptHitRegion = Readonly<{
   id: string;
-  kind: "link" | "action" | "fold-toggle" | "tool-call" | "custom";
+  kind: "link" | "action" | "fold-toggle" | "tool-call";
   rowIndex: number;
   visualRow: number;
   x0: number;
