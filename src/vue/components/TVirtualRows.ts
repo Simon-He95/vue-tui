@@ -204,6 +204,7 @@ export const TVirtualRows = defineComponent({
     let dirtyRowsHint: readonly number[] | undefined;
     let renderNodeId: string | null = null;
     let pendingWheelTop: number | null = null;
+    let pendingSelectionScrollFocusRemap = false;
     let alive = true;
 
     const itemCount = computed(() => Math.max(0, normalizeInt(props.itemCount)));
@@ -268,8 +269,7 @@ export const TVirtualRows = defineComponent({
     }
 
     function setCurrentScrollTop(top: number): void {
-      if (isScrollControlled()) controlledScrollTop.value = top;
-      else innerScrollTop.value = top;
+      if (!isScrollControlled()) innerScrollTop.value = top;
     }
 
     function hasPaintableViewport(): boolean {
@@ -355,6 +355,12 @@ export const TVirtualRows = defineComponent({
       const clampedTop = clampScrollTop(nextTop);
       const delta = clampedTop - prevTop;
       if (!delta) return false;
+
+      if (isScrollControlled()) {
+        if (options?.emitUpdate !== false) emit("update:scrollTop", clampedTop);
+        if (options?.emitScroll) emitScroll(clampedTop);
+        return true;
+      }
 
       setCurrentScrollTop(clampedTop);
       if (options?.emitUpdate !== false) emit("update:scrollTop", clampedTop);
@@ -487,7 +493,10 @@ export const TVirtualRows = defineComponent({
         emitScroll: true,
         strategy: "viewport-repaint",
       });
-      if (changed) selection.refresh({ remapFocus: true });
+      if (changed) {
+        if (isScrollControlled()) pendingSelectionScrollFocusRemap = true;
+        else selection.refresh({ remapFocus: true });
+      }
       return changed;
     }
 
@@ -678,20 +687,35 @@ export const TVirtualRows = defineComponent({
       () => props.scrollTop,
       () => {
         if (!isScrollControlled()) return;
+        const desiredTop = normalizeInt(props.scrollTop);
         const nextTop = clampScrollTop(props.scrollTop);
         if (!initializedScrollTop) {
           initializedScrollTop = true;
           controlledScrollTop.value = nextTop;
           markViewportDirty();
           invalidateSelf("normal");
+          if (desiredTop !== nextTop) {
+            emit("update:scrollTop", nextTop);
+            emitScroll(nextTop);
+          }
           return;
         }
-        if (nextTop === controlledScrollTop.value) return;
+        if (nextTop === controlledScrollTop.value) {
+          if (desiredTop !== nextTop) {
+            emit("update:scrollTop", nextTop);
+            emitScroll(nextTop);
+          }
+          return;
+        }
         cancelWheelScrollFrame();
-        const changed = applyScrollTop(nextTop, { emitUpdate: false });
-        if (changed) {
-          selection.refresh();
-          invalidateSelf("high");
+        controlledScrollTop.value = nextTop;
+        markViewportDirty();
+        selection.refresh(pendingSelectionScrollFocusRemap ? { remapFocus: true } : undefined);
+        pendingSelectionScrollFocusRemap = false;
+        invalidateSelf("high");
+        if (desiredTop !== nextTop) {
+          emit("update:scrollTop", nextTop);
+          emitScroll(nextTop);
         }
       },
       { immediate: true },
@@ -713,7 +737,14 @@ export const TVirtualRows = defineComponent({
       () => {
         resetWheelScrollState(wheelState);
         const nextTop = clampScrollTop(currentScrollTop());
-        setCurrentScrollTop(nextTop);
+        if (isScrollControlled()) {
+          if (controlledScrollTop.value !== nextTop) {
+            emit("update:scrollTop", nextTop);
+            emitScroll(nextTop);
+          }
+        } else {
+          setCurrentScrollTop(nextTop);
+        }
         markViewportDirty();
         invalidateSelf("normal");
       },

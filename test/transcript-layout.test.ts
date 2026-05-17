@@ -21,6 +21,23 @@ describe("transcript row layout", () => {
     expect(rows[0]?.segments[0]?.cells).toBe(3);
   });
 
+  it("keeps selectable text scoped to each wrapped visual row", () => {
+    const rows = layoutTranscriptRow({
+      row: {
+        kind: "message",
+        key: "msg",
+        segments: [{ text: "abcdef" }],
+      },
+      rowIndex: 0,
+      rowKey: "msg",
+      width: 3,
+      baseStyle: {},
+      wrap: true,
+    });
+
+    expect(rows.map((row) => row.selectableText)).toEqual(["abc", "def"]);
+  });
+
   it("lays out action hit regions without adding actions to copy text", () => {
     const row = {
       kind: "approval" as const,
@@ -45,6 +62,26 @@ describe("transcript row layout", () => {
       rowIndex: 2,
     });
     expect(plainTextForTranscriptRow(row)).toBe("Allow command?\npnpm test");
+  });
+
+  it("does not create hit regions for disabled actions", () => {
+    const row = {
+      kind: "approval" as const,
+      key: "approval",
+      title: "Allow command?",
+      actions: [{ id: "approve", label: "Approve", disabled: true }],
+    };
+    const rows = layoutTranscriptRow({
+      row,
+      rowIndex: 0,
+      rowKey: row.key,
+      width: 80,
+      baseStyle: {},
+      wrap: false,
+    });
+
+    expect(rows[0]?.text).toContain("[Approve]");
+    expect(rows[0]?.hitRegions).toEqual([]);
   });
 
   it("omits collapsed tool-call body from plain text", () => {

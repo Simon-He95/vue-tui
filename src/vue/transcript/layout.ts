@@ -8,7 +8,6 @@ import type {
 } from "./types.js";
 import type { Style } from "../../core/types.js";
 import { forEachTextCellSegment, sanitizeInlineText, textCellWidth } from "../utils/text.js";
-import { plainTextForTranscriptRow } from "./plain-text.js";
 
 export type TTranscriptRowLayoutOptions = Readonly<{
   row: TTranscriptRow;
@@ -80,6 +79,7 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
   let current = createVisualRow(0, 0);
   let x = 0;
   let absoluteCell = 0;
+  let currentSelectableText = "";
 
   function createVisualRow(partIndex: number, startCell: number) {
     return {
@@ -96,9 +96,10 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
 
   function pushCurrentIfNeeded(force = false): void {
     if (!force && !current.segments.length && !current.hitRegions.length) return;
-    current.selectableText = plainTextForTranscriptRow(options.row);
+    current.selectableText = currentSelectableText;
     visualRows.push(current);
     current = createVisualRow(visualRows.length, absoluteCell);
+    currentSelectableText = "";
     x = 0;
   }
 
@@ -133,6 +134,7 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
       });
     }
     current.text += text;
+    if (selectable !== false) currentSelectableText += text;
     x += clippedCells;
     absoluteCell += clippedCells;
     if (options.wrap !== false && x >= width) pushCurrentIfNeeded(true);
@@ -182,18 +184,20 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
     if (x > 0) appendPiece(" ", 1, options.baseStyle, false, undefined);
     const text = sanitizeInlineText(`[${action.label}]`);
     const baseStyle = mergeStyle(options.baseStyle, styleForAction(action));
-    const regionBase = {
-      id: action.id,
-      kind: "action" as const,
-      rowIndex: options.rowIndex,
-      payload: { action, row: options.row },
-      hoverStyle: action.hoverStyle ?? options.hoverStyle,
-      focusStyle: action.focusStyle ?? options.focusStyle,
-    };
+    const regionBase = action.disabled
+      ? undefined
+      : {
+          id: action.id,
+          kind: "action" as const,
+          rowIndex: options.rowIndex,
+          payload: { action, row: options.row },
+          hoverStyle: action.hoverStyle ?? options.hoverStyle,
+          focusStyle: action.focusStyle ?? options.focusStyle,
+        };
     const activeStyle =
-      action.id === options.focusedRegionId
+      regionBase && action.id === options.focusedRegionId
         ? mergeStyle(baseStyle, regionBase.focusStyle)
-        : action.id === options.hoverRegionId
+        : regionBase && action.id === options.hoverRegionId
           ? mergeStyle(baseStyle, regionBase.hoverStyle)
           : baseStyle;
     appendPiece(text, textCellWidth(text), activeStyle, false, undefined, regionBase);
@@ -204,7 +208,7 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
   if ("actions" in options.row) {
     for (const action of options.row.actions ?? []) appendAction(action);
   }
-  pushCurrentIfNeeded(true);
+  pushCurrentIfNeeded();
   return visualRows.length ? visualRows : [createVisualRow(0, 0)];
 }
 

@@ -7,6 +7,7 @@ import type {
   TTranscriptRegionEvent,
   TTranscriptRow,
   TTranscriptRowEvent,
+  TTranscriptSegment,
   TTranscriptViewHandle,
   TTranscriptVisualRow,
 } from "../transcript/types.js";
@@ -27,6 +28,21 @@ type LayoutState = Readonly<{
   regions: readonly TTranscriptHitRegion[];
 }>;
 
+type RowLayoutCacheEntry = Readonly<{
+  version: number;
+  row: TTranscriptRow;
+  rowIndex: number;
+  rowKey: string | number;
+  width: number;
+  wrap: boolean;
+  baseStyle: Style;
+  hoverStyle?: Style;
+  focusStyle?: Style;
+  hoverRegionId: string | null;
+  focusedRegionId: string | null;
+  visualRows: readonly TTranscriptVisualRow[];
+}>;
+
 const EMPTY_LAYOUT: LayoutState = Object.freeze({
   visualRows: Object.freeze([]),
   rowStarts: new Map(),
@@ -41,6 +57,55 @@ function clamp(n: number, min: number, max: number): number {
 function normalizeInt(value: unknown): number {
   const n = Math.floor(Number(value));
   return Number.isFinite(n) ? n : 0;
+}
+
+function sourceSegmentsForRegion(row: TTranscriptRow): readonly TTranscriptSegment[] {
+  if (row.kind === "message") return row.segments;
+  if (row.kind === "approval") {
+    const description = row.description ?? [];
+    return [{ text: row.title }, ...(description.length ? [{ text: " " }] : []), ...description];
+  }
+  if (row.kind === "tool-call") {
+    const content: TTranscriptSegment[] = [
+      { text: row.collapsed ? `▸ ${row.title}` : `▾ ${row.title}` },
+    ];
+    if (row.summary?.length) content.push({ text: " " }, ...row.summary);
+    if (!row.collapsed && row.body?.length) content.push({ text: " " }, ...row.body);
+    return content;
+  }
+  return [{ text: row.label }];
+}
+
+function rowHasRegionId(row: TTranscriptRow, rowKey: string | number, id: string | null): boolean {
+  if (!id) return false;
+  if ("actions" in row && row.actions?.some((action) => action.id === id)) return true;
+  const segments = sourceSegmentsForRegion(row);
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i]!;
+    if (segment.href == null) continue;
+    if ((segment.tokenId ?? `link:${rowKey}:${i}`) === id) return true;
+  }
+  return false;
+}
+
+function sameCachedLayout(
+  entry: RowLayoutCacheEntry | undefined,
+  next: Omit<RowLayoutCacheEntry, "visualRows">,
+): boolean {
+  return (
+    Boolean(entry) &&
+    entry!.version === next.version &&
+    entry!.row === next.row &&
+    entry!.rowIndex === next.rowIndex &&
+    entry!.rowKey === next.rowKey &&
+    entry!.width === next.width &&
+    entry!.wrap === next.wrap &&
+    entry!.baseStyle === next.baseStyle &&
+    entry!.hoverStyle === next.hoverStyle &&
+    entry!.focusStyle === next.focusStyle &&
+    entry!.hoverRegionId === next.hoverRegionId &&
+    entry!.focusedRegionId === next.focusedRegionId
+  );
 }
 
 export const TTranscriptView = defineComponent({
@@ -61,7 +126,6 @@ export const TTranscriptView = defineComponent({
     autoStickToBottom: { type: Boolean, default: false },
     selectable: { type: Boolean, default: true },
     wrap: { type: Boolean, default: false },
-    overscan: { type: Number, default: 0 },
     style: { type: Object as PropType<Style>, default: undefined },
     hoverStyle: { type: Object as PropType<Style>, default: undefined },
     focusStyle: { type: Object as PropType<Style>, default: undefined },
@@ -82,9 +146,6 @@ export const TTranscriptView = defineComponent({
     "foldToggle",
     "toolClick",
     "hoverRegion",
-    "selectionHover",
-    "search",
-    "searchMatch",
   ],
   setup(props, { emit, expose }) {
     const { defaultStyle } = useTerminal();
@@ -93,7 +154,7 @@ export const TTranscriptView = defineComponent({
     const innerScrollTop = ref(normalizeInt(props.defaultScrollTop));
     const hoveredRegion = ref<TTranscriptHitRegion | null>(null);
     const focusedRegion = ref<TTranscriptHitRegion | null>(null);
-    const interactionVersion = ref(0);
+    const rowLayoutCache = new Map<number, RowLayoutCacheEntry>();
 
     function isScrollControlled(): boolean {
       return Object.prototype.hasOwnProperty.call(instance?.vnode.props ?? {}, "scrollTop");
@@ -105,37 +166,68 @@ export const TTranscriptView = defineComponent({
 
     const layoutState = computed<LayoutState>(() => {
       void props.version;
-      void interactionVersion.value;
       const width = Math.max(1, Math.floor(props.w));
       const count = Math.max(0, normalizeInt(props.source.rowCount()));
-      if (!count) return EMPTY_LAYOUT;
+      if (!count) {
+        rowLayoutCache.clear();
+        return EMPTY_LAYOUT;
+      }
 
       const visualRows: TTranscriptVisualRow[] = [];
       const rowStarts = new Map<number, number>();
       const rowEnds = new Map<number, number>();
       const regions: TTranscriptHitRegion[] = [];
       const baseStyle = props.style ?? defaultStyle.value;
+      const hoverRegionId = hoveredRegion.value?.id ?? null;
+      const focusedRegionId = focusedRegion.value?.id ?? null;
       for (let rowIndex = 0; rowIndex < count; rowIndex++) {
         const row = props.source.getRow(rowIndex);
         const rowKey = props.source.getRowKey?.(rowIndex) ?? row.key;
-        rowStarts.set(rowIndex, visualRows.length);
-        const rows = layoutTranscriptRow({
+        const localHoverRegionId = rowHasRegionId(row, rowKey, hoverRegionId)
+          ? hoverRegionId
+          : null;
+        const localFocusedRegionId = rowHasRegionId(row, rowKey, focusedRegionId)
+          ? focusedRegionId
+          : null;
+        const cacheKey = {
+          version: props.version,
           row,
           rowIndex,
           rowKey,
           width,
+          wrap: props.wrap,
           baseStyle,
-          hoverRegionId: hoveredRegion.value?.id ?? null,
-          focusedRegionId: focusedRegion.value?.id ?? null,
           hoverStyle: props.hoverStyle,
           focusStyle: props.focusStyle,
-          wrap: props.wrap,
-        });
+          hoverRegionId: localHoverRegionId,
+          focusedRegionId: localFocusedRegionId,
+        };
+        rowStarts.set(rowIndex, visualRows.length);
+        const cached = rowLayoutCache.get(rowIndex);
+        const rows = sameCachedLayout(cached, cacheKey)
+          ? cached!.visualRows
+          : layoutTranscriptRow({
+              row,
+              rowIndex,
+              rowKey,
+              width,
+              baseStyle,
+              hoverRegionId: localHoverRegionId,
+              focusedRegionId: localFocusedRegionId,
+              hoverStyle: props.hoverStyle,
+              focusStyle: props.focusStyle,
+              wrap: props.wrap,
+            });
+        if (rows !== cached?.visualRows)
+          rowLayoutCache.set(rowIndex, { ...cacheKey, visualRows: rows });
         for (const visualRow of rows) {
           visualRows.push(visualRow);
           regions.push(...visualRow.hitRegions);
         }
         rowEnds.set(rowIndex, visualRows.length);
+      }
+      for (const rowIndex of rowLayoutCache.keys()) {
+        if (rowIndex >= count) rowLayoutCache.delete(rowIndex);
       }
       return { visualRows, rowStarts, rowEnds, regions };
     });
@@ -154,16 +246,31 @@ export const TTranscriptView = defineComponent({
       return props.source.getRow(visualRow.rowIndex);
     }
 
+    function firstRowIndex(): number {
+      return normalizeInt(props.source.firstRowIndex?.() ?? 0);
+    }
+
     function regionEvent(region: TTranscriptHitRegion, event?: unknown): TTranscriptRegionEvent {
       return {
         region,
         row: props.source.getRow(region.rowIndex),
         rowIndex: region.rowIndex,
+        absoluteRowIndex: firstRowIndex() + region.rowIndex,
         event,
       };
     }
 
+    function isDisabledActionRegion(region: TTranscriptHitRegion): boolean {
+      return (
+        region.kind === "action" &&
+        Boolean(
+          (region.payload as { action?: { disabled?: boolean } } | undefined)?.action?.disabled,
+        )
+      );
+    }
+
     function emitRegion(region: TTranscriptHitRegion, pointerEvent?: unknown): void {
+      if (isDisabledActionRegion(region)) return;
       const event = regionEvent(region, pointerEvent);
       if (region.kind === "action") emit("actionClick", event);
       else if (region.kind === "link") emit("linkClick", event);
@@ -189,7 +296,6 @@ export const TTranscriptView = defineComponent({
       const prev = hoveredRegion.value;
       if (prev?.id === region?.id) return;
       hoveredRegion.value = region;
-      interactionVersion.value++;
       invalidateRegion(prev);
       invalidateRegion(region);
       emit("hoverRegion", region ? regionEvent(region) : null);
@@ -199,7 +305,6 @@ export const TTranscriptView = defineComponent({
       const prev = focusedRegion.value;
       if (prev?.id === region?.id) return;
       focusedRegion.value = region;
-      interactionVersion.value++;
       invalidateRegion(prev);
       invalidateRegion(region);
     }
@@ -226,6 +331,7 @@ export const TTranscriptView = defineComponent({
     function activateFocusedRegion(): boolean {
       const region = focusedRegion.value;
       if (!region) return false;
+      if (!layoutState.value.regions.some((candidate) => candidate.id === region.id)) return false;
       emitRegion(region);
       return true;
     }
@@ -359,6 +465,17 @@ export const TTranscriptView = defineComponent({
       return nodes;
     }
 
+    function getVisualRow(index: number): TTranscriptVisualRow | undefined {
+      return layoutState.value.visualRows[index];
+    }
+
+    function selectionTextForVisualRow(item: unknown): string {
+      const visualRow = item as TTranscriptVisualRow | undefined;
+      if (!visualRow) return "";
+      const row = rowForVisualRow(visualRow);
+      return visualRow.selectableText ?? plainTextForTranscriptRow(row);
+    }
+
     return () =>
       h(TVirtualRows, {
         ref: rowsRef,
@@ -368,16 +485,11 @@ export const TTranscriptView = defineComponent({
         h: props.h,
         zIndex: props.zIndex,
         itemCount: layoutState.value.visualRows.length,
-        itemVersion: props.version + interactionVersion.value,
-        getItem: (index: number) => layoutState.value.visualRows[index],
+        itemVersion: props.version,
+        getItem: getVisualRow,
         paintItem: paintVisualRow,
         renderItemNodes: renderVisualRowNodes,
-        selectionText: (item: unknown) => {
-          const visualRow = item as TTranscriptVisualRow | undefined;
-          if (!visualRow) return "";
-          const row = rowForVisualRow(visualRow);
-          return visualRow.selectableText ?? plainTextForTranscriptRow(row);
-        },
+        selectionText: selectionTextForVisualRow,
         scrollTop: currentScrollTop(),
         style: props.style,
         autoFocus: props.autoFocus,
@@ -392,6 +504,7 @@ export const TTranscriptView = defineComponent({
           const rowEvent: TTranscriptRowEvent = {
             row: rowForVisualRow(visualRow),
             rowIndex: visualRow.rowIndex,
+            absoluteRowIndex: firstRowIndex() + visualRow.rowIndex,
             event: event.event,
           };
           emit("rowClick", rowEvent);

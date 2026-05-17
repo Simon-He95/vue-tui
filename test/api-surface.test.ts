@@ -132,6 +132,7 @@ describe("public API surface", () => {
         "TLogView",
         "TLogVirtualLinksPanel",
         "TLogVirtualSearchResults",
+        "TTranscriptView",
         "TVirtualList",
         "captureTLogViewSessionState",
         "createAppendOnlyLogStore",

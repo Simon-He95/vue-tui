@@ -101,12 +101,14 @@ export type TTranscriptRegionEvent = Readonly<{
   region: TTranscriptHitRegion;
   row: TTranscriptRow;
   rowIndex: number;
+  absoluteRowIndex: number;
   event?: unknown;
 }>;
 
 export type TTranscriptRowEvent = Readonly<{
   row: TTranscriptRow;
   rowIndex: number;
+  absoluteRowIndex: number;
   event?: unknown;
 }>;
 
