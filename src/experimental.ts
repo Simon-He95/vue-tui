@@ -66,6 +66,7 @@ export type {
   TTranscriptRegionEvent,
   TTranscriptRow,
   TTranscriptRowEvent,
+  TTranscriptSelectionSegment,
   TTranscriptSegment,
   TTranscriptViewHandle,
   TTranscriptVisualRow,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { layoutTranscriptRow } from "../src/vue/transcript/layout.js";
 import { plainTextForTranscriptRow } from "../src/vue/transcript/plain-text.js";
+import { sliceByCellsRange } from "../src/vue/utils/text.js";
 
 describe("transcript row layout", () => {
   it("wraps rich text by terminal cells", () => {
@@ -57,11 +58,77 @@ describe("transcript row layout", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.hitRegions[0]).toMatchObject({
-      id: "approve",
+      id: "action:approval:approve",
       kind: "action",
       rowIndex: 2,
+      payload: { actionId: "approve" },
     });
+    const region = rows[0]!.hitRegions[0]!;
+    expect(
+      sliceByCellsRange(
+        rows[0]!.selectionSegments.map((segment) => segment.text).join(""),
+        region.x0,
+        region.x1,
+      ),
+    ).toBe("[Approve]");
+    expect(
+      rows[0]!.selectionSegments.find(
+        (segment) => segment.x0 <= region.x0 && segment.x1 >= region.x1,
+      ),
+    ).toMatchObject({ selectable: false });
     expect(plainTextForTranscriptRow(row)).toBe("Allow command?\npnpm test");
+  });
+
+  it("scopes repeated action ids by row key", () => {
+    const makeRow = (key: string) => ({
+      kind: "approval" as const,
+      key,
+      title: "Allow?",
+      actions: [{ id: "approve", label: "Approve", kind: "primary" as const }],
+    });
+
+    const first = layoutTranscriptRow({
+      row: makeRow("first"),
+      rowIndex: 0,
+      rowKey: "first",
+      width: 80,
+      baseStyle: {},
+      wrap: false,
+    });
+    const second = layoutTranscriptRow({
+      row: makeRow("second"),
+      rowIndex: 1,
+      rowKey: "second",
+      width: 80,
+      baseStyle: {},
+      wrap: false,
+    });
+
+    expect(first[0]?.hitRegions[0]?.id).toBe("action:first:approve");
+    expect(second[0]?.hitRegions[0]?.id).toBe("action:second:approve");
+  });
+
+  it("keeps selection segments aligned across non-selectable cells", () => {
+    const rows = layoutTranscriptRow({
+      row: {
+        kind: "message",
+        key: "msg",
+        segments: [{ text: "AA" }, { text: "XX", selectable: false }, { text: "BB" }],
+      },
+      rowIndex: 0,
+      rowKey: "msg",
+      width: 80,
+      baseStyle: {},
+      wrap: false,
+    });
+
+    expect(rows[0]?.text).toBe("AAXXBB");
+    expect(rows[0]?.selectableText).toBe("AABB");
+    expect(rows[0]?.selectionSegments).toEqual([
+      { x0: 0, x1: 2, text: "AA", selectable: true },
+      { x0: 2, x1: 4, text: "XX", selectable: false },
+      { x0: 4, x1: 6, text: "BB", selectable: true },
+    ]);
   });
 
   it("does not create hit regions for disabled actions", () => {

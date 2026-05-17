@@ -74,6 +74,13 @@ export type TTranscriptVisualSegment = Readonly<{
   sourceSegmentIndex?: number;
 }>;
 
+export type TTranscriptSelectionSegment = Readonly<{
+  x0: number;
+  x1: number;
+  text: string;
+  selectable: boolean;
+}>;
+
 export type TTranscriptHitRegion = Readonly<{
   id: string;
   kind: "link" | "action" | "fold-toggle" | "tool-call" | "custom";
@@ -92,6 +99,7 @@ export type TTranscriptVisualRow = Readonly<{
   partIndex: number;
   startCell: number;
   segments: readonly TTranscriptVisualSegment[];
+  selectionSegments: readonly TTranscriptSelectionSegment[];
   hitRegions: readonly TTranscriptHitRegion[];
   selectableText?: string;
   text: string;

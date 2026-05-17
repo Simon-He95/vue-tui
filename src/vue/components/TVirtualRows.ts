@@ -85,6 +85,9 @@ export type TVirtualRowsPaintContext = Readonly<{
   x: number;
   y: number;
   w: number;
+  clipX: number;
+  clipY: number;
+  fullW: number;
   scrollTop: number;
   style: Style;
 }>;
@@ -93,7 +96,18 @@ export type TVirtualRowsRenderNodesContext = Readonly<{
   item: unknown;
   index: number;
   row: number;
+  clipX: number;
+  clipY: number;
+  fullW: number;
   scrollTop: number;
+}>;
+
+export type TVirtualRowsSelectionSpanTextContext = Readonly<{
+  item: unknown;
+  index: number;
+  x0: number;
+  x1: number;
+  cols: number;
 }>;
 
 export type TVirtualRowsScrollMetrics = Readonly<{
@@ -141,6 +155,10 @@ export const TVirtualRows = defineComponent({
     },
     selectionText: {
       type: Function as PropType<(item: unknown, index: number) => string>,
+      default: undefined,
+    },
+    selectionSpanText: {
+      type: Function as PropType<(ctx: TVirtualRowsSelectionSpanTextContext) => string>,
       default: undefined,
     },
     scrollTop: { type: Number, default: undefined },
@@ -531,7 +549,18 @@ export const TVirtualRows = defineComponent({
       const cols = Math.max(1, Math.floor(props.w));
       return terminalSelectionRowSpans(range, cols, itemCount.value)
         .map((span) => {
-          const text = sliceByCellsRange(itemText(span.y), span.x0, span.x1);
+          const item = props.getItem(span.y);
+          const text = props.selectionSpanText
+            ? String(
+                props.selectionSpanText({
+                  item,
+                  index: span.y,
+                  x0: span.x0,
+                  x1: span.x1,
+                  cols,
+                }) ?? "",
+              )
+            : sliceByCellsRange(itemText(span.y), span.x0, span.x1);
           return span.x1 >= cols ? text.trimEnd() : text;
         })
         .join("\n");
@@ -777,6 +806,7 @@ export const TVirtualRows = defineComponent({
         props.itemVersion,
         props.getItem,
         props.paintItem,
+        props.selectionSpanText,
         props.style,
         defaultStyle.value,
       ],
@@ -784,8 +814,9 @@ export const TVirtualRows = defineComponent({
         dirtyRowsHint = undefined;
         if (!visible.value) return;
         const r = normalizedRect();
+        const full = normalizedFullRect();
         if (r.w <= 0 || r.h <= 0) return;
-        const { y: clipY } = clipOffsets();
+        const { x: clipX, y: clipY } = clipOffsets();
         const top = currentScrollTop();
         const base = props.style ?? defaultStyle.value;
         const blank = spaces(r.w);
@@ -804,6 +835,9 @@ export const TVirtualRows = defineComponent({
             x: r.x,
             y,
             w: r.w,
+            clipX,
+            clipY,
+            fullW: full.w,
             scrollTop: top,
             style: base,
           });
@@ -825,7 +859,8 @@ export const TVirtualRows = defineComponent({
       const children: VNodeChild[] = [];
       if (props.renderItemNodes && visible.value) {
         const r = normalizedRect();
-        const { y: clipY } = clipOffsets();
+        const full = normalizedFullRect();
+        const { x: clipX, y: clipY } = clipOffsets();
         const top = currentScrollTop();
         for (let y = r.y; y < r.y + r.h; y++) {
           const row = clipY + (y - r.y);
@@ -836,6 +871,9 @@ export const TVirtualRows = defineComponent({
               item: props.getItem(index),
               index,
               row,
+              clipX,
+              clipY,
+              fullW: full.w,
               scrollTop: top,
             }),
           );

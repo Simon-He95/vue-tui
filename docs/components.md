@@ -8,26 +8,26 @@
 
 ## 导入入口
 
-| API maturity | Import                           | 组件                                                                                                                                                                              |
-| ------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TDialog` `TInput` `TList` `TSelect` `TText` `TView`                                                                                                    |
-| Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition`                             |
-| Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                |
-| Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap` |
+| API maturity | Import                           | 组件                                                                                                                                                                                                |
+| ------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TDialog` `TInput` `TList` `TSelect` `TText` `TView`                                                                                                                      |
+| Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition`                                               |
+| Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                  |
+| Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap` |
 
 下面的组件速读按用途分组，不代表 root entrypoint 导出。每个组件的 primary import 以生成的 [组件 API](/generated/components-api) 为准。
 
 ## 组件速读
 
-| 类别          | 组件                                                                                                                                                           | 典型用途                                        | 适配性判断                                         |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
-| Root          | `TerminalProvider`                                                                                                                                             | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
-| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                 | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
-| Text / Motion | `TText` `TTransition`                                                                                                                                          | 文本渲染、状态切换、动画插值                    | 通用                                               |
-| Input         | `TInput` `TInputBox` `TJsonEditor`                                                                                                                             | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
-| Pickers       | `TList` `TVirtualList` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、日志、路径选择                   | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
-| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                                                                                    | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
-| Navigation    | `TRouterView` + `createTerminalRouter()`                                                                                                                       | 多页面 TUI / shell                              | 通用                                               |
+| 类别          | 组件                                                                                                                                                                             | 典型用途                                        | 适配性判断                                         |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| Root          | `TerminalProvider`                                                                                                                                                               | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
+| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                   | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
+| Text / Motion | `TText` `TTransition`                                                                                                                                                            | 文本渲染、状态切换、动画插值                    | 通用                                               |
+| Input         | `TInput` `TInputBox` `TJsonEditor`                                                                                                                                               | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
+| Pickers       | `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择       | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                                                                                                      | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
+| Navigation    | `TRouterView` + `createTerminalRouter()`                                                                                                                                         | 多页面 TUI / shell                              | 通用                                               |
 
 如果你更关心“哪些地方还应该继续做插件化”，建议配合阅读：[扩展性与插件化](./extensibility.md)。
 
@@ -494,6 +494,33 @@ Wheel burst 通过 frame mailbox 合并；同一帧只应用最后的 `scrollTop
 - `update:scrollTop`: `scrollTop`（number）
 - `scroll`: `scrollTop`（number）
 - `focus` / `blur` / `keydown`
+
+## TTranscriptView
+
+Transcript row viewport：渲染 message / action / tool-call / approval rows，支持 row-scoped action/link hit regions、focus navigation、cell selection copy 和 wrapped visual rows。
+
+> Experimental prototype：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。它会在当前 layout state 中 flatten source rows 到 visual rows；适合小到中等 transcript 和交互原型，不适合作为几十万 visual rows 的高吞吐 retained transcript 视图。大规模 append-only output 继续使用 `TLogView`。
+
+### Props
+
+- `x`/`y`/`w`/`h` `(number, required)`
+- `source` `(TTranscriptDataSource, required)`：提供 `rowCount()`、`getRow(index)`，可选提供 `getRowKey(index)`、`firstRowIndex()`
+- `version` `(number, required)`：数据变化版本号
+- `scrollTop` `(number?)` + `update:scrollTop`
+- `defaultScrollTop` `(number?)`
+- `autoStickToBottom` `(boolean)`
+- `selectable` `(boolean)`
+- `wrap` `(boolean)`
+- `style` / `hoverStyle` / `focusStyle` `(Style?)`
+- `autoFocus` / `focusable` / `wheelScroll` `(boolean)`
+
+### Events
+
+- `actionClick` / `linkClick` / `foldToggle` / `toolClick`: `{ region, row, rowIndex, absoluteRowIndex, event }`
+- `rowClick`: `{ row, rowIndex, absoluteRowIndex, event }`
+- `hoverRegion`: region event or `null`
+- `scroll`: scroll metrics
+- `update:scrollTop`: `scrollTop`（number）
 
 ## TMarkdownText / TVirtualMarkdown
 

@@ -1,5 +1,10 @@
 import type { PropType } from "vue";
-import type { TVirtualRowsHandle, TVirtualRowsPaintContext } from "./TVirtualRows.js";
+import type {
+  TVirtualRowsHandle,
+  TVirtualRowsPaintContext,
+  TVirtualRowsRenderNodesContext,
+  TVirtualRowsSelectionSpanTextContext,
+} from "./TVirtualRows.js";
 import type { Style } from "../../core/types.js";
 import type {
   TTranscriptDataSource,
@@ -7,12 +12,17 @@ import type {
   TTranscriptRegionEvent,
   TTranscriptRow,
   TTranscriptRowEvent,
+  TTranscriptSelectionSegment,
   TTranscriptSegment,
   TTranscriptViewHandle,
   TTranscriptVisualRow,
 } from "../transcript/types.js";
 import { computed, defineComponent, getCurrentInstance, h, ref, watch } from "vue";
-import { layoutTranscriptRow } from "../transcript/layout.js";
+import {
+  layoutTranscriptRow,
+  transcriptActionRegionId,
+  transcriptLinkRegionId,
+} from "../transcript/layout.js";
 import { plainTextForTranscriptRow } from "../transcript/plain-text.js";
 import { sliceByCellsRange } from "../utils/text.js";
 import { TView } from "./TView.js";
@@ -78,12 +88,16 @@ function sourceSegmentsForRegion(row: TTranscriptRow): readonly TTranscriptSegme
 
 function rowHasRegionId(row: TTranscriptRow, rowKey: string | number, id: string | null): boolean {
   if (!id) return false;
-  if ("actions" in row && row.actions?.some((action) => action.id === id)) return true;
+  if (
+    "actions" in row &&
+    row.actions?.some((action) => transcriptActionRegionId(rowKey, action.id) === id)
+  )
+    return true;
   const segments = sourceSegmentsForRegion(row);
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i]!;
     if (segment.href == null) continue;
-    if ((segment.tokenId ?? `link:${rowKey}:${i}`) === id) return true;
+    if (transcriptLinkRegionId(rowKey, i, segment.tokenId) === id) return true;
   }
   return false;
 }
@@ -420,13 +434,13 @@ export const TTranscriptView = defineComponent({
       for (const segment of visualRow.segments) {
         const start = x;
         const end = start + segment.cells;
-        const drawStart = Math.max(0, start);
-        const drawEnd = Math.min(paintCtx.w, end);
+        const drawStart = Math.max(paintCtx.clipX, start);
+        const drawEnd = Math.min(paintCtx.clipX + paintCtx.w, end);
         if (drawEnd > drawStart) {
           paintCtx.terminal.write(
             sliceByCellsRange(segment.text, drawStart - start, drawEnd - start),
             {
-              x: paintCtx.x + drawStart,
+              x: paintCtx.x + (drawStart - paintCtx.clipX),
               y: paintCtx.y,
               style: segment.style,
             },
@@ -436,7 +450,7 @@ export const TTranscriptView = defineComponent({
       }
     }
 
-    function renderVisualRowNodes(ctx: { item: unknown; index: number; row: number }): any[] {
+    function renderVisualRowNodes(ctx: TVirtualRowsRenderNodesContext): any[] {
       const visualRow = ctx.item as TTranscriptVisualRow | undefined;
       if (!visualRow) return [];
       const nodes: any[] = [];
@@ -465,15 +479,41 @@ export const TTranscriptView = defineComponent({
       return nodes;
     }
 
+    function textForSelectionSegments(
+      segments: readonly TTranscriptSelectionSegment[],
+      x0: number,
+      x1: number,
+    ): string {
+      let text = "";
+      for (const segment of segments) {
+        const start = Math.max(x0, segment.x0);
+        const end = Math.min(x1, segment.x1);
+        if (end <= start || !segment.selectable) continue;
+        text += sliceByCellsRange(segment.text, start - segment.x0, end - segment.x0);
+      }
+      return text;
+    }
+
     function getVisualRow(index: number): TTranscriptVisualRow | undefined {
       return layoutState.value.visualRows[index];
     }
 
-    function selectionTextForVisualRow(item: unknown): string {
-      const visualRow = item as TTranscriptVisualRow | undefined;
+    function selectionTextForVisualRow(visualRow: TTranscriptVisualRow | undefined): string {
       if (!visualRow) return "";
       const row = rowForVisualRow(visualRow);
       return visualRow.selectableText ?? plainTextForTranscriptRow(row);
+    }
+
+    function selectionTextForItem(item: unknown): string {
+      return selectionTextForVisualRow(item as TTranscriptVisualRow | undefined);
+    }
+
+    function selectionTextForVisualRowSpan(ctx: TVirtualRowsSelectionSpanTextContext): string {
+      const visualRow = ctx.item as TTranscriptVisualRow | undefined;
+      if (!visualRow) return "";
+      if (visualRow.selectionSegments.length)
+        return textForSelectionSegments(visualRow.selectionSegments, ctx.x0, ctx.x1);
+      return sliceByCellsRange(selectionTextForVisualRow(visualRow), ctx.x0, ctx.x1);
     }
 
     return () =>
@@ -489,7 +529,8 @@ export const TTranscriptView = defineComponent({
         getItem: getVisualRow,
         paintItem: paintVisualRow,
         renderItemNodes: renderVisualRowNodes,
-        selectionText: selectionTextForVisualRow,
+        selectionText: selectionTextForItem,
+        selectionSpanText: selectionTextForVisualRowSpan,
         scrollTop: currentScrollTop(),
         style: props.style,
         autoFocus: props.autoFocus,

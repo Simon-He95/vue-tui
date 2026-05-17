@@ -2,6 +2,7 @@ import type {
   TTranscriptAction,
   TTranscriptHitRegion,
   TTranscriptRow,
+  TTranscriptSelectionSegment,
   TTranscriptSegment,
   TTranscriptVisualRow,
   TTranscriptVisualSegment,
@@ -31,6 +32,18 @@ function styleForAction(action: TTranscriptAction): Style {
 
 function mergeStyle(base: Style, next?: Style): Style {
   return next ? { ...base, ...next } : base;
+}
+
+export function transcriptActionRegionId(rowKey: string | number, actionId: string): string {
+  return `action:${rowKey}:${actionId}`;
+}
+
+export function transcriptLinkRegionId(
+  rowKey: string | number,
+  sourceSegmentIndex: number,
+  tokenId?: string,
+): string {
+  return `link:${rowKey}:${tokenId ?? sourceSegmentIndex}`;
 }
 
 function sameVisualSegment(
@@ -72,6 +85,7 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
     partIndex: number;
     startCell: number;
     segments: TTranscriptVisualSegment[];
+    selectionSegments: TTranscriptSelectionSegment[];
     hitRegions: TTranscriptHitRegion[];
     selectableText?: string;
     text: string;
@@ -88,6 +102,7 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
       partIndex,
       startCell,
       segments: [] as TTranscriptVisualSegment[],
+      selectionSegments: [] as TTranscriptSelectionSegment[],
       hitRegions: [] as TTranscriptHitRegion[],
       selectableText: undefined as string | undefined,
       text: "",
@@ -101,6 +116,19 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
     current = createVisualRow(visualRows.length, absoluteCell);
     currentSelectableText = "";
     x = 0;
+  }
+
+  function appendSelectionSegment(text: string, x0: number, x1: number, selectable: boolean): void {
+    const last = current.selectionSegments[current.selectionSegments.length - 1];
+    if (last && last.selectable === selectable && last.x1 === x0) {
+      current.selectionSegments[current.selectionSegments.length - 1] = {
+        ...last,
+        x1,
+        text: `${last.text}${text}`,
+      };
+      return;
+    }
+    current.selectionSegments.push({ x0, x1, text, selectable });
   }
 
   function appendPiece(
@@ -134,6 +162,7 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
       });
     }
     current.text += text;
+    appendSelectionSegment(text, x, x + clippedCells, selectable !== false);
     if (selectable !== false) currentSelectableText += text;
     x += clippedCells;
     absoluteCell += clippedCells;
@@ -147,10 +176,10 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
     const regionBase =
       segment.href != null
         ? {
-            id: segment.tokenId ?? `link:${options.rowKey}:${sourceSegmentIndex}`,
+            id: transcriptLinkRegionId(options.rowKey, sourceSegmentIndex, segment.tokenId),
             kind: "link" as const,
             rowIndex: options.rowIndex,
-            payload: { href: segment.href, segment, row: options.row },
+            payload: { href: segment.href, tokenId: segment.tokenId, segment, row: options.row },
             hoverStyle: options.hoverStyle,
             focusStyle: options.focusStyle,
           }
@@ -187,17 +216,17 @@ export function layoutTranscriptRow(options: TTranscriptRowLayoutOptions): TTran
     const regionBase = action.disabled
       ? undefined
       : {
-          id: action.id,
+          id: transcriptActionRegionId(options.rowKey, action.id),
           kind: "action" as const,
           rowIndex: options.rowIndex,
-          payload: { action, row: options.row },
+          payload: { actionId: action.id, action, row: options.row },
           hoverStyle: action.hoverStyle ?? options.hoverStyle,
           focusStyle: action.focusStyle ?? options.focusStyle,
         };
     const activeStyle =
-      regionBase && action.id === options.focusedRegionId
+      regionBase && regionBase.id === options.focusedRegionId
         ? mergeStyle(baseStyle, regionBase.focusStyle)
-        : regionBase && action.id === options.hoverRegionId
+        : regionBase && regionBase.id === options.hoverRegionId
           ? mergeStyle(baseStyle, regionBase.hoverStyle)
           : baseStyle;
     appendPiece(text, textCellWidth(text), activeStyle, false, undefined, regionBase);

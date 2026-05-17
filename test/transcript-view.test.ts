@@ -6,7 +6,14 @@ import {
   type TTranscriptRow,
   type TTranscriptViewHandle,
 } from "../src/experimental.js";
-import { defineComponent, h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
+import {
+  defineComponent,
+  h,
+  mountTerminal,
+  nextTick,
+  ref,
+  TView,
+} from "./ui-regressions-support.js";
 import { installManualRaf } from "./helpers/manual-raf.js";
 
 function createSource(rows: readonly TTranscriptRow[]): TTranscriptDataSource {
@@ -51,9 +58,15 @@ async function settleClipboard(): Promise<void> {
   await Promise.resolve();
 }
 
-async function copyWrappedSelection(
-  start: { x: number; y: number },
-  end: { x: number; y: number },
+async function copyTranscriptSelection(
+  options: Readonly<{
+    rows: readonly TTranscriptRow[];
+    w: number;
+    h: number;
+    wrap?: boolean;
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+  }>,
 ): Promise<string> {
   const writes: string[] = [];
   const restore = installNavigatorClipboard(writes);
@@ -62,34 +75,36 @@ async function copyWrappedSelection(
       h(TTranscriptView, {
         x: 0,
         y: 0,
-        w: 3,
-        h: 2,
-        source: createSource([
-          {
-            kind: "message",
-            key: "msg",
-            segments: [{ text: "abcdef" }],
-          },
-        ]),
+        w: options.w,
+        h: options.h,
+        source: createSource(options.rows),
         version: 1,
-        wrap: true,
+        wrap: options.wrap,
         selectable: true,
       }),
-    3,
-    2,
+    options.w,
+    options.h,
     { selection: true },
   );
 
   try {
     const container = mounted.container()!;
     container.dispatchEvent(
-      new MouseEvent("mousedown", { clientX: start.x, clientY: start.y, bubbles: true }),
+      new MouseEvent("mousedown", {
+        clientX: options.start.x,
+        clientY: options.start.y,
+        bubbles: true,
+      }),
     );
     container.dispatchEvent(
-      new MouseEvent("mousemove", { clientX: end.x, clientY: end.y, bubbles: true }),
+      new MouseEvent("mousemove", {
+        clientX: options.end.x,
+        clientY: options.end.y,
+        bubbles: true,
+      }),
     );
     container.dispatchEvent(
-      new MouseEvent("mouseup", { clientX: end.x, clientY: end.y, bubbles: true }),
+      new MouseEvent("mouseup", { clientX: options.end.x, clientY: options.end.y, bubbles: true }),
     );
     await settleClipboard();
     return writes[0] ?? "";
@@ -101,9 +116,61 @@ async function copyWrappedSelection(
 
 describe("TTranscriptView", () => {
   it("copies wrapped visual rows without repeating the full message", async () => {
-    await expect(copyWrappedSelection({ x: 0, y: 0 }, { x: 2, y: 0 })).resolves.toBe("abc");
-    await expect(copyWrappedSelection({ x: 0, y: 1 }, { x: 2, y: 1 })).resolves.toBe("def");
-    await expect(copyWrappedSelection({ x: 0, y: 0 }, { x: 2, y: 1 })).resolves.toBe("abc\ndef");
+    const rows: TTranscriptRow[] = [
+      {
+        kind: "message",
+        key: "msg",
+        segments: [{ text: "abcdef" }],
+      },
+    ];
+    await expect(
+      copyTranscriptSelection({
+        rows,
+        w: 3,
+        h: 2,
+        wrap: true,
+        start: { x: 0, y: 0 },
+        end: { x: 2, y: 0 },
+      }),
+    ).resolves.toBe("abc");
+    await expect(
+      copyTranscriptSelection({
+        rows,
+        w: 3,
+        h: 2,
+        wrap: true,
+        start: { x: 0, y: 1 },
+        end: { x: 2, y: 1 },
+      }),
+    ).resolves.toBe("def");
+    await expect(
+      copyTranscriptSelection({
+        rows,
+        w: 3,
+        h: 2,
+        wrap: true,
+        start: { x: 0, y: 0 },
+        end: { x: 2, y: 1 },
+      }),
+    ).resolves.toBe("abc\ndef");
+  });
+
+  it("copies selectable text after non-selectable cells without coordinate drift", async () => {
+    await expect(
+      copyTranscriptSelection({
+        rows: [
+          {
+            kind: "message",
+            key: "msg",
+            segments: [{ text: "AA" }, { text: "XX", selectable: false }, { text: "BB" }],
+          },
+        ],
+        w: 6,
+        h: 1,
+        start: { x: 4, y: 0 },
+        end: { x: 5, y: 0 },
+      }),
+    ).resolves.toBe("BB");
   });
 
   it("waits for parent-controlled scrollTop before repainting", async () => {
@@ -202,6 +269,101 @@ describe("TTranscriptView", () => {
       expect(viewRef.value?.focusNextRegion()).toBe(false);
       expect(viewRef.value?.activateFocusedRegion()).toBe(false);
       expect(actionClick).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("focuses repeated action ids by row-scoped region id", async () => {
+    const actionClick = vi.fn();
+    const viewRef = ref<TTranscriptViewHandle | null>(null);
+    const rows: TTranscriptRow[] = [
+      {
+        kind: "approval",
+        key: "first",
+        title: "Allow first?",
+        actions: [{ id: "approve", label: "Approve" }],
+      },
+      {
+        kind: "approval",
+        key: "second",
+        title: "Allow second?",
+        actions: [{ id: "approve", label: "Approve" }],
+      },
+    ];
+    const App = defineComponent({
+      name: "TranscriptRepeatedActionIdsApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            ref: viewRef,
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 2,
+            source: createSource(rows),
+            version: 1,
+            onActionClick: actionClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 32, rows: 4, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(viewRef.value?.focusNextRegion()).toBe(true);
+      expect(viewRef.value?.activateFocusedRegion()).toBe(true);
+      expect(viewRef.value?.focusNextRegion()).toBe(true);
+      expect(viewRef.value?.activateFocusedRegion()).toBe(true);
+      expect(viewRef.value?.focusNextRegion()).toBe(true);
+      expect(viewRef.value?.activateFocusedRegion()).toBe(true);
+
+      expect(actionClick.mock.calls.map(([event]) => event.rowIndex)).toEqual([0, 1, 0]);
+      expect(actionClick.mock.calls.map(([event]) => event.region.id)).toEqual([
+        "action:first:approve",
+        "action:second:approve",
+        "action:first:approve",
+      ]);
+      expect(actionClick.mock.calls[0]?.[0].region.payload).toMatchObject({ actionId: "approve" });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("paints horizontally clipped transcript rows from the clipped cell offset", async () => {
+    const App = defineComponent({
+      name: "TranscriptHorizontalClipApp",
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: 4, h: 1 }, () =>
+            h(TTranscriptView, {
+              x: -3,
+              y: 0,
+              w: 10,
+              h: 1,
+              source: createSource([
+                {
+                  kind: "message",
+                  key: "msg",
+                  segments: [{ text: "ABCDEFGH" }],
+                },
+              ]),
+              version: 1,
+            }),
+          );
+      },
+    });
+    const app = createTerminalApp({ cols: 8, rows: 2, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("DEFG");
     } finally {
       app.dispose();
     }
