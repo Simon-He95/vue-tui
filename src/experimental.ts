@@ -1,4 +1,5 @@
 export { TVirtualList } from "./vue/components/TVirtualList.js";
+export { TTranscriptView } from "./vue/components/TTranscriptView.js";
 export { TLogView } from "./vue/components/TLogView.js";
 export { TLogScrollbar } from "./vue/components/TLogScrollbar.js";
 export { TLogMinimap } from "./vue/components/TLogMinimap.js";
@@ -58,6 +59,18 @@ export {
   tlogHighContrastTheme,
 } from "./vue/log/tlog-theme.js";
 export type { RowScrollMode } from "./vue/components/TVirtualList.js";
+export type {
+  TTranscriptAction,
+  TTranscriptDataSource,
+  TTranscriptHitRegion,
+  TTranscriptRegionEvent,
+  TTranscriptRow,
+  TTranscriptRowEvent,
+  TTranscriptSegment,
+  TTranscriptViewHandle,
+  TTranscriptVisualRow,
+  TTranscriptVisualSegment,
+} from "./vue/transcript/types.js";
 export type {
   TLogLinkPanelItem,
   TLogLinksPanelSelectPayload,
