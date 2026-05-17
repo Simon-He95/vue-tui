@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { layoutTranscriptRow } from "../src/vue/transcript/layout.js";
+import {
+  layoutTranscriptRow,
+  transcriptActionRegionId,
+  transcriptFoldToggleRegionId,
+  transcriptToolCallRegionId,
+} from "../src/vue/transcript/layout.js";
 import { plainTextForTranscriptRow } from "../src/vue/transcript/plain-text.js";
 import { sliceByCellsRange } from "../src/vue/utils/text.js";
 
@@ -58,7 +63,7 @@ describe("transcript row layout", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.hitRegions[0]).toMatchObject({
-      id: "action:approval:approve",
+      id: transcriptActionRegionId("approval", "approve"),
       kind: "action",
       rowIndex: 2,
       payload: { actionId: "approve" },
@@ -104,8 +109,8 @@ describe("transcript row layout", () => {
       wrap: false,
     });
 
-    expect(first[0]?.hitRegions[0]?.id).toBe("action:first:approve");
-    expect(second[0]?.hitRegions[0]?.id).toBe("action:second:approve");
+    expect(first[0]?.hitRegions[0]?.id).toBe(transcriptActionRegionId("first", "approve"));
+    expect(second[0]?.hitRegions[0]?.id).toBe(transcriptActionRegionId("second", "approve"));
   });
 
   it("keeps selection segments aligned across non-selectable cells", () => {
@@ -174,12 +179,12 @@ describe("transcript row layout", () => {
     expect(rows[0]?.hitRegions.map((region) => region.kind)).toContain("tool-call");
     expect(rows[0]?.hitRegions.some((region) => region.kind === "action")).toBe(false);
     expect(rows[0]?.hitRegions.find((region) => region.kind === "fold-toggle")).toMatchObject({
-      id: "fold-toggle:tool",
+      id: transcriptFoldToggleRegionId("tool"),
       rowIndex: 1,
       payload: { collapsed: false },
     });
     expect(rows[0]?.hitRegions.find((region) => region.kind === "tool-call")).toMatchObject({
-      id: "tool-call:tool",
+      id: transcriptToolCallRegionId("tool"),
       rowIndex: 1,
     });
   });

@@ -6,6 +6,7 @@ import type {
   TVirtualRowsSelectionSpanTextContext,
 } from "./TVirtualRows.js";
 import type { Style } from "../../core/types.js";
+import type { TerminalKeyboardEvent } from "../../events/manager/types.js";
 import type {
   TTranscriptDataSource,
   TTranscriptHitRegion,
@@ -153,6 +154,7 @@ export const TTranscriptView = defineComponent({
     autoFocus: { type: Boolean, default: false },
     focusable: { type: Boolean, default: true },
     wheelScroll: { type: Boolean, default: true },
+    keyboardRegions: { type: Boolean, default: true },
     rowScrollMode: {
       type: String as PropType<RowScrollMode>,
       default: "unsafe-full-row",
@@ -176,6 +178,7 @@ export const TTranscriptView = defineComponent({
     const hoveredRegion = ref<TTranscriptHitRegion | null>(null);
     const focusedRegion = ref<TTranscriptHitRegion | null>(null);
     const rowLayoutCache = new Map<number, RowLayoutCacheEntry>();
+    let warnedLargeFlattenedRows = false;
 
     function isScrollControlled(): boolean {
       return Object.prototype.hasOwnProperty.call(instance?.vnode.props ?? {}, "scrollTop");
@@ -249,6 +252,16 @@ export const TTranscriptView = defineComponent({
       }
       for (const rowIndex of rowLayoutCache.keys()) {
         if (rowIndex >= count) rowLayoutCache.delete(rowIndex);
+      }
+      if (
+        !warnedLargeFlattenedRows &&
+        (globalThis as any).__VT_DEBUG_PERF__ &&
+        visualRows.length > 5000
+      ) {
+        warnedLargeFlattenedRows = true;
+        console.warn(
+          "[vue-tui] TTranscriptView flattens all transcript rows; use TLogView or windowed source for large retained output.",
+        );
       }
       return { visualRows, rowStarts, rowEnds, regions };
     });
@@ -346,6 +359,23 @@ export const TTranscriptView = defineComponent({
       return regions;
     }
 
+    function hasVisibleRegionId(id: string): boolean {
+      const rows = layoutState.value.visualRows;
+      const top = clamp(currentScrollTop(), 0, rows.length);
+      const bottom = Math.min(rows.length, top + Math.max(0, normalizeInt(props.h)));
+      for (let i = top; i < bottom; i++) {
+        if (rows[i]?.hitRegions.some((region) => region.id === id)) return true;
+      }
+      return false;
+    }
+
+    function reconcileActiveRegions(): void {
+      const hover = hoveredRegion.value;
+      if (hover && !hasVisibleRegionId(hover.id)) setHoveredRegion(null);
+      const focus = focusedRegion.value;
+      if (focus && !hasVisibleRegionId(focus.id)) setFocusedRegion(null);
+    }
+
     function focusRegionByOffset(offset: number): boolean {
       const regions = visibleFocusableRegions();
       if (!regions.length) return false;
@@ -371,6 +401,23 @@ export const TTranscriptView = defineComponent({
       if (!visibleFocusableRegions().some((candidate) => candidate.id === region.id)) return false;
       emitRegion(region);
       return true;
+    }
+
+    function onKeydown(e: TerminalKeyboardEvent): void {
+      if (!props.keyboardRegions) return;
+      if (e.key === "Tab") {
+        const handled = e.shiftKey ? focusPreviousRegion() : focusNextRegion();
+        if (handled) e.preventDefault();
+        return;
+      }
+      if (e.key === "Enter") {
+        if (activateFocusedRegion()) e.preventDefault();
+        return;
+      }
+      if (e.key === "Escape" && focusedRegion.value) {
+        e.preventDefault();
+        setFocusedRegion(null);
+      }
     }
 
     function scrollToTop(): void {
@@ -447,6 +494,11 @@ export const TTranscriptView = defineComponent({
         rowsRef.value?.scrollTo(nextTop);
         setScrollTop(nextTop);
       },
+    );
+
+    watch(
+      () => [layoutState.value.regions, currentScrollTop(), props.h],
+      () => reconcileActiveRegions(),
     );
 
     function paintVisualRow(paintCtx: TVirtualRowsPaintContext): void {
@@ -561,6 +613,7 @@ export const TTranscriptView = defineComponent({
         selectable: props.selectable,
         wheelScroll: props.wheelScroll,
         rowScrollMode: props.rowScrollMode,
+        onKeydown,
         onScroll: (payload: any) => emit("scroll", payload),
         onItemClick: (event: { item: unknown; event?: unknown }) => {
           const visualRow = event.item as TTranscriptVisualRow | undefined;

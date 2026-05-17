@@ -35,7 +35,7 @@ function mergeStyle(base: Style, next?: Style): Style {
 }
 
 export function transcriptActionRegionId(rowKey: string | number, actionId: string): string {
-  return `action:${rowKey}:${actionId}`;
+  return JSON.stringify(["action", rowKey, actionId]);
 }
 
 export function transcriptLinkRegionId(
@@ -43,15 +43,15 @@ export function transcriptLinkRegionId(
   sourceSegmentIndex: number,
   tokenId?: string,
 ): string {
-  return `link:${rowKey}:${tokenId ?? sourceSegmentIndex}`;
+  return JSON.stringify(["link", rowKey, tokenId ?? sourceSegmentIndex]);
 }
 
 export function transcriptFoldToggleRegionId(rowKey: string | number): string {
-  return `fold-toggle:${rowKey}`;
+  return JSON.stringify(["fold-toggle", rowKey]);
 }
 
 export function transcriptToolCallRegionId(rowKey: string | number): string {
-  return `tool-call:${rowKey}`;
+  return JSON.stringify(["tool-call", rowKey]);
 }
 
 function sameVisualSegment(

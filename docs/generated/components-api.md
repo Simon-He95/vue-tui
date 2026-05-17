@@ -1013,6 +1013,7 @@ Import: `@simon_he/vue-tui/experimental`
 | <code>autoFocus</code>         | <code>boolean</code>               | <code>false</code>                       | 否   | —    |
 | <code>focusable</code>         | <code>boolean</code>               | <code>true</code>                        | 否   | —    |
 | <code>wheelScroll</code>       | <code>boolean</code>               | <code>true</code>                        | 否   | —    |
+| <code>keyboardRegions</code>   | <code>boolean</code>               | <code>true</code>                        | 否   | —    |
 | <code>rowScrollMode</code>     | <code>RowScrollMode</code>         | <code>&quot;unsafe-full-row&quot;</code> | 否   | —    |
 
 ### Events

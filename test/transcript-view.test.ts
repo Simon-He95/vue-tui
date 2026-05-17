@@ -6,6 +6,7 @@ import {
   type TTranscriptRow,
   type TTranscriptViewHandle,
 } from "../src/experimental.js";
+import { transcriptActionRegionId, transcriptLinkRegionId } from "../src/vue/transcript/layout.js";
 import {
   defineComponent,
   h,
@@ -123,6 +124,12 @@ async function copyTranscriptSelection(
 }
 
 describe("TTranscriptView", () => {
+  it("generates unambiguous hit region ids for structured keys", () => {
+    expect(transcriptActionRegionId("a:b", "c")).not.toBe(transcriptActionRegionId("a", "b:c"));
+    expect(transcriptLinkRegionId("a:b", 0, "c")).not.toBe(transcriptLinkRegionId("a", 0, "b:c"));
+    expect(transcriptLinkRegionId("a:0", 1)).not.toBe(transcriptLinkRegionId("a", 0, "0:1"));
+  });
+
   it("copies wrapped visual rows without repeating the full message", async () => {
     const rows: TTranscriptRow[] = [
       {
@@ -282,6 +289,107 @@ describe("TTranscriptView", () => {
     }
   });
 
+  it("handles visible regions with Tab, Enter, and Escape when enabled", async () => {
+    const actionClick = vi.fn();
+    const rows: TTranscriptRow[] = [
+      {
+        kind: "approval",
+        key: "approval",
+        title: "Allow?",
+        actions: [
+          { id: "first", label: "First" },
+          { id: "second", label: "Second" },
+        ],
+      },
+    ];
+    const App = defineComponent({
+      name: "TranscriptKeyboardRegionsApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 1,
+            source: createSource(rows),
+            version: 1,
+            autoFocus: true,
+            onActionClick: actionClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 32, rows: 3, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "keydown", key: "Tab", code: "Tab", time: 1_000 } as any);
+      app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: 1_001 } as any);
+      app.events.dispatch({
+        type: "keydown",
+        key: "Tab",
+        code: "Tab",
+        shiftKey: true,
+        time: 1_002,
+      } as any);
+      app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: 1_003 } as any);
+      app.events.dispatch({ type: "keydown", key: "Escape", code: "Escape", time: 1_004 } as any);
+      app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: 1_005 } as any);
+
+      expect(actionClick.mock.calls.map(([event]) => event.region.payload.actionId)).toEqual([
+        "first",
+        "second",
+      ]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not intercept region keyboard handling when keyboardRegions is disabled", async () => {
+    const actionClick = vi.fn();
+    const rows: TTranscriptRow[] = [
+      {
+        kind: "approval",
+        key: "approval",
+        title: "Allow?",
+        actions: [{ id: "approve", label: "Approve" }],
+      },
+    ];
+    const App = defineComponent({
+      name: "TranscriptKeyboardRegionsDisabledApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 1,
+            source: createSource(rows),
+            version: 1,
+            autoFocus: true,
+            keyboardRegions: false,
+            onActionClick: actionClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 32, rows: 3, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "keydown", key: "Tab", code: "Tab", time: 1_000 } as any);
+      app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter", time: 1_001 } as any);
+
+      expect(actionClick).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("emits foldToggle from collapsed and expanded tool-call header clicks", async () => {
     const foldToggle = vi.fn();
     const rows: TTranscriptRow[] = [
@@ -434,6 +542,108 @@ describe("TTranscriptView", () => {
     }
   });
 
+  it("clears hovered regions when they leave the visible viewport", async () => {
+    const hoverRegion = vi.fn();
+    const viewRef = ref<TTranscriptViewHandle | null>(null);
+    const rows: TTranscriptRow[] = [
+      {
+        kind: "approval",
+        key: "approval",
+        title: "Allow?",
+        actions: [{ id: "approve", label: "Approve" }],
+      },
+      {
+        kind: "message",
+        key: "next",
+        segments: [{ text: "next" }],
+      },
+    ];
+    const App = defineComponent({
+      name: "TranscriptHoverReconcileApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            ref: viewRef,
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 1,
+            source: createSource(rows),
+            version: 1,
+            onHoverRegion: hoverRegion,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 32, rows: 3, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const actionX = rowText(app, 0).indexOf("[Approve]");
+      expect(actionX).toBeGreaterThanOrEqual(0);
+      app.events.dispatch({ type: "pointermove", cellX: actionX, cellY: 0, time: 1_000 } as any);
+      await nextTick();
+      expect(viewRef.value?.getHoveredRegion()?.id).toBe(
+        transcriptActionRegionId("approval", "approve"),
+      );
+
+      viewRef.value?.scrollToRow(1);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(viewRef.value?.getHoveredRegion()).toBeNull();
+      expect(hoverRegion.mock.calls.at(-1)?.[0]).toBeNull();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("warns in debug perf mode when transcript rows flatten past the prototype bound", async () => {
+    const previousDebugPerf = (globalThis as any).__VT_DEBUG_PERF__;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    (globalThis as any).__VT_DEBUG_PERF__ = true;
+    const rows = Array.from(
+      { length: 5001 },
+      (_, index): TTranscriptRow => ({
+        kind: "message",
+        key: index,
+        segments: [{ text: `row-${index}` }],
+      }),
+    );
+    const App = defineComponent({
+      name: "TranscriptLargeFlattenWarningApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 16,
+            h: 1,
+            source: createSource(rows),
+            version: 1,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 16, rows: 2, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(warn).toHaveBeenCalledWith(
+        "[vue-tui] TTranscriptView flattens all transcript rows; use TLogView or windowed source for large retained output.",
+      );
+    } finally {
+      app.dispose();
+      warn.mockRestore();
+      if (previousDebugPerf === undefined) delete (globalThis as any).__VT_DEBUG_PERF__;
+      else (globalThis as any).__VT_DEBUG_PERF__ = previousDebugPerf;
+    }
+  });
+
   it("does not focus or activate offscreen regions by keyboard navigation", async () => {
     const actionClick = vi.fn();
     const viewRef = ref<TTranscriptViewHandle | null>(null);
@@ -530,9 +740,9 @@ describe("TTranscriptView", () => {
 
       expect(actionClick.mock.calls.map(([event]) => event.rowIndex)).toEqual([0, 1, 0]);
       expect(actionClick.mock.calls.map(([event]) => event.region.id)).toEqual([
-        "action:first:approve",
-        "action:second:approve",
-        "action:first:approve",
+        transcriptActionRegionId("first", "approve"),
+        transcriptActionRegionId("second", "approve"),
+        transcriptActionRegionId("first", "approve"),
       ]);
       expect(actionClick.mock.calls[0]?.[0].region.payload).toMatchObject({ actionId: "approve" });
     } finally {

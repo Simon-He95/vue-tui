@@ -499,7 +499,7 @@ Wheel burst 通过 frame mailbox 合并；同一帧只应用最后的 `scrollTop
 
 Transcript row viewport：渲染 message / action / tool-call / approval rows，支持 row-scoped action/link hit regions、focus navigation、cell selection copy 和 wrapped visual rows。
 
-> Experimental prototype：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。它会在当前 layout state 中 flatten source rows 到 visual rows；适合小到中等 transcript 和交互原型，不适合作为几十万 visual rows 的高吞吐 retained transcript 视图。大规模 append-only output 继续使用 `TLogView`。
+> Experimental prototype：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。它会在当前 layout state 中 flatten source rows 到 visual rows；适合小到中等 transcript 和交互原型，建议控制在 few thousand visual rows 量级，不适合作为几十万 visual rows 的高吞吐 retained transcript 视图。大规模 append-only output 继续使用 `TLogView`。
 
 ### Props
 
@@ -513,6 +513,7 @@ Transcript row viewport：渲染 message / action / tool-call / approval rows，
 - `wrap` `(boolean)`
 - `style` / `hoverStyle` / `focusStyle` `(Style?)`
 - `autoFocus` / `focusable` / `wheelScroll` `(boolean)`
+- `keyboardRegions` `(boolean)`：默认 `true`，获得焦点时 `Tab` / `Shift+Tab` 在当前 viewport 的 hit regions 间循环 focus，`Enter` 激活 focused region，`Escape` 清除 focus
 
 ### Events
 
@@ -521,6 +522,8 @@ Transcript row viewport：渲染 message / action / tool-call / approval rows，
 - `hoverRegion`: region event or `null`
 - `scroll`: scroll metrics
 - `update:scrollTop`: `scrollTop`（number）
+
+`TTranscriptSegment.text` 是 inline-only 文本；显式 `\n` / `\r` / `\t` 会按 inline cell 文本规整。需要保留显式换行时，请在 source 层拆成多个 transcript rows，或拆成独立 visual row blocks。
 
 ## TMarkdownText / TVirtualMarkdown
 
