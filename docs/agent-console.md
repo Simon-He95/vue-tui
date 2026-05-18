@@ -7,8 +7,8 @@
 - 高频 token streaming 和 markdown 段落增量更新
 - `TLogView` 日志模式和 `TVirtualMarkdown` markdown 模式
 - `TRenderPlane` 拆分 transcript、chrome、input 和 overlay
-- 带背景色的 user bubble、ANSI tool log、代码块背景、inline markdown highlight、OSC8/link metadata
-- `best-agent` 风格的 `Thinking ▸/▾`、`TToolCallView` 的 `▾/▸ ● Run 3 commands`、collapsed suffix/preview、`in:/out:` shell 输出、changed-files 边框卡片和 token bar
+- `TUserMessageView` 的 best-agent 风格 user message block、ANSI tool log、代码块背景、inline markdown highlight、OSC8/link metadata
+- `best-agent` 风格的 `TThinkingView` `Thinking ▸/▾`、`TToolCallView` 的 `▾/▸ ● Run 3 commands`、collapsed suffix/preview、`in:/out:` shell 输出、changed-files 边框卡片和 token bar
 - 用户离开底部后的 scroll detachment，以及 Jump to bottom 恢复
 - 示例默认 paused，用户可以先滚动检查；`Resume stream` 或 `/stream` 再开启 streaming
 - terminal 里可直接点击 `Thinking` / `Run 3` 控件，动态折叠 transcript mock 内容
@@ -42,6 +42,12 @@ pnpm run example:agent-console:terminal:smoke
 ```bash
 pnpm run run:agent-console:terminal
 ```
+
+这个 runner 默认暂停 streaming，方便先滚动、选中复制、点击 `Thinking` / `Run 3` 展开折叠，并检查 best-agent 风格边框、按钮下划线和 link underline。按 `Resume stream` 或输入 `/stream` 后再观察 streaming 场景下的 scroll detachment、overlay 和输入稳定性。
+
+## 样式和扩展边界
+
+示例中的 user message、thinking 和 tool_call chrome 来自 `@simon_he/vue-tui/agent` 的 `TUserMessageView`、`TThinkingView`、`TToolCallView`。这些组件只接收通用渲染语义，不接收 agent/provider/session/tool schema；宿主可以通过 style props 改背景和文字样式，也可以通过 `header`、`row`、`preview` slots 完全替换局部行内容。非 Vue 行渲染器可以直接复用 `resolveTUserMessageViewModel()`、`resolveTThinkingViewModel()` 和 `resolveTToolCallViewModel()`，保证 wrapper 和组件走同一套 cell wrapping 与 segment 规则。
 
 ## Smoke 输出
 

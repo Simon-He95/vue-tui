@@ -91,6 +91,21 @@ function boxBorderClosed(
   return true;
 }
 
+function centeredDialogRect(rect: { w: number; h: number }): {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+} {
+  const size = app.terminal.size();
+  return {
+    x: Math.floor((size.cols - rect.w) / 2),
+    y: Math.floor((size.rows - rect.h) / 2),
+    w: rect.w,
+    h: rect.h,
+  };
+}
+
 function transcriptHasStyledBackground(app: TerminalApp): boolean {
   for (
     let y = AGENT_CONSOLE_LAYOUT.transcript.y;
@@ -113,8 +128,8 @@ function dispatchWheelBurst(
   for (let i = 0; i < count; i++) {
     events.dispatch({
       type: "wheel",
-      cellX: AGENT_CONSOLE_LAYOUT.transcript.x + 2,
-      cellY: AGENT_CONSOLE_LAYOUT.transcript.y + 2,
+      cellX: AGENT_CONSOLE_LAYOUT.transcriptLog.x + 2,
+      cellY: AGENT_CONSOLE_LAYOUT.transcriptLog.y + 2,
       deltaY,
       time: 1_000 + i,
     });
@@ -128,8 +143,8 @@ function dispatchWheel(
 ): void {
   events.dispatch({
     type: "wheel",
-    cellX: AGENT_CONSOLE_LAYOUT.transcript.x + 2,
-    cellY: AGENT_CONSOLE_LAYOUT.transcript.y + 2,
+    cellX: AGENT_CONSOLE_LAYOUT.transcriptLog.x + 2,
+    cellY: AGENT_CONSOLE_LAYOUT.transcriptLog.y + 2,
     deltaY,
     time,
   });
@@ -173,6 +188,15 @@ async function clickCell(app: TerminalApp, x: number, y: number): Promise<void> 
   app.scheduler.flushNow();
   app.events.dispatch({
     type: "pointerup",
+    cellX: x,
+    cellY: y,
+    button: 0,
+    buttons: 0,
+  });
+  await nextTick();
+  app.scheduler.flushNow();
+  app.events.dispatch({
+    type: "click",
     cellX: x,
     cellY: y,
     button: 0,
@@ -239,6 +263,18 @@ try {
     richTranscriptRows.includes("▾ ● Run 3 commands") &&
     richTranscriptRows.includes("Changed 3 files") &&
     richTranscriptRows.includes("████████░░");
+  const userBlockFileRow = rowText(app, AGENT_CONSOLE_LAYOUT.userMessage.y + 2);
+  const userBlockFileStart = userBlockFileRow.indexOf("examples/agent-console/src/App.vue");
+  const bestAgentUserMessageBlockRendered =
+    rowText(app, AGENT_CONSOLE_LAYOUT.userMessage.y).trim() === "" &&
+    rowText(app, AGENT_CONSOLE_LAYOUT.userMessage.y + 1).trim() === "> simon" &&
+    userBlockFileStart >= 0 &&
+    rowText(app, AGENT_CONSOLE_LAYOUT.userMessage.y + 3).trim() === "" &&
+    cellStyle(app, 0, AGENT_CONSOLE_LAYOUT.userMessage.y).bg === "blackBright" &&
+    cellStyle(app, 2, AGENT_CONSOLE_LAYOUT.userMessage.y + 1).fg === "greenBright" &&
+    cellStyle(app, userBlockFileStart, AGENT_CONSOLE_LAYOUT.userMessage.y + 2).fg ===
+      "cyanBright" &&
+    cellStyle(app, userBlockFileStart, AGENT_CONSOLE_LAYOUT.userMessage.y + 2).underline === true;
   const changedFilesBoxRows = richTranscriptRows.split("\n").filter((row) => {
     return (
       row.includes("╭") ||
@@ -280,6 +316,20 @@ try {
     clickedToolCollapsedRows.includes("▸ ● Run 3 commands") &&
     !clickedToolCollapsedRows.includes("Changed 3 files");
   await clickCell(app, 84, 27);
+
+  await clickCell(app, 102, 26);
+  const searchDialogRect = centeredDialogRect(AGENT_CONSOLE_LAYOUT.searchDialog);
+  const searchDialogClickStaysOpen = boxBorderClosed(app, searchDialogRect);
+  await dispatchKey(app, "Escape");
+  app.scheduler.flushNow();
+  const searchDialogEscCloses = !boxBorderClosed(app, searchDialogRect);
+
+  await clickCell(app, 112, 26);
+  const linksDialogRect = centeredDialogRect(AGENT_CONSOLE_LAYOUT.linksDialog);
+  const linksDialogClickStaysOpen = boxBorderClosed(app, linksDialogRect);
+  await dispatchKey(app, "Escape");
+  app.scheduler.flushNow();
+  const linksDialogEscCloses = !boxBorderClosed(app, linksDialogRect);
 
   api.clearFramePerf();
 
@@ -481,7 +531,12 @@ try {
   app.scheduler.flushNow();
   await nextTick();
   await flushFrame(raf);
-  const slashClearWorked = api.getTranscriptRows().join("").trim() === "";
+  const slashClearWorked =
+    Array.from({ length: AGENT_CONSOLE_LAYOUT.transcriptLog.h }, (_, index) =>
+      rowText(app, AGENT_CONSOLE_LAYOUT.transcriptLog.y + index),
+    )
+      .join("")
+      .trim() === "";
   const slashClearReplayReset = api.replayCursor.value === 0 && api.replayTotal.value === 0;
 
   const output = {
@@ -532,9 +587,14 @@ try {
     chromeButtonUnderlineFollowsText,
     thinkingClickCollapsedTranscript,
     toolCallClickCollapsedTranscript,
+    searchDialogClickStaysOpen,
+    searchDialogEscCloses,
+    linksDialogClickStaysOpen,
+    linksDialogEscCloses,
     ghosttyWheelDownMonotonic,
     fastWheelDistance,
     linksUnderlineFollowsText,
+    bestAgentUserMessageBlockRendered,
     bestAgentFixtureRowsRendered,
     firstTranscriptRow: rowText(app, AGENT_CONSOLE_LAYOUT.transcript.y),
     lastTranscriptRow: transcriptRows[transcriptRows.length - 1] ?? "",
@@ -576,9 +636,14 @@ try {
   assert.equal(output.chromeButtonUnderlineFollowsText, true);
   assert.equal(output.thinkingClickCollapsedTranscript, true);
   assert.equal(output.toolCallClickCollapsedTranscript, true);
+  assert.equal(output.searchDialogClickStaysOpen, true);
+  assert.equal(output.searchDialogEscCloses, true);
+  assert.equal(output.linksDialogClickStaysOpen, true);
+  assert.equal(output.linksDialogEscCloses, true);
   assert.equal(output.ghosttyWheelDownMonotonic, true);
   assert.ok(output.fastWheelDistance >= 24, "expected fast wheel burst to cover useful distance");
   assert.equal(output.linksUnderlineFollowsText, true);
+  assert.equal(output.bestAgentUserMessageBlockRendered, true);
   assert.equal(output.bestAgentFixtureRowsRendered, true);
   assert.ok(output.overlayMaxDirtyRows <= AGENT_CONSOLE_LAYOUT.rows);
   assert.ok(output.overlayMaxPaintedNodes <= AGENT_CONSOLE_LAYOUT.rows);

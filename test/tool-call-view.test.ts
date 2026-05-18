@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TToolCallView } from "../src/agent.js";
+import { resolveTToolCallViewModel, TToolCallView } from "../src/agent.js";
 import { h, mountTerminal, TText } from "./ui-regressions-support.js";
 
 function rowText(
@@ -22,6 +22,21 @@ function cellStyle(
 }
 
 describe("TToolCallView", () => {
+  it("exposes the same header and preview model used by the component", () => {
+    const model = resolveTToolCallViewModel({
+      w: 42,
+      title: "shell",
+      collapsed: true,
+      suffix: "pnpm test",
+      preview: "latest",
+    });
+
+    expect(model.headerSegments.map((segment) => segment.text).join("")).toBe(
+      "▸ ● shell pnpm test",
+    );
+    expect(model.previewSegments.map((segment) => segment.text).join("")).toBe("  ⎿ latest");
+  });
+
   it("matches best-agent collapsed streaming tool_call header and preview", async () => {
     const mounted = await mountTerminal(
       () =>

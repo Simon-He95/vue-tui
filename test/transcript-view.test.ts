@@ -248,6 +248,120 @@ describe("TTranscriptView", () => {
     }
   });
 
+  it("keeps line wheel rebound filtering after controlled scrollTop sync", async () => {
+    const raf = installManualRaf();
+    const scrollTop = ref(100);
+    const rows = Array.from(
+      { length: 200 },
+      (_, index): TTranscriptRow => ({
+        kind: "message",
+        key: index,
+        segments: [{ text: `row-${index}` }],
+      }),
+    );
+    const App = defineComponent({
+      name: "TranscriptControlledWheelReboundApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 16,
+            h: 5,
+            source: createSource(rows),
+            version: 1,
+            scrollTop: scrollTop.value,
+            "onUpdate:scrollTop": (value: number) => {
+              scrollTop.value = value;
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 16, rows: 8, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: 1,
+        deltaMode: 1,
+        time: 1_000,
+      });
+      expect(raf.pending()).toBe(1);
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(scrollTop.value).toBe(101);
+
+      app.events.dispatch({
+        type: "wheel",
+        cellX: 0,
+        cellY: 0,
+        deltaY: -1,
+        deltaMode: 1,
+        time: 1_095,
+      });
+      expect(raf.pending()).toBe(0);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(scrollTop.value).toBe(101);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
+  it("emits scrollEdge when wheel input reaches a transcript boundary", async () => {
+    const edges: Array<{ edge: string; scrollTop: number; deltaY: number }> = [];
+    const rows = Array.from({ length: 4 }, (_, index) => ({
+      kind: "message" as const,
+      key: `row-${index}`,
+      segments: [{ text: `row-${index}` }],
+    }));
+    const App = defineComponent({
+      name: "TranscriptScrollEdgeApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 2,
+            source: createSource(rows),
+            version: 1,
+            scrollTop: 0,
+            onScrollEdge: (payload: { edge: string; scrollTop: number; deltaY: number }) => {
+              edges.push({
+                edge: payload.edge,
+                scrollTop: payload.scrollTop,
+                deltaY: payload.deltaY,
+              });
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 10, rows: 4, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_000 });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(edges).toEqual([{ edge: "top", scrollTop: 0, deltaY: -1 }]);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not focus or click disabled actions", async () => {
     const actionClick = vi.fn();
     const viewRef = ref<TTranscriptViewHandle | null>(null);
@@ -450,6 +564,50 @@ describe("TTranscriptView", () => {
     }
   });
 
+  it("emits foldToggle from terminal pointerup without requiring a click event", async () => {
+    const foldToggle = vi.fn();
+    const rows: TTranscriptRow[] = [
+      {
+        kind: "tool-call",
+        key: "collapsed",
+        title: "read_file",
+        collapsed: true,
+        summary: [{ text: "src/index.ts" }],
+      },
+    ];
+    const App = defineComponent({
+      name: "TranscriptToolFoldPointerUpApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 1,
+            source: createSource(rows),
+            version: 1,
+            onFoldToggle: foldToggle,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 32, rows: 3, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: 0, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 0, button: 0 } as any);
+
+      expect(foldToggle).toHaveBeenCalledTimes(1);
+      expect(foldToggle.mock.calls[0]?.[0].row.key).toBe("collapsed");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("emits toolClick from tool-call body regions", async () => {
     const toolClick = vi.fn();
     const row: TTranscriptRow = {
@@ -488,6 +646,46 @@ describe("TTranscriptView", () => {
       expect(toolClick).toHaveBeenCalledTimes(1);
       expect(toolClick.mock.calls[0]?.[0].region.kind).toBe("tool-call");
       expect(toolClick.mock.calls[0]?.[0].row).toBe(row);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("emits rowClick from terminal pointerup without requiring a click event", async () => {
+    const rowClick = vi.fn();
+    const row: TTranscriptRow = {
+      kind: "message",
+      key: "message",
+      segments: [{ text: "clickable row" }],
+    };
+    const App = defineComponent({
+      name: "TranscriptRowPointerUpApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 1,
+            source: createSource([row]),
+            version: 1,
+            onRowClick: rowClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 32, rows: 3, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 2, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: 2, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "click", cellX: 2, cellY: 0, button: 0 } as any);
+
+      expect(rowClick).toHaveBeenCalledTimes(1);
+      expect(rowClick.mock.calls[0]?.[0].row).toBe(row);
     } finally {
       app.dispose();
     }
@@ -774,11 +972,13 @@ describe("TTranscriptView", () => {
         .slice()
         .reverse()
         .find((sample) => sample.name === "TTranscriptView" && sample.phase === "layout");
-      expect(rowBuilds).toBe(lines.length);
+      expect(rowBuilds).toBe(0);
       expect(transcriptSample).toMatchObject({
         itemCount: lines.length,
         cacheHit: lines.length,
         cacheMiss: 0,
+        sourceReadCount: 0,
+        sourceSkippedCount: lines.length,
         width: 44,
       });
     } finally {

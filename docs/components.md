@@ -14,22 +14,22 @@
 | Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition`                                               |
 | Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                  |
 | Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap` |
-| Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                                                    |
+| Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TUserMessageView` `TThinkingView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                 |
 
 下面的组件速读按用途分组，不代表 root entrypoint 导出。每个组件的 primary import 以生成的 [组件 API](/generated/components-api) 为准。
 
 ## 组件速读
 
-| 类别          | 组件                                                                                                                                                                             | 典型用途                                         | 适配性判断                                                 |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------- |
-| Root          | `TerminalProvider`                                                                                                                                                               | 创建 terminal / renderer / event manager 上下文  | 通用，适合所有宿主                                         |
-| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                   | 布局、裁剪、层级、分层组合                       | 通用，和 CLI 业务无关                                      |
-| Text / Motion | `TText` `TTransition`                                                                                                                                                            | 文本渲染、状态切换、动画插值                     | 通用                                                       |
-| Input         | `TInput` `TInputBox` `TJsonEditor`                                                                                                                                               | prompt、表单、结构化文本编辑                     | 通用，但推荐把补全/校验放到插件层                          |
-| Pickers       | `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择        | `TPathPicker` 本体可复用，路径语义由 provider 注入         |
-| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                                                                                                      | 对话框、详情查看、调试覆盖层                     | 通用，适合多种宿主                                         |
-| Navigation    | `TRouterView` + `createTerminalRouter()`                                                                                                                                         | 多页面 TUI / shell                               | 通用                                                       |
-| Agent Chrome  | `TToolCallView`                                                                                                                                                                  | tool call 折叠/展开头、状态点、collapsed preview | 默认对齐 best-agent 风格，可通过 style props 或 slots 替换 |
+| 类别          | 组件                                                                                                                                                                             | 典型用途                                        | 适配性判断                                                 |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| Root          | `TerminalProvider`                                                                                                                                                               | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                         |
+| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                   | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                                      |
+| Text / Motion | `TText` `TTransition`                                                                                                                                                            | 文本渲染、状态切换、动画插值                    | 通用                                                       |
+| Input         | `TInput` `TInputBox` `TJsonEditor`                                                                                                                                               | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                          |
+| Pickers       | `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择       | `TPathPicker` 本体可复用，路径语义由 provider 注入         |
+| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                                                                                                      | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                         |
+| Navigation    | `TRouterView` + `createTerminalRouter()`                                                                                                                                         | 多页面 TUI / shell                              | 通用                                                       |
+| Agent Chrome  | `TUserMessageView` `TThinkingView` `TToolCallView`                                                                                                                               | user message 块、thinking/tool call 折叠头、状态点 | 默认对齐 best-agent 风格，可通过 style props 或 slots 替换 |
 
 如果你更关心“哪些地方还应该继续做插件化”，建议配合阅读：[扩展性与插件化](./extensibility.md)。
 
@@ -45,7 +45,7 @@
 `TerminalProvider` 提供 `defaultStyle` 作为默认渲染样式；组件的 `style` 传入后会覆盖默认值（通常是整行/整块生效）。
 未显式传入时，`defaultStyle` 仍是普通可变对象；如果要触发依赖它的组件重新绘制，推荐替换整个对象，而不是原地修改字段。
 
-`TToolCallView` 这种 agent/console 组件保留通用数据边界：只接收 `title`、`status`、`collapsed`、`suffix`、`preview` 等渲染语义，不接收 provider/session/tool schema。默认样式对齐 best-agent CLI 的 tool_call header；宿主可以用 `style`、`mutedStyle`、`titleStyle`、`suffixStyle`、`previewStyle` 等 props 覆盖颜色，也可以用 `header` / `preview` slots 完全替换行内容。
+`TUserMessageView`、`TThinkingView`、`TToolCallView` 这种 agent/console 组件保留通用数据边界：只接收 `label`、`content`、`segments`、`title`、`status`、`collapsed`、`suffix`、`preview` 等渲染语义，不接收 provider/session/tool schema。默认样式对齐 best-agent CLI 的 user message block、thinking 和 tool_call header；宿主可以用 style props 覆盖颜色，也可以用 slots 完全替换行内容。对应的 `resolveT*ViewModel` 可在非 Vue 行渲染器里复用同一套 wrapping/segment/style 规则。
 
 ### zIndex（层级）
 
@@ -499,6 +499,97 @@ Wheel burst 通过 frame mailbox 合并；同一帧只应用最后的 `scrollTop
 - `scroll`: `scrollTop`（number）
 - `focus` / `blur` / `keydown`
 
+## Agent Console Components
+
+`@simon_he/vue-tui/agent` 提供一组不绑定具体 agent 协议的 console chrome 组件。它们只处理终端渲染、cell wrapping、折叠头、状态点、背景、segment 和 slots；provider、session、approval、tool schema、message store 仍由宿主负责。
+
+### Import
+
+```ts
+import {
+  TThinkingView,
+  TToolCallView,
+  TUserMessageView,
+  resolveTThinkingViewModel,
+  resolveTToolCallViewModel,
+  resolveTUserMessageViewModel,
+} from "@simon_he/vue-tui/agent";
+```
+
+### `TUserMessageView`
+
+用于渲染带背景的 user message block，默认样式对齐 best-agent CLI。`segments` 使用 content 原始字符串的字符 offset 标记链接、文件或高亮片段；组件负责按 cell 宽度 wrap 后把 segment 投影到可见行。
+
+- `label`/`prefix`/`meta`：控制 header 文本。
+- `content`：消息正文。
+- `indent`、`topBlank`、`bottomBlank`：控制块内留白。
+- `style`、`headerStyle`、`prefixStyle`、`labelStyle`、`contentStyle`、`segmentStyle`：覆盖背景和文字样式。
+- `header` / `row` slots：完全替换 header 或每一行正文渲染。
+- `resolveTUserMessageViewModel()`：给非 Vue renderer 或 snapshot test 复用同一套 wrapping 和 segment 投影规则。
+
+```vue
+<TUserMessageView
+  :x="2"
+  :y="1"
+  :w="76"
+  label="user"
+  meta="gpt-5"
+  content="请检查 src/agent.ts"
+  :segments="[{ start: 3, end: 15, href: 'file:///repo/src/agent.ts' }]"
+  :style="{ bg: 'blackBright', fg: 'whiteBright' }"
+/>
+```
+
+### `TThinkingView`
+
+用于渲染 `Thinking ▸/▾` 这类可折叠 reasoning block。它发出 `click` 和 `toggle`，但不持有 collapsed 状态；宿主在事件里更新自己的状态后回传 `collapsed`。
+
+- `title`、`content`、`collapsed`：渲染语义。
+- `pulseFrame`：collapsed 时可让标题字符产生轻量 pulse，用于 streaming/active 状态。
+- `markerCollapsed`、`markerExpanded`、`bodyPrefix`：替换 glyph 和 body 缩进。
+- `style`、`headerStyle`、`markerStyle`、`titleStyle`、`bodyStyle`：覆盖默认颜色。
+- `header` slot：替换 header 行。
+- `resolveTThinkingViewModel()`：复用 header/body rows 与 segment 计算。
+
+```vue
+<TThinkingView
+  :x="2"
+  :y="4"
+  :w="76"
+  title="Thinking"
+  :collapsed="thinkingCollapsed"
+  content="Now I have enough context."
+  @toggle="thinkingCollapsed = !thinkingCollapsed"
+/>
+```
+
+### `TToolCallView`
+
+用于渲染 tool call 折叠头和 collapsed preview，默认形态是 best-agent CLI 的 `▾ ● Run 3 commands` / `▸ ● Run 3 commands ...`。组件只接收通用显示语义，不理解 tool 名、参数结构或审批策略。
+
+- `title`、`status`、`collapsed`、`suffix`、`preview`：核心渲染语义。
+- `nested`、`selected`：影响缩进和强调。
+- `markerCollapsed`、`markerExpanded`、`statusDot`、`previewPrefix`：替换 glyph。
+- `style`、`mutedStyle`、`headerStyle`、`collapsedStyle`、`expandedStyle`、`markerStyle`、`statusStyle`、`titleStyle`、`suffixStyle`、`previewStyle`：覆盖样式。
+- `header` / `preview` slots：替换 header 或 collapsed preview。
+- `resolveTToolCallViewModel()`：复用 truncation、suffix fitting、status style 和 segment 输出。
+
+```vue
+<TToolCallView
+  :x="2"
+  :y="8"
+  :w="76"
+  title="Run 3 commands"
+  status="running"
+  suffix="in: $ pnpm test"
+  preview="out: apps/cli/test/..."
+  :collapsed="toolCollapsed"
+  @toggle="toolCollapsed = !toolCollapsed"
+/>
+```
+
+这些组件通常和 `TTranscriptView` 或 `TRenderPlane` 组合使用：宿主可以把它们直接放进 transcript row 的 slot，也可以只调用 `resolveT*ViewModel()`，把输出转换成自己的 `TTranscriptSegment[]`。
+
 ## TTranscriptView
 
 Transcript row viewport：渲染 message / action / tool-call / approval rows，支持 row-scoped action/link hit regions、focus navigation、cell selection copy 和 wrapped visual rows。
@@ -508,7 +599,7 @@ Transcript row viewport：渲染 message / action / tool-call / approval rows，
 ### Props
 
 - `x`/`y`/`w`/`h` `(number, required)`
-- `source` `(TTranscriptDataSource, required)`：提供 `rowCount()`、`getRow(index)`，可选提供 `getRowKey(index)`、`getRowVersion(index)`、`firstRowIndex()`
+- `source` `(TTranscriptDataSource, required)`：提供 `rowCount()`、`getRow(index)`，可选提供 `getRowKey(index)`、`getRowVersion(index)`、`firstRowIndex()`。同时提供 `getRowKey` 和 `getRowVersion` 时，未变化的缓存行可以跳过 `getRow()`；如果 hover、selection 或外部样式会改变该行输出，需要把这些状态计入 row version。profiling 打开时，`TTranscriptView` 的 component perf 会记录 `sourceReadCount` 和 `sourceSkippedCount`，用于区分 base cache 命中和 wrapper row 构造成本。
 - `version` `(number, required)`：数据变化版本号
 - `scrollTop` `(number?)` + `update:scrollTop`
 - `defaultScrollTop` `(number?)`

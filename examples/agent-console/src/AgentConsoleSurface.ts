@@ -24,7 +24,7 @@ import {
   watchEffect,
 } from "vue";
 import { TBox, TDialog, TSelect, TText, TView } from "@simon_he/vue-tui";
-import { TToolCallView } from "@simon_he/vue-tui/agent";
+import { TThinkingView, TToolCallView, TUserMessageView } from "@simon_he/vue-tui/agent";
 import { TInputBox, TRenderPlane, textCellWidth, useTerminal } from "@simon_he/vue-tui/vue";
 import { TVirtualMarkdown } from "@simon_he/vue-tui/markdown";
 import { TLogView } from "@simon_he/vue-tui/experimental";
@@ -43,6 +43,8 @@ export const AGENT_CONSOLE_LAYOUT = Object.freeze({
   rows: 37,
   status: { x: 0, y: 0, w: 118, h: 1 },
   transcript: { x: 0, y: 1, w: 118, h: 24 },
+  userMessage: { x: 0, y: 1, w: 118, h: 4 },
+  transcriptLog: { x: 0, y: 5, w: 118, h: 20 },
   chrome: { x: 0, y: 25, w: 118, h: 6 },
   input: { x: 0, y: 31, w: 118, h: 5 },
   footer: { x: 0, y: 36, w: 118, h: 1 },
@@ -128,6 +130,11 @@ function rowTextFromTerminal(
     .join("")
     .trimEnd();
 }
+
+const userBlockPrompt =
+  "Run the agent console smoke scenario and keep examples/agent-console/src/App.vue responsive.";
+const userBlockFile = "examples/agent-console/src/App.vue";
+const userBlockFileStart = userBlockPrompt.indexOf(userBlockFile);
 
 export const AgentConsoleSurface = defineComponent({
   name: "AgentConsoleSurface",
@@ -649,7 +656,7 @@ export const AgentConsoleSurface = defineComponent({
           w,
           h: 1,
           focusable: true,
-          onPointerdown: (event: { preventDefault?: () => void }) => {
+          onClick: (event: { preventDefault?: () => void }) => {
             event.preventDefault?.();
             onClick();
           },
@@ -675,49 +682,71 @@ export const AgentConsoleSurface = defineComponent({
     }
 
     function renderTranscript() {
+      const userBlock = h(TUserMessageView, {
+        ...AGENT_CONSOLE_LAYOUT.userMessage,
+        label: "simon",
+        content: userBlockPrompt,
+        segments:
+          userBlockFileStart >= 0
+            ? [
+                {
+                  start: userBlockFileStart,
+                  end: userBlockFileStart + userBlockFile.length,
+                  href: `file://${userBlockFile}`,
+                },
+              ]
+            : [],
+      });
+
       if (mode.value === "markdown") {
-        return h(TVirtualMarkdown, {
-          ...AGENT_CONSOLE_LAYOUT.transcript,
-          content: transcript.markdown.value,
-          blocks: transcript.markdownBlocks.value,
-          scrollTop: markdownScrollTop.value,
-          streaming: streamState.value === "connected",
-          final: streamState.value !== "connected",
-          theme: markdownTheme,
-          style: styles.panel,
-          autoFocus: !inputFocused.value && overlay.value == null,
-          "onUpdate:scrollTop": (value: number) => {
-            markdownScrollTop.value = value;
-          },
-          onScroll: handleMarkdownScroll,
-        });
+        return [
+          userBlock,
+          h(TVirtualMarkdown, {
+            ...AGENT_CONSOLE_LAYOUT.transcriptLog,
+            content: transcript.markdown.value,
+            blocks: transcript.markdownBlocks.value,
+            scrollTop: markdownScrollTop.value,
+            streaming: streamState.value === "connected",
+            final: streamState.value !== "connected",
+            theme: markdownTheme,
+            style: styles.panel,
+            autoFocus: !inputFocused.value && overlay.value == null,
+            "onUpdate:scrollTop": (value: number) => {
+              markdownScrollTop.value = value;
+            },
+            onScroll: handleMarkdownScroll,
+          }),
+        ];
       }
 
-      return h(TLogView, {
-        ref: logView,
-        ...AGENT_CONSOLE_LAYOUT.transcript,
-        source: transcript.logStore.source,
-        version: transcript.logStore.version.value,
-        ...logViewTheme,
-        wrap: true,
-        ansi: true,
-        links: true,
-        keyboardLinks: true,
-        visualIndexMode: "exact",
-        visualIndexOptions: { measureBudgetMs: 8 },
-        searchQuery: searchQuery.value,
-        searchOptions: { mode: "text", caseSensitive: false, wholeWord: false },
-        autoFocus: !inputFocused.value && overlay.value == null,
-        autoStickToBottom: true,
-        rowScrollMode: "off",
-        onScroll: handleLogScroll,
-        onSearch: handleSearch,
-        onSearchMatch: refreshSearchState,
-        onLinkFocus: handleLinkFocus,
-        onLinkActivate: handleLinkActivate,
-        onLinkClick: handleLinkClick,
-        onVisualIndex: refreshMetrics,
-      });
+      return [
+        userBlock,
+        h(TLogView, {
+          ref: logView,
+          ...AGENT_CONSOLE_LAYOUT.transcriptLog,
+          source: transcript.logStore.source,
+          version: transcript.logStore.version.value,
+          ...logViewTheme,
+          wrap: true,
+          ansi: true,
+          links: true,
+          keyboardLinks: true,
+          visualIndexMode: "exact",
+          visualIndexOptions: { measureBudgetMs: 8 },
+          searchQuery: searchQuery.value,
+          searchOptions: { mode: "text", caseSensitive: false, wholeWord: false },
+          autoFocus: !inputFocused.value && overlay.value == null,
+          autoStickToBottom: true,
+          rowScrollMode: "off",
+          onScroll: handleLogScroll,
+          onSearch: handleSearch,
+          onSearchMatch: refreshSearchState,
+          onLinkFocus: handleLinkFocus,
+          onLinkActivate: handleLinkActivate,
+          onLinkClick: handleLinkClick,
+          onVisualIndex: refreshMetrics,
+        }),
+      ];
     }
 
     function renderChrome() {
@@ -734,9 +763,6 @@ export const AgentConsoleSurface = defineComponent({
       ].join("  ");
       const search = searchState.value;
       const link = focusedLink.value?.href || lastActivatedLink.value || "none";
-      const thinking = thinkingExpanded.value
-        ? "▾ Thinking │ dirty background rows stay isolated"
-        : "▸ Thinking";
       return [
         h(TText, {
           key: "status",
@@ -771,7 +797,7 @@ export const AgentConsoleSurface = defineComponent({
               y: 1,
               w: 62,
               value: fit(
-                `search="${search.query}" matches=${search.matchCount} status=${search.status}`,
+                `search="${search.query}" matches=${search.matchCount} scan=${search.status}`,
                 62,
               ),
               style: search.matchCount ? styles.ok : styles.muted,
@@ -823,13 +849,17 @@ export const AgentConsoleSurface = defineComponent({
               () => runCommand("/stream"),
               streamState.value === "connected",
             ),
-            h(TText, {
+            h(TThinkingView, {
               key: "thinking-state",
               x: 67,
               y: 2,
               w: 48,
-              value: fit(thinking, 48),
+              title: thinkingExpanded.value
+                ? "Thinking │ dirty background rows stay isolated"
+                : "Thinking",
+              collapsed: !thinkingExpanded.value,
               style: thinkingExpanded.value ? styles.thinking : styles.muted,
+              bodyStyle: styles.muted,
             }),
             h(TToolCallView, {
               key: "tool-call-state",

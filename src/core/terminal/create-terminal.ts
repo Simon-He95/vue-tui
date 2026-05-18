@@ -70,6 +70,7 @@ interface PlaneTerminalInternals {
   getPlaneTerminal: (plane: TerminalRenderPlane) => Terminal;
   resetRowsForRender: (plane: TerminalRenderPlane, dirtyRows: readonly number[] | null) => void;
   getRowCoverageKind: (plane: TerminalRenderPlane, y: number) => 0 | 1 | 2;
+  getComposedRowBeforePlane: (plane: TerminalRenderPlane, y: number) => readonly Cell[] | null;
   scrollRows: (plane: TerminalRenderPlane, startY: number, endY: number, lines: number) => void;
 }
 
@@ -326,6 +327,15 @@ export function getPlaneRowCoverageKind(
 ): 0 | 1 | 2 {
   const internals = (terminal as PlaneAwareTerminal)[TERMINAL_PLANE_INTERNALS];
   return internals?.getRowCoverageKind(plane, y) ?? 0;
+}
+
+export function getComposedRowBeforePlane(
+  terminal: Terminal,
+  plane: TerminalRenderPlane,
+  y: number,
+): readonly Cell[] | null {
+  const internals = (terminal as PlaneAwareTerminal)[TERMINAL_PLANE_INTERNALS];
+  return internals?.getComposedRowBeforePlane(plane, y) ?? null;
 }
 
 export function scrollPlaneRows(
@@ -824,6 +834,35 @@ export function createTerminal(opts: TerminalOptions): Terminal {
     }
   }
 
+  function composeRowBeforePlane(plane: TerminalRenderPlane, y: number): readonly Cell[] | null {
+    const stop = TERMINAL_RENDER_PLANES.indexOf(plane);
+    if (stop <= 0 || y < 0 || y >= compositeBuffer.rows) return null;
+    const blank = createBlankCell();
+    const row = Array.from({ length: compositeBuffer.cols }, () => blank);
+
+    for (const lowerPlane of TERMINAL_RENDER_PLANES.slice(0, stop)) {
+      const state = planeStates.get(lowerPlane);
+      if (!state) continue;
+      const src = getBufferRow(state.buffer, y);
+      const coverage = state.coverage[y];
+      if (!coverage) continue;
+      for (let x = 0; x < compositeBuffer.cols; x++) {
+        if (coverage[x]) row[x] = src[x]!;
+      }
+    }
+
+    for (let x = 0; x < compositeBuffer.cols; x++) {
+      const cell = row[x]!;
+      if (cell.width === 2 && !cell.continuation) {
+        if (x + 1 >= compositeBuffer.cols || !row[x + 1]!.continuation) row[x] = blank;
+      } else if (cell.continuation) {
+        if (x === 0 || row[x - 1]!.width !== 2 || row[x - 1]!.continuation) row[x] = blank;
+      }
+    }
+
+    return row;
+  }
+
   function syncCompositeCursor(): void {
     const prevVisible = compositeBuffer.cursorVisible;
     const prevY = compositeBuffer.cursorY;
@@ -1258,6 +1297,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       if (covered >= row.length) return 2;
       return 1;
     },
+    getComposedRowBeforePlane: composeRowBeforePlane,
     scrollRows(plane, startY, endY, lines) {
       scrollRowsForPlane(plane, startY, endY, lines);
     },

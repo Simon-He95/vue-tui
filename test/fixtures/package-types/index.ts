@@ -47,10 +47,19 @@ import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdo
 
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import {
+  resolveTThinkingViewModel,
+  resolveTToolCallViewModel,
+  resolveTUserMessageViewModel,
   TAgentTranscript,
+  TThinkingView,
   TToolCallView,
   TToolLogView,
+  TUserMessageView,
+  type TThinkingViewModel,
+  type TToolCallViewModel,
   type TToolCallViewSlotProps,
+  type TUserMessageViewModel,
+  type TUserMessageViewSlotProps,
 } from "@simon_he/vue-tui/agent";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
@@ -78,8 +87,13 @@ console.log(
   TLogView,
   TVirtualList,
   TAgentTranscript,
+  TThinkingView,
   TToolCallView,
   TToolLogView,
+  TUserMessageView,
+  resolveTThinkingViewModel,
+  resolveTToolCallViewModel,
+  resolveTUserMessageViewModel,
   createTerminalApp,
   createStdoutRenderer,
   createStdinDriver,
@@ -115,4 +129,21 @@ const cleanupHandle: TerminalCleanupHandle | null = null;
 const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
 const record: TerminalEventRecord = { type: "keydown", key: "Enter" };
 const toolCallSlot: TToolCallViewSlotProps | null = null;
-console.log(driver, cleanupHandle, signalPolicy, record, toolCallSlot);
+const thinkingModel: TThinkingViewModel = resolveTThinkingViewModel({ w: 20, title: "Thinking" });
+const toolCallModel: TToolCallViewModel = resolveTToolCallViewModel({ w: 20, title: "shell" });
+const userMessageSlot: TUserMessageViewSlotProps | null = null;
+const userMessageModel: TUserMessageViewModel = resolveTUserMessageViewModel({
+  w: 20,
+  content: "hello",
+});
+console.log(
+  driver,
+  cleanupHandle,
+  signalPolicy,
+  record,
+  toolCallSlot,
+  thinkingModel,
+  toolCallModel,
+  userMessageSlot,
+  userMessageModel,
+);

@@ -3,7 +3,12 @@ export { TDialog } from "./vue/components/TDialog.js";
 export { TInput } from "./vue/components/TInput.js";
 export { TSelect } from "./vue/components/TSelect.js";
 export { TText } from "./vue/components/TText.js";
-export { TToolCallView } from "./vue/components/TToolCallView.js";
+export { resolveTThinkingViewModel, TThinkingView } from "./vue/components/TThinkingView.js";
+export { resolveTToolCallViewModel, TToolCallView } from "./vue/components/TToolCallView.js";
+export {
+  resolveTUserMessageViewModel,
+  TUserMessageView,
+} from "./vue/components/TUserMessageView.js";
 export { TView } from "./vue/components/TView.js";
 export { TRenderPlane } from "./vue/components/TRenderPlane.js";
 export { TVirtualList } from "./vue/components/TVirtualList.js";
@@ -59,12 +64,30 @@ export {
 } from "./vue/log/tlog-theme.js";
 export type { RowScrollMode } from "./vue/components/TVirtualList.js";
 export type {
+  TThinkingViewModel,
+  TThinkingViewModelOptions,
+  TThinkingViewSegment,
+  TThinkingViewSegmentRole,
+  TThinkingViewStyles,
+} from "./vue/components/TThinkingView.js";
+export type {
   TToolCallStatus,
+  TToolCallViewModel,
+  TToolCallViewModelOptions,
   TToolCallViewSegment,
   TToolCallViewSegmentRole,
   TToolCallViewSlotProps,
   TToolCallViewStyles,
 } from "./vue/components/TToolCallView.js";
+export type {
+  TUserMessageRow,
+  TUserMessageHeaderSegment,
+  TUserMessageHeaderSegmentRole,
+  TUserMessageSegment,
+  TUserMessageViewModel,
+  TUserMessageViewModelOptions,
+  TUserMessageViewSlotProps,
+} from "./vue/components/TUserMessageView.js";
 export type {
   TTranscriptAction,
   TTranscriptDataSource,

@@ -222,16 +222,16 @@ describe("terminal selection", () => {
     selection.paint();
     terminal.commit({ planes: ["overlay"], sync: true });
 
-    expect(terminal.getCell(1, 0).style.inverse).toBe(true);
-    expect(terminal.getCell(3, 0).style.inverse).toBe(true);
-    expect(terminal.getCell(4, 0).style.inverse).toBeUndefined();
+    expect(terminal.getCell(1, 0).style.bg).toBe("blue");
+    expect(terminal.getCell(3, 0).style.bg).toBe("blue");
+    expect(terminal.getCell(4, 0).style.bg).toBeUndefined();
 
     selection.clear();
     overlay.clear(0, 0, 6, 1);
     selection.paint([0]);
     terminal.commit({ planes: ["overlay"], sync: true });
 
-    expect(terminal.getCell(1, 0).style.inverse).toBeUndefined();
+    expect(terminal.getCell(1, 0).style.bg).toBeUndefined();
   });
 
   it("does not preserve link href on overlay selection cells", () => {
@@ -256,7 +256,7 @@ describe("terminal selection", () => {
 
     expect(terminal.getCell(1, 0).style.href).toBeUndefined();
     expect(terminal.getCell(1, 0).style.underline).toBe(true);
-    expect(terminal.getCell(1, 0).style.inverse).toBe(true);
+    expect(terminal.getCell(1, 0).style.bg).toBe("blue");
     expect(terminal.getCell(4, 0).style.href).toBe("https://example.com");
   });
 
@@ -316,7 +316,7 @@ describe("terminal selection", () => {
     // After scroll, the visible rows should be highlighted correctly.
     // With sourceTop=1, the visible rows are source rows 1-4.
     // Row 0 (screen y=0) maps to source row 1, which IS in the selection range.
-    expect(terminal.getCell(0, 0).style.inverse).toBe(true);
+    expect(terminal.getCell(0, 0).style.bg).toBe("blue");
   });
 
   it("falls back to terminal buffer spans when provider has no getVisibleSpans", () => {
@@ -347,8 +347,8 @@ describe("terminal selection", () => {
     terminal.commit({ planes: ["overlay"], sync: true });
 
     // Standard terminal buffer overlay should work
-    expect(terminal.getCell(0, 0).style.inverse).toBe(true);
-    expect(terminal.getCell(0, 1).style.inverse).toBe(true);
+    expect(terminal.getCell(0, 0).style.bg).toBe("blue");
+    expect(terminal.getCell(0, 1).style.bg).toBe("blue");
   });
 
   it("computes visible spans without materializing the full selected range", () => {
@@ -502,8 +502,8 @@ describe("terminal selection", () => {
     terminal.commit({ planes: ["overlay"], sync: true });
 
     // Verify overlay is applied
-    expect(terminal.getCell(0, 0).style.inverse).toBe(true);
-    expect(terminal.getCell(4, 0).style.inverse).toBe(true);
+    expect(terminal.getCell(0, 0).style.bg).toBe("blue");
+    expect(terminal.getCell(4, 0).style.bg).toBe("blue");
 
     // Simulate provider unregister — should clear selection and dirty rows.
     providers.length = 0;
@@ -514,8 +514,8 @@ describe("terminal selection", () => {
     selection.paint([0]);
     terminal.commit({ planes: ["overlay"], sync: true });
 
-    expect(terminal.getCell(0, 0).style.inverse).toBeUndefined();
-    expect(terminal.getCell(4, 0).style.inverse).toBeUndefined();
+    expect(terminal.getCell(0, 0).style.bg).toBeUndefined();
+    expect(terminal.getCell(4, 0).style.bg).toBeUndefined();
   });
 
   it("does not resolve provider text on finish when autoCopy is disabled", async () => {
@@ -633,7 +633,7 @@ describe("terminal selection", () => {
     selection.paint();
     terminal.commit({ planes: ["overlay"], sync: true });
 
-    expect(terminal.getCell(0, 1).style.inverse).toBe(true);
+    expect(terminal.getCell(0, 1).style.bg).toBe("blue");
 
     visible = false;
     selection.refresh();
@@ -642,6 +642,6 @@ describe("terminal selection", () => {
     selection.paint([1]);
     terminal.commit({ planes: ["overlay"], sync: true });
 
-    expect(terminal.getCell(0, 1).style.inverse).toBeUndefined();
+    expect(terminal.getCell(0, 1).style.bg).toBeUndefined();
   });
 });

@@ -35,7 +35,7 @@ import {
 } from "./cli/node-file-writers.js";
 import { createNodePathPickerProvider } from "./cli/path-provider.js";
 import { createTerminal } from "./core/index.js";
-import { getPlaneTerminal } from "./core/terminal/create-terminal.js";
+import { getComposedRowBeforePlane, getPlaneTerminal } from "./core/terminal/create-terminal.js";
 import { createCliEventManager } from "./events/index.js";
 import { getCliLatencyProfiler } from "./observability/cli-latency-node.js";
 import { framePerfNow, mergeFramePerfReason } from "./observability/frame-perf.js";
@@ -98,7 +98,7 @@ function resolveSelectionConfig(
       enabled: false,
       autoCopy: true,
       copyOnMouseUp: true,
-      style: { inverse: true },
+      style: { bg: "blue" },
     };
   }
   const value = config === true ? {} : config;
@@ -106,7 +106,7 @@ function resolveSelectionConfig(
     enabled: true,
     autoCopy: value.autoCopy ?? true,
     copyOnMouseUp: value.copyOnMouseUp ?? true,
-    style: value.style ?? { inverse: true },
+    style: value.style ?? { bg: "blue" },
   };
 }
 
@@ -611,6 +611,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     terminal,
     overlayTerminal: selectionOverlay,
     clipboard: options.clipboard ?? unsupportedClipboard,
+    getSourceRow: (y) => getComposedRowBeforePlane(terminal, "overlay", y) ?? terminal.getRow(y),
     getTextProviders: () => Array.from(selectionTextProviders.values()),
     getOptions: () => {
       const config = resolveSelectionConfig(options.selection);
@@ -658,6 +659,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   let selectionStartPoint: { x: number; y: number } | null = null;
   let selectionScrollOrigin: { x: number; y: number } | null = null;
   let selectionLastPoint: { x: number; y: number } | null = null;
+  let selectionPointerDownEvent: TerminalEventRecord | null = null;
   let selectionAutoScrollTimer: ReturnType<typeof setTimeout> | null = null;
   let selectionDragStarted = false;
   let suppressNextSelectionClick = false;
@@ -667,6 +669,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     selectionStartPoint = null;
     selectionScrollOrigin = null;
     selectionLastPoint = null;
+    selectionPointerDownEvent = null;
     selectionDragStarted = false;
     suppressNextSelectionClick = false;
     clearSelectionAutoScroll();
@@ -705,6 +708,20 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     x: Math.max(0, Math.floor((event as any).cellX ?? 0)),
     y: Math.max(0, Math.floor((event as any).cellY ?? 0)),
   });
+  const hasSelectionTextProviderAt = (point: { x: number; y: number }): boolean => {
+    for (const provider of selectionTextProviders.values()) {
+      const rect = provider.rect;
+      if (
+        point.x >= rect.x &&
+        point.y >= rect.y &&
+        point.x < rect.x + rect.w &&
+        point.y < rect.y + rect.h
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   const dispatchWithSelection = (event: TerminalEventRecord): boolean => {
     if (!selectionEnabled()) return baseEvents.dispatch(event);
@@ -729,12 +746,13 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       selectionDragStarted = false;
       if (!selecting && (event.button ?? 0) === 0) {
         const point = eventPoint(event);
-        if (baseEvents.canSelectAt(point.x, point.y)) {
+        if (baseEvents.canSelectAt(point.x, point.y) || hasSelectionTextProviderAt(point)) {
           selection.start(point, { extend: Boolean(event.shiftKey) });
           selecting = true;
           selectionStartPoint = point;
           selectionScrollOrigin = point;
           selectionLastPoint = point;
+          selectionPointerDownEvent = { ...event };
           scheduleSelectionAutoScroll();
 
           // Set suppress flag and dispatch so the CLI event manager's
@@ -781,11 +799,14 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
         suppressNextSelectionClick = true;
         (event as any)[SUPPRESS_TERMINAL_POINTER_UP] = true;
       }
+      const replayPointerDown = !suppressActivation ? selectionPointerDownEvent : null;
       selecting = false;
       selectionStartPoint = null;
       selectionScrollOrigin = null;
       selectionLastPoint = null;
+      selectionPointerDownEvent = null;
       clearSelectionAutoScroll();
+      if (replayPointerDown) baseEvents.dispatch(replayPointerDown);
       const prevented = baseEvents.dispatch(event);
       void selection.finish();
       return suppressActivation || prevented;

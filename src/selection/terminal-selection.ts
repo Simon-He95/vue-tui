@@ -134,6 +134,7 @@ export type CreateTerminalSelectionControllerOptions = Readonly<{
   terminal: Terminal;
   overlayTerminal: Terminal;
   clipboard: ClipboardApi;
+  getSourceRow?: (y: number) => readonly Cell[];
   getOptions?: () => Partial<ResolvedSelectionOptions>;
   getTextProviders?: () => readonly SelectionTextProvider[];
   onDirtyRows?: (rows: readonly number[]) => void;
@@ -270,7 +271,7 @@ export function createTerminalSelectionController(
   const readOptions = (): ResolvedSelectionOptions => ({
     autoCopy: true,
     copyOnMouseUp: true,
-    style: { inverse: true },
+    style: { bg: "blue" },
     ...(options.getOptions?.() ?? {}),
   });
 
@@ -323,7 +324,14 @@ export function createTerminalSelectionController(
     const spans = terminalSelectionRowSpans(nextRange, size.cols, size.rows);
     const lines: string[] = [];
     for (const span of spans) {
-      lines.push(selectedRowText(options.terminal.getRow(span.y), span.x0, span.x1, size.cols));
+      lines.push(
+        selectedRowText(
+          options.getSourceRow?.(span.y) ?? options.terminal.getRow(span.y),
+          span.x0,
+          span.x1,
+          size.cols,
+        ),
+      );
     }
     return lines.join("\n");
   };
@@ -554,7 +562,7 @@ export function createTerminalSelectionController(
         const spans = overlaySpans.get(y);
         if (!spans?.length) continue;
 
-        const row = options.terminal.getRow(y);
+        const row = options.getSourceRow?.(y) ?? options.terminal.getRow(y);
 
         for (const span of spans) {
           for (let x = span.x0; x < span.x1; x++) {

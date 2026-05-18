@@ -23,6 +23,8 @@ export type ComponentPerf = Readonly<{
   renderedCount?: number;
   cacheHit?: number;
   cacheMiss?: number;
+  sourceReadCount?: number;
+  sourceSkippedCount?: number;
   width?: number;
   version?: string | number;
   reason?: string;

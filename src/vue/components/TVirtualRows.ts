@@ -121,6 +121,13 @@ export type TVirtualRowsScrollMetrics = Readonly<{
 
 export type TVirtualRowsScrollPayload = TVirtualRowsScrollMetrics;
 
+export type TVirtualRowsScrollEdgePayload = TVirtualRowsScrollMetrics &
+  Readonly<{
+    edge: "top" | "bottom";
+    deltaY: number;
+    event: unknown;
+  }>;
+
 export type TVirtualRowsHandle = Readonly<{
   scrollTo: (top: number) => void;
   scrollBy: (delta: number) => void;
@@ -175,6 +182,7 @@ export const TVirtualRows = defineComponent({
   emits: [
     "update:scrollTop",
     "scroll",
+    "scrollEdge",
     "clickCapture",
     "click",
     "contextmenuCapture",
@@ -222,7 +230,15 @@ export const TVirtualRows = defineComponent({
     let dirtyRowsHint: readonly number[] | undefined;
     let renderNodeId: string | null = null;
     let pendingWheelTop: number | null = null;
+    let expectedControlledWheelTop: number | null = null;
+    let pendingWheelEdge: {
+      edge: "top" | "bottom";
+      deltaY: number;
+      event: unknown;
+      top: number;
+    } | null = null;
     let pendingSelectionScrollFocusRemap = false;
+    let pointerUpItemClickIndex: number | null = null;
     let alive = true;
 
     const itemCount = computed(() => Math.max(0, normalizeInt(props.itemCount)));
@@ -315,6 +331,20 @@ export const TVirtualRows = defineComponent({
 
     function emitScroll(top = currentScrollTop()): void {
       emit("scroll", scrollMetrics(top));
+    }
+
+    function emitScrollEdge(
+      edge: "top" | "bottom",
+      deltaY: number,
+      event: unknown,
+      top = currentScrollTop(),
+    ): void {
+      emit("scrollEdge", {
+        ...scrollMetrics(top),
+        edge,
+        deltaY,
+        event,
+      } satisfies TVirtualRowsScrollEdgePayload);
     }
 
     function viewportRows(): number[] {
@@ -414,7 +444,9 @@ export const TVirtualRows = defineComponent({
       priority: "high",
       sync: true,
       apply(nextTop, ctx) {
+        const edge = pendingWheelEdge;
         pendingWheelTop = null;
+        pendingWheelEdge = null;
         if (!alive || !hasPaintableViewport()) {
           resetWheelScrollState(wheelState);
           return;
@@ -425,14 +457,18 @@ export const TVirtualRows = defineComponent({
           return;
         }
         selection.refresh();
+        if (isScrollControlled()) expectedControlledWheelTop = clampScrollTop(nextTop);
+        if (edge) emitScrollEdge(edge.edge, edge.deltaY, edge.event, edge.top);
         ctx.invalidate({ priority: "high", plane: plane.value, reason: "scroll" });
       },
     });
 
-    function cancelWheelScrollFrame(): void {
+    function cancelWheelScrollFrame(options?: { resetState?: boolean }): void {
       pendingWheelTop = null;
+      expectedControlledWheelTop = null;
+      pendingWheelEdge = null;
       wheelMailbox.cancel();
-      resetWheelScrollState(wheelState);
+      if (options?.resetState !== false) resetWheelScrollState(wheelState);
     }
 
     function requestWheelScroll(nextTop: number): boolean {
@@ -540,6 +576,24 @@ export const TVirtualRows = defineComponent({
       };
     }
 
+    function itemIndexForEvent(e: TerminalPointerEvent): number | null {
+      const r = normalizedRect();
+      const { y: clipY } = clipOffsets();
+      const index = currentScrollTop() + clipY + (e.cellY - r.y);
+      if (index < 0 || index >= itemCount.value) return null;
+      return index;
+    }
+
+    function emitItemClick(index: number, e: TerminalPointerEvent): void {
+      const r = normalizedRect();
+      emit("itemClick", {
+        index,
+        item: props.getItem(index),
+        row: e.cellY - r.y,
+        event: e,
+      });
+    }
+
     function canHandleSelectionRange(range: TerminalSelectionRange): boolean {
       if (!props.selectable) return false;
       return Boolean(selectionPointForCell(range.anchor) && selectionPointForCell(range.focus));
@@ -620,11 +674,13 @@ export const TVirtualRows = defineComponent({
         clickCapture: (e: TerminalPointerEvent) => emit("clickCapture", e),
         click: (e: TerminalPointerEvent) => {
           emit("click", e);
-          const r = normalizedRect();
-          const { y: clipY } = clipOffsets();
-          const index = currentScrollTop() + clipY + (e.cellY - r.y);
-          if (index < 0 || index >= itemCount.value) return;
-          emit("itemClick", { index, item: props.getItem(index), row: e.cellY - r.y, event: e });
+          const index = itemIndexForEvent(e);
+          if (index == null) return;
+          if (pointerUpItemClickIndex === index) {
+            pointerUpItemClickIndex = null;
+            return;
+          }
+          emitItemClick(index, e);
         },
         contextmenuCapture: (e: TerminalPointerEvent) => emit("contextmenuCapture", e),
         contextmenu: (e: TerminalPointerEvent) => emit("contextmenu", e),
@@ -633,14 +689,23 @@ export const TVirtualRows = defineComponent({
         pointermoveCapture: (e: TerminalPointerEvent) => emit("pointermoveCapture", e),
         pointermove: (e: TerminalPointerEvent) => emit("pointermove", e),
         pointerupCapture: (e: TerminalPointerEvent) => emit("pointerupCapture", e),
-        pointerup: (e: TerminalPointerEvent) => emit("pointerup", e),
+        pointerup: (e: TerminalPointerEvent) => {
+          emit("pointerup", e);
+          if (e.button != null && e.button !== 0) return;
+          const index = itemIndexForEvent(e);
+          if (index == null) return;
+          pointerUpItemClickIndex = index;
+          emitItemClick(index, e);
+        },
         pointerleave: (e: TerminalPointerEvent) => emit("pointerleave", e),
         wheel: (e: any) => {
           emit("wheel", e);
           if (!props.wheelScroll) return;
           const { deltaY, mode } = getWheelScrollInput(e);
           if (!deltaY) return;
+          selection.clear();
           const baseTop = pendingWheelTop ?? currentScrollTop();
+          const maxTop = maxScrollTop();
           const now =
             typeof e.time === "number"
               ? e.time
@@ -651,13 +716,31 @@ export const TVirtualRows = defineComponent({
             wheelState,
             deltaY,
             baseTop,
-            maxScrollTop(),
+            maxTop,
             now,
             mode,
             { disableAcceleration: mode === "pixel" },
           );
-          if (!dir || nextTop === baseTop) return;
-          if (!requestWheelScroll(nextTop)) return;
+          if (!dir || nextTop === baseTop) {
+            if (deltaY < 0 && baseTop <= 0) {
+              emitScrollEdge("top", deltaY, e, baseTop);
+              e.preventDefault?.();
+            } else if (deltaY > 0 && baseTop >= maxTop) {
+              emitScrollEdge("bottom", deltaY, e, baseTop);
+              e.preventDefault?.();
+            }
+            return;
+          }
+          pendingWheelEdge =
+            deltaY < 0 && nextTop <= 0
+              ? { edge: "top", deltaY, event: e, top: nextTop }
+              : deltaY > 0 && nextTop >= maxTop
+                ? { edge: "bottom", deltaY, event: e, top: nextTop }
+                : null;
+          if (!requestWheelScroll(nextTop)) {
+            pendingWheelEdge = null;
+            return;
+          }
           e.preventDefault?.();
         },
         focus: () => {
@@ -736,7 +819,8 @@ export const TVirtualRows = defineComponent({
           }
           return;
         }
-        cancelWheelScrollFrame();
+        const isWheelControlledSync = expectedControlledWheelTop === nextTop;
+        cancelWheelScrollFrame({ resetState: !isWheelControlledSync });
         controlledScrollTop.value = nextTop;
         markViewportDirty();
         selection.refresh(pendingSelectionScrollFocusRemap ? { remapFocus: true } : undefined);

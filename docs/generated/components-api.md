@@ -1021,6 +1021,7 @@ Import: `@simon_he/vue-tui/experimental`
 | 名称                          | Payload | 说明 |
 | ----------------------------- | ------- | ---- |
 | <code>scroll</code>           | —       | —    |
+| <code>scrollEdge</code>       | —       | —    |
 | <code>update:scrollTop</code> | —       | —    |
 | <code>rowClick</code>         | —       | —    |
 | <code>actionClick</code>      | —       | —    |

@@ -6,7 +6,7 @@ import type {
   TVirtualRowsSelectionSpanTextContext,
 } from "./TVirtualRows.js";
 import type { Style } from "../../core/types.js";
-import type { TerminalKeyboardEvent } from "../../events/manager/types.js";
+import type { TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/manager/types.js";
 import type {
   TTranscriptDataSource,
   TTranscriptHitRegion,
@@ -167,6 +167,7 @@ export const TTranscriptView = defineComponent({
   },
   emits: [
     "scroll",
+    "scrollEdge",
     "update:scrollTop",
     "rowClick",
     "actionClick",
@@ -183,6 +184,7 @@ export const TTranscriptView = defineComponent({
     const hoveredRegion = ref<TTranscriptHitRegion | null>(null);
     const focusedRegion = ref<TTranscriptHitRegion | null>(null);
     const rowLayoutCache = new Map<number, RowLayoutCacheEntry>();
+    let pointerUpActivatedRegionId: string | null = null;
     let warnedLargeFlattenedRows = false;
 
     function isScrollControlled(): boolean {
@@ -211,6 +213,8 @@ export const TTranscriptView = defineComponent({
             renderedCount: 0,
             cacheHit: 0,
             cacheMiss: 0,
+            sourceReadCount: 0,
+            sourceSkippedCount: 0,
             width,
             version: props.version,
           });
@@ -227,14 +231,33 @@ export const TTranscriptView = defineComponent({
       const focusedRegionId = focusedRegion.value?.id ?? null;
       let cacheHit = 0;
       let cacheMiss = 0;
+      let sourceReadCount = 0;
+      let sourceSkippedCount = 0;
       for (let rowIndex = 0; rowIndex < count; rowIndex++) {
-        const row = props.source.getRow(rowIndex);
-        const rowKey = props.source.getRowKey?.(rowIndex) ?? row.key;
+        const cached = rowLayoutCache.get(rowIndex);
+        const sourceRowKey = props.source.getRowKey?.(rowIndex);
         const sourceRowVersion = props.source.getRowVersion?.(rowIndex);
-        const localHoverRegionId = rowHasRegionId(row, rowKey, hoverRegionId)
+        let rowKey = sourceRowKey;
+        let row: TTranscriptRow | undefined =
+          sourceRowVersion != null &&
+          rowKey != null &&
+          cached?.usesSourceRowVersion &&
+          cached.rowVersion === sourceRowVersion &&
+          cached.rowKey === rowKey
+            ? cached.row
+            : undefined;
+        if (row) {
+          sourceSkippedCount++;
+        } else {
+          row = props.source.getRow(rowIndex);
+          sourceReadCount++;
+          rowKey = rowKey ?? row.key;
+        }
+        const resolvedRowKey = rowKey ?? row.key;
+        const localHoverRegionId = rowHasRegionId(row, resolvedRowKey, hoverRegionId)
           ? hoverRegionId
           : null;
-        const localFocusedRegionId = rowHasRegionId(row, rowKey, focusedRegionId)
+        const localFocusedRegionId = rowHasRegionId(row, resolvedRowKey, focusedRegionId)
           ? focusedRegionId
           : null;
         const cacheKey = {
@@ -243,7 +266,7 @@ export const TTranscriptView = defineComponent({
           usesSourceRowVersion: sourceRowVersion != null,
           row,
           rowIndex,
-          rowKey,
+          rowKey: resolvedRowKey,
           width,
           wrap: props.wrap,
           baseStyle,
@@ -253,7 +276,6 @@ export const TTranscriptView = defineComponent({
           focusedRegionId: localFocusedRegionId,
         };
         rowStarts.set(rowIndex, visualRows.length);
-        const cached = rowLayoutCache.get(rowIndex);
         const cacheMatches = sameCachedLayout(cached, cacheKey);
         if (cacheMatches) cacheHit++;
         else cacheMiss++;
@@ -262,7 +284,7 @@ export const TTranscriptView = defineComponent({
           : layoutTranscriptRow({
               row,
               rowIndex,
-              rowKey,
+              rowKey: resolvedRowKey,
               width,
               baseStyle,
               hoverRegionId: localHoverRegionId,
@@ -302,6 +324,8 @@ export const TTranscriptView = defineComponent({
           renderedCount: visualRows.length,
           cacheHit,
           cacheMiss,
+          sourceReadCount,
+          sourceSkippedCount,
           width,
           version: props.version,
         });
@@ -353,6 +377,24 @@ export const TTranscriptView = defineComponent({
       else if (region.kind === "link") emit("linkClick", event);
       else if (region.kind === "fold-toggle") emit("foldToggle", event);
       else if (region.kind === "tool-call") emit("toolClick", event);
+    }
+
+    function emitRegionFromPointerUp(region: TTranscriptHitRegion, e: TerminalPointerEvent): void {
+      if (e.button != null && e.button !== 0) return;
+      if (isDisabledActionRegion(region)) return;
+      e.stopPropagation?.();
+      pointerUpActivatedRegionId = region.id;
+      emitRegion(region, e);
+    }
+
+    function emitRegionFromClick(region: TTranscriptHitRegion, e: TerminalPointerEvent): void {
+      e.stopPropagation?.();
+      if (isDisabledActionRegion(region)) return;
+      if (pointerUpActivatedRegionId === region.id) {
+        pointerUpActivatedRegionId = null;
+        return;
+      }
+      emitRegion(region, e);
     }
 
     function visualIndexesForRegion(region: TTranscriptHitRegion | null): number[] {
@@ -540,6 +582,12 @@ export const TTranscriptView = defineComponent({
     );
 
     watch(
+      () => props.version,
+      () => rowsRef.value?.refreshViewport(),
+      { flush: "post" },
+    );
+
+    watch(
       () => [layoutState.value.regions, currentScrollTop(), props.h],
       () => reconcileActiveRegions(),
     );
@@ -587,10 +635,8 @@ export const TTranscriptView = defineComponent({
             onPointerleave: () => {
               if (hoveredRegion.value?.id === region.id) setHoveredRegion(null);
             },
-            onClick: (e: any) => {
-              e.stopPropagation?.();
-              emitRegion(region, e);
-            },
+            onPointerup: (e: TerminalPointerEvent) => emitRegionFromPointerUp(region, e),
+            onClick: (e: TerminalPointerEvent) => emitRegionFromClick(region, e),
           }),
         );
       }
@@ -658,6 +704,7 @@ export const TTranscriptView = defineComponent({
         rowScrollMode: props.rowScrollMode,
         onKeydown,
         onScroll: (payload: any) => emit("scroll", payload),
+        onScrollEdge: (payload: any) => emit("scrollEdge", payload),
         onItemClick: (event: { item: unknown; event?: unknown }) => {
           const visualRow = event.item as TTranscriptVisualRow | undefined;
           if (!visualRow) return;
