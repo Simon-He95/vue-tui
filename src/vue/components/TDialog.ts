@@ -1037,6 +1037,8 @@ export const TDialog = defineComponent({
                 },
                 onKeydown: (e: any) => {
                   if (e?.defaultPrevented) return;
+                  onDialogKeydown(e);
+                  if (e?.defaultPrevented) return;
                   const key = e?.key;
                   const isEnter = key === "Enter";
                   const isSpace = key === " " || key === "Spacebar" || e?.code === "Space";

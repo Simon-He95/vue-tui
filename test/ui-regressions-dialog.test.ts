@@ -539,6 +539,64 @@ describe("ui regressions dialog", () => {
     mounted.unmount();
   });
 
+  it("TDialog footer buttons forward unhandled keys to the dialog keymap", async () => {
+    const open = ref(true);
+    const lastKey = ref("");
+    const prevented = ref(false);
+    const confirmed = ref("");
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 28,
+            h: 7,
+            title: "Sessions",
+            placement: "center",
+            teleport: true,
+            closeOnConfirm: false,
+            buttons: [
+              { label: "Open", value: "open", kind: "primary", default: true },
+              { label: "Close", value: "close" },
+            ],
+            onKeydown: (e: any) => {
+              lastKey.value = String(e?.key ?? "");
+              if (e?.key === "ArrowDown") {
+                e.preventDefault?.();
+                prevented.value = true;
+              }
+            },
+            onConfirm: (b: any) => {
+              confirmed.value = String(b?.value ?? "");
+            },
+          },
+          () => h(TText, { x: 0, y: 0, w: 24, value: "Rows" }),
+        ),
+      44,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        code: "ArrowDown",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    expect(lastKey.value).toBe("ArrowDown");
+    expect(prevented.value).toBe(true);
+    expect(confirmed.value).toBe("");
+
+    mounted.unmount();
+  });
+
   it("TDialog only underlines the selected footer button", async () => {
     const open = ref(true);
     const mounted = await mountTerminal(
