@@ -68,6 +68,29 @@ function inputBorderVisible(app: TerminalApp): boolean {
   return rowText(app, AGENT_CONSOLE_LAYOUT.input.y).startsWith("┌");
 }
 
+function boxBorderClosed(
+  app: TerminalApp,
+  rect: { x: number; y: number; w: number; h: number },
+): boolean {
+  const lines = app.terminal.snapshot().lines;
+  const { x, y, w, h } = rect;
+  if (lines[y]?.[x] !== "┌") return false;
+  if (lines[y]?.[x + w - 1] !== "┐") return false;
+  if (lines[y + h - 1]?.[x] !== "└") return false;
+  if (lines[y + h - 1]?.[x + w - 1] !== "┘") return false;
+
+  for (let yy = y + 1; yy < y + h - 1; yy++) {
+    if (lines[yy]?.[x] !== "│") return false;
+    if (lines[yy]?.[x + w - 1] !== "│") return false;
+  }
+
+  for (let xx = x + 1; xx < x + w - 1; xx++) {
+    if (lines[y + h - 1]?.[xx] !== "─") return false;
+  }
+
+  return true;
+}
+
 function transcriptHasStyledBackground(app: TerminalApp): boolean {
   for (
     let y = AGENT_CONSOLE_LAYOUT.transcript.y;
@@ -363,6 +386,7 @@ try {
     toolCallDotStyle.dim === true &&
     toolCallTitleStyle.fg === "yellowBright" &&
     toolCallTitleStyle.bg === "black";
+  const runtimeChromeBorderClosed = boxBorderClosed(app, AGENT_CONSOLE_LAYOUT.chrome);
   const replayLog = api.captureReplayLog();
   const replayPayload = stringifyAgentReplayLog(replayLog);
   const parsedReplayLog = parseAgentReplayLog(replayPayload);
@@ -503,6 +527,7 @@ try {
     expandableRowsRendered:
       overlayChrome.includes("▸ Thinking") && overlayChrome.includes("▸ ● Run 3 commands"),
     bestAgentToolCallChrome,
+    runtimeChromeBorderClosed,
     bestAgentChangedFilesBoxClosed,
     chromeButtonUnderlineFollowsText,
     thinkingClickCollapsedTranscript,
@@ -546,6 +571,7 @@ try {
   assert.equal(output.replayFinalSnapshotRows, output.terminalRows);
   assert.equal(output.expandableRowsRendered, true);
   assert.equal(output.bestAgentToolCallChrome, true);
+  assert.equal(output.runtimeChromeBorderClosed, true);
   assert.equal(output.bestAgentChangedFilesBoxClosed, true);
   assert.equal(output.chromeButtonUnderlineFollowsText, true);
   assert.equal(output.thinkingClickCollapsedTranscript, true);
