@@ -42,6 +42,16 @@ describe("wheel scroll", () => {
     expect(second.nextTop).toBe(40);
   });
 
+  it("accelerates rapid same-direction line-unit terminal wheel ticks", () => {
+    const state = createWheelScrollState();
+    const first = applyWheelScroll(state, 1, 10, 5000, 1000, "line");
+    const second = applyWheelScroll(state, 1, first.nextTop, 5000, 1010, "line");
+
+    expect(first.lines).toBe(1);
+    expect(second.lines).toBeGreaterThan(1);
+    expect(second.nextTop).toBeGreaterThan(12);
+  });
+
   it("suppresses short line-unit opposite ticks after a terminal wheel step", () => {
     const state = createWheelScrollState();
     const first = applyWheelScroll(state, 1, 10, 100, 1000, "line");

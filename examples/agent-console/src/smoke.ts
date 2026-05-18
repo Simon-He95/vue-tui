@@ -285,6 +285,14 @@ try {
   const ghosttyWheelDownMonotonic = ghosttyWheelTops.every((top, index) => {
     return top >= 0 && (index === 0 || top >= (ghosttyWheelTops[index - 1] ?? -1));
   });
+  const fastWheelStart = api.metrics.value?.scrollTop ?? -1;
+  for (let i = 0; i < 6; i++) {
+    dispatchWheel(app.events, 1, 4_000 + i * 10);
+    await flushFrame(raf);
+  }
+  const fastWheelEnd = api.metrics.value?.scrollTop ?? -1;
+  const fastWheelDistance =
+    fastWheelStart >= 0 && fastWheelEnd >= 0 ? fastWheelEnd - fastWheelStart : 0;
   const transcriptRows = api.getTranscriptRows();
   const scenarioSamples = api.getFramePerfSamples();
 
@@ -500,6 +508,7 @@ try {
     thinkingClickCollapsedTranscript,
     toolCallClickCollapsedTranscript,
     ghosttyWheelDownMonotonic,
+    fastWheelDistance,
     linksUnderlineFollowsText,
     bestAgentFixtureRowsRendered,
     firstTranscriptRow: rowText(app, AGENT_CONSOLE_LAYOUT.transcript.y),
@@ -542,6 +551,7 @@ try {
   assert.equal(output.thinkingClickCollapsedTranscript, true);
   assert.equal(output.toolCallClickCollapsedTranscript, true);
   assert.equal(output.ghosttyWheelDownMonotonic, true);
+  assert.ok(output.fastWheelDistance >= 24, "expected fast wheel burst to cover useful distance");
   assert.equal(output.linksUnderlineFollowsText, true);
   assert.equal(output.bestAgentFixtureRowsRendered, true);
   assert.ok(output.overlayMaxDirtyRows <= AGENT_CONSOLE_LAYOUT.rows);
