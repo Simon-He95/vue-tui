@@ -4,6 +4,7 @@ import {
   createStdoutRenderer,
   createTerminalApp,
   installTerminalCleanup,
+  type TerminalCleanupHandle,
 } from "@simon_he/vue-tui/cli";
 import { AgentConsoleSurface, AGENT_CONSOLE_LAYOUT } from "./AgentConsoleSurface";
 import { consoleDefaultStyle, domPalette } from "./theme";
@@ -35,7 +36,7 @@ const app = createTerminalApp({
   rows,
   component: AgentConsoleSurface,
   props: {
-    autoStart: !smoke,
+    autoStart: false,
     onReady(next: AgentConsoleApi) {
       api = next;
     },
@@ -78,14 +79,14 @@ const offCommitCursor = app.terminal.on("commit", () => {
 });
 
 let driver: ReturnType<typeof createStdinDriver> | null = null;
-let uninstallCleanup: (() => void) | null = null;
+let cleanupHandle: TerminalCleanupHandle | null = null;
 let exiting = false;
 
 const cleanup = () => {
   if (exiting) return;
   exiting = true;
-  uninstallCleanup?.();
-  uninstallCleanup = null;
+  cleanupHandle?.uninstall();
+  cleanupHandle = null;
   driver?.dispose();
   offCommitCursor();
   out.dispose();
@@ -112,7 +113,7 @@ if (smoke) {
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
   exit(0);
 } else {
-  uninstallCleanup = installTerminalCleanup(cleanup, { exitOnSignal: true });
+  cleanupHandle = installTerminalCleanup(cleanup, { signalPolicy: "exit" });
   driver = createStdinDriver({
     dispatch: (event) => {
       const prevented = app.events.dispatch(event);

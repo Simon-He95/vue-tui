@@ -3,6 +3,7 @@ import {
   createStdoutRenderer,
   createTerminalApp,
   installTerminalCleanup,
+  type TerminalCleanupHandle,
 } from "@simon_he/vue-tui/cli";
 import TableDemo from "./TableDemo.vue";
 
@@ -37,14 +38,14 @@ const renderer = createStdoutRenderer(
 app.scheduler.flushNow();
 
 let driver: ReturnType<typeof createStdinDriver> | null = null;
-let uninstallCleanup: (() => void) | null = null;
+let cleanupHandle: TerminalCleanupHandle | null = null;
 let disposed = false;
 
 const cleanup = () => {
   if (disposed) return;
   disposed = true;
-  uninstallCleanup?.();
-  uninstallCleanup = null;
+  cleanupHandle?.uninstall();
+  cleanupHandle = null;
   driver?.dispose();
   renderer.dispose();
   app.dispose();
@@ -58,7 +59,7 @@ const exit = () => {
 if (smoke) {
   exit();
 } else {
-  uninstallCleanup = installTerminalCleanup(cleanup, { exitOnSignal: true });
+  cleanupHandle = installTerminalCleanup(cleanup, { signalPolicy: "exit" });
   driver = createStdinDriver({
     dispatch(event) {
       const prevented = app.events.dispatch(event);

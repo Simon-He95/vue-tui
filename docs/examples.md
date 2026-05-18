@@ -17,7 +17,7 @@
 | Basic terminal         | `pnpm run run:basic:terminal`              | stdout renderer + stdin driver 基础交互     |
 | Basic multi-select     | `pnpm run run:basic:multi-select:terminal` | terminal multi-select interaction           |
 | TLogView Lab           | `pnpm run run:tlog-view-lab`               | retained log、search、links、minimap 组合   |
-| Agent Console terminal | `pnpm run example:agent-console:terminal`  | Agent Console 的真实 terminal/stdout runner |
+| Agent Console terminal | `pnpm run run:agent-console:terminal`      | Agent Console 的真实 terminal/stdout runner |
 
 ## Headless Smoke
 

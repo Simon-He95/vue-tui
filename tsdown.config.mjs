@@ -24,6 +24,7 @@ export default defineConfig([
       vue: "src/vue.ts",
       markdown: "src/markdown.ts",
       experimental: "src/experimental.ts",
+      agent: "src/agent.ts",
     },
     format: ["esm"],
     clean: false,

@@ -39,6 +39,7 @@ await build({
     vue: "src/vue.ts",
     markdown: "src/markdown.ts",
     experimental: "src/experimental.ts",
+    agent: "src/agent.ts",
   },
   outdir: "dist",
   outExtension: { ".js": ".cjs" },

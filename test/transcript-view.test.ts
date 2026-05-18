@@ -13,7 +13,10 @@ import {
   mountTerminal,
   nextTick,
   ref,
+  TRenderPlane,
+  TText,
   TView,
+  useTerminal,
 } from "./ui-regressions-support.js";
 import { installManualRaf } from "./helpers/manual-raf.js";
 
@@ -641,6 +644,145 @@ describe("TTranscriptView", () => {
       warn.mockRestore();
       if (previousDebugPerf === undefined) delete (globalThis as any).__VT_DEBUG_PERF__;
       else (globalThis as any).__VT_DEBUG_PERF__ = previousDebugPerf;
+    }
+  });
+
+  it("matches the best-agent ChatMessages source shape with stable row versions", async () => {
+    const lines = [
+      {
+        messageId: "u1",
+        role: "user" as const,
+        text: "User: inspect the renderer",
+        version: 1,
+        style: { fg: "white" as const, bg: "blackBright" as const },
+      },
+      {
+        messageId: "a1",
+        role: "assistant" as const,
+        text: "Assistant: reading visible transcript rows",
+        version: 1,
+        style: { fg: "white" as const, bg: "black" as const },
+      },
+      {
+        messageId: "tool1",
+        role: "tool" as const,
+        text: "tool: stdout chunk completed",
+        version: 1,
+        style: { fg: "cyanBright" as const, bg: "black" as const },
+      },
+    ];
+    const transcriptVersion = ref(1);
+    const windowStyle = { bg: "black" as const };
+    const hoverStyle = { underline: true };
+    const componentSamples: any[] = [];
+    let rowBuilds = 0;
+
+    function lineToTranscriptRow(index: number): TTranscriptRow {
+      rowBuilds++;
+      const line = lines[index];
+      if (!line) {
+        return {
+          kind: "message",
+          key: `empty:${index}`,
+          segments: [],
+          selectableText: "",
+        };
+      }
+      return {
+        kind: "message",
+        key: `${index}:${line.messageId}`,
+        role: line.role,
+        segments: [
+          { text: "  ", style: windowStyle, selectable: false },
+          { text: line.text.padEnd(38), style: line.style },
+        ],
+        selectableText: `  ${line.text}`,
+        meta: { line },
+      };
+    }
+
+    const source: TTranscriptDataSource = {
+      rowCount: () => lines.length,
+      getRow: lineToTranscriptRow,
+      getRowKey: (index) => {
+        const line = lines[index];
+        return line ? `${index}:${line.messageId}` : `empty:${index}`;
+      },
+      getRowVersion: (index) => lines[index]?.version ?? 0,
+    };
+
+    const App = defineComponent({
+      name: "BestAgentChatShapeProbe",
+      setup() {
+        const { observability } = useTerminal();
+        observability.framePerf.enabled.value = true;
+        observability.framePerf.addSink({
+          onFramePerf: () => {},
+          onComponentPerf: (sample) => componentSamples.push(sample),
+        });
+        return () =>
+          h(TView, { x: 0, y: 0, w: 44, h: 8, focusable: false }, () => [
+            h(TRenderPlane, { plane: "transcript" }, () => [
+              h(TView, { x: 0, y: 1, w: 44, h: 3, zIndex: 1, selectable: true }, () =>
+                h(TTranscriptView, {
+                  key: "messages-transcript",
+                  x: 0,
+                  y: 0,
+                  w: 44,
+                  h: 3,
+                  zIndex: 1,
+                  source,
+                  version: transcriptVersion.value,
+                  scrollTop: 0,
+                  style: windowStyle,
+                  hoverStyle,
+                  focusable: false,
+                  selectable: false,
+                  wheelScroll: false,
+                  wrap: false,
+                  rowScrollMode: "unsafe-full-row",
+                }),
+              ),
+            ]),
+            h(TRenderPlane, { plane: "chrome" }, () => [
+              h(TText, {
+                x: 0,
+                y: 0,
+                w: 44,
+                value: "best-agent chat header",
+                style: { fg: "white", bg: "blackBright" },
+              }),
+            ]),
+          ]);
+      },
+    });
+    const app = createTerminalApp({ cols: 44, rows: 8, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 1)).toContain("User: inspect the renderer");
+
+      componentSamples.length = 0;
+      rowBuilds = 0;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const transcriptSample = componentSamples
+        .slice()
+        .reverse()
+        .find((sample) => sample.name === "TTranscriptView" && sample.phase === "layout");
+      expect(rowBuilds).toBe(lines.length);
+      expect(transcriptSample).toMatchObject({
+        itemCount: lines.length,
+        cacheHit: lines.length,
+        cacheMiss: 0,
+        width: 44,
+      });
+    } finally {
+      app.dispose();
     }
   });
 

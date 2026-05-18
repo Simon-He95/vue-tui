@@ -20,7 +20,8 @@
       "@simon_he/vue-tui/vue": ["src/vue.ts"],
       "@simon_he/vue-tui/cli": ["src/cli.ts"],
       "@simon_he/vue-tui/markdown": ["src/markdown.ts"],
-      "@simon_he/vue-tui/experimental": ["src/experimental.ts"]
+      "@simon_he/vue-tui/experimental": ["src/experimental.ts"],
+      "@simon_he/vue-tui/agent": ["src/agent.ts"]
     }
   },
   "include": ["src", "test"],

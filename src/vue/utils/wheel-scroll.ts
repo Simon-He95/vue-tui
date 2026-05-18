@@ -3,6 +3,8 @@ export interface WheelScrollState {
   lastAt: number;
   lastEdgeDir: number;
   lastEdgeAt: number;
+  lastDir: number;
+  lastDirAt: number;
 }
 
 export interface WheelScrollResult {
@@ -25,6 +27,9 @@ const EDGE_BOUNCE_MS = 120;
 // Some terminals (notably Ghostty) can emit 2+ wheel ticks per one physical wheel step,
 // with very small intervals (~4ms). Treat those as a single logical tick.
 const MIN_TICK_INTERVAL_MS = 6;
+// Ghostty can also report a short opposite wheel tick after a slow physical step.
+// Ignore that single reversal so line-unit terminal scrolling stays monotonic.
+const LINE_UNIT_REVERSAL_BOUNCE_MS = 120;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -60,6 +65,8 @@ export function createWheelScrollState(): WheelScrollState {
     lastAt: 0,
     lastEdgeDir: 0,
     lastEdgeAt: 0,
+    lastDir: 0,
+    lastDirAt: 0,
   };
 }
 
@@ -68,6 +75,8 @@ export function resetWheelScrollState(state: WheelScrollState): void {
   state.lastAt = 0;
   state.lastEdgeDir = 0;
   state.lastEdgeAt = 0;
+  state.lastDir = 0;
+  state.lastDirAt = 0;
 }
 
 export function applyWheelScroll(
@@ -108,6 +117,16 @@ export function applyWheelScroll(
 
   state.accumulator -= lines;
   const dir = lines > 0 ? 1 : -1;
+  if (
+    lineUnits &&
+    state.lastDir !== 0 &&
+    dir === -state.lastDir &&
+    now - state.lastDirAt >= 0 &&
+    now - state.lastDirAt < LINE_UNIT_REVERSAL_BOUNCE_MS
+  ) {
+    state.accumulator = 0;
+    return { nextTop: scrollTop, dir: 0, lines: 0 };
+  }
   const atTop = scrollTop <= 0;
   const atBottom = scrollTop >= maxTop;
 
@@ -136,6 +155,8 @@ export function applyWheelScroll(
   if (nextTop !== unclamped) state.accumulator = 0;
 
   state.lastEdgeDir = 0;
+  state.lastDir = nextTop > scrollTop ? 1 : -1;
+  state.lastDirAt = now;
   return {
     nextTop,
     dir: nextTop > scrollTop ? 1 : -1,

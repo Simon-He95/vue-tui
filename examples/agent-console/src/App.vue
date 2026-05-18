@@ -14,7 +14,7 @@ import { consoleDefaultStyle, domPalette } from "./theme";
         :dom-renderer-options="{ palette: domPalette }"
         :selection="{ autoCopy: true, copyOnMouseUp: true }"
       >
-        <AgentConsoleSurface auto-start />
+        <AgentConsoleSurface />
       </TerminalProvider>
     </div>
   </main>

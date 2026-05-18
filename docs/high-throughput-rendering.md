@@ -350,6 +350,8 @@ type FramePerf = {
 };
 ```
 
+`@simon_he/vue-tui/observability` 还导出 `createJsonlPerfSink()` 和 `installTuiPerf()`。sink 接收 frame samples、component samples 和可选 event samples；默认不引入 Node builtin，CLI runtime 通过自己的 file writer 接到 `VUE_TUI_FRAME_PERF_LOG_PATH` / `DIMCODE_TUI_PERF_LOG`。
+
 `TDebugOverlay` 至少展示：
 
 - `frameMs`

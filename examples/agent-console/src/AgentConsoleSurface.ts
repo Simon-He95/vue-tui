@@ -24,7 +24,8 @@ import {
   watchEffect,
 } from "vue";
 import { TBox, TDialog, TSelect, TText, TView } from "@simon_he/vue-tui";
-import { TInputBox, TRenderPlane, useTerminal } from "@simon_he/vue-tui/vue";
+import { TToolCallView } from "@simon_he/vue-tui/agent";
+import { TInputBox, TRenderPlane, textCellWidth, useTerminal } from "@simon_he/vue-tui/vue";
 import { TVirtualMarkdown } from "@simon_he/vue-tui/markdown";
 import { TLogView } from "@simon_he/vue-tui/experimental";
 import { handleAgentConsoleKeymap } from "./keymap";
@@ -97,6 +98,12 @@ export type AgentConsoleApi = Readonly<{
 
 function fit(value: string, width: number): string {
   if (value.length <= width) return value.padEnd(width, " ");
+  if (width <= 3) return value.slice(0, width);
+  return `${value.slice(0, width - 3)}...`;
+}
+
+function truncate(value: string, width: number): string {
+  if (value.length <= width) return value;
   if (width <= 3) return value.slice(0, width);
   return `${value.slice(0, width - 3)}...`;
 }
@@ -241,12 +248,29 @@ export const AgentConsoleSurface = defineComponent({
       refreshMetrics();
     }
 
+    function applyFixtureExpansion(): void {
+      const wasAtBottom =
+        mode.value === "markdown" ? markdownStickToBottom.value : metrics.value?.atBottom !== false;
+      transcript.setFixtureExpansion({
+        thinkingExpanded: thinkingExpanded.value,
+        toolCallExpanded: toolCallExpanded.value,
+      });
+      void nextTick(() => {
+        if (wasAtBottom) jumpToBottom();
+        refreshMetrics();
+        refreshLinks();
+        refreshSearchState();
+      });
+    }
+
     function toggleThinking(): void {
       thinkingExpanded.value = !thinkingExpanded.value;
+      applyFixtureExpansion();
     }
 
     function toggleToolCall(): void {
       toolCallExpanded.value = !toolCallExpanded.value;
+      applyFixtureExpansion();
     }
 
     function toggleMode(): void {
@@ -615,8 +639,38 @@ export const AgentConsoleSurface = defineComponent({
       selected = false,
     ) {
       const style = selected ? styles.button : styles.buttonMuted;
-      return h(TView, { key, x, y, w, h: 1, focusable: true, onClick }, () =>
-        h(TText, { x: 0, y: 0, w, value: fit(label, w), style }),
+      const value = truncate(label, w);
+      return h(
+        TView,
+        {
+          key,
+          x,
+          y,
+          w,
+          h: 1,
+          focusable: true,
+          onPointerdown: (event: { preventDefault?: () => void }) => {
+            event.preventDefault?.();
+            onClick();
+          },
+        },
+        () => [
+          h(TText, {
+            x: 0,
+            y: 0,
+            w,
+            value: "",
+            style: selected ? styles.button : styles.panel,
+          }),
+          h(TText, {
+            x: 0,
+            y: 0,
+            w: textCellWidth(value),
+            value,
+            style,
+            clear: false,
+          }),
+        ],
       );
     }
 
@@ -649,7 +703,8 @@ export const AgentConsoleSurface = defineComponent({
         ansi: true,
         links: true,
         keyboardLinks: true,
-        visualIndexMode: "estimated",
+        visualIndexMode: "exact",
+        visualIndexOptions: { measureBudgetMs: 8 },
         searchQuery: searchQuery.value,
         searchOptions: { mode: "text", caseSensitive: false, wholeWord: false },
         autoFocus: !inputFocused.value && overlay.value == null,
@@ -682,9 +737,6 @@ export const AgentConsoleSurface = defineComponent({
       const thinking = thinkingExpanded.value
         ? "▾ Thinking │ dirty background rows stay isolated"
         : "▸ Thinking";
-      const toolCall = toolCallExpanded.value
-        ? "▾ ● Run 3 commands  in:/out:/code-bg"
-        : "▸ ● Run 3 commands";
       return [
         h(TText, {
           key: "status",
@@ -759,6 +811,15 @@ export const AgentConsoleSurface = defineComponent({
           toggleToolCall,
           toolCallExpanded.value,
         ),
+        renderButton(
+          "stream",
+          98,
+          27,
+          18,
+          streamState.value === "connected" ? "Pause stream" : "Resume stream",
+          () => runCommand("/stream"),
+          streamState.value === "connected",
+        ),
         h(TText, {
           key: "thinking-state",
           x: 68,
@@ -767,13 +828,17 @@ export const AgentConsoleSurface = defineComponent({
           value: fit(thinking, 48),
           style: thinkingExpanded.value ? styles.thinking : styles.muted,
         }),
-        h(TText, {
+        h(TToolCallView, {
           key: "tool-call-state",
           x: 68,
           y: 29,
           w: 48,
-          value: fit(toolCall, 48),
-          style: toolCallExpanded.value ? styles.toolCall : styles.muted,
+          title: "Run 3 commands",
+          collapsed: !toolCallExpanded.value,
+          suffix: "in:/out:/code-bg",
+          selected: toolCallExpanded.value,
+          style: { fg: "yellowBright", bg: "black" },
+          mutedStyle: styles.muted,
         }),
         h(TText, {
           key: "footer",
@@ -976,16 +1041,31 @@ export const AgentConsoleSurface = defineComponent({
         {
           default: () =>
             rows.length
-              ? rows.map((link, index) =>
-                  h(TText, {
-                    key: `${link.href}:${index}`,
-                    x: 0,
-                    y: index,
-                    w: 78,
-                    value: fit(`${index + 1}. [${link.source}] ${link.label} -> ${link.href}`, 78),
-                    style: styles.buttonMuted,
-                  }),
-                )
+              ? rows.flatMap((link, index) => {
+                  const value = truncate(
+                    `${index + 1}. [${link.source}] ${link.label} -> ${link.href}`,
+                    78,
+                  );
+                  return [
+                    h(TText, {
+                      key: `${link.href}:${index}:bg`,
+                      x: 0,
+                      y: index,
+                      w: 78,
+                      value: "",
+                      style: styles.dialog,
+                    }),
+                    h(TText, {
+                      key: `${link.href}:${index}:text`,
+                      x: 0,
+                      y: index,
+                      w: textCellWidth(value),
+                      value,
+                      style: styles.buttonMuted,
+                      clear: false,
+                    }),
+                  ];
+                })
               : [
                   h(TText, {
                     x: 0,

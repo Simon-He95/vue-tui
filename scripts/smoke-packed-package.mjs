@@ -176,6 +176,7 @@ import packageMetadata from "${packageName}/package.json" with { type: "json" };
 import * as root from "${packageName}";
 import * as markdown from "${packageName}/markdown";
 import * as experimental from "${packageName}/experimental";
+import * as agent from "${packageName}/agent";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -192,6 +193,8 @@ assert(typeof markdown.TVirtualMarkdown !== "undefined", "markdown ESM TVirtualM
 assert(typeof markdown.createTuiMarkdownParser === "function", "markdown ESM parser export is missing");
 assert(typeof experimental.TVirtualList !== "undefined", "experimental ESM TVirtualList export is missing");
 assert(typeof experimental.TLogView !== "undefined", "experimental ESM TLogView export is missing");
+assert(typeof agent.TAgentTranscript !== "undefined", "agent ESM transcript alias is missing");
+assert(typeof agent.TToolLogView !== "undefined", "agent ESM log alias is missing");
 assert(STDOUT_RENDERER_CAPABILITIES.domRows === false, "stdout capabilities are missing");
 
 const terminal = createTerminal({ cols: 4, rows: 2 });
@@ -257,6 +260,7 @@ const cli = require("${packageName}/cli");
 const packageMetadata = require("${packageName}/package.json");
 const markdown = require("${packageName}/markdown");
 const experimental = require("${packageName}/experimental");
+const agent = require("${packageName}/agent");
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -273,6 +277,8 @@ assert(typeof markdown.TVirtualMarkdown !== "undefined", "markdown CJS TVirtualM
 assert(typeof markdown.createTuiMarkdownParser === "function", "markdown CJS parser export is missing");
 assert(typeof experimental.TVirtualList !== "undefined", "experimental CJS TVirtualList export is missing");
 assert(typeof experimental.TLogView !== "undefined", "experimental CJS TLogView export is missing");
+assert(typeof agent.TAgentTranscript !== "undefined", "agent CJS transcript alias is missing");
+assert(typeof agent.TToolLogView !== "undefined", "agent CJS log alias is missing");
 assert(cli.STDOUT_RENDERER_CAPABILITIES.domRows === false, "stdout capabilities are missing");
 
 const terminal = root.createTerminal({ cols: 4, rows: 2 });

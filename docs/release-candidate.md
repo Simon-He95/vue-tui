@@ -212,7 +212,7 @@ pnpm run example:agent-console:terminal:smoke
 ```bash
 pnpm run run:basic:terminal
 pnpm run run:tlog-view-lab
-pnpm run example:agent-console:terminal
+pnpm run run:agent-console:terminal
 ```
 
 ## Manual Terminal Validation

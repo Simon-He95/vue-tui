@@ -46,6 +46,7 @@ import { TAnchor, TDebugOverlay, TFlow, TInputBox, TJsonEditor, TMultilineModal,
 import { createDefaultTInputHostAdapter, createStdoutRenderer, createTerminalApp, defaultTInputHostPlugin, installTerminalCleanup, type TerminalCleanupSignalPolicy } from "@simon_he/vue-tui/cli";
 import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
+import { TAgentTranscript, TToolLogView } from "@simon_he/vue-tui/agent";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
 const domOptions: DomRendererOptions = { links: true };
@@ -79,6 +80,8 @@ console.log(
   TMarkdownText,
   TLogView,
   TVirtualList,
+  TAgentTranscript,
+  TToolLogView,
   createAppendOnlyLogStore,
   style,
   domOptions,

@@ -1,11 +1,15 @@
 import type { AppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import type { TuiMarkdownBlock } from "@simon_he/vue-tui/markdown";
-import type { AgentEvent } from "./mock-agent-stream";
+import type { AgentEvent, AgentFixtureExpansion } from "./mock-agent-stream";
 import type { Ref } from "vue";
 import { ref } from "vue";
 import { createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import { createMarkdownBlockSource } from "@simon_he/vue-tui/markdown";
-import { createMockAgentEvents, createSyntheticAgentEvent } from "./mock-agent-stream";
+import {
+  createMockAgentEvents,
+  createSyntheticAgentEvent,
+  renderBestAgentRichLog,
+} from "./mock-agent-stream";
 import { markdownTheme } from "./theme";
 
 export type TranscriptMode = "log" | "markdown";
@@ -38,6 +42,7 @@ export type AgentTranscriptStore = Readonly<{
   eventLog: Ref<readonly AgentEvent[]>;
   apply: (event: AgentEvent) => void;
   appendSyntheticChunk: (index: number) => void;
+  setFixtureExpansion: (expansion: AgentFixtureExpansion) => void;
   captureReplayLog: () => AgentReplayLog;
   loadReplayLog: (log: AgentReplayLog, eventIndex?: number) => void;
   seed: (count?: number) => void;
@@ -105,6 +110,10 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
   const eventLog = ref<readonly AgentEvent[]>([]);
   let assistantOpen = false;
   let toolFenceOpen = false;
+  let fixtureExpansion: AgentFixtureExpansion = {
+    thinkingExpanded: true,
+    toolCallExpanded: true,
+  };
 
   function updateStats(next: Partial<TranscriptStats>): void {
     stats.value = { ...stats.value, ...next };
@@ -140,8 +149,30 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     toolFenceOpen = true;
   }
 
-  function apply(event: AgentEvent): void {
-    eventLog.value = [...eventLog.value, event];
+  function resetDerived(): void {
+    logStore.clear();
+    markdown.value = "";
+    markdownSource.clear();
+    markdownBlocks.value = markdownSource.blocks;
+    links.value = [];
+    assistantOpen = false;
+    toolFenceOpen = false;
+    stats.value = {
+      chunks: 0,
+      userMessages: 0,
+      toolRuns: 0,
+      toolErrors: 0,
+      approxTokens: 0,
+    };
+  }
+
+  function toolLogText(event: Extract<AgentEvent, { type: "tool-log" }>): string {
+    if (event.richLogIndex == null) return event.text;
+    return renderBestAgentRichLog(event.richLogIndex, fixtureExpansion);
+  }
+
+  function applyEvent(event: AgentEvent, record: boolean): void {
+    if (record) eventLog.value = [...eventLog.value, event];
 
     if (event.type === "user") {
       closeAssistantLine();
@@ -200,9 +231,10 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     if (event.type === "tool-log") {
       closeAssistantLine();
       ensureToolFence("tool-log");
-      logStore.appendChunk(event.text);
-      appendMarkdown(stripAnsi(event.text));
-      const linkMatch = event.text.match(/https:\/\/[^\s\x07]+/);
+      const text = toolLogText(event);
+      logStore.appendChunk(text);
+      appendMarkdown(stripAnsi(text));
+      const linkMatch = text.match(/https:\/\/[^\s\x07]+/);
       if (linkMatch) {
         addLink(links, {
           label: linkMatch[0].split("/").pop() ?? linkMatch[0],
@@ -222,22 +254,13 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     if (event.status === "error") updateStats({ toolErrors: stats.value.toolErrors + 1 });
   }
 
+  function apply(event: AgentEvent): void {
+    applyEvent(event, true);
+  }
+
   function clear(): void {
-    logStore.clear();
-    markdown.value = "";
-    markdownSource.clear();
-    markdownBlocks.value = markdownSource.blocks;
-    links.value = [];
+    resetDerived();
     eventLog.value = [];
-    assistantOpen = false;
-    toolFenceOpen = false;
-    stats.value = {
-      chunks: 0,
-      userMessages: 0,
-      toolRuns: 0,
-      toolErrors: 0,
-      approxTokens: 0,
-    };
   }
 
   function seed(count = 28): void {
@@ -251,6 +274,14 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     for (const event of log.events.slice(0, end)) apply(event);
   }
 
+  function setFixtureExpansion(expansion: AgentFixtureExpansion): void {
+    fixtureExpansion = expansion;
+    const events = eventLog.value;
+    resetDerived();
+    for (const event of events) applyEvent(event, false);
+    eventLog.value = events;
+  }
+
   return {
     logStore,
     markdown,
@@ -262,6 +293,7 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     appendSyntheticChunk(index) {
       apply(createSyntheticAgentEvent(index));
     },
+    setFixtureExpansion,
     captureReplayLog() {
       return createAgentReplayLog(eventLog.value);
     },

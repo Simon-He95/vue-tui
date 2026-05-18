@@ -63,6 +63,7 @@ export type TTranscriptDataSource = Readonly<{
   rowCount(): number;
   getRow(index: number): TTranscriptRow;
   getRowKey?: (index: number) => string | number;
+  getRowVersion?: (index: number) => string | number;
   firstRowIndex?: () => number;
 }>;
 

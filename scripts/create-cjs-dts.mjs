@@ -11,6 +11,7 @@ const entries = [
   "cli",
   "markdown",
   "experimental",
+  "agent",
 ];
 
 for (const entry of entries) {
