@@ -608,6 +608,50 @@ describe("TTranscriptView", () => {
     }
   });
 
+  it("does not let pointerup-only region activation suppress a later same-region click", async () => {
+    const foldToggle = vi.fn();
+    const rows: TTranscriptRow[] = [
+      {
+        kind: "tool-call",
+        key: "collapsed",
+        title: "read_file",
+        collapsed: true,
+        summary: [{ text: "src/index.ts" }],
+      },
+    ];
+    const App = defineComponent({
+      name: "TranscriptToolFoldPointerUpStaleDedupeApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 1,
+            source: createSource(rows),
+            version: 1,
+            onFoldToggle: foldToggle,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 32, rows: 3, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: 0, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 0, button: 0 } as any);
+
+      expect(foldToggle).toHaveBeenCalledTimes(2);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("emits toolClick from tool-call body regions", async () => {
     const toolClick = vi.fn();
     const row: TTranscriptRow = {
@@ -686,6 +730,46 @@ describe("TTranscriptView", () => {
 
       expect(rowClick).toHaveBeenCalledTimes(1);
       expect(rowClick.mock.calls[0]?.[0].row).toBe(row);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not let pointerup-only row activation suppress a later same-row click", async () => {
+    const rowClick = vi.fn();
+    const row: TTranscriptRow = {
+      kind: "message",
+      key: "message",
+      segments: [{ text: "clickable row" }],
+    };
+    const App = defineComponent({
+      name: "TranscriptRowPointerUpStaleDedupeApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 1,
+            source: createSource([row]),
+            version: 1,
+            onRowClick: rowClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 32, rows: 3, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 2, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: 2, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "pointerdown", cellX: 2, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "click", cellX: 2, cellY: 0, button: 0 } as any);
+
+      expect(rowClick).toHaveBeenCalledTimes(2);
     } finally {
       app.dispose();
     }

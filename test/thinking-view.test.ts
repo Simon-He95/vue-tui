@@ -48,4 +48,14 @@ describe("TThinkingView", () => {
       mounted.unmount();
     }
   });
+
+  it("preserves body whitespace", () => {
+    const model = resolveTThinkingViewModel({
+      w: 24,
+      title: "Thinking",
+      content: "  indented\n\ntrailing\n",
+    });
+
+    expect(model.bodyRows).toEqual(["    indented", "  ", "  trailing", "  "]);
+  });
 });

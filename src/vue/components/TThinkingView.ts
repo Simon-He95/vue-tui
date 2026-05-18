@@ -110,9 +110,7 @@ export function resolveTThinkingViewModel(options: TThinkingViewModelOptions): T
   const bodyRows: string[] = [];
   const bodySegments: TThinkingViewSegment[][] = [];
   if (!collapsed) {
-    const text = String(options.content ?? "")
-      .replace(/\r/g, "")
-      .trim();
+    const text = String(options.content ?? "").replace(/\r/g, "");
     if (text) {
       const prefix = options.bodyPrefix ?? "  ";
       const bodyWidth = Math.max(1, width - textCellWidth(prefix));

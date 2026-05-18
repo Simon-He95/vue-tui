@@ -394,6 +394,7 @@ export const TTranscriptView = defineComponent({
         pointerUpActivatedRegionId = null;
         return;
       }
+      pointerUpActivatedRegionId = null;
       emitRegion(region, e);
     }
 
@@ -634,6 +635,9 @@ export const TTranscriptView = defineComponent({
             onPointermove: () => setHoveredRegion(region),
             onPointerleave: () => {
               if (hoveredRegion.value?.id === region.id) setHoveredRegion(null);
+            },
+            onPointerdown: () => {
+              pointerUpActivatedRegionId = null;
             },
             onPointerup: (e: TerminalPointerEvent) => emitRegionFromPointerUp(region, e),
             onClick: (e: TerminalPointerEvent) => emitRegionFromClick(region, e),

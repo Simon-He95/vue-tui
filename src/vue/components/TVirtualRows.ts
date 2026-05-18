@@ -680,12 +680,16 @@ export const TVirtualRows = defineComponent({
             pointerUpItemClickIndex = null;
             return;
           }
+          pointerUpItemClickIndex = null;
           emitItemClick(index, e);
         },
         contextmenuCapture: (e: TerminalPointerEvent) => emit("contextmenuCapture", e),
         contextmenu: (e: TerminalPointerEvent) => emit("contextmenu", e),
         pointerdownCapture: (e: TerminalPointerEvent) => emit("pointerdownCapture", e),
-        pointerdown: (e: TerminalPointerEvent) => emit("pointerdown", e),
+        pointerdown: (e: TerminalPointerEvent) => {
+          pointerUpItemClickIndex = null;
+          emit("pointerdown", e);
+        },
         pointermoveCapture: (e: TerminalPointerEvent) => emit("pointermoveCapture", e),
         pointermove: (e: TerminalPointerEvent) => emit("pointermove", e),
         pointerupCapture: (e: TerminalPointerEvent) => emit("pointerupCapture", e),

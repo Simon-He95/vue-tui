@@ -1,6 +1,7 @@
 import type { TerminalRenderPlane } from "@simon_he/vue-tui/core";
 import type { FramePerfSample } from "@simon_he/vue-tui/observability";
 import type { TerminalKeyboardEvent } from "@simon_he/vue-tui/runtime";
+import type { TCommandPaletteItem } from "@simon_he/vue-tui/agent";
 import type {
   TLogViewHandle,
   TLogViewLinkActivatePayload,
@@ -24,7 +25,12 @@ import {
   watchEffect,
 } from "vue";
 import { TBox, TDialog, TSelect, TText, TView } from "@simon_he/vue-tui";
-import { TThinkingView, TToolCallView, TUserMessageView } from "@simon_he/vue-tui/agent";
+import {
+  TCommandPalette,
+  TThinkingView,
+  TToolCallView,
+  TUserMessageView,
+} from "@simon_he/vue-tui/agent";
 import { TInputBox, TRenderPlane, textCellWidth, useTerminal } from "@simon_he/vue-tui/vue";
 import { TVirtualMarkdown } from "@simon_he/vue-tui/markdown";
 import { TLogView } from "@simon_he/vue-tui/experimental";
@@ -153,6 +159,7 @@ export const AgentConsoleSurface = defineComponent({
     const overlay = ref<OverlayName | null>(null);
     const input = ref("");
     const inputFocused = ref(false);
+    const paletteInitialQuery = ref("");
     const paletteQuery = ref("");
     const paletteIndex = ref(0);
     const searchQuery = ref("");
@@ -235,6 +242,7 @@ export const AgentConsoleSurface = defineComponent({
     }
 
     function openPalette(query = ""): void {
+      paletteInitialQuery.value = query;
       paletteQuery.value = query;
       paletteIndex.value = 0;
       overlay.value = "palette";
@@ -477,9 +485,17 @@ export const AgentConsoleSurface = defineComponent({
       );
     }
 
-    function runPaletteSelection(): void {
-      const rows = filteredCommandRows();
-      const row = rows[Math.max(0, Math.min(paletteIndex.value, rows.length - 1))];
+    function commandPaletteItems(): readonly TCommandPaletteItem[] {
+      return commandRows().map((row) => ({
+        id: row.id,
+        label: row.label,
+        detail: `${row.command}  ${row.detail}`,
+        keywords: [row.command, row.detail],
+      }));
+    }
+
+    function runPaletteItem(item: TCommandPaletteItem | null): void {
+      const row = item?.id ? commandRows().find((candidate) => candidate.id === item.id) : null;
       if (!row) return;
       row.run();
       if (!row.keepOpen) closeOverlay();
@@ -968,84 +984,42 @@ export const AgentConsoleSurface = defineComponent({
     }
 
     function renderPaletteOverlay() {
-      const rows = filteredCommandRows();
-      const selected = Math.max(0, Math.min(paletteIndex.value, Math.max(0, rows.length - 1)));
-      const options = rows.length
-        ? rows.map((row) => ({
-            label: row.label,
-            detail: `${row.command}  ${row.detail}`,
-          }))
-        : [{ kind: "separator" as const, label: "No commands" }];
-      return h(
-        TDialog,
-        {
-          modelValue: overlay.value === "palette",
-          "onUpdate:modelValue": (value: boolean) => {
-            if (!value) closeOverlay();
-          },
-          ...AGENT_CONSOLE_LAYOUT.paletteDialog,
-          title: "Command Palette",
-          style: styles.dialog,
-          titleStyle: styles.dialogTitle,
-          backdropStyle: styles.backdrop,
-          closeOnEsc: true,
+      return h(TCommandPalette, {
+        modelValue: overlay.value === "palette",
+        "onUpdate:modelValue": (value: boolean) => {
+          if (!value) closeOverlay();
         },
-        {
-          default: () => [
-            h(TInputBox, {
-              x: 0,
-              y: 0,
-              w: 66,
-              h: 3,
-              title: "Command",
-              modelValue: paletteQuery.value,
-              placeholder: "/search, /copy, /clear...",
-              autoFocus: true,
-              style: styles.input,
-              cursorShape: "bar",
-              "onUpdate:modelValue": (value: string) => {
-                paletteQuery.value = value;
-                paletteIndex.value = 0;
-              },
-              onKeydown: (event: TerminalKeyboardEvent) => {
-                if (event.key === "ArrowDown") {
-                  event.preventDefault();
-                  paletteIndex.value = Math.min(selected + 1, Math.max(0, rows.length - 1));
-                  return;
-                }
-                if (event.key === "ArrowUp") {
-                  event.preventDefault();
-                  paletteIndex.value = Math.max(0, selected - 1);
-                  return;
-                }
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  if (runCommand(paletteQuery.value)) {
-                    if (overlay.value === "palette") closeOverlay();
-                    return;
-                  }
-                  runPaletteSelection();
-                }
-              },
-            }),
-            h(TSelect, {
-              x: 0,
-              y: 4,
-              w: 66,
-              h: 7,
-              options,
-              modelValue: selected,
-              style: styles.buttonMuted,
-              highlightStyle: styles.button,
-              "onUpdate:modelValue": (value: number) => {
-                paletteIndex.value = value;
-              },
-              onConfirm: runPaletteSelection,
-              onClose: closeOverlay,
-            }),
-          ],
+        initialQuery: paletteInitialQuery.value,
+        items: commandPaletteItems(),
+        selectedIndex: paletteIndex.value,
+        "onUpdate:selectedIndex": (value: number) => {
+          paletteIndex.value = value;
         },
-      );
+        "onUpdate:query": (value: string) => {
+          paletteQuery.value = value;
+          paletteIndex.value = 0;
+        },
+        onSelect: runPaletteItem,
+        onClose: closeOverlay,
+        title: "Command Palette",
+        placeholder: "/search, /copy, /clear...",
+        noMatchesText: "No commands",
+        hint: "Enter select   Esc close   Up/Down move",
+        showRowDetails: true,
+        widthRatio: AGENT_CONSOLE_LAYOUT.paletteDialog.w / AGENT_CONSOLE_LAYOUT.cols,
+        heightRatio: AGENT_CONSOLE_LAYOUT.paletteDialog.h / AGENT_CONSOLE_LAYOUT.rows,
+        minWidth: AGENT_CONSOLE_LAYOUT.paletteDialog.w,
+        minHeight: AGENT_CONSOLE_LAYOUT.paletteDialog.h,
+        chromeStyle: styles.dialog,
+        bodyStyle: styles.dialog,
+        inputStyle: styles.input,
+        listStyle: styles.buttonMuted,
+        highlightStyle: styles.button,
+        detailStyle: styles.muted,
+        emptyStyle: styles.muted,
+        dividerStyle: styles.muted,
+        hintStyle: styles.muted,
+      });
     }
 
     function linkRows(): readonly TranscriptLink[] {
