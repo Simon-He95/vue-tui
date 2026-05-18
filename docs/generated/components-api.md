@@ -181,6 +181,7 @@ Import: `@simon_he/vue-tui`
 | <code>focus</code>             | —       | —    |
 | <code>blur</code>              | —       | —    |
 | <code>keydown</code>           | —       | —    |
+| <code>keydownCapture</code>    | —       | —    |
 | <code>confirm</code>           | —       | —    |
 
 ## TerminalProvider

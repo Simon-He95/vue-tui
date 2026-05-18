@@ -254,6 +254,10 @@ const DialogSurface = defineComponent({
       type: Function as PropType<(e: any) => void>,
       default: undefined,
     },
+    onDialogKeydownCapture: {
+      type: Function as PropType<(e: any) => void>,
+      default: undefined,
+    },
     dialogNodeId: { type: String, default: undefined },
     onDialogNodeId: {
       type: Function as PropType<(id: string) => void>,
@@ -502,6 +506,8 @@ const DialogSurface = defineComponent({
     }
 
     function onKeydownCapture(e: any): void {
+      props.onDialogKeydownCapture?.(e);
+      if (e?.defaultPrevented || (e as any)?.__stopped) return;
       handleTabKey(e);
     }
 
@@ -762,7 +768,7 @@ export const TDialog = defineComponent({
     buttons: { type: Array as PropType<DialogButton[]>, default: () => [] },
     closeOnConfirm: { type: Boolean, default: true },
   },
-  emits: ["update:modelValue", "close", "focus", "blur", "keydown", "confirm"],
+  emits: ["update:modelValue", "close", "focus", "blur", "keydown", "keydownCapture", "confirm"],
   setup(props, { emit, slots }) {
     const { runtime, events, scheduler } = useTerminal();
     const layout = useLayout();
@@ -1137,6 +1143,10 @@ export const TDialog = defineComponent({
       }
     }
 
+    function onDialogKeydownCapture(e: any): void {
+      emit("keydownCapture", e);
+    }
+
     watch(
       () => props.modelValue,
       (next, prev) => {
@@ -1187,6 +1197,7 @@ export const TDialog = defineComponent({
           onRequestClose: requestClose,
           onDialogFocus,
           onDialogBlur,
+          onDialogKeydownCapture,
           onDialogKeydown,
         },
         { plane: "overlay" },
@@ -1229,6 +1240,7 @@ export const TDialog = defineComponent({
         onRequestClose: requestClose,
         onDialogFocus,
         onDialogBlur,
+        onDialogKeydownCapture,
         onDialogKeydown,
       });
     });
@@ -1267,6 +1279,7 @@ export const TDialog = defineComponent({
         onRequestClose: requestClose,
         onDialogFocus,
         onDialogBlur,
+        onDialogKeydownCapture,
         onDialogKeydown,
       });
     };

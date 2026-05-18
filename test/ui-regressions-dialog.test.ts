@@ -597,6 +597,65 @@ describe("ui regressions dialog", () => {
     mounted.unmount();
   });
 
+  it("TDialog forwards keydown capture before focused footer buttons handle the key", async () => {
+    const open = ref(true);
+    const calls: string[] = [];
+    const confirmed = ref("");
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 28,
+            h: 7,
+            title: "Sessions",
+            placement: "center",
+            teleport: true,
+            closeOnConfirm: false,
+            buttons: [
+              { label: "Open", value: "open", kind: "primary", default: true },
+              { label: "Close", value: "close" },
+            ],
+            onKeydownCapture: (e: any) => {
+              calls.push(`capture:${String(e?.key ?? "")}`);
+              if (e?.key === "ArrowDown") {
+                e.preventDefault?.();
+                e.stopPropagation?.();
+              }
+            },
+            onKeydown: (e: any) => {
+              calls.push(`bubble:${String(e?.key ?? "")}`);
+            },
+            onConfirm: (b: any) => {
+              confirmed.value = String(b?.value ?? "");
+            },
+          },
+          () => h(TText, { x: 0, y: 0, w: 24, value: "Rows" }),
+        ),
+      44,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        code: "ArrowDown",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    expect(calls).toEqual(["capture:ArrowDown"]);
+    expect(confirmed.value).toBe("");
+
+    mounted.unmount();
+  });
+
   it("TDialog only underlines the selected footer button", async () => {
     const open = ref(true);
     const mounted = await mountTerminal(

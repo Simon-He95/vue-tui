@@ -1506,7 +1506,7 @@ function onPanelActiveChange(payload: TLogLinksPanelActiveChangePayload) {
 
 ### Events
 
-- `close` / `focus` / `blur` / `keydown`
+- `close` / `focus` / `blur` / `keydown` / `keydownCapture`
 - `confirm`: `{ label, value?, id?, kind?, default?, index }`
 
 ## TTransition
