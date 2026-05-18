@@ -1,4 +1,10 @@
 export { TBox } from "./vue/components/TBox.js";
+export {
+  computeCommandPaletteMatchRanges,
+  filterCommandPaletteItems,
+  scoreCommandPaletteMatch,
+  TCommandPalette,
+} from "./vue/components/TCommandPalette.js";
 export { TDialog } from "./vue/components/TDialog.js";
 export { TInput } from "./vue/components/TInput.js";
 export { TSelect } from "./vue/components/TSelect.js";
@@ -63,6 +69,13 @@ export {
   tlogHighContrastTheme,
 } from "./vue/log/tlog-theme.js";
 export type { RowScrollMode } from "./vue/components/TVirtualList.js";
+export type {
+  TCommandPaletteFilter,
+  TCommandPaletteFilteredItem,
+  TCommandPaletteItem,
+  TCommandPaletteTextAccentSegment,
+  TCommandPaletteTextRange,
+} from "./vue/components/TCommandPalette.js";
 export type {
   TThinkingViewModel,
   TThinkingViewModelOptions,

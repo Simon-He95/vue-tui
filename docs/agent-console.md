@@ -12,6 +12,7 @@
 - 用户离开底部后的 scroll detachment，以及 Jump to bottom 恢复
 - 示例默认 paused，用户可以先滚动检查；`Resume stream` 或 `/stream` 再开启 streaming
 - terminal 里可直接点击 `Thinking` / `Run 3` 控件，动态折叠 transcript mock 内容
+- command palette 可由 `TCommandPalette` 承担过滤、匹配高亮、键盘和点击选择，宿主只保留 command 数据与执行逻辑
 - log 模式用精确 visual index，避免 wrapped rows 在滚动途中重新测量造成回弹感
 - streaming 中输入框继续响应，focus/cursor 不被 transcript repaint 影响
 - `/` 搜索、`Tab` link focus、`Ctrl+K` command palette、`Esc` overlay close
@@ -47,7 +48,7 @@ pnpm run run:agent-console:terminal
 
 ## 样式和扩展边界
 
-示例中的 user message、thinking 和 tool_call chrome 来自 `@simon_he/vue-tui/agent` 的 `TUserMessageView`、`TThinkingView`、`TToolCallView`。这些组件只接收通用渲染语义，不接收 agent/provider/session/tool schema；宿主可以通过 style props 改背景和文字样式，也可以通过 `header`、`row`、`preview` slots 完全替换局部行内容。非 Vue 行渲染器可以直接复用 `resolveTUserMessageViewModel()`、`resolveTThinkingViewModel()` 和 `resolveTToolCallViewModel()`，保证 wrapper 和组件走同一套 cell wrapping 与 segment 规则。
+示例中的 user message、thinking、tool_call chrome 和 command palette 来自 `@simon_he/vue-tui/agent` 的 `TUserMessageView`、`TThinkingView`、`TToolCallView`、`TCommandPalette`。这些组件只接收通用渲染语义，不接收 agent/provider/session/tool schema；宿主可以通过 style props 改背景和文字样式，也可以通过 `header`、`row`、`preview` slots 完全替换局部行内容。非 Vue 行渲染器可以直接复用 `resolveTUserMessageViewModel()`、`resolveTThinkingViewModel()` 和 `resolveTToolCallViewModel()`，保证 wrapper 和组件走同一套 cell wrapping 与 segment 规则。
 
 ## Smoke 输出
 
