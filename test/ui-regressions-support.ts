@@ -58,7 +58,7 @@ const {
 const { createEventManager } = await import("../src/runtime.js");
 
 const { createCliEventManager, defaultTInputHostPlugin } = await import("../src/cli.js");
-const { TVirtualList } = await import("../src/experimental.js");
+const { TLogScrollbar, TVirtualList } = await import("../src/experimental.js");
 const { useRenderNode } = await import("../src/vue/composables/use-render-node.js");
 
 const spawnOutputsByCmd = new Map<string, string | null>();
@@ -216,6 +216,7 @@ export {
   TRenderPlane,
   TSelect,
   TText,
+  TLogScrollbar,
   TVirtualList,
   TView,
   useLayout,

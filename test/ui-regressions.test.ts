@@ -17,6 +17,7 @@ import {
   TInput,
   TInputBox,
   TList,
+  TLogScrollbar,
   TPathPicker,
   TRenderPlane,
   TSelect,
@@ -36,6 +37,130 @@ import {
 import { reactive, type PropType } from "vue";
 
 describe("ui regressions", () => {
+  it("TLogScrollbar supports custom glyphs and a wider event hit zone", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogScrollbar, {
+          x: 9,
+          y: 0,
+          h: 5,
+          eventX: 7,
+          eventW: 3,
+          metrics: {
+            scrollTop: 0,
+            maxScrollTop: 4,
+            viewportRows: 1,
+            lineCount: 5,
+            firstLineIndex: 0,
+            estimatedVisualRowCount: 5,
+            visualRowCount: 5,
+            measuredVisualRowCount: 5,
+            measuredLineCount: 5,
+            visualIndexStatus: "exact",
+            atTop: true,
+            atBottom: false,
+          },
+          trackChar: ".",
+          thumbChar: "#",
+        }),
+      12,
+      5,
+    );
+
+    await nextTick();
+
+    expect(mounted.terminal.getRow(0)[9]?.ch).toBe("#");
+    expect(mounted.terminal.getRow(4)[9]?.ch).toBe(".");
+
+    const scrollTo: number[] = [];
+    mounted.unmount();
+
+    const hitMounted = await mountTerminal(
+      () =>
+        h(TLogScrollbar, {
+          x: 9,
+          y: 0,
+          h: 5,
+          eventX: 7,
+          eventW: 3,
+          metrics: {
+            scrollTop: 0,
+            maxScrollTop: 4,
+            viewportRows: 1,
+            lineCount: 5,
+            firstLineIndex: 0,
+            estimatedVisualRowCount: 5,
+            visualRowCount: 5,
+            measuredVisualRowCount: 5,
+            measuredLineCount: 5,
+            visualIndexStatus: "exact",
+            atTop: true,
+            atBottom: false,
+          },
+          onScrollTo: (value: number) => scrollTo.push(value),
+        }),
+      12,
+      5,
+    );
+
+    hitMounted
+      .container()
+      ?.dispatchEvent(new MouseEvent("click", { clientX: 7, clientY: 4, bubbles: true }));
+    await nextTick();
+
+    expect(scrollTo.at(-1)).toBe(4);
+    hitMounted.unmount();
+  });
+
+  it("TLogScrollbar emits scroll updates while dragging", async () => {
+    const scrollTo: number[] = [];
+    const drag: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogScrollbar, {
+          x: 0,
+          y: 0,
+          h: 10,
+          metrics: {
+            scrollTop: 0,
+            maxScrollTop: 90,
+            viewportRows: 10,
+            lineCount: 100,
+            firstLineIndex: 0,
+            estimatedVisualRowCount: 100,
+            visualRowCount: 100,
+            measuredVisualRowCount: 100,
+            measuredLineCount: 100,
+            visualIndexStatus: "exact",
+            atTop: true,
+            atBottom: false,
+          },
+          onScrollTo: (value: number) => scrollTo.push(value),
+          onDragStart: () => drag.push("start"),
+          onDragEnd: () => drag.push("end"),
+        }),
+      4,
+      10,
+    );
+
+    const container = mounted.container();
+    container?.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: 0, clientY: 0, button: 0, bubbles: true }),
+    );
+    container?.dispatchEvent(
+      new MouseEvent("pointermove", { clientX: 0, clientY: 9, button: 0, bubbles: true }),
+    );
+    container?.dispatchEvent(
+      new MouseEvent("pointerup", { clientX: 0, clientY: 9, button: 0, bubbles: true }),
+    );
+    await nextTick();
+
+    expect(scrollTo[0]).toBe(0);
+    expect(scrollTo.at(-1)).toBe(90);
+    expect(drag).toEqual(["start", "end"]);
+    mounted.unmount();
+  });
+
   it("useRenderNode batches sibling node invalidates into one scheduler tick", async () => {
     const version = ref(0);
     let invalidateCount = 0;

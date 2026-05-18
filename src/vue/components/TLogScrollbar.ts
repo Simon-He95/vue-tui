@@ -161,6 +161,8 @@ export const TLogScrollbar = defineComponent({
     x: { type: Number, required: true },
     y: { type: Number, required: true },
     h: { type: Number, required: true },
+    eventX: { type: Number, default: undefined },
+    eventW: { type: Number, default: undefined },
     zIndex: { type: Number, default: 0 },
     metrics: {
       type: Object as PropType<TLogScrollbarMetrics | null>,
@@ -184,8 +186,13 @@ export const TLogScrollbar = defineComponent({
     },
     showMarkers: { type: Boolean, default: true },
     showArrows: { type: Boolean, default: false },
+    paint: { type: Boolean, default: true },
+    trackChar: { type: String, default: TRACK_CHAR },
+    thumbChar: { type: String, default: EXACT_THUMB_CHAR },
+    measuringThumbChar: { type: String, default: MEASURING_THUMB_CHAR },
+    estimatedThumbChar: { type: String, default: ESTIMATED_THUMB_CHAR },
   },
-  emits: ["scrollTo", "scrollBy", "markerClick"],
+  emits: ["scrollTo", "scrollBy", "markerClick", "dragStart", "dragEnd"],
   setup(props, { emit }) {
     const { terminal, defaultStyle } = useTerminal();
     const parent = useLayout();
@@ -205,18 +212,42 @@ export const TLogScrollbar = defineComponent({
         parent.originY,
       ),
     );
+    const fullEventRect = computed<Rect>(() =>
+      translateRect(
+        {
+          x: normalizeInt(props.eventX ?? props.x),
+          y: normalizeInt(props.y),
+          w: Math.max(1, normalizeInt(props.eventW ?? SCROLLBAR_WIDTH)),
+          h: Math.max(0, normalizeInt(props.h)),
+        },
+        parent.originX,
+        parent.originY,
+      ),
+    );
 
     const rect = computed<Rect>(() => {
       const translated = fullRect.value;
       if (!parent.clipRect) return translated;
       return intersectRect(translated, parent.clipRect) ?? EMPTY_RECT;
     });
+    const eventRect = computed<Rect>(() => {
+      const translated = fullEventRect.value;
+      if (!parent.clipRect) return translated;
+      return intersectRect(translated, parent.clipRect) ?? EMPTY_RECT;
+    });
 
-    function emitTrackScroll(e: TerminalPointerEvent): void {
+    let dragging = false;
+    let suppressNextClick = false;
+
+    function emitTrackScroll(
+      e: TerminalPointerEvent,
+      opts?: Readonly<{ clampY?: boolean; markerClick?: boolean }>,
+    ): void {
       const metrics = props.metrics;
       if (!metrics) return;
-      const full = fullRect.value;
-      const localY = e.cellY - full.y;
+      const full = fullEventRect.value;
+      const rawLocalY = e.cellY - full.y;
+      const localY = opts?.clampY ? clamp(rawLocalY, 0, full.h - 1) : rawLocalY;
       if (localY < 0 || localY >= full.h) return;
 
       const { arrowRows, trackTop, trackHeight } = trackGeometry(full.h, props.showArrows);
@@ -237,7 +268,7 @@ export const TLogScrollbar = defineComponent({
       const thumb = computeThumb(metrics, full.h, props.showArrows);
       const isThumbRow = thumb != null && localY >= thumb.top && localY < thumb.top + thumb.size;
       const markerHit =
-        !isThumbRow && props.showMarkers
+        opts?.markerClick !== false && !isThumbRow && props.showMarkers
           ? collectMarkersByRow(props.markers, metrics, full.h, props.showArrows).get(localY)
           : undefined;
       if (markerHit != null) {
@@ -259,13 +290,48 @@ export const TLogScrollbar = defineComponent({
       e.preventDefault?.();
     }
 
+    function onPointerdown(e: TerminalPointerEvent): void {
+      if (e.button != null && e.button !== 0) return;
+      dragging = true;
+      emit("dragStart");
+      emitTrackScroll(e);
+      e.stopPropagation?.();
+    }
+
+    function onPointermove(e: TerminalPointerEvent): void {
+      if (!dragging) return;
+      emitTrackScroll(e, { clampY: true, markerClick: false });
+      e.stopPropagation?.();
+    }
+
+    function onPointerup(e: TerminalPointerEvent): void {
+      if (!dragging) return;
+      emitTrackScroll(e, { clampY: true, markerClick: false });
+      dragging = false;
+      suppressNextClick = true;
+      emit("dragEnd");
+      e.stopPropagation?.();
+    }
+
+    function onClick(e: TerminalPointerEvent): void {
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        e.preventDefault?.();
+        return;
+      }
+      emitTrackScroll(e);
+    }
+
     useTerminalNode(() => ({
-      rect: rect.value,
+      rect: eventRect.value,
       zIndex: eventZ.value,
       visible: visible.value,
       focusable: false,
       handlers: {
-        click: emitTrackScroll,
+        click: onClick,
+        pointerdown: onPointerdown,
+        pointermove: onPointermove,
+        pointerup: onPointerup,
         wheel: (e) => {
           const dir = Math.sign(Number(e.deltaY ?? 0));
           if (!dir) return;
@@ -277,9 +343,10 @@ export const TLogScrollbar = defineComponent({
 
     useRenderNode(() => ({
       zIndex: props.zIndex,
-      rect: visible.value ? rect.value : EMPTY_RECT,
+      rect: visible.value && props.paint ? rect.value : EMPTY_RECT,
       deps: [
         visible.value,
+        props.paint,
         rect.value,
         fullRect.value,
         props.metrics,
@@ -292,10 +359,14 @@ export const TLogScrollbar = defineComponent({
         props.currentMarkerStyle,
         props.showMarkers,
         props.showArrows,
+        props.trackChar,
+        props.thumbChar,
+        props.measuringThumbChar,
+        props.estimatedThumbChar,
         defaultStyle.value,
       ],
       paint: (dirtyRows) => {
-        if (!visible.value) return;
+        if (!visible.value || !props.paint) return;
         const r = rect.value;
         if (r.w <= 0 || r.h <= 0) return;
         const full = fullRect.value;
@@ -320,7 +391,7 @@ export const TLogScrollbar = defineComponent({
           const localY = y - full.y;
           if (localY < 0 || localY >= full.h) return;
 
-          let char = TRACK_CHAR;
+          let char = props.trackChar || TRACK_CHAR;
           let style = trackStyle;
           if (arrowRows && localY === 0) {
             char = UP_ARROW_CHAR;
@@ -339,13 +410,13 @@ export const TLogScrollbar = defineComponent({
           }
           if (thumb && localY >= thumb.top && localY < thumb.top + thumb.size) {
             if (props.metrics?.visualIndexStatus === "measuring") {
-              char = MEASURING_THUMB_CHAR;
+              char = props.measuringThumbChar || MEASURING_THUMB_CHAR;
               style = measuringThumbStyle;
             } else if (props.metrics?.visualIndexStatus === "estimated") {
-              char = ESTIMATED_THUMB_CHAR;
+              char = props.estimatedThumbChar || ESTIMATED_THUMB_CHAR;
               style = estimatedThumbStyle;
             } else {
-              char = EXACT_THUMB_CHAR;
+              char = props.thumbChar || EXACT_THUMB_CHAR;
               style = thumbStyle;
             }
           }

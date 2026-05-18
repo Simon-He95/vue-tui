@@ -528,6 +528,8 @@ Import: `@simon_he/vue-tui/experimental`
 | <code>x</code>                  | <code>number</code>                           | —                                                                 | 是   | —    |
 | <code>y</code>                  | <code>number</code>                           | —                                                                 | 是   | —    |
 | <code>h</code>                  | <code>number</code>                           | —                                                                 | 是   | —    |
+| <code>eventX</code>             | <code>number</code>                           | <code>undefined</code>                                            | 否   | —    |
+| <code>eventW</code>             | <code>number</code>                           | <code>undefined</code>                                            | 否   | —    |
 | <code>zIndex</code>             | <code>number</code>                           | <code>0</code>                                                    | 否   | —    |
 | <code>metrics</code>            | <code>TLogScrollbarMetrics &#124; null</code> | <code>null</code>                                                 | 否   | —    |
 | <code>style</code>              | <code>Style</code>                            | <code>undefined</code>                                            | 否   | —    |
@@ -539,6 +541,11 @@ Import: `@simon_he/vue-tui/experimental`
 | <code>currentMarkerStyle</code> | <code>Style</code>                            | <code>() =&gt; ({ fg: &quot;redBright&quot;, bold: true })</code> | 否   | —    |
 | <code>showMarkers</code>        | <code>boolean</code>                          | <code>true</code>                                                 | 否   | —    |
 | <code>showArrows</code>         | <code>boolean</code>                          | <code>false</code>                                                | 否   | —    |
+| <code>paint</code>              | <code>boolean</code>                          | <code>true</code>                                                 | 否   | —    |
+| <code>trackChar</code>          | <code>string</code>                           | <code>TRACK\_CHAR</code>                                          | 否   | —    |
+| <code>thumbChar</code>          | <code>string</code>                           | <code>EXACT\_THUMB\_CHAR</code>                                   | 否   | —    |
+| <code>measuringThumbChar</code> | <code>string</code>                           | <code>MEASURING\_THUMB\_CHAR</code>                               | 否   | —    |
+| <code>estimatedThumbChar</code> | <code>string</code>                           | <code>ESTIMATED\_THUMB\_CHAR</code>                               | 否   | —    |
 
 ### Events
 
@@ -547,6 +554,8 @@ Import: `@simon_he/vue-tui/experimental`
 | <code>scrollTo</code>    | —       | —    |
 | <code>scrollBy</code>    | —       | —    |
 | <code>markerClick</code> | —       | —    |
+| <code>dragStart</code>   | —       | —    |
+| <code>dragEnd</code>     | —       | —    |
 
 ## TLogSearchBar
 
