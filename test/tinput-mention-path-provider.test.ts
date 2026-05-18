@@ -1,8 +1,11 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { TInput } from "../src/index.js";
 import { createPromptMentionPlugin } from "../src/vue.js";
-import { createTerminalApp } from "../src/cli.js";
+import { createNodeMentionPathProvider, createTerminalApp } from "../src/cli.js";
 import { MENTION_TOKEN } from "../src/vue/components/input/utils/inlineTextTokens.js";
 
 describe("TInput mention path provider", () => {
@@ -77,5 +80,27 @@ describe("TInput mention path provider", () => {
     expect(value.value).toBe(`${MENTION_TOKEN} `);
     expect(mentions.value).toEqual(["/workspace/docs/readme.md"]);
     app.dispose();
+  });
+
+  it("reads Node workspace suggestions under the test runner", async () => {
+    const workspace = mkdtempSync(`${tmpdir()}/vue-tui-mention-path-`);
+    try {
+      writeFileSync(resolve(workspace, "a-note.md"), "first\n", "utf8");
+      writeFileSync(resolve(workspace, "z-note.md"), "last\n", "utf8");
+
+      const provider = createNodeMentionPathProvider();
+      const suggestions = await provider.suggest({
+        workspaceAbs: workspace,
+        input: "note",
+        mode: "any",
+        max: 8,
+        showHidden: false,
+        maxDepth: 8,
+      });
+
+      expect(suggestions.map((item) => item.display)).toEqual(["a-note.md", "z-note.md"]);
+    } finally {
+      rmSync(workspace, { force: true, recursive: true });
+    }
   });
 });
