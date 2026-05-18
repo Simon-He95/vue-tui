@@ -1,6 +1,6 @@
 import type { PropType, VNodeChild } from "vue";
 import type { Style } from "../../core/types.js";
-import { computed, defineComponent, h } from "vue";
+import { Comment, computed, defineComponent, h } from "vue";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
 import { sanitizeInlineText, sliceByCells, textCellWidth } from "../utils/text.js";
@@ -158,13 +158,24 @@ function renderSegments(segments: readonly TToolCallViewSegment[], y: number, wi
   });
 }
 
+function hasRenderableChild(child: VNodeChild): boolean {
+  if (child == null || typeof child === "boolean") return false;
+  if (Array.isArray(child)) return child.some(hasRenderableChild);
+  if (typeof child === "object" && (child as any).type === Comment) return false;
+  return true;
+}
+
+function slotChildrenOrDefault(children: VNodeChild[] | undefined, fallback: VNodeChild[]) {
+  return children?.some(hasRenderableChild) ? children : fallback;
+}
+
 export function resolveTToolCallViewModel(options: TToolCallViewModelOptions): TToolCallViewModel {
   const width = Math.max(0, Math.floor(options.w));
   const collapsed = Boolean(options.collapsed);
   const selected = Boolean(options.selected);
   const status = options.status ?? "pending";
-  const base = options.style ?? DEFAULT_BASE_STYLE;
-  const muted = options.mutedStyle ?? mergeStyle(DEFAULT_MUTED_STYLE, { bg: base.bg });
+  const base = mergeStyle(DEFAULT_BASE_STYLE, options.style);
+  const muted = mergeStyle(DEFAULT_MUTED_STYLE, { bg: base.bg }, options.mutedStyle);
   const header = collapsed
     ? mergeStyle(base, { dim: true }, options.collapsedStyle, options.headerStyle)
     : mergeStyle(
@@ -295,6 +306,10 @@ export const TToolCallView = defineComponent({
         y: 1,
         segments: state.previewSegments,
       };
+      const headerChildren = slotChildrenOrDefault(
+        slots.header?.(headerSlotProps),
+        renderSegments(state.headerSegments, 0, props.w),
+      );
       const children: VNodeChild[] = [
         h(TText, {
           key: "header-bg",
@@ -305,11 +320,13 @@ export const TToolCallView = defineComponent({
           value: "",
           style: state.styles.header,
         }),
-        ...(slots.header
-          ? slots.header(headerSlotProps)
-          : renderSegments(state.headerSegments, 0, props.w)),
+        ...headerChildren,
       ];
       if (state.preview && height > 1) {
+        const previewChildren = slotChildrenOrDefault(
+          slots.preview?.(previewSlotProps),
+          renderSegments(state.previewSegments, 1, props.w),
+        );
         children.push(
           h(TText, {
             key: "preview-bg",
@@ -320,9 +337,7 @@ export const TToolCallView = defineComponent({
             value: "",
             style: state.styles.preview,
           }),
-          ...(slots.preview
-            ? slots.preview(previewSlotProps)
-            : renderSegments(state.previewSegments, 1, props.w)),
+          ...previewChildren,
         );
       }
 

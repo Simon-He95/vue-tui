@@ -332,7 +332,9 @@ export const TCommandPalette = defineComponent({
         maxW <= 0
           ? 0
           : clamp(Math.floor(maxW * props.widthRatio), Math.min(props.minWidth, maxW), maxW);
-      const maxDialogH = maxH <= 0 ? 0 : Math.max(10, maxH - props.maxVerticalMargin);
+      const requestedVerticalMargin = Math.max(0, Math.floor(props.maxVerticalMargin));
+      const safeVerticalMargin = maxH <= props.minHeight ? 0 : requestedVerticalMargin;
+      const maxDialogH = maxH <= 0 ? 0 : Math.min(maxH, Math.max(1, maxH - safeVerticalMargin));
       const minDialogH = Math.min(props.minHeight, maxDialogH);
       const preferredH = maxH <= 0 ? 0 : Math.floor(maxH * props.heightRatio);
       const hgt = maxH <= 0 ? 0 : clamp(preferredH, minDialogH, maxDialogH);

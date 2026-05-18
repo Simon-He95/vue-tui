@@ -191,7 +191,7 @@ describe("TTranscriptView", () => {
     ).resolves.toBe("BB");
   });
 
-  it("waits for parent-controlled scrollTop before repainting", async () => {
+  it("optimistically repaints parent-controlled wheel scrolls", async () => {
     const raf = installManualRaf();
     const updates: number[] = [];
     const scrolls: number[] = [];
@@ -241,7 +241,7 @@ describe("TTranscriptView", () => {
 
       expect(updates).toEqual([1]);
       expect(scrolls).toEqual([1]);
-      expect(rowText(app, 0)).toBe("row-0");
+      expect(rowText(app, 0)).toBe("row-1");
     } finally {
       app.dispose();
       raf.restore();

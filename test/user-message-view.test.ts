@@ -82,6 +82,17 @@ describe("TUserMessageView", () => {
     }
   });
 
+  it("keeps default foreground when style only overrides background", () => {
+    const model = resolveTUserMessageViewModel({
+      w: 24,
+      content: "hello",
+      style: { bg: "blue" },
+    });
+
+    expect(model.block).toMatchObject({ fg: "whiteBright", bg: "blue" });
+    expect(model.header).toMatchObject({ fg: "white", bg: "blue" });
+  });
+
   it("renders overridable content reference segments", async () => {
     const content = "Open src/App.vue before editing";
     const start = content.indexOf("src/App.vue");

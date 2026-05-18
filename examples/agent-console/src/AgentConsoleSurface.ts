@@ -486,15 +486,31 @@ export const AgentConsoleSurface = defineComponent({
     }
 
     function commandPaletteItems(): readonly TCommandPaletteItem[] {
-      return commandRows().map((row) => ({
+      const rawCommand = paletteQuery.value.trim();
+      const items = commandRows().map((row) => ({
         id: row.id,
         label: row.label,
         detail: `${row.command}  ${row.detail}`,
         keywords: [row.command, row.detail],
       }));
+      if (!rawCommand.startsWith("/")) return items;
+      return [
+        {
+          id: "__raw_command__",
+          label: `Run ${rawCommand}`,
+          detail: "Execute slash command",
+          keywords: [rawCommand],
+        },
+        ...items,
+      ];
     }
 
     function runPaletteItem(item: TCommandPaletteItem | null): void {
+      const rawCommand = paletteQuery.value.trim();
+      if (rawCommand.startsWith("/") && runCommand(rawCommand)) {
+        if (overlay.value === "palette") closeOverlay();
+        return;
+      }
       const row = item?.id ? commandRows().find((candidate) => candidate.id === item.id) : null;
       if (!row) return;
       row.run();

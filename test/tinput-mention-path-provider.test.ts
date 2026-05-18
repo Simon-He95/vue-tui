@@ -89,7 +89,8 @@ describe("TInput mention path provider", () => {
       writeFileSync(resolve(workspace, "z-note.md"), "last\n", "utf8");
 
       const provider = createNodeMentionPathProvider();
-      const suggestions = await provider.suggest({
+      expect(provider.suggest).toBeDefined();
+      const suggestions = await provider.suggest!({
         workspaceAbs: workspace,
         input: "note",
         mode: "any",

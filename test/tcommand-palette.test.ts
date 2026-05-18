@@ -18,6 +18,13 @@ function lines(mounted: Awaited<ReturnType<typeof mountTerminal>>): string[] {
   return out;
 }
 
+function appLine(app: ReturnType<typeof createTerminalApp>, y: number): string {
+  return app.terminal
+    .getRow(y)
+    .map((cell) => cell.ch)
+    .join("");
+}
+
 describe("TCommandPalette", () => {
   it("filters items with label detail and keywords", () => {
     const filtered = filterCommandPaletteItems(
@@ -99,6 +106,47 @@ describe("TCommandPalette", () => {
       expect(close).toHaveBeenCalledTimes(1);
     } finally {
       app.dispose();
+    }
+  });
+
+  it("keeps the dialog inside small terminal heights and still closes on Escape", async () => {
+    for (const rows of [5, 8]) {
+      const open = ref(true);
+      const close = vi.fn();
+      const App = defineComponent({
+        name: "CommandPaletteSmallTerminalApp",
+        setup() {
+          return () =>
+            h(TCommandPalette, {
+              modelValue: open.value,
+              items: [{ label: "Open Session" }],
+              "onUpdate:modelValue": (value: boolean) => {
+                open.value = value;
+              },
+              onClose: close,
+            });
+        },
+      });
+      const app = createTerminalApp({ cols: 20, rows, component: App });
+
+      try {
+        app.mount();
+        await nextTick();
+        app.scheduler.flushNow();
+
+        expect(appLine(app, 0)[0]).toBe("┌");
+        expect(appLine(app, rows - 1)[0]).toBe("└");
+        expect(appLine(app, rows - 1)[19]).toBe("┘");
+
+        app.events.dispatch({ type: "keydown", key: "Escape", code: "Escape" } as any);
+        await nextTick();
+        app.scheduler.flushNow();
+
+        expect(open.value).toBe(false);
+        expect(close).toHaveBeenCalledTimes(1);
+      } finally {
+        app.dispose();
+      }
     }
   });
 

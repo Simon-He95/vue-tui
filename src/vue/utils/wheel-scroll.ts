@@ -23,7 +23,6 @@ const LINE_UNIT_THRESHOLD = 3;
 const PIXELS_PER_LINE = 16;
 const ACCEL_WINDOW_MS = 120;
 const MAX_ACCEL = 26;
-const LINE_UNIT_MAX_ACCEL = 8;
 const EDGE_BOUNCE_MS = 120;
 // Some terminals (notably Ghostty) can emit 2+ wheel ticks per one physical wheel step,
 // with very small intervals (~4ms). Treat those as a single logical tick.
@@ -105,13 +104,10 @@ export function applyWheelScroll(
 
   const normalizedDelta = normalizeDelta(deltaY, deltaMode);
   const deltaDir = normalizedDelta > 0 ? 1 : -1;
-  const sameDirectionLineTick = lineUnits && state.lastDir === deltaDir;
   const accel = options.disableAcceleration
     ? 1
     : lineUnits
-      ? sameDirectionLineTick && state.lastAt
-        ? accelFactor(now, state.lastAt, LINE_UNIT_MAX_ACCEL)
-        : 1
+      ? 1
       : state.lastAt
         ? accelFactor(now, state.lastAt)
         : 1;

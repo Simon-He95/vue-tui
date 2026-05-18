@@ -238,6 +238,10 @@ export const TVirtualRows = defineComponent({
       top: number;
     } | null = null;
     let pendingSelectionScrollFocusRemap = false;
+    let pointerDownItemClickIndex: number | null = null;
+    let pointerDownCellX = 0;
+    let pointerDownCellY = 0;
+    let pointerMoved = false;
     let pointerUpItemClickIndex: number | null = null;
     let alive = true;
 
@@ -405,6 +409,8 @@ export const TVirtualRows = defineComponent({
       if (!delta) return false;
 
       if (isScrollControlled()) {
+        controlledScrollTop.value = clampedTop;
+        markViewportDirty();
         if (options?.emitUpdate !== false) emit("update:scrollTop", clampedTop);
         if (options?.emitScroll) emitScroll(clampedTop);
         return true;
@@ -578,10 +584,18 @@ export const TVirtualRows = defineComponent({
 
     function itemIndexForEvent(e: TerminalPointerEvent): number | null {
       const r = normalizedRect();
+      if (e.cellX < r.x || e.cellY < r.y || e.cellX >= r.x + r.w || e.cellY >= r.y + r.h) {
+        return null;
+      }
       const { y: clipY } = clipOffsets();
       const index = currentScrollTop() + clipY + (e.cellY - r.y);
       if (index < 0 || index >= itemCount.value) return null;
       return index;
+    }
+
+    function resetPointerDownItemClick(): void {
+      pointerDownItemClickIndex = null;
+      pointerMoved = false;
     }
 
     function emitItemClick(index: number, e: TerminalPointerEvent): void {
@@ -688,20 +702,42 @@ export const TVirtualRows = defineComponent({
         pointerdownCapture: (e: TerminalPointerEvent) => emit("pointerdownCapture", e),
         pointerdown: (e: TerminalPointerEvent) => {
           pointerUpItemClickIndex = null;
+          resetPointerDownItemClick();
+          if (e.button == null || e.button === 0) {
+            pointerDownItemClickIndex = itemIndexForEvent(e);
+            pointerDownCellX = e.cellX;
+            pointerDownCellY = e.cellY;
+          }
           emit("pointerdown", e);
         },
         pointermoveCapture: (e: TerminalPointerEvent) => emit("pointermoveCapture", e),
-        pointermove: (e: TerminalPointerEvent) => emit("pointermove", e),
+        pointermove: (e: TerminalPointerEvent) => {
+          if (
+            pointerDownItemClickIndex != null &&
+            (e.cellX !== pointerDownCellX || e.cellY !== pointerDownCellY)
+          ) {
+            pointerMoved = true;
+          }
+          emit("pointermove", e);
+        },
         pointerupCapture: (e: TerminalPointerEvent) => emit("pointerupCapture", e),
         pointerup: (e: TerminalPointerEvent) => {
           emit("pointerup", e);
-          if (e.button != null && e.button !== 0) return;
+          if (e.button != null && e.button !== 0) {
+            resetPointerDownItemClick();
+            return;
+          }
           const index = itemIndexForEvent(e);
-          if (index == null) return;
+          const canActivate = index != null && pointerDownItemClickIndex === index && !pointerMoved;
+          resetPointerDownItemClick();
+          if (!canActivate || index == null) return;
           pointerUpItemClickIndex = index;
           emitItemClick(index, e);
         },
-        pointerleave: (e: TerminalPointerEvent) => emit("pointerleave", e),
+        pointerleave: (e: TerminalPointerEvent) => {
+          resetPointerDownItemClick();
+          emit("pointerleave", e);
+        },
         wheel: (e: any) => {
           emit("wheel", e);
           if (!props.wheelScroll) return;

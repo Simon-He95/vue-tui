@@ -179,7 +179,7 @@ export function resolveTUserMessageViewModel(
   const width = Math.max(1, Math.floor(options.w));
   const indent = Math.max(0, Math.floor(options.indent ?? 2));
   const contentWidth = Math.max(1, width - indent);
-  const block = options.style ?? DEFAULT_BLOCK_STYLE;
+  const block = { ...DEFAULT_BLOCK_STYLE, ...options.style };
   const header = { ...DEFAULT_HEADER_STYLE, bg: block.bg, ...options.headerStyle };
   const label = { ...DEFAULT_LABEL_STYLE, bg: block.bg, ...options.labelStyle };
   const prefix = { ...label, ...options.prefixStyle };

@@ -501,6 +501,16 @@ try {
   await nextTick();
   app.scheduler.flushNow();
 
+  api.openPalette("/search dirtyRows");
+  await nextTick();
+  app.scheduler.flushNow();
+  await dispatchKey(app, "Enter");
+  app.scheduler.flushNow();
+  const paletteRawSlashSearchWorked = api.searchQuery.value === "dirtyRows";
+  api.closeOverlay();
+  await nextTick();
+  app.scheduler.flushNow();
+
   api.runCommand("/copy");
   app.scheduler.flushNow();
   const slashCopyWorked = api.getCopiedText().length > 0;
@@ -562,6 +572,7 @@ try {
     markdownHasStyledBackground,
     paletteFilterMatchesCopy,
     paletteNoResultEnterSafe,
+    paletteRawSlashSearchWorked,
     slashCopyWorked,
     slashToggleMarkdown,
     slashToggleLog,
@@ -615,6 +626,7 @@ try {
   assert.equal(output.markdownHasStyledBackground, true);
   assert.equal(output.paletteFilterMatchesCopy, true);
   assert.equal(output.paletteNoResultEnterSafe, true);
+  assert.equal(output.paletteRawSlashSearchWorked, true);
   assert.equal(output.slashCopyWorked, true);
   assert.equal(output.slashToggleMarkdown, true);
   assert.equal(output.slashToggleLog, true);

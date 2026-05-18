@@ -117,6 +117,17 @@ describe("TToolCallView", () => {
     }
   });
 
+  it("keeps default foreground when style only overrides background", () => {
+    const model = resolveTToolCallViewModel({
+      w: 24,
+      title: "shell",
+      style: { bg: "blue" },
+    });
+
+    expect(model.styles.base).toMatchObject({ fg: "yellowBright", bg: "blue" });
+    expect(model.styles.preview).toMatchObject({ fg: "yellowBright", bg: "blue" });
+  });
+
   it("maps error and warning status dots to overridable renderer styles", async () => {
     const mounted = await mountTerminal(
       () => [
@@ -198,6 +209,36 @@ describe("TToolCallView", () => {
         bg: "greenBright",
         bold: true,
       });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("falls back to default rows when optional slots return empty values", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TToolCallView,
+          {
+            x: 0,
+            y: 0,
+            w: 36,
+            title: "shell",
+            collapsed: true,
+            preview: "latest",
+          },
+          {
+            header: () => undefined as any,
+            preview: () => null as any,
+          },
+        ),
+      36,
+      2,
+    );
+
+    try {
+      expect(rowText(mounted, 0).trim()).toBe("▸ ● shell");
+      expect(rowText(mounted, 1).trim()).toBe("⎿ latest");
     } finally {
       mounted.unmount();
     }

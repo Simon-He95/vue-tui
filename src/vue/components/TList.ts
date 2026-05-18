@@ -508,7 +508,26 @@ export const TList = defineComponent({
         wheel: (e: any) => {
           const { deltaY, mode } = getWheelScrollInput(e);
           if (!deltaY) return;
-          const baseTop = pendingWheelTop ?? scrollTop.value;
+          const pendingTop = pendingWheelTop;
+          const baseTop = pendingTop ?? scrollTop.value;
+          const maxTop = currentMaxScrollTop();
+          const inputDir = deltaY > 0 ? 1 : -1;
+          const pendingDir =
+            pendingTop == null || pendingTop === scrollTop.value
+              ? 0
+              : pendingTop > scrollTop.value
+                ? 1
+                : -1;
+          const pendingAtEdge = pendingTop != null && (pendingTop <= 0 || pendingTop >= maxTop);
+          if (pendingAtEdge && pendingDir !== 0 && inputDir === -pendingDir) {
+            resetWheelScrollState(wheelState);
+          } else if (
+            pendingTop == null &&
+            wheelState.lastDir !== 0 &&
+            inputDir === -wheelState.lastDir
+          ) {
+            resetWheelScrollState(wheelState);
+          }
           const now =
             typeof e.time === "number"
               ? e.time
@@ -519,7 +538,7 @@ export const TList = defineComponent({
             wheelState,
             deltaY,
             baseTop,
-            currentMaxScrollTop(),
+            maxTop,
             now,
             mode,
             {
@@ -527,7 +546,14 @@ export const TList = defineComponent({
             },
           );
           if (!dir || nextTop === baseTop) {
-            const maxTop = currentMaxScrollTop();
+            const isOppositePending =
+              pendingTop != null && pendingDir !== 0 && inputDir === -pendingDir;
+            if (isOppositePending && !pendingAtEdge) {
+              replacePendingWheelTop(scrollTop.value);
+              resetWheelScrollState(wheelState);
+              e.preventDefault?.();
+              return;
+            }
             const isEdgeNoop = (deltaY < 0 && baseTop <= 0) || (deltaY > 0 && baseTop >= maxTop);
             if (isEdgeNoop) resetWheelScrollState(wheelState);
             return;
