@@ -1034,9 +1034,9 @@ export const TDialog = defineComponent({
                 y: layout.y,
                 w: layout.w,
                 h: 1,
-                // Keep button hitboxes at the same interaction layer as dialog inputs.
+                // Keep button hitboxes just above dialog chrome within the dialog event layer.
                 // Otherwise modal focus lock can refuse mousedown focus changes to buttons.
-                zIndex: 1002,
+                zIndex: 2,
                 focusable: true,
                 onFocus: () => {
                   selectedButtonIndex.value = i;

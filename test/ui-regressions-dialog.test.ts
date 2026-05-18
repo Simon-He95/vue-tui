@@ -656,6 +656,60 @@ describe("ui regressions dialog", () => {
     mounted.unmount();
   });
 
+  it("TDialog footer hitboxes stay below higher-z dialog content controls", async () => {
+    const open = ref(true);
+    const selected = ref(0);
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 32,
+            h: 9,
+            title: "Sessions",
+            placement: "center",
+            teleport: true,
+            closeOnConfirm: false,
+            buttons: [
+              { label: "Open", value: "open" },
+              { label: "Close", value: "close" },
+            ],
+          },
+          () =>
+            h(TSelect, {
+              x: 0,
+              y: 0,
+              w: 28,
+              h: 3,
+              zIndex: 5,
+              options: ["one", "two"],
+              modelValue: selected.value,
+              "onUpdate:modelValue": (v: number) => (selected.value = v),
+            }),
+        ),
+      44,
+      12,
+    );
+
+    const manager = await waitFor(() => mounted.events());
+    await nextTick();
+    await nextTick();
+
+    const focusables = manager
+      .debugNodes()
+      .filter((n) => n.visible && n.focusable && n.rect.w > 0 && n.rect.h > 0);
+    const selectNode = focusables.find((n) => n.rect.h === 3 && n.rect.w === 28);
+    expect(selectNode).toBeTruthy();
+
+    const footerY = Math.max(...focusables.map((n) => n.rect.y));
+    const footerZ = Math.max(...focusables.filter((n) => n.rect.y === footerY).map((n) => n.zIndex));
+    expect(footerZ).toBeLessThan(selectNode!.zIndex);
+
+    mounted.unmount();
+  });
+
   it("TDialog only underlines the selected footer button", async () => {
     const open = ref(true);
     const mounted = await mountTerminal(
