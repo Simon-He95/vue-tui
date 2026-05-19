@@ -218,14 +218,12 @@ export function resolveTUserMessageViewModel(
   const metaText = options.meta ?? "";
   const headerText = `${prefixText}${labelText}${metaText ? ` ${metaText}` : ""}`;
   const headerSegments: TUserMessageHeaderSegment[] = [];
-  const marker = prefixText.trimStart().slice(0, 1);
-  if (marker) {
-    const markerStart = Math.max(0, prefixText.indexOf(marker));
+  if (prefixText) {
     headerSegments.push({
       role: "prefix",
-      text: marker,
-      start: markerStart,
-      end: markerStart + marker.length,
+      text: prefixText,
+      start: 0,
+      end: prefixText.length,
       style: prefix,
     });
   }

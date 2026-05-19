@@ -66,6 +66,32 @@ describe("TUserMessageView", () => {
     expect(row.text.slice(segment.start - row.start, segment.end - row.start)).toBe("file.ts");
   });
 
+  it("styles the whole prefix segment", () => {
+    const prefixStyle = { fg: "yellowBright" } as const;
+    const model = resolveTUserMessageViewModel({
+      w: 32,
+      label: "simon",
+      prefix: "[user] ",
+      content: "hello",
+      prefixStyle,
+    });
+
+    expect(model.headerText).toBe("[user] simon");
+    expect(model.headerSegments[0]).toMatchObject({
+      role: "prefix",
+      text: "[user] ",
+      start: 0,
+      end: 7,
+      style: expect.objectContaining(prefixStyle),
+    });
+    expect(model.headerSegments[1]).toMatchObject({
+      role: "label",
+      text: "simon",
+      start: 7,
+      end: 12,
+    });
+  });
+
   it("matches best-agent user block spacing, header, and background", async () => {
     const mounted = await mountTerminal(
       () =>
