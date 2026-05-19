@@ -353,7 +353,7 @@ export const TToolCallView = defineComponent({
           selectable: props.selectable,
           onClick: (event: unknown) => {
             emit("click", event);
-            emit("toggle", { collapsed: !props.collapsed });
+            emit("toggle", { collapsed: !props.collapsed, event });
           },
         },
         () => children,

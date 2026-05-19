@@ -155,7 +155,7 @@ describe("ui regressions", () => {
     );
     await nextTick();
 
-    expect(scrollTo[0]).toBe(0);
+    expect(scrollTo[0]).toBe(90);
     expect(scrollTo.at(-1)).toBe(90);
     expect(drag).toEqual(["start", "end"]);
     mounted.unmount();

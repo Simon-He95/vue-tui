@@ -1,6 +1,6 @@
 import type { PropType, VNodeChild } from "vue";
 import type { Style } from "../../core/types.js";
-import { computed, defineComponent, h } from "vue";
+import { Comment, computed, defineComponent, h } from "vue";
 import { textCellWidth, wrapByCells } from "../utils/text.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
@@ -152,6 +152,17 @@ function renderSegments(segments: readonly TThinkingViewSegment[], y: number, wi
   );
 }
 
+function hasRenderableChild(child: VNodeChild): boolean {
+  if (child == null || typeof child === "boolean") return false;
+  if (Array.isArray(child)) return child.some(hasRenderableChild);
+  if (typeof child === "object" && (child as any).type === Comment) return false;
+  return true;
+}
+
+function slotChildrenOrDefault(children: VNodeChild[] | undefined, fallback: VNodeChild[]) {
+  return children?.some(hasRenderableChild) ? children : fallback;
+}
+
 export const TThinkingView = defineComponent({
   name: "TThinkingView",
   props: {
@@ -179,19 +190,17 @@ export const TThinkingView = defineComponent({
     return () => {
       const state = model.value;
       const children: VNodeChild[] = [];
-      if (slots.header) {
-        children.push(
-          ...(slots.header({
-            y: 0,
-            w: props.w,
-            text: state.headerText,
-            segments: state.headerSegments,
-            styles: state.styles,
-          }) ?? []),
-        );
-      } else {
-        children.push(...renderSegments(state.headerSegments, 0, props.w));
-      }
+      const headerChildren = slotChildrenOrDefault(
+        slots.header?.({
+          y: 0,
+          w: props.w,
+          text: state.headerText,
+          segments: state.headerSegments,
+          styles: state.styles,
+        }),
+        renderSegments(state.headerSegments, 0, props.w),
+      );
+      children.push(...headerChildren);
 
       for (let index = 0; index < state.bodySegments.length; index++) {
         children.push(...renderSegments(state.bodySegments[index]!, index + 1, props.w));
@@ -208,7 +217,7 @@ export const TThinkingView = defineComponent({
           focusable: true,
           onClick: (event: unknown) => {
             emit("click", event);
-            emit("toggle", event);
+            emit("toggle", { collapsed: !props.collapsed, event });
           },
         },
         () => children,

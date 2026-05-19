@@ -166,7 +166,12 @@ function selectedFilteredIndex(
   filtered: readonly TCommandPaletteFilteredItem[],
   selectedIndex: number,
 ): number {
-  const idx = filtered.findIndex((x) => x.index === selectedIndex);
+  const idx = filtered.findIndex((x) => x.index === selectedIndex && x.item.kind !== "separator");
+  return idx >= 0 ? idx : firstSelectableFilteredIndex(filtered);
+}
+
+function firstSelectableFilteredIndex(filtered: readonly TCommandPaletteFilteredItem[]): number {
+  const idx = filtered.findIndex((x) => x.item.kind !== "separator");
   return idx >= 0 ? idx : 0;
 }
 
@@ -313,7 +318,10 @@ export const TCommandPalette = defineComponent({
         queryOverride == null
           ? currentSelectedFilteredIndex.value
           : selectedFilteredIndex(list, localSelectedIndex.value);
-      const current = list[selected];
+      const current =
+        list[selected]?.item.kind === "separator"
+          ? list[firstSelectableFilteredIndex(list)]
+          : list[selected];
       if (!current || current.item.kind === "separator") return;
       emit("select", current.item, current.index);
     }

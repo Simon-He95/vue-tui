@@ -126,6 +126,8 @@ export function applyWheelScroll(
     now - state.lastDirAt < LINE_UNIT_REVERSAL_BOUNCE_MS
   ) {
     state.accumulator = 0;
+    state.lastDir = 0;
+    state.lastDirAt = 0;
     return { nextTop: scrollTop, dir: 0, lines: 0 };
   }
   const atTop = scrollTop <= 0;

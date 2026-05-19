@@ -291,6 +291,48 @@ describe("TLogScrollbar", () => {
     }
   });
 
+  it("does not double-scroll arrow rows across pointerdown pointerup and click", async () => {
+    const onScrollBy = vi.fn();
+    const App = defineComponent({
+      name: "TLogScrollbarArrowPointerClickApp",
+      setup() {
+        return () =>
+          h(TLogScrollbar, {
+            x: 0,
+            y: 0,
+            h: 4,
+            showArrows: true,
+            metrics: createMetrics({
+              viewportRows: 3,
+              maxScrollTop: 20,
+            }),
+            onScrollBy,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 1, rows: 4, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: 0, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 3, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: 0, cellY: 3, button: 0 } as any);
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 3, button: 0 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScrollBy).toHaveBeenCalledTimes(2);
+      expect(onScrollBy).toHaveBeenNthCalledWith(1, -3);
+      expect(onScrollBy).toHaveBeenNthCalledWith(2, 3);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("renders markers on the track and keeps the thumb visible", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -364,6 +406,58 @@ describe("TLogScrollbar", () => {
       await nextTick();
       app.scheduler.flushNow();
 
+      expect(onMarkerClick).toHaveBeenCalledWith({
+        marker: markers[0],
+        markerIndex: 0,
+        visualRow: 50,
+        cellX: 0,
+        cellY: 5,
+      });
+      expect(onScrollTo).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not convert marker pointerdown pointerup and click into scrollTo", async () => {
+    const onScrollTo = vi.fn();
+    const onMarkerClick = vi.fn();
+    const markers = [{ id: "m1", visualRow: 50, payload: { kind: "match" } }] as const;
+    const App = defineComponent({
+      name: "TLogScrollbarMarkerPointerClickApp",
+      setup() {
+        return () =>
+          h(TLogScrollbar, {
+            x: 0,
+            y: 0,
+            h: 10,
+            metrics: createMetrics({
+              scrollTop: 0,
+              maxScrollTop: 90,
+              viewportRows: 10,
+              visualRowCount: 100,
+              estimatedVisualRowCount: 100,
+              measuredVisualRowCount: 100,
+            }),
+            markers,
+            onScrollTo,
+            onMarkerClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 1, rows: 10, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 5, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: 0, cellY: 5, button: 0 } as any);
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 5, button: 0 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onMarkerClick).toHaveBeenCalledTimes(1);
       expect(onMarkerClick).toHaveBeenCalledWith({
         marker: markers[0],
         markerIndex: 0,

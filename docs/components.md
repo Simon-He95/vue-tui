@@ -627,7 +627,7 @@ Transcript row viewport：渲染 message / action / tool-call / approval rows，
 - `x`/`y`/`w`/`h` `(number, required)`
 - `source` `(TTranscriptDataSource, required)`：提供 `rowCount()`、`getRow(index)`，可选提供 `getRowKey(index)`、`getRowVersion(index)`、`firstRowIndex()`。同时提供 `getRowKey` 和 `getRowVersion` 时，未变化的缓存行可以跳过 `getRow()`；如果 hover、selection 或外部样式会改变该行输出，需要把这些状态计入 row version。profiling 打开时，`TTranscriptView` 的 component perf 会记录 `sourceReadCount` 和 `sourceSkippedCount`，用于区分 base cache 命中和 wrapper row 构造成本。
 - `version` `(number, required)`：数据变化版本号
-- `scrollTop` `(number?)` + `update:scrollTop`
+- `scrollTop` `(number?)` + `update:scrollTop`：受控 viewport scrollTop；wheel/keyboard 滚动会先 optimistic repaint 并 emit `update:scrollTop`，父组件应在接受更新时同步 prop，否则内部可见 rows 会暂时和传入的 `scrollTop` 分歧
 - `defaultScrollTop` `(number?)`
 - `autoStickToBottom` `(boolean)`
 - `selectable` `(boolean)`

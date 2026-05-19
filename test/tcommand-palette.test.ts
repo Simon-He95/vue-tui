@@ -150,8 +150,48 @@ describe("TCommandPalette", () => {
     }
   });
 
-  it("skips separators when moving and selects with Enter", async () => {
+  it("selects the first command when the filtered list starts with a separator", async () => {
     const selected = ref(0);
+    const select = vi.fn();
+    const App = defineComponent({
+      name: "CommandPaletteSeparatorDefaultSelectApp",
+      setup() {
+        return () =>
+          h(TCommandPalette, {
+            modelValue: true,
+            items: [
+              { kind: "separator", label: "Group" },
+              { label: "Open Session" },
+              { label: "Switch Provider" },
+            ],
+            selectedIndex: selected.value,
+            "onUpdate:selectedIndex": (value: number) => {
+              selected.value = value;
+            },
+            onSelect: select,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 64, rows: 20, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter" } as any);
+
+      expect(selected.value).toBe(0);
+      expect(select).toHaveBeenCalledTimes(1);
+      expect(select.mock.calls[0]?.[0]).toMatchObject({ label: "Open Session" });
+      expect(select.mock.calls[0]?.[1]).toBe(1);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("skips separators when moving selection", async () => {
+    const selected = ref(1);
     const select = vi.fn();
     const App = defineComponent({
       name: "CommandPaletteSeparatorKeyboardApp",
@@ -179,15 +219,15 @@ describe("TCommandPalette", () => {
       await nextTick();
       app.scheduler.flushNow();
 
-      app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown" } as any);
+      app.events.dispatch({ type: "keydown", key: "ArrowUp", code: "ArrowUp" } as any);
       await nextTick();
       app.scheduler.flushNow();
       app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter" } as any);
 
-      expect(selected.value).toBe(1);
+      expect(selected.value).toBe(2);
       expect(select).toHaveBeenCalledTimes(1);
-      expect(select.mock.calls[0]?.[0]).toMatchObject({ label: "Open Session" });
-      expect(select.mock.calls[0]?.[1]).toBe(1);
+      expect(select.mock.calls[0]?.[0]).toMatchObject({ label: "Switch Provider" });
+      expect(select.mock.calls[0]?.[1]).toBe(2);
     } finally {
       app.dispose();
     }

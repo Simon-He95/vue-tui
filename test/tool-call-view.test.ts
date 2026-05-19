@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { resolveTToolCallViewModel, TToolCallView } from "../src/agent.js";
-import { h, mountTerminal, TText } from "./ui-regressions-support.js";
+import { createTerminalApp } from "../src/cli.js";
+import { defineComponent, h, mountTerminal, nextTick, TText } from "./ui-regressions-support.js";
 
 function rowText(
   mounted: { terminal: { getRow: (y: number) => readonly { ch: string }[] } },
@@ -241,6 +242,41 @@ describe("TToolCallView", () => {
       expect(rowText(mounted, 1).trim()).toBe("⎿ latest");
     } finally {
       mounted.unmount();
+    }
+  });
+
+  it("emits toggle payloads with the next collapsed state and click event", async () => {
+    const onToggle = vi.fn();
+    const App = defineComponent({
+      name: "ToolCallTogglePayloadApp",
+      setup() {
+        return () =>
+          h(TToolCallView, {
+            x: 0,
+            y: 0,
+            w: 24,
+            title: "shell",
+            collapsed: true,
+            onToggle,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 24, rows: 2, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 0, button: 0 } as any);
+
+      expect(onToggle).toHaveBeenCalledTimes(1);
+      expect(onToggle.mock.calls[0]?.[0]).toMatchObject({
+        collapsed: false,
+        event: { cellX: 0, cellY: 0 },
+      });
+    } finally {
+      app.dispose();
     }
   });
 });

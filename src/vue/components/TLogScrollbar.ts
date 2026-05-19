@@ -237,6 +237,7 @@ export const TLogScrollbar = defineComponent({
     });
 
     let dragging = false;
+    let dragMoved = false;
     let suppressNextClick = false;
 
     function emitTrackScroll(
@@ -293,22 +294,25 @@ export const TLogScrollbar = defineComponent({
     function onPointerdown(e: TerminalPointerEvent): void {
       if (e.button != null && e.button !== 0) return;
       dragging = true;
+      dragMoved = false;
       emit("dragStart");
-      emitTrackScroll(e);
       e.stopPropagation?.();
     }
 
     function onPointermove(e: TerminalPointerEvent): void {
       if (!dragging) return;
+      dragMoved = true;
       emitTrackScroll(e, { clampY: true, markerClick: false });
       e.stopPropagation?.();
     }
 
     function onPointerup(e: TerminalPointerEvent): void {
       if (!dragging) return;
-      emitTrackScroll(e, { clampY: true, markerClick: false });
+      if (dragMoved) {
+        emitTrackScroll(e, { clampY: true, markerClick: false });
+        suppressNextClick = true;
+      }
       dragging = false;
-      suppressNextClick = true;
       emit("dragEnd");
       e.stopPropagation?.();
     }
