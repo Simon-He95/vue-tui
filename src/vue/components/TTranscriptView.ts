@@ -201,6 +201,10 @@ export const TTranscriptView = defineComponent({
     const focusedRegion = ref<TTranscriptHitRegion | null>(null);
     const rowLayoutCache = new Map<number, RowLayoutCacheEntry>();
     let pointerUpActivatedRegionId: string | null = null;
+    let pointerDownRegionId: string | null = null;
+    let pointerDownCellX = 0;
+    let pointerDownCellY = 0;
+    let pointerMoved = false;
     let warnedLargeFlattenedRows = false;
 
     function isScrollControlled(): boolean {
@@ -396,7 +400,15 @@ export const TTranscriptView = defineComponent({
     }
 
     function emitRegionFromPointerUp(region: TTranscriptHitRegion, e: TerminalPointerEvent): void {
-      if (e.button != null && e.button !== 0) return;
+      if (e.button != null && e.button !== 0) {
+        pointerDownRegionId = null;
+        pointerMoved = false;
+        return;
+      }
+      const canActivate = pointerDownRegionId === region.id && !pointerMoved;
+      pointerDownRegionId = null;
+      pointerMoved = false;
+      if (!canActivate) return;
       if (isDisabledActionRegion(region)) return;
       e.stopPropagation?.();
       pointerUpActivatedRegionId = region.id;
@@ -648,12 +660,29 @@ export const TTranscriptView = defineComponent({
             zIndex: 2,
             focusable: false,
             onPointerenter: () => setHoveredRegion(region),
-            onPointermove: () => setHoveredRegion(region),
+            onPointermove: (e: TerminalPointerEvent) => {
+              if (
+                pointerDownRegionId &&
+                (e.cellX !== pointerDownCellX || e.cellY !== pointerDownCellY)
+              ) {
+                pointerMoved = true;
+              }
+              setHoveredRegion(region);
+            },
             onPointerleave: () => {
+              pointerDownRegionId = null;
+              pointerMoved = false;
               if (hoveredRegion.value?.id === region.id) setHoveredRegion(null);
             },
-            onPointerdown: () => {
+            onPointerdown: (e: TerminalPointerEvent) => {
               pointerUpActivatedRegionId = null;
+              pointerDownRegionId = null;
+              pointerMoved = false;
+              if (e.button == null || e.button === 0) {
+                pointerDownRegionId = region.id;
+                pointerDownCellX = e.cellX;
+                pointerDownCellY = e.cellY;
+              }
             },
             onPointerup: (e: TerminalPointerEvent) => emitRegionFromPointerUp(region, e),
             onClick: (e: TerminalPointerEvent) => emitRegionFromClick(region, e),

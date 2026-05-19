@@ -30,7 +30,10 @@ import {
   watchEffect,
 } from "vue";
 import { createTerminal } from "../../core/index.js";
-import { getPlaneTerminal } from "../../core/terminal/create-terminal.js";
+import {
+  getComposedRowBeforePlane,
+  getPlaneTerminal,
+} from "../../core/terminal/create-terminal.js";
 import { createEventManager } from "../../events/manager/event-manager.js";
 import { createFramePerfStore } from "../../observability/frame-perf-store.js";
 import { createTraceStore } from "../../observability/trace.js";
@@ -223,6 +226,7 @@ export const TerminalProvider = defineComponent({
       terminal,
       overlayTerminal: selectionOverlay,
       clipboard: selectionClipboard,
+      getSourceRow: (y) => getComposedRowBeforePlane(terminal, "overlay", y) ?? terminal.getRow(y),
       getTextProviders: () => Array.from(selectionTextProviders.values()),
       getOptions: () => {
         const config = resolveSelectionConfig(props.selection);

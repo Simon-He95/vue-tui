@@ -608,6 +608,81 @@ describe("TTranscriptView", () => {
     }
   });
 
+  it("ignores region pointerup without same-region pointerdown or after movement", async () => {
+    const linkClick = vi.fn();
+    const actionClick = vi.fn();
+    const toolClick = vi.fn();
+    const rows: TTranscriptRow[] = [
+      {
+        kind: "message",
+        key: "link",
+        segments: [{ text: "go " }, { text: "link", href: "https://example.com" }],
+      },
+      {
+        kind: "approval",
+        key: "approval",
+        title: "Allow?",
+        actions: [{ id: "approve", label: "Approve" }],
+      },
+      {
+        kind: "tool-call",
+        key: "tool",
+        title: "run_tests",
+        collapsed: false,
+        body: [{ text: "passed" }],
+      },
+    ];
+    const App = defineComponent({
+      name: "TranscriptRegionPointerGuardApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 3,
+            source: createSource(rows),
+            version: 1,
+            onLinkClick: linkClick,
+            onActionClick: actionClick,
+            onToolClick: toolClick,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 40, rows: 4, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const linkX = rowText(app, 0).indexOf("link");
+      const actionX = rowText(app, 1).indexOf("[Approve]");
+      const toolX = rowText(app, 2).indexOf("passed");
+      expect(linkX).toBeGreaterThanOrEqual(0);
+      expect(actionX).toBeGreaterThanOrEqual(0);
+      expect(toolX).toBeGreaterThanOrEqual(0);
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "pointermove", cellX: linkX, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: linkX, cellY: 0, button: 0 } as any);
+
+      app.events.dispatch({ type: "pointerdown", cellX: linkX, cellY: 0, button: 0 } as any);
+      app.events.dispatch({ type: "pointermove", cellX: actionX, cellY: 1, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: actionX, cellY: 1, button: 0 } as any);
+
+      app.events.dispatch({ type: "pointerdown", cellX: toolX, cellY: 2, button: 0 } as any);
+      app.events.dispatch({ type: "pointermove", cellX: toolX + 1, cellY: 2, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: toolX + 1, cellY: 2, button: 0 } as any);
+
+      expect(linkClick).not.toHaveBeenCalled();
+      expect(actionClick).not.toHaveBeenCalled();
+      expect(toolClick).not.toHaveBeenCalled();
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not let pointerup-only region activation suppress a later same-region click", async () => {
     const foldToggle = vi.fn();
     const rows: TTranscriptRow[] = [

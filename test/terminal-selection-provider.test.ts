@@ -101,6 +101,56 @@ describe("TerminalProvider selection", () => {
     }
   });
 
+  it("copies from the composed row before the selection overlay", async () => {
+    const text = ref("abcdef");
+    const writes: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TText, {
+          x: 0,
+          y: 0,
+          value: text.value,
+          w: 6,
+          style: { fg: "whiteBright" },
+        }),
+      8,
+      2,
+      {
+        selection: true,
+        clipboard: {
+          supported: true,
+          readText: async () => writes[writes.length - 1] ?? "",
+          writeText: async (value: string) => {
+            writes.push(value);
+          },
+        },
+      },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 2, clientY: 0, bubbles: true }),
+      );
+      await nextTick();
+
+      expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);
+
+      text.value = "xyzdef";
+      await nextTick();
+
+      container.dispatchEvent(new MouseEvent("mouseup", { clientX: 2, clientY: 0, bubbles: true }));
+      await settleClipboard();
+
+      expect(writes).toEqual(["xyz"]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("uses injected clipboard for browser auto-copy", async () => {
     const writes: string[] = [];
     const mounted = await mountTerminal(
