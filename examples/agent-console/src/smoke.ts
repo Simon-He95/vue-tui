@@ -68,6 +68,12 @@ function inputBorderVisible(app: TerminalApp): boolean {
   return rowText(app, AGENT_CONSOLE_LAYOUT.input.y).startsWith("┌");
 }
 
+function isAgentConsoleFixtureUrl(href: string): boolean {
+  const url = new URL(href);
+  const parts = url.pathname.split("/").filter(Boolean);
+  return url.origin === "https://example.com" && parts[0] === "agent-console" && parts.length >= 2;
+}
+
 function boxBorderClosed(
   app: TerminalApp,
   rect: { x: number; y: number; w: number; h: number },
@@ -140,12 +146,14 @@ function dispatchWheel(
   events: Pick<CliEventManager, "dispatch">,
   deltaY: number,
   time: number,
+  deltaMode?: number,
 ): void {
   events.dispatch({
     type: "wheel",
     cellX: AGENT_CONSOLE_LAYOUT.transcriptLog.x + 2,
     cellY: AGENT_CONSOLE_LAYOUT.transcriptLog.y + 2,
     deltaY,
+    deltaMode,
     time,
   });
 }
@@ -360,7 +368,7 @@ try {
   });
   const fastWheelStart = api.metrics.value?.scrollTop ?? -1;
   for (let i = 0; i < 6; i++) {
-    dispatchWheel(app.events, 1, 4_000 + i * 10);
+    dispatchWheel(app.events, 120, 4_000 + i * 10, 0);
     await flushFrame(raf);
   }
   const fastWheelEnd = api.metrics.value?.scrollTop ?? -1;
@@ -388,7 +396,10 @@ try {
     rowText(app, y),
   );
   const firstLinkY = linkOverlayRows.findIndex((row) => {
-    return row.includes("1. [log]") && row.includes("https://example.com/agent-console");
+    return row.includes("1. [log]");
+  });
+  const firstLinkFixtureUrl = api.getVisibleLinks().some((link) => {
+    return isAgentConsoleFixtureUrl(link.href);
   });
   const firstLinkRow = firstLinkY >= 0 ? (linkOverlayRows[firstLinkY] ?? "") : "";
   const firstLinkStart = firstLinkRow.indexOf("1. [log]");
@@ -604,6 +615,7 @@ try {
     linksDialogEscCloses,
     ghosttyWheelDownMonotonic,
     fastWheelDistance,
+    firstLinkFixtureUrl,
     linksUnderlineFollowsText,
     bestAgentUserMessageBlockRendered,
     bestAgentFixtureRowsRendered,
@@ -654,6 +666,7 @@ try {
   assert.equal(output.linksDialogEscCloses, true);
   assert.equal(output.ghosttyWheelDownMonotonic, true);
   assert.ok(output.fastWheelDistance >= 24, "expected fast wheel burst to cover useful distance");
+  assert.equal(output.firstLinkFixtureUrl, true);
   assert.equal(output.linksUnderlineFollowsText, true);
   assert.equal(output.bestAgentUserMessageBlockRendered, true);
   assert.equal(output.bestAgentFixtureRowsRendered, true);

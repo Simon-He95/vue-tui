@@ -89,11 +89,7 @@ export function applyWheelScroll(
   options: WheelScrollOptions = {},
 ): WheelScrollResult {
   if (!Number.isFinite(deltaY) || deltaY === 0 || maxTop <= 0) {
-    if (maxTop <= 0) {
-      state.accumulator = 0;
-      state.lastEdgeDir = 0;
-      state.lastEdgeAt = 0;
-    }
+    if (maxTop <= 0) resetWheelScrollState(state);
     return { nextTop: scrollTop, dir: 0, lines: 0 };
   }
 

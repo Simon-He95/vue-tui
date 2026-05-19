@@ -83,4 +83,16 @@ describe("wheel scroll", () => {
     expect(reverse.lines).toBe(-1);
     expect(reverse.nextTop).toBe(10);
   });
+
+  it("clears line-unit reversal state while content is not scrollable", () => {
+    const state = createWheelScrollState();
+    const first = applyWheelScroll(state, 1, 10, 100, 1000, "line");
+
+    applyWheelScroll(state, 1, 0, 0, 1020, "line");
+    const reverse = applyWheelScroll(state, -1, first.nextTop, 100, 1050, "line");
+
+    expect(first.nextTop).toBe(11);
+    expect(reverse.lines).toBe(-1);
+    expect(reverse.nextTop).toBe(10);
+  });
 });

@@ -3,19 +3,19 @@ export function isNodeRuntime(): boolean {
   return typeof proc?.versions?.node === "string";
 }
 
-export function importNodeModule<T>(specifier: string): Promise<T | null> {
-  if (!isNodeRuntime()) return Promise.resolve(null);
+export async function importNodeModule<T>(specifier: string): Promise<T | null> {
+  if (!isNodeRuntime()) return null;
 
   try {
-    return import(/* @vite-ignore */ specifier).catch(() => null) as Promise<T | null>;
+    return (await import(/* @vite-ignore */ specifier)) as T;
   } catch {}
 
   try {
     const dynamicImport = new Function("specifier", "return import(specifier)") as (
       specifier: string,
     ) => Promise<T>;
-    return dynamicImport(specifier).catch(() => null);
+    return await dynamicImport(specifier);
   } catch {
-    return Promise.resolve(null);
+    return null;
   }
 }
