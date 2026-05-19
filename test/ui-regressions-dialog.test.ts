@@ -704,7 +704,9 @@ describe("ui regressions dialog", () => {
     expect(selectNode).toBeTruthy();
 
     const footerY = Math.max(...focusables.map((n) => n.rect.y));
-    const footerZ = Math.max(...focusables.filter((n) => n.rect.y === footerY).map((n) => n.zIndex));
+    const footerZ = Math.max(
+      ...focusables.filter((n) => n.rect.y === footerY).map((n) => n.zIndex),
+    );
     expect(footerZ).toBeLessThan(selectNode!.zIndex);
 
     mounted.unmount();

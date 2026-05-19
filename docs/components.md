@@ -625,9 +625,9 @@ Transcript row viewport：渲染 message / action / tool-call / approval rows，
 ### Props
 
 - `x`/`y`/`w`/`h` `(number, required)`
-- `source` `(TTranscriptDataSource, required)`：提供 `rowCount()`、`getRow(index)`，可选提供 `getRowKey(index)`、`getRowVersion(index)`、`firstRowIndex()`。同时提供 `getRowKey` 和 `getRowVersion` 时，未变化的缓存行可以跳过 `getRow()`；如果 hover、selection 或外部样式会改变该行输出，需要把这些状态计入 row version。profiling 打开时，`TTranscriptView` 的 component perf 会记录 `sourceReadCount` 和 `sourceSkippedCount`，用于区分 base cache 命中和 wrapper row 构造成本。
-- `version` `(number, required)`：数据变化版本号
-- `scrollTop` `(number?)` + `update:scrollTop`：受控 viewport scrollTop；wheel/keyboard 滚动会先 optimistic repaint 并 emit `update:scrollTop`，父组件应在接受更新时同步 prop，否则内部可见 rows 会暂时和传入的 `scrollTop` 分歧
+- `source` `(TTranscriptDataSource, required)`：提供 `rowCount()`、`getRow(index)`，可选提供 `getRowKey(index)`、`getRowVersion(index)`、`firstRowIndex()`。同时提供 `getRowKey` 和 `getRowVersion` 时，未变化的缓存行可以跳过 `getRow()`；row version 会成为 row content/layout cache 的权威失效键。如果 hover、selection、schema 投影或外部样式会改变该行输出，需要把这些状态计入 row version。profiling 打开时，`TTranscriptView` 的 component perf 会记录 `sourceReadCount` 和 `sourceSkippedCount`，用于区分 base cache 命中和 wrapper row 构造成本。
+- `version` `(number, required)`：数据变化版本号；当 `source.getRowVersion()` 存在时，global `version` 变化会刷新 viewport，但不会强制重读 key/version 未变的 row，也不会强制重算这些 row 的 layout
+- `scrollTop` `(number?)` + `update:scrollTop`：受控 viewport scrollTop；`TTranscriptView` 通过内部 `TVirtualRows` 使用 optimistic controlled scroll，wheel/keyboard 滚动会先 repaint 并 emit `update:scrollTop`。父组件接受更新时应同步 prop；父组件忽略 update 时，内部可见 rows 会保留 optimistic top，直到父组件写入新的 `scrollTop` 或组件因数据/几何 clamp 重新同步
 - `defaultScrollTop` `(number?)`
 - `autoStickToBottom` `(boolean)`
 - `selectable` `(boolean)`

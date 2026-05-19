@@ -350,7 +350,7 @@ type FramePerf = {
 };
 ```
 
-`@simon_he/vue-tui/observability` 还导出 `createJsonlPerfSink()` 和 `installTuiPerf()`。sink 接收 frame samples、component samples 和可选 event samples；默认不引入 Node builtin，CLI runtime 通过自己的 file writer 接到 `VUE_TUI_FRAME_PERF_LOG_PATH` / `DIMCODE_TUI_PERF_LOG`。
+`@simon_he/vue-tui/observability` 还导出 `createJsonlPerfSink()` 和 `installTuiPerf()`。sink 接收 frame samples、component samples 和可选 event samples；默认不引入 Node builtin，CLI runtime 通过自己的 file writer 接到 `VUE_TUI_FRAME_PERF_LOG_PATH` / `DIMCODE_TUI_PERF_LOG`。`installTuiPerf()` 是创建 perf store 前的全局安装入口；需要在 `createTerminalApp()`、`TerminalProvider` mount 或直接调用 `createFramePerfStore()` 之前调用，已有 app/store 不会动态接入之后安装的 sink。
 
 `TDebugOverlay` 至少展示：
 

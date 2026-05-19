@@ -371,23 +371,23 @@ Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
-| 名称                                     | 类型                                  | 默认值                                            | 必填 | 说明 |
-| ---------------------------------------- | ------------------------------------- | ------------------------------------------------- | ---- | ---- |
-| <code>x</code>                           | <code>number</code>                   | —                                                 | 是   | —    |
-| <code>y</code>                           | <code>number</code>                   | —                                                 | 是   | —    |
-| <code>w</code>                           | <code>number</code>                   | —                                                 | 是   | —    |
-| <code>h</code>                           | <code>number</code>                   | <code>8</code>                                    | 否   | —    |
-| <code>zIndex</code>                      | <code>number</code>                   | <code>0</code>                                    | 否   | —    |
-| <code>modelValue</code>                  | <code>string</code>                   | —                                                 | 是   | —    |
-| <code>placeholder</code>                 | <code>string</code>                   | <code>&quot;&quot;</code>                         | 否   | —    |
-| <code>style</code>                       | <code>Style</code>                    | <code>undefined</code>                            | 否   | —    |
-| <code>showIndentGuides</code>            | <code>boolean</code>                  | <code>true</code>                                 | 否   | —    |
-| <code>indentSize</code>                  | <code>number</code>                   | <code>2</code>                                    | 否   | —    |
-| <code>guideColors</code>                 | <code>readonly AnsiColorName[]</code> | <code>() =&gt; [...DEFAULT\_GUIDE\_COLORS]</code> | 否   | —    |
-| <code>autoFocus</code>                   | <code>boolean</code>                  | <code>false</code>                                | 否   | —    |
-| <code>cursorToEndOnFirstFocus</code>     | <code>boolean</code>                  | <code>true</code>                                 | 否   | —    |
-| <code>cursorToEndOnExternalUpdate</code> | <code>boolean</code>                  | <code>true</code>                                 | 否   | —    |
-| <code>submitOnEnter</code>               | <code>boolean</code>                  | <code>false</code>                                | 否   | —    |
+| 名称                                     | 类型                                  | 默认值                                          | 必填 | 说明 |
+| ---------------------------------------- | ------------------------------------- | ----------------------------------------------- | ---- | ---- |
+| <code>x</code>                           | <code>number</code>                   | —                                               | 是   | —    |
+| <code>y</code>                           | <code>number</code>                   | —                                               | 是   | —    |
+| <code>w</code>                           | <code>number</code>                   | —                                               | 是   | —    |
+| <code>h</code>                           | <code>number</code>                   | <code>8</code>                                  | 否   | —    |
+| <code>zIndex</code>                      | <code>number</code>                   | <code>0</code>                                  | 否   | —    |
+| <code>modelValue</code>                  | <code>string</code>                   | —                                               | 是   | —    |
+| <code>placeholder</code>                 | <code>string</code>                   | <code>&quot;&quot;</code>                       | 否   | —    |
+| <code>style</code>                       | <code>Style</code>                    | <code>undefined</code>                          | 否   | —    |
+| <code>showIndentGuides</code>            | <code>boolean</code>                  | <code>true</code>                               | 否   | —    |
+| <code>indentSize</code>                  | <code>number</code>                   | <code>2</code>                                  | 否   | —    |
+| <code>guideColors</code>                 | <code>readonly AnsiColorName[]</code> | <code>() =&gt; [...DEFAULT_GUIDE_COLORS]</code> | 否   | —    |
+| <code>autoFocus</code>                   | <code>boolean</code>                  | <code>false</code>                              | 否   | —    |
+| <code>cursorToEndOnFirstFocus</code>     | <code>boolean</code>                  | <code>true</code>                               | 否   | —    |
+| <code>cursorToEndOnExternalUpdate</code> | <code>boolean</code>                  | <code>true</code>                               | 否   | —    |
+| <code>submitOnEnter</code>               | <code>boolean</code>                  | <code>false</code>                              | 否   | —    |
 
 ### Events
 
@@ -543,10 +543,10 @@ Import: `@simon_he/vue-tui/experimental`
 | <code>showMarkers</code>        | <code>boolean</code>                          | <code>true</code>                                                 | 否   | —    |
 | <code>showArrows</code>         | <code>boolean</code>                          | <code>false</code>                                                | 否   | —    |
 | <code>paint</code>              | <code>boolean</code>                          | <code>true</code>                                                 | 否   | —    |
-| <code>trackChar</code>          | <code>string</code>                           | <code>TRACK\_CHAR</code>                                          | 否   | —    |
-| <code>thumbChar</code>          | <code>string</code>                           | <code>EXACT\_THUMB\_CHAR</code>                                   | 否   | —    |
-| <code>measuringThumbChar</code> | <code>string</code>                           | <code>MEASURING\_THUMB\_CHAR</code>                               | 否   | —    |
-| <code>estimatedThumbChar</code> | <code>string</code>                           | <code>ESTIMATED\_THUMB\_CHAR</code>                               | 否   | —    |
+| <code>trackChar</code>          | <code>string</code>                           | <code>TRACK_CHAR</code>                                           | 否   | —    |
+| <code>thumbChar</code>          | <code>string</code>                           | <code>EXACT_THUMB_CHAR</code>                                     | 否   | —    |
+| <code>measuringThumbChar</code> | <code>string</code>                           | <code>MEASURING_THUMB_CHAR</code>                                 | 否   | —    |
+| <code>estimatedThumbChar</code> | <code>string</code>                           | <code>ESTIMATED_THUMB_CHAR</code>                                 | 否   | —    |
 
 ### Events
 
@@ -1003,28 +1003,28 @@ Import: `@simon_he/vue-tui/experimental`
 
 ### Props
 
-| 名称                           | 类型                               | 默认值                                   | 必填 | 说明 |
-| ------------------------------ | ---------------------------------- | ---------------------------------------- | ---- | ---- |
-| <code>x</code>                 | <code>number</code>                | —                                        | 是   | —    |
-| <code>y</code>                 | <code>number</code>                | —                                        | 是   | —    |
-| <code>w</code>                 | <code>number</code>                | —                                        | 是   | —    |
-| <code>h</code>                 | <code>number</code>                | —                                        | 是   | —    |
-| <code>zIndex</code>            | <code>number</code>                | <code>0</code>                           | 否   | —    |
-| <code>source</code>            | <code>TTranscriptDataSource</code> | —                                        | 是   | —    |
-| <code>version</code>           | <code>number</code>                | —                                        | 是   | —    |
-| <code>scrollTop</code>         | <code>number</code>                | <code>undefined</code>                   | 否   | —    |
-| <code>defaultScrollTop</code>  | <code>number</code>                | <code>0</code>                           | 否   | —    |
-| <code>autoStickToBottom</code> | <code>boolean</code>               | <code>false</code>                       | 否   | —    |
-| <code>selectable</code>        | <code>boolean</code>               | <code>true</code>                        | 否   | —    |
-| <code>wrap</code>              | <code>boolean</code>               | <code>false</code>                       | 否   | —    |
-| <code>style</code>             | <code>Style</code>                 | <code>undefined</code>                   | 否   | —    |
-| <code>hoverStyle</code>        | <code>Style</code>                 | <code>undefined</code>                   | 否   | —    |
-| <code>focusStyle</code>        | <code>Style</code>                 | <code>undefined</code>                   | 否   | —    |
-| <code>autoFocus</code>         | <code>boolean</code>               | <code>false</code>                       | 否   | —    |
-| <code>focusable</code>         | <code>boolean</code>               | <code>true</code>                        | 否   | —    |
-| <code>wheelScroll</code>       | <code>boolean</code>               | <code>true</code>                        | 否   | —    |
-| <code>keyboardRegions</code>   | <code>boolean</code>               | <code>true</code>                        | 否   | —    |
-| <code>rowScrollMode</code>     | <code>RowScrollMode</code>         | <code>&quot;unsafe-full-row&quot;</code> | 否   | —    |
+| 名称                           | 类型                               | 默认值                                   | 必填 | 说明                                                                                                                                                                     |
+| ------------------------------ | ---------------------------------- | ---------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| <code>x</code>                 | <code>number</code>                | —                                        | 是   | —                                                                                                                                                                        |
+| <code>y</code>                 | <code>number</code>                | —                                        | 是   | —                                                                                                                                                                        |
+| <code>w</code>                 | <code>number</code>                | —                                        | 是   | —                                                                                                                                                                        |
+| <code>h</code>                 | <code>number</code>                | —                                        | 是   | —                                                                                                                                                                        |
+| <code>zIndex</code>            | <code>number</code>                | <code>0</code>                           | 否   | —                                                                                                                                                                        |
+| <code>source</code>            | <code>TTranscriptDataSource</code> | —                                        | 是   | Transcript source. When `getRowKey` and `getRowVersion` are both provided,<br>unchanged rows can skip `getRow()`.                                                        |
+| <code>version</code>           | <code>number</code>                | —                                        | 是   | Global data version. When the source provides `getRowVersion`, unchanged<br>row key/version pairs keep their row content/layout cache across global<br>version changes.  |
+| <code>scrollTop</code>         | <code>number</code>                | <code>undefined</code>                   | 否   | Controlled viewport scrollTop. Wheel and keyboard scroll repaint<br>optimistically before emitting `update:scrollTop`; a later parent prop<br>write reconciles the view. |
+| <code>defaultScrollTop</code>  | <code>number</code>                | <code>0</code>                           | 否   | —                                                                                                                                                                        |
+| <code>autoStickToBottom</code> | <code>boolean</code>               | <code>false</code>                       | 否   | —                                                                                                                                                                        |
+| <code>selectable</code>        | <code>boolean</code>               | <code>true</code>                        | 否   | —                                                                                                                                                                        |
+| <code>wrap</code>              | <code>boolean</code>               | <code>false</code>                       | 否   | —                                                                                                                                                                        |
+| <code>style</code>             | <code>Style</code>                 | <code>undefined</code>                   | 否   | —                                                                                                                                                                        |
+| <code>hoverStyle</code>        | <code>Style</code>                 | <code>undefined</code>                   | 否   | —                                                                                                                                                                        |
+| <code>focusStyle</code>        | <code>Style</code>                 | <code>undefined</code>                   | 否   | —                                                                                                                                                                        |
+| <code>autoFocus</code>         | <code>boolean</code>               | <code>false</code>                       | 否   | —                                                                                                                                                                        |
+| <code>focusable</code>         | <code>boolean</code>               | <code>true</code>                        | 否   | —                                                                                                                                                                        |
+| <code>wheelScroll</code>       | <code>boolean</code>               | <code>true</code>                        | 否   | —                                                                                                                                                                        |
+| <code>keyboardRegions</code>   | <code>boolean</code>               | <code>true</code>                        | 否   | —                                                                                                                                                                        |
+| <code>rowScrollMode</code>     | <code>RowScrollMode</code>         | <code>&quot;unsafe-full-row&quot;</code> | 否   | —                                                                                                                                                                        |
 
 ### Events
 

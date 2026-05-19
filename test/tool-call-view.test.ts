@@ -38,6 +38,23 @@ describe("TToolCallView", () => {
     expect(model.previewSegments.map((segment) => segment.text).join("")).toBe("  ⎿ latest");
   });
 
+  it("keeps collapsed suffix visible when the title is long", () => {
+    const model = resolveTToolCallViewModel({
+      w: 28,
+      title: "very-long-tool-call-title",
+      collapsed: true,
+      suffix: "in: pnpm test",
+    });
+
+    const suffix = model.headerSegments.find((segment) => segment.role === "suffix")?.text ?? "";
+
+    expect(suffix).not.toBe("");
+    expect(suffix).toContain("pnpm");
+    expect(model.headerSegments.map((segment) => segment.text).join("")).toBe(
+      "▸ ● very-long… in: pnpm test",
+    );
+  });
+
   it("matches best-agent collapsed streaming tool_call header and preview", async () => {
     const mounted = await mountTerminal(
       () =>

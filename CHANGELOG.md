@@ -72,6 +72,7 @@ import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 - `installTerminalCleanup()` now returns an explicit `{ cleanup, uninstall }` handle and uses `signalPolicy: "cleanup-only" | "exit" | "reraise"` while leaving termination ownership with existing host signal listeners.
 - Opted-in unhandled rejection cleanup now rethrows by default. Set `rethrowUnhandledRejection: false` to suppress it explicitly.
 - `release:ci` now points users to the GitHub Release workflow instead of publishing from a second scripted path.
+- Runtime/`createTerminalApp` selection highlighting now defaults to `{ bg: "blue" }`; pass `selection.style` to preserve a different theme or contrast target.
 
 ### Security
 

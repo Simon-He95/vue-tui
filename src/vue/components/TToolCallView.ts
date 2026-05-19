@@ -216,10 +216,13 @@ export function resolveTToolCallViewModel(options: TToolCallViewModelOptions): T
     x = pushSegment(segments, "status", x, statusDot, dot);
     x = pushSegment(segments, "separator", x, " ", header);
   }
-  x = pushSegment(segments, "title", x, fitText(options.title, Math.max(0, width - x)), title);
   if (collapsed) {
     const visibleSuffix = fitSuffix(options.suffix ?? "", Math.max(0, width - x));
+    const titleWidth = Math.max(0, width - x - textCellWidth(visibleSuffix));
+    x = pushSegment(segments, "title", x, fitText(options.title, titleWidth), title);
     pushSegment(segments, "suffix", x, visibleSuffix, suffix);
+  } else {
+    pushSegment(segments, "title", x, fitText(options.title, Math.max(0, width - x)), title);
   }
 
   const previewPrefix = `${nestedLead}${options.previewPrefix ?? "  ⎿ "}`;

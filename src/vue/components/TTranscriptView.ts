@@ -143,11 +143,25 @@ export const TTranscriptView = defineComponent({
     w: { type: Number, required: true },
     h: { type: Number, required: true },
     zIndex: { type: Number, default: 0 },
+    /**
+     * Transcript source. When `getRowKey` and `getRowVersion` are both provided,
+     * unchanged rows can skip `getRow()`.
+     */
     source: {
       type: Object as PropType<TTranscriptDataSource>,
       required: true,
     },
+    /**
+     * Global data version. When the source provides `getRowVersion`, unchanged
+     * row key/version pairs keep their row content/layout cache across global
+     * version changes.
+     */
     version: { type: Number, required: true },
+    /**
+     * Controlled viewport scrollTop. Wheel and keyboard scroll repaint
+     * optimistically before emitting `update:scrollTop`; a later parent prop
+     * write reconciles the view.
+     */
     scrollTop: { type: Number, default: undefined },
     defaultScrollTop: { type: Number, default: 0 },
     autoStickToBottom: { type: Boolean, default: false },
