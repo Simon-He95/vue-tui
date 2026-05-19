@@ -103,7 +103,6 @@ export function applyWheelScroll(
     return { nextTop: scrollTop, dir: 0, lines: 0 };
 
   const normalizedDelta = normalizeDelta(deltaY, deltaMode);
-  const deltaDir = normalizedDelta > 0 ? 1 : -1;
   const accel = options.disableAcceleration
     ? 1
     : lineUnits
