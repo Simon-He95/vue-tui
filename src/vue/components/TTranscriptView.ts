@@ -145,7 +145,9 @@ export const TTranscriptView = defineComponent({
     zIndex: { type: Number, default: 0 },
     /**
      * Transcript source. When `getRowKey` and `getRowVersion` are both provided,
-     * unchanged rows can skip `getRow()`.
+     * unchanged rows can skip `getRow()`. The row version must change whenever
+     * rendered content, segments, styles, actions, hit regions, or selectable
+     * text can change.
      */
     source: {
       type: Object as PropType<TTranscriptDataSource>,

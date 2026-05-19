@@ -233,6 +233,45 @@ describe("TCommandPalette", () => {
     }
   });
 
+  it("moves selection once for ArrowDown while the input is focused", async () => {
+    const selected = ref(0);
+    const updates = vi.fn((value: number) => {
+      selected.value = value;
+    });
+    const App = defineComponent({
+      name: "CommandPaletteInputArrowApp",
+      setup() {
+        return () =>
+          h(TCommandPalette, {
+            modelValue: true,
+            items: [
+              { label: "Open Session" },
+              { label: "Switch Provider" },
+              { label: "Close Session" },
+            ],
+            selectedIndex: selected.value,
+            "onUpdate:selectedIndex": updates,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 64, rows: 20, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "keydown", key: "ArrowDown", code: "ArrowDown" } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(selected.value).toBe(1);
+      expect(updates).toHaveBeenCalledTimes(1);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("emits query updates and accepts custom filters", async () => {
     const query = ref("");
     const select = vi.fn();

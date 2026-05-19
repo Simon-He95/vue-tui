@@ -5,7 +5,10 @@ import type {
 } from "../src/selection/terminal-selection.js";
 import { describe, expect, it, vi } from "vitest";
 import { createTerminal } from "../src/core/index.js";
-import { getPlaneTerminal } from "../src/core/terminal/create-terminal.js";
+import {
+  getComposedRowBeforePlane,
+  getPlaneTerminal,
+} from "../src/core/terminal/create-terminal.js";
 import {
   createTerminalSelectionController,
   terminalSelectionVisibleRowSpans,
@@ -643,5 +646,31 @@ describe("terminal selection", () => {
     terminal.commit({ planes: ["overlay"], sync: true });
 
     expect(terminal.getCell(0, 1).style.bg).toBeUndefined();
+  });
+
+  it("paints overlay selections from the composed row before the overlay plane", () => {
+    const terminal = createTerminal({ cols: 6, rows: 1 });
+    const overlay = getPlaneTerminal(terminal, "overlay");
+    const clipboard = memoryClipboard();
+
+    terminal.write("source", { x: 0, y: 0 });
+    overlay.write("OOOOOO", { x: 0, y: 0, style: { fg: "red" } });
+    terminal.commit({ sync: true });
+
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: overlay,
+      clipboard: clipboard.api,
+      getSourceRow: (y) => getComposedRowBeforePlane(terminal, "overlay", y) ?? terminal.getRow(y),
+    });
+
+    selection.start({ x: 0, y: 0 });
+    selection.update({ x: 2, y: 0 });
+    selection.paint();
+
+    expect(overlay.getCell(0, 0).ch).toBe("s");
+    expect(overlay.getCell(1, 0).ch).toBe("o");
+    expect(overlay.getCell(2, 0).ch).toBe("u");
+    expect(overlay.getCell(0, 0).style.bg).toBe("blue");
   });
 });

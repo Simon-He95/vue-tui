@@ -575,6 +575,7 @@ import {
 - `markerCollapsed`、`markerExpanded`、`bodyPrefix`：替换 glyph 和 body 缩进。
 - `style`、`headerStyle`、`markerStyle`、`titleStyle`、`bodyStyle`：覆盖默认颜色。
 - `header` slot：替换 header 行。
+- 点击区域是整个 rendered block；宿主若只想让 header 折叠，应在自定义 slot 或外层事件里限制触发范围。
 - `resolveTThinkingViewModel()`：复用 header/body rows 与 segment 计算。
 
 ```vue
@@ -598,6 +599,7 @@ import {
 - `markerCollapsed`、`markerExpanded`、`statusDot`、`previewPrefix`：替换 glyph。
 - `style`、`mutedStyle`、`headerStyle`、`collapsedStyle`、`expandedStyle`、`markerStyle`、`statusStyle`、`titleStyle`、`suffixStyle`、`previewStyle`：覆盖样式。
 - `header` / `preview` slots：替换 header 或 collapsed preview。
+- 点击区域是整个 rendered block，包括 collapsed preview；宿主若只想让 header 折叠，应在自定义 slot 或外层事件里限制触发范围。
 - `resolveTToolCallViewModel()`：复用 truncation、suffix fitting、status style 和 segment 输出。
 
 ```vue

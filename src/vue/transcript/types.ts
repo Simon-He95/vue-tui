@@ -63,6 +63,10 @@ export type TTranscriptDataSource = Readonly<{
   rowCount(): number;
   getRow(index: number): TTranscriptRow;
   getRowKey?: (index: number) => string | number;
+  /**
+   * Must change whenever rendered content, segments, styles, actions,
+   * hit regions, or selectable text can change for the row.
+   */
   getRowVersion?: (index: number) => string | number;
   firstRowIndex?: () => number;
 }>;
