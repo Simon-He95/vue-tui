@@ -293,6 +293,7 @@ export const TLogScrollbar = defineComponent({
 
     function onPointerdown(e: TerminalPointerEvent): void {
       if (e.button != null && e.button !== 0) return;
+      suppressNextClick = false;
       dragging = true;
       dragMoved = false;
       emit("dragStart");

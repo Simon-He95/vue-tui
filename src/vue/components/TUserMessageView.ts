@@ -159,6 +159,28 @@ function wrapRows(text: string, width: number): TUserMessageRow[] {
   return rows.length ? rows : [{ text: "", start: 0, end: 0 }];
 }
 
+function normalizedOffsetForRawContent(text: string, offset: number): number {
+  const rawOffset = Math.floor(offset);
+  const limit = Math.min(Math.max(0, rawOffset), text.length);
+  let removed = 0;
+  for (let index = 0; index < limit; index++) {
+    if (text[index] === "\r") removed++;
+  }
+  return rawOffset - removed;
+}
+
+function normalizeSegments(
+  text: string,
+  segments: readonly TUserMessageSegment[],
+): readonly TUserMessageSegment[] {
+  if (!text.includes("\r")) return segments;
+  return segments.map((segment) => ({
+    ...segment,
+    start: normalizedOffsetForRawContent(text, segment.start),
+    end: normalizedOffsetForRawContent(text, segment.end),
+  }));
+}
+
 function rowSegments(
   row: TUserMessageRow,
   segments: readonly TUserMessageSegment[],
@@ -185,7 +207,8 @@ export function resolveTUserMessageViewModel(
   const prefix = { ...label, ...options.prefixStyle };
   const content = { ...DEFAULT_CONTENT_STYLE, bg: block.bg, ...options.contentStyle };
   const segment = { ...DEFAULT_SEGMENT_STYLE, bg: block.bg, ...options.segmentStyle };
-  const segments = options.segments ?? [];
+  const rawContent = String(options.content ?? "");
+  const segments = normalizeSegments(rawContent, options.segments ?? []);
   const rows = wrapRows(options.content, contentWidth).map((row) => ({
     ...row,
     segments: rowSegments(row, segments),

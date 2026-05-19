@@ -333,6 +333,55 @@ describe("TLogScrollbar", () => {
     }
   });
 
+  it("does not suppress a later click when a drag is not followed by click", async () => {
+    const onScrollTo = vi.fn();
+    const App = defineComponent({
+      name: "TLogScrollbarStaleSuppressClickApp",
+      setup() {
+        return () =>
+          h(TLogScrollbar, {
+            x: 0,
+            y: 0,
+            h: 10,
+            metrics: createMetrics({
+              scrollTop: 0,
+              maxScrollTop: 100,
+              viewportRows: 10,
+              lineCount: 110,
+              visualRowCount: 110,
+              estimatedVisualRowCount: 110,
+              measuredVisualRowCount: 110,
+            }),
+            onScrollTo,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 1, rows: 10, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 1, button: 0 } as any);
+      app.events.dispatch({ type: "pointermove", cellX: 0, cellY: 5, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: 0, cellY: 5, button: 0 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+      onScrollTo.mockClear();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 8, button: 0 } as any);
+      app.events.dispatch({ type: "pointerup", cellX: 0, cellY: 8, button: 0 } as any);
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 8, button: 0 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onScrollTo).toHaveBeenCalledTimes(1);
+      expect(onScrollTo).toHaveBeenCalledWith(89);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("renders markers on the track and keeps the thumb visible", async () => {
     const mounted = await mountTerminal(
       () =>

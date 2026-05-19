@@ -52,6 +52,20 @@ describe("TUserMessageView", () => {
     });
   });
 
+  it("projects CRLF segment offsets onto normalized rows", () => {
+    const model = resolveTUserMessageViewModel({
+      w: 20,
+      content: "a\r\nfile.ts",
+      segments: [{ start: 3, end: 10, href: "file://file.ts" }],
+    });
+    const row = model.rows[1]!;
+    const segment = row.segments![0]!;
+
+    expect(row.text).toBe("file.ts");
+    expect(segment).toMatchObject({ start: 2, end: 9, href: "file://file.ts" });
+    expect(row.text.slice(segment.start - row.start, segment.end - row.start)).toBe("file.ts");
+  });
+
   it("matches best-agent user block spacing, header, and background", async () => {
     const mounted = await mountTerminal(
       () =>
