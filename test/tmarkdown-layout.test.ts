@@ -564,6 +564,36 @@ describe("markdown layout", () => {
     expect(rows.map(visualRowCells)).toEqual([5, 5, 5, 5, 5]);
   });
 
+  it("keeps the table right border when an emoji column is exactly wide enough", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| 😀 |", "|---|", "| ok |"].join("\n"),
+      6,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows.map((row) => row.plainText)).toEqual([
+      "╭────╮",
+      "│ 😀 │",
+      "├────┤",
+      "│ ok │",
+      "╰────╯",
+    ]);
+    expect(rows.every((row) => visualRowCells(row) === 6)).toBe(true);
+  });
+
+  it("pads a clipped wide emoji while keeping the table right border", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| A |", "|---|", "| 😀 |"].join("\n"),
+      5,
+      createTuiMarkdownParser(),
+    );
+    const dataRow = rows[3];
+
+    expect(rows.every((row) => visualRowCells(row) === 5)).toBe(true);
+    expect(dataRow?.plainText).toBe("│   │");
+    expect(dataRow?.plainText.endsWith("│")).toBe(true);
+  });
+
   it("clips tables when viewport is narrower than the minimum border width", () => {
     const rows = buildMarkdownVisualRows(
       ["| A | B |", "|---|---|", "| x | y |"].join("\n"),

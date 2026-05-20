@@ -347,15 +347,6 @@ function tableColumnWidths(
   return widths;
 }
 
-function tableBorderText(
-  left: string,
-  join: string,
-  right: string,
-  widths: readonly number[],
-): string {
-  return `${left}${widths.map((w) => repeatChar("─", w + 2)).join(join)}${right}`;
-}
-
 function appendVisualSegment(
   segments: TuiMarkdownVisualSegment[],
   text: string,
@@ -401,9 +392,20 @@ function tableBorderRow(
   const prefix = (block.prefixSegments ?? [])
     .map(toVisualSegment)
     .filter(Boolean) as TuiMarkdownVisualSegment[];
-  const border = tableBorderText(left, join, right, widths);
   const segments = [...prefix];
-  appendVisualSegment(segments, border, block.borderStyle);
+  let cells = prefix.reduce((sum, segment) => sum + segment.cells, 0);
+  const append = (text: string) => {
+    if (cells >= width) return;
+    appendVisualSegment(segments, text, block.borderStyle);
+    cells += textCellWidth(text);
+  };
+
+  append(left);
+  for (let index = 0; index < widths.length && cells < width; index++) {
+    append(repeatChar("─", (widths[index] ?? 0) + 2));
+    append(index === widths.length - 1 ? right : join);
+  }
+
   const clipped = clipVisualSegmentsToWidth(segments, width);
   return {
     key: `${block.key}:${rowInBlock}`,
@@ -424,25 +426,35 @@ function tableContentRow(
   const segments = (block.prefixSegments ?? [])
     .map(toVisualSegment)
     .filter(Boolean) as TuiMarkdownVisualSegment[];
-  appendVisualSegment(segments, "│", block.borderStyle);
+  let cells = segments.reduce((sum, segment) => sum + segment.cells, 0);
+  const append = (text: string, style?: Style) => {
+    if (cells >= width) return;
+    appendVisualSegment(segments, text, style);
+    cells += textCellWidth(text);
+  };
 
-  for (let index = 0; index < widths.length; index++) {
-    const width = widths[index] ?? 0;
+  append("│", block.borderStyle);
+
+  for (let index = 0; index < widths.length && cells < width; index++) {
+    const columnWidth = widths[index] ?? 0;
     const cell = row[index];
-    const clipped = clipInlineSegmentsToWidth(cell?.segments ?? [], width);
+    const clipped = clipInlineSegmentsToWidth(cell?.segments ?? [], columnWidth);
     const contentCells = segmentsCellWidth(clipped);
-    const remaining = Math.max(0, width - contentCells);
+    const remaining = Math.max(0, columnWidth - contentCells);
     const align = cell?.align ?? "left";
     const leftPad =
       align === "right" ? remaining : align === "center" ? Math.floor(remaining / 2) : 0;
     const rightPad = remaining - leftPad;
 
-    appendVisualSegment(segments, " ");
-    appendVisualSegment(segments, repeatChar(" ", leftPad));
-    appendInlineVisualSegments(segments, clipped);
-    appendVisualSegment(segments, repeatChar(" ", rightPad));
-    appendVisualSegment(segments, " ");
-    appendVisualSegment(segments, "│", block.borderStyle);
+    append(" ");
+    append(repeatChar(" ", leftPad));
+    if (cells < width) {
+      appendInlineVisualSegments(segments, clipped);
+      cells += contentCells;
+    }
+    append(repeatChar(" ", rightPad));
+    append(" ");
+    append("│", block.borderStyle);
   }
 
   const clipped = clipVisualSegmentsToWidth(segments, width);

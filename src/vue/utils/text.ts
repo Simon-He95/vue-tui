@@ -57,6 +57,40 @@ function isAscii(text: string): boolean {
   return true;
 }
 
+const UNSAFE_FORMAT_CONTROL_RE =
+  /[\u061C\u00AD\u180E\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/u;
+
+function isUnsafeFormatControl(codePoint: number): boolean {
+  return (
+    codePoint === 0x061c ||
+    codePoint === 0x00ad ||
+    codePoint === 0x180e ||
+    codePoint === 0x200b ||
+    codePoint === 0x200c ||
+    codePoint === 0x200e ||
+    codePoint === 0x200f ||
+    (codePoint >= 0x202a && codePoint <= 0x202e) ||
+    (codePoint >= 0x2060 && codePoint <= 0x206f) ||
+    codePoint === 0xfeff
+  );
+}
+
+function hasInlineAsciiControl(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code === 0x0a || code === 0x0d || code === 0x09) return true;
+  }
+  return false;
+}
+
+function hasTextBlockAsciiControl(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code === 0x09 || (code <= 0x1f && code !== 0x0a) || code === 0x7f) return true;
+  }
+  return false;
+}
+
 function forEachGrapheme(text: string, cb: (g: string) => void | false): void {
   if (!text) return;
   const segments = segmentedGraphemes(text);
@@ -146,8 +180,18 @@ export function sanitizeInlineText(text: string): string {
   // Components that render single-line segments must not emit control chars
   // because terminal.write interprets them as cursor movement.
   // Replace common controls with spaces.
-  if (!/[\n\r\t]/.test(text)) return text;
-  return text.replace(/[\n\r\t]/g, " ");
+  if (!UNSAFE_FORMAT_CONTROL_RE.test(text) && !hasInlineAsciiControl(text)) return text;
+  const out: string[] = [];
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    if (cp === 0x0a || cp === 0x0d || cp === 0x09) {
+      out.push(" ");
+      continue;
+    }
+    if (isUnsafeFormatControl(cp)) continue;
+    out.push(ch);
+  }
+  return out.join("");
 }
 
 export function sanitizeTextBlock(text: string): string {
@@ -157,8 +201,7 @@ export function sanitizeTextBlock(text: string): string {
 
   // Fast path: if there are no characters that require sanitization, return as-is.
   // We keep '\n' but strip other ASCII control chars + DEL, convert '\t' to ' ', and drop '\r'.
-  // eslint-disable-next-line no-control-regex
-  if (!/[\t\x00-\x08\x0B-\x1F\x7F]/.test(text)) return text;
+  if (!UNSAFE_FORMAT_CONTROL_RE.test(text) && !hasTextBlockAsciiControl(text)) return text;
 
   const out: string[] = [];
   out.length = 0;
@@ -174,6 +217,7 @@ export function sanitizeTextBlock(text: string): string {
     }
     // Keep '\n' (0x0A) to preserve explicit newlines; strip other ASCII control chars + DEL.
     if ((cp <= 0x1f && cp !== 0x0a) || cp === 0x7f) continue;
+    if (isUnsafeFormatControl(cp)) continue;
     out.push(ch);
   }
   return out.join("");

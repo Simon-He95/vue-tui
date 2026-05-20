@@ -81,14 +81,7 @@ function sanitizeCodeBlockText(text: string, tabSize = 4): string {
     .replace(/\r\n?/g, "\n")
     .replace(/\t/g, spaces(tabSize))
     .replace(/\u00a0/g, " ");
-  let out = "";
-  for (const ch of normalized) {
-    const code = ch.charCodeAt(0);
-    if ((code >= 0x00 && code <= 0x08) || code === 0x0b || code === 0x0c) continue;
-    if ((code >= 0x0e && code <= 0x1f) || code === 0x7f) continue;
-    out += ch;
-  }
-  return out;
+  return sanitizeTextBlock(normalized);
 }
 
 function inlineNodeSegments(
