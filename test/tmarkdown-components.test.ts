@@ -95,6 +95,58 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("keeps TMarkdownText table borders aligned with cjk widthProvider", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 5,
+          content: ["| A |", "|---|", "| Ω |"].join("\n"),
+        }),
+      12,
+      6,
+      { widthProvider: "cjk" },
+    );
+
+    expect(mounted.terminal.getCell(5, 0).ch).toBe("╮");
+    expect(mounted.terminal.getCell(5, 1).ch).toBe("│");
+    expect(mounted.terminal.getCell(5, 2).ch).toBe("┤");
+    expect(mounted.terminal.getCell(5, 3).ch).toBe("│");
+    expect(mounted.terminal.getCell(5, 4).ch).toBe("╯");
+    expect(mounted.terminal.getCell(2, 3).ch).toBe("Ω");
+    expect(mounted.terminal.getCell(2, 3).width).toBe(2);
+    expect(mounted.terminal.getCell(3, 3).continuation).toBe(true);
+    mounted.unmount();
+  });
+
+  it("keeps TVirtualMarkdown table borders aligned with cjk widthProvider", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 5,
+          content: ["| A |", "|---|", "| Ω |"].join("\n"),
+        }),
+      12,
+      6,
+      { widthProvider: "cjk" },
+    );
+
+    expect(mounted.terminal.getCell(5, 0).ch).toBe("╮");
+    expect(mounted.terminal.getCell(5, 1).ch).toBe("│");
+    expect(mounted.terminal.getCell(5, 2).ch).toBe("┤");
+    expect(mounted.terminal.getCell(5, 3).ch).toBe("│");
+    expect(mounted.terminal.getCell(5, 4).ch).toBe("╯");
+    expect(mounted.terminal.getCell(2, 3).ch).toBe("Ω");
+    expect(mounted.terminal.getCell(2, 3).width).toBe(2);
+    expect(mounted.terminal.getCell(3, 3).continuation).toBe(true);
+    mounted.unmount();
+  });
+
   it("does not render unsafe markdown links with active link styling", async () => {
     const mounted = await mountTerminal(
       () =>
