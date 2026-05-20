@@ -43,7 +43,12 @@ import {
   type TerminalCleanupSignalPolicy,
 } from "@simon_he/vue-tui/cli";
 
-import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
+import {
+  TMarkdownText,
+  buildMarkdownVisualRows,
+  createTuiMarkdownParser,
+  layoutMarkdownBlocks,
+} from "@simon_he/vue-tui/markdown";
 
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import {
@@ -115,4 +120,17 @@ const cleanupHandle: TerminalCleanupHandle | null = null;
 const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
 const record: TerminalEventRecord = { type: "keydown", key: "Enter" };
 const toolCallSlot: TToolCallViewSlotProps | null = null;
-console.log(driver, cleanupHandle, signalPolicy, record, toolCallSlot);
+const markdownParser = createTuiMarkdownParser();
+const markdownRows = buildMarkdownVisualRows("| Ω |\n|---|", 20, markdownParser, {
+  widthProvider: "cjk",
+});
+const markdownLayoutRows = layoutMarkdownBlocks([], 20, { widthProvider: "cjk" });
+console.log(
+  driver,
+  cleanupHandle,
+  signalPolicy,
+  record,
+  toolCallSlot,
+  markdownRows,
+  markdownLayoutRows,
+);

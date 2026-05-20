@@ -325,6 +325,28 @@ describe("markdown layout", () => {
     expect(rows[3]?.plainText).toBe("│ a    │   b    │     c │");
   });
 
+  it("lets public markdown helpers use cjk widthProvider for table layout", () => {
+    const markdown = ["| X | Name |", "|---|---|", "| Ω | omega |", "| — | dash |"].join("\n");
+    const parser = createTuiMarkdownParser();
+    const defaultRows = buildMarkdownVisualRows(markdown, 40, parser);
+    const rows = buildMarkdownVisualRows(markdown, 40, parser, { widthProvider: "cjk" });
+    const { blocks } = buildMarkdownBlocks(markdown, parser);
+    const layoutRows = layoutMarkdownBlocks(blocks, 40, { widthProvider: "cjk" });
+    const tableWidth = visualRowCells(rows[0]!);
+    const terminal = createTerminal({ cols: 40, rows: rows.length, widthProvider: "cjk" });
+
+    expect(layoutRows.map((row) => row.plainText)).toEqual(rows.map((row) => row.plainText));
+    expect(tableWidth).toBeGreaterThan(visualRowCells(defaultRows[0]!));
+    expect(rows.every((row) => visualRowCells(row) === tableWidth)).toBe(true);
+
+    rows.forEach((row, y) => terminal.write(row.plainText, { x: 0, y }));
+
+    expect(terminal.getCell(tableWidth - 1, 0).ch).toBe("╮");
+    expect(terminal.getCell(tableWidth - 1, 1).ch).toBe("│");
+    expect(terminal.getCell(tableWidth - 1, 2).ch).toBe("┤");
+    expect(terminal.getCell(tableWidth - 1, rows.length - 1).ch).toBe("╯");
+  });
+
   it("keeps markdown table borders aligned with wide emoji, tag emoji, and CJK cells", () => {
     const smile = "\u{1F600}";
     const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}";
@@ -476,6 +498,45 @@ describe("markdown layout", () => {
     expect(terminal.getCell(tableWidth - 1, 1).ch).toBe("│");
     expect(terminal.getCell(tableWidth - 1, 2).ch).toBe("┤");
     expect(terminal.getCell(tableWidth - 1, rows.length - 1).ch).toBe("╯");
+  });
+
+  it("keeps table borders stable with hidden unicode and bidi controls", () => {
+    const zeroWidthSpace = String.fromCodePoint(0x200b);
+    const zwnj = String.fromCodePoint(0x200c);
+    const rtlMark = String.fromCodePoint(0x200f);
+    const rtlOverride = String.fromCodePoint(0x202e);
+    const isolate = `${String.fromCodePoint(0x2066)}x${String.fromCodePoint(0x2069)}`;
+    const rows = buildMarkdownVisualRows(
+      [
+        "| X | Name |",
+        "|---|---|",
+        `| ${zeroWidthSpace} | zwsp |`,
+        `| ${zwnj} | zwnj |`,
+        `| ${rtlMark} | rtl-mark |`,
+        `| ${rtlOverride} | rtl-override |`,
+        `| ${isolate} | isolate |`,
+      ].join("\n"),
+      50,
+      createTuiMarkdownParser(),
+    );
+    const width = visualRowCells(rows[0]!);
+    const terminal = createTerminal({ cols: 50, rows: rows.length });
+
+    expect(rows.every((row) => visualRowCells(row) === width)).toBe(true);
+
+    rows.forEach((row, y) => {
+      paintMarkdownVisualRow(terminal, row, {
+        x: 0,
+        y,
+        w: 50,
+        baseStyle: {},
+      });
+    });
+
+    expect(terminal.getCell(width - 1, 0).ch).toBe("╮");
+    expect(terminal.getCell(width - 1, 1).ch).toBe("│");
+    expect(terminal.getCell(width - 1, 2).ch).toBe("┤");
+    expect(terminal.getCell(width - 1, rows.length - 1).ch).toBe("╯");
   });
 
   it("does not split wide emoji when table cells are clipped", () => {

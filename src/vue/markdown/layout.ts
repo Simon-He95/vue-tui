@@ -3,8 +3,10 @@ import {
   repeatChar,
   sliceByCellsRange,
   textCellWidth,
+  withTextWidthProvider,
 } from "../utils/text.js";
 import type { Style } from "../../core/types.js";
+import type { WidthProvider } from "../../core/buffer/width.js";
 import type {
   TuiMarkdownBlock,
   TuiMarkdownInlineSegment,
@@ -16,6 +18,10 @@ import type {
 export type TuiMarkdownLayoutCache = Readonly<{
   width: number;
   entries: ReadonlyMap<string, TuiMarkdownLayoutCacheEntry>;
+}>;
+
+export type TuiMarkdownLayoutOptions = Readonly<{
+  widthProvider?: WidthProvider;
 }>;
 
 type TuiMarkdownLayoutCacheEntry = Readonly<{
@@ -606,6 +612,13 @@ export function layoutMarkdownBlocksCached(
 export function layoutMarkdownBlocks(
   blocks: readonly TuiMarkdownBlock[],
   width: number,
+  options?: TuiMarkdownLayoutOptions,
 ): readonly TuiMarkdownVisualRow[] {
+  if (options?.widthProvider !== undefined) {
+    return withTextWidthProvider(
+      options.widthProvider,
+      () => layoutMarkdownBlocksCached(blocks, width).rows,
+    );
+  }
   return layoutMarkdownBlocksCached(blocks, width).rows;
 }

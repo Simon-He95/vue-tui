@@ -9,6 +9,7 @@ export type {
   TuiMarkdownBlockSourceOptions,
   TuiMarkdownBlockSourceSnapshot,
 } from "./vue/markdown/block-source.js";
+export type { TuiMarkdownLayoutOptions } from "./vue/markdown/layout.js";
 export type {
   TuiMarkdownBlock,
   TuiMarkdownInlineSegment,
