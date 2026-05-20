@@ -218,4 +218,65 @@ describe("TToolCallView", () => {
       mounted.unmount();
     }
   });
+
+  it("does not overflow truncated title or suffix segments under cjk widthProvider", async () => {
+    let titleSegments: readonly { role: string; x: number; cells: number; text: string }[] = [];
+    let suffixSegments: readonly { role: string; x: number; cells: number; text: string }[] = [];
+    const mounted = await mountTerminal(
+      () => [
+        h(
+          TToolCallView,
+          {
+            x: 0,
+            y: 0,
+            w: 10,
+            title: "ΩΩΩΩΩΩΩ",
+            collapsed: true,
+          },
+          {
+            header: (ctx: { segments: typeof titleSegments }) => {
+              titleSegments = ctx.segments;
+              return null;
+            },
+          },
+        ),
+        h(
+          TToolCallView,
+          {
+            x: 0,
+            y: 1,
+            w: 10,
+            title: "x",
+            collapsed: true,
+            suffix: "①①①①",
+          },
+          {
+            header: (ctx: { segments: typeof suffixSegments }) => {
+              suffixSegments = ctx.segments;
+              return null;
+            },
+          },
+        ),
+      ],
+      10,
+      2,
+      { widthProvider: "cjk" },
+    );
+
+    try {
+      for (const segments of [titleSegments, suffixSegments]) {
+        for (const segment of segments) {
+          expect(segment.x + segment.cells).toBeLessThanOrEqual(10);
+        }
+      }
+      expect(titleSegments.find((segment) => segment.role === "title")?.text.endsWith("…")).toBe(
+        true,
+      );
+      expect(suffixSegments.find((segment) => segment.role === "suffix")?.text.endsWith("…")).toBe(
+        true,
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
 });

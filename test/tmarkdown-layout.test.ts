@@ -375,6 +375,47 @@ describe("markdown layout", () => {
     expect(rows.at(-1)?.plainText.endsWith("╯")).toBe(true);
   });
 
+  it("keeps table borders stable with orphaned unicode modifiers", () => {
+    const zwj = String.fromCodePoint(0x200d);
+    const vs16 = String.fromCodePoint(0xfe0f);
+    const combining = String.fromCodePoint(0x0301);
+    const tagEnd = String.fromCodePoint(0xe007f);
+    const rows = buildMarkdownVisualRows(
+      [
+        "| X | Name |",
+        "|---|---|",
+        `| ${zwj} | zwj |`,
+        `| ${vs16} | vs16 |`,
+        `| ${combining} | combining |`,
+        `| ${tagEnd} | tag-end |`,
+      ].join("\n"),
+      40,
+      createTuiMarkdownParser(),
+    );
+    const width = visualRowCells(rows[0]!);
+
+    expect(rows.every((row) => visualRowCells(row) === width)).toBe(true);
+    expect(rows[0]?.plainText.endsWith("╮")).toBe(true);
+    expect(rows[1]?.plainText.endsWith("│")).toBe(true);
+    expect(rows[2]?.plainText.endsWith("┤")).toBe(true);
+    expect(rows.at(-1)?.plainText.endsWith("╯")).toBe(true);
+
+    const terminal = createTerminal({ cols: 40, rows: rows.length });
+    rows.forEach((row, y) => {
+      paintMarkdownVisualRow(terminal, row, {
+        x: 0,
+        y,
+        w: 40,
+        baseStyle: {},
+      });
+    });
+
+    expect(terminal.getCell(width - 1, 0).ch).toBe("╮");
+    expect(terminal.getCell(width - 1, 1).ch).toBe("│");
+    expect(terminal.getCell(width - 1, 2).ch).toBe("┤");
+    expect(terminal.getCell(width - 1, rows.length - 1).ch).toBe("╯");
+  });
+
   it("paints markdown table right borders at stable terminal columns with complex emoji", () => {
     const coder = "\u{1F468}\u{1F3FD}\u200D\u{1F4BB}";
     const rainbowFlag = "\u{1F3F3}\uFE0F\u200D\u{1F308}";

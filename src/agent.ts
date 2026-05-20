@@ -4,6 +4,10 @@ export { TInput } from "./vue/components/TInput.js";
 export { TSelect } from "./vue/components/TSelect.js";
 export { TText } from "./vue/components/TText.js";
 export { TToolCallView } from "./vue/components/TToolCallView.js";
+export {
+  computeCommandPaletteMatchRanges,
+  TCommandPalette,
+} from "./vue/components/TCommandPalette.js";
 export { TView } from "./vue/components/TView.js";
 export { TRenderPlane } from "./vue/components/TRenderPlane.js";
 export { TVirtualList } from "./vue/components/TVirtualList.js";
@@ -59,12 +63,27 @@ export {
 } from "./vue/log/tlog-theme.js";
 export type { RowScrollMode } from "./vue/components/TVirtualList.js";
 export type {
+  TCommandPaletteItem,
+  TCommandPaletteMatchRange,
+} from "./vue/components/TCommandPalette.js";
+export type {
   TToolCallStatus,
   TToolCallViewSegment,
   TToolCallViewSegmentRole,
   TToolCallViewSlotProps,
   TToolCallViewStyles,
 } from "./vue/components/TToolCallView.js";
+export {
+  resolveTThinkingViewModel,
+  resolveTToolCallViewModel,
+  resolveTUserMessageViewModel,
+} from "./vue/agent/view-models.js";
+export type {
+  TThinkingViewModel,
+  TToolCallViewModel,
+  TUserMessageSegment,
+  TUserMessageViewModel,
+} from "./vue/agent/view-models.js";
 export type {
   TTranscriptAction,
   TTranscriptDataSource,

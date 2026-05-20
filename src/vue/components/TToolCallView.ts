@@ -73,8 +73,10 @@ function fitText(text: string, width: number): string {
   const safe = sanitizeInlineText(text);
   if (width <= 0) return "";
   if (textCellWidth(safe) <= width) return safe;
-  if (width <= 1) return sliceByCells(safe, width);
-  return `${sliceByCells(safe, width - 1)}…`;
+  const marker = "…";
+  const markerCells = textCellWidth(marker);
+  if (width <= markerCells) return sliceByCells(safe, width);
+  return `${sliceByCells(safe, width - markerCells)}${marker}`;
 }
 
 function normalizeSuffix(text: string): string {
@@ -87,9 +89,11 @@ function fitSuffix(text: string, width: number): string {
   const suffix = normalizeSuffix(text);
   if (!suffix || width <= 0) return "";
   if (textCellWidth(suffix) <= width) return suffix;
-  const bodyWidth = width - 2;
+  const prefix = " ";
+  const marker = "…";
+  const bodyWidth = width - textCellWidth(prefix) - textCellWidth(marker);
   if (bodyWidth <= 0) return "";
-  return ` ${sliceByCells(suffix.trimStart(), bodyWidth)}…`;
+  return `${prefix}${sliceByCells(suffix.trimStart(), bodyWidth)}${marker}`;
 }
 
 function statusStyle(status: TToolCallStatus, base: Style, muted: Style): Style {

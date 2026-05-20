@@ -88,6 +88,11 @@ function clipVisualSegmentsToWidth(
   const out: TuiMarkdownVisualSegment[] = [];
   for (const segment of segments) {
     if (!segment.text || remaining <= 0) continue;
+    if (segment.cells <= remaining) {
+      out.push(segment);
+      remaining -= segment.cells;
+      continue;
+    }
     const text = sliceByCellsRange(segment.text, 0, remaining);
     const cells = textCellWidth(text);
     if (!text || cells <= 0) continue;
