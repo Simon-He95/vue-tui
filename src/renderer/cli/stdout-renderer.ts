@@ -504,14 +504,12 @@ export function createStdoutRenderer(
   const rowClearToEol: string[] = [];
   const rowTextPartsScratch: string[] = [];
 
-  // Some terminals disagree on the rendered width of certain emoji (esp. emoji presentation
-  // sequences and some symbol emoji). If the terminal advances fewer columns than our buffer
-  // model (width=2), subsequent glyphs can shift left and visually corrupt borders.
-  // To make rendering robust, force cursor alignment after 2-cell graphemes that are
-  // represented by multiple code units (surrogates, VS16 sequences, ZWJ clusters, etc.).
+  // Some terminals disagree on the rendered width of certain wide glyphs. If the terminal
+  // advances fewer columns than our buffer model (width=2), subsequent glyphs can shift left
+  // and visually corrupt borders. Force cursor alignment after rendered 2-cell glyphs.
   const needsWideCursorFix = (cell: Cell, ch: string): boolean => {
     const w = cell.width ?? 1;
-    return w === 2 && ch.length > 1;
+    return w === 2 && ch !== " ";
   };
 
   const ensureRowEscapes = (rows: number): void => {
