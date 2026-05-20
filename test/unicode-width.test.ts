@@ -37,6 +37,22 @@ describe("unicode width + grapheme safety", () => {
     expect(sliceByCells(s, 2)).toBe("e\u0301x");
   });
 
+  it("keeps Indic mark graphemes intact", () => {
+    const devanagariKi = "\u0915\u093F";
+    const devanagariKsha = "\u0915\u094D\u0937";
+    const terminal = createTerminal({ cols: 4, rows: 1 });
+
+    expect(textCellWidth(devanagariKi)).toBe(1);
+    expect(textCellWidth(devanagariKsha)).toBe(1);
+    expect(sliceByCells(`${devanagariKi}x`, 1)).toBe(devanagariKi);
+    expect(sliceByCells(`${devanagariKsha}x`, 1)).toBe(devanagariKsha);
+
+    terminal.write(`${devanagariKi}x`, { x: 0, y: 0 });
+
+    expect(terminal.getCell(0, 0).ch).toBe(devanagariKi);
+    expect(terminal.getCell(1, 0).ch).toBe("x");
+  });
+
   it("sliceByCells does not split ZWJ emoji sequences", () => {
     const s = "👩‍💻X";
     expect(charCellWidth("👩‍💻")).toBe(2);

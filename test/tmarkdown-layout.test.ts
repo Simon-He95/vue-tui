@@ -375,6 +375,29 @@ describe("markdown layout", () => {
     expect(rows.at(-1)?.plainText.endsWith("╯")).toBe(true);
   });
 
+  it("keeps table borders aligned with non-emoji grapheme clusters", () => {
+    const devanagariKi = "\u0915\u093F";
+    const devanagariKsha = "\u0915\u094D\u0937";
+    const devanagariZwjKsha = "\u0915\u094D\u200D\u0937";
+    const rows = buildMarkdownVisualRows(
+      [
+        "| X |",
+        "|---|",
+        `| ${devanagariKi} |`,
+        `| ${devanagariKsha} |`,
+        `| ${devanagariZwjKsha} |`,
+      ].join("\n"),
+      20,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows.every((row) => visualRowCells(row) === 5)).toBe(true);
+    expect(rows[0]?.plainText).toBe("╭───╮");
+    expect(rows[1]?.plainText.endsWith("│")).toBe(true);
+    expect(rows[2]?.plainText.endsWith("┤")).toBe(true);
+    expect(rows.at(-1)?.plainText).toBe("╰───╯");
+  });
+
   it("keeps table borders stable with orphaned unicode modifiers", () => {
     const zwj = String.fromCodePoint(0x200d);
     const vs16 = String.fromCodePoint(0xfe0f);

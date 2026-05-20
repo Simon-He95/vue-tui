@@ -40,6 +40,22 @@ describe("unicode fallback without Intl.Segmenter", () => {
     expect(wrapByCells(`a${coder}b`, 3)).toEqual([`a${coder}`, "b"]);
   });
 
+  it("keeps non-emoji mark clusters intact in text utilities", async () => {
+    const { sliceByCells, sliceByCellsRange, textCellWidth, wrapByCells } =
+      await importWithoutSegmenter(() => import("../src/vue/utils/text.js"));
+    const devanagariKi = "\u0915\u093F";
+    const devanagariKsha = "\u0915\u094D\u0937";
+    const devanagariZwjKsha = "\u0915\u094D\u200D\u0937";
+
+    for (const cluster of [devanagariKi, devanagariKsha, devanagariZwjKsha]) {
+      expect(textCellWidth(cluster)).toBe(1);
+      expect(sliceByCells(`${cluster}x`, 1)).toBe(cluster);
+      expect(sliceByCellsRange(`x${cluster}y`, 1, 2)).toBe(cluster);
+    }
+
+    expect(wrapByCells(`a${devanagariKsha}b`, 2)).toEqual([`a${devanagariKsha}`, "b"]);
+  });
+
   it("keeps complex emoji clusters intact in terminal writes", async () => {
     const { createTerminal } = await importWithoutSegmenter(
       () => import("../src/core/terminal/create-terminal.js"),
@@ -57,5 +73,20 @@ describe("unicode fallback without Intl.Segmenter", () => {
     expect(terminal.getCell(2, 0).width).toBe(2);
     expect(terminal.getCell(3, 0).continuation).toBe(true);
     expect(terminal.getCell(4, 0).ch).toBe("x");
+  });
+
+  it("keeps non-emoji mark clusters intact in terminal writes", async () => {
+    const { createTerminal } = await importWithoutSegmenter(
+      () => import("../src/core/terminal/create-terminal.js"),
+    );
+    const devanagariKi = "\u0915\u093F";
+    const devanagariKsha = "\u0915\u094D\u0937";
+    const terminal = createTerminal({ cols: 4, rows: 1 });
+
+    terminal.write(`${devanagariKi}${devanagariKsha}x`, { x: 0, y: 0 });
+
+    expect(terminal.getCell(0, 0).ch).toBe(devanagariKi);
+    expect(terminal.getCell(1, 0).ch).toBe(devanagariKsha);
+    expect(terminal.getCell(2, 0).ch).toBe("x");
   });
 });

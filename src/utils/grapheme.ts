@@ -21,20 +21,20 @@ try {
   graphemeSegmenter = null;
 }
 
+let unicodeMarkRe: RegExp | null = null;
+try {
+  // eslint-disable-next-line prefer-regex-literals
+  unicodeMarkRe = new RegExp("\\p{Mark}", "u");
+} catch {
+  unicodeMarkRe = null;
+}
+
 function needsGraphemeSegmentation(text: string): boolean {
   for (const ch of text) {
     const cp = ch.codePointAt(0)!;
     if (cp === 0x200d) return true;
     if ((cp >= 0xfe00 && cp <= 0xfe0f) || (cp >= 0xe0100 && cp <= 0xe01ef)) return true;
-    if (
-      (cp >= 0x0300 && cp <= 0x036f) ||
-      (cp >= 0x1ab0 && cp <= 0x1aff) ||
-      (cp >= 0x1dc0 && cp <= 0x1dff) ||
-      (cp >= 0x20d0 && cp <= 0x20ff) ||
-      (cp >= 0xfe20 && cp <= 0xfe2f)
-    ) {
-      return true;
-    }
+    if (isCombiningMark(cp)) return true;
     if (cp >= 0x1f3fb && cp <= 0x1f3ff) return true;
     if (cp >= 0x1f1e6 && cp <= 0x1f1ff) return true;
     if (cp >= 0xe0000 && cp <= 0xe007f) return true;
@@ -54,8 +54,24 @@ function isCombiningMark(codePoint: number): boolean {
     (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
     (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
     (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
-    (codePoint >= 0xfe20 && codePoint <= 0xfe2f)
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f) ||
+    isDevanagariMark(codePoint) ||
+    unicodeMarkRe?.test(String.fromCodePoint(codePoint)) === true
   );
+}
+
+function isDevanagariMark(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x0900 && codePoint <= 0x0903) ||
+    (codePoint >= 0x093a && codePoint <= 0x093c) ||
+    (codePoint >= 0x093e && codePoint <= 0x094f) ||
+    (codePoint >= 0x0951 && codePoint <= 0x0957) ||
+    (codePoint >= 0x0962 && codePoint <= 0x0963)
+  );
+}
+
+function isVirama(codePoint: number): boolean {
+  return codePoint === 0x094d;
 }
 
 function isEmojiModifier(codePoint: number): boolean {
@@ -109,7 +125,7 @@ function fallbackGraphemeSegments(text: string): readonly GraphemeSegment[] {
         regionalIndicators = 0;
     }
 
-    if (codePoint === 0x200d) joinNext = true;
+    if (codePoint === 0x200d || isVirama(codePoint)) joinNext = true;
     else if (joinNext && !isVariationSelector(codePoint) && !isCombiningMark(codePoint)) {
       joinNext = false;
     }
