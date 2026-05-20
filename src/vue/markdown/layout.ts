@@ -1,4 +1,5 @@
 import {
+  currentTextWidthProvider,
   forEachTextCellSegment,
   repeatChar,
   sliceByCellsRange,
@@ -17,6 +18,7 @@ import type {
 
 export type TuiMarkdownLayoutCache = Readonly<{
   width: number;
+  widthProvider?: WidthProvider;
   entries: ReadonlyMap<string, TuiMarkdownLayoutCacheEntry>;
 }>;
 
@@ -574,13 +576,18 @@ export function layoutMarkdownBlocksCached(
   cache: TuiMarkdownLayoutCache;
 }> {
   const normalizedWidth = Math.max(0, Math.floor(width));
+  const widthProvider = currentTextWidthProvider();
   if (normalizedWidth <= 0) {
-    return { rows: [], cache: { width: normalizedWidth, entries: new Map() } };
+    return { rows: [], cache: { width: normalizedWidth, widthProvider, entries: new Map() } };
   }
 
   const rows: TuiMarkdownVisualRow[] = [];
   const entries = new Map<string, TuiMarkdownLayoutCacheEntry>();
-  const previousEntries = previous?.width === normalizedWidth ? previous.entries : undefined;
+  const previousEntries =
+    previous?.width === normalizedWidth &&
+    Object.is(previous.widthProvider ?? "default", widthProvider)
+      ? previous.entries
+      : undefined;
 
   for (let index = 0; index < blocks.length; index++) {
     const block = blocks[index]!;
@@ -605,7 +612,7 @@ export function layoutMarkdownBlocksCached(
 
   return {
     rows,
-    cache: { width: normalizedWidth, entries },
+    cache: { width: normalizedWidth, widthProvider, entries },
   };
 }
 

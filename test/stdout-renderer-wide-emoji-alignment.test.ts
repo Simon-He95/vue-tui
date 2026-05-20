@@ -35,7 +35,7 @@ describe("stdout renderer (wide emoji alignment)", () => {
     expect(frame).toContain("\u001B[1;4H");
   });
 
-  it("realigns wide glyphs in markdown table stdout output", () => {
+  it("realigns high-risk wide glyphs in markdown table stdout output", () => {
     const check = "\u2705";
     const smile = "\u{1F600}";
     const coder = "\u{1F468}\u{1F3FD}\u200D\u{1F4BB}";
@@ -87,12 +87,17 @@ describe("stdout renderer (wide emoji alignment)", () => {
     renderer.dispose();
 
     const expectedFixes: string[] = [];
+    const cjkFixes: string[] = [];
     let checkFix = "";
     for (let y = 0; y < rows.length; y++) {
       for (let x = 0; x < 40; x++) {
         const cell = terminal.getCell(x, y);
         if (cell.continuation || cell.width !== 2 || cell.ch === " ") continue;
         const fix = `\u001B[${y + 1};${x + 1 + cell.width}H`;
+        if (cell.ch === "中" || cell.ch === "文") {
+          cjkFixes.push(fix);
+          continue;
+        }
         expectedFixes.push(fix);
         if (cell.ch === check) checkFix = fix;
       }
@@ -100,6 +105,8 @@ describe("stdout renderer (wide emoji alignment)", () => {
 
     expect(checkFix).toBeTruthy();
     for (const fix of expectedFixes) expect(frame).toContain(fix);
+    expect(cjkFixes).toHaveLength(2);
+    for (const fix of cjkFixes) expect(frame).not.toContain(fix);
   });
 
   it("realigns orphaned zero-width markdown table cells in stdout output", () => {

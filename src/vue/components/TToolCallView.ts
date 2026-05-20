@@ -4,12 +4,8 @@ import { computed, defineComponent, h } from "vue";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
 import { useTerminal } from "../composables/use-terminal.js";
-import {
-  sanitizeInlineText,
-  sliceByCells,
-  textCellWidth,
-  withTextWidthProvider,
-} from "../utils/text.js";
+import { resolveTToolCallViewModel } from "../agent/view-models.js";
+import { sliceByCells, withTextWidthProvider } from "../utils/text.js";
 
 export type TToolCallStatus = "pending" | "running" | "success" | "error" | "warning" | "neutral";
 
@@ -57,64 +53,6 @@ export type TToolCallViewSlotProps = Readonly<{
   segments: readonly TToolCallViewSegment[];
   styles: TToolCallViewStyles;
 }>;
-
-const DEFAULT_BASE_STYLE: Style = Object.freeze({ fg: "yellowBright", bg: "black" });
-const DEFAULT_MUTED_STYLE: Style = Object.freeze({ fg: "white", bg: "black", dim: true });
-
-function mergeStyle(base: Style, ...overrides: readonly (Style | undefined)[]): Style {
-  let out = base;
-  for (const next of overrides) {
-    if (next) out = { ...out, ...next };
-  }
-  return out;
-}
-
-function fitText(text: string, width: number): string {
-  const safe = sanitizeInlineText(text);
-  if (width <= 0) return "";
-  if (textCellWidth(safe) <= width) return safe;
-  const marker = "…";
-  const markerCells = textCellWidth(marker);
-  if (width <= markerCells) return sliceByCells(safe, width);
-  return `${sliceByCells(safe, width - markerCells)}${marker}`;
-}
-
-function normalizeSuffix(text: string): string {
-  const safe = sanitizeInlineText(text);
-  if (!safe) return "";
-  return safe.startsWith(" ") ? safe : ` ${safe}`;
-}
-
-function fitSuffix(text: string, width: number): string {
-  const suffix = normalizeSuffix(text);
-  if (!suffix || width <= 0) return "";
-  if (textCellWidth(suffix) <= width) return suffix;
-  const prefix = " ";
-  const marker = "…";
-  const bodyWidth = width - textCellWidth(prefix) - textCellWidth(marker);
-  if (bodyWidth <= 0) return "";
-  return `${prefix}${sliceByCells(suffix.trimStart(), bodyWidth)}${marker}`;
-}
-
-function statusStyle(status: TToolCallStatus, base: Style, muted: Style): Style {
-  if (status === "success") return mergeStyle(base, { fg: "greenBright", bold: true });
-  if (status === "error") return mergeStyle(base, { fg: "redBright", bold: true });
-  if (status === "warning") return mergeStyle(base, { fg: "yellowBright", bold: true });
-  return mergeStyle(base, muted);
-}
-
-function pushSegment(
-  out: TToolCallViewSegment[],
-  role: TToolCallViewSegmentRole,
-  x: number,
-  text: string,
-  style: Style,
-): number {
-  if (!text) return x;
-  const cells = textCellWidth(text);
-  out.push({ role, x, text, cells, style });
-  return x + cells;
-}
 
 function renderSegments(segments: readonly TToolCallViewSegment[], y: number, width: number) {
   return segments.map((segment, index) => {
@@ -171,81 +109,32 @@ export const TToolCallView = defineComponent({
     const withWidthProvider = <T>(fn: () => T): T => withTextWidthProvider(widthProvider, fn);
 
     const model = computed(() =>
-      withWidthProvider(() => {
-        const width = Math.max(0, Math.floor(props.w));
-        const base = props.style ?? DEFAULT_BASE_STYLE;
-        const muted = props.mutedStyle ?? mergeStyle(DEFAULT_MUTED_STYLE, { bg: base.bg });
-        const header = props.collapsed
-          ? mergeStyle(base, { dim: true }, props.collapsedStyle, props.headerStyle)
-          : mergeStyle(
-              base,
-              props.selected ? { bold: true } : undefined,
-              props.expandedStyle,
-              props.headerStyle,
-            );
-        const marker = props.markerStyle ? mergeStyle(header, props.markerStyle) : header;
-        const dot = mergeStyle(statusStyle(props.status, base, muted), props.statusStyle);
-        const title = mergeStyle(
-          base,
-          { dim: false },
-          props.selected ? { bold: true } : undefined,
-          props.titleStyle,
-        );
-        const suffix = mergeStyle(base, muted, props.suffixStyle);
-        const preview = mergeStyle(base, { dim: true }, props.previewStyle);
-        const styles: TToolCallViewStyles = {
-          base,
-          header,
-          marker,
-          status: dot,
-          title,
-          suffix,
-          preview,
-        };
-
-        const segments: TToolCallViewSegment[] = [];
-        let x = 0;
-        const nestedLead = props.nested ? "    " : "";
-        const markerText = `${nestedLead}${props.collapsed ? props.markerCollapsed : props.markerExpanded} `;
-        x = pushSegment(segments, "marker", x, markerText, marker);
-        if (props.statusDot) {
-          x = pushSegment(segments, "status", x, props.statusDot, dot);
-          x = pushSegment(segments, "separator", x, " ", header);
-        }
-        x = pushSegment(segments, "title", x, fitText(props.title, Math.max(0, width - x)), title);
-        if (props.collapsed) {
-          const visibleSuffix = fitSuffix(props.suffix, Math.max(0, width - x));
-          pushSegment(segments, "suffix", x, visibleSuffix, suffix);
-        }
-
-        const previewPrefix = `${nestedLead}${props.previewPrefix}`;
-        const previewText =
-          props.collapsed && props.preview
-            ? fitText(props.preview, Math.max(0, width - textCellWidth(previewPrefix)))
-            : "";
-        const previewSegments: TToolCallViewSegment[] = [];
-        if (previewText) {
-          let previewX = 0;
-          previewX = pushSegment(
-            previewSegments,
-            "preview-prefix",
-            previewX,
-            previewPrefix,
-            preview,
-          );
-          pushSegment(previewSegments, "preview", previewX, previewText, preview);
-        }
-
-        return {
-          styles,
-          marker: props.collapsed ? props.markerCollapsed : props.markerExpanded,
-          suffix: segments.find((segment) => segment.role === "suffix")?.text ?? "",
-          preview: previewText,
-          previewPrefix,
-          headerSegments: segments,
-          previewSegments,
-        };
-      }),
+      withWidthProvider(() =>
+        resolveTToolCallViewModel({
+          w: props.w,
+          title: props.title,
+          collapsed: props.collapsed,
+          selected: props.selected,
+          nested: props.nested,
+          status: props.status,
+          suffix: props.suffix,
+          preview: props.preview,
+          markerCollapsed: props.markerCollapsed,
+          markerExpanded: props.markerExpanded,
+          statusDot: props.statusDot,
+          previewPrefix: props.previewPrefix,
+          style: props.style,
+          mutedStyle: props.mutedStyle,
+          headerStyle: props.headerStyle,
+          collapsedStyle: props.collapsedStyle,
+          expandedStyle: props.expandedStyle,
+          markerStyle: props.markerStyle,
+          statusStyle: props.statusStyle,
+          titleStyle: props.titleStyle,
+          suffixStyle: props.suffixStyle,
+          previewStyle: props.previewStyle,
+        }),
+      ),
     );
 
     return () => {

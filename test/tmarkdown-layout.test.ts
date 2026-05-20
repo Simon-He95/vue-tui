@@ -11,6 +11,7 @@ import {
 import { paintMarkdownVisualRow } from "../src/vue/markdown/render.js";
 import { DEFAULT_TUI_MARKDOWN_THEME } from "../src/vue/markdown/theme.js";
 import type { TuiMarkdownNode } from "../src/vue/markdown/types.js";
+import { withTextWidthProvider } from "../src/vue/utils/text.js";
 
 function visualRowCells(row: { segments: readonly { cells: number }[] }): number {
   return row.segments.reduce((sum, segment) => sum + segment.cells, 0);
@@ -345,6 +346,22 @@ describe("markdown layout", () => {
     expect(terminal.getCell(tableWidth - 1, 1).ch).toBe("│");
     expect(terminal.getCell(tableWidth - 1, 2).ch).toBe("┤");
     expect(terminal.getCell(tableWidth - 1, rows.length - 1).ch).toBe("╯");
+  });
+
+  it("does not reuse cached table rows when the widthProvider changes", () => {
+    const parser = createTuiMarkdownParser();
+    const { blocks } = buildMarkdownBlocks(["| X |", "|---|", "| Ω |"].join("\n"), parser);
+    const first = withTextWidthProvider("default", () => layoutMarkdownBlocksCached(blocks, 40));
+    const next = withTextWidthProvider("cjk", () =>
+      layoutMarkdownBlocksCached(blocks, 40, first.cache),
+    );
+    const fresh = withTextWidthProvider("cjk", () => layoutMarkdownBlocksCached(blocks, 40));
+
+    expect(next.rows.map((row) => row.plainText)).toEqual(
+      fresh.rows.map((row) => row.plainText),
+    );
+    expect(visualRowCells(next.rows[0]!)).toBeGreaterThan(visualRowCells(first.rows[0]!));
+    expect(next.rows[0]).not.toBe(first.rows[0]);
   });
 
   it("keeps markdown table borders aligned with wide emoji, tag emoji, and CJK cells", () => {

@@ -12,7 +12,7 @@ let renderPassDepth = 0;
 const renderPassTextWidthCache = new Map<string, number>();
 const textWidthProviderStack: WidthProvider[] = [];
 
-function currentTextWidthProvider(): WidthProvider {
+export function currentTextWidthProvider(): WidthProvider {
   return textWidthProviderStack[textWidthProviderStack.length - 1] ?? "default";
 }
 
