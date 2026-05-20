@@ -74,7 +74,8 @@ function isAscii(text: string): boolean {
 function needsGraphemeSegmentation(text: string): boolean {
   // Be conservative: return true if we see characters that commonly participate in multi-codepoint
   // grapheme clusters (combining marks, ZWJ sequences, emoji variation selectors, skin tone modifiers,
-  // or regional-indicator flags). If none are present, code-point iteration is generally safe.
+  // regional-indicator flags, or emoji tag sequences). If none are present, code-point iteration is
+  // generally safe.
   for (const ch of text) {
     const cp = ch.codePointAt(0)!;
     // ZWJ
@@ -95,6 +96,8 @@ function needsGraphemeSegmentation(text: string): boolean {
     if (cp >= 0x1f3fb && cp <= 0x1f3ff) return true;
     // Regional indicator symbols (flags are pairs)
     if (cp >= 0x1f1e6 && cp <= 0x1f1ff) return true;
+    // Emoji tag sequences, including subdivision flags
+    if (cp >= 0xe0000 && cp <= 0xe007f) return true;
   }
   return false;
 }

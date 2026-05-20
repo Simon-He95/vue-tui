@@ -79,6 +79,24 @@ function clipInlineSegmentsToWidth(
   return out;
 }
 
+function clipVisualSegmentsToWidth(
+  segments: readonly TuiMarkdownVisualSegment[],
+  width: number,
+): readonly TuiMarkdownVisualSegment[] {
+  let remaining = Math.max(0, Math.floor(width));
+  if (remaining <= 0) return [];
+  const out: TuiMarkdownVisualSegment[] = [];
+  for (const segment of segments) {
+    if (!segment.text || remaining <= 0) continue;
+    const text = sliceByCellsRange(segment.text, 0, remaining);
+    const cells = textCellWidth(text);
+    if (!text || cells <= 0) continue;
+    out.push({ text, style: segment.style, cells });
+    remaining -= cells;
+  }
+  return out;
+}
+
 function wrapLineSegments(
   source: readonly TuiMarkdownInlineSegment[],
   prefixSegments: readonly TuiMarkdownInlineSegment[],
@@ -361,6 +379,7 @@ function appendInlineVisualSegments(
 function tableBorderRow(
   block: Extract<TuiMarkdownBlock, { type: "table" }>,
   widths: readonly number[],
+  width: number,
   rowInBlock: number,
   left: string,
   join: string,
@@ -372,12 +391,13 @@ function tableBorderRow(
   const border = tableBorderText(left, join, right, widths);
   const segments = [...prefix];
   appendVisualSegment(segments, border, block.borderStyle);
+  const clipped = clipVisualSegmentsToWidth(segments, width);
   return {
     key: `${block.key}:${rowInBlock}`,
     blockKey: block.key,
     rowInBlock,
-    plainText: segmentsPlainText(segments),
-    segments,
+    plainText: segmentsPlainText(clipped),
+    segments: clipped,
   };
 }
 
@@ -385,6 +405,7 @@ function tableContentRow(
   block: Extract<TuiMarkdownBlock, { type: "table" }>,
   row: readonly TuiMarkdownTableCell[],
   widths: readonly number[],
+  width: number,
   rowInBlock: number,
 ): TuiMarkdownVisualRow {
   const segments = (block.prefixSegments ?? [])
@@ -411,12 +432,13 @@ function tableContentRow(
     appendVisualSegment(segments, "│", block.borderStyle);
   }
 
+  const clipped = clipVisualSegmentsToWidth(segments, width);
   return {
     key: `${block.key}:${rowInBlock}`,
     blockKey: block.key,
     rowInBlock,
-    plainText: segmentsPlainText(segments),
-    segments,
+    plainText: segmentsPlainText(clipped),
+    segments: clipped,
   };
 }
 
@@ -429,11 +451,11 @@ function tableRows(
 
   const widths = tableColumnWidths(block, columns, width);
   const rows: TuiMarkdownVisualRow[] = [];
-  rows.push(tableBorderRow(block, widths, rows.length, "╭", "┬", "╮"));
-  rows.push(tableContentRow(block, block.header, widths, rows.length));
-  rows.push(tableBorderRow(block, widths, rows.length, "├", "┼", "┤"));
-  for (const row of block.rows) rows.push(tableContentRow(block, row, widths, rows.length));
-  rows.push(tableBorderRow(block, widths, rows.length, "╰", "┴", "╯"));
+  rows.push(tableBorderRow(block, widths, width, rows.length, "╭", "┬", "╮"));
+  rows.push(tableContentRow(block, block.header, widths, width, rows.length));
+  rows.push(tableBorderRow(block, widths, width, rows.length, "├", "┼", "┤"));
+  for (const row of block.rows) rows.push(tableContentRow(block, row, widths, width, rows.length));
+  rows.push(tableBorderRow(block, widths, width, rows.length, "╰", "┴", "╯"));
   return rows;
 }
 

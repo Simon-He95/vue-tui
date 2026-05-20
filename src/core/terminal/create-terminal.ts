@@ -301,6 +301,7 @@ function needsGraphemeSegmentation(text: string): boolean {
     }
     if (cp >= 0x1f3fb && cp <= 0x1f3ff) return true;
     if (cp >= 0x1f1e6 && cp <= 0x1f1ff) return true;
+    if (cp >= 0xe0000 && cp <= 0xe007f) return true;
   }
   return false;
 }

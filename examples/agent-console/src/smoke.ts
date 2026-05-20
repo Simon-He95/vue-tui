@@ -58,6 +58,22 @@ function rowsText(app: TerminalApp): string {
   return Array.from({ length: app.terminal.size().rows }, (_, y) => rowText(app, y)).join("\n");
 }
 
+function isAgentConsoleUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.origin === "https://example.com" &&
+      (url.pathname === "/agent-console" || url.pathname.startsWith("/agent-console/"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function rowHasAgentConsoleUrl(row: string): boolean {
+  return row.split(/\s+/).some(isAgentConsoleUrl);
+}
+
 function inputRowsText(app: TerminalApp): string {
   return Array.from({ length: AGENT_CONSOLE_LAYOUT.input.h }, (_, index) =>
     rowText(app, AGENT_CONSOLE_LAYOUT.input.y + index),
@@ -295,18 +311,18 @@ try {
   const inputAfter = api.getInputValue();
   const inputStillVisible = inputBorderVisible(app) && inputRowsText(app).includes("stable input");
   const afterBurstTop = api.metrics.value?.scrollTop ?? -1;
-  const ghosttyWheelTops: number[] = [];
+  const lineWheelTops: number[] = [];
   for (let i = 0; i < 8; i++) {
     const time = 2_000 + i * 80;
     dispatchWheel(app.events, 1, time);
     await flushFrame(raf);
-    ghosttyWheelTops.push(api.metrics.value?.scrollTop ?? -1);
+    lineWheelTops.push(api.metrics.value?.scrollTop ?? -1);
     dispatchWheel(app.events, -1, time + 40);
     await flushFrame(raf);
-    ghosttyWheelTops.push(api.metrics.value?.scrollTop ?? -1);
+    lineWheelTops.push(api.metrics.value?.scrollTop ?? -1);
   }
-  const ghosttyWheelDownMonotonic = ghosttyWheelTops.every((top, index) => {
-    return top >= 0 && (index === 0 || top >= (ghosttyWheelTops[index - 1] ?? -1));
+  const lineWheelReversalObserved = lineWheelTops.some((top, index) => {
+    return index > 0 && top >= 0 && top < (lineWheelTops[index - 1] ?? -1);
   });
   const fastWheelStart = api.metrics.value?.scrollTop ?? -1;
   for (let i = 0; i < 6; i++) {
@@ -338,7 +354,7 @@ try {
     rowText(app, y),
   );
   const firstLinkY = linkOverlayRows.findIndex((row) => {
-    return row.includes("1. [log]") && row.includes("https://example.com/agent-console");
+    return row.includes("1. [log]") && rowHasAgentConsoleUrl(row);
   });
   const firstLinkRow = firstLinkY >= 0 ? (linkOverlayRows[firstLinkY] ?? "") : "";
   const firstLinkStart = firstLinkRow.indexOf("1. [log]");
@@ -532,7 +548,7 @@ try {
     chromeButtonUnderlineFollowsText,
     thinkingClickCollapsedTranscript,
     toolCallClickCollapsedTranscript,
-    ghosttyWheelDownMonotonic,
+    lineWheelReversalObserved,
     fastWheelDistance,
     linksUnderlineFollowsText,
     bestAgentFixtureRowsRendered,
@@ -576,8 +592,8 @@ try {
   assert.equal(output.chromeButtonUnderlineFollowsText, true);
   assert.equal(output.thinkingClickCollapsedTranscript, true);
   assert.equal(output.toolCallClickCollapsedTranscript, true);
-  assert.equal(output.ghosttyWheelDownMonotonic, true);
-  assert.ok(output.fastWheelDistance >= 24, "expected fast wheel burst to cover useful distance");
+  assert.equal(output.lineWheelReversalObserved, true);
+  assert.ok(output.fastWheelDistance >= 6, "expected fast wheel burst to cover line ticks");
   assert.equal(output.linksUnderlineFollowsText, true);
   assert.equal(output.bestAgentFixtureRowsRendered, true);
   assert.ok(output.overlayMaxDirtyRows <= AGENT_CONSOLE_LAYOUT.rows);

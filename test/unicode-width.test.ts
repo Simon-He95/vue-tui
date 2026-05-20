@@ -58,6 +58,21 @@ describe("unicode width + grapheme safety", () => {
     expect(charCellWidth("⏱️")).toBe(2);
   });
 
+  it("keeps emoji tag sequences as one wide grapheme", () => {
+    const englandFlag = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}";
+    const terminal = createTerminal({ cols: 6, rows: 1 });
+
+    expect(textCellWidth(englandFlag)).toBe(2);
+    expect(sliceByCells(`${englandFlag}x`, 2)).toBe(englandFlag);
+
+    terminal.write(`${englandFlag}x`, { x: 0, y: 0 });
+
+    expect(terminal.getCell(0, 0).ch).toBe(englandFlag);
+    expect(terminal.getCell(0, 0).width).toBe(2);
+    expect(terminal.getCell(1, 0).continuation).toBe(true);
+    expect(terminal.getCell(2, 0).ch).toBe("x");
+  });
+
   it("keycap emoji sequences are wide", () => {
     expect(charCellWidth("1")).toBe(1);
     expect(charCellWidth("1️⃣")).toBe(2);

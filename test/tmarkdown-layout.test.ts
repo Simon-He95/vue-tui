@@ -12,6 +12,10 @@ import { paintMarkdownVisualRow } from "../src/vue/markdown/render.js";
 import { DEFAULT_TUI_MARKDOWN_THEME } from "../src/vue/markdown/theme.js";
 import type { TuiMarkdownNode } from "../src/vue/markdown/types.js";
 
+function visualRowCells(row: { segments: readonly { cells: number }[] }): number {
+  return row.segments.reduce((sum, segment) => sum + segment.cells, 0);
+}
+
 describe("markdown layout", () => {
   it("maps headings, links, and unsafe links into terminal blocks", () => {
     const parser = createTuiMarkdownParser();
@@ -319,6 +323,49 @@ describe("markdown layout", () => {
     );
 
     expect(rows[3]?.plainText).toBe("│ a    │   b    │     c │");
+  });
+
+  it("keeps markdown table borders aligned with wide emoji, tag emoji, and CJK cells", () => {
+    const smile = "\u{1F600}";
+    const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}";
+    const check = "\u2705";
+    const englandFlag = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}";
+    const rows = buildMarkdownVisualRows(
+      [
+        "| Icon | Text |",
+        "|---|---|",
+        `| ${smile} | smile |`,
+        `| ${family} | family |`,
+        "| 中文 | cjk |",
+        `| ${check} | ok |`,
+        `| ${englandFlag} | england |`,
+      ].join("\n"),
+      80,
+      createTuiMarkdownParser(),
+    );
+
+    expect(new Set(rows.map(visualRowCells)).size).toBe(1);
+    expect(rows.some((row) => row.plainText.includes(englandFlag))).toBe(true);
+  });
+
+  it("does not split wide emoji when table cells are clipped", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| A |", "|---|", "| 😀 |"].join("\n"),
+      5,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows.map(visualRowCells)).toEqual([5, 5, 5, 5, 5]);
+  });
+
+  it("does not emit visual rows wider than the viewport for narrow tables", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| A | B |", "|---|---|", "| x | y |"].join("\n"),
+      6,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows.every((row) => visualRowCells(row) <= 6)).toBe(true);
   });
 
   it("does not insert an extra blank row before nested list items", () => {
