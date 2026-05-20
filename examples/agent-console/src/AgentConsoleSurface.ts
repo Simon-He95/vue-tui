@@ -25,7 +25,14 @@ import {
 } from "vue";
 import { TBox, TDialog, TSelect, TText, TView } from "@simon_he/vue-tui";
 import { TToolCallView } from "@simon_he/vue-tui/agent";
-import { TInputBox, TRenderPlane, textCellWidth, useTerminal } from "@simon_he/vue-tui/vue";
+import {
+  padEndByCells,
+  sliceByCells,
+  TInputBox,
+  TRenderPlane,
+  textCellWidth,
+  useTerminal,
+} from "@simon_he/vue-tui/vue";
 import { TVirtualMarkdown } from "@simon_he/vue-tui/markdown";
 import { TLogView } from "@simon_he/vue-tui/experimental";
 import { handleAgentConsoleKeymap } from "./keymap";
@@ -97,15 +104,13 @@ export type AgentConsoleApi = Readonly<{
 }>;
 
 function fit(value: string, width: number): string {
-  if (value.length <= width) return value.padEnd(width, " ");
-  if (width <= 3) return value.slice(0, width);
-  return `${value.slice(0, width - 3)}...`;
+  return padEndByCells(truncate(value, width), width);
 }
 
 function truncate(value: string, width: number): string {
-  if (value.length <= width) return value;
-  if (width <= 3) return value.slice(0, width);
-  return `${value.slice(0, width - 3)}...`;
+  if (textCellWidth(value) <= width) return value;
+  if (width <= 3) return sliceByCells(value, width);
+  return `${sliceByCells(value, width - 3)}...`;
 }
 
 function searchStateFor(query: string): TLogViewSearchState {

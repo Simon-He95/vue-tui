@@ -348,6 +348,28 @@ describe("markdown layout", () => {
     expect(rows.some((row) => row.plainText.includes(englandFlag))).toBe(true);
   });
 
+  it("keeps table right borders closed with complex emoji clusters", () => {
+    const rows = buildMarkdownVisualRows(
+      [
+        "| Icon | Name |",
+        "|---|---|",
+        "| 👨🏽‍💻 | coder |",
+        "| 🏳️‍🌈 | pride |",
+        "| 🏴‍☠️ | pirate |",
+        "| 1️⃣ | keycap |",
+        "| e\u0301 | combining |",
+      ].join("\n"),
+      40,
+      createTuiMarkdownParser(),
+    );
+
+    expect(new Set(rows.map(visualRowCells)).size).toBe(1);
+    expect(rows[0]?.plainText.endsWith("╮")).toBe(true);
+    expect(rows[1]?.plainText.endsWith("│")).toBe(true);
+    expect(rows[2]?.plainText.endsWith("┤")).toBe(true);
+    expect(rows.at(-1)?.plainText.endsWith("╯")).toBe(true);
+  });
+
   it("does not split wide emoji when table cells are clipped", () => {
     const rows = buildMarkdownVisualRows(
       ["| A |", "|---|", "| 😀 |"].join("\n"),
