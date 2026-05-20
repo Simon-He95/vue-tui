@@ -349,15 +349,20 @@ describe("markdown layout", () => {
   });
 
   it("keeps table right borders closed with complex emoji clusters", () => {
+    const coder = "\u{1F468}\u{1F3FD}\u200D\u{1F4BB}";
+    const rainbowFlag = "\u{1F3F3}\uFE0F\u200D\u{1F308}";
+    const pirateFlag = "\u{1F3F4}\u200D\u2620\uFE0F";
+    const keycapOne = "1\uFE0F\u20E3";
+    const combiningE = "e\u0301";
     const rows = buildMarkdownVisualRows(
       [
         "| Icon | Name |",
         "|---|---|",
-        "| 👨🏽‍💻 | coder |",
-        "| 🏳️‍🌈 | pride |",
-        "| 🏴‍☠️ | pirate |",
-        "| 1️⃣ | keycap |",
-        "| e\u0301 | combining |",
+        `| ${coder} | coder |`,
+        `| ${rainbowFlag} | pride |`,
+        `| ${pirateFlag} | pirate |`,
+        `| ${keycapOne} | keycap |`,
+        `| ${combiningE} | combining |`,
       ].join("\n"),
       40,
       createTuiMarkdownParser(),
@@ -380,14 +385,17 @@ describe("markdown layout", () => {
     expect(rows.map(visualRowCells)).toEqual([5, 5, 5, 5, 5]);
   });
 
-  it("does not emit visual rows wider than the viewport for narrow tables", () => {
+  it("clips tables when viewport is narrower than the minimum border width", () => {
     const rows = buildMarkdownVisualRows(
       ["| A | B |", "|---|---|", "| x | y |"].join("\n"),
-      6,
+      5,
       createTuiMarkdownParser(),
     );
 
-    expect(rows.every((row) => visualRowCells(row) <= 6)).toBe(true);
+    expect(rows.every((row) => visualRowCells(row) <= 5)).toBe(true);
+    expect(rows[0]?.plainText.endsWith("╮")).toBe(false);
+    expect(rows[1]?.plainText.endsWith("│")).toBe(false);
+    expect(rows.at(-1)?.plainText.endsWith("╯")).toBe(false);
   });
 
   it("does not insert an extra blank row before nested list items", () => {

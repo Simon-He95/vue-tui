@@ -306,6 +306,82 @@ function needsGraphemeSegmentation(text: string): boolean {
   return false;
 }
 
+function isVariationSelector(codePoint: number): boolean {
+  return (
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) || (codePoint >= 0xe0100 && codePoint <= 0xe01ef)
+  );
+}
+
+function isCombiningMark(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
+    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
+    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
+    (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f)
+  );
+}
+
+function isEmojiModifier(codePoint: number): boolean {
+  return codePoint >= 0x1f3fb && codePoint <= 0x1f3ff;
+}
+
+function isRegionalIndicator(codePoint: number): boolean {
+  return codePoint >= 0x1f1e6 && codePoint <= 0x1f1ff;
+}
+
+function isEmojiTag(codePoint: number): boolean {
+  return codePoint >= 0xe0000 && codePoint <= 0xe007f;
+}
+
+function fallbackGraphemeSegments(text: string): readonly GraphemeSegment[] {
+  const out: GraphemeSegment[] = [];
+  let segment = "";
+  let regionalIndicators = 0;
+  let joinNext = false;
+
+  const pushSegment = () => {
+    if (segment) out.push({ segment });
+  };
+
+  for (const ch of text) {
+    const codePoint = ch.codePointAt(0)!;
+    const attach =
+      segment !== "" &&
+      (joinNext ||
+        codePoint === 0x200d ||
+        isVariationSelector(codePoint) ||
+        isCombiningMark(codePoint) ||
+        isEmojiModifier(codePoint) ||
+        isEmojiTag(codePoint) ||
+        (isRegionalIndicator(codePoint) && regionalIndicators === 1));
+
+    if (!attach) {
+      pushSegment();
+      segment = ch;
+      regionalIndicators = isRegionalIndicator(codePoint) ? 1 : 0;
+    } else {
+      segment += ch;
+      if (isRegionalIndicator(codePoint)) regionalIndicators++;
+      else if (!isVariationSelector(codePoint) && !isCombiningMark(codePoint))
+        regionalIndicators = 0;
+    }
+
+    if (codePoint === 0x200d) joinNext = true;
+    else if (joinNext && !isVariationSelector(codePoint) && !isCombiningMark(codePoint)) {
+      joinNext = false;
+    }
+  }
+
+  pushSegment();
+  return out;
+}
+
+function segmentedGraphemes(text: string): Iterable<GraphemeSegment> | null {
+  if (!needsGraphemeSegmentation(text)) return null;
+  return sharedGraphemeSegmenter?.segment(text) ?? fallbackGraphemeSegments(text);
+}
+
 export function getPlaneTerminal(terminal: Terminal, plane: TerminalRenderPlane): Terminal {
   const internals = (terminal as PlaneAwareTerminal)[TERMINAL_PLANE_INTERNALS];
   return internals?.getPlaneTerminal(plane) ?? terminal;
@@ -450,15 +526,10 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       return true;
     };
 
-    if (needsGraphemeSegmentation(text)) {
-      if (sharedGraphemeSegmenter) {
-        for (const seg of sharedGraphemeSegmenter.segment(text)) {
-          if (!writeChar(seg.segment)) break;
-        }
-      } else {
-        for (const ch of text) {
-          if (!writeChar(ch)) break;
-        }
+    const segments = segmentedGraphemes(text);
+    if (segments) {
+      for (const seg of segments) {
+        if (!writeChar(seg.segment)) break;
       }
       return { x: cx, y: cy };
     }
@@ -472,8 +543,9 @@ export function createTerminal(opts: TerminalOptions): Terminal {
 
     if (i < text.length) {
       const rest = text.slice(i);
-      if (sharedGraphemeSegmenter) {
-        for (const seg of sharedGraphemeSegmenter.segment(rest)) {
+      const restSegments = segmentedGraphemes(rest);
+      if (restSegments) {
+        for (const seg of restSegments) {
           if (!writeChar(seg.segment)) break;
         }
       } else {

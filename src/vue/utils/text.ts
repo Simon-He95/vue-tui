@@ -102,6 +102,89 @@ function needsGraphemeSegmentation(text: string): boolean {
   return false;
 }
 
+function isVariationSelector(codePoint: number): boolean {
+  return (
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) || (codePoint >= 0xe0100 && codePoint <= 0xe01ef)
+  );
+}
+
+function isCombiningMark(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
+    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
+    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
+    (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f)
+  );
+}
+
+function isEmojiModifier(codePoint: number): boolean {
+  return codePoint >= 0x1f3fb && codePoint <= 0x1f3ff;
+}
+
+function isRegionalIndicator(codePoint: number): boolean {
+  return codePoint >= 0x1f1e6 && codePoint <= 0x1f1ff;
+}
+
+function isEmojiTag(codePoint: number): boolean {
+  return codePoint >= 0xe0000 && codePoint <= 0xe007f;
+}
+
+function fallbackGraphemeSegments(text: string): readonly GraphemeSegment[] {
+  const out: GraphemeSegment[] = [];
+  let segment = "";
+  let segmentStart = 0;
+  let pos = 0;
+  let regionalIndicators = 0;
+  let joinNext = false;
+
+  const pushSegment = () => {
+    if (segment) out.push({ segment, index: segmentStart });
+  };
+
+  for (const ch of text) {
+    const codePoint = ch.codePointAt(0)!;
+    const chStart = pos;
+    pos += ch.length;
+
+    const attach =
+      segment !== "" &&
+      (joinNext ||
+        codePoint === 0x200d ||
+        isVariationSelector(codePoint) ||
+        isCombiningMark(codePoint) ||
+        isEmojiModifier(codePoint) ||
+        isEmojiTag(codePoint) ||
+        (isRegionalIndicator(codePoint) && regionalIndicators === 1));
+
+    if (!attach) {
+      pushSegment();
+      segment = ch;
+      segmentStart = chStart;
+      regionalIndicators = isRegionalIndicator(codePoint) ? 1 : 0;
+    } else {
+      segment += ch;
+      if (isRegionalIndicator(codePoint)) regionalIndicators++;
+      else if (!isVariationSelector(codePoint) && !isCombiningMark(codePoint))
+        regionalIndicators = 0;
+    }
+
+    if (codePoint === 0x200d) joinNext = true;
+    else if (joinNext && !isVariationSelector(codePoint) && !isCombiningMark(codePoint)) {
+      joinNext = false;
+    }
+  }
+
+  pushSegment();
+  return out;
+}
+
+function segmentedGraphemes(text: string): Iterable<GraphemeSegment> | null {
+  if (!needsGraphemeSegmentation(text)) return null;
+  if (graphemeSegmenter) return graphemeSegmenter.segment(text) as any as Iterable<GraphemeSegment>;
+  return fallbackGraphemeSegments(text);
+}
+
 let graphemeSegmenter: GraphemeSegmenter | null = null;
 try {
   // Some runtimes may not support Intl.Segmenter; fall back to code-point iteration.
@@ -113,16 +196,15 @@ try {
 
 function forEachGrapheme(text: string, cb: (g: string) => void | false): void {
   if (!text) return;
-  const seg = graphemeSegmenter;
-  if (!seg || !needsGraphemeSegmentation(text)) {
+  const segments = segmentedGraphemes(text);
+  if (!segments) {
     for (const ch of text) {
       const r = cb(ch);
       if (r === false) return;
     }
     return;
   }
-  // segment() returns objects with a `.segment` field; keep types loose for older TS libs.
-  for (const part of seg.segment(text) as any as Iterable<GraphemeSegment>) {
+  for (const part of segments) {
     const r = cb(part.segment);
     if (r === false) return;
   }
@@ -134,8 +216,8 @@ export function forEachTextCellSegment(
   provider: WidthProvider = currentTextWidthProvider(),
 ): void {
   if (!text) return;
-  const seg = graphemeSegmenter;
-  if (!seg || !needsGraphemeSegmentation(text)) {
+  const segments = segmentedGraphemes(text);
+  if (!segments) {
     let index = 0;
     for (const ch of text) {
       const next = index + ch.length;
@@ -151,7 +233,7 @@ export function forEachTextCellSegment(
     return;
   }
   let index = 0;
-  for (const part of seg.segment(text) as any as Iterable<GraphemeSegment>) {
+  for (const part of segments) {
     const start = part.index ?? index;
     const end = start + part.segment.length;
     const result = cb({
@@ -174,11 +256,11 @@ export function graphemeRangeAt(
   if (index < 0 || index >= len) return null;
   if (isAscii(text)) return { start: index, end: index + 1 };
 
-  const seg = graphemeSegmenter;
-  if (seg && needsGraphemeSegmentation(text)) {
+  const segments = segmentedGraphemes(text);
+  if (segments) {
     let pos = 0;
-    for (const part of seg.segment(text) as any as Iterable<GraphemeSegment>) {
-      const start = pos;
+    for (const part of segments) {
+      const start = part.index ?? pos;
       const end = start + part.segment.length;
       if (index >= start && index < end) return { start, end };
       pos = end;
@@ -503,11 +585,11 @@ export function wrapByCells(
 
     // Use index tracking + slice instead of array push + join.
     // Avoids intermediate array allocations per line break.
-    const seg = graphemeSegmenter;
-    if (seg && needsGraphemeSegmentation(rawLine)) {
+    const segments = segmentedGraphemes(rawLine);
+    if (segments) {
       let lineStart = 0;
       let cells = 0;
-      for (const part of seg.segment(rawLine) as any as Iterable<GraphemeSegment>) {
+      for (const part of segments) {
         const g = part.segment;
         const gIdx = part.index;
         const w = charCellWidth(g, provider);
