@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Style, Terminal } from "../src/index.js";
+import { createTerminal, type Style, type Terminal } from "../src/index.js";
 import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
 import { buildMarkdownBlocks, buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
 import { layoutMarkdownBlocks, layoutMarkdownBlocksCached } from "../src/vue/markdown/layout.js";
@@ -373,6 +373,45 @@ describe("markdown layout", () => {
     expect(rows[1]?.plainText.endsWith("│")).toBe(true);
     expect(rows[2]?.plainText.endsWith("┤")).toBe(true);
     expect(rows.at(-1)?.plainText.endsWith("╯")).toBe(true);
+  });
+
+  it("paints markdown table right borders at stable terminal columns with complex emoji", () => {
+    const coder = "\u{1F468}\u{1F3FD}\u200D\u{1F4BB}";
+    const rainbowFlag = "\u{1F3F3}\uFE0F\u200D\u{1F308}";
+    const pirateFlag = "\u{1F3F4}\u200D\u2620\uFE0F";
+    const keycapOne = "1\uFE0F\u20E3";
+    const englandFlag = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}";
+    const width = 40;
+    const rows = buildMarkdownVisualRows(
+      [
+        "| Icon | Name |",
+        "|---|---|",
+        `| ${coder} | coder |`,
+        `| ${rainbowFlag} | pride |`,
+        `| ${pirateFlag} | pirate |`,
+        `| ${keycapOne} | keycap |`,
+        `| ${englandFlag} | england |`,
+      ].join("\n"),
+      width,
+      createTuiMarkdownParser(),
+    );
+    const tableWidth = visualRowCells(rows[0]!);
+    const terminal = createTerminal({ cols: width, rows: rows.length });
+
+    rows.forEach((row, y) => {
+      paintMarkdownVisualRow(terminal, row, {
+        x: 0,
+        y,
+        w: width,
+        baseStyle: {},
+      });
+    });
+
+    expect(rows.every((row) => visualRowCells(row) === tableWidth)).toBe(true);
+    expect(terminal.getCell(tableWidth - 1, 0).ch).toBe("╮");
+    expect(terminal.getCell(tableWidth - 1, 1).ch).toBe("│");
+    expect(terminal.getCell(tableWidth - 1, 2).ch).toBe("┤");
+    expect(terminal.getCell(tableWidth - 1, rows.length - 1).ch).toBe("╯");
   });
 
   it("does not split wide emoji when table cells are clipped", () => {
