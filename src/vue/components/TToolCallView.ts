@@ -3,7 +3,13 @@ import type { Style } from "../../core/types.js";
 import { computed, defineComponent, h } from "vue";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
-import { sanitizeInlineText, sliceByCells, textCellWidth } from "../utils/text.js";
+import { useTerminal } from "../composables/use-terminal.js";
+import {
+  sanitizeInlineText,
+  sliceByCells,
+  textCellWidth,
+  withTextWidthProvider,
+} from "../utils/text.js";
 
 export type TToolCallStatus = "pending" | "running" | "success" | "error" | "warning" | "neutral";
 
@@ -157,75 +163,86 @@ export const TToolCallView = defineComponent({
   },
   emits: ["click", "toggle"],
   setup(props, { emit, slots }) {
-    const model = computed(() => {
-      const width = Math.max(0, Math.floor(props.w));
-      const base = props.style ?? DEFAULT_BASE_STYLE;
-      const muted = props.mutedStyle ?? mergeStyle(DEFAULT_MUTED_STYLE, { bg: base.bg });
-      const header = props.collapsed
-        ? mergeStyle(base, { dim: true }, props.collapsedStyle, props.headerStyle)
-        : mergeStyle(
-            base,
-            props.selected ? { bold: true } : undefined,
-            props.expandedStyle,
-            props.headerStyle,
+    const { widthProvider } = useTerminal();
+    const withWidthProvider = <T>(fn: () => T): T => withTextWidthProvider(widthProvider, fn);
+
+    const model = computed(() =>
+      withWidthProvider(() => {
+        const width = Math.max(0, Math.floor(props.w));
+        const base = props.style ?? DEFAULT_BASE_STYLE;
+        const muted = props.mutedStyle ?? mergeStyle(DEFAULT_MUTED_STYLE, { bg: base.bg });
+        const header = props.collapsed
+          ? mergeStyle(base, { dim: true }, props.collapsedStyle, props.headerStyle)
+          : mergeStyle(
+              base,
+              props.selected ? { bold: true } : undefined,
+              props.expandedStyle,
+              props.headerStyle,
+            );
+        const marker = props.markerStyle ? mergeStyle(header, props.markerStyle) : header;
+        const dot = mergeStyle(statusStyle(props.status, base, muted), props.statusStyle);
+        const title = mergeStyle(
+          base,
+          { dim: false },
+          props.selected ? { bold: true } : undefined,
+          props.titleStyle,
+        );
+        const suffix = mergeStyle(base, muted, props.suffixStyle);
+        const preview = mergeStyle(base, { dim: true }, props.previewStyle);
+        const styles: TToolCallViewStyles = {
+          base,
+          header,
+          marker,
+          status: dot,
+          title,
+          suffix,
+          preview,
+        };
+
+        const segments: TToolCallViewSegment[] = [];
+        let x = 0;
+        const nestedLead = props.nested ? "    " : "";
+        const markerText = `${nestedLead}${props.collapsed ? props.markerCollapsed : props.markerExpanded} `;
+        x = pushSegment(segments, "marker", x, markerText, marker);
+        if (props.statusDot) {
+          x = pushSegment(segments, "status", x, props.statusDot, dot);
+          x = pushSegment(segments, "separator", x, " ", header);
+        }
+        x = pushSegment(segments, "title", x, fitText(props.title, Math.max(0, width - x)), title);
+        if (props.collapsed) {
+          const visibleSuffix = fitSuffix(props.suffix, Math.max(0, width - x));
+          pushSegment(segments, "suffix", x, visibleSuffix, suffix);
+        }
+
+        const previewPrefix = `${nestedLead}${props.previewPrefix}`;
+        const previewText =
+          props.collapsed && props.preview
+            ? fitText(props.preview, Math.max(0, width - textCellWidth(previewPrefix)))
+            : "";
+        const previewSegments: TToolCallViewSegment[] = [];
+        if (previewText) {
+          let previewX = 0;
+          previewX = pushSegment(
+            previewSegments,
+            "preview-prefix",
+            previewX,
+            previewPrefix,
+            preview,
           );
-      const marker = props.markerStyle ? mergeStyle(header, props.markerStyle) : header;
-      const dot = mergeStyle(statusStyle(props.status, base, muted), props.statusStyle);
-      const title = mergeStyle(
-        base,
-        { dim: false },
-        props.selected ? { bold: true } : undefined,
-        props.titleStyle,
-      );
-      const suffix = mergeStyle(base, muted, props.suffixStyle);
-      const preview = mergeStyle(base, { dim: true }, props.previewStyle);
-      const styles: TToolCallViewStyles = {
-        base,
-        header,
-        marker,
-        status: dot,
-        title,
-        suffix,
-        preview,
-      };
+          pushSegment(previewSegments, "preview", previewX, previewText, preview);
+        }
 
-      const segments: TToolCallViewSegment[] = [];
-      let x = 0;
-      const nestedLead = props.nested ? "    " : "";
-      const markerText = `${nestedLead}${props.collapsed ? props.markerCollapsed : props.markerExpanded} `;
-      x = pushSegment(segments, "marker", x, markerText, marker);
-      if (props.statusDot) {
-        x = pushSegment(segments, "status", x, props.statusDot, dot);
-        x = pushSegment(segments, "separator", x, " ", header);
-      }
-      x = pushSegment(segments, "title", x, fitText(props.title, Math.max(0, width - x)), title);
-      if (props.collapsed) {
-        const visibleSuffix = fitSuffix(props.suffix, Math.max(0, width - x));
-        pushSegment(segments, "suffix", x, visibleSuffix, suffix);
-      }
-
-      const previewPrefix = `${nestedLead}${props.previewPrefix}`;
-      const previewText =
-        props.collapsed && props.preview
-          ? fitText(props.preview, Math.max(0, width - textCellWidth(previewPrefix)))
-          : "";
-      const previewSegments: TToolCallViewSegment[] = [];
-      if (previewText) {
-        let previewX = 0;
-        previewX = pushSegment(previewSegments, "preview-prefix", previewX, previewPrefix, preview);
-        pushSegment(previewSegments, "preview", previewX, previewText, preview);
-      }
-
-      return {
-        styles,
-        marker: props.collapsed ? props.markerCollapsed : props.markerExpanded,
-        suffix: segments.find((segment) => segment.role === "suffix")?.text ?? "",
-        preview: previewText,
-        previewPrefix,
-        headerSegments: segments,
-        previewSegments,
-      };
-    });
+        return {
+          styles,
+          marker: props.collapsed ? props.markerCollapsed : props.markerExpanded,
+          suffix: segments.find((segment) => segment.role === "suffix")?.text ?? "",
+          preview: previewText,
+          previewPrefix,
+          headerSegments: segments,
+          previewSegments,
+        };
+      }),
+    );
 
     return () => {
       const state = model.value;
@@ -264,7 +281,7 @@ export const TToolCallView = defineComponent({
         }),
         ...(slots.header
           ? slots.header(headerSlotProps)
-          : renderSegments(state.headerSegments, 0, props.w)),
+          : withWidthProvider(() => renderSegments(state.headerSegments, 0, props.w))),
       ];
       if (state.preview && height > 1) {
         children.push(
@@ -279,7 +296,7 @@ export const TToolCallView = defineComponent({
           }),
           ...(slots.preview
             ? slots.preview(previewSlotProps)
-            : renderSegments(state.previewSegments, 1, props.w)),
+            : withWidthProvider(() => renderSegments(state.previewSegments, 1, props.w))),
         );
       }
 

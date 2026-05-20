@@ -187,4 +187,35 @@ describe("TToolCallView", () => {
       mounted.unmount();
     }
   });
+
+  it("uses TerminalProvider widthProvider for ambiguous-width tool call segments", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TToolCallView, {
+          x: 0,
+          y: 0,
+          w: 24,
+          title: "Ωshell",
+          collapsed: true,
+          suffix: "① done",
+          preview: "★ changed",
+        }),
+      24,
+      2,
+      { widthProvider: "cjk" },
+    );
+
+    try {
+      expect(mounted.terminal.getCell(2, 0).ch).toBe("●");
+      expect(mounted.terminal.getCell(3, 0).continuation).toBe(true);
+      expect(mounted.terminal.getCell(5, 0).ch).toBe("Ω");
+      expect(mounted.terminal.getCell(6, 0).continuation).toBe(true);
+      expect(mounted.terminal.getCell(13, 0).ch).toBe("①");
+      expect(mounted.terminal.getCell(14, 0).continuation).toBe(true);
+      expect(mounted.terminal.getCell(4, 1).ch).toBe("★");
+      expect(mounted.terminal.getCell(5, 1).continuation).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
 });
