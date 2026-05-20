@@ -8,6 +8,7 @@ import type { Style } from "../../core/types.js";
 import type {
   TuiMarkdownBlock,
   TuiMarkdownInlineSegment,
+  TuiMarkdownTableCell,
   TuiMarkdownVisualRow,
   TuiMarkdownVisualSegment,
 } from "./types.js";
@@ -275,6 +276,167 @@ function thematicBreakRows(
   ];
 }
 
+function tableColumnCount(block: Extract<TuiMarkdownBlock, { type: "table" }>): number {
+  let columns = block.header.length;
+  for (const row of block.rows) columns = Math.max(columns, row.length);
+  return columns;
+}
+
+function tableColumnWidths(
+  block: Extract<TuiMarkdownBlock, { type: "table" }>,
+  columns: number,
+  width: number,
+): number[] {
+  const widths = Array.from({ length: columns }, () => 0);
+  const measureRow = (row: readonly TuiMarkdownTableCell[]) => {
+    for (let index = 0; index < columns; index++) {
+      widths[index] = Math.max(widths[index] ?? 0, segmentsCellWidth(row[index]?.segments ?? []));
+    }
+  };
+  measureRow(block.header);
+  for (const row of block.rows) measureRow(row);
+
+  const prefixCells = segmentsCellWidth(block.prefixSegments ?? []);
+  const available = Math.max(0, width - prefixCells - (columns * 3 + 1));
+  for (let index = 0; index < widths.length; index++) {
+    widths[index] = Math.min(widths[index] ?? 0, available);
+  }
+
+  let total = widths.reduce((sum, item) => sum + item, 0);
+  while (total > available) {
+    let widestIndex = 0;
+    for (let index = 1; index < widths.length; index++) {
+      if ((widths[index] ?? 0) > (widths[widestIndex] ?? 0)) widestIndex = index;
+    }
+    if ((widths[widestIndex] ?? 0) <= 0) break;
+    widths[widestIndex]!--;
+    total--;
+  }
+
+  return widths;
+}
+
+function tableBorderText(
+  left: string,
+  join: string,
+  right: string,
+  widths: readonly number[],
+): string {
+  return `${left}${widths.map((w) => repeatChar("─", w + 2)).join(join)}${right}`;
+}
+
+function appendVisualSegment(
+  segments: TuiMarkdownVisualSegment[],
+  text: string,
+  style?: Style,
+): void {
+  if (!text) return;
+  const cells = textCellWidth(text);
+  if (cells <= 0) return;
+  const prev = segments[segments.length - 1];
+  if (prev && prev.style === style) {
+    segments[segments.length - 1] = {
+      text: `${prev.text}${text}`,
+      style,
+      cells: prev.cells + cells,
+    };
+    return;
+  }
+  segments.push({ text, style, cells });
+}
+
+function appendInlineVisualSegments(
+  out: TuiMarkdownVisualSegment[],
+  segments: readonly TuiMarkdownInlineSegment[],
+): void {
+  for (const segment of segments) {
+    if (segment.hardBreak) {
+      appendVisualSegment(out, " ");
+      continue;
+    }
+    appendVisualSegment(out, segment.text, segment.style);
+  }
+}
+
+function tableBorderRow(
+  block: Extract<TuiMarkdownBlock, { type: "table" }>,
+  widths: readonly number[],
+  rowInBlock: number,
+  left: string,
+  join: string,
+  right: string,
+): TuiMarkdownVisualRow {
+  const prefix = (block.prefixSegments ?? [])
+    .map(toVisualSegment)
+    .filter(Boolean) as TuiMarkdownVisualSegment[];
+  const border = tableBorderText(left, join, right, widths);
+  const segments = [...prefix];
+  appendVisualSegment(segments, border, block.borderStyle);
+  return {
+    key: `${block.key}:${rowInBlock}`,
+    blockKey: block.key,
+    rowInBlock,
+    plainText: segmentsPlainText(segments),
+    segments,
+  };
+}
+
+function tableContentRow(
+  block: Extract<TuiMarkdownBlock, { type: "table" }>,
+  row: readonly TuiMarkdownTableCell[],
+  widths: readonly number[],
+  rowInBlock: number,
+): TuiMarkdownVisualRow {
+  const segments = (block.prefixSegments ?? [])
+    .map(toVisualSegment)
+    .filter(Boolean) as TuiMarkdownVisualSegment[];
+  appendVisualSegment(segments, "│", block.borderStyle);
+
+  for (let index = 0; index < widths.length; index++) {
+    const width = widths[index] ?? 0;
+    const cell = row[index];
+    const clipped = clipInlineSegmentsToWidth(cell?.segments ?? [], width);
+    const contentCells = segmentsCellWidth(clipped);
+    const remaining = Math.max(0, width - contentCells);
+    const align = cell?.align ?? "left";
+    const leftPad =
+      align === "right" ? remaining : align === "center" ? Math.floor(remaining / 2) : 0;
+    const rightPad = remaining - leftPad;
+
+    appendVisualSegment(segments, " ");
+    appendVisualSegment(segments, repeatChar(" ", leftPad));
+    appendInlineVisualSegments(segments, clipped);
+    appendVisualSegment(segments, repeatChar(" ", rightPad));
+    appendVisualSegment(segments, " ");
+    appendVisualSegment(segments, "│", block.borderStyle);
+  }
+
+  return {
+    key: `${block.key}:${rowInBlock}`,
+    blockKey: block.key,
+    rowInBlock,
+    plainText: segmentsPlainText(segments),
+    segments,
+  };
+}
+
+function tableRows(
+  block: Extract<TuiMarkdownBlock, { type: "table" }>,
+  width: number,
+): readonly TuiMarkdownVisualRow[] {
+  const columns = tableColumnCount(block);
+  if (columns <= 0) return [];
+
+  const widths = tableColumnWidths(block, columns, width);
+  const rows: TuiMarkdownVisualRow[] = [];
+  rows.push(tableBorderRow(block, widths, rows.length, "╭", "┬", "╮"));
+  rows.push(tableContentRow(block, block.header, widths, rows.length));
+  rows.push(tableBorderRow(block, widths, rows.length, "├", "┼", "┤"));
+  for (const row of block.rows) rows.push(tableContentRow(block, row, widths, rows.length));
+  rows.push(tableBorderRow(block, widths, rows.length, "╰", "┴", "╯"));
+  return rows;
+}
+
 function styleSignature(style?: Style): string {
   if (!style) return "";
   return [
@@ -323,6 +485,22 @@ function blockLayoutSignature(block: TuiMarkdownBlock): string {
         styleSignature(block.style),
         inlineSegmentsSignature(block.prefixSegments),
       ].join("\u0004");
+    case "table":
+      return [
+        block.type,
+        inlineSegmentsSignature(block.prefixSegments),
+        styleSignature(block.borderStyle),
+        block.header
+          .map((cell) => `${inlineSegmentsSignature(cell.segments)}\u0005${cell.align ?? ""}`)
+          .join("\u0006"),
+        block.rows
+          .map((row) =>
+            row
+              .map((cell) => `${inlineSegmentsSignature(cell.segments)}\u0005${cell.align ?? ""}`)
+              .join("\u0006"),
+          )
+          .join("\u0007"),
+      ].join("\u0004");
     case "blank":
       return block.type;
   }
@@ -339,6 +517,8 @@ export function layoutMarkdownBlock(
       return codeBlockRows(block, width);
     case "thematic_break":
       return thematicBreakRows(block, width);
+    case "table":
+      return tableRows(block, width);
     case "blank":
       return [
         {

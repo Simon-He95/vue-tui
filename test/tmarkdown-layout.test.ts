@@ -292,6 +292,35 @@ describe("markdown layout", () => {
     expect(rows.map((row) => row.plainText)).toEqual(["- hello ", "  world"]);
   });
 
+  it("renders markdown tables as bordered terminal rows", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| Package | Name |", "|---|---|", "| cli | dimcode |"].join("\n"),
+      80,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows.map((row) => row.plainText)).toEqual([
+      "╭─────────┬─────────╮",
+      "│ Package │ Name    │",
+      "├─────────┼─────────┤",
+      "│ cli     │ dimcode │",
+      "╰─────────┴─────────╯",
+    ]);
+    expect(
+      rows[1]?.segments.some((segment) => segment.text === "Package" && segment.style?.bold),
+    ).toBe(true);
+  });
+
+  it("honors markdown table cell alignment", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| Left | Center | Right |", "|:--|:-:|--:|", "| a | b | c |"].join("\n"),
+      80,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows[3]?.plainText).toBe("│ a    │   b    │     c │");
+  });
+
   it("does not insert an extra blank row before nested list items", () => {
     const rows = buildMarkdownVisualRows("- parent\n  - child", 40, createTuiMarkdownParser());
     expect(rows.map((row) => row.plainText)).toEqual(["- parent", "  - child"]);

@@ -42,6 +42,8 @@ function withBlockKeyPrefix(
       return { ...block, key };
     case "thematic_break":
       return { ...block, key };
+    case "table":
+      return { ...block, key };
     case "blank":
       return { ...block, key };
   }
