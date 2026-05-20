@@ -42,6 +42,9 @@ const app = createTerminalApp({
     },
   },
   defaultStyle: consoleDefaultStyle,
+  selection: {
+    style: { fg: "black", bg: "magentaBright", inverse: false },
+  },
 });
 app.mount();
 

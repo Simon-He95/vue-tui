@@ -60,6 +60,7 @@ interface PendingPlaneScrollOperation extends TerminalScrollOperation {
 
 interface PlaneTerminalInternals {
   getPlaneTerminal: (plane: TerminalRenderPlane) => Terminal;
+  readRowForPlanes: (y: number, planes: TerminalRenderPlanes | null | undefined) => readonly Cell[];
   resetRowsForRender: (plane: TerminalRenderPlane, dirtyRows: readonly number[] | null) => void;
   getRowCoverageKind: (plane: TerminalRenderPlane, y: number) => 0 | 1 | 2;
   scrollRows: (plane: TerminalRenderPlane, startY: number, endY: number, lines: number) => void;
@@ -269,6 +270,15 @@ function normalizeDirtyRows(
 export function getPlaneTerminal(terminal: Terminal, plane: TerminalRenderPlane): Terminal {
   const internals = (terminal as PlaneAwareTerminal)[TERMINAL_PLANE_INTERNALS];
   return internals?.getPlaneTerminal(plane) ?? terminal;
+}
+
+export function readTerminalRowForPlanes(
+  terminal: Terminal,
+  y: number,
+  planes?: TerminalRenderPlanes | null,
+): readonly Cell[] {
+  const internals = (terminal as PlaneAwareTerminal)[TERMINAL_PLANE_INTERNALS];
+  return internals?.readRowForPlanes(y, planes) ?? terminal.getRow(y);
 }
 
 export function resetPlaneRowsForRender(
@@ -727,7 +737,10 @@ export function createTerminal(opts: TerminalOptions): Terminal {
     recordPendingScrollOp(plane, op);
   }
 
-  function composeRows(rows: readonly number[] | null): void {
+  function composeRows(
+    rows: readonly number[] | null,
+    planes: readonly TerminalRenderPlane[] = TERMINAL_RENDER_PLANES,
+  ): void {
     const blank = createBlankCell();
     const fpFn = compositeBuffer.fingerprintFn;
     const fpArr = compositeBuffer.soaFingerprints;
@@ -737,7 +750,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       const dst = getBufferRow(compositeBuffer, y);
       dst.length = compositeBuffer.cols;
       for (let x = 0; x < compositeBuffer.cols; x++) dst[x] = blank;
-      for (const plane of TERMINAL_RENDER_PLANES) {
+      for (const plane of planes) {
         const state = planeStates.get(plane);
         if (!state) continue;
         const src = getBufferRow(state.buffer, y);
@@ -815,8 +828,21 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       for (const y of rows) dirtyRows.add(y);
     }
     if (composeAllRows || dirtyRows.size > 0)
-      composeRows(composeAllRows ? null : Array.from(dirtyRows).sort((a, b) => a - b));
+      composeRows(
+        composeAllRows ? null : Array.from(dirtyRows).sort((a, b) => a - b),
+        planesToCompose,
+      );
     syncCompositeCursor();
+  }
+
+  function readRowForPlanes(
+    y: number,
+    planes: TerminalRenderPlanes | null | undefined,
+  ): readonly Cell[] {
+    assertNotDisposed();
+    if (y < 0 || y >= compositeBuffer.rows) throw new RangeError("Row out of bounds");
+    composeRows([y], planes?.length ? planes : TERMINAL_RENDER_PLANES);
+    return getBufferRow(compositeBuffer, y);
   }
 
   function pendingDirtyRowsForPlanes(
@@ -1193,6 +1219,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
 
   base[TERMINAL_PLANE_INTERNALS] = {
     getPlaneTerminal: createPlaneTerminalApi,
+    readRowForPlanes,
     resetRowsForRender(plane, dirtyRows) {
       const state = getPlaneState(plane);
       const rows = normalizeDirtyRows(dirtyRows, state.buffer.rows);

@@ -504,12 +504,44 @@ export function createStdoutRenderer(
   const rowClearToEol: string[] = [];
   const rowTextPartsScratch: string[] = [];
 
-  // Some terminals disagree on the rendered width of certain wide glyphs. If the terminal
-  // advances fewer columns than our buffer model (width=2), subsequent glyphs can shift left
-  // and visually corrupt borders. Force cursor alignment after rendered 2-cell glyphs.
-  const needsWideCursorFix = (cell: Cell, ch: string): boolean => {
+  let zeroWidthRiskRe: RegExp | null = null;
+  try {
+    // eslint-disable-next-line prefer-regex-literals
+    zeroWidthRiskRe = new RegExp("^(?:\\p{Mark}|\\p{Default_Ignorable_Code_Point})+$", "u");
+  } catch {
+    zeroWidthRiskRe = null;
+  }
+
+  const isZeroWidthRiskCodePoint = (codePoint: number): boolean =>
+    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
+    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
+    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
+    (codePoint >= 0x200b && codePoint <= 0x200f) ||
+    (codePoint >= 0x202a && codePoint <= 0x202e) ||
+    (codePoint >= 0x2060 && codePoint <= 0x206f) ||
+    (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f) ||
+    (codePoint >= 0xe0000 && codePoint <= 0xe0fff);
+
+  const isZeroWidthRiskGrapheme = (ch: string): boolean => {
+    if (!ch || ch === " ") return false;
+    if (zeroWidthRiskRe?.test(ch)) return true;
+    let hasRiskCodePoint = false;
+    for (const part of ch) {
+      const codePoint = part.codePointAt(0);
+      if (codePoint === 0x20) continue;
+      if (codePoint == null || !isZeroWidthRiskCodePoint(codePoint)) return false;
+      hasRiskCodePoint = true;
+    }
+    return hasRiskCodePoint;
+  };
+
+  // Some terminals disagree on rendered glyph widths. If the terminal advances fewer columns
+  // than our buffer model, subsequent glyphs can shift left and visually corrupt borders.
+  const needsCursorFix = (cell: Cell, ch: string): boolean => {
     const w = cell.width ?? 1;
-    return w === 2 && ch !== " ";
+    return (w === 2 && ch !== " ") || (w === 1 && isZeroWidthRiskGrapheme(ch));
   };
 
   const ensureRowEscapes = (rows: number): void => {
@@ -1056,7 +1088,7 @@ export function createStdoutRenderer(
           currentKey = key;
           currentStyle = nextStyle;
           currentTextParts.push(ch);
-          if (needsWideCursorFix(cell, ch)) {
+          if (needsCursorFix(cell, ch)) {
             currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);
           }
           continue;
@@ -1066,7 +1098,7 @@ export function createStdoutRenderer(
           normalizeHref(nextStyle.href) === normalizeHref(currentStyle?.href)
         ) {
           currentTextParts.push(ch);
-          if (needsWideCursorFix(cell, ch)) {
+          if (needsCursorFix(cell, ch)) {
             currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);
           }
           continue;
@@ -1080,7 +1112,7 @@ export function createStdoutRenderer(
         currentStyle = nextStyle;
         currentTextParts.length = 0;
         currentTextParts.push(ch);
-        if (needsWideCursorFix(cell, ch))
+        if (needsCursorFix(cell, ch))
           currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);
       }
 

@@ -35,7 +35,7 @@ import {
 } from "./cli/node-file-writers.js";
 import { createNodePathPickerProvider } from "./cli/path-provider.js";
 import { createTerminal } from "./core/index.js";
-import { getPlaneTerminal } from "./core/terminal/create-terminal.js";
+import { getPlaneTerminal, readTerminalRowForPlanes } from "./core/terminal/create-terminal.js";
 import { createCliEventManager } from "./events/index.js";
 import { getCliLatencyProfiler } from "./observability/cli-latency-node.js";
 import { framePerfNow, mergeFramePerfReason } from "./observability/frame-perf.js";
@@ -606,11 +606,13 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     },
   } as const;
   const selectionOverlay = getPlaneTerminal(terminal, "overlay");
+  const selectionReadPlanes: TerminalRenderPlanes = ["default", "transcript", "chrome"];
   let selectionRenderNodeId: string | null = null;
   const selection = createTerminalSelectionController({
     terminal,
     overlayTerminal: selectionOverlay,
     clipboard: options.clipboard ?? unsupportedClipboard,
+    getRow: (y) => readTerminalRowForPlanes(terminal, y, selectionReadPlanes),
     getTextProviders: () => Array.from(selectionTextProviders.values()),
     getOptions: () => {
       const config = resolveSelectionConfig(options.selection);
