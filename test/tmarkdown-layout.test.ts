@@ -357,9 +357,7 @@ describe("markdown layout", () => {
     );
     const fresh = withTextWidthProvider("cjk", () => layoutMarkdownBlocksCached(blocks, 40));
 
-    expect(next.rows.map((row) => row.plainText)).toEqual(
-      fresh.rows.map((row) => row.plainText),
-    );
+    expect(next.rows.map((row) => row.plainText)).toEqual(fresh.rows.map((row) => row.plainText));
     expect(visualRowCells(next.rows[0]!)).toBeGreaterThan(visualRowCells(first.rows[0]!));
     expect(next.rows[0]).not.toBe(first.rows[0]);
   });
