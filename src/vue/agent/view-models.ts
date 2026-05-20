@@ -5,6 +5,7 @@ import type {
   TToolCallViewStyles,
 } from "../components/TToolCallView.js";
 import {
+  forEachTextCellSegment,
   sanitizeInlineText,
   sanitizeTextBlock,
   sliceByCells,
@@ -108,10 +109,9 @@ function buildUserRows(
     let rowStart = lineStart;
     let rowText = "";
     let rowCells = 0;
-    for (const ch of rawLine) {
-      const chCells = textCellWidth(ch);
-      if (rowText && rowCells + chCells > width) {
-        const rowEnd = rowStart + rowText.length;
+    forEachTextCellSegment(rawLine, (segment) => {
+      if (rowText && rowCells + segment.cells > width) {
+        const rowEnd = lineStart + segment.start;
         rows.push({
           text: rowText,
           start: rowStart,
@@ -122,9 +122,9 @@ function buildUserRows(
         rowText = "";
         rowCells = 0;
       }
-      rowText += ch;
-      rowCells += chCells;
-    }
+      rowText += segment.text;
+      rowCells += segment.cells;
+    });
 
     const rowEnd = rowStart + rowText.length;
     rows.push({
