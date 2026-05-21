@@ -108,6 +108,12 @@ describe("TLinkifyText", () => {
       { text: "src/foo.ts" },
     ]);
     expect(linkifyTextSegments("3/4", { allowRelative: true })).toEqual([{ text: "3/4" }]);
+    expect(linkifyTextSegments("C:/Users/me/project", { allowRelative: true })).toEqual([
+      { text: "C:/Users/me/project" },
+    ]);
+    expect(linkifyTextSegments("key:/path", { allowRelative: true })).toEqual([
+      { text: "key:/path" },
+    ]);
     expect(linkifyTextSegments("GET / 200", { allowRelative: true })).toEqual([
       { text: "GET / 200" },
     ]);
@@ -155,6 +161,13 @@ describe("TLinkifyText", () => {
   it("skips links longer than the configured maximum length", () => {
     expect(linkifyTextSegments("https://example.com/very-long", { maxUrlLength: 8 })).toEqual([
       { text: "https://example.com/very-long" },
+    ]);
+    expect(
+      linkifyTextSegments("see https://a.co/x.", { maxUrlLength: "https://a.co/x".length }),
+    ).toEqual([
+      { text: "see " },
+      { text: "https://a.co/x", href: "https://a.co/x" },
+      { text: "." },
     ]);
   });
 

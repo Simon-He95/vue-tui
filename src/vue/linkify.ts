@@ -95,19 +95,19 @@ function splitTrailingPunctuation(raw: string): { body: string; suffix: string }
   return { body, suffix };
 }
 
-function normalizeLinkifiedHref(raw: string, options: TLinkifyOptions): string | null {
+function normalizeLinkifiedHref(body: string, options: TLinkifyOptions): string | null {
   const protocols = protocolSet(options);
   const maxUrlLength = options.maxUrlLength;
-  if (maxUrlLength != null && raw.length > Math.max(0, Math.floor(maxUrlLength))) return null;
+  if (maxUrlLength != null && body.length > Math.max(0, Math.floor(maxUrlLength))) return null;
 
-  const rawScheme = scheme(raw);
+  const rawScheme = scheme(body);
   if (rawScheme === "http" || rawScheme === "https" || rawScheme === "mailto") {
     if (!protocols.has(rawScheme)) return null;
-    return sanitizeDomHref(raw, { allowRelative: false });
+    return sanitizeDomHref(body, { allowRelative: false });
   }
 
-  if (options.allowRelative && isRelativeCandidate(raw)) {
-    return sanitizeDomHref(raw, { allowRelative: true });
+  if (options.allowRelative && isRelativeCandidate(body)) {
+    return sanitizeDomHref(body, { allowRelative: true });
   }
 
   return null;
@@ -133,6 +133,13 @@ export function linkifyTextSegments(
 
     const { body, suffix } = splitTrailingPunctuation(raw);
     if (!hasTextBoundary(text, match.index)) continue;
+    if (
+      isRelativeCandidate(body) &&
+      text[match.index - 1] === ":" &&
+      /[a-z0-9]/iu.test(text[match.index - 2] ?? "")
+    ) {
+      continue;
+    }
 
     const href = normalizeLinkifiedHref(body, options);
     if (!href) continue;

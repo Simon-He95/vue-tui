@@ -281,6 +281,8 @@ export function openExternalHref(href: string): boolean {
   // Safe by construction: opening is disabled unless VT_OPEN_LINKS=1, href is
   // protocol-allowlisted by normalizeOpenHref(), command is a fixed platform
   // binary, and shell:false prevents shell interpolation.
+
+  // codeql[js/shell-command-injection-from-environment]
   const child = spawn(command, args, { detached: true, stdio: "ignore", shell: false });
   child.on("error", () => {});
   child.unref();
