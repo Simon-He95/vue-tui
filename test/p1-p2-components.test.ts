@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createTheme,
   TAutocompleteInput,
@@ -18,7 +18,7 @@ import {
   TTooltip,
   TTree,
 } from "../src/index.js";
-import { h, mountTerminal } from "./ui-regressions-support.js";
+import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
 describe("P1/P2 public components", () => {
   it("renders table, data table, and tree primitives", async () => {
@@ -172,14 +172,146 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("selects the highlighted context menu item after keyboard navigation", async () => {
+    const open = ref(true);
+    const selectedIndex = ref(0);
+    const items = [
+      { id: "open", label: "Open Link" },
+      { id: "copy", label: "Copy Link" },
+    ];
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TContextMenu, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (value: boolean) => (open.value = value),
+          x: 0,
+          y: 0,
+          w: 18,
+          items,
+          selectedIndex: selectedIndex.value,
+          "onUpdate:selectedIndex": (index: number) => (selectedIndex.value = index),
+          onSelect,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(selectedIndex.value).toBe(1);
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith({ item: items[1], index: 1 });
+      expect(open.value).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses provider theme defaults for table and form field styles", async () => {
+    const theme = createTheme({
+      components: {
+        TTable: {
+          headerStyle: { fg: "blueBright" },
+          rowStyle: { fg: "greenBright" },
+          selectedStyle: { bg: "blue" },
+        },
+        TFormField: {
+          labelStyle: { fg: "cyanBright" },
+          errorStyle: { fg: "yellowBright" },
+        },
+      },
+    });
+    const mounted = await mountTerminal(
+      () => [
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "id", label: "ID", width: 4 }],
+          rows: [{ id: "1" }],
+          rowKey: "id",
+          selectedRowKey: "1",
+        }),
+        h(TFormField, { x: 16, y: 0, w: 20, h: 3, label: "Token", error: "Required" }),
+      ],
+      40,
+      5,
+      { theme },
+    );
+
+    try {
+      const headerStyle = mounted.terminal.getCell(0, 0).style;
+      expect(headerStyle.bold).toBe(true);
+      expect(headerStyle.underline).toBe(true);
+      expect(headerStyle.fg).toBe("blueBright");
+
+      const rowStyle = mounted.terminal.getCell(0, 2).style;
+      expect(rowStyle.fg).toBe("greenBright");
+      expect(rowStyle.inverse).toBe(true);
+      expect(rowStyle.bg).toBe("blue");
+
+      const labelStyle = mounted.terminal.getCell(16, 0).style;
+      expect(labelStyle.bold).toBe(true);
+      expect(labelStyle.fg).toBe("cyanBright");
+      expect(mounted.terminal.getCell(16, 2).style.fg).toBe("yellowBright");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("creates theme tokens with component overrides", () => {
     const theme = createTheme({
       colors: { link: "blueBright" },
-      components: { TLink: { style: { fg: "blueBright", underline: true } } },
+      components: {
+        TLink: {
+          style: { fg: "blueBright" },
+          hoverStyle: { fg: "greenBright" },
+          underline: true,
+        },
+        TTable: { selectedStyle: { bg: "blue" } },
+        TFormField: { errorStyle: { fg: "yellowBright" } },
+      },
     });
 
     expect(theme.colors.link).toBe("blueBright");
     expect(theme.components.TLink?.style?.fg).toBe("blueBright");
+    expect(theme.components.TLink?.style?.underline).toBe(true);
+    expect(theme.components.TLink?.hoverStyle).toMatchObject({
+      fg: "greenBright",
+      underline: true,
+    });
+    expect(theme.components.TLink?.focusStyle?.inverse).toBe(true);
+    expect(theme.components.TTable?.selectedStyle).toMatchObject({
+      bg: "blue",
+      inverse: true,
+    });
+    expect(theme.components.TFormField?.labelStyle?.bold).toBe(true);
+    expect(theme.components.TFormField?.errorStyle?.fg).toBe("yellowBright");
     expect(theme.colors.danger).toBe("redBright");
   });
 });

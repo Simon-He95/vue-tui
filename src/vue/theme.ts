@@ -79,15 +79,52 @@ export const tuiDefaultTheme: TuiTheme = Object.freeze({
   }),
 });
 
+function mergeStyleToken(base?: Style, override?: Style): Style | undefined {
+  if (!base && !override) return undefined;
+  return {
+    ...(base ?? {}),
+    ...(override ?? {}),
+  } as Style;
+}
+
 export function createTheme(overrides: TuiThemeOverrides = {}): TuiTheme {
+  const components = overrides.components ?? {};
+  const link = components.TLink;
+  const table = components.TTable;
+  const formField = components.TFormField;
+  const defaultLink = tuiDefaultTheme.components.TLink;
+  const defaultTable = tuiDefaultTheme.components.TTable;
+  const defaultFormField = tuiDefaultTheme.components.TFormField;
+
   return {
     colors: {
       ...tuiDefaultTheme.colors,
       ...(overrides.colors ?? {}),
     },
     components: {
-      ...tuiDefaultTheme.components,
-      ...(overrides.components ?? {}),
+      TLink: {
+        ...(defaultLink ?? {}),
+        ...(link ?? {}),
+        style: mergeStyleToken(defaultLink?.style, link?.style),
+        hoverStyle: mergeStyleToken(defaultLink?.hoverStyle, link?.hoverStyle),
+        focusStyle: mergeStyleToken(defaultLink?.focusStyle, link?.focusStyle),
+        visitedStyle: mergeStyleToken(defaultLink?.visitedStyle, link?.visitedStyle),
+      },
+      TTable: {
+        ...(defaultTable ?? {}),
+        ...(table ?? {}),
+        headerStyle: mergeStyleToken(defaultTable?.headerStyle, table?.headerStyle),
+        borderStyle: mergeStyleToken(defaultTable?.borderStyle, table?.borderStyle),
+        rowStyle: mergeStyleToken(defaultTable?.rowStyle, table?.rowStyle),
+        selectedStyle: mergeStyleToken(defaultTable?.selectedStyle, table?.selectedStyle),
+      },
+      TFormField: {
+        ...(defaultFormField ?? {}),
+        ...(formField ?? {}),
+        labelStyle: mergeStyleToken(defaultFormField?.labelStyle, formField?.labelStyle),
+        helpStyle: mergeStyleToken(defaultFormField?.helpStyle, formField?.helpStyle),
+        errorStyle: mergeStyleToken(defaultFormField?.errorStyle, formField?.errorStyle),
+      },
     },
   };
 }

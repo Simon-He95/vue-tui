@@ -484,22 +484,22 @@ Import: `@simon_he/vue-tui`
 
 ### Props
 
-| 名称                    | 类型                 | 默认值                                                | 必填 | 说明 |
-| ----------------------- | -------------------- | ----------------------------------------------------- | ---- | ---- |
-| <code>x</code>          | <code>number</code>  | —                                                     | 是   | —    |
-| <code>y</code>          | <code>number</code>  | —                                                     | 是   | —    |
-| <code>w</code>          | <code>number</code>  | —                                                     | 是   | —    |
-| <code>h</code>          | <code>number</code>  | —                                                     | 是   | —    |
-| <code>zIndex</code>     | <code>number</code>  | <code>0</code>                                        | 否   | —    |
-| <code>label</code>      | <code>string</code>  | <code>&quot;&quot;</code>                             | 否   | —    |
-| <code>help</code>       | <code>string</code>  | <code>&quot;&quot;</code>                             | 否   | —    |
-| <code>error</code>      | <code>string</code>  | <code>&quot;&quot;</code>                             | 否   | —    |
-| <code>required</code>   | <code>boolean</code> | <code>false</code>                                    | 否   | —    |
-| <code>disabled</code>   | <code>boolean</code> | <code>false</code>                                    | 否   | —    |
-| <code>style</code>      | <code>Style</code>   | <code>undefined</code>                                | 否   | —    |
-| <code>labelStyle</code> | <code>Style</code>   | <code>() =&gt; ({ bold: true })</code>                | 否   | —    |
-| <code>helpStyle</code>  | <code>Style</code>   | <code>() =&gt; ({ dim: true })</code>                 | 否   | —    |
-| <code>errorStyle</code> | <code>Style</code>   | <code>() =&gt; ({ fg: &quot;redBright&quot; })</code> | 否   | —    |
+| 名称                    | 类型                 | 默认值                    | 必填 | 说明 |
+| ----------------------- | -------------------- | ------------------------- | ---- | ---- |
+| <code>x</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>y</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>w</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>h</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>zIndex</code>     | <code>number</code>  | <code>0</code>            | 否   | —    |
+| <code>label</code>      | <code>string</code>  | <code>&quot;&quot;</code> | 否   | —    |
+| <code>help</code>       | <code>string</code>  | <code>&quot;&quot;</code> | 否   | —    |
+| <code>error</code>      | <code>string</code>  | <code>&quot;&quot;</code> | 否   | —    |
+| <code>required</code>   | <code>boolean</code> | <code>false</code>        | 否   | —    |
+| <code>disabled</code>   | <code>boolean</code> | <code>false</code>        | 否   | —    |
+| <code>style</code>      | <code>Style</code>   | <code>undefined</code>    | 否   | —    |
+| <code>labelStyle</code> | <code>Style</code>   | <code>undefined</code>    | 否   | —    |
+| <code>helpStyle</code>  | <code>Style</code>   | <code>undefined</code>    | 否   | —    |
+| <code>errorStyle</code> | <code>Style</code>   | <code>undefined</code>    | 否   | —    |
 
 ### Events
 
@@ -1500,24 +1500,24 @@ Import: `@simon_he/vue-tui`
 
 ### Props
 
-| 名称                        | 类型                                                                       | 默认值                                                  | 必填 | 说明 |
-| --------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------- | ---- | ---- |
-| <code>x</code>              | <code>number</code>                                                        | —                                                       | 是   | —    |
-| <code>y</code>              | <code>number</code>                                                        | —                                                       | 是   | —    |
-| <code>w</code>              | <code>number</code>                                                        | —                                                       | 是   | —    |
-| <code>h</code>              | <code>number</code>                                                        | —                                                       | 是   | —    |
-| <code>zIndex</code>         | <code>number</code>                                                        | <code>0</code>                                          | 否   | —    |
-| <code>columns</code>        | <code>readonly TTableColumn[]</code>                                       | —                                                       | 是   | —    |
-| <code>rows</code>           | <code>readonly TTableRow[]</code>                                          | —                                                       | 是   | —    |
-| <code>rowKey</code>         | <code>string &#124; ((row: TTableRow, index: number) =&gt; unknown)</code> | <code>undefined</code>                                  | 否   | —    |
-| <code>selectedRowKey</code> | <code>unknown</code>                                                       | <code>undefined</code>                                  | 否   | —    |
-| <code>border</code>         | <code>boolean</code>                                                       | <code>false</code>                                      | 否   | —    |
-| <code>header</code>         | <code>boolean</code>                                                       | <code>true</code>                                       | 否   | —    |
-| <code>style</code>          | <code>Style</code>                                                         | <code>undefined</code>                                  | 否   | —    |
-| <code>headerStyle</code>    | <code>Style</code>                                                         | <code>() =&gt; ({ bold: true, underline: true })</code> | 否   | —    |
-| <code>borderStyle</code>    | <code>Style</code>                                                         | <code>() =&gt; ({ dim: true })</code>                   | 否   | —    |
-| <code>selectedStyle</code>  | <code>Style</code>                                                         | <code>() =&gt; ({ inverse: true })</code>               | 否   | —    |
-| <code>emptyText</code>      | <code>string</code>                                                        | <code>&quot;No rows&quot;</code>                        | 否   | —    |
+| 名称                        | 类型                                                                       | 默认值                           | 必填 | 说明 |
+| --------------------------- | -------------------------------------------------------------------------- | -------------------------------- | ---- | ---- |
+| <code>x</code>              | <code>number</code>                                                        | —                                | 是   | —    |
+| <code>y</code>              | <code>number</code>                                                        | —                                | 是   | —    |
+| <code>w</code>              | <code>number</code>                                                        | —                                | 是   | —    |
+| <code>h</code>              | <code>number</code>                                                        | —                                | 是   | —    |
+| <code>zIndex</code>         | <code>number</code>                                                        | <code>0</code>                   | 否   | —    |
+| <code>columns</code>        | <code>readonly TTableColumn[]</code>                                       | —                                | 是   | —    |
+| <code>rows</code>           | <code>readonly TTableRow[]</code>                                          | —                                | 是   | —    |
+| <code>rowKey</code>         | <code>string &#124; ((row: TTableRow, index: number) =&gt; unknown)</code> | <code>undefined</code>           | 否   | —    |
+| <code>selectedRowKey</code> | <code>unknown</code>                                                       | <code>undefined</code>           | 否   | —    |
+| <code>border</code>         | <code>boolean</code>                                                       | <code>false</code>               | 否   | —    |
+| <code>header</code>         | <code>boolean</code>                                                       | <code>true</code>                | 否   | —    |
+| <code>style</code>          | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
+| <code>headerStyle</code>    | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
+| <code>borderStyle</code>    | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
+| <code>selectedStyle</code>  | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
+| <code>emptyText</code>      | <code>string</code>                                                        | <code>&quot;No rows&quot;</code> | 否   | —    |
 
 ### Events
 

@@ -4,7 +4,7 @@ import { defineComponent, h } from "vue";
 import { TBox } from "./TBox.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
-import { fitCellText, mergeStyle } from "./simple-utils.js";
+import { clamp, fitCellText, mergeStyle } from "./simple-utils.js";
 
 export type TContextMenuItem = Readonly<{
   id: string;
@@ -55,6 +55,10 @@ export const TContextMenu = defineComponent({
       close();
     }
 
+    function selectedIndex(): number {
+      return clamp(props.selectedIndex, 0, props.items.length - 1);
+    }
+
     return () => {
       if (!props.modelValue) return null;
       const hgt = Math.max(2, props.items.length + 2);
@@ -81,13 +85,19 @@ export const TContextMenu = defineComponent({
                     close();
                   } else if (event.key === "Enter") {
                     event.preventDefault?.();
-                    select(index);
+                    select(selectedIndex());
                   } else if (event.key === "ArrowDown") {
                     event.preventDefault?.();
-                    emit("update:selectedIndex", Math.min(props.items.length - 1, index + 1));
+                    emit(
+                      "update:selectedIndex",
+                      clamp(selectedIndex() + 1, 0, props.items.length - 1),
+                    );
                   } else if (event.key === "ArrowUp") {
                     event.preventDefault?.();
-                    emit("update:selectedIndex", Math.max(0, index - 1));
+                    emit(
+                      "update:selectedIndex",
+                      clamp(selectedIndex() - 1, 0, props.items.length - 1),
+                    );
                   }
                 },
               },

@@ -137,7 +137,9 @@ export const TLink = defineComponent({
               props.hoverStyle,
             )
           : undefined,
-        interactiveMode.value && focused.value ? props.focusStyle : undefined,
+        interactiveMode.value && focused.value
+          ? mergeStyle(theme.value.components.TLink?.focusStyle, props.focusStyle)
+          : undefined,
         interactiveMode.value && active.value ? props.activeStyle : undefined,
       );
       return mergeStyle(

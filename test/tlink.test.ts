@@ -159,6 +159,28 @@ describe("TLink", () => {
     }
   });
 
+  it("applies theme focus style when focused", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          autoFocus: true,
+        }),
+      20,
+      2,
+    );
+
+    try {
+      await nextTick();
+      expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("does not open when keydown handler prevents default", async () => {
     const opener = vi.fn(() => true);
     const onActivate = vi.fn();

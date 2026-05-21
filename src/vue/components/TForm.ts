@@ -1,6 +1,7 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import { computed, defineComponent, h } from "vue";
+import { computed, defineComponent, h, inject, ref } from "vue";
+import { TuiThemeContextKey, tuiDefaultTheme } from "../theme.js";
 import { TInput } from "./TInput.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
@@ -288,14 +289,25 @@ export const TFormField = defineComponent({
     required: { type: Boolean, default: false },
     disabled: { type: Boolean, default: false },
     style: { type: Object as PropType<Style>, default: undefined },
-    labelStyle: { type: Object as PropType<Style>, default: () => ({ bold: true }) },
-    helpStyle: { type: Object as PropType<Style>, default: () => ({ dim: true }) },
-    errorStyle: { type: Object as PropType<Style>, default: () => ({ fg: "redBright" }) },
+    labelStyle: { type: Object as PropType<Style>, default: undefined },
+    helpStyle: { type: Object as PropType<Style>, default: undefined },
+    errorStyle: { type: Object as PropType<Style>, default: undefined },
   },
   setup(props, { slots }) {
+    const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
+    const labelStyle = computed(() =>
+      mergeStyle(theme.value.components.TFormField?.labelStyle, props.labelStyle),
+    );
+    const helpStyle = computed(() =>
+      mergeStyle(theme.value.components.TFormField?.helpStyle, props.helpStyle),
+    );
+    const errorStyle = computed(() =>
+      mergeStyle(theme.value.components.TFormField?.errorStyle, props.errorStyle),
+    );
+
     return () => {
       const message = props.error || props.help;
-      const messageStyle = props.error ? props.errorStyle : props.helpStyle;
+      const messageStyle = props.error ? errorStyle.value : helpStyle.value;
       const label = props.required && props.label ? `${props.label} *` : props.label;
       return h(
         TView as any,
@@ -308,8 +320,8 @@ export const TFormField = defineComponent({
                 w: props.w,
                 value: label,
                 style: props.disabled
-                  ? mergeStyle(props.labelStyle, { dim: true })
-                  : props.labelStyle,
+                  ? mergeStyle(labelStyle.value, { dim: true })
+                  : labelStyle.value,
               })
             : null,
           h(

@@ -1,6 +1,7 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import { computed, defineComponent, h } from "vue";
+import { computed, defineComponent, h, inject, ref } from "vue";
+import { TuiThemeContextKey, tuiDefaultTheme } from "../theme.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
 import { fitCellText, mergeStyle, repeatToCells } from "./simple-utils.js";
@@ -117,12 +118,9 @@ export const TTable = defineComponent({
     border: { type: Boolean, default: false },
     header: { type: Boolean, default: true },
     style: { type: Object as PropType<Style>, default: undefined },
-    headerStyle: {
-      type: Object as PropType<Style>,
-      default: () => ({ bold: true, underline: true }),
-    },
-    borderStyle: { type: Object as PropType<Style>, default: () => ({ dim: true }) },
-    selectedStyle: { type: Object as PropType<Style>, default: () => ({ inverse: true }) },
+    headerStyle: { type: Object as PropType<Style>, default: undefined },
+    borderStyle: { type: Object as PropType<Style>, default: undefined },
+    selectedStyle: { type: Object as PropType<Style>, default: undefined },
     emptyText: { type: String, default: "No rows" },
   },
   emits: {
@@ -130,6 +128,7 @@ export const TTable = defineComponent({
     headerClick: (_payload: TTableHeaderClickPayload) => true,
   },
   setup(props, { emit }) {
+    const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
     const widths = computed(() => resolveColumnWidths(props.columns, props.w, props.border));
     const headerLine = computed(() => makeHeaderLine(props.columns, widths.value, props.border));
     const separatorLine = computed(() => {
@@ -137,6 +136,18 @@ export const TTable = defineComponent({
       const cells = widths.value.map((width) => repeatToCells("-", width));
       return props.border ? `+${cells.join("+")}+` : cells.join(" ");
     });
+    const headerStyle = computed(() =>
+      mergeStyle(theme.value.components.TTable?.headerStyle, props.headerStyle),
+    );
+    const borderStyle = computed(() =>
+      mergeStyle(theme.value.components.TTable?.borderStyle, props.borderStyle),
+    );
+    const rowStyle = computed(() =>
+      mergeStyle(theme.value.components.TTable?.rowStyle, props.style),
+    );
+    const selectedRowStyle = computed(() =>
+      mergeStyle(rowStyle.value, theme.value.components.TTable?.selectedStyle, props.selectedStyle),
+    );
     const bodyRows = computed(() => {
       const top = props.header ? 2 : 0;
       return props.rows.slice(0, Math.max(0, props.h - top));
@@ -152,7 +163,7 @@ export const TTable = defineComponent({
             y: 0,
             w: props.w,
             value: headerLine.value,
-            style: props.headerStyle,
+            style: headerStyle.value,
           }),
         );
         let cursor = props.border ? 1 : 0;
@@ -181,7 +192,7 @@ export const TTable = defineComponent({
             y: 1,
             w: props.w,
             value: separatorLine.value,
-            style: props.borderStyle,
+            style: borderStyle.value,
           }),
         );
       }
@@ -194,7 +205,7 @@ export const TTable = defineComponent({
             y: props.header ? 2 : 0,
             w: props.w,
             value: props.emptyText,
-            style: props.style,
+            style: rowStyle.value,
           }),
         );
       }
@@ -223,7 +234,7 @@ export const TTable = defineComponent({
                 y: 0,
                 w: props.w,
                 value: makeRowLine(props.columns, widths.value, row, index, props.border),
-                style: selected ? mergeStyle(props.style, props.selectedStyle) : props.style,
+                style: selected ? selectedRowStyle.value : rowStyle.value,
               }),
           ),
         );
