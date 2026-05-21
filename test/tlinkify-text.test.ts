@@ -112,6 +112,21 @@ describe("TLinkifyText", () => {
       { text: "url=" },
       { text: "https://example.com", href: "https://example.com/" },
     ]);
+    expect(linkifyTextSegments('url="https://example.com"')).toEqual([
+      { text: 'url="' },
+      { text: "https://example.com", href: "https://example.com/" },
+      { text: '"' },
+    ]);
+    expect(linkifyTextSegments("open 'https://example.com'")).toEqual([
+      { text: "open '" },
+      { text: "https://example.com", href: "https://example.com/" },
+      { text: "'" },
+    ]);
+    expect(linkifyTextSegments("`https://example.com`")).toEqual([
+      { text: "`" },
+      { text: "https://example.com", href: "https://example.com/" },
+      { text: "`" },
+    ]);
   });
 
   it("keeps trailing punctuation outside link hrefs", () => {
@@ -134,6 +149,13 @@ describe("TLinkifyText", () => {
       { text: "see " },
       { text: "https://example.com/a_(b)", href: "https://example.com/a_(b)" },
       { text: "." },
+    ]);
+    expect(linkifyTextSegments("see https://example.com/path?x=1#top")).toEqual([
+      { text: "see " },
+      {
+        text: "https://example.com/path?x=1#top",
+        href: "https://example.com/path?x=1#top",
+      },
     ]);
   });
 

@@ -475,6 +475,67 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("skips disabled context menu items for default selection and keyboard navigation", async () => {
+    const open = ref(true);
+    const selectedIndex = ref(0);
+    const items = [
+      { id: "disabled-open", label: "Open Link", disabled: true },
+      { id: "copy", label: "Copy Link" },
+      { id: "disabled-save", label: "Save Link", disabled: true },
+      { id: "inspect", label: "Inspect Link" },
+    ];
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TContextMenu, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (value: boolean) => (open.value = value),
+          x: 0,
+          y: 0,
+          w: 18,
+          items,
+          selectedIndex: selectedIndex.value,
+          "onUpdate:selectedIndex": (index: number) => (selectedIndex.value = index),
+          onSelect,
+        }),
+      24,
+      7,
+    );
+
+    try {
+      expect(mounted.terminal.getCell(1, 1).style.inverse).not.toBe(true);
+      expect(mounted.terminal.getCell(1, 2).style.inverse).toBe(true);
+
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(selectedIndex.value).toBe(3);
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith({ item: items[3], index: 3 });
+      expect(open.value).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders the clamped context menu selection as active", async () => {
     const items = [
       { id: "open", label: "Open Link" },

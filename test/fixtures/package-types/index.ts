@@ -9,7 +9,6 @@ import {
   TTable,
   TText,
   TTree,
-  computeCommandPaletteMatchRanges,
   createTInputHostPlugin,
   createTerminal,
   createTheme,
@@ -20,7 +19,6 @@ import {
   type TInputHostAdapter,
   type TLinkifyOptions,
   type TCommandPaletteItem as RootTCommandPaletteItem,
-  type TCommandPaletteMatchRange as RootTCommandPaletteMatchRange,
 } from "@simon_he/vue-tui";
 
 import { sanitizeDomHref } from "@simon_he/vue-tui/core";
@@ -41,10 +39,8 @@ import {
   TRenderLayer,
   TRenderPlane,
   TTransition,
-  computeCommandPaletteMatchRanges as computeVueCommandPaletteMatchRanges,
   useTerminal,
   type TCommandPaletteItem as VueTCommandPaletteItem,
-  type TCommandPaletteMatchRange as VueTCommandPaletteMatchRange,
   type TInputPlugin,
 } from "@simon_he/vue-tui/vue";
 
@@ -70,9 +66,7 @@ import {
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import {
   TAgentTranscript,
-  computeCommandPaletteMatchRanges as computeAgentCommandPaletteMatchRanges,
   type TCommandPaletteItem as AgentTCommandPaletteItem,
-  type TCommandPaletteMatchRange as AgentTCommandPaletteMatchRange,
   TThinkingView,
   TToolCallView,
   TToolLogView,
@@ -100,29 +94,21 @@ const linkifyOptions: TLinkifyOptions = { protocols: ["https"], allowRelative: t
 const linkified = linkifyTextSegments("see https://example.com", linkifyOptions);
 const theme = createTheme({ colors: { link: "cyanBright" } });
 const tableColumns: TTableColumn[] = [{ key: "id", label: "ID", width: 4 }];
-const commandPaletteRange: RootTCommandPaletteMatchRange = { start: 0, end: 4 };
 const commandPaletteItem: RootTCommandPaletteItem = {
   label: "Open",
   detail: "workspace",
-  detailAccentRanges: [commandPaletteRange],
-  detailAccentSegments: [{ start: 0, end: 4, style: { fg: "cyanBright" } }],
-  accentStyle: { fg: "cyanBright" },
-  highlightAccentStyle: { bold: true },
-  legacyField: "kept",
+  keywords: ["project"],
+  disabled: false,
+  value: { id: "open" },
 };
-const commandPaletteRanges = computeCommandPaletteMatchRanges("Open workspace", "open");
-const vueCommandPaletteRange: VueTCommandPaletteMatchRange = { start: 0, end: 4 };
 const vueCommandPaletteItem: VueTCommandPaletteItem = {
   label: "Open",
-  detailAccentRanges: [vueCommandPaletteRange],
+  detail: "workspace",
 };
-const vueCommandPaletteRanges = computeVueCommandPaletteMatchRanges("Open workspace", "open");
-const agentCommandPaletteRange: AgentTCommandPaletteMatchRange = { start: 0, end: 4 };
 const agentCommandPaletteItem: AgentTCommandPaletteItem = {
   label: "Open",
-  detailAccentRanges: [agentCommandPaletteRange],
+  keywords: ["workspace"],
 };
-const agentCommandPaletteRanges = computeAgentCommandPaletteMatchRanges("Open workspace", "open");
 
 console.log(
   TerminalProvider,
@@ -175,11 +161,8 @@ console.log(
   theme,
   tableColumns,
   commandPaletteItem,
-  commandPaletteRanges,
   vueCommandPaletteItem,
-  vueCommandPaletteRanges,
   agentCommandPaletteItem,
-  agentCommandPaletteRanges,
 );
 
 const driver: StdinDriver | null = null;

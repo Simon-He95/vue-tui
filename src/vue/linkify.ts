@@ -17,7 +17,7 @@ const DEFAULT_PROTOCOLS: readonly TLinkifyProtocol[] = Object.freeze(["http", "h
 const URL_TEXT_RE = /(?:https?:\/\/|mailto:|file:\/\/|\.{1,2}\/|\/|#|\?)[^\s<>"'`]+/giu;
 const TRAILING_PUNCTUATION_RE = /[.,;:!?]/u;
 const TRAILING_CLOSER_RE = /[)\]}]/u;
-const TEXT_BOUNDARY_RE = /[\s([{<:=]/u;
+const TEXT_BOUNDARY_RE = /[\s([{<:="'`]/u;
 
 function protocolSet(options: TLinkifyOptions): Set<TLinkifyProtocol> {
   return new Set(options.protocols ?? DEFAULT_PROTOCOLS);

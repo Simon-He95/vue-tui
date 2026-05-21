@@ -59,8 +59,25 @@ export const TContextMenu = defineComponent({
       close();
     }
 
+    function firstEnabledIndex(): number {
+      return props.items.findIndex((item) => !item.disabled);
+    }
+
     function selectedIndex(): number {
-      return clamp(props.selectedIndex, 0, props.items.length - 1);
+      if (!props.items.length) return 0;
+      const clamped = clamp(props.selectedIndex, 0, props.items.length - 1);
+      if (!props.items[clamped]?.disabled) return clamped;
+      const first = firstEnabledIndex();
+      return first >= 0 ? first : clamped;
+    }
+
+    function nextEnabledIndex(index: number, direction: 1 | -1): number {
+      let next = index + direction;
+      while (next >= 0 && next < props.items.length) {
+        if (!props.items[next]?.disabled) return next;
+        next += direction;
+      }
+      return index;
     }
 
     return () => {
@@ -101,16 +118,10 @@ export const TContextMenu = defineComponent({
                     select(selectedIndex());
                   } else if (event.key === "ArrowDown") {
                     event.preventDefault?.();
-                    emit(
-                      "update:selectedIndex",
-                      clamp(selectedIndex() + 1, 0, props.items.length - 1),
-                    );
+                    emit("update:selectedIndex", nextEnabledIndex(selectedIndex(), 1));
                   } else if (event.key === "ArrowUp") {
                     event.preventDefault?.();
-                    emit(
-                      "update:selectedIndex",
-                      clamp(selectedIndex() - 1, 0, props.items.length - 1),
-                    );
+                    emit("update:selectedIndex", nextEnabledIndex(selectedIndex(), -1));
                   }
                 },
               },

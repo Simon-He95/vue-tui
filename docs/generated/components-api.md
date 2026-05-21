@@ -237,30 +237,26 @@ Import: `@simon_he/vue-tui`
 
 ### Props
 
-| 名称                             | 类型                                        | 默认值                              | 必填 | 说明 |
-| -------------------------------- | ------------------------------------------- | ----------------------------------- | ---- | ---- |
-| <code>modelValue</code>          | <code>boolean</code>                        | —                                   | 是   | —    |
-| <code>title</code>               | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
-| <code>initialQuery</code>        | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
-| <code>items</code>               | <code>readonly TCommandPaletteItem[]</code> | —                                   | 是   | —    |
-| <code>selectedIndex</code>       | <code>number</code>                         | <code>0</code>                      | 否   | —    |
-| <code>showRowDetails</code>      | <code>boolean</code>                        | <code>false</code>                  | 否   | —    |
-| <code>placeholder</code>         | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
-| <code>noMatchesText</code>       | <code>string</code>                         | <code>&quot;No matches&quot;</code> | 否   | —    |
-| <code>hint</code>                | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
-| <code>w</code>                   | <code>number</code>                         | <code>72</code>                     | 否   | —    |
-| <code>h</code>                   | <code>number</code>                         | <code>18</code>                     | 否   | —    |
-| <code>chromeStyle</code>         | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
-| <code>inputStyle</code>          | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
-| <code>listStyle</code>           | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
-| <code>bodyStyle</code>           | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
-| <code>highlightStyle</code>      | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
-| <code>matchStyle</code>          | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
-| <code>highlightMatchStyle</code> | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
-| <code>dividerStyle</code>        | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
-| <code>hintStyle</code>           | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
-| <code>detailStyle</code>         | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
-| <code>emptyStyle</code>          | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| 名称                        | 类型                                        | 默认值                              | 必填 | 说明 |
+| --------------------------- | ------------------------------------------- | ----------------------------------- | ---- | ---- |
+| <code>modelValue</code>     | <code>boolean</code>                        | —                                   | 是   | —    |
+| <code>title</code>          | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
+| <code>initialQuery</code>   | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
+| <code>items</code>          | <code>readonly TCommandPaletteItem[]</code> | —                                   | 是   | —    |
+| <code>selectedIndex</code>  | <code>number</code>                         | <code>0</code>                      | 否   | —    |
+| <code>showRowDetails</code> | <code>boolean</code>                        | <code>false</code>                  | 否   | —    |
+| <code>placeholder</code>    | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
+| <code>noMatchesText</code>  | <code>string</code>                         | <code>&quot;No matches&quot;</code> | 否   | —    |
+| <code>hint</code>           | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
+| <code>w</code>              | <code>number</code>                         | <code>72</code>                     | 否   | —    |
+| <code>h</code>              | <code>number</code>                         | <code>18</code>                     | 否   | —    |
+| <code>chromeStyle</code>    | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>inputStyle</code>     | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>listStyle</code>      | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>bodyStyle</code>      | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>highlightStyle</code> | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>hintStyle</code>      | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>emptyStyle</code>     | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
 
 ### Events
 
