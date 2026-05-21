@@ -331,6 +331,54 @@ describe("TLink", () => {
     }
   });
 
+  it("allows native DOM click activation when native mode modifier passes", async () => {
+    const opener = vi.fn(() => true);
+    const onActivate = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          openMode: "native",
+          modifierClick: "ctrlOrMeta",
+          onActivate,
+        }),
+      20,
+      2,
+      { domRendererOptions: { links: true }, linkOpener: opener },
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+
+      const anchor = mounted.container()!.querySelector("a");
+      expect(anchor?.getAttribute("href")).toBe("https://example.com/");
+
+      const click = new MouseEvent("click", {
+        clientX: 1,
+        clientY: 0,
+        bubbles: true,
+        cancelable: true,
+        ctrlKey: true,
+      });
+      expect(anchor!.dispatchEvent(click)).toBe(true);
+      await Promise.resolve();
+
+      expect(click.defaultPrevented).toBe(false);
+      expect(onActivate).toHaveBeenCalledWith({
+        href: "https://example.com/",
+        label: "Example",
+        source: "click",
+      });
+      expect(opener).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("lets renderer-level event activation win over host mode", async () => {
     const opener = vi.fn(() => true);
     const rendererActivate = vi.fn();
@@ -585,6 +633,47 @@ describe("TLink", () => {
 
       expect(onInvalidHref).toHaveBeenCalledWith({
         href: "javascript:alert(1)",
+        reason: "unsafe href",
+      });
+      expect(opener).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("rejects file hrefs at the TLink boundary", async () => {
+    const opener = vi.fn(() => true);
+    const onInvalidHref = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "file:///tmp/a",
+          label: "File",
+          onInvalidHref,
+        }),
+      20,
+      2,
+      { domRendererOptions: { links: true }, linkOpener: opener },
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+
+      expect(mounted.terminal.getCell(0, 0).style.href).toBeUndefined();
+      expect(mounted.container()!.querySelector("a")).toBeNull();
+
+      mounted
+        .container()!
+        .dispatchEvent(
+          new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true, cancelable: true }),
+        );
+      await Promise.resolve();
+
+      expect(onInvalidHref).toHaveBeenCalledWith({
+        href: "file:///tmp/a",
         reason: "unsafe href",
       });
       expect(opener).not.toHaveBeenCalled();

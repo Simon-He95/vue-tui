@@ -103,7 +103,7 @@ type Style = {
 - `inputPlugins`：给子树中的 `TInput` 统一注入宿主/平台插件；init-only，修改后需要 remount `TerminalProvider` / `TInput`
   - 默认 host plugin 只负责 clipboard / TTY / path 这类底层能力；toast 之类 UI 反馈应由宿主通过 `createTInputHostPlugin({ showToast })` 显式补充
 - `pathPickerProvider`：给子树中的 `TPathPicker` 统一注入宿主路径 provider
-- `linkOpener`：给 `TLink openMode="host"` 注入 `openExternal(href, context)`；`openMode="native"` 的键盘激活也会在 terminal focus 模型下 fallback 到它；browser provider 默认用 `window.open`，CLI/headless 通过 `createTerminalApp({ linkOpener })` 显式提供
+- `linkOpener`：给 `TLink openMode="host"` 注入 `openExternal(href, context)`；`openMode="native"` 的键盘激活也会在 terminal focus 模型下 fallback 到它；browser provider 默认用 `window.open` 尝试打开，CLI/headless 通过 `createTerminalApp({ linkOpener })` 显式提供。`TLink` 有意拒绝 `file:` URL；`file:` opt-in 只适用于底层 `Style.href` 写入者和 terminal-specific providers
 
 补充说明：
 

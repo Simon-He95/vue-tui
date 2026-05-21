@@ -162,9 +162,9 @@
 
 ## TLink
 
-可点击、可聚焦、可键盘激活的单行链接组件。除 `disabled` / `openMode="none"` 外，它会把 safe `href` 写入 `Style.href`，因此 DOM renderer links 开启时可以得到原生 anchor，CLI/stdout renderer 可以继续输出 OSC8 hyperlink。
+可点击、可聚焦、可键盘激活的单行链接组件。除 `disabled` / `openMode="none"` 外，它会把 DOM-safe `href` 写入 `Style.href`，因此 DOM renderer links 开启时可以得到原生 anchor，CLI/stdout renderer 可以继续输出 OSC8 hyperlink。
 
-默认 `openMode="host"`：点击或按 `Enter` 时会先 emit `activate`，再调用 `TerminalProvider.linkOpener` 或 `createTerminalApp({ linkOpener })` 注入的 `openExternal()`；浏览器 `TerminalProvider` 默认使用 `window.open`，CLI/headless 不会默认执行系统命令。
+默认 `openMode="host"`：点击或按 `Enter` 时会先 emit `activate`，再调用 `TerminalProvider.linkOpener` 或 `createTerminalApp({ linkOpener })` 注入的 `openExternal()` 尝试打开；浏览器 `TerminalProvider` 默认使用 `window.open`，CLI/headless 不会默认执行系统命令。
 
 `openMode` 语义：
 
@@ -173,7 +173,7 @@
 - `native`: click emit `activate` 并允许 renderer/native link activation；keyboard emit `activate` 后在有 `linkOpener` 时作为 terminal focus fallback 打开；如果 `modifierClick` 不满足，会阻止 native click
 - `none`: 只渲染文本，不写入 href metadata，不激活
 
-CLI/headless 的 `linkOpener` 会收到 `/docs`、`#section` 这类 relative href；宿主应按自己的策略重新解析或拒绝。
+`TLink` 接受 absolute `https:` / `http:` / `mailto:` 和 `/docs`、`#section` 这类 relative href；宿主应按自己的策略重新解析或拒绝 relative href。`TLink` 有意拒绝 `file:` URL；terminal-specific `file:` opt-in 只适用于底层 `Style.href` 写入者、stdout renderer 或 TLog retained index 这类显式 provider。
 
 `modifierClick="meta"` 和 `ctrlOrMeta` 里的 Meta/Cmd 只对 browser/DOM 事件有意义；真实 CLI SGR mouse report 只携带 Shift/Alt/Ctrl，所以 CLI 下 `ctrlOrMeta` 等价于 Ctrl，`meta` 不会被真实鼠标输入满足。
 
