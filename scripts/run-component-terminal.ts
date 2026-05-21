@@ -1,8 +1,7 @@
 import type { App, Component } from "vue";
 import { spawn } from "node:child_process";
 import process from "node:process";
-import { createInterface } from "node:readline/promises";
-import { defineComponent, h, ref } from "vue";
+import { computed, defineComponent, h, onUnmounted, ref } from "vue";
 import {
   TAutocompleteInput,
   TBox,
@@ -44,6 +43,7 @@ import {
   TTooltip,
   TTransition,
   createTerminalRouter,
+  useLayout,
 } from "../src/vue.js";
 import { TMarkdownText, TVirtualMarkdown } from "../src/markdown.js";
 import {
@@ -84,8 +84,18 @@ type Demo = Readonly<{
 }>;
 
 const groupOrder: readonly Demo["group"][] = ["root", "vue", "markdown", "experimental", "agent"];
+const foregroundOptions = [
+  "whiteBright",
+  "cyanBright",
+  "greenBright",
+  "yellowBright",
+  "magentaBright",
+  "redBright",
+] as const;
+const backgroundOptions = ["black", "blue", "green", "magenta", "red"] as const;
 const titleStyle = { fg: "cyanBright", bold: true } as const;
 const mutedStyle = { dim: true } as const;
+let activeGalleryNavHandler: ((key: string) => boolean) | null = null;
 const rows = [
   { id: "2", name: "build", status: "fail", rank: 2 },
   { id: "1", name: "test", status: "ok", rank: 1 },
@@ -1300,6 +1310,445 @@ function resolveDemo(raw: string): Demo | undefined {
   return findDemo(raw);
 }
 
+function selectedStyle(active: boolean) {
+  return active ? { fg: "black", bg: "cyanBright", bold: true } : { fg: "whiteBright" };
+}
+
+function vscodeHref(): string {
+  return encodeURI(`vscode://file${process.cwd()}/scripts/run-component-terminal.ts:1`);
+}
+
+const ComponentGallery = defineComponent({
+  name: "ComponentGallery",
+  props: {
+    initialName: { type: String, default: "" },
+  },
+  setup(props) {
+    const layout = useLayout();
+    const ordered = listedDemos();
+    const initialIndex = Math.max(
+      0,
+      props.initialName
+        ? ordered.findIndex((demo) => normalizeName(demo.name) === normalizeName(props.initialName))
+        : 0,
+    );
+    const selectedIndex = ref(initialIndex);
+    const routeHistory = ref<number[]>([]);
+    const navTop = ref(Math.max(0, initialIndex - 3));
+    const fgIndex = ref(1);
+    const bgIndex = ref(0);
+    const underline = ref(true);
+    const toolCollapsed = ref(false);
+    const status = ref("Click a component, tweak props, or open an external target.");
+
+    const cols = computed(() => Math.max(80, Math.floor(layout.clipRect?.w ?? 104)));
+    const rowsCount = computed(() => Math.max(18, Math.floor(layout.clipRect?.h ?? 26)));
+    const bodyH = computed(() => Math.max(15, rowsCount.value - 2));
+    const leftW = computed(() => Math.min(28, Math.max(20, Math.floor(cols.value * 0.24))));
+    const rightW = computed(() => Math.min(30, Math.max(24, Math.floor(cols.value * 0.25))));
+    const centerW = computed(() => Math.max(32, cols.value - leftW.value - rightW.value));
+    const navRows = computed(() => Math.max(7, bodyH.value - 6));
+    const selectedDemo = computed(() => ordered[selectedIndex.value] ?? ordered[0]!);
+    const fg = computed(() => foregroundOptions[fgIndex.value] ?? foregroundOptions[0]);
+    const bg = computed(() => backgroundOptions[bgIndex.value] ?? backgroundOptions[0]);
+    const liveStyle = computed(() => ({ fg: fg.value, bg: bg.value, underline: underline.value }));
+
+    function ensureVisible(index: number): void {
+      const visible = navRows.value;
+      if (index < navTop.value) navTop.value = index;
+      else if (index >= navTop.value + visible) navTop.value = index - visible + 1;
+    }
+
+    function selectRoute(index: number): void {
+      const demo = ordered[index];
+      if (!demo || index === selectedIndex.value) return;
+      routeHistory.value = [...routeHistory.value, selectedIndex.value].slice(-20);
+      selectedIndex.value = index;
+      ensureVisible(index);
+      status.value = `Route: ${demo.group}/${demo.name}`;
+    }
+
+    function goBack(): void {
+      const previous = routeHistory.value[routeHistory.value.length - 1];
+      if (previous == null) return;
+      routeHistory.value = routeHistory.value.slice(0, -1);
+      selectedIndex.value = previous;
+      ensureVisible(previous);
+      status.value = `Back to ${ordered[previous]?.name ?? "previous route"}`;
+    }
+
+    function cycleFg(): void {
+      fgIndex.value = (fgIndex.value + 1) % foregroundOptions.length;
+      status.value = `fg=${fg.value}`;
+    }
+
+    function cycleBg(): void {
+      bgIndex.value = (bgIndex.value + 1) % backgroundOptions.length;
+      status.value = `bg=${bg.value}`;
+    }
+
+    function toggleUnderline(): void {
+      underline.value = !underline.value;
+      status.value = `underline=${underline.value ? "on" : "off"}`;
+    }
+
+    function toggleTool(): void {
+      toolCollapsed.value = !toolCollapsed.value;
+      status.value = `tool_call ${toolCollapsed.value ? "collapsed" : "expanded"}`;
+    }
+
+    function openVscode(): void {
+      openExternalHref(vscodeHref());
+      status.value = "Opened scripts/run-component-terminal.ts in VS Code";
+    }
+
+    function openBrowser(): void {
+      openExternalHref("https://example.com");
+      status.value = "Opened https://example.com";
+    }
+
+    function move(delta: number): void {
+      const next = Math.max(0, Math.min(ordered.length - 1, selectedIndex.value + delta));
+      selectRoute(next);
+    }
+
+    function page(delta: number): void {
+      move(delta * Math.max(1, navRows.value - 1));
+    }
+
+    function handleNavigationKey(key: string): boolean {
+      if (key === "ArrowDown") {
+        move(1);
+        return true;
+      } else if (key === "ArrowUp") {
+        move(-1);
+        return true;
+      } else if (key === "PageDown") {
+        page(1);
+        return true;
+      } else if (key === "PageUp") {
+        page(-1);
+        return true;
+      }
+      return false;
+    }
+
+    function onKeydownCapture(event: any): void {
+      if (!handleNavigationKey(event.key)) return;
+      event.preventDefault();
+    }
+
+    function onKeydown(event: any): void {
+      if (event.key === "b" || event.key === "B") {
+        event.preventDefault();
+        goBack();
+      } else if (event.key === "u" || event.key === "U") {
+        event.preventDefault();
+        toggleUnderline();
+      } else if (event.key === "f" || event.key === "F") {
+        event.preventDefault();
+        cycleFg();
+      } else if (event.key === "g" || event.key === "G") {
+        event.preventDefault();
+        cycleBg();
+      } else if (event.key === "t" || event.key === "T") {
+        event.preventDefault();
+        toggleTool();
+      } else if (event.key === "o" || event.key === "O") {
+        event.preventDefault();
+        openBrowser();
+      } else if (event.key === "v" || event.key === "V") {
+        event.preventDefault();
+        openVscode();
+      }
+    }
+
+    function controlButton(label: string, y: number, onClick: () => void, active = false) {
+      const w = Math.max(0, rightW.value - 2);
+      return [
+        h(TView, { x: 0, y, w, h: 1, focusable: true, onClick }),
+        h(TText, {
+          x: 0,
+          y,
+          w,
+          value: label,
+          style: active
+            ? { fg: "black", bg: "yellowBright", bold: true }
+            : { fg: "whiteBright", bg: "black" },
+        }),
+      ];
+    }
+
+    function renderNav() {
+      const visible = navRows.value;
+      const maxTop = Math.max(0, ordered.length - visible);
+      const start = Math.min(navTop.value, maxTop);
+      const items = ordered.slice(start, start + visible);
+      const w = Math.max(0, leftW.value - 2);
+      const out: unknown[] = [
+        h(TText, {
+          x: 0,
+          y: 0,
+          w,
+          value: `routes ${selectedIndex.value + 1}/${ordered.length}`,
+          style: { fg: "yellowBright", bold: true },
+        }),
+      ];
+      let y = 2;
+      for (let i = 0; i < items.length; i++) {
+        const demo = items[i]!;
+        const index = start + i;
+        const active = index === selectedIndex.value;
+        const label = `${String(index + 1).padStart(2, " ")} ${demo.name}`;
+        out.push(
+          h(TView, {
+            key: `nav-hit:${demo.name}`,
+            x: 0,
+            y,
+            w,
+            h: 1,
+            focusable: true,
+            onClick: () => selectRoute(index),
+          }),
+          h(TText, {
+            key: `nav:${demo.name}`,
+            x: 0,
+            y,
+            w,
+            value: label,
+            style: selectedStyle(active),
+          }),
+        );
+        y++;
+      }
+      out.push(
+        h(TText, {
+          x: 0,
+          y: bodyH.value - 4,
+          w,
+          value: "Up/Down route  Pg scroll",
+          style: mutedStyle,
+        }),
+        h(TText, {
+          x: 0,
+          y: bodyH.value - 3,
+          w,
+          value: "B back  q exit",
+          style: mutedStyle,
+        }),
+      );
+      return out;
+    }
+
+    function renderPreview() {
+      const demo = selectedDemo.value;
+      const w = Math.max(0, centerW.value - 2);
+      const demoH = Math.max(5, bodyH.value - 10);
+      const selectedPreview =
+        demo.name === "TMultilineModal"
+          ? h(
+              TBox,
+              {
+                x: 0,
+                y: 9,
+                w: Math.min(w, 62),
+                h: Math.min(demoH, 12),
+                title: "Multiline",
+                padding: 1,
+                style: { fg: "whiteBright", bg: "black" },
+              },
+              () =>
+                h(TText, {
+                  x: 0,
+                  y: 0,
+                  w: Math.min(w, 58),
+                  h: 4,
+                  value: ["first line", "second line", "third line"].join("\n"),
+                }),
+            )
+          : h(TView, { x: 0, y: 9, w, h: demoH, key: `preview:${demo.name}` }, () =>
+              h(demo.component, { key: demo.name }),
+            );
+      return [
+        h(TText, {
+          x: 0,
+          y: 0,
+          w,
+          value: `${demo.group}/${demo.name}`,
+          style: { fg: "cyanBright", bold: true },
+        }),
+        h(TText, {
+          x: 0,
+          y: 1,
+          w,
+          value: "Live props",
+          style: { fg: "yellowBright" },
+        }),
+        h(TText, {
+          x: 0,
+          y: 2,
+          w,
+          value: `Styled text: fg=${fg.value} bg=${bg.value} underline=${underline.value}`,
+          style: liveStyle.value,
+        }),
+        h(TLink, {
+          x: 0,
+          y: 3,
+          href: "https://example.com",
+          label: "open browser with TLink",
+          style: liveStyle.value,
+          onOpen: () => {
+            status.value = "TLink opened https://example.com";
+          },
+        }),
+        h(TView, { x: 27, y: 3, w: 18, h: 1, focusable: true, onClick: openVscode }, () =>
+          h(TText, {
+            x: 0,
+            y: 0,
+            w: 18,
+            value: "[open VS Code]",
+            style: { fg: "black", bg: "greenBright", bold: true },
+          }),
+        ),
+        h(TToolCallView, {
+          x: 0,
+          y: 5,
+          w: Math.min(w, 58),
+          title: "tool_call: pnpm run test",
+          status: toolCollapsed.value ? "running" : "success",
+          suffix: toolCollapsed.value ? "collapsed" : "expanded",
+          preview: "click or press T to fold/unfold",
+          selected: true,
+          collapsed: toolCollapsed.value,
+          onToggle: toggleTool,
+        }),
+        h(TText, { x: 0, y: 8, w, value: "Selected component", style: { fg: "yellowBright" } }),
+        selectedPreview,
+      ];
+    }
+
+    function renderControls() {
+      const out: unknown[] = [
+        h(TText, {
+          x: 0,
+          y: 0,
+          w: Math.max(0, rightW.value - 2),
+          value: "Props",
+          style: { fg: "yellowBright", bold: true },
+        }),
+        ...controlButton(`F fg: ${fg.value}`, 2, cycleFg),
+        ...controlButton(`G bg: ${bg.value}`, 3, cycleBg),
+        ...controlButton(
+          `U underline: ${underline.value ? "on" : "off"}`,
+          4,
+          toggleUnderline,
+          underline.value,
+        ),
+        ...controlButton(
+          `T tool: ${toolCollapsed.value ? "collapsed" : "expanded"}`,
+          5,
+          toggleTool,
+          toolCollapsed.value,
+        ),
+        h(TText, {
+          x: 0,
+          y: 7,
+          w: Math.max(0, rightW.value - 2),
+          value: "Open",
+          style: { fg: "yellowBright", bold: true },
+        }),
+        ...controlButton("O browser", 9, openBrowser),
+        ...controlButton("V VS Code", 10, openVscode),
+        h(TText, {
+          x: 0,
+          y: 12,
+          w: Math.max(0, rightW.value - 2),
+          value: "Route",
+          style: { fg: "yellowBright", bold: true },
+        }),
+        ...controlButton("B back", 14, goBack, routeHistory.value.length > 0),
+      ];
+      return out;
+    }
+
+    activeGalleryNavHandler = handleNavigationKey;
+    onUnmounted(() => {
+      if (activeGalleryNavHandler === handleNavigationKey) activeGalleryNavHandler = null;
+    });
+
+    return () =>
+      h(
+        TView,
+        {
+          x: 0,
+          y: 0,
+          w: cols.value,
+          h: rowsCount.value,
+          focusable: true,
+          autoFocus: true,
+          onKeydownCapture,
+          onKeydown,
+        },
+        () => [
+          h(TText, {
+            x: 0,
+            y: 0,
+            w: cols.value,
+            value: " vue-tui component gallery",
+            style: { fg: "black", bg: "cyanBright", bold: true },
+          }),
+          h(
+            TBox,
+            {
+              x: 0,
+              y: 1,
+              w: leftW.value,
+              h: bodyH.value,
+              title: "Components",
+              padding: 0,
+              style: { fg: "cyanBright" },
+            },
+            renderNav,
+          ),
+          h(
+            TBox,
+            {
+              x: leftW.value,
+              y: 1,
+              w: centerW.value,
+              h: bodyH.value,
+              title: "Preview",
+              padding: 0,
+              style: { fg: "whiteBright" },
+            },
+            renderPreview,
+          ),
+          h(
+            TBox,
+            {
+              x: leftW.value + centerW.value,
+              y: 1,
+              w: rightW.value,
+              h: bodyH.value,
+              title: "Controls",
+              padding: 0,
+              style: { fg: "greenBright" },
+            },
+            renderControls,
+          ),
+          h(TStatusBar, {
+            x: 0,
+            y: rowsCount.value - 1,
+            w: cols.value,
+            left: `route ${selectedDemo.value.name}`,
+            center: status.value,
+            right: "q exit",
+          }),
+        ],
+      );
+  },
+});
+
 function printList(): void {
   const ordered = listedDemos();
   for (const group of groupOrder) {
@@ -1315,44 +1764,35 @@ function printList(): void {
 }
 
 function usage(): void {
-  console.log("Usage: pnpm run run:component:terminal -- [component]");
+  console.log("Usage: pnpm run run:component:terminal -- [initial-component]");
   console.log("       pnpm run run:component:terminal -- --list");
   console.log("       VT_SMOKE=1 pnpm run run:component:terminal -- --all");
 }
 
-async function chooseDemo(): Promise<Demo | null> {
-  printList();
-  const ordered = listedDemos();
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.error("\nPass a component name when stdin is not interactive.");
-    return null;
-  }
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await rl.question("\nSelect component number or name: ");
-  rl.close();
-  const n = Number(answer);
-  if (Number.isInteger(n) && n >= 1 && n <= ordered.length) return ordered[n - 1]!;
-  return findDemo(answer) ?? null;
-}
-
-function mountDemo(demo: Demo, smoke: boolean): void {
-  const cols = demo.cols ?? Math.max(88, Number(process.stdout.columns) || 88);
-  const rows = demo.rows ?? Math.max(22, Number(process.stdout.rows) || 22);
+function mountComponentApp(options: {
+  component: Component;
+  cols: number;
+  rows: number;
+  smoke: boolean;
+  props?: Record<string, unknown>;
+  install?: (app: App) => void;
+}): void {
   const app = createTerminalApp({
-    cols,
-    rows,
-    component: demo.component,
+    cols: options.cols,
+    rows: options.rows,
+    component: options.component,
+    props: options.props,
     defaultStyle: { fg: "whiteBright" },
     linkOpener: { openExternal: openExternalHref },
     selection: true,
   });
 
-  demo.install?.(app.app);
+  options.install?.(app.app);
   app.mount();
 
   const renderer = createStdoutRenderer(
     app.terminal,
-    smoke
+    options.smoke
       ? {
           output: { isTTY: false, write: () => {} } as any,
           clear: false,
@@ -1369,8 +1809,8 @@ function mountDemo(demo: Demo, smoke: boolean): void {
   let disposed = false;
 
   const onResize = () => {
-    const nextCols = Math.max(40, Number(process.stdout.columns) || cols);
-    const nextRows = Math.max(10, Number(process.stdout.rows) || rows);
+    const nextCols = Math.max(80, Number(process.stdout.columns) || options.cols);
+    const nextRows = Math.max(18, Number(process.stdout.rows) || options.rows);
     app.terminal.resize(nextCols, nextRows);
     app.scheduler.flushNow();
   };
@@ -1391,7 +1831,7 @@ function mountDemo(demo: Demo, smoke: boolean): void {
     process.exit(0);
   };
 
-  if (smoke || !process.stdin.isTTY || !process.stdout.isTTY) {
+  if (options.smoke || !process.stdin.isTTY || !process.stdout.isTTY) {
     cleanup();
     return;
   }
@@ -1404,12 +1844,39 @@ function mountDemo(demo: Demo, smoke: boolean): void {
         exit();
         return true;
       }
+      if (event.type === "keydown" && activeGalleryNavHandler?.(event.key)) {
+        app.scheduler.flushNow();
+        return true;
+      }
       const prevented = app.events.dispatch(event);
       app.scheduler.flushNow();
       return prevented;
     },
     enableMouse: true,
     onExit: exit,
+  });
+}
+
+function mountDemo(demo: Demo, smoke: boolean): void {
+  mountComponentApp({
+    component: demo.component,
+    cols: demo.cols ?? Math.max(88, Number(process.stdout.columns) || 88),
+    rows: demo.rows ?? Math.max(22, Number(process.stdout.rows) || 22),
+    smoke,
+    install: demo.install,
+  });
+}
+
+function mountGallery(initialName: string, smoke: boolean): void {
+  mountComponentApp({
+    component: ComponentGallery,
+    cols: Math.max(104, Number(process.stdout.columns) || 104),
+    rows: Math.max(24, Number(process.stdout.rows) || 24),
+    smoke,
+    props: { initialName },
+    install: (app) => {
+      for (const demo of demos) demo.install?.(app);
+    },
   });
 }
 
@@ -1432,15 +1899,14 @@ async function main(): Promise<void> {
     return;
   }
 
-  const name = args.find((arg) => !arg.startsWith("-"));
-  const demo = name ? resolveDemo(name) : await chooseDemo();
-  if (!demo) {
+  const name = args.find((arg) => !arg.startsWith("-")) ?? "";
+  if (name && !resolveDemo(name)) {
     console.error("Unknown component.");
     usage();
     process.exitCode = 1;
     return;
   }
-  mountDemo(demo, smoke);
+  mountGallery(name, smoke);
 }
 
 void main();
