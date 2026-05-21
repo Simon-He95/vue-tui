@@ -1126,6 +1126,53 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("includes visible and original indexes in data table row select payloads", async () => {
+    const rows = [
+      { name: "Alpha", rank: 1 },
+      { name: "Beta", rank: 2 },
+    ];
+    const columns = [
+      { key: "name", label: "Name", width: 6 },
+      { key: "rank", label: "Rank", width: 4 },
+    ];
+    const onRowSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns,
+          rows,
+          rowKey: (_row: unknown, index: number) => index,
+          selectable: true,
+          sortable: true,
+          sortBy: "rank",
+          sortDirection: "desc",
+          onRowSelect,
+        }),
+      16,
+      5,
+    );
+
+    try {
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 2, bubbles: true }));
+      await nextTick();
+
+      expect(onRowSelect).toHaveBeenCalledWith({
+        row: rows[1],
+        index: 0,
+        originalIndex: 1,
+        key: 1,
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("filters data table rows by formatted values", async () => {
     const rows = [
       { name: "Alpha", status: "ok" },

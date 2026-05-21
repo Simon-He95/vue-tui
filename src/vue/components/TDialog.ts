@@ -1086,6 +1086,8 @@ export const TDialog = defineComponent({
 
     const handle = shallowRef<TerminalRuntimeHandle | null>(null);
     const stableButtons = shallowRef(props.buttons);
+    // Dialog content renders through a wrapper component, so each surface update
+    // needs an explicit reactive dependency to re-run the default slot.
     let contentVersion = 0;
 
     function requestClose(): void {

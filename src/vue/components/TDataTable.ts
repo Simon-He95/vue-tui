@@ -13,6 +13,7 @@ export type TDataTableSortChangePayload = Readonly<{
 export type TDataTableRowSelectPayload = Readonly<{
   row: TTableRow;
   index: number;
+  originalIndex: number;
   key: unknown;
 }>;
 
@@ -126,9 +127,10 @@ export const TDataTable = defineComponent({
     }
 
     function select(row: TTableRow, index: number): void {
-      const key = dataTableRowKey(row, index);
+      const originalIndex = originalIndexAt(index);
+      const key = rowKey(row, originalIndex, props.rowKey as any);
       if (props.selectable) emit("update:selectedRowKey", key);
-      emit("rowSelect", { row, index, key });
+      emit("rowSelect", { row, index, originalIndex, key });
     }
 
     function sort(column: TTableColumn): void {

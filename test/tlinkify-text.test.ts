@@ -116,6 +116,18 @@ describe("TLinkifyText", () => {
     ).toEqual([{ text: "open file:///tmp/a.txt" }]);
   });
 
+  it("filters public linkification protocols", () => {
+    expect(linkifyTextSegments("http://a.test", { protocols: ["https"] })).toEqual([
+      { text: "http://a.test" },
+    ]);
+  });
+
+  it("skips links longer than the configured maximum length", () => {
+    expect(linkifyTextSegments("https://example.com/very-long", { maxUrlLength: 8 })).toEqual([
+      { text: "https://example.com/very-long" },
+    ]);
+  });
+
   it("requires a text boundary before absolute links", () => {
     expect(linkifyTextSegments("foohttps://example.com")).toEqual([
       { text: "foohttps://example.com" },
