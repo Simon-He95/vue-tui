@@ -10,7 +10,7 @@
 
 | API maturity | Import                           | 组件                                                                                                                                                                                                |
 | ------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TDialog` `TInput` `TLink` `TList` `TSelect` `TText` `TView`                                                                                                              |
+| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TDialog` `TInput` `TLink` `TLinkifyText` `TList` `TSelect` `TText` `TView`                                                                                               |
 | Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition`                                               |
 | Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                  |
 | Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap` |
@@ -24,7 +24,7 @@
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
 | Root          | `TerminalProvider`                                                                                                                                                               | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
 | Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                   | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
-| Text / Action | `TText` `TLink` `TTransition`                                                                                                                                                    | 文本渲染、链接操作、状态切换、动画插值          | 通用                                               |
+| Text / Action | `TText` `TLink` `TLinkifyText` `TTransition`                                                                                                                                     | 文本渲染、链接操作、状态切换、动画插值          | 通用                                               |
 | Input         | `TInput` `TInputBox` `TJsonEditor`                                                                                                                                               | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
 | Pickers       | `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择       | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
 | Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                                                                                                      | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
@@ -209,6 +209,29 @@
   :focus-style="{ inverse: true }"
   @activate="onLinkActivate"
 />
+```
+
+## TLinkifyText
+
+自动识别纯文本里的 URL，并把匹配片段渲染成带 `Style.href` metadata 的文本。它不自己打开链接，也不注册点击事件；DOM renderer 是否生成 `<a>` 仍由 `domRendererOptions.links` 控制，CLI/stdout 是否输出 OSC8 仍由 stdout renderer 的 href sanitizer 控制。
+
+默认只识别 `http:` / `https:` / `mailto:`。`file:` 和 relative href 需要显式 opt in，避免把日志或路径文本误标成可打开链接。
+
+### Props
+
+- `x`/`y` `(number, required)`
+- `w`/`h` `(number?)`
+- `value` `(string, required)`
+- `style` `(Style?)`
+- `linkStyle` `(Style?)`: 默认 `{ fg: 'cyanBright', underline: true }`
+- `clear` `(boolean)`
+- `wrap` `(boolean)`
+- `protocols` `(('http' | 'https' | 'mailto' | 'file')[]?)`
+- `allowRelative` `(boolean)`
+- `maxUrlLength` `(number?)`
+
+```vue
+<TLinkifyText :x="2" :y="6" :w="80" value="build failed: see https://example.com/docs" />
 ```
 
 ## TAnchor
@@ -675,7 +698,9 @@ type TLogDataSource = {
 
 `wrap=false` 是默认行为，超出宽度的行会被 clip。`wrap=true` 时，一个 logical source line 可以渲染成多个 visual rows，`scrollTop` 也按 visual row 计数。`ansi=false` 是默认行为，日志行按纯文本 fast path 渲染。`ansi=true` 时，`source.getLine(index)` 可以包含 ANSI SGR escape sequences；TLogView 会解析 fg/bg/bold/dim/italic/underline/inverse 等 style，并在 fixed clip 和 `wrap=true` visual rows 中保留样式。ANSI reset 会回到 TLogView base style（`style` prop 或 terminal default style）。
 
-`links=true` 只在 `ansi=true` 时生效。TLogView 会解析 OSC8 opener/closer，忽略 params，把 safe visible link text 渲染为带 `Style.href` 的 cells，并叠加 `linkStyle`；unsafe href 会按普通文本渲染，不进入 visible link model。BEL 和 ST terminator 都支持。组件不会自动打开链接、不会做 URL auto-detect、不会解析 Markdown link，也不会提供 hover tooltip；点击 visible link cell 时只 emit `linkClick`，由应用层决定如何处理。
+`links=true` 只在 `ansi=true` 时生效。TLogView 会解析 OSC8 opener/closer，忽略 params，把 safe visible link text 渲染为带 `Style.href` 的 cells，并叠加 `linkStyle`；unsafe href 会按普通文本渲染，不进入 visible link model。BEL 和 ST terminator 都支持。组件不会自动打开链接、不会解析 Markdown link，也不会提供 hover tooltip；点击 visible link cell 时只 emit `linkClick`，由应用层决定如何处理。
+
+`linkify=true` 只在 `ansi=false` 时生效，用同 `TLinkifyText` 一致的 URL 检测规则把纯文本里的 safe URL 渲染为 `Style.href` cells。需要调整协议范围时可传对象：`:linkify="{ protocols: ['https'], allowRelative: true }"`。如果日志已经带 ANSI/OSC8，应使用 `ansi + links`，不要叠加 `linkify`。
 
 `keyboardLinks=false` 是默认行为，这样 `Tab` / `Enter` 不会默认抢占宿主应用自己的焦点和提交逻辑。启用 `keyboardLinks` 后，TLogView 在获得焦点时会只针对**当前 visible links**处理键盘：`Tab` / `Shift+Tab` 在当前 viewport 内可见的 OSC8 link segments 间循环 focus，`Enter` emit `linkActivate`，`Escape` 清除当前 focused link。`getVisibleLinks()` 返回的也是当前 visible / clipped link segments，不会为 retained source window 建立全局 link index。
 

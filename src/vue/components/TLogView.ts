@@ -20,6 +20,7 @@ import type {
   TLogViewVisualIndexOptions,
   TLogViewVisualIndexStatus,
 } from "../log/types.js";
+import type { TLinkifyOptions } from "../linkify.js";
 import { applyAnsiSgrStyle, parseAnsiSgr } from "../../core/ansi/sgr.js";
 import {
   terminalSelectionRowSpans,
@@ -43,6 +44,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
+import { linkifyTextSegments } from "../linkify.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import {
   forEachTextCellSegment,
@@ -754,6 +756,10 @@ export const TLogView = defineComponent({
     },
     ansi: { type: Boolean, default: false },
     links: { type: Boolean, default: false },
+    linkify: {
+      type: [Boolean, Object] as PropType<boolean | TLinkifyOptions>,
+      default: false,
+    },
     linkStyle: {
       type: Object as PropType<Style>,
       default: () => ({ underline: true }),
@@ -945,6 +951,21 @@ export const TLogView = defineComponent({
 
     function linksEnabled(): boolean {
       return props.ansi && props.links;
+    }
+
+    function linkifyEnabled(): boolean {
+      return (
+        props.ansi !== true &&
+        (props.linkify === true || (typeof props.linkify === "object" && props.linkify != null))
+      );
+    }
+
+    function visualLinksEnabled(): boolean {
+      return linksEnabled() || linkifyEnabled();
+    }
+
+    function linkifyOptions(): TLinkifyOptions {
+      return typeof props.linkify === "object" && props.linkify != null ? props.linkify : {};
     }
 
     function linkStyleCacheKey(): string {
@@ -1282,6 +1303,41 @@ export const TLogView = defineComponent({
         touchedAt: ++cacheClock,
       });
       return visualSegments;
+    }
+
+    function linkifiedSegmentsForText(
+      text: string,
+      baseStyle: Style,
+    ): readonly TLogStyledSegment[] {
+      const clean = sanitizeInlineText(text);
+      if (!clean) return [];
+      return linkifyTextSegments(clean, linkifyOptions()).map((segment) => ({
+        text: segment.text,
+        style: segment.href ? { ...baseStyle, ...props.linkStyle, href: segment.href } : baseStyle,
+      }));
+    }
+
+    function linkifiedWrappedRowsForLine(
+      index: number,
+      count: number,
+      width: number,
+      baseStyle: Style,
+    ): readonly TLogVisualRow[] {
+      if (index < 0 || index >= count) return [[]];
+      const segments = linkifiedSegmentsForText(props.source.getLine(index), baseStyle);
+      return wrapStyledSegmentsByCells(segments, width);
+    }
+
+    function linkifiedFixedRowForLine(
+      index: number,
+      count: number,
+      baseStyle: Style,
+      clipX: number,
+      visibleW: number,
+    ): readonly TLogVisualSegment[] {
+      if (index < 0 || index >= count) return [];
+      const segments = linkifiedSegmentsForText(props.source.getLine(index), baseStyle);
+      return clipStyledSegmentsByCells(segments, clipX, clipX + visibleW);
     }
 
     function normalizedSearchQuery(): string {
@@ -2413,7 +2469,7 @@ export const TLogView = defineComponent({
       visibleStartCell: number,
     ): void {
       visibleLinksByRow.delete(y);
-      if (!linksEnabled()) return;
+      if (!visualLinksEnabled()) return;
 
       const rowLinks: TLogVisibleLinkSegment[] = [];
       let x = normalizedRect().x;
@@ -3739,9 +3795,9 @@ export const TLogView = defineComponent({
     );
 
     watch(
-      () => [props.ansi, props.links],
-      ([ansi, links]) => {
-        if (ansi && links) return;
+      () => [props.ansi, props.links, props.linkify],
+      () => {
+        if (visualLinksEnabled()) return;
         clearLinkFocus();
       },
     );
@@ -3771,6 +3827,7 @@ export const TLogView = defineComponent({
         () => props.visualIndexOptions?.maxMeasuredLines,
         () => props.ansi,
         () => props.links,
+        () => props.linkify,
         () => props.linkStyle,
         () => fullRect.value.w,
       ],
@@ -3882,6 +3939,7 @@ export const TLogView = defineComponent({
         props.wrap,
         props.ansi,
         props.links,
+        props.linkify,
         props.linkStyle,
         props.keyboardLinks,
         props.linkFocusStyle,
@@ -3976,6 +4034,32 @@ export const TLogView = defineComponent({
             ) {
               lastPaintedBottom = { index: located.lineIndex, lineKey: rawKey };
             }
+            if (linkifyEnabled()) {
+              const linkifiedRows = linkifiedWrappedRowsForLine(
+                located.lineIndex,
+                count,
+                full.w,
+                base,
+              );
+              const visualSegments = clipVisualSegmentsByCells(
+                linkifiedRows[located.partIndex] ?? [],
+                clipX,
+                clipX + r.w,
+              );
+              const visibleStartCell =
+                wrappedAnsiRowStartCell(linkifiedRows, located.partIndex) + clipX;
+              const highlighted = applySearchHighlightsToSegments(
+                visualSegments,
+                located.lineIndex,
+                visibleStartCell,
+              );
+              recordVisibleLinks(y, highlighted, located.lineIndex, visibleStartCell);
+              writeStyledRow(
+                applyLinkFocusToSegments(highlighted, located.lineIndex, visibleStartCell),
+                y,
+              );
+              return;
+            }
             if (props.highlightMatches && matchesByLine.has(located.lineIndex)) {
               const rawRow = wrappedRows[located.partIndex] ?? "";
               const clipped = sliceByCellsRange(rawRow, clipX, clipX + r.w);
@@ -4020,12 +4104,25 @@ export const TLogView = defineComponent({
             return;
           }
           if (props.highlightMatches && matchesByLine.has(idx)) {
+            if (linkifyEnabled()) {
+              const visualSegments = linkifiedFixedRowForLine(idx, count, base, clipX, r.w);
+              const highlighted = applySearchHighlightsToSegments(visualSegments, idx, clipX);
+              recordVisibleLinks(y, highlighted, idx, clipX);
+              writeStyledRow(applyLinkFocusToSegments(highlighted, idx, clipX), y);
+              return;
+            }
             const text = sanitizeInlineText(props.source.getLine(idx));
             const clipped = sliceByCellsRange(text, clipX, clipX + r.w);
             writeStyledRow(
               applySearchHighlightsToSegments(plainVisualSegments(clipped, base), idx, clipX),
               y,
             );
+            return;
+          }
+          if (linkifyEnabled()) {
+            const visualSegments = linkifiedFixedRowForLine(idx, count, base, clipX, r.w);
+            recordVisibleLinks(y, visualSegments, idx, clipX);
+            writeStyledRow(applyLinkFocusToSegments(visualSegments, idx, clipX), y);
             return;
           }
           const line = renderLine(idx, count, full.w, clipX, r.w);

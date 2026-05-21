@@ -211,6 +211,7 @@ describe("package exports", () => {
       "TDialog",
       "TInput",
       "TLink",
+      "TLinkifyText",
       "TList",
       "TSelect",
       "TText",
@@ -219,6 +220,7 @@ describe("package exports", () => {
       "createDomRenderer",
       "createTInputHostPlugin",
       "createTerminal",
+      "linkifyTextSegments",
     ]);
     expect(cli.createTerminalApp).toBeTruthy();
     expect(cli.createStdoutRenderer).toBeTruthy();

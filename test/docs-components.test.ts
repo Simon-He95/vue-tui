@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const components = [
   "TerminalProvider",
   "TText",
+  "TLinkifyText",
   "TBox",
   "TView",
   "TAnchor",

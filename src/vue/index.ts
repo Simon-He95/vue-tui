@@ -27,6 +27,7 @@ export { TInputBox } from "./components/TInputBox.js";
 export { lintJsonText, TJsonEditor } from "./components/TJsonEditor.js";
 export { TList } from "./components/TList.js";
 export { TLink } from "./components/TLink.js";
+export { TLinkifyText } from "./components/TLinkifyText.js";
 export type {
   TLinkActivatePayload,
   TLinkActivationSource,
@@ -41,6 +42,12 @@ export type {
   TerminalLinkOpenerLike,
   TerminalLinkOpenSource,
 } from "./components/link/host.js";
+export {
+  linkifyTextSegments,
+  type TLinkifyOptions,
+  type TLinkifyProtocol,
+  type TLinkifySegment,
+} from "./linkify.js";
 export { TMultilineModal } from "./components/TMultilineModal.js";
 export { TPathPicker } from "./components/TPathPicker.js";
 export { TRenderLayer } from "./components/TRenderLayer.js";

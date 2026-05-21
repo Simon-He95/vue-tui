@@ -12,6 +12,7 @@ describe("public API surface", () => {
         "TDialog",
         "TInput",
         "TLink",
+        "TLinkifyText",
         "TList",
         "TSelect",
         "TText",
@@ -20,6 +21,7 @@ describe("public API surface", () => {
         "createDomRenderer",
         "createTInputHostPlugin",
         "createTerminal",
+        "linkifyTextSegments",
       ]
     `);
   });
@@ -37,6 +39,7 @@ describe("public API surface", () => {
         "TInputPluginsContextKey",
         "TJsonEditor",
         "TLink",
+        "TLinkifyText",
         "TList",
         "TMultilineModal",
         "TPathPicker",
@@ -56,6 +59,7 @@ describe("public API surface", () => {
         "createTextRestrictionPlugin",
         "createWheelScrollState",
         "formatInlineCellLine",
+        "linkifyTextSegments",
         "lintJsonText",
         "padEndByCells",
         "sanitizeInlineText",

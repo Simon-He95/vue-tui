@@ -12,11 +12,13 @@ describe("documented entrypoint exports", () => {
       "TDialog",
       "TInput",
       "TLink",
+      "TLinkifyText",
       "TList",
       "TSelect",
       "TText",
       "TView",
       "createTInputHostPlugin",
+      "linkifyTextSegments",
     ]) {
       expect(key in root, key).toBe(true);
     }

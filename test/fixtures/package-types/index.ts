@@ -1,12 +1,15 @@
 import {
   TerminalProvider,
   TBox,
+  TLinkifyText,
   TText,
   createTInputHostPlugin,
   createTerminal,
+  linkifyTextSegments,
   type Style,
   type Terminal,
   type TInputHostAdapter,
+  type TLinkifyOptions,
 } from "@simon_he/vue-tui";
 
 import { sanitizeDomHref } from "@simon_he/vue-tui/core";
@@ -76,10 +79,13 @@ const hostAdapter: TInputHostAdapter = {
   isTerminalLike: false,
 };
 const hostPlugin = createTInputHostPlugin(hostAdapter);
+const linkifyOptions: TLinkifyOptions = { protocols: ["https"], allowRelative: true };
+const linkified = linkifyTextSegments("see https://example.com", linkifyOptions);
 
 console.log(
   TerminalProvider,
   TBox,
+  TLinkifyText,
   TText,
   TMarkdownText,
   TLogView,
@@ -117,6 +123,7 @@ console.log(
   runtime,
   plugin,
   hostPlugin,
+  linkified,
 );
 
 const driver: StdinDriver | null = null;

@@ -265,6 +265,7 @@ const app = createTerminalApp({
 
 - `<TText />`：响应式写入
 - `<TLink />`：单行可点击/可聚焦链接，复用 `Style.href` 并可通过 host opener 打开外部链接
+- `<TLinkifyText />`：纯文本 URL 自动识别，输出带 `Style.href` metadata 的文本片段
 - `<TBox />`：边框 + padding + contentRect 裁剪
 
 ### `<TTransition />`

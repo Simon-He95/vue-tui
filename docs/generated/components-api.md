@@ -14,6 +14,7 @@
 - [TInputBox](#tinputbox)
 - [TJsonEditor](#tjsoneditor)
 - [TLink](#tlink)
+- [TLinkifyText](#tlinkifytext)
 - [TList](#tlist)
 - [TLogLinksPanel](#tloglinkspanel)
 - [TLogMinimap](#tlogminimap)
@@ -444,6 +445,36 @@ Import: `@simon_he/vue-tui`
 | <code>focus</code>       | <code>(\_event: TerminalBaseEvent) =&gt; true</code>         | —    |
 | <code>blur</code>        | <code>(\_event: TerminalBaseEvent) =&gt; true</code>         | —    |
 
+## TLinkifyText
+
+源码：`src/vue/components/TLinkifyText.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                       | 类型                                     | 默认值                                                                  | 必填 | 说明 |
+| -------------------------- | ---------------------------------------- | ----------------------------------------------------------------------- | ---- | ---- |
+| <code>x</code>             | <code>number</code>                      | —                                                                       | 是   | —    |
+| <code>y</code>             | <code>number</code>                      | —                                                                       | 是   | —    |
+| <code>zIndex</code>        | <code>number</code>                      | <code>0</code>                                                          | 否   | —    |
+| <code>value</code>         | <code>string</code>                      | —                                                                       | 是   | —    |
+| <code>w</code>             | <code>number</code>                      | <code>undefined</code>                                                  | 否   | —    |
+| <code>h</code>             | <code>number</code>                      | <code>undefined</code>                                                  | 否   | —    |
+| <code>style</code>         | <code>Style</code>                       | <code>undefined</code>                                                  | 否   | —    |
+| <code>linkStyle</code>     | <code>Style</code>                       | <code>() =&gt; ({ fg: &quot;cyanBright&quot;, underline: true })</code> | 否   | —    |
+| <code>clear</code>         | <code>boolean</code>                     | <code>true</code>                                                       | 否   | —    |
+| <code>wrap</code>          | <code>boolean</code>                     | <code>false</code>                                                      | 否   | —    |
+| <code>protocols</code>     | <code>readonly TLinkifyProtocol[]</code> | <code>undefined</code>                                                  | 否   | —    |
+| <code>allowRelative</code> | <code>boolean</code>                     | <code>false</code>                                                      | 否   | —    |
+| <code>maxUrlLength</code>  | <code>number</code>                      | <code>undefined</code>                                                  | 否   | —    |
+
+### Events
+
+—
+
 ## TList
 
 源码：`src/vue/components/TList.ts`
@@ -736,6 +767,7 @@ Import: `@simon_he/vue-tui/experimental`
 | <code>visualIndexOptions</code> | <code>TLogViewVisualIndexOptions</code>                     | <code>undefined</code>                                | 否   | —    |
 | <code>ansi</code>               | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
 | <code>links</code>              | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
+| <code>linkify</code>            | <code>boolean &#124; TLinkifyOptions</code>                 | <code>false</code>                                    | 否   | —    |
 | <code>linkStyle</code>          | <code>Style</code>                                          | <code>() =&gt; ({ underline: true })</code>           | 否   | —    |
 | <code>keyboardLinks</code>      | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
 | <code>linkFocusStyle</code>     | <code>Style</code>                                          | <code>() =&gt; ({ inverse: true })</code>             | 否   | —    |
