@@ -31,15 +31,44 @@ export const TKeyHint = defineComponent({
   },
   setup(props) {
     return () => {
-      const text = `${props.combo} ${props.label}`;
-      return h(TText as any, {
-        x: props.x,
-        y: props.y,
-        zIndex: props.zIndex,
-        w: props.w,
-        value: text,
-        style: mergeStyle(props.style, props.comboStyle),
-      });
+      const comboW = textCellWidth(props.combo);
+      const gap = props.label ? 1 : 0;
+      const comboRenderW = props.w == null ? comboW : Math.min(comboW, Math.max(0, props.w));
+      const gapW = props.w == null ? gap : Math.min(gap, Math.max(0, props.w - comboW));
+      const labelW = props.w == null ? undefined : Math.max(0, props.w - comboW - gap);
+      const children = [
+        h(TText as any, {
+          x: props.x,
+          y: props.y,
+          zIndex: props.zIndex,
+          w: comboRenderW,
+          value: props.combo,
+          style: mergeStyle(props.style, props.comboStyle),
+        }),
+      ];
+      if (gapW > 0) {
+        children.push(
+          h(TText as any, {
+            x: props.x + comboW,
+            y: props.y,
+            zIndex: props.zIndex,
+            w: gapW,
+            value: " ",
+            style: props.style,
+          }),
+        );
+      }
+      children.push(
+        h(TText as any, {
+          x: props.x + comboW + gap,
+          y: props.y,
+          zIndex: props.zIndex,
+          w: labelW,
+          value: props.label,
+          style: props.style,
+        }),
+      );
+      return children;
     };
   },
 });

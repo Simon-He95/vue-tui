@@ -170,8 +170,10 @@ describe("P1/P2 public components", () => {
           ],
         }),
         h(TSlider, { x: 0, y: 4, w: 18, modelValue: 50 }),
-        h(TFormField, { x: 22, y: 0, w: 24, h: 3, label: "Token", help: "Required" }, () =>
-          h(TPasswordInput, { x: 0, y: 0, w: 12, modelValue: "secret" }),
+        h(
+          TFormField,
+          { x: 22, y: 0, w: 24, h: 3, label: "Token", help: "Required", style: { fg: "white" } },
+          () => h(TPasswordInput, { x: 0, y: 0, w: 12, modelValue: "secret" }),
         ),
         h(TAutocompleteInput, {
           x: 22,
@@ -196,6 +198,8 @@ describe("P1/P2 public components", () => {
       expect(lines[0]).toContain("Token");
       expect(lines.join("\n")).not.toContain("secret");
       expect(lines[6]).toContain("apricot");
+      expect(mounted.terminal.getCell(22, 0).style.fg).toBe("white");
+      expect(mounted.terminal.getCell(22, 2).style.fg).toBe("white");
     } finally {
       mounted.unmount();
     }
@@ -248,6 +252,9 @@ describe("P1/P2 public components", () => {
       expect(lines[7]).toContain("Ready");
       expect(lines[8]).toContain("home / src");
       expect(lines[8]).toContain("Esc Close");
+      expect(mounted.terminal.getCell(32, 8).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(35, 8).style.inverse).not.toBe(true);
+      expect(mounted.terminal.getCell(36, 8).style.inverse).not.toBe(true);
     } finally {
       mounted.unmount();
     }

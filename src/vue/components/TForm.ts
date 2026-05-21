@@ -296,13 +296,13 @@ export const TFormField = defineComponent({
   setup(props, { slots }) {
     const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
     const labelStyle = computed(() =>
-      mergeStyle(theme.value.components.TFormField?.labelStyle, props.labelStyle),
+      mergeStyle(props.style, theme.value.components.TFormField?.labelStyle, props.labelStyle),
     );
     const helpStyle = computed(() =>
-      mergeStyle(theme.value.components.TFormField?.helpStyle, props.helpStyle),
+      mergeStyle(props.style, theme.value.components.TFormField?.helpStyle, props.helpStyle),
     );
     const errorStyle = computed(() =>
-      mergeStyle(theme.value.components.TFormField?.errorStyle, props.errorStyle),
+      mergeStyle(props.style, theme.value.components.TFormField?.errorStyle, props.errorStyle),
     );
 
     return () => {

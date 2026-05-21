@@ -104,6 +104,16 @@ describe("TLinkifyText", () => {
     expect(linkifyTextSegments("3/4", { allowRelative: true })).toEqual([{ text: "3/4" }]);
   });
 
+  it("requires a text boundary before absolute links", () => {
+    expect(linkifyTextSegments("foohttps://example.com")).toEqual([
+      { text: "foohttps://example.com" },
+    ]);
+    expect(linkifyTextSegments("url=https://example.com")).toEqual([
+      { text: "url=" },
+      { text: "https://example.com", href: "https://example.com/" },
+    ]);
+  });
+
   it("keeps trailing punctuation outside link hrefs", () => {
     expect(linkifyTextSegments("see https://example.com/docs.")).toEqual([
       { text: "see " },
