@@ -113,11 +113,7 @@ describe("stdout renderer (wide emoji alignment)", () => {
     const firstColumnEmoji = "\u{1F600}";
     const lastColumnEmoji = "\u2705";
     const rows = buildMarkdownVisualRows(
-      [
-        "| Start | End |",
-        "|---|---|",
-        `| ${firstColumnEmoji} | ${lastColumnEmoji} |`,
-      ].join("\n"),
+      ["| Start | End |", "|---|---|", `| ${firstColumnEmoji} | ${lastColumnEmoji} |`].join("\n"),
       32,
       createTuiMarkdownParser(),
     );
