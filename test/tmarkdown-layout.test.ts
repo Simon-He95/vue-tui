@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Style, Terminal } from "../src/index.js";
+import { createTerminal, type Style, type Terminal } from "../src/index.js";
 import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
 import { buildMarkdownBlocks, buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
 import { layoutMarkdownBlocks, layoutMarkdownBlocksCached } from "../src/vue/markdown/layout.js";
@@ -11,6 +11,11 @@ import {
 import { paintMarkdownVisualRow } from "../src/vue/markdown/render.js";
 import { DEFAULT_TUI_MARKDOWN_THEME } from "../src/vue/markdown/theme.js";
 import type { TuiMarkdownNode } from "../src/vue/markdown/types.js";
+import { withTextWidthProvider } from "../src/vue/utils/text.js";
+
+function visualRowCells(row: { segments: readonly { cells: number }[] }): number {
+  return row.segments.reduce((sum, segment) => sum + segment.cells, 0);
+}
 
 describe("markdown layout", () => {
   it("maps headings, links, and unsafe links into terminal blocks", () => {
@@ -290,6 +295,316 @@ describe("markdown layout", () => {
     const blocks = markdownAstToBlocks(nodes, DEFAULT_TUI_MARKDOWN_THEME);
     const rows = layoutMarkdownBlocks(blocks, 8);
     expect(rows.map((row) => row.plainText)).toEqual(["- hello ", "  world"]);
+  });
+
+  it("renders markdown tables as bordered terminal rows", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| Package | Name |", "|---|---|", "| cli | dimcode |"].join("\n"),
+      80,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows.map((row) => row.plainText)).toEqual([
+      "╭─────────┬─────────╮",
+      "│ Package │ Name    │",
+      "├─────────┼─────────┤",
+      "│ cli     │ dimcode │",
+      "╰─────────┴─────────╯",
+    ]);
+    expect(
+      rows[1]?.segments.some((segment) => segment.text === "Package" && segment.style?.bold),
+    ).toBe(true);
+  });
+
+  it("honors markdown table cell alignment", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| Left | Center | Right |", "|:--|:-:|--:|", "| a | b | c |"].join("\n"),
+      80,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows[3]?.plainText).toBe("│ a    │   b    │     c │");
+  });
+
+  it("lets public markdown helpers use cjk widthProvider for table layout", () => {
+    const markdown = ["| X | Name |", "|---|---|", "| Ω | omega |", "| — | dash |"].join("\n");
+    const parser = createTuiMarkdownParser();
+    const defaultRows = buildMarkdownVisualRows(markdown, 40, parser);
+    const rows = buildMarkdownVisualRows(markdown, 40, parser, { widthProvider: "cjk" });
+    const { blocks } = buildMarkdownBlocks(markdown, parser);
+    const layoutRows = layoutMarkdownBlocks(blocks, 40, { widthProvider: "cjk" });
+    const tableWidth = visualRowCells(rows[0]!);
+    const terminal = createTerminal({ cols: 40, rows: rows.length, widthProvider: "cjk" });
+
+    expect(layoutRows.map((row) => row.plainText)).toEqual(rows.map((row) => row.plainText));
+    expect(tableWidth).toBeGreaterThan(visualRowCells(defaultRows[0]!));
+    expect(rows.every((row) => visualRowCells(row) === tableWidth)).toBe(true);
+
+    rows.forEach((row, y) => terminal.write(row.plainText, { x: 0, y }));
+
+    expect(terminal.getCell(tableWidth - 1, 0).ch).toBe("╮");
+    expect(terminal.getCell(tableWidth - 1, 1).ch).toBe("│");
+    expect(terminal.getCell(tableWidth - 1, 2).ch).toBe("┤");
+    expect(terminal.getCell(tableWidth - 1, rows.length - 1).ch).toBe("╯");
+  });
+
+  it("does not reuse cached table rows when the widthProvider changes", () => {
+    const parser = createTuiMarkdownParser();
+    const { blocks } = buildMarkdownBlocks(["| X |", "|---|", "| Ω |"].join("\n"), parser);
+    const first = withTextWidthProvider("default", () => layoutMarkdownBlocksCached(blocks, 40));
+    const next = withTextWidthProvider("cjk", () =>
+      layoutMarkdownBlocksCached(blocks, 40, first.cache),
+    );
+    const fresh = withTextWidthProvider("cjk", () => layoutMarkdownBlocksCached(blocks, 40));
+
+    expect(next.rows.map((row) => row.plainText)).toEqual(fresh.rows.map((row) => row.plainText));
+    expect(visualRowCells(next.rows[0]!)).toBeGreaterThan(visualRowCells(first.rows[0]!));
+    expect(next.rows[0]).not.toBe(first.rows[0]);
+  });
+
+  it("keeps markdown table borders aligned with wide emoji, tag emoji, and CJK cells", () => {
+    const smile = "\u{1F600}";
+    const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}";
+    const check = "\u2705";
+    const englandFlag = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}";
+    const rows = buildMarkdownVisualRows(
+      [
+        "| Icon | Text |",
+        "|---|---|",
+        `| ${smile} | smile |`,
+        `| ${family} | family |`,
+        "| 中文 | cjk |",
+        `| ${check} | ok |`,
+        `| ${englandFlag} | england |`,
+      ].join("\n"),
+      80,
+      createTuiMarkdownParser(),
+    );
+
+    expect(new Set(rows.map(visualRowCells)).size).toBe(1);
+    expect(rows.some((row) => row.plainText.includes(englandFlag))).toBe(true);
+  });
+
+  it("keeps table right borders closed with complex emoji clusters", () => {
+    const coder = "\u{1F468}\u{1F3FD}\u200D\u{1F4BB}";
+    const rainbowFlag = "\u{1F3F3}\uFE0F\u200D\u{1F308}";
+    const pirateFlag = "\u{1F3F4}\u200D\u2620\uFE0F";
+    const keycapOne = "1\uFE0F\u20E3";
+    const combiningE = "e\u0301";
+    const rows = buildMarkdownVisualRows(
+      [
+        "| Icon | Name |",
+        "|---|---|",
+        `| ${coder} | coder |`,
+        `| ${rainbowFlag} | pride |`,
+        `| ${pirateFlag} | pirate |`,
+        `| ${keycapOne} | keycap |`,
+        `| ${combiningE} | combining |`,
+      ].join("\n"),
+      40,
+      createTuiMarkdownParser(),
+    );
+
+    expect(new Set(rows.map(visualRowCells)).size).toBe(1);
+    expect(rows[0]?.plainText.endsWith("╮")).toBe(true);
+    expect(rows[1]?.plainText.endsWith("│")).toBe(true);
+    expect(rows[2]?.plainText.endsWith("┤")).toBe(true);
+    expect(rows.at(-1)?.plainText.endsWith("╯")).toBe(true);
+  });
+
+  it("keeps table borders aligned with non-emoji grapheme clusters", () => {
+    const devanagariKi = "\u0915\u093F";
+    const devanagariKsha = "\u0915\u094D\u0937";
+    const devanagariZwjKsha = "\u0915\u094D\u200D\u0937";
+    const rows = buildMarkdownVisualRows(
+      [
+        "| X |",
+        "|---|",
+        `| ${devanagariKi} |`,
+        `| ${devanagariKsha} |`,
+        `| ${devanagariZwjKsha} |`,
+      ].join("\n"),
+      20,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows.every((row) => visualRowCells(row) === 5)).toBe(true);
+    expect(rows[0]?.plainText).toBe("╭───╮");
+    expect(rows[1]?.plainText.endsWith("│")).toBe(true);
+    expect(rows[2]?.plainText.endsWith("┤")).toBe(true);
+    expect(rows.at(-1)?.plainText).toBe("╰───╯");
+  });
+
+  it("keeps table borders stable with orphaned unicode modifiers", () => {
+    const zwj = String.fromCodePoint(0x200d);
+    const vs16 = String.fromCodePoint(0xfe0f);
+    const combining = String.fromCodePoint(0x0301);
+    const tagEnd = String.fromCodePoint(0xe007f);
+    const rows = buildMarkdownVisualRows(
+      [
+        "| X | Name |",
+        "|---|---|",
+        `| ${zwj} | zwj |`,
+        `| ${vs16} | vs16 |`,
+        `| ${combining} | combining |`,
+        `| ${tagEnd} | tag-end |`,
+      ].join("\n"),
+      40,
+      createTuiMarkdownParser(),
+    );
+    const width = visualRowCells(rows[0]!);
+
+    expect(rows.every((row) => visualRowCells(row) === width)).toBe(true);
+    expect(rows[0]?.plainText.endsWith("╮")).toBe(true);
+    expect(rows[1]?.plainText.endsWith("│")).toBe(true);
+    expect(rows[2]?.plainText.endsWith("┤")).toBe(true);
+    expect(rows.at(-1)?.plainText.endsWith("╯")).toBe(true);
+
+    const terminal = createTerminal({ cols: 40, rows: rows.length });
+    rows.forEach((row, y) => {
+      paintMarkdownVisualRow(terminal, row, {
+        x: 0,
+        y,
+        w: 40,
+        baseStyle: {},
+      });
+    });
+
+    expect(terminal.getCell(width - 1, 0).ch).toBe("╮");
+    expect(terminal.getCell(width - 1, 1).ch).toBe("│");
+    expect(terminal.getCell(width - 1, 2).ch).toBe("┤");
+    expect(terminal.getCell(width - 1, rows.length - 1).ch).toBe("╯");
+  });
+
+  it("paints markdown table right borders at stable terminal columns with complex emoji", () => {
+    const coder = "\u{1F468}\u{1F3FD}\u200D\u{1F4BB}";
+    const rainbowFlag = "\u{1F3F3}\uFE0F\u200D\u{1F308}";
+    const pirateFlag = "\u{1F3F4}\u200D\u2620\uFE0F";
+    const keycapOne = "1\uFE0F\u20E3";
+    const englandFlag = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}";
+    const width = 40;
+    const rows = buildMarkdownVisualRows(
+      [
+        "| Icon | Name |",
+        "|---|---|",
+        `| ${coder} | coder |`,
+        `| ${rainbowFlag} | pride |`,
+        `| ${pirateFlag} | pirate |`,
+        `| ${keycapOne} | keycap |`,
+        `| ${englandFlag} | england |`,
+      ].join("\n"),
+      width,
+      createTuiMarkdownParser(),
+    );
+    const tableWidth = visualRowCells(rows[0]!);
+    const terminal = createTerminal({ cols: width, rows: rows.length });
+
+    rows.forEach((row, y) => {
+      paintMarkdownVisualRow(terminal, row, {
+        x: 0,
+        y,
+        w: width,
+        baseStyle: {},
+      });
+    });
+
+    expect(rows.every((row) => visualRowCells(row) === tableWidth)).toBe(true);
+    expect(terminal.getCell(tableWidth - 1, 0).ch).toBe("╮");
+    expect(terminal.getCell(tableWidth - 1, 1).ch).toBe("│");
+    expect(terminal.getCell(tableWidth - 1, 2).ch).toBe("┤");
+    expect(terminal.getCell(tableWidth - 1, rows.length - 1).ch).toBe("╯");
+  });
+
+  it("keeps table borders stable with hidden unicode and bidi controls", () => {
+    const zeroWidthSpace = String.fromCodePoint(0x200b);
+    const zwnj = String.fromCodePoint(0x200c);
+    const rtlMark = String.fromCodePoint(0x200f);
+    const rtlOverride = String.fromCodePoint(0x202e);
+    const isolate = `${String.fromCodePoint(0x2066)}x${String.fromCodePoint(0x2069)}`;
+    const rows = buildMarkdownVisualRows(
+      [
+        "| X | Name |",
+        "|---|---|",
+        `| ${zeroWidthSpace} | zwsp |`,
+        `| ${zwnj} | zwnj |`,
+        `| ${rtlMark} | rtl-mark |`,
+        `| ${rtlOverride} | rtl-override |`,
+        `| ${isolate} | isolate |`,
+      ].join("\n"),
+      50,
+      createTuiMarkdownParser(),
+    );
+    const width = visualRowCells(rows[0]!);
+    const terminal = createTerminal({ cols: 50, rows: rows.length });
+
+    expect(rows.every((row) => visualRowCells(row) === width)).toBe(true);
+
+    rows.forEach((row, y) => {
+      paintMarkdownVisualRow(terminal, row, {
+        x: 0,
+        y,
+        w: 50,
+        baseStyle: {},
+      });
+    });
+
+    expect(terminal.getCell(width - 1, 0).ch).toBe("╮");
+    expect(terminal.getCell(width - 1, 1).ch).toBe("│");
+    expect(terminal.getCell(width - 1, 2).ch).toBe("┤");
+    expect(terminal.getCell(width - 1, rows.length - 1).ch).toBe("╯");
+  });
+
+  it("does not split wide emoji when table cells are clipped", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| A |", "|---|", "| 😀 |"].join("\n"),
+      5,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows.map(visualRowCells)).toEqual([5, 5, 5, 5, 5]);
+  });
+
+  it("keeps the table right border when an emoji column is exactly wide enough", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| 😀 |", "|---|", "| ok |"].join("\n"),
+      6,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows.map((row) => row.plainText)).toEqual([
+      "╭────╮",
+      "│ 😀 │",
+      "├────┤",
+      "│ ok │",
+      "╰────╯",
+    ]);
+    expect(rows.every((row) => visualRowCells(row) === 6)).toBe(true);
+  });
+
+  it("pads a clipped wide emoji while keeping the table right border", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| A |", "|---|", "| 😀 |"].join("\n"),
+      5,
+      createTuiMarkdownParser(),
+    );
+    const dataRow = rows[3];
+
+    expect(rows.every((row) => visualRowCells(row) === 5)).toBe(true);
+    expect(dataRow?.plainText).toBe("│   │");
+    expect(dataRow?.plainText.endsWith("│")).toBe(true);
+  });
+
+  it("clips tables when viewport is narrower than the minimum border width", () => {
+    const rows = buildMarkdownVisualRows(
+      ["| A | B |", "|---|---|", "| x | y |"].join("\n"),
+      5,
+      createTuiMarkdownParser(),
+    );
+
+    expect(rows.every((row) => visualRowCells(row) <= 5)).toBe(true);
+    expect(rows[0]?.plainText.endsWith("╮")).toBe(false);
+    expect(rows[1]?.plainText.endsWith("│")).toBe(false);
+    expect(rows.at(-1)?.plainText.endsWith("╯")).toBe(false);
   });
 
   it("does not insert an extra blank row before nested list items", () => {

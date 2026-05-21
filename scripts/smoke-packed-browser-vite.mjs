@@ -25,6 +25,7 @@ const requiredBrowserSubpaths = [
   `${packageName}/vue`,
   `${packageName}/markdown`,
   `${packageName}/experimental`,
+  `${packageName}/agent`,
 ];
 const browserSmokeSource = `
 import * as root from "${packageName}";
@@ -35,6 +36,7 @@ import * as observability from "${packageName}/observability";
 import * as vueEntry from "${packageName}/vue";
 import * as markdown from "${packageName}/markdown";
 import * as experimental from "${packageName}/experimental";
+import * as agent from "${packageName}/agent";
 
 const terminal = root.createTerminal({ cols: 4, rows: 1 });
 terminal.write("OK", { x: 0, y: 0 });
@@ -48,6 +50,7 @@ globalThis.__VUE_TUI_BROWSER_SMOKE__ = Boolean(
     vueEntry.TerminalProvider &&
     markdown.TMarkdownText &&
     experimental.TVirtualList &&
+    agent.TAgentTranscript &&
     terminal.snapshot().lines[0]?.startsWith("OK"),
 );
 

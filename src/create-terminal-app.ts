@@ -27,6 +27,7 @@ import process from "node:process";
 import { defineComponent, h, provide, ref, shallowReactive, shallowRef } from "vue";
 import { createHeadlessApp, createHeadlessRoot } from "./cli/headless-renderer.js";
 import {
+  defaultVueTuiFramePerfLogPath,
   defaultVueTuiProfileLogPath,
   installNodeFileWriters,
   nodeProfilerFileWriter,
@@ -34,11 +35,12 @@ import {
 } from "./cli/node-file-writers.js";
 import { createNodePathPickerProvider } from "./cli/path-provider.js";
 import { createTerminal } from "./core/index.js";
-import { getPlaneTerminal } from "./core/terminal/create-terminal.js";
+import { getPlaneTerminal, readTerminalRowForPlanes } from "./core/terminal/create-terminal.js";
 import { createCliEventManager } from "./events/index.js";
 import { getCliLatencyProfiler } from "./observability/cli-latency-node.js";
 import { framePerfNow, mergeFramePerfReason } from "./observability/frame-perf.js";
 import { createFramePerfStore } from "./observability/frame-perf-store.js";
+import { createJsonlPerfSink } from "./observability/perf-sink.js";
 import { createTraceStore } from "./observability/trace.js";
 import { createTuiProfiler } from "./observability/tui-profiler.js";
 import { HEADLESS_RENDERER_CAPABILITIES } from "./renderer/capabilities.js";
@@ -70,7 +72,7 @@ import {
   SUPPRESS_TERMINAL_POINTER_MOVE,
   SUPPRESS_TERMINAL_POINTER_UP,
 } from "./events/manager/selection-suppression.js";
-import { firstNonEmptyEnv } from "./utils/env.js";
+import { envFlag, envString, firstNonEmptyEnv } from "./utils/env.js";
 
 interface Portal {
   id: string;
@@ -179,6 +181,23 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   const env = (process?.env ?? {}) as Record<string, unknown>;
   if (shouldInstallFileWriters(env)) installNodeFileWriters();
   const widthProvider = options.widthProvider ?? "default";
+  const profileEnabled = envFlag(env, "VUE_TUI_PROFILE", "DIMCODE_PROFILE_TUI");
+  const profileLogPath = envString(env, "VUE_TUI_PROFILE_LOG_PATH", "DIMCODE_PROFILE_TUI_LOG_PATH");
+  const framePerfLogPath =
+    envString(env, "VUE_TUI_FRAME_PERF_LOG_PATH", "DIMCODE_TUI_PERF_LOG") ||
+    (profileLogPath.endsWith(".jsonl") ? profileLogPath : defaultVueTuiFramePerfLogPath());
+  const framePerfSink = profileEnabled
+    ? createJsonlPerfSink({
+        file: framePerfLogPath,
+        fileWriter: nodeProfilerFileWriter,
+        includeComponents: envFlag(
+          env,
+          "VUE_TUI_PROFILE_COMPONENTS",
+          "DIMCODE_PROFILE_TUI_COMPONENTS",
+        ),
+        includeEvents: envFlag(env, "VUE_TUI_PROFILE_EVENTS", "DIMCODE_PROFILE_TUI_EVENTS"),
+      })
+    : undefined;
 
   const terminal: Terminal = createTerminal({
     cols: options.cols,
@@ -189,7 +208,8 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     enabled: Boolean((globalThis as any).__VT_DEBUG_TRACE__),
   });
   const framePerf = createFramePerfStore(120, {
-    enabled: Boolean((globalThis as any).__VT_DEBUG_PERF__),
+    enabled: Boolean((globalThis as any).__VT_DEBUG_PERF__) || profileEnabled,
+    sink: framePerfSink,
   });
   const latency = getCliLatencyProfiler();
   const profiler = createTuiProfiler("cli-scheduler", {
@@ -586,11 +606,13 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     },
   } as const;
   const selectionOverlay = getPlaneTerminal(terminal, "overlay");
+  const selectionReadPlanes: TerminalRenderPlanes = ["default", "transcript", "chrome"];
   let selectionRenderNodeId: string | null = null;
   const selection = createTerminalSelectionController({
     terminal,
     overlayTerminal: selectionOverlay,
     clipboard: options.clipboard ?? unsupportedClipboard,
+    getRow: (y) => readTerminalRowForPlanes(terminal, y, selectionReadPlanes),
     getTextProviders: () => Array.from(selectionTextProviders.values()),
     getOptions: () => {
       const config = resolveSelectionConfig(options.selection);

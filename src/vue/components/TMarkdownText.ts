@@ -21,6 +21,7 @@ import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
+import { withTextWidthProvider } from "../utils/text.js";
 
 export const TMarkdownText = defineComponent({
   name: "TMarkdownText",
@@ -46,7 +47,7 @@ export const TMarkdownText = defineComponent({
   },
   setup(props) {
     const instance = getCurrentInstance();
-    const { terminal, defaultStyle, scheduler } = useTerminal();
+    const { terminal, defaultStyle, scheduler, widthProvider } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const rows = shallowRef<readonly TuiMarkdownVisualRow[]>(markRaw([]));
@@ -77,10 +78,12 @@ export const TMarkdownText = defineComponent({
 
     function rebuildRows(): void {
       rows.value = markRaw(
-        buildMarkdownVisualRows(props.content, props.w, parser.value, {
-          final: props.final,
-          theme: props.theme,
-        }),
+        withTextWidthProvider(widthProvider, () =>
+          buildMarkdownVisualRows(props.content, props.w, parser.value, {
+            final: props.final,
+            theme: props.theme,
+          }),
+        ),
       );
       documentVersion.value++;
     }
@@ -155,31 +158,33 @@ export const TMarkdownText = defineComponent({
         defaultStyle.value,
       ],
       paint: (dirtyRows) => {
-        if (!visible.value) return;
-        const r = absRect.value;
-        const full = fullRect.value;
-        if (r.w <= 0 || r.h <= 0) return;
-        const baseStyle = props.style ?? defaultStyle.value;
-        const clipStart = Math.max(0, Math.floor(r.x - full.x));
-        const paintRow = (y: number) => {
-          if (y < r.y || y >= r.y + r.h) return;
-          const rowIndex = Math.floor(y - full.y);
-          const row = rows.value[rowIndex];
-          if (!row && !props.clear) return;
-          paintMarkdownVisualRow(terminal, row, {
-            x: r.x,
-            y,
-            w: r.w,
-            clipStart,
-            baseStyle,
-            clear: props.clear,
-          });
-        };
-        if (dirtyRows?.length) {
-          for (const y of dirtyRows) paintRow(y);
-          return;
-        }
-        for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+        withTextWidthProvider(widthProvider, () => {
+          if (!visible.value) return;
+          const r = absRect.value;
+          const full = fullRect.value;
+          if (r.w <= 0 || r.h <= 0) return;
+          const baseStyle = props.style ?? defaultStyle.value;
+          const clipStart = Math.max(0, Math.floor(r.x - full.x));
+          const paintRow = (y: number) => {
+            if (y < r.y || y >= r.y + r.h) return;
+            const rowIndex = Math.floor(y - full.y);
+            const row = rows.value[rowIndex];
+            if (!row && !props.clear) return;
+            paintMarkdownVisualRow(terminal, row, {
+              x: r.x,
+              y,
+              w: r.w,
+              clipStart,
+              baseStyle,
+              clear: props.clear,
+            });
+          };
+          if (dirtyRows?.length) {
+            for (const y of dirtyRows) paintRow(y);
+            return;
+          }
+          for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+        });
       },
     }));
 

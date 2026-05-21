@@ -50,6 +50,7 @@ import * as observability from "${packageName}/observability";
 import * as vueEntry from "${packageName}/vue";
 import * as markdown from "${packageName}/markdown";
 import * as experimental from "${packageName}/experimental";
+import * as agent from "${packageName}/agent";
 
 const ok = Boolean(
   root.createTerminal &&
@@ -59,7 +60,8 @@ const ok = Boolean(
     observability.createTraceStore &&
     vueEntry.TerminalProvider &&
     markdown.TMarkdownText &&
-    experimental.TVirtualList,
+    experimental.TVirtualList &&
+    agent.TAgentTranscript,
 );
 
 if (!ok) throw new Error("SSR import smoke did not load every public import target");

@@ -1,7 +1,13 @@
 import { sanitizeInlineText, sanitizeTextBlock, spaces, textCellWidth } from "../utils/text.js";
 import { sanitizeMarkdownLink } from "./parser.js";
 import { type TuiMarkdownTheme } from "./theme.js";
-import type { TuiMarkdownBlock, TuiMarkdownInlineSegment, TuiMarkdownNode } from "./types.js";
+import type {
+  TuiMarkdownBlock,
+  TuiMarkdownInlineSegment,
+  TuiMarkdownNode,
+  TuiMarkdownTableCell,
+  TuiMarkdownTableCellAlign,
+} from "./types.js";
 
 type BlockContext = Readonly<{
   prefixSegments: readonly TuiMarkdownInlineSegment[];
@@ -75,14 +81,7 @@ function sanitizeCodeBlockText(text: string, tabSize = 4): string {
     .replace(/\r\n?/g, "\n")
     .replace(/\t/g, spaces(tabSize))
     .replace(/\u00a0/g, " ");
-  let out = "";
-  for (const ch of normalized) {
-    const code = ch.charCodeAt(0);
-    if ((code >= 0x00 && code <= 0x08) || code === 0x0b || code === 0x0c) continue;
-    if ((code >= 0x0e && code <= 0x1f) || code === 0x7f) continue;
-    out += ch;
-  }
-  return out;
+  return sanitizeTextBlock(normalized);
 }
 
 function inlineNodeSegments(
@@ -280,6 +279,52 @@ function blockFromHtmlBlock(
   );
 }
 
+function tableRows(node: TuiMarkdownNode, key: "header" | "rows"): readonly TuiMarkdownNode[] {
+  const value = (node as Record<string, unknown>)[key];
+  if (key === "header") return value && typeof value === "object" ? [value as TuiMarkdownNode] : [];
+  return Array.isArray(value) ? (value as readonly TuiMarkdownNode[]) : [];
+}
+
+function tableCells(row: TuiMarkdownNode): readonly TuiMarkdownNode[] {
+  const value = (row as Record<string, unknown>).cells;
+  return Array.isArray(value) ? (value as readonly TuiMarkdownNode[]) : [];
+}
+
+function tableCellAlign(cell: TuiMarkdownNode): TuiMarkdownTableCellAlign | undefined {
+  const align = stringProp(cell, "align");
+  return align === "center" || align === "right" || align === "left" ? align : undefined;
+}
+
+function blockFromTable(
+  node: TuiMarkdownNode,
+  key: string,
+  context: BlockContext,
+  theme: TuiMarkdownTheme,
+): TuiMarkdownBlock {
+  const headerRow = tableRows(node, "header")[0];
+  const header: TuiMarkdownTableCell[] = tableCells(
+    headerRow ?? ({ type: "table_row" } as const),
+  ).map((cell) => ({
+    segments: inlineNodeSegments(nodeChildren(cell), theme, theme.strong),
+    align: tableCellAlign(cell),
+  }));
+  const rows = tableRows(node, "rows").map((row) =>
+    tableCells(row).map((cell) => ({
+      segments: inlineNodeSegments(nodeChildren(cell), theme),
+      align: tableCellAlign(cell),
+    })),
+  );
+
+  return {
+    type: "table",
+    key,
+    header,
+    rows,
+    borderStyle: theme.thematicBreak,
+    prefixSegments: context.prefixSegments,
+  };
+}
+
 function childSequenceToBlocks(
   nodes: readonly TuiMarkdownNode[],
   context: BlockContext,
@@ -438,6 +483,8 @@ function nodeToBlocks(
       if ("items" in node && Array.isArray(node.items))
         return listBlocks(node, context, theme, keyPrefix);
       break;
+    case "table":
+      return [blockFromTable(node, keyPrefix, context, theme)];
     case "inline":
       return [inlineBlock(keyPrefix, inlineNodeSegments(nodeChildren(node), theme), context)];
     case "html_block":

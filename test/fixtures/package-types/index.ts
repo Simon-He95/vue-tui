@@ -43,9 +43,20 @@ import {
   type TerminalCleanupSignalPolicy,
 } from "@simon_he/vue-tui/cli";
 
-import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
+import {
+  TMarkdownText,
+  buildMarkdownVisualRows,
+  createTuiMarkdownParser,
+  layoutMarkdownBlocks,
+} from "@simon_he/vue-tui/markdown";
 
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
+import {
+  TAgentTranscript,
+  TToolCallView,
+  TToolLogView,
+  type TToolCallViewSlotProps,
+} from "@simon_he/vue-tui/agent";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
 const domOptions: DomRendererOptions = { links: true };
@@ -71,6 +82,9 @@ console.log(
   TMarkdownText,
   TLogView,
   TVirtualList,
+  TAgentTranscript,
+  TToolCallView,
+  TToolLogView,
   createTerminalApp,
   createStdoutRenderer,
   createStdinDriver,
@@ -105,4 +119,18 @@ const driver: StdinDriver | null = null;
 const cleanupHandle: TerminalCleanupHandle | null = null;
 const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
 const record: TerminalEventRecord = { type: "keydown", key: "Enter" };
-console.log(driver, cleanupHandle, signalPolicy, record);
+const toolCallSlot: TToolCallViewSlotProps | null = null;
+const markdownParser = createTuiMarkdownParser();
+const markdownRows = buildMarkdownVisualRows("| Ω |\n|---|", 20, markdownParser, {
+  widthProvider: "cjk",
+});
+const markdownLayoutRows = layoutMarkdownBlocks([], 20, { widthProvider: "cjk" });
+console.log(
+  driver,
+  cleanupHandle,
+  signalPolicy,
+  record,
+  toolCallSlot,
+  markdownRows,
+  markdownLayoutRows,
+);

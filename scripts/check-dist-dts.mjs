@@ -12,6 +12,7 @@ const browserFacingJsEntries = [
   "vue.js",
   "markdown.js",
   "experimental.js",
+  "agent.js",
   "index.cjs",
   "core.cjs",
   "runtime.cjs",
@@ -20,6 +21,7 @@ const browserFacingJsEntries = [
   "vue.cjs",
   "markdown.cjs",
   "experimental.cjs",
+  "agent.cjs",
 ];
 const browserFacingDtsFiles = [
   "index.d.ts",
@@ -30,6 +32,7 @@ const browserFacingDtsFiles = [
   "vue.d.ts",
   "markdown.d.ts",
   "experimental.d.ts",
+  "agent.d.ts",
   "index.d.cts",
   "core.d.cts",
   "runtime.d.cts",
@@ -38,6 +41,7 @@ const browserFacingDtsFiles = [
   "vue.d.cts",
   "markdown.d.cts",
   "experimental.d.cts",
+  "agent.d.cts",
 ];
 
 function walk(dir, out = []) {

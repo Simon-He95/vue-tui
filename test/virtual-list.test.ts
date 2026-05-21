@@ -444,7 +444,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it("uses event time for wheel tick coalescing", async () => {
+  it("does not collapse distinct line wheel ticks by event time", async () => {
     const dateNow = vi.spyOn(Date, "now");
     dateNow.mockReturnValue(10_000);
     const app = createTerminalApp({
@@ -472,7 +472,7 @@ describe("TVirtualList", () => {
       app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 101 });
       await nextTick();
 
-      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-1");
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-2");
     } finally {
       app.dispose();
       dateNow.mockRestore();

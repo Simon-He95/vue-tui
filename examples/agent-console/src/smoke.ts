@@ -50,8 +50,28 @@ function rowText(app: TerminalApp, y: number): string {
     .trimEnd();
 }
 
+function cellStyle(app: TerminalApp, x: number, y: number): Record<string, unknown> {
+  return app.terminal.getRow(y)[x]?.style ?? {};
+}
+
 function rowsText(app: TerminalApp): string {
   return Array.from({ length: app.terminal.size().rows }, (_, y) => rowText(app, y)).join("\n");
+}
+
+function isAgentConsoleUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.origin === "https://example.com" &&
+      (url.pathname === "/agent-console" || url.pathname.startsWith("/agent-console/"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function rowHasAgentConsoleUrl(row: string): boolean {
+  return row.split(/\s+/).some(isAgentConsoleUrl);
 }
 
 function inputRowsText(app: TerminalApp): string {
@@ -62,6 +82,29 @@ function inputRowsText(app: TerminalApp): string {
 
 function inputBorderVisible(app: TerminalApp): boolean {
   return rowText(app, AGENT_CONSOLE_LAYOUT.input.y).startsWith("┌");
+}
+
+function boxBorderClosed(
+  app: TerminalApp,
+  rect: { x: number; y: number; w: number; h: number },
+): boolean {
+  const lines = app.terminal.snapshot().lines;
+  const { x, y, w, h } = rect;
+  if (lines[y]?.[x] !== "┌") return false;
+  if (lines[y]?.[x + w - 1] !== "┐") return false;
+  if (lines[y + h - 1]?.[x] !== "└") return false;
+  if (lines[y + h - 1]?.[x + w - 1] !== "┘") return false;
+
+  for (let yy = y + 1; yy < y + h - 1; yy++) {
+    if (lines[yy]?.[x] !== "│") return false;
+    if (lines[yy]?.[x + w - 1] !== "│") return false;
+  }
+
+  for (let xx = x + 1; xx < x + w - 1; xx++) {
+    if (lines[y + h - 1]?.[xx] !== "─") return false;
+  }
+
+  return true;
 }
 
 function transcriptHasStyledBackground(app: TerminalApp): boolean {
@@ -94,6 +137,20 @@ function dispatchWheelBurst(
   }
 }
 
+function dispatchWheel(
+  events: Pick<CliEventManager, "dispatch">,
+  deltaY: number,
+  time: number,
+): void {
+  events.dispatch({
+    type: "wheel",
+    cellX: AGENT_CONSOLE_LAYOUT.transcript.x + 2,
+    cellY: AGENT_CONSOLE_LAYOUT.transcript.y + 2,
+    deltaY,
+    time,
+  });
+}
+
 async function flushFrame(raf: ManualRaf): Promise<void> {
   raf.flush();
   await nextTick();
@@ -118,6 +175,27 @@ async function dispatchText(app: TerminalApp, text: string): Promise<void> {
 async function dispatchKey(app: TerminalApp, key: string, code = key): Promise<void> {
   app.events.dispatch({ type: "keydown", key, code } as any);
   await nextTick();
+}
+
+async function clickCell(app: TerminalApp, x: number, y: number): Promise<void> {
+  app.events.dispatch({
+    type: "pointerdown",
+    cellX: x,
+    cellY: y,
+    button: 0,
+    buttons: 1,
+  });
+  await nextTick();
+  app.scheduler.flushNow();
+  app.events.dispatch({
+    type: "pointerup",
+    cellX: x,
+    cellY: y,
+    button: 0,
+    buttons: 0,
+  });
+  await nextTick();
+  app.scheduler.flushNow();
 }
 
 async function settleSearch(api: AgentConsoleApi, app: TerminalApp, raf: ManualRaf): Promise<void> {
@@ -177,6 +255,48 @@ try {
     richTranscriptRows.includes("▾ ● Run 3 commands") &&
     richTranscriptRows.includes("Changed 3 files") &&
     richTranscriptRows.includes("████████░░");
+  const changedFilesBoxRows = richTranscriptRows.split("\n").filter((row) => {
+    return (
+      row.includes("╭") ||
+      row.includes("╰") ||
+      row.includes("│ Changed 3 files") ||
+      row.includes("│ src/mock-agent-stream.ts")
+    );
+  });
+  const bestAgentChangedFilesBoxClosed = changedFilesBoxRows.some((_, index) => {
+    const block = changedFilesBoxRows.slice(index, index + 4);
+    return (
+      block.length === 4 &&
+      new Set(block.map((row) => row.length)).size === 1 &&
+      block[0]?.endsWith("╮") === true &&
+      block[1]?.endsWith("│") === true &&
+      block[2]?.endsWith("│") === true &&
+      block[3]?.endsWith("╯") === true
+    );
+  });
+  const chromeButtonUnderlineFollowsText =
+    cellStyle(app, 83, 26).underline === true &&
+    cellStyle(app, 94, 26).underline !== true &&
+    cellStyle(app, 101, 26).underline === true &&
+    cellStyle(app, 107, 26).underline !== true &&
+    cellStyle(app, 111, 26).underline === true &&
+    cellStyle(app, 116, 26).underline !== true &&
+    cellStyle(app, 98, 27).underline === true &&
+    cellStyle(app, 111, 27).underline !== true;
+
+  await clickCell(app, 69, 27);
+  const clickedThinkingCollapsedRows = api.getTranscriptRows().join("\n");
+  const thinkingClickCollapsedTranscript =
+    clickedThinkingCollapsedRows.includes("Thinking ▸") &&
+    !clickedThinkingCollapsedRows.includes("Now I have a good understanding");
+  await clickCell(app, 69, 27);
+  await clickCell(app, 84, 27);
+  const clickedToolCollapsedRows = api.getTranscriptRows().join("\n");
+  const toolCallClickCollapsedTranscript =
+    clickedToolCollapsedRows.includes("▸ ● Run 3 commands") &&
+    !clickedToolCollapsedRows.includes("Changed 3 files");
+  await clickCell(app, 84, 27);
+
   api.clearFramePerf();
 
   dispatchWheelBurst(app.events, 100, -1);
@@ -191,6 +311,27 @@ try {
   const inputAfter = api.getInputValue();
   const inputStillVisible = inputBorderVisible(app) && inputRowsText(app).includes("stable input");
   const afterBurstTop = api.metrics.value?.scrollTop ?? -1;
+  const lineWheelTops: number[] = [];
+  for (let i = 0; i < 8; i++) {
+    const time = 2_000 + i * 80;
+    dispatchWheel(app.events, 1, time);
+    await flushFrame(raf);
+    lineWheelTops.push(api.metrics.value?.scrollTop ?? -1);
+    dispatchWheel(app.events, -1, time + 40);
+    await flushFrame(raf);
+    lineWheelTops.push(api.metrics.value?.scrollTop ?? -1);
+  }
+  const lineWheelReversalObserved = lineWheelTops.some((top, index) => {
+    return index > 0 && top >= 0 && top < (lineWheelTops[index - 1] ?? -1);
+  });
+  const fastWheelStart = api.metrics.value?.scrollTop ?? -1;
+  for (let i = 0; i < 6; i++) {
+    dispatchWheel(app.events, 1, 4_000 + i * 10);
+    await flushFrame(raf);
+  }
+  const fastWheelEnd = api.metrics.value?.scrollTop ?? -1;
+  const fastWheelDistance =
+    fastWheelStart >= 0 && fastWheelEnd >= 0 ? fastWheelEnd - fastWheelStart : 0;
   const transcriptRows = api.getTranscriptRows();
   const scenarioSamples = api.getFramePerfSamples();
 
@@ -209,6 +350,20 @@ try {
   api.openLinks();
   await nextTick();
   app.scheduler.flushNow();
+  const linkOverlayRows = Array.from({ length: app.terminal.size().rows }, (_, y) =>
+    rowText(app, y),
+  );
+  const firstLinkY = linkOverlayRows.findIndex((row) => {
+    return row.includes("1. [log]") && rowHasAgentConsoleUrl(row);
+  });
+  const firstLinkRow = firstLinkY >= 0 ? (linkOverlayRows[firstLinkY] ?? "") : "";
+  const firstLinkStart = firstLinkRow.indexOf("1. [log]");
+  const afterFirstLinkTextX = Math.min(firstLinkRow.length, app.terminal.size().cols - 1);
+  const linksUnderlineFollowsText =
+    firstLinkY >= 0 &&
+    firstLinkStart >= 0 &&
+    cellStyle(app, firstLinkStart, firstLinkY).underline === true &&
+    cellStyle(app, afterFirstLinkTextX, firstLinkY).underline !== true;
   const searchMatches = api.searchState.value.matchCount;
   const visibleLinks = api.getVisibleLinks().length;
 
@@ -239,6 +394,15 @@ try {
     overlayVisibleBeforeEscape && !rowsText(app).includes("Command Palette");
   const inputStillVisibleAfterResize = inputBorderVisible(app);
   const overlayChrome = api.getChromeRows().join("\n");
+  const toolCallDotStyle = cellStyle(app, 70, 29);
+  const toolCallTitleStyle = cellStyle(app, 72, 29);
+  const bestAgentToolCallChrome =
+    overlayChrome.includes("▸ ● Run 3 commands") &&
+    toolCallDotStyle.fg === "white" &&
+    toolCallDotStyle.dim === true &&
+    toolCallTitleStyle.fg === "yellowBright" &&
+    toolCallTitleStyle.bg === "black";
+  const runtimeChromeBorderClosed = boxBorderClosed(app, AGENT_CONSOLE_LAYOUT.chrome);
   const replayLog = api.captureReplayLog();
   const replayPayload = stringifyAgentReplayLog(replayLog);
   const parsedReplayLog = parseAgentReplayLog(replayPayload);
@@ -377,7 +541,16 @@ try {
     replayFinalSnapshotRows: replayFinalSnapshot.split("\n").length,
     terminalRows: resizedSize.rows,
     expandableRowsRendered:
-      overlayChrome.includes("▸ Thinking") && overlayChrome.includes("▸ Run 3"),
+      overlayChrome.includes("▸ Thinking") && overlayChrome.includes("▸ ● Run 3 commands"),
+    bestAgentToolCallChrome,
+    runtimeChromeBorderClosed,
+    bestAgentChangedFilesBoxClosed,
+    chromeButtonUnderlineFollowsText,
+    thinkingClickCollapsedTranscript,
+    toolCallClickCollapsedTranscript,
+    lineWheelReversalObserved,
+    fastWheelDistance,
+    linksUnderlineFollowsText,
     bestAgentFixtureRowsRendered,
     firstTranscriptRow: rowText(app, AGENT_CONSOLE_LAYOUT.transcript.y),
     lastTranscriptRow: transcriptRows[transcriptRows.length - 1] ?? "",
@@ -413,6 +586,15 @@ try {
   assert.equal(output.replayRestored, true);
   assert.equal(output.replayFinalSnapshotRows, output.terminalRows);
   assert.equal(output.expandableRowsRendered, true);
+  assert.equal(output.bestAgentToolCallChrome, true);
+  assert.equal(output.runtimeChromeBorderClosed, true);
+  assert.equal(output.bestAgentChangedFilesBoxClosed, true);
+  assert.equal(output.chromeButtonUnderlineFollowsText, true);
+  assert.equal(output.thinkingClickCollapsedTranscript, true);
+  assert.equal(output.toolCallClickCollapsedTranscript, true);
+  assert.equal(output.lineWheelReversalObserved, true);
+  assert.ok(output.fastWheelDistance >= 6, "expected fast wheel burst to cover line ticks");
+  assert.equal(output.linksUnderlineFollowsText, true);
   assert.equal(output.bestAgentFixtureRowsRendered, true);
   assert.ok(output.overlayMaxDirtyRows <= AGENT_CONSOLE_LAYOUT.rows);
   assert.ok(output.overlayMaxPaintedNodes <= AGENT_CONSOLE_LAYOUT.rows);

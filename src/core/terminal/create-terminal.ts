@@ -1,5 +1,6 @@
 import type { GridBuffer } from "../buffer/buffer.js";
 import type { TerminalRenderPlane, TerminalRenderPlanes } from "../render-plane.js";
+import { segmentedGraphemes } from "../../utils/grapheme.js";
 import type {
   BufferSnapshot,
   Cell,
@@ -31,15 +32,6 @@ import {
 import { TERMINAL_RENDER_PLANES } from "../render-plane.js";
 import { Emitter } from "./emitter.js";
 
-type GraphemeSegment = Readonly<{ segment: string }>;
-type GraphemeSegmenter = Readonly<{ segment(input: string): Iterable<GraphemeSegment> }>;
-type IntlWithSegmenter = typeof Intl & {
-  Segmenter?: new (
-    locales?: string | string[],
-    options?: Readonly<{ granularity?: "grapheme" }>,
-  ) => GraphemeSegmenter;
-};
-
 function isControlChar(ch: string): boolean {
   return ch === "\n" || ch === "\r" || ch === "\t";
 }
@@ -68,6 +60,7 @@ interface PendingPlaneScrollOperation extends TerminalScrollOperation {
 
 interface PlaneTerminalInternals {
   getPlaneTerminal: (plane: TerminalRenderPlane) => Terminal;
+  readRowForPlanes: (y: number, planes: TerminalRenderPlanes | null | undefined) => readonly Cell[];
   resetRowsForRender: (plane: TerminalRenderPlane, dirtyRows: readonly number[] | null) => void;
   getRowCoverageKind: (plane: TerminalRenderPlane, y: number) => 0 | 1 | 2;
   scrollRows: (plane: TerminalRenderPlane, startY: number, endY: number, lines: number) => void;
@@ -274,40 +267,18 @@ function normalizeDirtyRows(
   return out;
 }
 
-// Shared Intl.Segmenter instance for grapheme cluster iteration
-let sharedGraphemeSegmenter: GraphemeSegmenter | null = null;
-try {
-  const Segmenter = (Intl as IntlWithSegmenter).Segmenter;
-  sharedGraphemeSegmenter = Segmenter
-    ? new Segmenter(undefined, { granularity: "grapheme" })
-    : null;
-} catch {
-  // Fall back to code point iteration if Intl.Segmenter is not available
-}
-
-function needsGraphemeSegmentation(text: string): boolean {
-  for (const ch of text) {
-    const cp = ch.codePointAt(0)!;
-    if (cp === 0x200d) return true;
-    if ((cp >= 0xfe00 && cp <= 0xfe0f) || (cp >= 0xe0100 && cp <= 0xe01ef)) return true;
-    if (
-      (cp >= 0x0300 && cp <= 0x036f) ||
-      (cp >= 0x1ab0 && cp <= 0x1aff) ||
-      (cp >= 0x1dc0 && cp <= 0x1dff) ||
-      (cp >= 0x20d0 && cp <= 0x20ff) ||
-      (cp >= 0xfe20 && cp <= 0xfe2f)
-    ) {
-      return true;
-    }
-    if (cp >= 0x1f3fb && cp <= 0x1f3ff) return true;
-    if (cp >= 0x1f1e6 && cp <= 0x1f1ff) return true;
-  }
-  return false;
-}
-
 export function getPlaneTerminal(terminal: Terminal, plane: TerminalRenderPlane): Terminal {
   const internals = (terminal as PlaneAwareTerminal)[TERMINAL_PLANE_INTERNALS];
   return internals?.getPlaneTerminal(plane) ?? terminal;
+}
+
+export function readTerminalRowForPlanes(
+  terminal: Terminal,
+  y: number,
+  planes?: TerminalRenderPlanes | null,
+): readonly Cell[] {
+  const internals = (terminal as PlaneAwareTerminal)[TERMINAL_PLANE_INTERNALS];
+  return internals?.readRowForPlanes(y, planes) ?? terminal.getRow(y);
 }
 
 export function resetPlaneRowsForRender(
@@ -449,15 +420,10 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       return true;
     };
 
-    if (needsGraphemeSegmentation(text)) {
-      if (sharedGraphemeSegmenter) {
-        for (const seg of sharedGraphemeSegmenter.segment(text)) {
-          if (!writeChar(seg.segment)) break;
-        }
-      } else {
-        for (const ch of text) {
-          if (!writeChar(ch)) break;
-        }
+    const segments = segmentedGraphemes(text);
+    if (segments) {
+      for (const seg of segments) {
+        if (!writeChar(seg.segment)) break;
       }
       return { x: cx, y: cy };
     }
@@ -471,8 +437,9 @@ export function createTerminal(opts: TerminalOptions): Terminal {
 
     if (i < text.length) {
       const rest = text.slice(i);
-      if (sharedGraphemeSegmenter) {
-        for (const seg of sharedGraphemeSegmenter.segment(rest)) {
+      const restSegments = segmentedGraphemes(rest);
+      if (restSegments) {
+        for (const seg of restSegments) {
           if (!writeChar(seg.segment)) break;
         }
       } else {
@@ -770,7 +737,10 @@ export function createTerminal(opts: TerminalOptions): Terminal {
     recordPendingScrollOp(plane, op);
   }
 
-  function composeRows(rows: readonly number[] | null): void {
+  function composeRows(
+    rows: readonly number[] | null,
+    planes: readonly TerminalRenderPlane[] = TERMINAL_RENDER_PLANES,
+  ): void {
     const blank = createBlankCell();
     const fpFn = compositeBuffer.fingerprintFn;
     const fpArr = compositeBuffer.soaFingerprints;
@@ -780,7 +750,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       const dst = getBufferRow(compositeBuffer, y);
       dst.length = compositeBuffer.cols;
       for (let x = 0; x < compositeBuffer.cols; x++) dst[x] = blank;
-      for (const plane of TERMINAL_RENDER_PLANES) {
+      for (const plane of planes) {
         const state = planeStates.get(plane);
         if (!state) continue;
         const src = getBufferRow(state.buffer, y);
@@ -858,8 +828,21 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       for (const y of rows) dirtyRows.add(y);
     }
     if (composeAllRows || dirtyRows.size > 0)
-      composeRows(composeAllRows ? null : Array.from(dirtyRows).sort((a, b) => a - b));
+      composeRows(
+        composeAllRows ? null : Array.from(dirtyRows).sort((a, b) => a - b),
+        planesToCompose,
+      );
     syncCompositeCursor();
+  }
+
+  function readRowForPlanes(
+    y: number,
+    planes: TerminalRenderPlanes | null | undefined,
+  ): readonly Cell[] {
+    assertNotDisposed();
+    if (y < 0 || y >= compositeBuffer.rows) throw new RangeError("Row out of bounds");
+    composeRows([y], planes?.length ? planes : TERMINAL_RENDER_PLANES);
+    return getBufferRow(compositeBuffer, y);
   }
 
   function pendingDirtyRowsForPlanes(
@@ -1236,6 +1219,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
 
   base[TERMINAL_PLANE_INTERNALS] = {
     getPlaneTerminal: createPlaneTerminalApi,
+    readRowForPlanes,
     resetRowsForRender(plane, dirtyRows) {
       const state = getPlaneState(plane);
       const rows = normalizeDirtyRows(dirtyRows, state.buffer.rows);

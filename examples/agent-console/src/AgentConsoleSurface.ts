@@ -24,7 +24,15 @@ import {
   watchEffect,
 } from "vue";
 import { TBox, TDialog, TSelect, TText, TView } from "@simon_he/vue-tui";
-import { TInputBox, TRenderPlane, useTerminal } from "@simon_he/vue-tui/vue";
+import { TToolCallView } from "@simon_he/vue-tui/agent";
+import {
+  padEndByCells,
+  sliceByCells,
+  TInputBox,
+  TRenderPlane,
+  textCellWidth,
+  useTerminal,
+} from "@simon_he/vue-tui/vue";
 import { TVirtualMarkdown } from "@simon_he/vue-tui/markdown";
 import { TLogView } from "@simon_he/vue-tui/experimental";
 import { handleAgentConsoleKeymap } from "./keymap";
@@ -39,12 +47,12 @@ import { logViewTheme, markdownTheme, styles } from "./theme";
 
 export const AGENT_CONSOLE_LAYOUT = Object.freeze({
   cols: 118,
-  rows: 36,
+  rows: 37,
   status: { x: 0, y: 0, w: 118, h: 1 },
   transcript: { x: 0, y: 1, w: 118, h: 24 },
-  chrome: { x: 0, y: 25, w: 118, h: 5 },
-  input: { x: 0, y: 30, w: 118, h: 5 },
-  footer: { x: 0, y: 35, w: 118, h: 1 },
+  chrome: { x: 0, y: 25, w: 118, h: 6 },
+  input: { x: 0, y: 31, w: 118, h: 5 },
+  footer: { x: 0, y: 36, w: 118, h: 1 },
   searchDialog: { w: 70, h: 9 },
   paletteDialog: { w: 72, h: 12 },
   linksDialog: { w: 84, h: 14 },
@@ -96,9 +104,13 @@ export type AgentConsoleApi = Readonly<{
 }>;
 
 function fit(value: string, width: number): string {
-  if (value.length <= width) return value.padEnd(width, " ");
-  if (width <= 3) return value.slice(0, width);
-  return `${value.slice(0, width - 3)}...`;
+  return padEndByCells(truncate(value, width), width);
+}
+
+function truncate(value: string, width: number): string {
+  if (textCellWidth(value) <= width) return value;
+  if (width <= 3) return sliceByCells(value, width);
+  return `${sliceByCells(value, width - 3)}...`;
 }
 
 function searchStateFor(query: string): TLogViewSearchState {
@@ -241,12 +253,29 @@ export const AgentConsoleSurface = defineComponent({
       refreshMetrics();
     }
 
+    function applyFixtureExpansion(): void {
+      const wasAtBottom =
+        mode.value === "markdown" ? markdownStickToBottom.value : metrics.value?.atBottom !== false;
+      transcript.setFixtureExpansion({
+        thinkingExpanded: thinkingExpanded.value,
+        toolCallExpanded: toolCallExpanded.value,
+      });
+      void nextTick(() => {
+        if (wasAtBottom) jumpToBottom();
+        refreshMetrics();
+        refreshLinks();
+        refreshSearchState();
+      });
+    }
+
     function toggleThinking(): void {
       thinkingExpanded.value = !thinkingExpanded.value;
+      applyFixtureExpansion();
     }
 
     function toggleToolCall(): void {
       toolCallExpanded.value = !toolCallExpanded.value;
+      applyFixtureExpansion();
     }
 
     function toggleMode(): void {
@@ -615,8 +644,38 @@ export const AgentConsoleSurface = defineComponent({
       selected = false,
     ) {
       const style = selected ? styles.button : styles.buttonMuted;
-      return h(TView, { key, x, y, w, h: 1, focusable: true, onClick }, () =>
-        h(TText, { x: 0, y: 0, w, value: fit(label, w), style }),
+      const value = truncate(label, w);
+      return h(
+        TView,
+        {
+          key,
+          x,
+          y,
+          w,
+          h: 1,
+          focusable: true,
+          onPointerdown: (event: { preventDefault?: () => void }) => {
+            event.preventDefault?.();
+            onClick();
+          },
+        },
+        () => [
+          h(TText, {
+            x: 0,
+            y: 0,
+            w,
+            value: "",
+            style: selected ? styles.button : styles.panel,
+          }),
+          h(TText, {
+            x: 0,
+            y: 0,
+            w: textCellWidth(value),
+            value,
+            style,
+            clear: false,
+          }),
+        ],
       );
     }
 
@@ -649,7 +708,8 @@ export const AgentConsoleSurface = defineComponent({
         ansi: true,
         links: true,
         keyboardLinks: true,
-        visualIndexMode: "estimated",
+        visualIndexMode: "exact",
+        visualIndexOptions: { measureBudgetMs: 8 },
         searchQuery: searchQuery.value,
         searchOptions: { mode: "text", caseSensitive: false, wholeWord: false },
         autoFocus: !inputFocused.value && overlay.value == null,
@@ -682,9 +742,6 @@ export const AgentConsoleSurface = defineComponent({
       const thinking = thinkingExpanded.value
         ? "▾ Thinking │ dirty background rows stay isolated"
         : "▸ Thinking";
-      const toolCall = toolCallExpanded.value
-        ? "▾ ● Run 3 commands  in:/out:/code-bg"
-        : "▸ ● Run 3 commands";
       return [
         h(TText, {
           key: "status",
@@ -692,89 +749,107 @@ export const AgentConsoleSurface = defineComponent({
           value: fit(status, AGENT_CONSOLE_LAYOUT.status.w),
           style: styles.status,
         }),
-        h(TBox, {
-          key: "chrome-box",
-          ...AGENT_CONSOLE_LAYOUT.chrome,
-          title: "Runtime",
-          style: styles.panelBorder,
-          clear: true,
-        }),
-        h(TText, {
-          key: "metrics-1",
-          x: 2,
-          y: 26,
-          w: 62,
-          value: fit(
-            `chunks=${stats.chunks} tokens=${stats.approxTokens} tools=${stats.toolRuns} errors=${stats.toolErrors}`,
-            62,
-          ),
-          style: styles.muted,
-        }),
-        h(TText, {
-          key: "metrics-2",
-          x: 2,
-          y: 27,
-          w: 62,
-          value: fit(
-            `search="${search.query}" matches=${search.matchCount} status=${search.status}`,
-            62,
-          ),
-          style: search.matchCount ? styles.ok : styles.muted,
-        }),
-        h(TText, {
-          key: "metrics-3",
-          x: 2,
-          y: 28,
-          w: 62,
-          value: fit(`link=${link}`, 62),
-          style: link === "none" ? styles.muted : styles.warn,
-        }),
-        renderButton(
-          "mode",
-          68,
-          26,
-          13,
-          mode.value === "log" ? "Log" : "Markdown",
-          toggleMode,
-          true,
+        h(
+          TBox,
+          {
+            key: "chrome-box",
+            ...AGENT_CONSOLE_LAYOUT.chrome,
+            title: "Runtime",
+            style: styles.panelBorder,
+            clear: true,
+          },
+          () => [
+            h(TText, {
+              key: "metrics-1",
+              x: 1,
+              y: 0,
+              w: 62,
+              value: fit(
+                `chunks=${stats.chunks} tokens=${stats.approxTokens} tools=${stats.toolRuns} errors=${stats.toolErrors}`,
+                62,
+              ),
+              style: styles.muted,
+            }),
+            h(TText, {
+              key: "metrics-2",
+              x: 1,
+              y: 1,
+              w: 62,
+              value: fit(
+                `search="${search.query}" matches=${search.matchCount} status=${search.status}`,
+                62,
+              ),
+              style: search.matchCount ? styles.ok : styles.muted,
+            }),
+            h(TText, {
+              key: "metrics-3",
+              x: 1,
+              y: 2,
+              w: 62,
+              value: fit(`link=${link}`, 62),
+              style: link === "none" ? styles.muted : styles.warn,
+            }),
+            renderButton(
+              "mode",
+              67,
+              0,
+              13,
+              mode.value === "log" ? "Log" : "Markdown",
+              toggleMode,
+              true,
+            ),
+            renderButton("bottom", 82, 0, 16, "Jump bottom", jumpToBottom),
+            renderButton("search", 100, 0, 8, "Search", () => openSearch()),
+            renderButton("links", 110, 0, 7, "Links", openLinks),
+            renderButton(
+              "thinking",
+              67,
+              1,
+              13,
+              thinkingExpanded.value ? "▾ Thinking" : "▸ Thinking",
+              toggleThinking,
+              thinkingExpanded.value,
+            ),
+            renderButton(
+              "tool-call",
+              82,
+              1,
+              13,
+              toolCallExpanded.value ? "▾ Run 3" : "▸ Run 3",
+              toggleToolCall,
+              toolCallExpanded.value,
+            ),
+            renderButton(
+              "stream",
+              97,
+              1,
+              18,
+              streamState.value === "connected" ? "Pause stream" : "Resume stream",
+              () => runCommand("/stream"),
+              streamState.value === "connected",
+            ),
+            h(TText, {
+              key: "thinking-state",
+              x: 67,
+              y: 2,
+              w: 48,
+              value: fit(thinking, 48),
+              style: thinkingExpanded.value ? styles.thinking : styles.muted,
+            }),
+            h(TToolCallView, {
+              key: "tool-call-state",
+              x: 67,
+              y: 3,
+              w: 48,
+              title: "Run 3 commands",
+              collapsed: !toolCallExpanded.value,
+              suffix: "in:/out:/code-bg",
+              selected: toolCallExpanded.value,
+              style: { fg: "yellowBright", bg: "black" },
+              mutedStyle: styles.muted,
+            }),
+          ],
         ),
-        renderButton("bottom", 83, 26, 16, "Jump bottom", jumpToBottom),
-        renderButton("search", 101, 26, 8, "Search", () => openSearch()),
-        renderButton("links", 111, 26, 7, "Links", openLinks),
-        renderButton(
-          "thinking",
-          68,
-          27,
-          13,
-          thinkingExpanded.value ? "▾ Thinking" : "▸ Thinking",
-          toggleThinking,
-          thinkingExpanded.value,
-        ),
-        renderButton(
-          "tool-call",
-          83,
-          27,
-          13,
-          toolCallExpanded.value ? "▾ Run 3" : "▸ Run 3",
-          toggleToolCall,
-          toolCallExpanded.value,
-        ),
-        h(TText, {
-          key: "thinking-state",
-          x: 68,
-          y: 28,
-          w: 48,
-          value: fit(thinking, 48),
-          style: thinkingExpanded.value ? styles.thinking : styles.muted,
-        }),
-        h(TText, {
-          key: "tool-call-state",
-          x: 68,
-          y: 29,
-          w: 48,
-          value: fit(toolCall, 48),
-          style: toolCallExpanded.value ? styles.toolCall : styles.muted,
-        }),
         h(TText, {
           key: "footer",
           ...AGENT_CONSOLE_LAYOUT.footer,
@@ -976,16 +1051,31 @@ export const AgentConsoleSurface = defineComponent({
         {
           default: () =>
             rows.length
-              ? rows.map((link, index) =>
-                  h(TText, {
-                    key: `${link.href}:${index}`,
-                    x: 0,
-                    y: index,
-                    w: 78,
-                    value: fit(`${index + 1}. [${link.source}] ${link.label} -> ${link.href}`, 78),
-                    style: styles.buttonMuted,
-                  }),
-                )
+              ? rows.flatMap((link, index) => {
+                  const value = truncate(
+                    `${index + 1}. [${link.source}] ${link.label} -> ${link.href}`,
+                    78,
+                  );
+                  return [
+                    h(TText, {
+                      key: `${link.href}:${index}:bg`,
+                      x: 0,
+                      y: index,
+                      w: 78,
+                      value: "",
+                      style: styles.dialog,
+                    }),
+                    h(TText, {
+                      key: `${link.href}:${index}:text`,
+                      x: 0,
+                      y: index,
+                      w: textCellWidth(value),
+                      value,
+                      style: styles.buttonMuted,
+                      clear: false,
+                    }),
+                  ];
+                })
               : [
                   h(TText, {
                     x: 0,

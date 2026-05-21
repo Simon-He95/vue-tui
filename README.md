@@ -36,8 +36,9 @@ Development, release validation, and documentation builds are run on Node.js 20 
 | `@simon_he/vue-tui/cli`           | Public       | Node-only headless Vue app runtime, stdin driver, stdout renderer, path provider, recording, and terminal clipboard helpers |
 | `@simon_he/vue-tui/markdown`      | Public       | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources                   |
 | `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`, `TTranscriptView`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins |
+| `@simon_he/vue-tui/agent`         | Experimental | Agent/console transcript, tool-call header, log, markdown, virtual list, render plane, and overlay component aggregation    |
 
-The stable surface is terminal core, DOM rendering, CLI runtime, basic Vue components, and markdown APIs. High-throughput log and virtualization APIs stay under `/experimental` until their public surface settles; keep those imports isolated in application code.
+The stable surface is terminal core, DOM rendering, CLI runtime, basic Vue components, and markdown APIs. High-throughput log, virtualization, and agent/console aggregation APIs stay under `/experimental` or `/agent` until their public surface settles; keep those imports isolated in application code.
 
 Do not deep import from `@simon_he/vue-tui/dist/...`; only the entry points above are part of the supported package contract.
 
@@ -204,6 +205,7 @@ Unhandled promise rejections stay host-owned by default. Setting `cleanupOnUnhan
 | Vue extended   | `@simon_he/vue-tui/vue`          | `TAnchor`, `TFlow`, `TRenderPlane`, `TRenderLayer`, `TTransition`, `TInputBox`, `TPathPicker`, `TJsonEditor`, `TMultilineModal`, `TDebugOverlay`, composables, router APIs |
 | Markdown       | `@simon_he/vue-tui/markdown`     | `TMarkdownText`, `TVirtualMarkdown`                                                                                                                                        |
 | Experimental   | `@simon_he/vue-tui/experimental` | `TVirtualList`, `TTranscriptView`, `TLogView`, `TLogSearchBar`, `TLogLinksPanel`, `TLogScrollbar`, `TLogMinimap`                                                           |
+| Agent console  | `@simon_he/vue-tui/agent`        | `TAgentTranscript`, `TToolCallView`, `TToolLogView`, `TVirtualMarkdown`, `TVirtualList`, `TRenderPlane`                                                                    |
 | Runtime        | `@simon_he/vue-tui/runtime`      | runtime, event, and selection APIs                                                                                                                                         |
 | CLI            | `@simon_he/vue-tui/cli`          | `createTerminalApp`, `createStdoutRenderer`, `createStdinDriver`, Node host adapters                                                                                       |
 
@@ -237,6 +239,7 @@ pnpm -C examples/basic dev
 pnpm run build:examples
 pnpm run build:examples:terminal
 pnpm run run:basic:terminal
+pnpm run run:agent-console:terminal
 pnpm run example:tlog-view-lab
 pnpm run example:agent-console
 pnpm run example:agent-console:smoke
@@ -296,7 +299,7 @@ pnpm run release:dry-run
 ## Package Notes
 
 - The published package ships `dist` only.
-- Root, core, runtime, DOM renderer, observability, Vue, CLI, markdown, and experimental entrypoints are available as ESM, CJS, and type declarations after build.
+- Root, core, runtime, DOM renderer, observability, Vue, CLI, markdown, experimental, and agent entrypoints are available as ESM, CJS, and type declarations after build.
 - The root browser/core API does not require a Node runtime, but CLI usage expects a Node-like stdout/stdin environment.
 - Terminal emoji and East Asian width behavior still depends on the user terminal and font.
 

@@ -16,6 +16,7 @@ const distVue = resolve("dist/vue.js");
 const distCli = resolve("dist/cli.js");
 const distMarkdown = resolve("dist/markdown.js");
 const distExperimental = resolve("dist/experimental.js");
+const distAgent = resolve("dist/agent.js");
 const distIndexCjs = resolve("dist/index.cjs");
 const distCoreCjs = resolve("dist/core.cjs");
 const distRuntimeCjs = resolve("dist/runtime.cjs");
@@ -24,6 +25,7 @@ const distObservabilityCjs = resolve("dist/observability.cjs");
 const distVueCjs = resolve("dist/vue.cjs");
 const distMarkdownCjs = resolve("dist/markdown.cjs");
 const distExperimentalCjs = resolve("dist/experimental.cjs");
+const distAgentCjs = resolve("dist/agent.cjs");
 const distIndexCjsTypes = resolve("dist/index.d.cts");
 const distCoreCjsTypes = resolve("dist/core.d.cts");
 const distRuntimeCjsTypes = resolve("dist/runtime.d.cts");
@@ -33,6 +35,7 @@ const distVueCjsTypes = resolve("dist/vue.d.cts");
 const distCliCjsTypes = resolve("dist/cli.d.cts");
 const distMarkdownCjsTypes = resolve("dist/markdown.d.cts");
 const distExperimentalCjsTypes = resolve("dist/experimental.d.cts");
+const distAgentCjsTypes = resolve("dist/agent.d.cts");
 const distTypes = resolve("dist/index.d.ts");
 const distCoreTypes = resolve("dist/core.d.ts");
 const distRuntimeTypes = resolve("dist/runtime.d.ts");
@@ -42,6 +45,7 @@ const distVueTypes = resolve("dist/vue.d.ts");
 const distCliTypes = resolve("dist/cli.d.ts");
 const distMarkdownTypes = resolve("dist/markdown.d.ts");
 const distExperimentalTypes = resolve("dist/experimental.d.ts");
+const distAgentTypes = resolve("dist/agent.d.ts");
 const requireDistExports = process.env.VUE_TUI_REQUIRE_DIST_EXPORTS === "1";
 const forbiddenNodeBuiltins = new Set([
   ...builtinModules,
@@ -187,6 +191,7 @@ describe("package exports", () => {
     const cli = await import("../src/cli.js");
     const markdown = await import("../src/markdown.js");
     const experimental = await import("../src/experimental.js");
+    const agent = await import("../src/agent.js");
 
     expect("createTerminalApp" in root).toBe(false);
     expect("createStdoutRenderer" in root).toBe(false);
@@ -293,6 +298,11 @@ describe("package exports", () => {
     expect(experimental.createTLogViewSessionStore).toBeTruthy();
     expect(experimental.createTLogLevelPlugin).toBeTruthy();
     expect(experimental.tlogDefaultPreset).toBeTruthy();
+    expect(agent.TAgentTranscript).toBe(experimental.TTranscriptView);
+    expect(agent.TToolCallView).toBeTruthy();
+    expect(agent.TToolLogView).toBe(experimental.TLogView);
+    expect(agent.TVirtualMarkdown).toBe(markdown.TVirtualMarkdown);
+    expect(agent.createMarkdownBlockSource).toBe(markdown.createMarkdownBlockSource);
   });
 
   it("re-exports TLogView link navigation types from the experimental entrypoint", () => {
@@ -371,7 +381,8 @@ describe("package exports", () => {
           import * as vue from "./src/vue.ts";
           import * as markdown from "./src/markdown.ts";
           import * as experimental from "./src/experimental.ts";
-          console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental);
+          import * as agent from "./src/agent.ts";
+          console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental, agent);
         `,
         resolveDir: process.cwd(),
         sourcefile: "vue-tui-browser-smoke.ts",
@@ -395,6 +406,7 @@ describe("package exports", () => {
       expect(existsSync(distIndex)).toBe(true);
       expect(existsSync(distMarkdown)).toBe(true);
       expect(existsSync(distExperimental)).toBe(true);
+      expect(existsSync(distAgent)).toBe(true);
 
       const { build } = await import("esbuild");
       const result = await build({
@@ -408,7 +420,8 @@ describe("package exports", () => {
             import * as vue from "./dist/vue.js";
             import * as markdown from "./dist/markdown.js";
             import * as experimental from "./dist/experimental.js";
-            console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental);
+            import * as agent from "./dist/agent.js";
+            console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental, agent);
           `,
           resolveDir: process.cwd(),
           sourcefile: "vue-tui-dist-browser-smoke.ts",
@@ -437,6 +450,7 @@ describe("package exports", () => {
       distVue,
       distMarkdown,
       distExperimental,
+      distAgent,
       distIndexCjs,
       distCoreCjs,
       distRuntimeCjs,
@@ -445,6 +459,7 @@ describe("package exports", () => {
       distVueCjs,
       distMarkdownCjs,
       distExperimentalCjs,
+      distAgentCjs,
       distIndexCjsTypes,
       distCoreCjsTypes,
       distRuntimeCjsTypes,
@@ -453,6 +468,7 @@ describe("package exports", () => {
       distVueCjsTypes,
       distMarkdownCjsTypes,
       distExperimentalCjsTypes,
+      distAgentCjsTypes,
       distTypes,
       distCoreTypes,
       distRuntimeTypes,
@@ -461,6 +477,7 @@ describe("package exports", () => {
       distVueTypes,
       distMarkdownTypes,
       distExperimentalTypes,
+      distAgentTypes,
     ]) {
       expect(existsSync(file)).toBe(true);
       expectNoBrowserForbiddenCode(file);
@@ -477,6 +494,7 @@ describe("package exports", () => {
     expect(existsSync(distCli)).toBe(true);
     expect(existsSync(distMarkdown)).toBe(true);
     expect(existsSync(distExperimental)).toBe(true);
+    expect(existsSync(distAgent)).toBe(true);
     expect(existsSync(distIndexCjsTypes)).toBe(true);
     expect(existsSync(distCoreCjsTypes)).toBe(true);
     expect(existsSync(distRuntimeCjsTypes)).toBe(true);
@@ -486,6 +504,7 @@ describe("package exports", () => {
     expect(existsSync(distCliCjsTypes)).toBe(true);
     expect(existsSync(distMarkdownCjsTypes)).toBe(true);
     expect(existsSync(distExperimentalCjsTypes)).toBe(true);
+    expect(existsSync(distAgentCjsTypes)).toBe(true);
     expect(existsSync(distTypes)).toBe(true);
     expect(existsSync(distCoreTypes)).toBe(true);
     expect(existsSync(distRuntimeTypes)).toBe(true);
@@ -495,6 +514,7 @@ describe("package exports", () => {
     expect(existsSync(distCliTypes)).toBe(true);
     expect(existsSync(distMarkdownTypes)).toBe(true);
     expect(existsSync(distExperimentalTypes)).toBe(true);
+    expect(existsSync(distAgentTypes)).toBe(true);
     expect(readFileSync(distCliTypes, "utf8")).toContain("Osc52ClipboardOptions");
 
     const root = await import(/* @vite-ignore */ pathToFileURL(distIndex).href);
@@ -506,6 +526,7 @@ describe("package exports", () => {
     const cli = await import(/* @vite-ignore */ pathToFileURL(distCli).href);
     const markdown = await import(/* @vite-ignore */ pathToFileURL(distMarkdown).href);
     const experimental = await import(/* @vite-ignore */ pathToFileURL(distExperimental).href);
+    const agent = await import(/* @vite-ignore */ pathToFileURL(distAgent).href);
     const require = createRequire(import.meta.url);
     const rootCjs = require("../dist/index.cjs");
     const coreCjs = require("../dist/core.cjs");
@@ -516,6 +537,7 @@ describe("package exports", () => {
     const cliCjs = require("../dist/cli.cjs");
     const markdownCjs = require("../dist/markdown.cjs");
     const experimentalCjs = require("../dist/experimental.cjs");
+    const agentCjs = require("../dist/agent.cjs");
 
     expect("createTerminalApp" in root).toBe(false);
     expect("createStdoutRenderer" in root).toBe(false);
@@ -627,6 +649,9 @@ describe("package exports", () => {
       "mailto:test@example.com",
     );
     expect(experimental.tlogDefaultPreset).toBeTruthy();
+    expect(agent.TAgentTranscript).toBe(experimental.TTranscriptView);
+    expect(agent.TToolCallView).toBeTruthy();
+    expect(agent.TToolLogView).toBe(experimental.TLogView);
     expect("TMarkdownText" in experimentalCjs).toBe(false);
     expect("TVirtualMarkdown" in experimentalCjs).toBe(false);
     expect(experimentalCjs.TVirtualList).toBeTruthy();
@@ -652,6 +677,9 @@ describe("package exports", () => {
       "mailto:test@example.com",
     );
     expect(experimentalCjs.tlogDefaultPreset).toBeTruthy();
+    expect(agentCjs.TAgentTranscript).toBeTruthy();
+    expect(agentCjs.TToolCallView).toBeTruthy();
+    expect(agentCjs.TToolLogView).toBeTruthy();
 
     const { h, nextTick, ref } = require("vue");
     const log = experimentalCjs.createAppendOnlyLogStore({ maxLines: 4 });

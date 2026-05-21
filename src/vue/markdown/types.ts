@@ -13,6 +13,13 @@ export type TuiMarkdownInlineSegment = Readonly<{
   hardBreak?: boolean;
 }>;
 
+export type TuiMarkdownTableCellAlign = "left" | "center" | "right";
+
+export type TuiMarkdownTableCell = Readonly<{
+  segments: readonly TuiMarkdownInlineSegment[];
+  align?: TuiMarkdownTableCellAlign;
+}>;
+
 export type TuiMarkdownBlock =
   | Readonly<{
       type: "inline";
@@ -34,6 +41,14 @@ export type TuiMarkdownBlock =
       key: string;
       char?: string;
       style?: Style;
+      prefixSegments?: readonly TuiMarkdownInlineSegment[];
+    }>
+  | Readonly<{
+      type: "table";
+      key: string;
+      header: readonly TuiMarkdownTableCell[];
+      rows: readonly (readonly TuiMarkdownTableCell[])[];
+      borderStyle?: Style;
       prefixSegments?: readonly TuiMarkdownInlineSegment[];
     }>
   | Readonly<{

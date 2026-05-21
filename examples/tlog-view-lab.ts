@@ -3,6 +3,7 @@ import {
   createStdoutRenderer,
   createTerminalApp,
   installTerminalCleanup,
+  type TerminalCleanupHandle,
 } from "../src/cli.js";
 import { TLOG_VIEW_LAB_LAYOUT, createTLogViewLabRunnerApp } from "./tlog-view-lab/App.js";
 
@@ -43,7 +44,7 @@ const out = createStdoutRenderer(
 app.scheduler.flush();
 
 let driver: ReturnType<typeof createStdinDriver> | null = null;
-let uninstallCleanup: (() => void) | null = null;
+let cleanupHandle: TerminalCleanupHandle | null = null;
 let exiting = false;
 
 const onResize = () => {
@@ -61,8 +62,8 @@ const cleanup = () => {
   if (exiting) return;
   exiting = true;
   if (process.stdout.isTTY) process.stdout.off("resize", onResize);
-  uninstallCleanup?.();
-  uninstallCleanup = null;
+  cleanupHandle?.uninstall();
+  cleanupHandle = null;
   driver?.dispose();
   out.dispose();
   app.dispose();
@@ -80,7 +81,7 @@ if (process.stdout.isTTY) {
 if (smoke) {
   exit();
 } else {
-  uninstallCleanup = installTerminalCleanup(cleanup, { exitOnSignal: true });
+  cleanupHandle = installTerminalCleanup(cleanup, { signalPolicy: "exit" });
   driver = createStdinDriver({
     dispatch: (event) => {
       const prevented = app.events.dispatch(event);

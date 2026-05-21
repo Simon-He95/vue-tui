@@ -19,6 +19,7 @@ import type {
   TTranscriptVisualRow,
 } from "../transcript/types.js";
 import { computed, defineComponent, getCurrentInstance, h, ref, watch } from "vue";
+import { framePerfNow } from "../../observability/frame-perf.js";
 import {
   layoutTranscriptRow,
   transcriptActionRegionId,
@@ -43,6 +44,8 @@ type LayoutState = Readonly<{
 
 type RowLayoutCacheEntry = Readonly<{
   version: number;
+  rowVersion: string | number;
+  usesSourceRowVersion: boolean;
   row: TTranscriptRow;
   rowIndex: number;
   rowKey: string | number;
@@ -116,8 +119,10 @@ function sameCachedLayout(
 ): boolean {
   return (
     Boolean(entry) &&
-    entry!.version === next.version &&
-    entry!.row === next.row &&
+    (next.usesSourceRowVersion || entry!.version === next.version) &&
+    entry!.rowVersion === next.rowVersion &&
+    entry!.usesSourceRowVersion === next.usesSourceRowVersion &&
+    (next.usesSourceRowVersion || entry!.row === next.row) &&
     entry!.rowIndex === next.rowIndex &&
     entry!.rowKey === next.rowKey &&
     entry!.width === next.width &&
@@ -171,7 +176,7 @@ export const TTranscriptView = defineComponent({
     "hoverRegion",
   ],
   setup(props, { emit, expose }) {
-    const { defaultStyle } = useTerminal();
+    const { defaultStyle, observability } = useTerminal();
     const instance = getCurrentInstance();
     const rowsRef = ref<TVirtualRowsHandle | null>(null);
     const innerScrollTop = ref(normalizeInt(props.defaultScrollTop));
@@ -190,10 +195,26 @@ export const TTranscriptView = defineComponent({
 
     const layoutState = computed<LayoutState>(() => {
       void props.version;
+      const perfEnabled = observability.framePerf.enabled.value;
+      const perfStartedAt = perfEnabled ? framePerfNow() : 0;
       const width = Math.max(1, Math.floor(props.w));
       const count = Math.max(0, normalizeInt(props.source.rowCount()));
       if (!count) {
         rowLayoutCache.clear();
+        if (perfEnabled) {
+          observability.framePerf.recordComponent({
+            name: "TTranscriptView",
+            id: instance?.uid == null ? undefined : String(instance.uid),
+            phase: "layout",
+            durationMs: framePerfNow() - perfStartedAt,
+            itemCount: 0,
+            renderedCount: 0,
+            cacheHit: 0,
+            cacheMiss: 0,
+            width,
+            version: props.version,
+          });
+        }
         return EMPTY_LAYOUT;
       }
 
@@ -204,9 +225,12 @@ export const TTranscriptView = defineComponent({
       const baseStyle = props.style ?? defaultStyle.value;
       const hoverRegionId = hoveredRegion.value?.id ?? null;
       const focusedRegionId = focusedRegion.value?.id ?? null;
+      let cacheHit = 0;
+      let cacheMiss = 0;
       for (let rowIndex = 0; rowIndex < count; rowIndex++) {
         const row = props.source.getRow(rowIndex);
         const rowKey = props.source.getRowKey?.(rowIndex) ?? row.key;
+        const sourceRowVersion = props.source.getRowVersion?.(rowIndex);
         const localHoverRegionId = rowHasRegionId(row, rowKey, hoverRegionId)
           ? hoverRegionId
           : null;
@@ -215,6 +239,8 @@ export const TTranscriptView = defineComponent({
           : null;
         const cacheKey = {
           version: props.version,
+          rowVersion: sourceRowVersion ?? props.version,
+          usesSourceRowVersion: sourceRowVersion != null,
           row,
           rowIndex,
           rowKey,
@@ -228,7 +254,10 @@ export const TTranscriptView = defineComponent({
         };
         rowStarts.set(rowIndex, visualRows.length);
         const cached = rowLayoutCache.get(rowIndex);
-        const rows = sameCachedLayout(cached, cacheKey)
+        const cacheMatches = sameCachedLayout(cached, cacheKey);
+        if (cacheMatches) cacheHit++;
+        else cacheMiss++;
+        const rows = cacheMatches
           ? cached!.visualRows
           : layoutTranscriptRow({
               row,
@@ -262,6 +291,20 @@ export const TTranscriptView = defineComponent({
         console.warn(
           "[vue-tui] TTranscriptView flattens all transcript rows; use TLogView or windowed source for large retained output.",
         );
+      }
+      if (perfEnabled) {
+        observability.framePerf.recordComponent({
+          name: "TTranscriptView",
+          id: instance?.uid == null ? undefined : String(instance.uid),
+          phase: "layout",
+          durationMs: framePerfNow() - perfStartedAt,
+          itemCount: count,
+          renderedCount: visualRows.length,
+          cacheHit,
+          cacheMiss,
+          width,
+          version: props.version,
+        });
       }
       return { visualRows, rowStarts, rowEnds, regions };
     });

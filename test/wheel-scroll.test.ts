@@ -41,4 +41,34 @@ describe("wheel scroll", () => {
     expect(second.lines).toBe(15);
     expect(second.nextTop).toBe(40);
   });
+
+  it("does not accelerate rapid same-direction line-unit terminal wheel ticks", () => {
+    const state = createWheelScrollState();
+    const first = applyWheelScroll(state, 1, 10, 5000, 1000, "line");
+    const second = applyWheelScroll(state, 1, first.nextTop, 5000, 1010, "line");
+
+    expect(first.lines).toBe(1);
+    expect(second.lines).toBe(1);
+    expect(second.nextTop).toBe(12);
+  });
+
+  it("allows short line-unit opposite ticks after a terminal wheel step", () => {
+    const state = createWheelScrollState();
+    const first = applyWheelScroll(state, 1, 10, 100, 1000, "line");
+    const rebound = applyWheelScroll(state, -1, first.nextTop, 100, 1050, "line");
+
+    expect(first.nextTop).toBe(11);
+    expect(rebound.lines).toBe(-1);
+    expect(rebound.nextTop).toBe(10);
+  });
+
+  it("allows line-unit direction changes after the reversal bounce window", () => {
+    const state = createWheelScrollState();
+    const first = applyWheelScroll(state, 1, 10, 100, 1000, "line");
+    const reverse = applyWheelScroll(state, -1, first.nextTop, 100, 1200, "line");
+
+    expect(first.nextTop).toBe(11);
+    expect(reverse.lines).toBe(-1);
+    expect(reverse.nextTop).toBe(10);
+  });
 });

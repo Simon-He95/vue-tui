@@ -504,14 +504,75 @@ export function createStdoutRenderer(
   const rowClearToEol: string[] = [];
   const rowTextPartsScratch: string[] = [];
 
-  // Some terminals disagree on the rendered width of certain emoji (esp. emoji presentation
-  // sequences and some symbol emoji). If the terminal advances fewer columns than our buffer
-  // model (width=2), subsequent glyphs can shift left and visually corrupt borders.
-  // To make rendering robust, force cursor alignment after 2-cell graphemes that are
-  // represented by multiple code units (surrogates, VS16 sequences, ZWJ clusters, etc.).
-  const needsWideCursorFix = (cell: Cell, ch: string): boolean => {
+  let zeroWidthRiskRe: RegExp | null = null;
+  try {
+    // eslint-disable-next-line prefer-regex-literals
+    zeroWidthRiskRe = new RegExp("^(?:\\p{Mark}|\\p{Default_Ignorable_Code_Point})+$", "u");
+  } catch {
+    zeroWidthRiskRe = null;
+  }
+
+  let extendedPictographicRe: RegExp | null = null;
+  try {
+    // eslint-disable-next-line prefer-regex-literals
+    extendedPictographicRe = new RegExp("\\p{Extended_Pictographic}", "u");
+  } catch {
+    extendedPictographicRe = null;
+  }
+
+  let emojiPresentationRe: RegExp | null = null;
+  try {
+    // eslint-disable-next-line prefer-regex-literals
+    emojiPresentationRe = new RegExp("\\p{Emoji_Presentation}", "u");
+  } catch {
+    emojiPresentationRe = null;
+  }
+
+  const isZeroWidthRiskCodePoint = (codePoint: number): boolean =>
+    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
+    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
+    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
+    (codePoint >= 0x200b && codePoint <= 0x200f) ||
+    (codePoint >= 0x202a && codePoint <= 0x202e) ||
+    (codePoint >= 0x2060 && codePoint <= 0x206f) ||
+    (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f) ||
+    (codePoint >= 0xe0000 && codePoint <= 0xe0fff);
+
+  const isZeroWidthRiskGrapheme = (ch: string): boolean => {
+    if (!ch || ch === " ") return false;
+    if (zeroWidthRiskRe?.test(ch)) return true;
+    let hasRiskCodePoint = false;
+    for (const part of ch) {
+      const codePoint = part.codePointAt(0);
+      if (codePoint === 0x20) continue;
+      if (codePoint == null || !isZeroWidthRiskCodePoint(codePoint)) return false;
+      hasRiskCodePoint = true;
+    }
+    return hasRiskCodePoint;
+  };
+
+  const isHighRiskWideGrapheme = (ch: string): boolean => {
+    if (!ch || ch === " ") return false;
+    if (ch.includes("\uFE0F") || ch.includes("\u200D") || ch.includes("\u20E3")) return true;
+    if (extendedPictographicRe?.test(ch) || emojiPresentationRe?.test(ch)) return true;
+    for (const part of ch) {
+      const codePoint = part.codePointAt(0);
+      if (codePoint == null) continue;
+      if (codePoint >= 0x1f1e6 && codePoint <= 0x1f1ff) return true;
+      if (codePoint >= 0x1f300 && codePoint <= 0x1faff) return true;
+      if (codePoint >= 0x1f3fb && codePoint <= 0x1f3ff) return true;
+      if (codePoint >= 0xe0000 && codePoint <= 0xe007f) return true;
+    }
+    return false;
+  };
+
+  // Some terminals disagree on rendered glyph widths. If the terminal advances fewer columns
+  // than our buffer model, subsequent glyphs can shift left and visually corrupt borders.
+  const needsCursorFix = (cell: Cell, ch: string): boolean => {
     const w = cell.width ?? 1;
-    return w === 2 && ch.length > 1;
+    return (w === 2 && isHighRiskWideGrapheme(ch)) || (w === 1 && isZeroWidthRiskGrapheme(ch));
   };
 
   const ensureRowEscapes = (rows: number): void => {
@@ -1058,7 +1119,7 @@ export function createStdoutRenderer(
           currentKey = key;
           currentStyle = nextStyle;
           currentTextParts.push(ch);
-          if (needsWideCursorFix(cell, ch)) {
+          if (needsCursorFix(cell, ch)) {
             currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);
           }
           continue;
@@ -1068,7 +1129,7 @@ export function createStdoutRenderer(
           normalizeHref(nextStyle.href) === normalizeHref(currentStyle?.href)
         ) {
           currentTextParts.push(ch);
-          if (needsWideCursorFix(cell, ch)) {
+          if (needsCursorFix(cell, ch)) {
             currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);
           }
           continue;
@@ -1082,7 +1143,7 @@ export function createStdoutRenderer(
         currentStyle = nextStyle;
         currentTextParts.length = 0;
         currentTextParts.push(ch);
-        if (needsWideCursorFix(cell, ch))
+        if (needsCursorFix(cell, ch))
           currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);
       }
 

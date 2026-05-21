@@ -4,6 +4,7 @@ import {
   defineComponent,
   h,
   nextTick,
+  TRenderPlane,
   TText,
   TView,
   useTerminal,
@@ -80,6 +81,78 @@ describe("createTerminalApp selection", () => {
       expect(onClick).not.toHaveBeenCalled();
       expect(app.terminal.getCell(0, 0).style.inverse).toBe(true);
       expect(app.terminal.getCell(5, 0).style.inverse).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("paints selected text from transcript and chrome planes", async () => {
+    const App = defineComponent({
+      name: "CliSelectionPlaneProbe",
+      setup() {
+        return () =>
+          h(
+            TView,
+            {
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 2,
+              selectable: true,
+            },
+            () => [
+              h(TRenderPlane, { plane: "transcript" }, () =>
+                h(TText, {
+                  x: 0,
+                  y: 0,
+                  value: "select me",
+                  style: { fg: "whiteBright", bg: "blackBright" },
+                }),
+              ),
+              h(TRenderPlane, { plane: "chrome" }, () =>
+                h(TText, {
+                  x: 0,
+                  y: 1,
+                  value: "chrome",
+                  style: { fg: "cyanBright", bg: "black" },
+                }),
+              ),
+            ],
+          );
+      },
+    });
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 2,
+      component: App,
+      selection: {
+        autoCopy: false,
+        style: { fg: "black", bg: "magentaBright", inverse: false },
+      },
+    });
+
+    try {
+      app.mount();
+      await settle();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 });
+      app.events.dispatch({ type: "pointermove", cellX: 2, cellY: 1, button: 0 });
+      await settle();
+      app.scheduler.flushNow();
+
+      expect(app.terminal.getCell(0, 0).ch).toBe("s");
+      expect(app.terminal.getCell(0, 0).style).toMatchObject({
+        fg: "black",
+        bg: "magentaBright",
+        inverse: false,
+      });
+      expect(app.terminal.getCell(0, 1).ch).toBe("c");
+      expect(app.terminal.getCell(0, 1).style).toMatchObject({
+        fg: "black",
+        bg: "magentaBright",
+        inverse: false,
+      });
     } finally {
       app.dispose();
     }

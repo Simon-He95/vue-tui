@@ -161,6 +161,51 @@ describe("ui regressions portal select and text", () => {
     mounted.unmount();
   });
 
+  it("TBox border stays closed when nested child stacks clear edge cells", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TBox,
+          {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 5,
+            border: true,
+            padding: 0,
+            style: { fg: "blueBright", bg: "black" },
+          },
+          () => [
+            h(TView, { x: 15, y: 0, w: 4, h: 1 }, () =>
+              h(TText, {
+                x: 0,
+                y: 0,
+                w: 4,
+                value: "Link",
+                style: { fg: "whiteBright", bg: "black", underline: true },
+              }),
+            ),
+            h(TView, { x: 7, y: 3, w: 8, h: 1 }, () =>
+              h(TText, {
+                x: 0,
+                y: 0,
+                w: 8,
+                value: "Run 3",
+                style: { fg: "yellowBright", bg: "black" },
+              }),
+            ),
+          ],
+        ),
+      24,
+      7,
+    );
+    await nextTick();
+
+    expectBoxBorder(mounted.terminal.snapshot().lines, { x: 0, y: 0, w: 20, h: 5 });
+
+    mounted.unmount();
+  });
+
   it("v-if mounts/unmounts terminal nodes cleanly", async () => {
     const show = ref(true);
     const mountedCount = ref(0);

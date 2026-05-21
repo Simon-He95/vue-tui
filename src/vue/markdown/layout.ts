@@ -1,20 +1,29 @@
 import {
+  currentTextWidthProvider,
   forEachTextCellSegment,
   repeatChar,
   sliceByCellsRange,
   textCellWidth,
+  withTextWidthProvider,
 } from "../utils/text.js";
 import type { Style } from "../../core/types.js";
+import type { WidthProvider } from "../../core/buffer/width.js";
 import type {
   TuiMarkdownBlock,
   TuiMarkdownInlineSegment,
+  TuiMarkdownTableCell,
   TuiMarkdownVisualRow,
   TuiMarkdownVisualSegment,
 } from "./types.js";
 
 export type TuiMarkdownLayoutCache = Readonly<{
   width: number;
+  widthProvider?: WidthProvider;
   entries: ReadonlyMap<string, TuiMarkdownLayoutCacheEntry>;
+}>;
+
+export type TuiMarkdownLayoutOptions = Readonly<{
+  widthProvider?: WidthProvider;
 }>;
 
 type TuiMarkdownLayoutCacheEntry = Readonly<{
@@ -73,6 +82,29 @@ function clipInlineSegmentsToWidth(
     const cells = textCellWidth(piece);
     if (!piece || cells <= 0) continue;
     out.push(segment.style ? { text: piece, style: segment.style } : { text: piece });
+    remaining -= cells;
+  }
+  return out;
+}
+
+function clipVisualSegmentsToWidth(
+  segments: readonly TuiMarkdownVisualSegment[],
+  width: number,
+): readonly TuiMarkdownVisualSegment[] {
+  let remaining = Math.max(0, Math.floor(width));
+  if (remaining <= 0) return [];
+  const out: TuiMarkdownVisualSegment[] = [];
+  for (const segment of segments) {
+    if (!segment.text || remaining <= 0) continue;
+    if (segment.cells <= remaining) {
+      out.push(segment);
+      remaining -= segment.cells;
+      continue;
+    }
+    const text = sliceByCellsRange(segment.text, 0, remaining);
+    const cells = textCellWidth(text);
+    if (!text || cells <= 0) continue;
+    out.push({ text, style: segment.style, cells });
     remaining -= cells;
   }
   return out;
@@ -275,6 +307,183 @@ function thematicBreakRows(
   ];
 }
 
+function tableColumnCount(block: Extract<TuiMarkdownBlock, { type: "table" }>): number {
+  let columns = block.header.length;
+  for (const row of block.rows) columns = Math.max(columns, row.length);
+  return columns;
+}
+
+function tableColumnWidths(
+  block: Extract<TuiMarkdownBlock, { type: "table" }>,
+  columns: number,
+  width: number,
+): number[] {
+  const widths = Array.from({ length: columns }, () => 0);
+  const measureRow = (row: readonly TuiMarkdownTableCell[]) => {
+    for (let index = 0; index < columns; index++) {
+      widths[index] = Math.max(widths[index] ?? 0, segmentsCellWidth(row[index]?.segments ?? []));
+    }
+  };
+  measureRow(block.header);
+  for (const row of block.rows) measureRow(row);
+
+  const prefixCells = segmentsCellWidth(block.prefixSegments ?? []);
+  const available = Math.max(0, width - prefixCells - (columns * 3 + 1));
+  for (let index = 0; index < widths.length; index++) {
+    widths[index] = Math.min(widths[index] ?? 0, available);
+  }
+
+  let total = widths.reduce((sum, item) => sum + item, 0);
+  while (total > available) {
+    let widestIndex = 0;
+    for (let index = 1; index < widths.length; index++) {
+      if ((widths[index] ?? 0) > (widths[widestIndex] ?? 0)) widestIndex = index;
+    }
+    if ((widths[widestIndex] ?? 0) <= 0) break;
+    widths[widestIndex]!--;
+    total--;
+  }
+
+  return widths;
+}
+
+function appendVisualSegment(
+  segments: TuiMarkdownVisualSegment[],
+  text: string,
+  style?: Style,
+): void {
+  if (!text) return;
+  const cells = textCellWidth(text);
+  if (cells <= 0) return;
+  const prev = segments[segments.length - 1];
+  if (prev && prev.style === style) {
+    segments[segments.length - 1] = {
+      text: `${prev.text}${text}`,
+      style,
+      cells: prev.cells + cells,
+    };
+    return;
+  }
+  segments.push({ text, style, cells });
+}
+
+function appendInlineVisualSegments(
+  out: TuiMarkdownVisualSegment[],
+  segments: readonly TuiMarkdownInlineSegment[],
+): void {
+  for (const segment of segments) {
+    if (segment.hardBreak) {
+      appendVisualSegment(out, " ");
+      continue;
+    }
+    appendVisualSegment(out, segment.text, segment.style);
+  }
+}
+
+function tableBorderRow(
+  block: Extract<TuiMarkdownBlock, { type: "table" }>,
+  widths: readonly number[],
+  width: number,
+  rowInBlock: number,
+  left: string,
+  join: string,
+  right: string,
+): TuiMarkdownVisualRow {
+  const prefix = (block.prefixSegments ?? [])
+    .map(toVisualSegment)
+    .filter(Boolean) as TuiMarkdownVisualSegment[];
+  const segments = [...prefix];
+  let cells = prefix.reduce((sum, segment) => sum + segment.cells, 0);
+  const append = (text: string) => {
+    if (cells >= width) return;
+    appendVisualSegment(segments, text, block.borderStyle);
+    cells += textCellWidth(text);
+  };
+
+  append(left);
+  for (let index = 0; index < widths.length && cells < width; index++) {
+    append(repeatChar("─", (widths[index] ?? 0) + 2));
+    append(index === widths.length - 1 ? right : join);
+  }
+
+  const clipped = clipVisualSegmentsToWidth(segments, width);
+  return {
+    key: `${block.key}:${rowInBlock}`,
+    blockKey: block.key,
+    rowInBlock,
+    plainText: segmentsPlainText(clipped),
+    segments: clipped,
+  };
+}
+
+function tableContentRow(
+  block: Extract<TuiMarkdownBlock, { type: "table" }>,
+  row: readonly TuiMarkdownTableCell[],
+  widths: readonly number[],
+  width: number,
+  rowInBlock: number,
+): TuiMarkdownVisualRow {
+  const segments = (block.prefixSegments ?? [])
+    .map(toVisualSegment)
+    .filter(Boolean) as TuiMarkdownVisualSegment[];
+  let cells = segments.reduce((sum, segment) => sum + segment.cells, 0);
+  const append = (text: string, style?: Style) => {
+    if (cells >= width) return;
+    appendVisualSegment(segments, text, style);
+    cells += textCellWidth(text);
+  };
+
+  append("│", block.borderStyle);
+
+  for (let index = 0; index < widths.length && cells < width; index++) {
+    const columnWidth = widths[index] ?? 0;
+    const cell = row[index];
+    const clipped = clipInlineSegmentsToWidth(cell?.segments ?? [], columnWidth);
+    const contentCells = segmentsCellWidth(clipped);
+    const remaining = Math.max(0, columnWidth - contentCells);
+    const align = cell?.align ?? "left";
+    const leftPad =
+      align === "right" ? remaining : align === "center" ? Math.floor(remaining / 2) : 0;
+    const rightPad = remaining - leftPad;
+
+    append(" ");
+    append(repeatChar(" ", leftPad));
+    if (cells < width) {
+      appendInlineVisualSegments(segments, clipped);
+      cells += contentCells;
+    }
+    append(repeatChar(" ", rightPad));
+    append(" ");
+    append("│", block.borderStyle);
+  }
+
+  const clipped = clipVisualSegmentsToWidth(segments, width);
+  return {
+    key: `${block.key}:${rowInBlock}`,
+    blockKey: block.key,
+    rowInBlock,
+    plainText: segmentsPlainText(clipped),
+    segments: clipped,
+  };
+}
+
+function tableRows(
+  block: Extract<TuiMarkdownBlock, { type: "table" }>,
+  width: number,
+): readonly TuiMarkdownVisualRow[] {
+  const columns = tableColumnCount(block);
+  if (columns <= 0) return [];
+
+  const widths = tableColumnWidths(block, columns, width);
+  const rows: TuiMarkdownVisualRow[] = [];
+  rows.push(tableBorderRow(block, widths, width, rows.length, "╭", "┬", "╮"));
+  rows.push(tableContentRow(block, block.header, widths, width, rows.length));
+  rows.push(tableBorderRow(block, widths, width, rows.length, "├", "┼", "┤"));
+  for (const row of block.rows) rows.push(tableContentRow(block, row, widths, width, rows.length));
+  rows.push(tableBorderRow(block, widths, width, rows.length, "╰", "┴", "╯"));
+  return rows;
+}
+
 function styleSignature(style?: Style): string {
   if (!style) return "";
   return [
@@ -323,6 +532,22 @@ function blockLayoutSignature(block: TuiMarkdownBlock): string {
         styleSignature(block.style),
         inlineSegmentsSignature(block.prefixSegments),
       ].join("\u0004");
+    case "table":
+      return [
+        block.type,
+        inlineSegmentsSignature(block.prefixSegments),
+        styleSignature(block.borderStyle),
+        block.header
+          .map((cell) => `${inlineSegmentsSignature(cell.segments)}\u0005${cell.align ?? ""}`)
+          .join("\u0006"),
+        block.rows
+          .map((row) =>
+            row
+              .map((cell) => `${inlineSegmentsSignature(cell.segments)}\u0005${cell.align ?? ""}`)
+              .join("\u0006"),
+          )
+          .join("\u0007"),
+      ].join("\u0004");
     case "blank":
       return block.type;
   }
@@ -339,6 +564,8 @@ export function layoutMarkdownBlock(
       return codeBlockRows(block, width);
     case "thematic_break":
       return thematicBreakRows(block, width);
+    case "table":
+      return tableRows(block, width);
     case "blank":
       return [
         {
@@ -361,13 +588,18 @@ export function layoutMarkdownBlocksCached(
   cache: TuiMarkdownLayoutCache;
 }> {
   const normalizedWidth = Math.max(0, Math.floor(width));
+  const widthProvider = currentTextWidthProvider();
   if (normalizedWidth <= 0) {
-    return { rows: [], cache: { width: normalizedWidth, entries: new Map() } };
+    return { rows: [], cache: { width: normalizedWidth, widthProvider, entries: new Map() } };
   }
 
   const rows: TuiMarkdownVisualRow[] = [];
   const entries = new Map<string, TuiMarkdownLayoutCacheEntry>();
-  const previousEntries = previous?.width === normalizedWidth ? previous.entries : undefined;
+  const previousEntries =
+    previous?.width === normalizedWidth &&
+    Object.is(previous.widthProvider ?? "default", widthProvider)
+      ? previous.entries
+      : undefined;
 
   for (let index = 0; index < blocks.length; index++) {
     const block = blocks[index]!;
@@ -392,13 +624,20 @@ export function layoutMarkdownBlocksCached(
 
   return {
     rows,
-    cache: { width: normalizedWidth, entries },
+    cache: { width: normalizedWidth, widthProvider, entries },
   };
 }
 
 export function layoutMarkdownBlocks(
   blocks: readonly TuiMarkdownBlock[],
   width: number,
+  options?: TuiMarkdownLayoutOptions,
 ): readonly TuiMarkdownVisualRow[] {
+  if (options?.widthProvider !== undefined) {
+    return withTextWidthProvider(
+      options.widthProvider,
+      () => layoutMarkdownBlocksCached(blocks, width).rows,
+    );
+  }
   return layoutMarkdownBlocksCached(blocks, width).rows;
 }

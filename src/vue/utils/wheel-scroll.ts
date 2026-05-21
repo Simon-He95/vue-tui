@@ -22,9 +22,6 @@ const PIXELS_PER_LINE = 16;
 const ACCEL_WINDOW_MS = 120;
 const MAX_ACCEL = 26;
 const EDGE_BOUNCE_MS = 120;
-// Some terminals (notably Ghostty) can emit 2+ wheel ticks per one physical wheel step,
-// with very small intervals (~4ms). Treat those as a single logical tick.
-const MIN_TICK_INTERVAL_MS = 6;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -47,11 +44,11 @@ function normalizeDelta(deltaY: number, mode: WheelDeltaMode = "auto"): number {
   return deltaY / PIXELS_PER_LINE;
 }
 
-function accelFactor(now: number, lastAt: number): number {
+function accelFactor(now: number, lastAt: number, maxAccel = MAX_ACCEL): number {
   const dt = now - lastAt;
   if (!Number.isFinite(dt) || dt <= 0 || dt > ACCEL_WINDOW_MS) return 1;
   const t = 1 - dt / ACCEL_WINDOW_MS;
-  return 1 + t * (MAX_ACCEL - 1);
+  return 1 + t * (maxAccel - 1);
 }
 
 export function createWheelScrollState(): WheelScrollState {
@@ -88,21 +85,18 @@ export function applyWheelScroll(
     return { nextTop: scrollTop, dir: 0, lines: 0 };
   }
 
-  const dt = state.lastAt ? now - state.lastAt : Infinity;
   const lineUnits = isLineUnitDelta(deltaY, deltaMode);
-  if (lineUnits && dt !== Infinity && dt >= 0 && dt < MIN_TICK_INTERVAL_MS)
-    return { nextTop: scrollTop, dir: 0, lines: 0 };
-
-  const accel = lineUnits
+  const normalizedDelta = normalizeDelta(deltaY, deltaMode);
+  const accel = options.disableAcceleration
     ? 1
-    : options.disableAcceleration
+    : lineUnits
       ? 1
       : state.lastAt
         ? accelFactor(now, state.lastAt)
         : 1;
   state.lastAt = now;
 
-  state.accumulator += normalizeDelta(deltaY, deltaMode) * accel;
+  state.accumulator += normalizedDelta * accel;
   const lines = Math.trunc(state.accumulator);
   if (lines === 0) return { nextTop: scrollTop, dir: 0, lines: 0 };
 

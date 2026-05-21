@@ -89,7 +89,11 @@ export function createTuiProfiler(
 
   const format =
     parseLogFormat(firstNonEmptyEnv(env, "VUE_TUI_PROFILE_FORMAT", "DIMCODE_PROFILE_TUI_FORMAT")) ??
-    "text";
+    (String(firstNonEmptyEnv(env, "VUE_TUI_PROFILE_LOG_PATH", "DIMCODE_PROFILE_TUI_LOG_PATH") ?? "")
+      .trim()
+      .endsWith(".jsonl")
+      ? "json"
+      : "text");
   const logDest =
     parseLogDest(
       firstNonEmptyEnv(env, "VUE_TUI_PROFILE_LOG_DEST", "DIMCODE_PROFILE_TUI_LOG_DEST"),

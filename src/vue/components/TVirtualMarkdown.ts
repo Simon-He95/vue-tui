@@ -41,7 +41,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey } from "../context.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
-import { sliceByCellsRange } from "../utils/text.js";
+import { sliceByCellsRange, withTextWidthProvider } from "../utils/text.js";
 import {
   applyWheelScroll,
   createWheelScrollState,
@@ -131,7 +131,7 @@ export const TVirtualMarkdown = defineComponent({
   emits: ["update:scrollTop", "scroll", "focus", "blur", "keydown"],
   setup(props, { emit }) {
     const instance = getCurrentInstance();
-    const { terminal, defaultStyle, events, scheduler, selection } = useTerminal();
+    const { terminal, defaultStyle, events, scheduler, selection, widthProvider } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
@@ -169,13 +169,15 @@ export const TVirtualMarkdown = defineComponent({
     function rebuildRows(): void {
       const prevScrollTop = internalScrollTop.value;
       const prevVisibleRows = visibleRowSignatures(rows.value, prevScrollTop);
-      const blocks =
-        props.blocks ??
-        buildMarkdownBlocks(props.content, parser.value, {
-          final: props.final,
-          theme: props.theme,
-        }).blocks;
-      const nextLayout = layoutMarkdownBlocksCached(blocks, props.w, layoutCache);
+      const nextLayout = withTextWidthProvider(widthProvider, () => {
+        const blocks =
+          props.blocks ??
+          buildMarkdownBlocks(props.content, parser.value, {
+            final: props.final,
+            theme: props.theme,
+          }).blocks;
+        return layoutMarkdownBlocksCached(blocks, props.w, layoutCache);
+      });
       layoutCache = markRaw(nextLayout.cache);
       const nextRows = nextLayout.rows;
       rows.value = markRaw(nextRows);
@@ -418,12 +420,14 @@ export const TVirtualMarkdown = defineComponent({
 
     function textForSelectionRange(range: TerminalSelectionRange): string {
       const cols = Math.max(1, Math.floor(props.w));
-      return terminalSelectionRowSpans(range, cols, rows.value.length)
-        .map((span) => {
-          const text = sliceByCellsRange(rows.value[span.y]?.plainText ?? "", span.x0, span.x1);
-          return span.x1 >= cols ? text.trimEnd() : text;
-        })
-        .join("\n");
+      return withTextWidthProvider(widthProvider, () =>
+        terminalSelectionRowSpans(range, cols, rows.value.length)
+          .map((span) => {
+            const text = sliceByCellsRange(rows.value[span.y]?.plainText ?? "", span.x0, span.x1);
+            return span.x1 >= cols ? text.trimEnd() : text;
+          })
+          .join("\n"),
+      );
     }
 
     function visibleSpansForSelectionRange(
@@ -574,28 +578,30 @@ export const TVirtualMarkdown = defineComponent({
         documentVersion.value,
       ],
       paint: (dirtyRows) => {
-        if (!visible.value) return;
-        const r = normalizedRect();
-        if (r.w <= 0 || r.h <= 0) return;
-        const baseStyle = props.style ?? defaultStyle.value;
-        const { x: clipX, y: clipY } = clipOffsets();
-        const paintRow = (y: number) => {
-          if (y < r.y || y >= r.y + r.h) return;
-          const visualIndex = internalScrollTop.value + clipY + (y - r.y);
-          paintMarkdownVisualRow(terminal, rows.value[visualIndex], {
-            x: r.x,
-            y,
-            w: r.w,
-            clipStart: clipX,
-            baseStyle,
-            clear: true,
-          });
-        };
-        if (dirtyRows?.length) {
-          for (const y of dirtyRows) paintRow(y);
-          return;
-        }
-        for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+        withTextWidthProvider(widthProvider, () => {
+          if (!visible.value) return;
+          const r = normalizedRect();
+          if (r.w <= 0 || r.h <= 0) return;
+          const baseStyle = props.style ?? defaultStyle.value;
+          const { x: clipX, y: clipY } = clipOffsets();
+          const paintRow = (y: number) => {
+            if (y < r.y || y >= r.y + r.h) return;
+            const visualIndex = internalScrollTop.value + clipY + (y - r.y);
+            paintMarkdownVisualRow(terminal, rows.value[visualIndex], {
+              x: r.x,
+              y,
+              w: r.w,
+              clipStart: clipX,
+              baseStyle,
+              clear: true,
+            });
+          };
+          if (dirtyRows?.length) {
+            for (const y of dirtyRows) paintRow(y);
+            return;
+          }
+          for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+        });
       },
     }));
 

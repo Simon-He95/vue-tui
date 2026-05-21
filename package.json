@@ -61,6 +61,9 @@
       ],
       "experimental": [
         "./dist/experimental.d.ts"
+      ],
+      "agent": [
+        "./dist/agent.d.ts"
       ]
     }
   },
@@ -155,6 +158,16 @@
         "default": "./dist/experimental.cjs"
       }
     },
+    "./agent": {
+      "import": {
+        "types": "./dist/agent.d.ts",
+        "default": "./dist/agent.js"
+      },
+      "require": {
+        "types": "./dist/agent.d.cts",
+        "default": "./dist/agent.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -175,6 +188,7 @@
     "example:agent-console:terminal:smoke": "pnpm run build && pnpm -C examples/agent-console terminal:smoke",
     "example:tlog-view-lab": "pnpm run build && VT_SMOKE=1 tsx examples/tlog-view-lab.ts",
     "run:basic:terminal": "pnpm run build && pnpm -C examples/basic terminal",
+    "run:agent-console:terminal": "pnpm run build && pnpm -C examples/agent-console terminal",
     "run:basic:multi-select:terminal": "pnpm run build && pnpm -C examples/basic build:terminal:multi-select && pnpm -C examples/basic terminal:multi-select",
     "run:tlog-view-lab": "pnpm run build && VT_INTERACTIVE=1 tsx examples/tlog-view-lab.ts",
     "docs:gen": "tsx scripts/generate-component-api-docs.ts",
@@ -203,7 +217,7 @@
     "release:smoke": "pnpm run example:tlog-view-lab && pnpm run example:agent-console:smoke && pnpm run example:agent-console:terminal:smoke && pnpm run example:basic:terminal-table:smoke",
     "start": "esno src/index.ts",
     "test": "vitest run",
-    "test:coverage:core": "vitest run test/unicode-width.test.ts test/hyperlink-sanitizer.test.ts test/dom-renderer.test.ts test/render-manager.test.ts test/terminal-selection.test.ts --coverage.enabled true --coverage.reporter text-summary",
+    "test:coverage:core": "vitest run test/unicode-width.test.ts test/hyperlink-sanitizer.test.ts test/dom-renderer.test.ts test/render-manager.test.ts test/terminal-selection.test.ts test/terminal-scroll-operations.test.ts test/plane-compositor.test.ts --coverage.enabled true --coverage.reporter text-summary",
     "test:browser-packed-vite-import": "pnpm run test:browser-vite-import:package",
     "test:browser-vite-import": "pnpm run build:checked && pnpm run test:browser-vite-import:dist",
     "test:browser-vite-import:dist": "pnpm exec vite build --config test/fixtures/browser-vite-import/vite.config.ts && node scripts/check-browser-vite-import.mjs",

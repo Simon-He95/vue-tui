@@ -3,6 +3,7 @@ import { layoutMarkdownBlocks } from "./layout.js";
 import { type TuiMarkdownParser } from "./parser.js";
 import { resolveTuiMarkdownTheme, type TuiMarkdownThemeOverrides } from "./theme.js";
 import type { TuiMarkdownBlock, TuiMarkdownNode, TuiMarkdownVisualRow } from "./types.js";
+import type { WidthProvider } from "../../core/buffer/width.js";
 import { sanitizeInlineText, sanitizeTextBlock } from "../utils/text.js";
 
 /**
@@ -41,9 +42,13 @@ export function buildMarkdownVisualRows(
   options?: Readonly<{
     final?: boolean;
     theme?: TuiMarkdownThemeOverrides;
+    widthProvider?: WidthProvider;
   }>,
 ): readonly TuiMarkdownVisualRow[] {
   const { blocks } = buildMarkdownBlocks(content, parser, options);
+  if (options?.widthProvider !== undefined) {
+    return layoutMarkdownBlocks(blocks, width, { widthProvider: options.widthProvider });
+  }
   return layoutMarkdownBlocks(blocks, width);
 }
 

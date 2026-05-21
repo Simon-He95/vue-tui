@@ -120,6 +120,18 @@ describe("public API surface", () => {
     `);
   });
 
+  it("keeps observability entry exports intentional", async () => {
+    expect(await exportNames("../src/observability.js")).toMatchInlineSnapshot(`
+      [
+        "createFramePerfStore",
+        "createJsonlPerfSink",
+        "createTraceStore",
+        "framePerfNow",
+        "installTuiPerf",
+      ]
+    `);
+  });
+
   it("keeps experimental entry exports intentional", async () => {
     expect(await exportNames("../src/experimental.js")).toMatchInlineSnapshot(`
       [
@@ -167,6 +179,72 @@ describe("public API surface", () => {
         "tlogDefaultPreset",
         "tlogDefaultTheme",
         "tlogHighContrastKeymap",
+        "tlogHighContrastPreset",
+        "tlogHighContrastTheme",
+        "toTLogExternalLinkFromVisibleLink",
+        "useTLogLinkController",
+        "useTLogRetainedIndex",
+        "useTLogSearchController",
+        "useTLogSearchResultsPage",
+        "useTLogVirtualSearchResults",
+      ]
+    `);
+  });
+
+  it("keeps agent entry exports intentional", async () => {
+    expect(await exportNames("../src/agent.js")).toMatchInlineSnapshot(`
+      [
+        "TAgentTranscript",
+        "TBox",
+        "TCommandPalette",
+        "TDialog",
+        "TInput",
+        "TLogLinksPanel",
+        "TLogMinimap",
+        "TLogScrollbar",
+        "TLogSearchBar",
+        "TLogSearchPager",
+        "TLogSearchResults",
+        "TLogView",
+        "TLogVirtualLinksPanel",
+        "TLogVirtualSearchResults",
+        "TRenderPlane",
+        "TSelect",
+        "TText",
+        "TToolCallView",
+        "TToolLogView",
+        "TTranscriptView",
+        "TView",
+        "TVirtualList",
+        "TVirtualMarkdown",
+        "computeCommandPaletteMatchRanges",
+        "createAppendOnlyLogStore",
+        "createMarkdownBlockSource",
+        "createTLogDensityBucketsFromMarkers",
+        "createTLogLevelPlugin",
+        "createTLogLineMatcherPlugin",
+        "createTLogLinkActionPlugin",
+        "createTLogOsc8LinkPlugin",
+        "createTLogUrlPlugin",
+        "detectTLogUrls",
+        "dispatchTLogPluginLinkAction",
+        "getTLogPluginMetadata",
+        "parseTLogAnnotatedText",
+        "resolveTLogLinksPanelTheme",
+        "resolveTLogMinimapTheme",
+        "resolveTLogScrollbarTheme",
+        "resolveTLogSearchBarTheme",
+        "resolveTLogSearchPagerTheme",
+        "resolveTLogSearchResultsTheme",
+        "resolveTLogViewTheme",
+        "resolveTThinkingViewModel",
+        "resolveTToolCallViewModel",
+        "resolveTUserMessageViewModel",
+        "stripTLogAnsiText",
+        "tlogDarkPreset",
+        "tlogDarkTheme",
+        "tlogDefaultPreset",
+        "tlogDefaultTheme",
         "tlogHighContrastPreset",
         "tlogHighContrastTheme",
         "toTLogExternalLinkFromVisibleLink",

@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createApp, defineComponent, h, nextTick, ref } from "vue";
 import { createTerminal } from "../src/index.js";
 import { createDomRenderer } from "../src/renderer-dom.js";
-import { createFramePerfStore, type FramePerfStore } from "../src/observability.js";
+import {
+  createFramePerfStore,
+  createJsonlPerfSink,
+  type FramePerfStore,
+} from "../src/observability.js";
 import { TerminalProvider, TList, TText, useTerminal, type TerminalScheduler } from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 import { TVirtualList } from "../src/experimental.js";
@@ -85,6 +89,58 @@ describe("FramePerfStore", () => {
     release();
 
     expect(store.enabled.value).toBe(true);
+  });
+
+  it("forwards frame and component samples to perf sinks", () => {
+    const frames: unknown[] = [];
+    const components: unknown[] = [];
+    const store = createFramePerfStore(2, {
+      enabled: true,
+      sink: {
+        onFramePerf: (value) => frames.push(value),
+        onComponentPerf: (value) => components.push(value),
+      },
+    });
+
+    store.push(sample(1));
+    store.recordComponent({
+      name: "TTranscriptView",
+      phase: "layout",
+      durationMs: 1,
+      itemCount: 2,
+      renderedCount: 2,
+      cacheHit: 1,
+      cacheMiss: 1,
+    });
+
+    expect(frames).toHaveLength(1);
+    expect(components).toEqual([
+      expect.objectContaining({
+        name: "TTranscriptView",
+        phase: "layout",
+        cacheHit: 1,
+        cacheMiss: 1,
+      }),
+    ]);
+  });
+
+  it("writes perf samples as json lines", () => {
+    const lines: string[] = [];
+    const sink = createJsonlPerfSink({
+      write: (line) => lines.push(line),
+      includeComponents: true,
+      includeEvents: true,
+    });
+
+    sink.onFramePerf(sample(1));
+    sink.onComponentPerf?.({ name: "TVirtualList", phase: "render", durationMs: 2 });
+    sink.onEvent?.({ type: "scroll", component: "TVirtualList" });
+
+    expect(lines.map((line) => JSON.parse(line))).toEqual([
+      expect.objectContaining({ type: "frame", frameId: 1 }),
+      expect.objectContaining({ type: "component", name: "TVirtualList", phase: "render" }),
+      expect.objectContaining({ type: "event", eventType: "scroll", component: "TVirtualList" }),
+    ]);
   });
 });
 

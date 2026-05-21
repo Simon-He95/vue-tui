@@ -1,0 +1,282 @@
+import { describe, expect, it } from "vitest";
+import { TToolCallView } from "../src/agent.js";
+import { h, mountTerminal, TText } from "./ui-regressions-support.js";
+
+function rowText(
+  mounted: { terminal: { getRow: (y: number) => readonly { ch: string }[] } },
+  y: number,
+): string {
+  return mounted.terminal
+    .getRow(y)
+    .map((cell) => cell.ch)
+    .join("")
+    .trimEnd();
+}
+
+function cellStyle(
+  mounted: { terminal: { getRow: (y: number) => readonly { style: Record<string, unknown> }[] } },
+  x: number,
+  y: number,
+): Record<string, unknown> {
+  return mounted.terminal.getRow(y)[x]?.style ?? {};
+}
+
+describe("TToolCallView", () => {
+  it("matches best-agent collapsed streaming tool_call header and preview", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TToolCallView, {
+          x: 2,
+          y: 0,
+          w: 42,
+          title: "shell",
+          collapsed: true,
+          suffix: "pnpm test",
+          preview: "latest",
+        }),
+      46,
+      2,
+    );
+
+    try {
+      expect(rowText(mounted, 0).trim()).toBe("▸ ● shell pnpm test");
+      expect(rowText(mounted, 1).trim()).toBe("⎿ latest");
+      expect(cellStyle(mounted, 2, 0)).toMatchObject({
+        fg: "yellowBright",
+        bg: "black",
+        dim: true,
+      });
+      expect(cellStyle(mounted, 4, 0)).toMatchObject({
+        fg: "white",
+        bg: "black",
+        dim: true,
+      });
+      expect(cellStyle(mounted, 6, 0)).toMatchObject({
+        fg: "yellowBright",
+        bg: "black",
+        dim: false,
+      });
+      expect(cellStyle(mounted, 12, 0)).toMatchObject({
+        fg: "white",
+        bg: "black",
+        dim: true,
+      });
+      expect(cellStyle(mounted, 4, 1)).toMatchObject({
+        fg: "yellowBright",
+        bg: "black",
+        dim: true,
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("hides suffix and preview when expanded like best-agent", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TToolCallView, {
+          x: 0,
+          y: 0,
+          w: 42,
+          title: "write-workspace",
+          collapsed: false,
+          status: "success",
+          suffix: "src/a.ts (+3)",
+          preview: "latest",
+        }),
+      42,
+      2,
+    );
+
+    try {
+      expect(rowText(mounted, 0).trim()).toBe("▾ ● write-workspace");
+      expect(rowText(mounted, 0)).not.toContain("src/a.ts");
+      expect(rowText(mounted, 1).trim()).toBe("");
+      expect(cellStyle(mounted, 2, 0)).toMatchObject({
+        fg: "greenBright",
+        bg: "black",
+        bold: true,
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("maps error and warning status dots to overridable renderer styles", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TToolCallView, {
+          x: 0,
+          y: 0,
+          w: 24,
+          title: "read",
+          status: "error",
+        }),
+        h(TToolCallView, {
+          x: 0,
+          y: 1,
+          w: 24,
+          title: "search",
+          status: "warning",
+        }),
+      ],
+      24,
+      2,
+    );
+
+    try {
+      expect(cellStyle(mounted, 2, 0)).toMatchObject({
+        fg: "redBright",
+        bg: "black",
+        bold: true,
+      });
+      expect(cellStyle(mounted, 2, 1)).toMatchObject({
+        fg: "yellowBright",
+        bg: "black",
+        bold: true,
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("allows style props and slots to replace the default chrome", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TToolCallView,
+          {
+            x: 0,
+            y: 0,
+            w: 36,
+            title: "shell",
+            collapsed: true,
+            suffix: "pnpm test",
+            preview: "latest",
+            style: { fg: "cyanBright", bg: "blue" },
+            titleStyle: { fg: "yellowBright" },
+            suffixStyle: { fg: "magentaBright" },
+          },
+          {
+            preview: (ctx: { preview: string }) =>
+              h(TText, {
+                x: 0,
+                y: 1,
+                w: 36,
+                value: `custom:${ctx.preview}`,
+                style: { fg: "black", bg: "greenBright", bold: true },
+              }),
+          },
+        ),
+      36,
+      2,
+    );
+
+    try {
+      expect(rowText(mounted, 0).trim()).toBe("▸ ● shell pnpm test");
+      expect(rowText(mounted, 1).trim()).toBe("custom:latest");
+      expect(cellStyle(mounted, 0, 0)).toMatchObject({ bg: "blue" });
+      expect(cellStyle(mounted, 4, 0)).toMatchObject({ fg: "yellowBright" });
+      expect(cellStyle(mounted, 10, 0)).toMatchObject({ fg: "magentaBright" });
+      expect(cellStyle(mounted, 0, 1)).toMatchObject({
+        fg: "black",
+        bg: "greenBright",
+        bold: true,
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses TerminalProvider widthProvider for ambiguous-width tool call segments", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TToolCallView, {
+          x: 0,
+          y: 0,
+          w: 24,
+          title: "Ωshell",
+          collapsed: true,
+          suffix: "① done",
+          preview: "★ changed",
+        }),
+      24,
+      2,
+      { widthProvider: "cjk" },
+    );
+
+    try {
+      expect(mounted.terminal.getCell(2, 0).ch).toBe("●");
+      expect(mounted.terminal.getCell(3, 0).continuation).toBe(true);
+      expect(mounted.terminal.getCell(5, 0).ch).toBe("Ω");
+      expect(mounted.terminal.getCell(6, 0).continuation).toBe(true);
+      expect(mounted.terminal.getCell(13, 0).ch).toBe("①");
+      expect(mounted.terminal.getCell(14, 0).continuation).toBe(true);
+      expect(mounted.terminal.getCell(4, 1).ch).toBe("★");
+      expect(mounted.terminal.getCell(5, 1).continuation).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not overflow truncated title or suffix segments under cjk widthProvider", async () => {
+    let titleSegments: readonly { role: string; x: number; cells: number; text: string }[] = [];
+    let suffixSegments: readonly { role: string; x: number; cells: number; text: string }[] = [];
+    const mounted = await mountTerminal(
+      () => [
+        h(
+          TToolCallView,
+          {
+            x: 0,
+            y: 0,
+            w: 10,
+            title: "ΩΩΩΩΩΩΩ",
+            collapsed: true,
+          },
+          {
+            header: (ctx: { segments: typeof titleSegments }) => {
+              titleSegments = ctx.segments;
+              return null;
+            },
+          },
+        ),
+        h(
+          TToolCallView,
+          {
+            x: 0,
+            y: 1,
+            w: 10,
+            title: "x",
+            collapsed: true,
+            suffix: "①①①①",
+          },
+          {
+            header: (ctx: { segments: typeof suffixSegments }) => {
+              suffixSegments = ctx.segments;
+              return null;
+            },
+          },
+        ),
+      ],
+      10,
+      2,
+      { widthProvider: "cjk" },
+    );
+
+    try {
+      for (const segments of [titleSegments, suffixSegments]) {
+        for (const segment of segments) {
+          expect(segment.x + segment.cells).toBeLessThanOrEqual(10);
+        }
+      }
+      expect(titleSegments.find((segment) => segment.role === "title")?.text.endsWith("…")).toBe(
+        true,
+      );
+      expect(suffixSegments.find((segment) => segment.role === "suffix")?.text.endsWith("…")).toBe(
+        true,
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+});

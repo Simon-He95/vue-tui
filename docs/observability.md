@@ -45,6 +45,8 @@
 
 ```bash
 VUE_TUI_PROFILE=1
+VUE_TUI_FRAME_PERF_LOG_PATH=.dimcode/tui-perf.jsonl
+VUE_TUI_PROFILE_COMPONENTS=1
 ```
 
 会启用 TUI profiler；`DIMCODE_PROFILE_TUI` 仍作为 legacy alias 保留。它会输出：
@@ -57,6 +59,24 @@ VUE_TUI_PROFILE=1
 - `avgWriteMs` / `maxWriteMs`
 - `planes.invalidate`
 - `planes.render`
+
+CLI runtime 还会把 frame samples 写成 JSONL。默认路径是系统临时目录下的 `vue-tui-frame-perf.jsonl`；也可以用 `VUE_TUI_FRAME_PERF_LOG_PATH` 或 legacy `DIMCODE_TUI_PERF_LOG` 指定。若 `VUE_TUI_PROFILE_LOG_PATH` 以 `.jsonl` 结尾，frame JSONL 会复用该路径，聚合 profiler 也会自动输出 JSON 行，避免同一个文件混入文本日志。
+
+应用内也可以直接接入 sink：
+
+```ts
+import { createFramePerfStore, createJsonlPerfSink } from "@simon_he/vue-tui/observability";
+
+const sink = createJsonlPerfSink({
+  write: (line) => console.log(line),
+  includeComponents: true,
+});
+
+const framePerf = createFramePerfStore(120, {
+  enabled: true,
+  sink,
+});
+```
 
 对 plane/compositor 改动来说，最有用的不是总 render 次数，而是：
 

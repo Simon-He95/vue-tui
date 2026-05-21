@@ -29,6 +29,42 @@ function dispatchTimedWheel(container: HTMLElement, timeStamp: number): void {
   container.dispatchEvent(wheel);
 }
 
+function complexEmojiTable(): { content: string; icons: readonly string[] } {
+  const coder = "\u{1F468}\u{1F3FD}\u200D\u{1F4BB}";
+  const pirateFlag = "\u{1F3F4}\u200D\u2620\uFE0F";
+  const englandFlag = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}";
+  const keycapOne = "1\uFE0F\u20E3";
+  return {
+    content: [
+      "| Icon | Name |",
+      "|---|---|",
+      `| ${coder} | coder |`,
+      `| ${pirateFlag} | pirate |`,
+      `| ${englandFlag} | england |`,
+      `| ${keycapOne} | keycap |`,
+    ].join("\n"),
+    icons: [coder, pirateFlag, englandFlag, keycapOne],
+  };
+}
+
+function expectComplexEmojiTableBorders(
+  mounted: Awaited<ReturnType<typeof mountTerminal>>,
+  icons: readonly string[],
+): void {
+  const rightX = 17;
+  expect(mounted.terminal.getCell(rightX, 0).ch).toBe("╮");
+  expect(mounted.terminal.getCell(rightX, 1).ch).toBe("│");
+  expect(mounted.terminal.getCell(rightX, 2).ch).toBe("┤");
+  expect(mounted.terminal.getCell(rightX, 7).ch).toBe("╯");
+  icons.forEach((icon, index) => {
+    const y = index + 3;
+    expect(mounted.terminal.getCell(rightX, y).ch).toBe("│");
+    expect(mounted.terminal.getCell(2, y).ch).toBe(icon);
+    expect(mounted.terminal.getCell(2, y).width).toBe(2);
+    expect(mounted.terminal.getCell(3, y).continuation).toBe(true);
+  });
+}
+
 describe("markdown components", () => {
   it("renders styled markdown rows without feeding raw AST into TText", async () => {
     const mounted = await mountTerminal(
@@ -92,6 +128,125 @@ describe("markdown components", () => {
     );
 
     expect(mounted.terminal.getCell(0, 0).style.href).toBe("guide/parser-api");
+    mounted.unmount();
+  });
+
+  it("keeps TMarkdownText table borders aligned with cjk widthProvider", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 5,
+          content: ["| A |", "|---|", "| Ω |"].join("\n"),
+        }),
+      12,
+      6,
+      { widthProvider: "cjk" },
+    );
+
+    expect(mounted.terminal.getCell(5, 0).ch).toBe("╮");
+    expect(mounted.terminal.getCell(5, 1).ch).toBe("│");
+    expect(mounted.terminal.getCell(5, 2).ch).toBe("┤");
+    expect(mounted.terminal.getCell(5, 3).ch).toBe("│");
+    expect(mounted.terminal.getCell(5, 4).ch).toBe("╯");
+    expect(mounted.terminal.getCell(2, 3).ch).toBe("Ω");
+    expect(mounted.terminal.getCell(2, 3).width).toBe(2);
+    expect(mounted.terminal.getCell(3, 3).continuation).toBe(true);
+    mounted.unmount();
+  });
+
+  it("keeps TMarkdownText complex emoji table borders aligned with cjk widthProvider", async () => {
+    const table = complexEmojiTable();
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 8,
+          content: table.content,
+        }),
+      40,
+      9,
+      { widthProvider: "cjk" },
+    );
+
+    expectComplexEmojiTableBorders(mounted, table.icons);
+    mounted.unmount();
+  });
+
+  it("keeps styled emoji table cell links from leaking into padding and borders", async () => {
+    const coder = "\u{1F468}\u{1F3FD}\u200D\u{1F4BB}";
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 5,
+          content: [
+            "| Icon | Link |",
+            "|---|---|",
+            `| [${coder}](https://example.com) | coder |`,
+          ].join("\n"),
+        }),
+      24,
+      6,
+    );
+
+    expect(mounted.terminal.getCell(15, 3).ch).toBe("│");
+    expect(mounted.terminal.getCell(15, 3).style).toMatchObject({ dim: true });
+    expect(mounted.terminal.getCell(15, 3).style.href).toBeUndefined();
+    expect(mounted.terminal.getCell(2, 3).style.href).toBe("https://example.com/");
+    expect(mounted.terminal.getCell(14, 3).style.href).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it("keeps TVirtualMarkdown table borders aligned with cjk widthProvider", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 5,
+          content: ["| A |", "|---|", "| Ω |"].join("\n"),
+        }),
+      12,
+      6,
+      { widthProvider: "cjk" },
+    );
+
+    expect(mounted.terminal.getCell(5, 0).ch).toBe("╮");
+    expect(mounted.terminal.getCell(5, 1).ch).toBe("│");
+    expect(mounted.terminal.getCell(5, 2).ch).toBe("┤");
+    expect(mounted.terminal.getCell(5, 3).ch).toBe("│");
+    expect(mounted.terminal.getCell(5, 4).ch).toBe("╯");
+    expect(mounted.terminal.getCell(2, 3).ch).toBe("Ω");
+    expect(mounted.terminal.getCell(2, 3).width).toBe(2);
+    expect(mounted.terminal.getCell(3, 3).continuation).toBe(true);
+    mounted.unmount();
+  });
+
+  it("keeps TVirtualMarkdown complex emoji table borders aligned with cjk widthProvider", async () => {
+    const table = complexEmojiTable();
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 8,
+          content: table.content,
+        }),
+      40,
+      9,
+      { widthProvider: "cjk" },
+    );
+
+    expectComplexEmojiTableBorders(mounted, table.icons);
     mounted.unmount();
   });
 

@@ -27,6 +27,10 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("../../src/experimental.ts", import.meta.url)),
       },
       {
+        find: "@simon_he/vue-tui/agent",
+        replacement: fileURLToPath(new URL("../../src/agent.ts", import.meta.url)),
+      },
+      {
         find: "@simon_he/vue-tui/markdown",
         replacement: fileURLToPath(new URL("../../src/markdown.ts", import.meta.url)),
       },

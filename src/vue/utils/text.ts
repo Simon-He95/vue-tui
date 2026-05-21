@@ -1,19 +1,5 @@
 import { charCellWidth, type WidthProvider } from "../../core/buffer/width.js";
-
-interface GraphemeSegment {
-  segment: string;
-  index: number;
-}
-
-type GraphemeSegmenter = {
-  segment(input: string): Iterable<GraphemeSegment>;
-};
-type IntlWithSegmenter = typeof Intl & {
-  Segmenter?: new (
-    locales?: string | string[],
-    options?: Readonly<{ granularity?: "grapheme" }>,
-  ) => GraphemeSegmenter;
-};
+import { segmentedGraphemes } from "../../utils/grapheme.js";
 
 export interface TextCellSegment {
   text: string;
@@ -26,7 +12,7 @@ let renderPassDepth = 0;
 const renderPassTextWidthCache = new Map<string, number>();
 const textWidthProviderStack: WidthProvider[] = [];
 
-function currentTextWidthProvider(): WidthProvider {
+export function currentTextWidthProvider(): WidthProvider {
   return textWidthProviderStack[textWidthProviderStack.length - 1] ?? "default";
 }
 
@@ -71,55 +57,51 @@ function isAscii(text: string): boolean {
   return true;
 }
 
-function needsGraphemeSegmentation(text: string): boolean {
-  // Be conservative: return true if we see characters that commonly participate in multi-codepoint
-  // grapheme clusters (combining marks, ZWJ sequences, emoji variation selectors, skin tone modifiers,
-  // or regional-indicator flags). If none are present, code-point iteration is generally safe.
-  for (const ch of text) {
-    const cp = ch.codePointAt(0)!;
-    // ZWJ
-    if (cp === 0x200d) return true;
-    // Variation selectors (incl. VS16)
-    if ((cp >= 0xfe00 && cp <= 0xfe0f) || (cp >= 0xe0100 && cp <= 0xe01ef)) return true;
-    // Combining diacritics + common marks blocks
-    if (
-      (cp >= 0x0300 && cp <= 0x036f) ||
-      (cp >= 0x1ab0 && cp <= 0x1aff) ||
-      (cp >= 0x1dc0 && cp <= 0x1dff) ||
-      (cp >= 0x20d0 && cp <= 0x20ff) ||
-      (cp >= 0xfe20 && cp <= 0xfe2f)
-    ) {
-      return true;
-    }
-    // Emoji modifiers (skin tones)
-    if (cp >= 0x1f3fb && cp <= 0x1f3ff) return true;
-    // Regional indicator symbols (flags are pairs)
-    if (cp >= 0x1f1e6 && cp <= 0x1f1ff) return true;
+const UNSAFE_FORMAT_CONTROL_RE =
+  /[\u061C\u00AD\u180E\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/u;
+
+function isUnsafeFormatControl(codePoint: number): boolean {
+  return (
+    codePoint === 0x061c ||
+    codePoint === 0x00ad ||
+    codePoint === 0x180e ||
+    codePoint === 0x200b ||
+    codePoint === 0x200c ||
+    codePoint === 0x200e ||
+    codePoint === 0x200f ||
+    (codePoint >= 0x202a && codePoint <= 0x202e) ||
+    (codePoint >= 0x2060 && codePoint <= 0x206f) ||
+    codePoint === 0xfeff
+  );
+}
+
+function hasInlineAsciiControl(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code === 0x0a || code === 0x0d || code === 0x09) return true;
   }
   return false;
 }
 
-let graphemeSegmenter: GraphemeSegmenter | null = null;
-try {
-  // Some runtimes may not support Intl.Segmenter; fall back to code-point iteration.
-  const Segmenter = typeof Intl !== "undefined" ? (Intl as IntlWithSegmenter).Segmenter : undefined;
-  graphemeSegmenter = Segmenter ? new Segmenter(undefined, { granularity: "grapheme" }) : null;
-} catch {
-  graphemeSegmenter = null;
+function hasTextBlockAsciiControl(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code === 0x09 || (code <= 0x1f && code !== 0x0a) || code === 0x7f) return true;
+  }
+  return false;
 }
 
 function forEachGrapheme(text: string, cb: (g: string) => void | false): void {
   if (!text) return;
-  const seg = graphemeSegmenter;
-  if (!seg || !needsGraphemeSegmentation(text)) {
+  const segments = segmentedGraphemes(text);
+  if (!segments) {
     for (const ch of text) {
       const r = cb(ch);
       if (r === false) return;
     }
     return;
   }
-  // segment() returns objects with a `.segment` field; keep types loose for older TS libs.
-  for (const part of seg.segment(text) as any as Iterable<GraphemeSegment>) {
+  for (const part of segments) {
     const r = cb(part.segment);
     if (r === false) return;
   }
@@ -131,8 +113,8 @@ export function forEachTextCellSegment(
   provider: WidthProvider = currentTextWidthProvider(),
 ): void {
   if (!text) return;
-  const seg = graphemeSegmenter;
-  if (!seg || !needsGraphemeSegmentation(text)) {
+  const segments = segmentedGraphemes(text);
+  if (!segments) {
     let index = 0;
     for (const ch of text) {
       const next = index + ch.length;
@@ -148,7 +130,7 @@ export function forEachTextCellSegment(
     return;
   }
   let index = 0;
-  for (const part of seg.segment(text) as any as Iterable<GraphemeSegment>) {
+  for (const part of segments) {
     const start = part.index ?? index;
     const end = start + part.segment.length;
     const result = cb({
@@ -171,11 +153,11 @@ export function graphemeRangeAt(
   if (index < 0 || index >= len) return null;
   if (isAscii(text)) return { start: index, end: index + 1 };
 
-  const seg = graphemeSegmenter;
-  if (seg && needsGraphemeSegmentation(text)) {
+  const segments = segmentedGraphemes(text);
+  if (segments) {
     let pos = 0;
-    for (const part of seg.segment(text) as any as Iterable<GraphemeSegment>) {
-      const start = pos;
+    for (const part of segments) {
+      const start = part.index ?? pos;
       const end = start + part.segment.length;
       if (index >= start && index < end) return { start, end };
       pos = end;
@@ -198,8 +180,18 @@ export function sanitizeInlineText(text: string): string {
   // Components that render single-line segments must not emit control chars
   // because terminal.write interprets them as cursor movement.
   // Replace common controls with spaces.
-  if (!/[\n\r\t]/.test(text)) return text;
-  return text.replace(/[\n\r\t]/g, " ");
+  if (!UNSAFE_FORMAT_CONTROL_RE.test(text) && !hasInlineAsciiControl(text)) return text;
+  const out: string[] = [];
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    if (cp === 0x0a || cp === 0x0d || cp === 0x09) {
+      out.push(" ");
+      continue;
+    }
+    if (isUnsafeFormatControl(cp)) continue;
+    out.push(ch);
+  }
+  return out.join("");
 }
 
 export function sanitizeTextBlock(text: string): string {
@@ -209,8 +201,7 @@ export function sanitizeTextBlock(text: string): string {
 
   // Fast path: if there are no characters that require sanitization, return as-is.
   // We keep '\n' but strip other ASCII control chars + DEL, convert '\t' to ' ', and drop '\r'.
-  // eslint-disable-next-line no-control-regex
-  if (!/[\t\x00-\x08\x0B-\x1F\x7F]/.test(text)) return text;
+  if (!UNSAFE_FORMAT_CONTROL_RE.test(text) && !hasTextBlockAsciiControl(text)) return text;
 
   const out: string[] = [];
   out.length = 0;
@@ -226,6 +217,7 @@ export function sanitizeTextBlock(text: string): string {
     }
     // Keep '\n' (0x0A) to preserve explicit newlines; strip other ASCII control chars + DEL.
     if ((cp <= 0x1f && cp !== 0x0a) || cp === 0x7f) continue;
+    if (isUnsafeFormatControl(cp)) continue;
     out.push(ch);
   }
   return out.join("");
@@ -500,11 +492,11 @@ export function wrapByCells(
 
     // Use index tracking + slice instead of array push + join.
     // Avoids intermediate array allocations per line break.
-    const seg = graphemeSegmenter;
-    if (seg && needsGraphemeSegmentation(rawLine)) {
+    const segments = segmentedGraphemes(rawLine);
+    if (segments) {
       let lineStart = 0;
       let cells = 0;
-      for (const part of seg.segment(rawLine) as any as Iterable<GraphemeSegment>) {
+      for (const part of segments) {
         const g = part.segment;
         const gIdx = part.index;
         const w = charCellWidth(g, provider);

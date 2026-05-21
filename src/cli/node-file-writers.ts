@@ -13,6 +13,10 @@ export function defaultVueTuiProfileLogPath(): string {
   return join(tmpdir(), "vue-tui-profile.log");
 }
 
+export function defaultVueTuiFramePerfLogPath(): string {
+  return join(tmpdir(), "vue-tui-frame-perf.jsonl");
+}
+
 export function defaultVueTuiDebugLogPath(): string {
   return join(tmpdir(), "vue-tui-debug.log");
 }
