@@ -175,6 +175,10 @@
 
 CLI/headless 的 `linkOpener` 会收到 `/docs`、`#section` 这类 relative href；宿主应按自己的策略重新解析或拒绝。
 
+`modifierClick="meta"` 和 `ctrlOrMeta` 里的 Meta/Cmd 只对 browser/DOM 事件有意义；真实 CLI SGR mouse report 只携带 Shift/Alt/Ctrl，所以 CLI 下 `ctrlOrMeta` 等价于 Ctrl，`meta` 不会被真实鼠标输入满足。
+
+`domRendererOptions.links.activation="event"` 面向 markdown/static rich text 这类直接写入 `Style.href` 的链接。它会在 DOM anchor 层先 `preventDefault()` 并调用 renderer-level `onActivate`；`TLink` 会尊重这个 defaultPrevented 状态，不再执行组件级 `activate` / host opener。组件化链接推荐由 `TLink` 自己拥有 activation。
+
 ### Props
 
 - `x`/`y` `(number, required)`

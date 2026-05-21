@@ -16,7 +16,7 @@ import { TView } from "./TView.js";
 
 export type TLinkOpenMode = "native" | "host" | "event" | "none";
 export type TLinkModifierClick = "none" | "ctrl" | "meta" | "ctrlOrMeta";
-export type TLinkActivationSource = "click" | "key" | "osc8";
+export type TLinkActivationSource = "click" | "key";
 
 export type TLinkActivatePayload = Readonly<{
   href: string;

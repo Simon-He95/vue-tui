@@ -1,4 +1,6 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import { createStdinDriver } from "../src/cli.js";
 import {
   createTerminalApp,
   defineComponent,
@@ -7,6 +9,18 @@ import {
   nextTick,
   TLink,
 } from "./ui-regressions-support";
+
+class FakeStdin extends EventEmitter {
+  isTTY = true;
+  setEncoding(_enc: string) {}
+  setRawMode(_value: boolean) {}
+  resume() {}
+}
+
+class FakeStdout {
+  isTTY = true;
+  write(_value: string) {}
+}
 
 describe("TLink", () => {
   it("renders link text with href metadata and opens through TerminalProvider linkOpener", async () => {
@@ -317,6 +331,55 @@ describe("TLink", () => {
     }
   });
 
+  it("lets renderer-level event activation win over host mode", async () => {
+    const opener = vi.fn(() => true);
+    const rendererActivate = vi.fn();
+    const onActivate = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          openMode: "host",
+          onActivate,
+        }),
+      20,
+      2,
+      {
+        domRendererOptions: {
+          links: { activation: "event", onActivate: rendererActivate },
+        },
+        linkOpener: opener,
+      },
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+
+      const anchor = mounted.container()!.querySelector("a");
+      expect(anchor?.getAttribute("href")).toBe("https://example.com/");
+
+      const click = new MouseEvent("click", {
+        clientX: 1,
+        clientY: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      expect(anchor!.dispatchEvent(click)).toBe(false);
+      await Promise.resolve();
+
+      expect(click.defaultPrevented).toBe(true);
+      expect(rendererActivate).toHaveBeenCalledWith("https://example.com/", click);
+      expect(onActivate).not.toHaveBeenCalled();
+      expect(opener).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("suppresses native DOM link activation before modifier click passes", async () => {
     const opener = vi.fn(() => true);
     const onActivate = vi.fn();
@@ -565,6 +628,65 @@ describe("TLink", () => {
       });
     } finally {
       app.dispose();
+    }
+  });
+
+  it("uses only ctrl from ctrlOrMeta on real CLI mouse input", async () => {
+    for (const testCase of [
+      { modifierClick: "ctrlOrMeta", opens: true },
+      { modifierClick: "meta", opens: false },
+    ] as const) {
+      const opener = vi.fn(() => true);
+      const App = defineComponent({
+        name: "TLinkCliModifierTest",
+        setup() {
+          return () =>
+            h(TLink, {
+              x: 0,
+              y: 0,
+              href: "https://cli.example",
+              label: "CLI",
+              modifierClick: testCase.modifierClick,
+            });
+        },
+      });
+      const app = createTerminalApp({
+        cols: 20,
+        rows: 2,
+        component: App,
+        linkOpener: opener,
+      });
+      const stdin = new FakeStdin() as any;
+      const stdout = new FakeStdout() as any;
+      const driver = createStdinDriver({
+        stdin,
+        stdout,
+        dispatch: (event) => app.events.dispatch(event),
+        enableMouse: false,
+      });
+
+      try {
+        app.mount();
+        await nextTick();
+        app.scheduler.flushNow();
+
+        stdin.emit("data", "\u001B[<16;1;1M\u001B[<19;1;1m");
+        await Promise.resolve();
+
+        if (testCase.opens) {
+          expect(opener).toHaveBeenCalledWith("https://cli.example/", {
+            source: "click",
+            label: "CLI",
+            cellX: 0,
+            cellY: 0,
+          });
+        } else {
+          expect(opener).not.toHaveBeenCalled();
+        }
+      } finally {
+        driver.dispose();
+        app.dispose();
+      }
     }
   });
 });
