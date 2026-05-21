@@ -125,6 +125,11 @@ export const TBreadcrumb = defineComponent({
               onClick: () => {
                 if (!item.disabled) emit("select", { item, index });
               },
+              onKeydown: (event: any) => {
+                if (item.disabled || (event.key !== "Enter" && event.key !== " ")) return;
+                event.preventDefault?.();
+                emit("select", { item, index });
+              },
             },
             () =>
               h(TText as any, {

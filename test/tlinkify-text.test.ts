@@ -1,3 +1,8 @@
+import type {
+  TLogViewLinkActivatePayload,
+  TLogViewLinkClickPayload,
+  TLogViewLinkFocusPayload,
+} from "../src/experimental.js";
 import { describe, expect, it } from "vitest";
 import { createTheme, linkifyTextSegments, TLinkifyText, TText } from "../src/index.js";
 import { TLogView } from "../src/experimental.js";
@@ -272,6 +277,114 @@ describe("TLinkifyText", () => {
     try {
       expect(mounted.terminal.getCell(5, 0).style.href).toBe("https://example.com/");
       expect(mounted.terminal.getCell(5, 0).style.underline).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits linkClick for TLogView linkified URL cells", async () => {
+    const payloads: TLogViewLinkClickPayload[] = [];
+    const source = {
+      lineCount: () => 1,
+      getLine: () => "open https://example.com",
+      getLineKey: () => "url",
+    };
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 2,
+          source,
+          version: 1,
+          linkify: true,
+          onLinkClick: (payload: TLogViewLinkClickPayload) => payloads.push(payload),
+        }),
+      40,
+      3,
+    );
+
+    try {
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 0, bubbles: true }));
+
+      expect(payloads[0]).toMatchObject({
+        href: "https://example.com/",
+        text: "https://example.com",
+        absoluteLineIndex: 0,
+        index: 0,
+        startCell: 5,
+        cellX: 5,
+        cellY: 0,
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("focuses and activates TLogView linkified URLs with keyboardLinks", async () => {
+    const focusPayloads: TLogViewLinkFocusPayload[] = [];
+    const activatePayloads: TLogViewLinkActivatePayload[] = [];
+    const source = {
+      lineCount: () => 1,
+      getLine: () => "open https://example.com",
+      getLineKey: () => "url",
+    };
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 2,
+          source,
+          version: 1,
+          linkify: true,
+          keyboardLinks: true,
+          autoFocus: true,
+          onLinkFocus: (payload: TLogViewLinkFocusPayload) => focusPayloads.push(payload),
+          onLinkActivate: (payload: TLogViewLinkActivatePayload) => activatePayloads.push(payload),
+        }),
+      40,
+      3,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Tab",
+          code: "Tab",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(focusPayloads[0]?.link?.href).toBe("https://example.com/");
+      expect(mounted.terminal.getCell(5, 0).style.inverse).toBe(true);
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(activatePayloads[0]).toMatchObject({
+        link: {
+          href: "https://example.com/",
+          text: "https://example.com",
+          focused: true,
+        },
+        source: "keyboard",
+      });
     } finally {
       mounted.unmount();
     }

@@ -76,6 +76,81 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("activates data table sortable headers and selectable rows from keyboard focus", async () => {
+    const rows = [
+      { id: "2", name: "build" },
+      { id: "1", name: "test" },
+    ];
+    const columns = [
+      { key: "id", label: "ID", width: 3 },
+      { key: "name", label: "Name", width: 8 },
+    ];
+    const selectedRowKey = ref<unknown>(undefined);
+    const onSortChange = vi.fn();
+    const onRowSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          columns,
+          rows,
+          rowKey: "id",
+          selectedRowKey: selectedRowKey.value,
+          "onUpdate:selectedRowKey": (key: unknown) => (selectedRowKey.value = key),
+          sortable: true,
+          selectable: true,
+          onSortChange,
+          onRowSelect,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSortChange).toHaveBeenCalledWith({ sortBy: "id", sortDirection: "asc" });
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 2, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(selectedRowKey.value).toBe("2");
+      expect(onRowSelect).toHaveBeenCalledWith({
+        row: rows[0],
+        index: 0,
+        originalIndex: 0,
+        key: "2",
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("does not toggle disabled expandable tree nodes", async () => {
     const expandedIds = ref<string[]>([]);
     const onToggle = vi.fn();
@@ -523,6 +598,47 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("selects a focused autocomplete suggestion with Enter", async () => {
+    const value = ref("ap");
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          modelValue: value.value,
+          "onUpdate:modelValue": (next: string) => (value.value = next),
+          suggestions: ["apple", "apricot"],
+          onSelect,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 2, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(value.value).toBe("apricot");
+      expect(onSelect).toHaveBeenCalledWith({ value: "apricot", index: 1 });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("sizes form field slot from visible label and message rows", async () => {
     const mounted = await mountTerminal(
       () => [
@@ -639,6 +755,46 @@ describe("P1/P2 public components", () => {
         item: { id: "home", label: "首页" },
         index: 0,
       });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("selects a focused breadcrumb item with Enter", async () => {
+    const onSelect = vi.fn();
+    const items = [
+      { id: "home", label: "home" },
+      { id: "src", label: "src" },
+    ];
+    const mounted = await mountTerminal(
+      () =>
+        h(TBreadcrumb, {
+          x: 0,
+          y: 0,
+          w: 16,
+          items,
+          onSelect,
+        }),
+      20,
+      2,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 8, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith({ item: items[1], index: 1 });
     } finally {
       mounted.unmount();
     }

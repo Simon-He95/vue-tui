@@ -195,6 +195,11 @@ export const TTable = defineComponent({
               h: 1,
               focusable: props.headerFocusable,
               onClick: () => emit("headerClick", { column, index }),
+              onKeydown: (event: any) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault?.();
+                emit("headerClick", { column, index });
+              },
             }),
           );
           cursor += width + 1;
@@ -243,6 +248,11 @@ export const TTable = defineComponent({
               h: 1,
               focusable: props.rowFocusable,
               onClick: () => emit("rowClick", { row, index }),
+              onKeydown: (event: any) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault?.();
+                emit("rowClick", { row, index });
+              },
             },
             () => {
               const baseStyle = selected ? selectedRowStyle.value : rowStyle.value;

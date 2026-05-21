@@ -498,6 +498,11 @@ export const TAutocompleteInput = defineComponent({
                 h: 1,
                 focusable: true,
                 onClick: () => select(index),
+                onKeydown: (event: any) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault?.();
+                  select(index);
+                },
               },
               () =>
                 h(TText as any, {
