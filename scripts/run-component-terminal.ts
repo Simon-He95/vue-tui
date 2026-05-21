@@ -1,5 +1,6 @@
 import type { App, Component } from "vue";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
@@ -285,6 +286,7 @@ export function openExternalHref(href: string): boolean {
       ),
     );
   }
+  if (!existsSync("/usr/bin/xdg-open")) return false;
   return detachedExternalOpener(spawn("/usr/bin/xdg-open", [normalized], options));
 }
 
@@ -1439,14 +1441,14 @@ const ComponentGallery = defineComponent({
     function openVscode(): void {
       const href = vscodeHref();
       status.value = openExternalHref(href)
-        ? "Opened scripts/run-component-terminal.ts in VS Code"
+        ? "Open requested for scripts/run-component-terminal.ts in VS Code"
         : `Link: ${href} (set VT_OPEN_LINKS=1 to open)`;
     }
 
     function openBrowser(): void {
       const href = "https://example.com";
       status.value = openExternalHref(href)
-        ? "Opened https://example.com"
+        ? "Open requested for https://example.com"
         : `Link: ${href} (set VT_OPEN_LINKS=1 to open)`;
     }
 
@@ -1646,7 +1648,7 @@ const ComponentGallery = defineComponent({
             }
           },
           onOpen: () => {
-            status.value = "TLink opened https://example.com";
+            status.value = "TLink open requested for https://example.com";
           },
         }),
         h(TView, { x: 27, y: 3, w: 18, h: 1, focusable: true, onClick: openVscode }, () =>
