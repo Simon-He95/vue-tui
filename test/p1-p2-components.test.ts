@@ -600,6 +600,8 @@ describe("P1/P2 public components", () => {
 
   it("selects a focused autocomplete suggestion with Enter", async () => {
     const value = ref("ap");
+    const changes: string[] = [];
+    const inputs: string[] = [];
     const onSelect = vi.fn();
     const mounted = await mountTerminal(
       () =>
@@ -611,6 +613,8 @@ describe("P1/P2 public components", () => {
           modelValue: value.value,
           "onUpdate:modelValue": (next: string) => (value.value = next),
           suggestions: ["apple", "apricot"],
+          onChange: (next: string) => changes.push(next),
+          onInput: (next: string) => inputs.push(next),
           onSelect,
         }),
       24,
@@ -633,6 +637,8 @@ describe("P1/P2 public components", () => {
       await nextTick();
 
       expect(value.value).toBe("apricot");
+      expect(changes).toEqual(["apricot"]);
+      expect(inputs).toEqual([]);
       expect(onSelect).toHaveBeenCalledWith({ value: "apricot", index: 1 });
     } finally {
       mounted.unmount();
@@ -1202,6 +1208,51 @@ describe("P1/P2 public components", () => {
       expect(onSelect).toHaveBeenCalledWith(items[3]);
     } finally {
       mounted.unmount();
+    }
+  });
+
+  it("keeps command palette open after selection so hosts can close it explicitly", async () => {
+    const open = ref(true);
+    const items = [{ label: "Open" }, { label: "Copy" }];
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    const App = defineComponent({
+      name: "CommandPaletteHostControlledCloseApp",
+      setup() {
+        return () =>
+          h(TCommandPalette, {
+            modelValue: open.value,
+            w: 32,
+            h: 10,
+            items,
+            "onUpdate:modelValue": (value: boolean) => (open.value = value),
+            onSelect,
+            onClose,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 50, rows: 14, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({
+        type: "keydown",
+        key: "Enter",
+        code: "Enter",
+        time: Date.now(),
+      } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(onSelect).toHaveBeenCalledWith(items[0]);
+      expect(open.value).toBe(true);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(app.terminal.snapshot().lines.join("\n")).toContain("Open");
+    } finally {
+      app.dispose();
     }
   });
 

@@ -447,11 +447,13 @@ export const TAutocompleteInput = defineComponent({
       mergeStyle(suggestionStyle.value, props.activeSuggestionStyle),
     );
     const visibleSuggestions = computed(() => props.suggestions.slice(0, Math.max(0, props.h - 1)));
-    function select(index: number): void {
+    function select(index: number): boolean {
       const value = visibleSuggestions.value[index];
-      if (value == null) return;
+      if (value == null) return false;
       emit("update:modelValue", value);
+      emit("change", value);
       emit("select", { value, index });
+      return true;
     }
 
     return () =>
@@ -482,8 +484,8 @@ export const TAutocompleteInput = defineComponent({
                   "update:highlightedIndex",
                   clamp(props.highlightedIndex - 1, 0, visibleSuggestions.value.length - 1),
                 );
-              } else if (event.key === "Enter") {
-                select(props.highlightedIndex);
+              } else if (event.key === "Enter" && select(props.highlightedIndex)) {
+                event.preventDefault?.();
               }
             },
           }),

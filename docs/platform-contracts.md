@@ -47,7 +47,7 @@ createDomRenderer(terminal, container, {
 | `TList` / `TSelect`           | Arrow keys 移动当前项，Enter 选择；multi-select 使用 Space 切换                   |
 | `TLink`                       | 默认 Enter 激活；`activationKeys` 可改；`modifierClick` 只约束 pointer activation |
 | `TLogView keyboardLinks=true` | 只在当前 visible links 内处理 Tab / Shift+Tab / Enter / Escape                    |
-| `TCommandPalette`             | ArrowUp / ArrowDown 移动，Enter select，Escape close                              |
+| `TCommandPalette`             | ArrowUp / ArrowDown 移动，Enter select（宿主关闭），Escape close                  |
 | form controls                 | Space / Enter 切换或选择；`TSlider` 使用 ArrowLeft / ArrowRight 调整              |
 | overlays                      | `TContextMenu` Enter select，Escape close；popover/tooltip 不抢占键盘             |
 

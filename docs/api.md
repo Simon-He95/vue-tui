@@ -104,6 +104,7 @@ type Style = {
   - 默认 host plugin 只负责 clipboard / TTY / path 这类底层能力；toast 之类 UI 反馈应由宿主通过 `createTInputHostPlugin({ showToast })` 显式补充
 - `pathPickerProvider`：给子树中的 `TPathPicker` 统一注入宿主路径 provider
 - `linkOpener`：给 `TLink openMode="host"` 注入 `openExternal(href, context)`；`openMode="native"` 的键盘激活也会在 terminal focus 模型下 fallback 到它；browser provider 默认用 `window.open` 尝试打开，CLI/headless 通过 `createTerminalApp({ linkOpener })` 显式提供。`TLink` 有意拒绝 `file:` URL；`file:` opt-in 只适用于底层 `Style.href` 写入者和 terminal-specific providers
+- `theme`：接收 `TuiThemeOverrides` partial overrides，例如 `{ colors: { link: "blueBright" } }`；provider 会用 `createTheme()` 归一化
 
 补充说明：
 
@@ -269,7 +270,7 @@ const app = createTerminalApp({
 - `<TBox />`：边框 + padding + contentRect 裁剪
 - `<TTable />` / `<TDataTable />`：多列表格、受控排序/过滤/选择
 - `<TTree />`：层级节点视图，`expandedIds` / `selectedId` 由宿主控制
-- `createTheme()`：生成 `TerminalProvider.theme` 使用的主题 token
+- `createTheme()`：把 `TerminalProvider.theme` 使用的 partial overrides 归一化为完整主题 token
 
 ### `<TTransition />`
 
@@ -300,9 +301,9 @@ const app = createTerminalApp({
   - `<TSelect />`：上下键切换，Enter 选择
   - `<TSelect multiple />`：上下键移动光标，Space 切换勾选，Enter confirm；`v-model` 使用 `number[]`；`multipleEmit='value|index|both'` 控制 `@change/@confirm` 参数（默认 `value`）
   - `<TList />`：上下键切换，wheel 滚动
-- `<TCommandPalette />`：命令面板，过滤 `label/detail/keywords`，Enter select，Esc close
+- `<TCommandPalette />`：命令面板，过滤 `label/detail/keywords`，Enter select，Esc close；select 后由宿主更新 `v-model` 关闭
 - `<TCheckbox />` / `<TRadioGroup />` / `<TSwitch />` / `<TSlider />`：基础表单控件
-- `<TFormField />` / `<TPasswordInput />` / `<TAutocompleteInput />`：表单字段、密码输入、轻量补全
+- `<TFormField />` / `<TPasswordInput />` / `<TAutocompleteInput />`：表单字段、密码输入、轻量补全；autocomplete 选择 suggestion 时 emit `update:modelValue` / `change` / `select`
 - `/vue` 的 `<TContextMenu />` / `<TPopover />` / `<TTooltip />`：轻量 overlay
 - `/vue` 的 `<TStatusBar />` / `<TBreadcrumb />` / `<TKeyHint />`：状态栏、路径导航、快捷键提示
 

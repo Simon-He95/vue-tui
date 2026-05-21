@@ -4,7 +4,7 @@ This repo targets a “terminal-first” design system that can render identical
 
 ## Tokens
 
-`createTheme()` 是 public token helper，返回可传给 `TerminalProvider.theme` 的对象。当前 token 聚焦公共组件默认样式，不替代局部 `style` props。
+`TerminalProvider.theme` 接收 partial overrides；provider 会用 `createTheme()` 合并默认 token。`createTheme()` 也可作为 public helper 预先生成完整主题对象。当前 token 聚焦公共组件默认样式，不替代局部 `style` props。
 
 ```ts
 const theme = createTheme({

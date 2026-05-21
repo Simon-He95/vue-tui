@@ -5185,6 +5185,52 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
+  it("preserves linkified href metadata when search highlights URL text", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "open https://example.com/docs",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewLinkifySearchHighlightApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 1,
+            source,
+            version: 1,
+            linkify: true,
+            searchQuery: "example",
+            searchOptions: { scanBudgetMs: 1000 },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 32, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      const styles = rowStyles(app, 0);
+      expect(rowText(app, 0)).toBe("open https://example.com/docs");
+      expect(styles[13]!.href).toBe("https://example.com/docs");
+      expect(styles[13]!.underline).toBe(true);
+      expect(styles[13]!.inverse).toBe(true);
+      expect(logView.value!.getVisibleLinks()[0]).toMatchObject({
+        href: "https://example.com/docs",
+        text: "https://example.com/docs",
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("emits retained absolute line indexes for linkClick", async () => {
     const payloads: TLogViewLinkClickPayload[] = [];
     const log = createAppendOnlyLogStore({ maxLines: 3 });
