@@ -472,19 +472,26 @@ export const TAutocompleteInput = defineComponent({
             onInput: (value: string) => emit("input", value),
             onChange: (value: string) => emit("change", value),
             onKeydown: (event: any) => {
+              const suggestionCount = visibleSuggestions.value.length;
               if (event.key === "ArrowDown") {
+                if (suggestionCount === 0) return;
                 event.preventDefault?.();
                 emit(
                   "update:highlightedIndex",
-                  clamp(props.highlightedIndex + 1, 0, visibleSuggestions.value.length - 1),
+                  clamp(props.highlightedIndex + 1, 0, suggestionCount - 1),
                 );
               } else if (event.key === "ArrowUp") {
+                if (suggestionCount === 0) return;
                 event.preventDefault?.();
                 emit(
                   "update:highlightedIndex",
-                  clamp(props.highlightedIndex - 1, 0, visibleSuggestions.value.length - 1),
+                  clamp(props.highlightedIndex - 1, 0, suggestionCount - 1),
                 );
-              } else if (event.key === "Enter" && select(props.highlightedIndex)) {
+              } else if (
+                event.key === "Enter" &&
+                suggestionCount > 0 &&
+                select(props.highlightedIndex)
+              ) {
                 event.preventDefault?.();
               }
             },

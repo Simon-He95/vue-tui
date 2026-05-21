@@ -33,6 +33,7 @@ export const TContextMenu = defineComponent({
       required: true,
     },
     selectedIndex: { type: Number, default: undefined },
+    closeOnOutside: { type: Boolean, default: true },
     style: { type: Object as PropType<Style>, default: undefined },
     activeStyle: { type: Object as PropType<Style>, default: () => ({ inverse: true }) },
     disabledStyle: { type: Object as PropType<Style>, default: () => ({ dim: true }) },
@@ -44,7 +45,7 @@ export const TContextMenu = defineComponent({
     close: () => true,
   },
   setup(props, { emit }) {
-    const { defaultStyle } = useTerminal();
+    const { terminal, defaultStyle } = useTerminal();
     const innerSelectedIndex = ref(0);
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
 
@@ -106,21 +107,34 @@ export const TContextMenu = defineComponent({
       }
     }
 
+    function closeFromOutside(event: any): void {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      close();
+    }
+
+    function stopInsideClick(event: any): void {
+      event.stopPropagation?.();
+    }
+
     return () => {
       if (!props.modelValue) return null;
+      const size = terminal.size();
       const hgt = Math.max(2, props.items.length + 2);
       const activeIndex = selectedIndex();
       const hasEnabledItem = props.items.some((item) => !item.disabled);
-      return h(
+      const menu = h(
         TView as any,
         {
+          key: "menu",
           x: props.x,
           y: props.y,
           w: props.w,
           h: hgt,
-          zIndex: props.zIndex,
+          zIndex: props.closeOnOutside ? props.zIndex + 1 : props.zIndex,
           focusable: !hasEnabledItem,
           autoFocus: !hasEnabledItem,
+          onClick: props.closeOnOutside ? stopInsideClick : undefined,
           onKeydown: handleMenuKeydown,
         },
         () =>
@@ -165,6 +179,19 @@ export const TContextMenu = defineComponent({
               }),
           ),
       );
+      if (!props.closeOnOutside) return menu;
+      return [
+        h(TView as any, {
+          key: "outside",
+          x: 0,
+          y: 0,
+          w: size.cols,
+          h: size.rows,
+          zIndex: props.zIndex,
+          onClick: closeFromOutside,
+        }),
+        menu,
+      ];
     };
   },
 });

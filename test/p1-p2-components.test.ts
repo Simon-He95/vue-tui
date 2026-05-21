@@ -13,6 +13,7 @@ import {
   TTable,
   TText,
   TTree,
+  TView,
 } from "../src/index.js";
 import { TBreadcrumb, TContextMenu, TKeyHint, TPopover, TStatusBar, TTooltip } from "../src/vue.js";
 import {
@@ -637,6 +638,44 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not move autocomplete highlight when no suggestions are visible", async () => {
+    const highlightedUpdates: number[] = [];
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          modelValue: "",
+          suggestions: [],
+          "onUpdate:highlightedIndex": (index: number) => highlightedUpdates.push(index),
+          onSelect,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      for (const key of ["ArrowDown", "ArrowUp", "Enter"]) {
+        container.dispatchEvent(
+          new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }),
+        );
+      }
+      await nextTick();
+
+      expect(highlightedUpdates).toEqual([]);
+      expect(onSelect).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("selects a focused autocomplete suggestion with Enter", async () => {
     const value = ref("ap");
     const changes: string[] = [];
@@ -947,6 +986,84 @@ describe("P1/P2 public components", () => {
 
       expect(onSelect).toHaveBeenCalledWith({ item: items[1], index: 1 });
       expect(open.value).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("closes context menu on outside click without activating background controls", async () => {
+    const open = ref(true);
+    const backgroundClick = vi.fn();
+    const onClose = vi.fn();
+    const mounted = await mountTerminal(
+      () => [
+        h(TView, { x: 20, y: 0, w: 4, h: 1, zIndex: 10, onClick: backgroundClick }),
+        h(TContextMenu, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (value: boolean) => (open.value = value),
+          x: 0,
+          y: 0,
+          w: 18,
+          items: [{ id: "open", label: "Open Link" }],
+          onClose,
+        }),
+      ],
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 20, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mouseup", { clientX: 20, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("click", { clientX: 20, clientY: 0, bubbles: true }));
+      await nextTick();
+
+      expect(backgroundClick).not.toHaveBeenCalled();
+      expect(open.value).toBe(false);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps context menu outside close opt-out non-modal", async () => {
+    const open = ref(true);
+    const backgroundClick = vi.fn();
+    const mounted = await mountTerminal(
+      () => [
+        h(TView, { x: 20, y: 0, w: 4, h: 1, zIndex: 10, onClick: backgroundClick }),
+        h(TContextMenu, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (value: boolean) => (open.value = value),
+          x: 0,
+          y: 0,
+          w: 18,
+          items: [{ id: "open", label: "Open Link" }],
+          closeOnOutside: false,
+        }),
+      ],
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 20, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new MouseEvent("mouseup", { clientX: 20, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("click", { clientX: 20, clientY: 0, bubbles: true }));
+      await nextTick();
+
+      expect(backgroundClick).toHaveBeenCalledTimes(1);
+      expect(open.value).toBe(true);
     } finally {
       mounted.unmount();
     }

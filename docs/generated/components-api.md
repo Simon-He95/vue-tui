@@ -283,18 +283,19 @@ Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
-| 名称                       | 类型                                     | 默认值                                    | 必填 | 说明 |
-| -------------------------- | ---------------------------------------- | ----------------------------------------- | ---- | ---- |
-| <code>modelValue</code>    | <code>boolean</code>                     | —                                         | 是   | —    |
-| <code>x</code>             | <code>number</code>                      | —                                         | 是   | —    |
-| <code>y</code>             | <code>number</code>                      | —                                         | 是   | —    |
-| <code>w</code>             | <code>number</code>                      | <code>24</code>                           | 否   | —    |
-| <code>zIndex</code>        | <code>number</code>                      | <code>20</code>                           | 否   | —    |
-| <code>items</code>         | <code>readonly TContextMenuItem[]</code> | —                                         | 是   | —    |
-| <code>selectedIndex</code> | <code>number</code>                      | <code>undefined</code>                    | 否   | —    |
-| <code>style</code>         | <code>Style</code>                       | <code>undefined</code>                    | 否   | —    |
-| <code>activeStyle</code>   | <code>Style</code>                       | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
-| <code>disabledStyle</code> | <code>Style</code>                       | <code>() =&gt; ({ dim: true })</code>     | 否   | —    |
+| 名称                        | 类型                                     | 默认值                                    | 必填 | 说明 |
+| --------------------------- | ---------------------------------------- | ----------------------------------------- | ---- | ---- |
+| <code>modelValue</code>     | <code>boolean</code>                     | —                                         | 是   | —    |
+| <code>x</code>              | <code>number</code>                      | —                                         | 是   | —    |
+| <code>y</code>              | <code>number</code>                      | —                                         | 是   | —    |
+| <code>w</code>              | <code>number</code>                      | <code>24</code>                           | 否   | —    |
+| <code>zIndex</code>         | <code>number</code>                      | <code>20</code>                           | 否   | —    |
+| <code>items</code>          | <code>readonly TContextMenuItem[]</code> | —                                         | 是   | —    |
+| <code>selectedIndex</code>  | <code>number</code>                      | <code>undefined</code>                    | 否   | —    |
+| <code>closeOnOutside</code> | <code>boolean</code>                     | <code>true</code>                         | 否   | —    |
+| <code>style</code>          | <code>Style</code>                       | <code>undefined</code>                    | 否   | —    |
+| <code>activeStyle</code>    | <code>Style</code>                       | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
+| <code>disabledStyle</code>  | <code>Style</code>                       | <code>() =&gt; ({ dim: true })</code>     | 否   | —    |
 
 ### Events
 
