@@ -71,6 +71,7 @@ export const TDataTable = defineComponent({
       default: undefined,
     },
     selectedRowKey: { type: null as any, default: undefined },
+    /** Sorts by the raw row value at this key; column format only affects display and filtering. */
     sortBy: { type: String, default: "" },
     sortDirection: {
       type: String as PropType<TDataTableSortDirection>,

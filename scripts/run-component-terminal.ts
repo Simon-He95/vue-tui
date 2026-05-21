@@ -260,15 +260,10 @@ export function normalizeOpenHref(href: string): string | null {
   return null;
 }
 
-function openerCommand(normalized: string): { command: string; args: string[] } {
-  if (process.platform === "darwin") return { command: "/usr/bin/open", args: [normalized] };
-  if (process.platform === "win32") {
-    return {
-      command: "C:\\Windows\\System32\\rundll32.exe",
-      args: ["url.dll,FileProtocolHandler", normalized],
-    };
-  }
-  return { command: "/usr/bin/xdg-open", args: [normalized] };
+function detachedExternalOpener(child: ReturnType<typeof spawn>): boolean {
+  child.on("error", () => {});
+  child.unref();
+  return true;
 }
 
 export function openExternalHref(href: string): boolean {
@@ -277,16 +272,20 @@ export function openExternalHref(href: string): boolean {
   const normalized = normalizeOpenHref(href);
   if (!normalized) return false;
 
-  const { command, args } = openerCommand(normalized);
-  // Safe by construction: opening is disabled unless VT_OPEN_LINKS=1, href is
-  // protocol-allowlisted by normalizeOpenHref(), command is a fixed platform
-  // binary, and shell:false prevents shell interpolation.
-
-  // codeql[js/shell-command-injection-from-environment]
-  const child = spawn(command, args, { detached: true, stdio: "ignore", shell: false });
-  child.on("error", () => {});
-  child.unref();
-  return true;
+  const options = { detached: true, stdio: "ignore", shell: false } as const;
+  if (process.platform === "darwin") {
+    return detachedExternalOpener(spawn("/usr/bin/open", [normalized], options));
+  }
+  if (process.platform === "win32") {
+    return detachedExternalOpener(
+      spawn(
+        "C:\\Windows\\System32\\rundll32.exe",
+        ["url.dll,FileProtocolHandler", normalized],
+        options,
+      ),
+    );
+  }
+  return detachedExternalOpener(spawn("/usr/bin/xdg-open", [normalized], options));
 }
 
 function tableDemo(componentName = "TTable"): unknown {

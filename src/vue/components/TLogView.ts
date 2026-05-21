@@ -4169,14 +4169,6 @@ export const TLogView = defineComponent({
               return;
             }
 
-            const wrappedRows = wrappedRowsForLine(located.lineIndex, count, full.w);
-            if (
-              located.lineIndex === count - 1 &&
-              located.partIndex === wrappedRows.length - 1 &&
-              y === r.y + r.h - 1
-            ) {
-              lastPaintedBottom = { index: located.lineIndex, lineKey: rawKey };
-            }
             if (linkifyEnabled()) {
               const linkifiedRows = linkifiedWrappedRowsForLine(
                 located.lineIndex,
@@ -4185,6 +4177,13 @@ export const TLogView = defineComponent({
                 base,
                 baseStyleKey,
               );
+              if (
+                located.lineIndex === count - 1 &&
+                located.partIndex === linkifiedRows.length - 1 &&
+                y === r.y + r.h - 1
+              ) {
+                lastPaintedBottom = { index: located.lineIndex, lineKey: rawKey };
+              }
               const visualSegments = clipVisualSegmentsByCells(
                 linkifiedRows[located.partIndex] ?? [],
                 clipX,
@@ -4203,6 +4202,14 @@ export const TLogView = defineComponent({
                 y,
               );
               return;
+            }
+            const wrappedRows = wrappedRowsForLine(located.lineIndex, count, full.w);
+            if (
+              located.lineIndex === count - 1 &&
+              located.partIndex === wrappedRows.length - 1 &&
+              y === r.y + r.h - 1
+            ) {
+              lastPaintedBottom = { index: located.lineIndex, lineKey: rawKey };
             }
             if (props.highlightMatches && matchesByLine.has(located.lineIndex)) {
               const rawRow = wrappedRows[located.partIndex] ?? "";

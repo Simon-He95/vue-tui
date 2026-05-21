@@ -316,29 +316,29 @@ Import: `@simon_he/vue-tui`
 
 ### Props
 
-| 名称                        | 类型                                                                       | 默认值                           | 必填 | 说明 |
-| --------------------------- | -------------------------------------------------------------------------- | -------------------------------- | ---- | ---- |
-| <code>x</code>              | <code>number</code>                                                        | —                                | 是   | —    |
-| <code>y</code>              | <code>number</code>                                                        | —                                | 是   | —    |
-| <code>w</code>              | <code>number</code>                                                        | —                                | 是   | —    |
-| <code>h</code>              | <code>number</code>                                                        | —                                | 是   | —    |
-| <code>zIndex</code>         | <code>number</code>                                                        | <code>0</code>                   | 否   | —    |
-| <code>columns</code>        | <code>readonly TTableColumn[]</code>                                       | —                                | 是   | —    |
-| <code>rows</code>           | <code>readonly TTableRow[]</code>                                          | —                                | 是   | —    |
-| <code>rowKey</code>         | <code>string &#124; ((row: TTableRow, index: number) =&gt; unknown)</code> | <code>undefined</code>           | 否   | —    |
-| <code>selectedRowKey</code> | <code>unknown</code>                                                       | <code>undefined</code>           | 否   | —    |
-| <code>sortBy</code>         | <code>string</code>                                                        | <code>&quot;&quot;</code>        | 否   | —    |
-| <code>sortDirection</code>  | <code>TDataTableSortDirection</code>                                       | <code>&quot;asc&quot;</code>     | 否   | —    |
-| <code>sortable</code>       | <code>boolean</code>                                                       | <code>false</code>               | 否   | —    |
-| <code>filter</code>         | <code>string</code>                                                        | <code>&quot;&quot;</code>        | 否   | —    |
-| <code>filterable</code>     | <code>boolean</code>                                                       | <code>false</code>               | 否   | —    |
-| <code>selectable</code>     | <code>boolean</code>                                                       | <code>false</code>               | 否   | —    |
-| <code>border</code>         | <code>boolean</code>                                                       | <code>false</code>               | 否   | —    |
-| <code>style</code>          | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
-| <code>headerStyle</code>    | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
-| <code>borderStyle</code>    | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
-| <code>selectedStyle</code>  | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
-| <code>emptyText</code>      | <code>string</code>                                                        | <code>&quot;No rows&quot;</code> | 否   | —    |
+| 名称                        | 类型                                                                       | 默认值                           | 必填 | 说明                                                                                      |
+| --------------------------- | -------------------------------------------------------------------------- | -------------------------------- | ---- | ----------------------------------------------------------------------------------------- |
+| <code>x</code>              | <code>number</code>                                                        | —                                | 是   | —                                                                                         |
+| <code>y</code>              | <code>number</code>                                                        | —                                | 是   | —                                                                                         |
+| <code>w</code>              | <code>number</code>                                                        | —                                | 是   | —                                                                                         |
+| <code>h</code>              | <code>number</code>                                                        | —                                | 是   | —                                                                                         |
+| <code>zIndex</code>         | <code>number</code>                                                        | <code>0</code>                   | 否   | —                                                                                         |
+| <code>columns</code>        | <code>readonly TTableColumn[]</code>                                       | —                                | 是   | —                                                                                         |
+| <code>rows</code>           | <code>readonly TTableRow[]</code>                                          | —                                | 是   | —                                                                                         |
+| <code>rowKey</code>         | <code>string &#124; ((row: TTableRow, index: number) =&gt; unknown)</code> | <code>undefined</code>           | 否   | —                                                                                         |
+| <code>selectedRowKey</code> | <code>unknown</code>                                                       | <code>undefined</code>           | 否   | —                                                                                         |
+| <code>sortBy</code>         | <code>string</code>                                                        | <code>&quot;&quot;</code>        | 否   | Sorts by the raw row value at this key; column format only affects display and filtering. |
+| <code>sortDirection</code>  | <code>TDataTableSortDirection</code>                                       | <code>&quot;asc&quot;</code>     | 否   | —                                                                                         |
+| <code>sortable</code>       | <code>boolean</code>                                                       | <code>false</code>               | 否   | —                                                                                         |
+| <code>filter</code>         | <code>string</code>                                                        | <code>&quot;&quot;</code>        | 否   | —                                                                                         |
+| <code>filterable</code>     | <code>boolean</code>                                                       | <code>false</code>               | 否   | —                                                                                         |
+| <code>selectable</code>     | <code>boolean</code>                                                       | <code>false</code>               | 否   | —                                                                                         |
+| <code>border</code>         | <code>boolean</code>                                                       | <code>false</code>               | 否   | —                                                                                         |
+| <code>style</code>          | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                         |
+| <code>headerStyle</code>    | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                         |
+| <code>borderStyle</code>    | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                         |
+| <code>selectedStyle</code>  | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                         |
+| <code>emptyText</code>      | <code>string</code>                                                        | <code>&quot;No rows&quot;</code> | 否   | —                                                                                         |
 
 ### Events
 
