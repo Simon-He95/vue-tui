@@ -142,6 +142,181 @@ describe("TLink", () => {
     }
   });
 
+  it("suppresses native DOM link activation before modifier click passes", async () => {
+    const opener = vi.fn(() => true);
+    const onActivate = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          modifierClick: "ctrlOrMeta",
+          onActivate,
+        }),
+      20,
+      2,
+      { domRendererOptions: { links: true }, linkOpener: opener },
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+
+      const anchor = mounted.container()!.querySelector("a");
+      expect(anchor?.getAttribute("href")).toBe("https://example.com/");
+
+      const click = new MouseEvent("click", {
+        clientX: 1,
+        clientY: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      expect(anchor!.dispatchEvent(click)).toBe(false);
+      await Promise.resolve();
+
+      expect(click.defaultPrevented).toBe(true);
+      expect(onActivate).not.toHaveBeenCalled();
+      expect(opener).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not render href metadata in none mode", async () => {
+    const opener = vi.fn(() => true);
+    const onActivate = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          openMode: "none",
+          onActivate,
+        }),
+      20,
+      2,
+      { domRendererOptions: { links: true }, linkOpener: opener },
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+
+      expect(mounted.terminal.getCell(0, 0).style.href).toBeUndefined();
+      expect(mounted.container()!.querySelector("a")).toBeNull();
+
+      mounted
+        .container()!
+        .dispatchEvent(
+          new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true, cancelable: true }),
+        );
+      await Promise.resolve();
+
+      expect(onActivate).not.toHaveBeenCalled();
+      expect(opener).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits open for the default browser opener when window.open returns null", async () => {
+    const win = (globalThis as any).window as {
+      open?: (url?: string, target?: string, features?: string) => unknown;
+    };
+    const originalOpen = win.open;
+    const open = vi.fn(() => null);
+    win.open = open;
+    const onOpen = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://browser.example",
+          label: "Browser",
+          onOpen,
+        }),
+      20,
+      2,
+    );
+
+    try {
+      mounted
+        .container()!
+        .dispatchEvent(
+          new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true, cancelable: true }),
+        );
+      await Promise.resolve();
+
+      expect(open).toHaveBeenCalledWith(
+        "https://browser.example/",
+        "_blank",
+        "noopener,noreferrer",
+      );
+      expect(onOpen).toHaveBeenCalledWith({
+        href: "https://browser.example/",
+        label: "Browser",
+        source: "click",
+      });
+    } finally {
+      if (originalOpen) win.open = originalOpen;
+      else delete win.open;
+      mounted.unmount();
+    }
+  });
+
+  it("ignores linkOpener errors without leaking unhandled failures", async () => {
+    const cases = [
+      vi.fn(() => {
+        throw new Error("blocked");
+      }),
+      vi.fn(() => Promise.reject(new Error("blocked"))),
+    ];
+
+    for (const opener of cases) {
+      const onOpen = vi.fn();
+      const mounted = await mountTerminal(
+        () =>
+          h(TLink, {
+            x: 0,
+            y: 0,
+            href: "https://example.com",
+            label: "Example",
+            onOpen,
+          }),
+        20,
+        2,
+        { linkOpener: opener },
+      );
+
+      try {
+        expect(() => {
+          mounted
+            .container()!
+            .dispatchEvent(
+              new MouseEvent("click", {
+                clientX: 0,
+                clientY: 0,
+                bubbles: true,
+                cancelable: true,
+              }),
+            );
+        }).not.toThrow();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(opener).toHaveBeenCalled();
+        expect(onOpen).not.toHaveBeenCalled();
+      } finally {
+        mounted.unmount();
+      }
+    }
+  });
+
   it("reports unsafe hrefs without rendering or opening them", async () => {
     const opener = vi.fn(() => true);
     const onInvalidHref = vi.fn();

@@ -162,9 +162,18 @@
 
 ## TLink
 
-可点击、可聚焦、可键盘激活的单行链接组件。它会把 safe `href` 写入 `Style.href`，因此 DOM renderer links 开启时可以得到原生 anchor，CLI/stdout renderer 可以继续输出 OSC8 hyperlink。
+可点击、可聚焦、可键盘激活的单行链接组件。除 `disabled` / `openMode="none"` 外，它会把 safe `href` 写入 `Style.href`，因此 DOM renderer links 开启时可以得到原生 anchor，CLI/stdout renderer 可以继续输出 OSC8 hyperlink。
 
-默认 `openMode="host"`：点击或按 `Enter`/`Space` 时会先 emit `activate`，再调用 `TerminalProvider.linkOpener` 或 `createTerminalApp({ linkOpener })` 注入的 `openExternal()`；浏览器 `TerminalProvider` 默认使用 `window.open`，CLI/headless 不会默认执行系统命令。
+默认 `openMode="host"`：点击或按 `Enter` 时会先 emit `activate`，再调用 `TerminalProvider.linkOpener` 或 `createTerminalApp({ linkOpener })` 注入的 `openExternal()`；浏览器 `TerminalProvider` 默认使用 `window.open`，CLI/headless 不会默认执行系统命令。
+
+`openMode` 语义：
+
+- `host`: emit `activate`，阻止 DOM native anchor 默认行为，并调用 `linkOpener`
+- `event`: emit `activate`，阻止 DOM native anchor 默认行为，不调用 `linkOpener`
+- `native`: emit `activate`，不调用 `linkOpener`，允许 renderer/native link activation；如果 `modifierClick` 不满足，会阻止 native click
+- `none`: 只渲染文本，不写入 href metadata，不激活
+
+CLI/headless 的 `linkOpener` 会收到 `/docs`、`#section` 这类 relative href；宿主应按自己的策略重新解析或拒绝。
 
 ### Props
 
@@ -176,7 +185,7 @@
 - `style` / `hoverStyle` / `focusStyle` / `activeStyle` `(Style?)`
 - `disabled` `(boolean)`
 - `openMode` `('native' | 'host' | 'event' | 'none')`
-- `activationKeys` `(string[])`: 默认 `['Enter', ' ']`
+- `activationKeys` `(string[])`: 默认 `['Enter']`
 - `modifierClick` `('none' | 'ctrl' | 'meta' | 'ctrlOrMeta')`
 - `autoFocus` `(boolean)`
 

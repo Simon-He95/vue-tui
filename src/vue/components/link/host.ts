@@ -37,7 +37,8 @@ export function createBrowserLinkOpener(): TerminalLinkOpener {
         | undefined;
       const open = win?.open;
       if (!open) return false;
-      return Boolean(open.call(win, href, "_blank", "noopener,noreferrer"));
+      open.call(win, href, "_blank", "noopener,noreferrer");
+      return true;
     },
   };
 }

@@ -35,7 +35,7 @@ export type TLinkInvalidHrefPayload = Readonly<{
   reason: string;
 }>;
 
-const DEFAULT_ACTIVATION_KEYS = Object.freeze(["Enter", " "]);
+const DEFAULT_ACTIVATION_KEYS = Object.freeze(["Enter"]);
 
 function mergeStyle(...styles: Array<Style | undefined>): Style {
   const out: Record<string, unknown> = {};
@@ -111,6 +111,9 @@ export const TLink = defineComponent({
 
     const label = computed(() => sanitizeInlineText(props.label ?? props.href));
     const safeHref = computed(() => sanitizeDomHref(props.href, { allowRelative: true }));
+    const shouldRenderHref = computed(
+      () => !props.disabled && props.openMode !== "none" && Boolean(safeHref.value),
+    );
     const viewWidth = computed(() => {
       const width = props.w ?? textCellWidth(label.value);
       return Math.max(0, Math.floor(width));
@@ -123,7 +126,7 @@ export const TLink = defineComponent({
         { fg: "cyanBright", underline: true },
         props.style,
         props.disabled ? { dim: true } : undefined,
-        props.disabled || !safeHref.value ? { href: undefined } : { href: safeHref.value },
+        shouldRenderHref.value ? { href: safeHref.value ?? undefined } : { href: undefined },
       );
       if (props.disabled) return base;
       return mergeStyle(
@@ -155,21 +158,35 @@ export const TLink = defineComponent({
 
       const opener = linkOpener.value;
       if (!opener) return;
-      const result = opener.openExternal(href, {
-        source,
-        label: label.value,
-        cellX: event && "cellX" in event ? event.cellX : undefined,
-        cellY: event && "cellY" in event ? event.cellY : undefined,
-      });
-      void Promise.resolve(result).then((opened) => {
-        if (opened) emit("open", payload);
-      });
+      let result: boolean | Promise<boolean>;
+      try {
+        result = opener.openExternal(href, {
+          source,
+          label: label.value,
+          cellX: event && "cellX" in event ? event.cellX : undefined,
+          cellY: event && "cellY" in event ? event.cellY : undefined,
+        });
+      } catch {
+        return;
+      }
+      void Promise.resolve(result)
+        .then((opened) => {
+          if (opened) emit("open", payload);
+        })
+        .catch(() => {});
+    }
+
+    function shouldSuppressNativeClick(modifierAllowed: boolean): boolean {
+      if (props.disabled) return true;
+      if (props.openMode !== "native") return true;
+      return !modifierAllowed;
     }
 
     function onClick(event: TerminalPointerEvent): void {
       emit("click", event);
-      if (!allowsModifierClick(event, props.modifierClick)) return;
-      if (props.openMode === "host" || props.openMode === "event") event.preventDefault();
+      const modifierAllowed = allowsModifierClick(event, props.modifierClick);
+      if (shouldSuppressNativeClick(modifierAllowed)) event.preventDefault();
+      if (!modifierAllowed) return;
       activate("click", event);
     }
 
