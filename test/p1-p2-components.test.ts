@@ -20,7 +20,14 @@ import {
   TTooltip,
   TTree,
 } from "../src/index.js";
-import { defineComponent, h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
+import {
+  createTerminalApp,
+  defineComponent,
+  h,
+  mountTerminal,
+  nextTick,
+  ref,
+} from "./ui-regressions-support.js";
 
 describe("P1/P2 public components", () => {
   it("renders table, data table, and tree primitives", async () => {
@@ -667,6 +674,92 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("renders command palette match and detail accent styles", async () => {
+    const items = [
+      {
+        label: "Open File",
+        detail: "src/app.ts",
+        accentStyle: { fg: "cyan" },
+        highlightAccentStyle: { fg: "yellowBright" },
+        detailAccentRanges: [{ start: 0, end: 3 }],
+        detailAccentSegments: [
+          { start: 4, end: 10, style: { fg: "blue" }, highlightStyle: { fg: "magenta" } },
+        ],
+      },
+    ];
+    const App = defineComponent({
+      name: "CommandPaletteStylesHost",
+      setup() {
+        return () =>
+          h(TCommandPalette, {
+            modelValue: true,
+            w: 36,
+            h: 10,
+            initialQuery: "open",
+            items,
+            selectedIndex: 0,
+            showRowDetails: true,
+            listStyle: { fg: "white" },
+            highlightStyle: { bg: "blue" },
+            matchStyle: { fg: "green" },
+            highlightMatchStyle: { fg: "red" },
+            detailStyle: { dim: true },
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 50, rows: 14, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(app.terminal.snapshot().lines.join("\n")).toContain("› Open File  src/app.ts");
+      expect(app.terminal.getCell(11, 6).style.fg).toBe("red");
+      expect(app.terminal.getCell(22, 6).style.fg).toBe("yellowBright");
+      expect(app.terminal.getCell(26, 6).style.fg).toBe("magenta");
+      expect(app.terminal.getCell(25, 6).style.dim).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("selects command palette items with mouse", async () => {
+    const selectedIndex = ref(0);
+    const items = [{ label: "Open" }, { label: "Copy" }];
+    const onSelect = vi.fn();
+    const App = defineComponent({
+      name: "CommandPaletteMouseHost",
+      setup() {
+        return () =>
+          h(TCommandPalette, {
+            modelValue: true,
+            w: 32,
+            h: 10,
+            items,
+            selectedIndex: selectedIndex.value,
+            "onUpdate:selectedIndex": (index: number) => (selectedIndex.value = index),
+            onSelect,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 50, rows: 14, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "click", cellX: 11, cellY: 7, time: Date.now() } as any);
+      await nextTick();
+
+      expect(selectedIndex.value).toBe(1);
+      expect(onSelect).toHaveBeenCalledWith(items[1]);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("skips disabled command palette items for keyboard navigation", async () => {
     const selectedIndex = ref(0);
     const items = [
@@ -761,6 +854,45 @@ describe("P1/P2 public components", () => {
       expect(lines[3]).toContain("Alpha");
       expect(mounted.terminal.getCell(0, 2).style.inverse).not.toBe(true);
       expect(mounted.terminal.getCell(0, 3).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("filters data table rows by formatted values", async () => {
+    const rows = [
+      { name: "Alpha", status: "ok" },
+      { name: "Beta", status: "fail" },
+    ];
+    const columns = [
+      { key: "name", label: "Name", width: 6 },
+      {
+        key: "status",
+        label: "Status",
+        width: 8,
+        format: (value: unknown) => (value === "ok" ? "Ready" : "Blocked"),
+      },
+    ];
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          columns,
+          rows,
+          filterable: true,
+          filter: "ready",
+        }),
+      20,
+      5,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[2]).toContain("Alpha");
+      expect(lines.join("\n")).not.toContain("Beta");
     } finally {
       mounted.unmount();
     }

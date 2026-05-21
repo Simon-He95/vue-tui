@@ -18,8 +18,14 @@ export type {
 } from "./vue/theme.js";
 export { TerminalProvider } from "./vue/components/TerminalProvider.js";
 export { TBox } from "./vue/components/TBox.js";
-export { TCommandPalette } from "./vue/components/TCommandPalette.js";
-export type { TCommandPaletteItem } from "./vue/components/TCommandPalette.js";
+export {
+  computeCommandPaletteMatchRanges,
+  TCommandPalette,
+} from "./vue/components/TCommandPalette.js";
+export type {
+  TCommandPaletteItem,
+  TCommandPaletteMatchRange,
+} from "./vue/components/TCommandPalette.js";
 export { TDataTable } from "./vue/components/TDataTable.js";
 export type {
   TDataTableSortChangePayload,

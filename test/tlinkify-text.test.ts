@@ -157,6 +157,21 @@ describe("TLinkifyText", () => {
         href: "https://example.com/path?x=1#top",
       },
     ]);
+    expect(linkifyTextSegments("文档：https://example.com。")).toEqual([
+      { text: "文档：" },
+      { text: "https://example.com", href: "https://example.com/" },
+      { text: "。" },
+    ]);
+    expect(linkifyTextSegments("打开（https://example.com/docs）")).toEqual([
+      { text: "打开（" },
+      { text: "https://example.com/docs", href: "https://example.com/docs" },
+      { text: "）" },
+    ]);
+    expect(linkifyTextSegments("参考：https://example.com/docs，继续")).toEqual([
+      { text: "参考：" },
+      { text: "https://example.com/docs", href: "https://example.com/docs" },
+      { text: "，继续" },
+    ]);
   });
 
   it("ignores dirty rows outside its rect", async () => {

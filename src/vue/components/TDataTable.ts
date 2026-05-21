@@ -36,6 +36,11 @@ function compareValues(a: unknown, b: unknown): number {
   return String(a ?? "").localeCompare(String(b ?? ""));
 }
 
+function displayValue(column: TTableColumn, row: TTableRow, index: number): string {
+  const raw = row[column.key];
+  return column.format ? column.format(raw, row, index) : String(raw ?? "");
+}
+
 export const TDataTable = defineComponent({
   name: "TDataTable",
   props: {
@@ -86,11 +91,9 @@ export const TDataTable = defineComponent({
     const filteredRows = computed(() => {
       if (!props.filterable || !props.filter.trim()) return indexedRows.value;
       const query = props.filter.trim().toLowerCase();
-      return indexedRows.value.filter(({ row }) =>
+      return indexedRows.value.filter(({ row, originalIndex }) =>
         props.columns.some((column) =>
-          String(row[column.key] ?? "")
-            .toLowerCase()
-            .includes(query),
+          displayValue(column, row, originalIndex).toLowerCase().includes(query),
         ),
       );
     });

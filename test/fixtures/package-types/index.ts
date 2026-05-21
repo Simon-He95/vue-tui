@@ -12,6 +12,7 @@ import {
   createTInputHostPlugin,
   createTerminal,
   createTheme,
+  computeCommandPaletteMatchRanges as computeRootCommandPaletteMatchRanges,
   linkifyTextSegments,
   type Style,
   type TTableColumn,
@@ -19,6 +20,7 @@ import {
   type TInputHostAdapter,
   type TLinkifyOptions,
   type TCommandPaletteItem as RootTCommandPaletteItem,
+  type TCommandPaletteMatchRange as RootTCommandPaletteMatchRange,
 } from "@simon_he/vue-tui";
 
 import { sanitizeDomHref } from "@simon_he/vue-tui/core";
@@ -39,8 +41,10 @@ import {
   TRenderLayer,
   TRenderPlane,
   TTransition,
+  computeCommandPaletteMatchRanges as computeVueCommandPaletteMatchRanges,
   useTerminal,
   type TCommandPaletteItem as VueTCommandPaletteItem,
+  type TCommandPaletteMatchRange as VueTCommandPaletteMatchRange,
   type TInputPlugin,
 } from "@simon_he/vue-tui/vue";
 
@@ -107,6 +111,10 @@ const vueCommandPaletteItem: VueTCommandPaletteItem = {
   label: "Open",
   detail: "workspace",
 };
+const rootCommandPaletteRange: RootTCommandPaletteMatchRange = { start: 0, end: 4 };
+const vueCommandPaletteRange: VueTCommandPaletteMatchRange = { start: 0, end: 4 };
+const rootCommandPaletteRanges = computeRootCommandPaletteMatchRanges("Open workspace", "open");
+const vueCommandPaletteRanges = computeVueCommandPaletteMatchRanges("Open workspace", "open");
 const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
 const agentCommandPaletteItem: AgentTCommandPaletteItem = {
   label: "Open",
@@ -167,6 +175,10 @@ console.log(
   tableColumns,
   commandPaletteItem,
   vueCommandPaletteItem,
+  rootCommandPaletteRange,
+  vueCommandPaletteRange,
+  rootCommandPaletteRanges,
+  vueCommandPaletteRanges,
   agentCommandPaletteItem,
   agentCommandPaletteRanges,
 );

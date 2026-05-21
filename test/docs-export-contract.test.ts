@@ -24,6 +24,7 @@ describe("documented entrypoint exports", () => {
       "TTree",
       "TView",
       "createTInputHostPlugin",
+      "computeCommandPaletteMatchRanges",
       "createTheme",
       "linkifyTextSegments",
     ]) {

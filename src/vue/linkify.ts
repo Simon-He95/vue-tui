@@ -14,10 +14,23 @@ export type TLinkifySegment = Readonly<{
 }>;
 
 const DEFAULT_PROTOCOLS: readonly TLinkifyProtocol[] = Object.freeze(["http", "https", "mailto"]);
-const URL_TEXT_RE = /(?:https?:\/\/|mailto:|file:\/\/|\.{1,2}\/|\/|#|\?)[^\s<>"'`]+/giu;
-const TRAILING_PUNCTUATION_RE = /[.,;:!?]/u;
-const TRAILING_CLOSER_RE = /[)\]}]/u;
-const TEXT_BOUNDARY_RE = /[\s([{<:="'`]/u;
+const URL_TEXT_RE =
+  /(?:https?:\/\/|mailto:|file:\/\/|\.{1,2}\/|\/|#|\?)[^\s<>"'`，。；：！？、]+/giu;
+const TRAILING_PUNCTUATION_RE = /[.,;:!?，。；：！？、]/u;
+const TRAILING_CLOSER_RE = /[)\]}）】》」』”’]/u;
+const TEXT_BOUNDARY_RE = /[\s([{<:="'`，。；：！？、（【《「『“‘]/u;
+const CLOSE_TO_OPEN: Readonly<Record<string, string>> = {
+  ")": "(",
+  "]": "[",
+  "}": "{",
+  "）": "（",
+  "】": "【",
+  "》": "《",
+  "」": "「",
+  "』": "『",
+  "”": "“",
+  "’": "‘",
+};
 
 function protocolSet(options: TLinkifyOptions): Set<TLinkifyProtocol> {
   return new Set(options.protocols ?? DEFAULT_PROTOCOLS);
@@ -61,7 +74,8 @@ function splitTrailingPunctuation(raw: string): { body: string; suffix: string }
 
   while (body && TRAILING_CLOSER_RE.test(lastChar(body))) {
     const ch = lastChar(body);
-    const open = ch === ")" ? "(" : ch === "]" ? "[" : "{";
+    const open = CLOSE_TO_OPEN[ch];
+    if (!open) break;
     let opens = 0;
     let closes = 0;
     for (const c of body) {
