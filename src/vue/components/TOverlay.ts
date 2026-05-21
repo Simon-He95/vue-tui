@@ -1,6 +1,6 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import { computed, defineComponent, h } from "vue";
+import { computed, defineComponent, h, ref } from "vue";
 import { useTerminal } from "../composables/use-terminal.js";
 import { TBox } from "./TBox.js";
 import { TText } from "./TText.js";
@@ -32,7 +32,7 @@ export const TContextMenu = defineComponent({
       type: Array as PropType<readonly TContextMenuItem[]>,
       required: true,
     },
-    selectedIndex: { type: Number, default: 0 },
+    selectedIndex: { type: Number, default: undefined },
     style: { type: Object as PropType<Style>, default: undefined },
     activeStyle: { type: Object as PropType<Style>, default: () => ({ inverse: true }) },
     disabledStyle: { type: Object as PropType<Style>, default: () => ({ dim: true }) },
@@ -45,6 +45,7 @@ export const TContextMenu = defineComponent({
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
+    const innerSelectedIndex = ref(0);
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
 
     function close(): void {
@@ -65,7 +66,11 @@ export const TContextMenu = defineComponent({
 
     function selectedIndex(): number {
       if (!props.items.length) return 0;
-      const clamped = clamp(props.selectedIndex, 0, props.items.length - 1);
+      const clamped = clamp(
+        props.selectedIndex ?? innerSelectedIndex.value,
+        0,
+        props.items.length - 1,
+      );
       if (!props.items[clamped]?.disabled) return clamped;
       const first = firstEnabledIndex();
       return first >= 0 ? first : clamped;
@@ -80,6 +85,11 @@ export const TContextMenu = defineComponent({
       return index;
     }
 
+    function setSelected(index: number): void {
+      innerSelectedIndex.value = index;
+      emit("update:selectedIndex", index);
+    }
+
     function handleMenuKeydown(event: any): void {
       if (event.key === "Escape") {
         event.preventDefault?.();
@@ -89,10 +99,10 @@ export const TContextMenu = defineComponent({
         select(selectedIndex());
       } else if (event.key === "ArrowDown") {
         event.preventDefault?.();
-        emit("update:selectedIndex", nextEnabledIndex(selectedIndex(), 1));
+        setSelected(nextEnabledIndex(selectedIndex(), 1));
       } else if (event.key === "ArrowUp") {
         event.preventDefault?.();
-        emit("update:selectedIndex", nextEnabledIndex(selectedIndex(), -1));
+        setSelected(nextEnabledIndex(selectedIndex(), -1));
       }
     }
 

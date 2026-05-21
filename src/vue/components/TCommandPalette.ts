@@ -200,7 +200,7 @@ export const TCommandPalette = defineComponent({
       type: Array as PropType<readonly TCommandPaletteItem[]>,
       required: true,
     },
-    selectedIndex: { type: Number, default: 0 },
+    selectedIndex: { type: Number, default: undefined },
     showRowDetails: { type: Boolean, default: false },
     placeholder: { type: String, default: "" },
     noMatchesText: { type: String, default: "No matches" },
@@ -222,6 +222,7 @@ export const TCommandPalette = defineComponent({
   emits: ["update:modelValue", "update:selectedIndex", "select", "close"],
   setup(props, { emit }) {
     const query = ref(props.initialQuery);
+    const innerSelectedIndex = ref(0);
     const filteredItems = computed(() => {
       const q = query.value.trim().toLowerCase();
       if (!q) return props.items;
@@ -260,7 +261,7 @@ export const TCommandPalette = defineComponent({
     }
 
     function selectedIndex(): number {
-      return enabledIndexFrom(props.selectedIndex, 1);
+      return enabledIndexFrom(props.selectedIndex ?? innerSelectedIndex.value, 1);
     }
 
     function ensureSelectedVisible(index = selectedIndex()): void {
@@ -290,12 +291,17 @@ export const TCommandPalette = defineComponent({
 
     watch(
       () => [filteredItems.value.length, props.selectedIndex, props.h] as const,
-      () => ensureSelectedVisible(),
+      () => {
+        const next = selectedIndex();
+        innerSelectedIndex.value = next;
+        ensureSelectedVisible(next);
+      },
       { immediate: true },
     );
 
     function setSelected(index: number, direction: 1 | -1 = 1): void {
       const next = enabledIndexFrom(index, direction);
+      innerSelectedIndex.value = next;
       ensureSelectedVisible(next);
       emit("update:selectedIndex", next);
     }
@@ -314,6 +320,7 @@ export const TCommandPalette = defineComponent({
     function selectItem(index: number): void {
       const item = filteredItems.value[index] ?? null;
       if (!item || item.disabled) return;
+      innerSelectedIndex.value = index;
       emit("update:selectedIndex", index);
       emit("select", item);
     }

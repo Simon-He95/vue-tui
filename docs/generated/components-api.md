@@ -245,7 +245,7 @@ Import: `@simon_he/vue-tui`
 | <code>title</code>               | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
 | <code>initialQuery</code>        | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
 | <code>items</code>               | <code>readonly TCommandPaletteItem[]</code> | —                                   | 是   | —    |
-| <code>selectedIndex</code>       | <code>number</code>                         | <code>0</code>                      | 否   | —    |
+| <code>selectedIndex</code>       | <code>number</code>                         | <code>undefined</code>              | 否   | —    |
 | <code>showRowDetails</code>      | <code>boolean</code>                        | <code>false</code>                  | 否   | —    |
 | <code>placeholder</code>         | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
 | <code>noMatchesText</code>       | <code>string</code>                         | <code>&quot;No matches&quot;</code> | 否   | —    |
@@ -291,7 +291,7 @@ Import: `@simon_he/vue-tui/vue`
 | <code>w</code>             | <code>number</code>                      | <code>24</code>                           | 否   | —    |
 | <code>zIndex</code>        | <code>number</code>                      | <code>20</code>                           | 否   | —    |
 | <code>items</code>         | <code>readonly TContextMenuItem[]</code> | —                                         | 是   | —    |
-| <code>selectedIndex</code> | <code>number</code>                      | <code>0</code>                            | 否   | —    |
+| <code>selectedIndex</code> | <code>number</code>                      | <code>undefined</code>                    | 否   | —    |
 | <code>style</code>         | <code>Style</code>                       | <code>undefined</code>                    | 否   | —    |
 | <code>activeStyle</code>   | <code>Style</code>                       | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
 | <code>disabledStyle</code> | <code>Style</code>                       | <code>() =&gt; ({ dim: true })</code>     | 否   | —    |

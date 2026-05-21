@@ -862,6 +862,57 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps context menu keyboard selection internally when selectedIndex is uncontrolled", async () => {
+    const open = ref(true);
+    const items = [
+      { id: "open", label: "Open Link" },
+      { id: "copy", label: "Copy Link" },
+    ];
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TContextMenu, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (value: boolean) => (open.value = value),
+          x: 0,
+          y: 0,
+          w: 18,
+          items,
+          onSelect,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith({ item: items[1], index: 1 });
+      expect(open.value).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("skips disabled context menu items for default selection and keyboard navigation", async () => {
     const open = ref(true);
     const selectedIndex = ref(0);
@@ -1059,6 +1110,50 @@ describe("P1/P2 public components", () => {
       await nextTick();
 
       expect(onSelect).toHaveBeenCalledWith(items[3]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps command palette keyboard selection internally when selectedIndex is uncontrolled", async () => {
+    const items = [{ label: "Open" }, { label: "Copy" }];
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 32,
+          h: 10,
+          items,
+          onSelect,
+        }),
+      50,
+      14,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith(items[1]);
     } finally {
       mounted.unmount();
     }
@@ -1289,6 +1384,36 @@ describe("P1/P2 public components", () => {
       expect(lines[3]).toContain("Alpha");
       expect(mounted.terminal.getCell(0, 2).style.inverse).not.toBe(true);
       expect(mounted.terminal.getCell(0, 3).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps data table sort marker visible in narrow headers", async () => {
+    const columns = [
+      { key: "id", label: "ID", width: 3 },
+      { key: "name", label: "Name", width: 5 },
+    ];
+    const rows = [{ id: 1, name: "Alpha" }];
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 3,
+          columns,
+          rows,
+          sortable: true,
+          sortBy: "id",
+          sortDirection: "asc",
+        }),
+      12,
+      4,
+    );
+
+    try {
+      expect(mounted.terminal.snapshot().lines[0]).toContain("ID^");
     } finally {
       mounted.unmount();
     }

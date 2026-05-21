@@ -1,6 +1,7 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import { computed, defineComponent, h } from "vue";
+import { sliceByCells, textCellWidth } from "../utils/text.js";
 import { TTable, type TTableColumn, type TTableRow } from "./TTable.js";
 
 export type TDataTableSortDirection = "asc" | "desc";
@@ -40,6 +41,13 @@ function compareValues(a: unknown, b: unknown): number {
 function displayValue(column: TTableColumn, row: TTableRow, index: number): string {
   const raw = row[column.key];
   return column.format ? column.format(raw, row, index) : String(raw ?? "");
+}
+
+function sortLabel(column: TTableColumn, marker: string): string {
+  const label = column.label ?? column.key;
+  const width = column.width == null ? undefined : Math.max(1, Math.floor(column.width));
+  if (width == null || textCellWidth(`${label} ${marker}`) <= width) return `${label} ${marker}`;
+  return `${sliceByCells(label, Math.max(0, width - 1))}${marker}`;
 }
 
 export const TDataTable = defineComponent({
@@ -114,7 +122,7 @@ export const TDataTable = defineComponent({
       props.columns.map((column) => {
         if (!props.sortable || column.key !== props.sortBy) return column;
         const marker = props.sortDirection === "desc" ? "v" : "^";
-        return { ...column, label: `${column.label ?? column.key} ${marker}` };
+        return { ...column, label: sortLabel(column, marker) };
       }),
     );
 
