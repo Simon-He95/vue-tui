@@ -14,6 +14,7 @@ describe("component terminal script", () => {
 
     expect(normalizeOpenHref("javascript:alert(1)")).toBeNull();
     expect(normalizeOpenHref("data:text/plain,hello")).toBeNull();
+    expect(normalizeOpenHref(`file://${process.cwd()}/package.json`)).toBeNull();
     expect(normalizeOpenHref(`vscode://file${process.cwd()}/package.json:1`)).toBeNull();
     expect(normalizeOpenHref("not a url")).toBeNull();
   });

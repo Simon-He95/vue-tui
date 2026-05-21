@@ -348,6 +348,45 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("clamps overflowing explicit table columns to the table width", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 3,
+          columns: [
+            { key: "a", label: "Alpha", width: 8 },
+            { key: "b", label: "Beta", width: 8 },
+            { key: "c", label: "Gamma", width: 8 },
+          ],
+          rows: [],
+          headerFocusable: true,
+        }),
+      16,
+      4,
+    );
+
+    try {
+      const headerRects = mounted
+        .events()!
+        .debugNodes()
+        .filter((node) => node.visible && node.focusable && node.rect.y === 0 && node.rect.w > 0)
+        .map((node) => node.rect)
+        .sort((a, b) => a.x - b.x);
+
+      expect(headerRects).toEqual([
+        { x: 0, y: 0, w: 4, h: 1 },
+        { x: 5, y: 0, w: 3, h: 1 },
+        { x: 9, y: 0, w: 3, h: 1 },
+      ]);
+      expect(Math.max(...headerRects.map((rect) => rect.x + rect.w))).toBe(12);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("keeps data table sortable headers and selectable rows focusable", async () => {
     const rows = [{ id: "1", name: "build" }];
     const columns = [

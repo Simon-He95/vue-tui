@@ -823,7 +823,6 @@ export const TLogView = defineComponent({
     const effectiveAnsiLinkStyle = computed<Style>(() => props.linkStyle ?? DEFAULT_LINK_STYLE);
     const effectiveLinkStyle = computed<Style>(() => ({
       ...(theme.value.components.TLink?.style ?? {}),
-      ...(theme.value.components.TLink?.underline === false ? { underline: false } : {}),
       ...(props.linkStyle ?? {}),
     }));
 

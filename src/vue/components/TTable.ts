@@ -44,16 +44,30 @@ function resolveColumnWidths(
   const explicitTotal = explicit.reduce((sum, next) => sum + next, 0);
   const autoIndexes = explicit.flatMap((value, index) => (value > 0 ? [] : [index]));
   const out = [...explicit];
-  if (autoIndexes.length === 0) return out.map((value) => Math.max(1, value));
-
-  let remaining = Math.max(0, available - explicitTotal);
-  for (let i = 0; i < autoIndexes.length; i++) {
-    const slotsLeft = autoIndexes.length - i;
-    const value = Math.max(1, Math.floor(remaining / slotsLeft));
-    out[autoIndexes[i]!] = value;
-    remaining -= value;
+  if (autoIndexes.length > 0) {
+    let remaining = Math.max(0, available - explicitTotal);
+    for (let i = 0; i < autoIndexes.length; i++) {
+      const slotsLeft = autoIndexes.length - i;
+      const value = Math.ceil(remaining / slotsLeft);
+      out[autoIndexes[i]!] = value;
+      remaining -= value;
+    }
   }
-  return out;
+
+  const total = out.reduce((sum, next) => sum + next, 0);
+  if (total <= available) return out;
+  if (available <= 0 || total <= 0) return out.map(() => 0);
+
+  const clamped = out.map((value) => Math.floor((value / total) * available));
+  let remaining = available - clamped.reduce((sum, next) => sum + next, 0);
+  const remainders = out.map((value, index) => {
+    const raw = (value / total) * available;
+    return { index, fraction: raw - Math.floor(raw) };
+  });
+  remainders.sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+  for (let i = 0; i < remaining; i++) clamped[remainders[i]!.index]! += 1;
+
+  return clamped;
 }
 
 function cellValue(column: TTableColumn, row: TTableRow, index: number): string {

@@ -107,6 +107,18 @@ export function createTheme(overrides: TuiThemeOverrides = {}): TuiTheme {
       colors.linkVisited ? { fg: colors.linkVisited } : undefined,
     ),
   };
+  const linkStyle =
+    link?.underline === false
+      ? mergeStyleToken(mergeStyleToken(defaultLinkFromColors.style, link?.style), {
+          underline: false,
+        })
+      : mergeStyleToken(defaultLinkFromColors.style, link?.style);
+  const linkVisitedStyle =
+    link?.underline === false
+      ? mergeStyleToken(mergeStyleToken(defaultLinkFromColors.visitedStyle, link?.visitedStyle), {
+          underline: false,
+        })
+      : mergeStyleToken(defaultLinkFromColors.visitedStyle, link?.visitedStyle);
   const linkHoverStyle = mergeStyleToken(defaultLinkFromColors.hoverStyle, link?.hoverStyle);
 
   return {
@@ -115,13 +127,13 @@ export function createTheme(overrides: TuiThemeOverrides = {}): TuiTheme {
       TLink: {
         ...defaultLinkFromColors,
         ...(link ?? {}),
-        style: mergeStyleToken(defaultLinkFromColors.style, link?.style),
+        style: linkStyle,
         hoverStyle:
           link?.hoverUnderline === false && link?.hoverStyle?.underline == null
             ? mergeStyleToken(linkHoverStyle, { underline: false })
             : linkHoverStyle,
         focusStyle: mergeStyleToken(defaultLinkFromColors.focusStyle, link?.focusStyle),
-        visitedStyle: mergeStyleToken(defaultLinkFromColors.visitedStyle, link?.visitedStyle),
+        visitedStyle: linkVisitedStyle,
       },
       TTable: {
         ...(defaultTable ?? {}),

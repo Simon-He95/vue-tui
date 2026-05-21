@@ -191,6 +191,8 @@ describe("TLink", () => {
         },
       },
     });
+    expect(theme.components.TLink?.style?.underline).toBe(false);
+    expect(theme.components.TLink?.visitedStyle?.underline).toBe(false);
     expect(theme.components.TLink?.hoverStyle?.underline).toBe(false);
     const mounted = await mountTerminal(
       () =>

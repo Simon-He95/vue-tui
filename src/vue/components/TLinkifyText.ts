@@ -184,11 +184,7 @@ export const TLinkifyText = defineComponent({
 
     const options = computed(() => linkifyOptions(props));
     const effectiveLinkStyle = computed(() =>
-      mergeStyle(
-        theme.value.components.TLink?.style,
-        theme.value.components.TLink?.underline === false ? { underline: false } : undefined,
-        props.linkStyle,
-      ),
+      mergeStyle(theme.value.components.TLink?.style, props.linkStyle),
     );
     const defaultWidth = computed(() => computeDefaultWidth(props.value, options.value));
     const rows = computed(() => {
