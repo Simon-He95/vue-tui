@@ -6,13 +6,49 @@ import { TInput } from "./TInput.js";
 import { TText } from "./TText.js";
 import { sanitizeInlineText, sliceByCells } from "../utils/text.js";
 
+export type TCommandPaletteMatchRange = Readonly<{
+  start: number;
+  end: number;
+}>;
+
 export type TCommandPaletteItem = Readonly<{
   label: string;
   detail?: string;
   keywords?: readonly string[];
   disabled?: boolean;
   value?: unknown;
+  accentStyle?: Style;
+  highlightAccentStyle?: Style;
+  detailAccentRanges?: readonly TCommandPaletteMatchRange[];
+  detailAccentSegments?: readonly Readonly<{
+    start: number;
+    end: number;
+    style?: Style;
+    highlightStyle?: Style;
+  }>[];
+  [key: string]: unknown;
 }>;
+
+export function computeCommandPaletteMatchRanges(
+  text: string,
+  query: string,
+): TCommandPaletteMatchRange[] {
+  const source = String(text ?? "");
+  const needle = String(query ?? "")
+    .trim()
+    .toLowerCase();
+  if (!source || !needle) return [];
+  const haystack = source.toLowerCase();
+  const ranges: TCommandPaletteMatchRange[] = [];
+  let from = 0;
+  while (from < haystack.length) {
+    const index = haystack.indexOf(needle, from);
+    if (index < 0) break;
+    ranges.push({ start: index, end: index + needle.length });
+    from = index + Math.max(1, needle.length);
+  }
+  return ranges;
+}
 
 export const TCommandPalette = defineComponent({
   name: "TCommandPalette",
@@ -36,7 +72,11 @@ export const TCommandPalette = defineComponent({
     listStyle: { type: Object as PropType<Style>, default: undefined },
     bodyStyle: { type: Object as PropType<Style>, default: undefined },
     highlightStyle: { type: Object as PropType<Style>, default: undefined },
+    matchStyle: { type: Object as PropType<Style>, default: undefined },
+    highlightMatchStyle: { type: Object as PropType<Style>, default: undefined },
+    dividerStyle: { type: Object as PropType<Style>, default: undefined },
     hintStyle: { type: Object as PropType<Style>, default: undefined },
+    detailStyle: { type: Object as PropType<Style>, default: undefined },
     emptyStyle: { type: Object as PropType<Style>, default: undefined },
   },
   emits: ["update:modelValue", "update:selectedIndex", "select", "close"],

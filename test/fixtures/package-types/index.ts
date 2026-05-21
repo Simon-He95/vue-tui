@@ -64,6 +64,9 @@ import {
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import {
   TAgentTranscript,
+  computeCommandPaletteMatchRanges,
+  type TCommandPaletteItem,
+  type TCommandPaletteMatchRange,
   TThinkingView,
   TToolCallView,
   TToolLogView,
@@ -91,6 +94,17 @@ const linkifyOptions: TLinkifyOptions = { protocols: ["https"], allowRelative: t
 const linkified = linkifyTextSegments("see https://example.com", linkifyOptions);
 const theme = createTheme({ colors: { link: "cyanBright" } });
 const tableColumns: TTableColumn[] = [{ key: "id", label: "ID", width: 4 }];
+const commandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
+const commandPaletteItem: TCommandPaletteItem = {
+  label: "Open",
+  detail: "workspace",
+  detailAccentRanges: [commandPaletteRange],
+  detailAccentSegments: [{ start: 0, end: 4, style: { fg: "cyanBright" } }],
+  accentStyle: { fg: "cyanBright" },
+  highlightAccentStyle: { bold: true },
+  legacyField: "kept",
+};
+const commandPaletteRanges = computeCommandPaletteMatchRanges("Open workspace", "open");
 
 console.log(
   TerminalProvider,
@@ -142,6 +156,8 @@ console.log(
   linkified,
   theme,
   tableColumns,
+  commandPaletteItem,
+  commandPaletteRanges,
 );
 
 const driver: StdinDriver | null = null;

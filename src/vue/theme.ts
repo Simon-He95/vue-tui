@@ -107,6 +107,7 @@ export function createTheme(overrides: TuiThemeOverrides = {}): TuiTheme {
       colors.linkVisited ? { fg: colors.linkVisited } : undefined,
     ),
   };
+  const linkHoverStyle = mergeStyleToken(defaultLinkFromColors.hoverStyle, link?.hoverStyle);
 
   return {
     colors,
@@ -115,7 +116,10 @@ export function createTheme(overrides: TuiThemeOverrides = {}): TuiTheme {
         ...defaultLinkFromColors,
         ...(link ?? {}),
         style: mergeStyleToken(defaultLinkFromColors.style, link?.style),
-        hoverStyle: mergeStyleToken(defaultLinkFromColors.hoverStyle, link?.hoverStyle),
+        hoverStyle:
+          link?.hoverUnderline === false && link?.hoverStyle?.underline == null
+            ? mergeStyleToken(linkHoverStyle, { underline: false })
+            : linkHoverStyle,
         focusStyle: mergeStyleToken(defaultLinkFromColors.focusStyle, link?.focusStyle),
         visitedStyle: mergeStyleToken(defaultLinkFromColors.visitedStyle, link?.visitedStyle),
       },
