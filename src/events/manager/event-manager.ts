@@ -338,7 +338,7 @@ export function createEventManager(
       eventPhase: 2 as 1 | 2 | 3,
       bubbles: true,
       cancelable: true,
-      defaultPrevented: false,
+      defaultPrevented: Boolean(nativeEvent?.defaultPrevented),
       timeStamp: now(),
       __stopped: false,
       stopPropagation() {

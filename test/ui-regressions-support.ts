@@ -45,6 +45,7 @@ const {
   TInput,
   TInputBox,
   TList,
+  TLink,
   TPathPicker,
   TRenderPlane,
   TSelect,
@@ -57,7 +58,8 @@ const {
 
 const { createEventManager } = await import("../src/runtime.js");
 
-const { createCliEventManager, defaultTInputHostPlugin } = await import("../src/cli.js");
+const { createCliEventManager, createTerminalApp, defaultTInputHostPlugin } =
+  await import("../src/cli.js");
 const { TVirtualList } = await import("../src/experimental.js");
 const { useRenderNode } = await import("../src/vue/composables/use-render-node.js");
 
@@ -194,6 +196,7 @@ afterEach(() => {
 export {
   createApp,
   createCliEventManager,
+  createTerminalApp,
   createEventManager,
   defaultTInputHostPlugin,
   createPromptMentionPlugin,
@@ -212,6 +215,7 @@ export {
   TInput,
   TInputBox,
   TList,
+  TLink,
   TPathPicker,
   TRenderPlane,
   TSelect,

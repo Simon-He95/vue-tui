@@ -13,6 +13,7 @@
 - [TInput](#tinput)
 - [TInputBox](#tinputbox)
 - [TJsonEditor](#tjsoneditor)
+- [TLink](#tlink)
 - [TList](#tlist)
 - [TLogLinksPanel](#tloglinkspanel)
 - [TLogMinimap](#tlogminimap)
@@ -205,6 +206,7 @@ Import: `@simon_he/vue-tui`
 | <code>recordEvents</code>       | <code>((e: TerminalEventRecord) =&gt; void) &#124; undefined</code> | <code>undefined</code>                          | 否   | —    |
 | <code>inputPlugins</code>       | <code>readonly TInputPlugin[]</code>                                | <code>() =&gt; [defaultTInputHostPlugin]</code> | 否   | —    |
 | <code>pathPickerProvider</code> | <code>PathPickerProvider</code>                                     | <code>undefined</code>                          | 否   | —    |
+| <code>linkOpener</code>         | <code>TerminalLinkOpenerLike</code>                                 | <code>undefined</code>                          | 否   | —    |
 | <code>debugIme</code>           | <code>boolean</code>                                                | <code>false</code>                              | 否   | —    |
 | <code>debugTrace</code>         | <code>boolean</code>                                                | <code>false</code>                              | 否   | —    |
 | <code>domRendererOptions</code> | <code>DomRendererOptions</code>                                     | <code>undefined</code>                          | 否   | —    |
@@ -370,23 +372,23 @@ Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
-| 名称                                     | 类型                                  | 默认值                                            | 必填 | 说明 |
-| ---------------------------------------- | ------------------------------------- | ------------------------------------------------- | ---- | ---- |
-| <code>x</code>                           | <code>number</code>                   | —                                                 | 是   | —    |
-| <code>y</code>                           | <code>number</code>                   | —                                                 | 是   | —    |
-| <code>w</code>                           | <code>number</code>                   | —                                                 | 是   | —    |
-| <code>h</code>                           | <code>number</code>                   | <code>8</code>                                    | 否   | —    |
-| <code>zIndex</code>                      | <code>number</code>                   | <code>0</code>                                    | 否   | —    |
-| <code>modelValue</code>                  | <code>string</code>                   | —                                                 | 是   | —    |
-| <code>placeholder</code>                 | <code>string</code>                   | <code>&quot;&quot;</code>                         | 否   | —    |
-| <code>style</code>                       | <code>Style</code>                    | <code>undefined</code>                            | 否   | —    |
-| <code>showIndentGuides</code>            | <code>boolean</code>                  | <code>true</code>                                 | 否   | —    |
-| <code>indentSize</code>                  | <code>number</code>                   | <code>2</code>                                    | 否   | —    |
-| <code>guideColors</code>                 | <code>readonly AnsiColorName[]</code> | <code>() =&gt; [...DEFAULT\_GUIDE\_COLORS]</code> | 否   | —    |
-| <code>autoFocus</code>                   | <code>boolean</code>                  | <code>false</code>                                | 否   | —    |
-| <code>cursorToEndOnFirstFocus</code>     | <code>boolean</code>                  | <code>true</code>                                 | 否   | —    |
-| <code>cursorToEndOnExternalUpdate</code> | <code>boolean</code>                  | <code>true</code>                                 | 否   | —    |
-| <code>submitOnEnter</code>               | <code>boolean</code>                  | <code>false</code>                                | 否   | —    |
+| 名称                                     | 类型                                  | 默认值                                          | 必填 | 说明 |
+| ---------------------------------------- | ------------------------------------- | ----------------------------------------------- | ---- | ---- |
+| <code>x</code>                           | <code>number</code>                   | —                                               | 是   | —    |
+| <code>y</code>                           | <code>number</code>                   | —                                               | 是   | —    |
+| <code>w</code>                           | <code>number</code>                   | —                                               | 是   | —    |
+| <code>h</code>                           | <code>number</code>                   | <code>8</code>                                  | 否   | —    |
+| <code>zIndex</code>                      | <code>number</code>                   | <code>0</code>                                  | 否   | —    |
+| <code>modelValue</code>                  | <code>string</code>                   | —                                               | 是   | —    |
+| <code>placeholder</code>                 | <code>string</code>                   | <code>&quot;&quot;</code>                       | 否   | —    |
+| <code>style</code>                       | <code>Style</code>                    | <code>undefined</code>                          | 否   | —    |
+| <code>showIndentGuides</code>            | <code>boolean</code>                  | <code>true</code>                               | 否   | —    |
+| <code>indentSize</code>                  | <code>number</code>                   | <code>2</code>                                  | 否   | —    |
+| <code>guideColors</code>                 | <code>readonly AnsiColorName[]</code> | <code>() =&gt; [...DEFAULT_GUIDE_COLORS]</code> | 否   | —    |
+| <code>autoFocus</code>                   | <code>boolean</code>                  | <code>false</code>                              | 否   | —    |
+| <code>cursorToEndOnFirstFocus</code>     | <code>boolean</code>                  | <code>true</code>                               | 否   | —    |
+| <code>cursorToEndOnExternalUpdate</code> | <code>boolean</code>                  | <code>true</code>                               | 否   | —    |
+| <code>submitOnEnter</code>               | <code>boolean</code>                  | <code>false</code>                              | 否   | —    |
 
 ### Events
 
@@ -400,6 +402,47 @@ Import: `@simon_he/vue-tui/vue`
 | <code>redo</code>              | —       | —    |
 | <code>lintChange</code>        | —       | —    |
 | <code>validationError</code>   | —       | —    |
+
+## TLink
+
+源码：`src/vue/components/TLink.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                        | 类型                            | 默认值                                        | 必填 | 说明 |
+| --------------------------- | ------------------------------- | --------------------------------------------- | ---- | ---- |
+| <code>x</code>              | <code>number</code>             | —                                             | 是   | —    |
+| <code>y</code>              | <code>number</code>             | —                                             | 是   | —    |
+| <code>w</code>              | <code>number</code>             | <code>undefined</code>                        | 否   | —    |
+| <code>h</code>              | <code>number</code>             | <code>1</code>                                | 否   | —    |
+| <code>zIndex</code>         | <code>number</code>             | <code>0</code>                                | 否   | —    |
+| <code>href</code>           | <code>string</code>             | —                                             | 是   | —    |
+| <code>label</code>          | <code>string</code>             | <code>undefined</code>                        | 否   | —    |
+| <code>style</code>          | <code>Style</code>              | <code>undefined</code>                        | 否   | —    |
+| <code>hoverStyle</code>     | <code>Style</code>              | <code>undefined</code>                        | 否   | —    |
+| <code>focusStyle</code>     | <code>Style</code>              | <code>undefined</code>                        | 否   | —    |
+| <code>activeStyle</code>    | <code>Style</code>              | <code>undefined</code>                        | 否   | —    |
+| <code>disabled</code>       | <code>boolean</code>            | <code>false</code>                            | 否   | —    |
+| <code>openMode</code>       | <code>TLinkOpenMode</code>      | <code>&quot;host&quot;</code>                 | 否   | —    |
+| <code>activationKeys</code> | <code>readonly string[]</code>  | <code>() =&gt; DEFAULT_ACTIVATION_KEYS</code> | 否   | —    |
+| <code>modifierClick</code>  | <code>TLinkModifierClick</code> | <code>&quot;none&quot;</code>                 | 否   | —    |
+| <code>autoFocus</code>      | <code>boolean</code>            | <code>false</code>                            | 否   | —    |
+
+### Events
+
+| 名称                     | Payload                                                      | 说明 |
+| ------------------------ | ------------------------------------------------------------ | ---- |
+| <code>activate</code>    | <code>(\_payload: TLinkActivatePayload) =&gt; true</code>    | —    |
+| <code>open</code>        | <code>(\_payload: TLinkOpenPayload) =&gt; true</code>        | —    |
+| <code>invalidHref</code> | <code>(\_payload: TLinkInvalidHrefPayload) =&gt; true</code> | —    |
+| <code>click</code>       | <code>(\_event: TerminalPointerEvent) =&gt; true</code>      | —    |
+| <code>keydown</code>     | <code>(\_event: TerminalKeyboardEvent) =&gt; true</code>     | —    |
+| <code>focus</code>       | <code>(\_event: TerminalBaseEvent) =&gt; true</code>         | —    |
+| <code>blur</code>        | <code>(\_event: TerminalBaseEvent) =&gt; true</code>         | —    |
 
 ## TList
 

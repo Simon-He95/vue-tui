@@ -10,7 +10,7 @@
 
 | API maturity | Import                           | 组件                                                                                                                                                                                                |
 | ------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TDialog` `TInput` `TList` `TSelect` `TText` `TView`                                                                                                                      |
+| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TDialog` `TInput` `TLink` `TList` `TSelect` `TText` `TView`                                                                                                              |
 | Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition`                                               |
 | Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                  |
 | Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap` |
@@ -24,7 +24,7 @@
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
 | Root          | `TerminalProvider`                                                                                                                                                               | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
 | Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                   | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
-| Text / Motion | `TText` `TTransition`                                                                                                                                                            | 文本渲染、状态切换、动画插值                    | 通用                                               |
+| Text / Action | `TText` `TLink` `TTransition`                                                                                                                                                    | 文本渲染、链接操作、状态切换、动画插值          | 通用                                               |
 | Input         | `TInput` `TInputBox` `TJsonEditor`                                                                                                                                               | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
 | Pickers       | `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择       | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
 | Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                                                                                                      | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
@@ -77,6 +77,7 @@
 - `clipboard` `(ClipboardApi?)`: 给 selection auto-copy 注入 clipboard；不传时 browser 使用运行时 clipboard
 - `inputPlugins` `(TInputPlugin[])`: 给子树里的 `TInput` / `TInputBox` 注入宿主插件（例如 terminal clipboard、TTY 风格快捷键）；init-only，修改后需重新挂载 provider/input
 - `pathPickerProvider` `(PathPickerProvider?)`: 给子树里的 `TPathPicker` 注入宿主路径 provider
+- `linkOpener` `(TerminalLinkOpener | function?)`: 给 `TLink openMode="host"` 注入外部链接打开能力；浏览器 `TerminalProvider` 默认使用 `window.open`，CLI/headless 需要通过 `createTerminalApp({ linkOpener })` 显式提供
 - `debugIme` `(boolean)`: 输出 IME 调试信息
 - `debugTrace` `(boolean)`: 开启 trace（commit/event/focus）
 - `domRendererOptions` `(DomRendererOptions?)`: DOM renderer 配置，例如 `syncFlushMaxRows` / `syncFlushCellBudget`；link options 会在更新时刷新，其他选项按 mount-time 使用，修改后需重新挂载 provider
@@ -158,6 +159,57 @@
 `@click`/`@dblclick`/`@pointerdown`/`@pointerup`/`@pointermove`/`@pointerenter`/`@pointerleave`/`@wheel`/`@keydown`/`@keyup`/`@focus`/`@blur`
 
 > 同时支持对应的 `Capture` 版本（例如 `@clickCapture`）。
+
+## TLink
+
+可点击、可聚焦、可键盘激活的单行链接组件。除 `disabled` / `openMode="none"` 外，它会把 DOM-safe `href` 写入 `Style.href`，因此 DOM renderer links 开启时可以得到原生 anchor，CLI/stdout renderer 可以继续输出 OSC8 hyperlink。
+
+默认 `openMode="host"`：点击或按 `Enter` 时会先 emit `activate`，再调用 `TerminalProvider.linkOpener` 或 `createTerminalApp({ linkOpener })` 注入的 `openExternal()` 尝试打开；浏览器 `TerminalProvider` 默认使用 `window.open`，CLI/headless 不会默认执行系统命令。
+
+`openMode` 语义：
+
+- `host`: emit `activate`，阻止 DOM native anchor 默认行为，并调用 `linkOpener`
+- `event`: emit `activate`，阻止组件处理的 DOM native anchor click，不调用 `linkOpener`；仍会写入 `Style.href` metadata，terminal OSC8 或 browser context menu 仍可能暴露 href，如需完全不输出 link metadata 请使用 `none`
+- `native`: click emit `activate` 并允许 renderer/native link activation；keyboard emit `activate` 后在有 `linkOpener` 时作为 terminal focus fallback 打开；如果 `modifierClick` 不满足，会阻止 native click
+- `none`: 只渲染文本，不写入 href metadata，不激活
+
+`TLink` 接受 absolute `https:` / `http:` / `mailto:` 和 `/docs`、`#section` 这类 relative href；宿主应按自己的策略重新解析或拒绝 relative href。`TLink` 有意拒绝 `file:` URL；terminal-specific `file:` opt-in 只适用于底层 `Style.href` 写入者、stdout renderer 或 TLog retained index 这类显式 provider。
+
+`modifierClick="meta"` 和 `ctrlOrMeta` 里的 Meta/Cmd 只对 browser/DOM 事件有意义；真实 CLI SGR mouse report 只携带 Shift/Alt/Ctrl，所以 CLI 下 `ctrlOrMeta` 等价于 Ctrl，`meta` 不会被真实鼠标输入满足。
+
+`domRendererOptions.links.activation="event"` 面向 markdown/static rich text 这类直接写入 `Style.href` 的链接。它会在 DOM anchor 层先 `preventDefault()` 并调用 renderer-level `onActivate`；`TLink` 会尊重这个 defaultPrevented 状态，不再执行组件级 `activate` / host opener。组件化链接推荐由 `TLink` 自己拥有 activation。
+
+### Props
+
+- `x`/`y` `(number, required)`
+- `w` `(number?)`: 不传时按 `label || href` 的 cell 宽度计算
+- `h` `(number)`: 命中区域高度，默认 `1`
+- `href` `(string, required)`
+- `label` `(string?)`
+- `style` / `hoverStyle` / `focusStyle` / `activeStyle` `(Style?)`
+- `disabled` `(boolean)`
+- `openMode` `('native' | 'host' | 'event' | 'none')`
+- `activationKeys` `(string[])`: 默认 `['Enter']`
+- `modifierClick` `('none' | 'ctrl' | 'meta' | 'ctrlOrMeta')`
+- `autoFocus` `(boolean)`
+
+### Events
+
+- `activate`: `{ href, label, source }`
+- `open`: `{ href, label, source }`，host opener 返回 true 时触发，表示请求已被接受/尝试；不保证 OS 或 browser 实际打开了目标
+- `invalidHref`: `{ href, reason }`
+- `click` / `keydown` / `focus` / `blur`
+
+```vue
+<TLink
+  :x="2"
+  :y="4"
+  href="https://example.com"
+  label="Open example.com"
+  :focus-style="{ inverse: true }"
+  @activate="onLinkActivate"
+/>
+```
 
 ## TAnchor
 

@@ -92,14 +92,16 @@ import { TAnchor, TFlow } from "@simon_he/vue-tui/vue";
 
 DOM renderer link rendering is opt-in through `domRendererOptions.links`. Once enabled, DOM anchors allow safe absolute and relative targets such as `https:`, `http:`, `mailto:`, `/path`, `./path`, `../path`, `#hash`, and `?q=1`. Link callbacks preserve native browser behavior unless they return `false`.
 
-CLI/stdout rendering uses OSC8 hyperlinks and keeps a stricter boundary: only safe absolute `https:`, `http:`, and `mailto:` hrefs are emitted by default. `file:` links stay opt-in for terminal-specific providers.
+CLI/stdout rendering uses OSC8 hyperlinks and keeps a stricter boundary: only safe absolute `https:`, `http:`, and `mailto:` hrefs are emitted by default. `file:` links stay opt-in for terminal-specific providers and lower-level `Style.href` writers.
+
+`TLink` is the public component-level link primitive. It renders DOM-safe `Style.href` metadata for absolute `https:` / `http:` / `mailto:` and relative targets, supports focus, click, keyboard activation, and host-controlled attempted opens through `TerminalProvider.linkOpener` or `createTerminalApp({ linkOpener })`. Browser `TerminalProvider` defaults to `window.open`; CLI/headless apps must opt in. `TLink` intentionally rejects `file:` URLs; use lower-level `Style.href` writers plus terminal-specific opt-in when exposing file links.
 
 ## Browser Usage
 
 ```vue
 <script setup lang="ts">
 import { ref } from "vue";
-import { TerminalProvider, TBox, TInput, TText } from "@simon_he/vue-tui";
+import { TerminalProvider, TBox, TInput, TLink, TText } from "@simon_he/vue-tui";
 
 const input = ref("");
 </script>
@@ -108,6 +110,7 @@ const input = ref("");
   <TerminalProvider :cols="80" :rows="24" :default-style="{ fg: 'whiteBright' }">
     <TBox :x="0" :y="0" :w="80" :h="24" border title="Demo" :padding="1">
       <TText :x="0" :y="0" :w="78" value="Vue TUI is running" />
+      <TLink :x="0" :y="2" href="https://github.com/Simon-He95/vue-tui" label="Project link" />
       <TInput :x="0" :y="20" :w="78" v-model="input" placeholder="Type..." />
     </TBox>
   </TerminalProvider>
@@ -199,7 +202,7 @@ Unhandled promise rejections stay host-owned by default. Setting `cleanupOnUnhan
 | Area           | Import                           | Components / APIs                                                                                                                                                          |
 | -------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Stable layout  | `@simon_he/vue-tui`              | `TBox`, `TView`                                                                                                                                                            |
-| Stable text    | `@simon_he/vue-tui`              | `TText`                                                                                                                                                                    |
+| Stable text    | `@simon_he/vue-tui`              | `TText`, `TLink`                                                                                                                                                           |
 | Stable input   | `@simon_he/vue-tui`              | `TInput`, `TList`, `TSelect`                                                                                                                                               |
 | Stable overlay | `@simon_he/vue-tui`              | `TDialog`                                                                                                                                                                  |
 | Vue extended   | `@simon_he/vue-tui/vue`          | `TAnchor`, `TFlow`, `TRenderPlane`, `TRenderLayer`, `TTransition`, `TInputBox`, `TPathPicker`, `TJsonEditor`, `TMultilineModal`, `TDebugOverlay`, composables, router APIs |

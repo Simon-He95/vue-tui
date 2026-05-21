@@ -14,6 +14,7 @@ import type {
 import type { ImeAnchor, LayoutContext, TerminalContext } from "../context.js";
 import type { TInputPlugin } from "./input/plugins/types.js";
 import {
+  computed,
   defineComponent,
   effectScope,
   h,
@@ -52,6 +53,12 @@ import { RenderStackKey } from "../render/context.js";
 import { createRenderManager } from "../render/render-manager.js";
 import { clearTextCaches } from "../utils/text.js";
 import { defaultTInputHostPlugin } from "./input/plugins/hostPlugin.js";
+import {
+  createBrowserLinkOpener,
+  normalizeTerminalLinkOpener,
+  TerminalLinkOpenerContextKey,
+  type TerminalLinkOpenerLike,
+} from "./link/host.js";
 import { TRenderPlane } from "./TRenderPlane.js";
 import { createCopyToastState } from "./terminal-provider/copy-toast.js";
 import { createTerminalPortals } from "./terminal-provider/portals.js";
@@ -97,6 +104,10 @@ export const TerminalProvider = defineComponent({
       type: Object as PropType<PathPickerProvider>,
       default: undefined,
     },
+    linkOpener: {
+      type: [Object, Function] as PropType<TerminalLinkOpenerLike>,
+      default: undefined,
+    },
     debugIme: { type: Boolean, default: false },
     debugTrace: { type: Boolean, default: false },
     domRendererOptions: {
@@ -128,6 +139,10 @@ export const TerminalProvider = defineComponent({
     const imeAnchor = shallowRef<ImeAnchor | null>(null);
     const copyToast = createCopyToastState();
     const renderer = shallowRef<DomRenderer | null>(null);
+    const defaultLinkOpener = createBrowserLinkOpener();
+    const linkOpener = computed(
+      () => normalizeTerminalLinkOpener(props.linkOpener) ?? defaultLinkOpener,
+    );
     const rendererCapabilities = shallowRef(DOM_RENDERER_CAPABILITIES);
     const events = shallowRef<EventManager | null>(null);
     const imeTimeline = shallowReactive<
@@ -297,6 +312,7 @@ export const TerminalProvider = defineComponent({
     provide(ImeAnchorContextKey, imeAnchor);
     provide(TInputPluginsContextKey, toRef(props, "inputPlugins") as any);
     provide(TPathPickerProviderContextKey, toRef(props, "pathPickerProvider") as any);
+    provide(TerminalLinkOpenerContextKey, linkOpener as any);
     const initialWidthProvider = props.widthProvider;
     watch(
       () => props.widthProvider,
