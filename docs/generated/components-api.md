@@ -335,6 +335,7 @@ Import: `@simon_he/vue-tui`
 | <code>border</code>         | <code>boolean</code>                                                       | <code>false</code>               | 否   | —    |
 | <code>style</code>          | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
 | <code>headerStyle</code>    | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
+| <code>borderStyle</code>    | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
 | <code>selectedStyle</code>  | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —    |
 | <code>emptyText</code>      | <code>string</code>                                                        | <code>&quot;No rows&quot;</code> | 否   | —    |
 

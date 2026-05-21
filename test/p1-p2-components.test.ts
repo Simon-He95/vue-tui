@@ -1505,6 +1505,67 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not select data table rows when selectable is false", async () => {
+    const rows = [{ id: "1", name: "Alpha" }];
+    const columns = [{ key: "name", label: "Name", width: 6 }];
+    const onRowSelect = vi.fn();
+    const onUpdateSelectedRowKey = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 8,
+          h: 3,
+          columns,
+          rows,
+          rowKey: "id",
+          onRowSelect,
+          "onUpdate:selectedRowKey": onUpdateSelectedRowKey,
+        }),
+      12,
+      4,
+    );
+
+    try {
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 2, bubbles: true }));
+      await nextTick();
+
+      expect(onRowSelect).not.toHaveBeenCalled();
+      expect(onUpdateSelectedRowKey).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("passes data table borderStyle to the table border", async () => {
+    const rows = [{ id: "1", name: "Alpha" }];
+    const columns = [{ key: "name", label: "Name", width: 6 }];
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 8,
+          h: 3,
+          columns,
+          rows,
+          border: true,
+          borderStyle: { fg: "redBright" },
+        }),
+      12,
+      4,
+    );
+
+    try {
+      expect(mounted.terminal.getCell(0, 1).style.fg).toBe("redBright");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("filters data table rows by formatted values", async () => {
     const rows = [
       { name: "Alpha", status: "ok" },

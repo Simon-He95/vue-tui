@@ -1,6 +1,8 @@
 import type { App, Component } from "vue";
 import { spawn } from "node:child_process";
+import { resolve } from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import { computed, defineComponent, h, onUnmounted, ref } from "vue";
 import {
   TAutocompleteInput,
@@ -239,11 +241,38 @@ function simple(name: string, render: () => unknown): Component {
   return defineComponent({ name: `${name}Demo`, setup: () => render });
 }
 
+export function normalizeOpenHref(href: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return null;
+  }
+
+  if (url.protocol === "http:" || url.protocol === "https:" || url.protocol === "mailto:") {
+    return url.href;
+  }
+
+  if (url.protocol === "vscode:" && url.href === new URL(vscodeHref()).href) {
+    return url.href;
+  }
+
+  return null;
+}
+
 function openExternalHref(href: string): boolean {
+  const normalized = normalizeOpenHref(href);
+  if (!normalized) return false;
+
   const command =
-    process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", href] : [href];
-  const child = spawn(command, args, { detached: true, stdio: "ignore" });
+    process.platform === "darwin"
+      ? "open"
+      : process.platform === "win32"
+        ? "rundll32.exe"
+        : "xdg-open";
+  const args =
+    process.platform === "win32" ? ["url.dll,FileProtocolHandler", normalized] : [normalized];
+  const child = spawn(command, args, { detached: true, stdio: "ignore", shell: false });
   child.on("error", () => {});
   child.unref();
   return true;
@@ -1909,4 +1938,8 @@ async function main(): Promise<void> {
   mountGallery(name, smoke);
 }
 
-void main();
+function isMainModule(): boolean {
+  return process.argv[1] ? import.meta.url === pathToFileURL(resolve(process.argv[1])).href : false;
+}
+
+if (isMainModule()) void main();

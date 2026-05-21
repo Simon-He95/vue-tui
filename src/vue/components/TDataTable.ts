@@ -83,6 +83,7 @@ export const TDataTable = defineComponent({
     border: { type: Boolean, default: false },
     style: { type: Object as PropType<Style>, default: undefined },
     headerStyle: { type: Object as PropType<Style>, default: undefined },
+    borderStyle: { type: Object as PropType<Style>, default: undefined },
     selectedStyle: { type: Object as PropType<Style>, default: undefined },
     emptyText: { type: String, default: "No rows" },
   },
@@ -137,7 +138,8 @@ export const TDataTable = defineComponent({
     function select(row: TTableRow, index: number): void {
       const originalIndex = originalIndexAt(index);
       const key = rowKey(row, originalIndex, props.rowKey as any);
-      if (props.selectable) emit("update:selectedRowKey", key);
+      if (!props.selectable) return;
+      emit("update:selectedRowKey", key);
       emit("rowSelect", { row, index, originalIndex, key });
     }
 
@@ -165,6 +167,7 @@ export const TDataTable = defineComponent({
         border: props.border,
         style: props.style,
         headerStyle: props.headerStyle,
+        borderStyle: props.borderStyle,
         selectedStyle: props.selectedStyle,
         emptyText: props.emptyText,
         headerFocusable: props.sortable,

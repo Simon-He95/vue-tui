@@ -256,7 +256,7 @@
 
 ## TDataTable
 
-`TDataTable` 在 `TTable` 上增加受控排序、过滤和行选择；点击表头会 emit `sortChange` / `update:sortBy` / `update:sortDirection`。`rowKey` 函数收到的 `index` 是原始 rows index，排序/过滤后仍保持行 identity。
+`TDataTable` 在 `TTable` 上增加受控排序、过滤和行选择；点击表头会 emit `sortChange` / `update:sortBy` / `update:sortDirection`。`rowKey` 函数收到的 `index` 是原始 rows index，排序/过滤后仍保持行 identity。列 `format` 会影响显示和过滤匹配，排序使用 `row[sortBy]` 的原始值。
 
 ```vue
 <TDataTable
