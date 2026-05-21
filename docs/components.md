@@ -14,22 +14,22 @@
 | Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition`                                               |
 | Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                  |
 | Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap` |
-| Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                                                    |
+| Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                 |
 
 下面的组件速读按用途分组，不代表 root entrypoint 导出。每个组件的 primary import 以生成的 [组件 API](/generated/components-api) 为准。
 
 ## 组件速读
 
-| 类别          | 组件                                                                                                                                                                             | 典型用途                                         | 适配性判断                                                 |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------- |
-| Root          | `TerminalProvider`                                                                                                                                                               | 创建 terminal / renderer / event manager 上下文  | 通用，适合所有宿主                                         |
-| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                   | 布局、裁剪、层级、分层组合                       | 通用，和 CLI 业务无关                                      |
-| Text / Action | `TText` `TLink` `TTransition`                                                                                                                                                    | 文本渲染、链接操作、状态切换、动画插值           | 通用                                                       |
-| Input         | `TInput` `TInputBox` `TJsonEditor`                                                                                                                                               | prompt、表单、结构化文本编辑                     | 通用，但推荐把补全/校验放到插件层                          |
-| Pickers       | `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择        | `TPathPicker` 本体可复用，路径语义由 provider 注入         |
-| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                                                                                                      | 对话框、详情查看、调试覆盖层                     | 通用，适合多种宿主                                         |
-| Navigation    | `TRouterView` + `createTerminalRouter()`                                                                                                                                         | 多页面 TUI / shell                               | 通用                                                       |
-| Agent Chrome  | `TToolCallView`                                                                                                                                                                  | tool call 折叠/展开头、状态点、collapsed preview | 默认对齐 best-agent 风格，可通过 style props 或 slots 替换 |
+| 类别          | 组件                                                                                                                                                                             | 典型用途                                        | 适配性判断                                         |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| Root          | `TerminalProvider`                                                                                                                                                               | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
+| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                   | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
+| Text / Action | `TText` `TLink` `TTransition`                                                                                                                                                    | 文本渲染、链接操作、状态切换、动画插值          | 通用                                               |
+| Input         | `TInput` `TInputBox` `TJsonEditor`                                                                                                                                               | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
+| Pickers       | `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择       | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                                                                                                      | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
+| Navigation    | `TRouterView` + `createTerminalRouter()`                                                                                                                                         | 多页面 TUI / shell                              | 通用                                               |
+| Agent Chrome  | `TThinkingView` `TUserMessageView` `TToolCallView`                                                                                                                               | thinking/user/tool-call transcript chrome       | 默认对齐 best-agent 风格，可通过 style props 覆盖  |
 
 如果你更关心“哪些地方还应该继续做插件化”，建议配合阅读：[扩展性与插件化](./extensibility.md)。
 
@@ -45,7 +45,7 @@
 `TerminalProvider` 提供 `defaultStyle` 作为默认渲染样式；组件的 `style` 传入后会覆盖默认值（通常是整行/整块生效）。
 未显式传入时，`defaultStyle` 仍是普通可变对象；如果要触发依赖它的组件重新绘制，推荐替换整个对象，而不是原地修改字段。
 
-`TToolCallView` 这种 agent/console 组件保留通用数据边界：只接收 `title`、`status`、`collapsed`、`suffix`、`preview` 等渲染语义，不接收 provider/session/tool schema。默认样式对齐 best-agent CLI 的 tool_call header；宿主可以用 `style`、`mutedStyle`、`titleStyle`、`suffixStyle`、`previewStyle` 等 props 覆盖颜色，也可以用 `header` / `preview` slots 完全替换行内容。
+`TThinkingView`、`TUserMessageView`、`TToolCallView` 这种 agent/console 组件保留通用数据边界：只接收 `title`、`content`、`status`、`collapsed`、`suffix`、`preview` 等渲染语义，不接收 provider/session/tool schema。默认样式对齐 best-agent CLI 的 transcript chrome；宿主可以用各组件的 `style`、`headerStyle`、`contentStyle`、`titleStyle`、`suffixStyle`、`previewStyle` 等 props 覆盖颜色。
 
 ### zIndex（层级）
 
@@ -170,7 +170,7 @@
 
 - `host`: emit `activate`，阻止 DOM native anchor 默认行为，并调用 `linkOpener`
 - `event`: emit `activate`，阻止 DOM native anchor 默认行为，不调用 `linkOpener`
-- `native`: emit `activate`，不调用 `linkOpener`，允许 renderer/native link activation；如果 `modifierClick` 不满足，会阻止 native click
+- `native`: click emit `activate` 并允许 renderer/native link activation；keyboard emit `activate` 后在有 `linkOpener` 时作为 terminal focus fallback 打开；如果 `modifierClick` 不满足，会阻止 native click
 - `none`: 只渲染文本，不写入 href metadata，不激活
 
 CLI/headless 的 `linkOpener` 会收到 `/docs`、`#section` 这类 relative href；宿主应按自己的策略重新解析或拒绝。
@@ -192,7 +192,7 @@ CLI/headless 的 `linkOpener` 会收到 `/docs`、`#section` 这类 relative hre
 ### Events
 
 - `activate`: `{ href, label, source }`
-- `open`: `{ href, label, source }`，仅 host opener 返回 truthy 时触发
+- `open`: `{ href, label, source }`，host opener 接受/尝试打开请求时触发
 - `invalidHref`: `{ href, reason }`
 - `click` / `keydown` / `focus` / `blur`
 

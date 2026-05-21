@@ -63,6 +63,46 @@ describe("TLink", () => {
     }
   });
 
+  it("does not open when click handler prevents default", async () => {
+    const opener = vi.fn(() => true);
+    const onActivate = vi.fn();
+    const onClick = vi.fn((event: { preventDefault: () => void }) => {
+      event.preventDefault();
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          onActivate,
+          onClick,
+        }),
+      20,
+      2,
+      { linkOpener: opener },
+    );
+
+    try {
+      const click = new MouseEvent("click", {
+        clientX: 0,
+        clientY: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      mounted.container()!.dispatchEvent(click);
+      await Promise.resolve();
+
+      expect(click.defaultPrevented).toBe(true);
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onActivate).not.toHaveBeenCalled();
+      expect(opener).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("supports keyboard activation when focused", async () => {
     const opener = vi.fn(() => true);
     const mounted = await mountTerminal(
@@ -105,6 +145,101 @@ describe("TLink", () => {
     }
   });
 
+  it("does not open when keydown handler prevents default", async () => {
+    const opener = vi.fn(() => true);
+    const onActivate = vi.fn();
+    const onKeydown = vi.fn((event: { preventDefault: () => void }) => {
+      event.preventDefault();
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "mailto:test@example.com",
+          label: "Mail",
+          onActivate,
+          onKeydown,
+        }),
+      20,
+      2,
+      { linkOpener: opener },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(event);
+      await Promise.resolve();
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(onKeydown).toHaveBeenCalledTimes(1);
+      expect(onActivate).not.toHaveBeenCalled();
+      expect(opener).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses host opener for native keyboard activation", async () => {
+    const opener = vi.fn(() => true);
+    const onOpen = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          openMode: "native",
+          onOpen,
+        }),
+      20,
+      2,
+      { linkOpener: opener },
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(event);
+      await Promise.resolve();
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(opener).toHaveBeenCalledWith("https://example.com/", {
+        source: "key",
+        label: "Example",
+        cellX: undefined,
+        cellY: undefined,
+      });
+      expect(onOpen).toHaveBeenCalledWith({
+        href: "https://example.com/",
+        label: "Example",
+        source: "key",
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("emits activation without opening in event mode", async () => {
     const opener = vi.fn(() => true);
     const onActivate = vi.fn();
@@ -137,6 +272,46 @@ describe("TLink", () => {
         source: "click",
       });
       expect(opener).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("prevents native DOM link activation when host mode opens", async () => {
+    const opener = vi.fn(() => true);
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          openMode: "host",
+          modifierClick: "none",
+        }),
+      20,
+      2,
+      { domRendererOptions: { links: true }, linkOpener: opener },
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+
+      const anchor = mounted.container()!.querySelector("a");
+      expect(anchor?.getAttribute("href")).toBe("https://example.com/");
+
+      const click = new MouseEvent("click", {
+        clientX: 1,
+        clientY: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      expect(anchor!.dispatchEvent(click)).toBe(false);
+      await Promise.resolve();
+
+      expect(click.defaultPrevented).toBe(true);
+      expect(opener).toHaveBeenCalledTimes(1);
     } finally {
       mounted.unmount();
     }
@@ -295,16 +470,14 @@ describe("TLink", () => {
 
       try {
         expect(() => {
-          mounted
-            .container()!
-            .dispatchEvent(
-              new MouseEvent("click", {
-                clientX: 0,
-                clientY: 0,
-                bubbles: true,
-                cancelable: true,
-              }),
-            );
+          mounted.container()!.dispatchEvent(
+            new MouseEvent("click", {
+              clientX: 0,
+              clientY: 0,
+              bubbles: true,
+              cancelable: true,
+            }),
+          );
         }).not.toThrow();
         await Promise.resolve();
         await Promise.resolve();

@@ -300,8 +300,10 @@ describe("package exports", () => {
     expect(experimental.createTLogLevelPlugin).toBeTruthy();
     expect(experimental.tlogDefaultPreset).toBeTruthy();
     expect(agent.TAgentTranscript).toBe(experimental.TTranscriptView);
+    expect(agent.TThinkingView).toBeTruthy();
     expect(agent.TToolCallView).toBeTruthy();
     expect(agent.TToolLogView).toBe(experimental.TLogView);
+    expect(agent.TUserMessageView).toBeTruthy();
     expect(agent.TVirtualMarkdown).toBe(markdown.TVirtualMarkdown);
     expect(agent.createMarkdownBlockSource).toBe(markdown.createMarkdownBlockSource);
   });
@@ -651,8 +653,10 @@ describe("package exports", () => {
     );
     expect(experimental.tlogDefaultPreset).toBeTruthy();
     expect(agent.TAgentTranscript).toBe(experimental.TTranscriptView);
+    expect(agent.TThinkingView).toBeTruthy();
     expect(agent.TToolCallView).toBeTruthy();
     expect(agent.TToolLogView).toBe(experimental.TLogView);
+    expect(agent.TUserMessageView).toBeTruthy();
     expect("TMarkdownText" in experimentalCjs).toBe(false);
     expect("TVirtualMarkdown" in experimentalCjs).toBe(false);
     expect(experimentalCjs.TVirtualList).toBeTruthy();
@@ -679,8 +683,10 @@ describe("package exports", () => {
     );
     expect(experimentalCjs.tlogDefaultPreset).toBeTruthy();
     expect(agentCjs.TAgentTranscript).toBeTruthy();
+    expect(agentCjs.TThinkingView).toBeTruthy();
     expect(agentCjs.TToolCallView).toBeTruthy();
     expect(agentCjs.TToolLogView).toBeTruthy();
+    expect(agentCjs.TUserMessageView).toBeTruthy();
 
     const { h, nextTick, ref } = require("vue");
     const log = experimentalCjs.createAppendOnlyLogStore({ maxLines: 4 });

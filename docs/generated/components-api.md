@@ -413,24 +413,24 @@ Import: `@simon_he/vue-tui`
 
 ### Props
 
-| 名称                        | 类型                            | 默认值                                          | 必填 | 说明 |
-| --------------------------- | ------------------------------- | ----------------------------------------------- | ---- | ---- |
-| <code>x</code>              | <code>number</code>             | —                                               | 是   | —    |
-| <code>y</code>              | <code>number</code>             | —                                               | 是   | —    |
-| <code>w</code>              | <code>number</code>             | <code>undefined</code>                          | 否   | —    |
-| <code>h</code>              | <code>number</code>             | <code>1</code>                                  | 否   | —    |
-| <code>zIndex</code>         | <code>number</code>             | <code>0</code>                                  | 否   | —    |
-| <code>href</code>           | <code>string</code>             | —                                               | 是   | —    |
-| <code>label</code>          | <code>string</code>             | <code>undefined</code>                          | 否   | —    |
-| <code>style</code>          | <code>Style</code>              | <code>undefined</code>                          | 否   | —    |
-| <code>hoverStyle</code>     | <code>Style</code>              | <code>undefined</code>                          | 否   | —    |
-| <code>focusStyle</code>     | <code>Style</code>              | <code>undefined</code>                          | 否   | —    |
-| <code>activeStyle</code>    | <code>Style</code>              | <code>undefined</code>                          | 否   | —    |
-| <code>disabled</code>       | <code>boolean</code>            | <code>false</code>                              | 否   | —    |
-| <code>openMode</code>       | <code>TLinkOpenMode</code>      | <code>&quot;host&quot;</code>                   | 否   | —    |
-| <code>activationKeys</code> | <code>readonly string[]</code>  | <code>() =&gt; DEFAULT\_ACTIVATION\_KEYS</code> | 否   | —    |
-| <code>modifierClick</code>  | <code>TLinkModifierClick</code> | <code>&quot;none&quot;</code>                   | 否   | —    |
-| <code>autoFocus</code>      | <code>boolean</code>            | <code>false</code>                              | 否   | —    |
+| 名称                        | 类型                            | 默认值                                        | 必填 | 说明 |
+| --------------------------- | ------------------------------- | --------------------------------------------- | ---- | ---- |
+| <code>x</code>              | <code>number</code>             | —                                             | 是   | —    |
+| <code>y</code>              | <code>number</code>             | —                                             | 是   | —    |
+| <code>w</code>              | <code>number</code>             | <code>undefined</code>                        | 否   | —    |
+| <code>h</code>              | <code>number</code>             | <code>1</code>                                | 否   | —    |
+| <code>zIndex</code>         | <code>number</code>             | <code>0</code>                                | 否   | —    |
+| <code>href</code>           | <code>string</code>             | —                                             | 是   | —    |
+| <code>label</code>          | <code>string</code>             | <code>undefined</code>                        | 否   | —    |
+| <code>style</code>          | <code>Style</code>              | <code>undefined</code>                        | 否   | —    |
+| <code>hoverStyle</code>     | <code>Style</code>              | <code>undefined</code>                        | 否   | —    |
+| <code>focusStyle</code>     | <code>Style</code>              | <code>undefined</code>                        | 否   | —    |
+| <code>activeStyle</code>    | <code>Style</code>              | <code>undefined</code>                        | 否   | —    |
+| <code>disabled</code>       | <code>boolean</code>            | <code>false</code>                            | 否   | —    |
+| <code>openMode</code>       | <code>TLinkOpenMode</code>      | <code>&quot;host&quot;</code>                 | 否   | —    |
+| <code>activationKeys</code> | <code>readonly string[]</code>  | <code>() =&gt; DEFAULT_ACTIVATION_KEYS</code> | 否   | —    |
+| <code>modifierClick</code>  | <code>TLinkModifierClick</code> | <code>&quot;none&quot;</code>                 | 否   | —    |
+| <code>autoFocus</code>      | <code>boolean</code>            | <code>false</code>                            | 否   | —    |
 
 ### Events
 

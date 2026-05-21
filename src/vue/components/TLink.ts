@@ -154,7 +154,9 @@ export const TLink = defineComponent({
 
       const payload = { href, label: label.value, source };
       emit("activate", payload);
-      if (props.openMode !== "host") return;
+      if (props.openMode !== "host" && !(props.openMode === "native" && source === "key")) {
+        return;
+      }
 
       const opener = linkOpener.value;
       if (!opener) return;
@@ -184,6 +186,8 @@ export const TLink = defineComponent({
 
     function onClick(event: TerminalPointerEvent): void {
       emit("click", event);
+      if (event.defaultPrevented) return;
+
       const modifierAllowed = allowsModifierClick(event, props.modifierClick);
       if (shouldSuppressNativeClick(modifierAllowed)) event.preventDefault();
       if (!modifierAllowed) return;
@@ -192,6 +196,8 @@ export const TLink = defineComponent({
 
     function onKeydown(event: TerminalKeyboardEvent): void {
       emit("keydown", event);
+      if (event.defaultPrevented) return;
+
       if (!isActivationKey(event, props.activationKeys)) return;
       if (props.openMode === "host" || props.openMode === "event") event.preventDefault();
       activate("key", event);

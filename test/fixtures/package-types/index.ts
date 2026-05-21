@@ -53,8 +53,10 @@ import {
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import {
   TAgentTranscript,
+  TThinkingView,
   TToolCallView,
   TToolLogView,
+  TUserMessageView,
   type TToolCallViewSlotProps,
 } from "@simon_he/vue-tui/agent";
 
@@ -83,8 +85,10 @@ console.log(
   TLogView,
   TVirtualList,
   TAgentTranscript,
+  TThinkingView,
   TToolCallView,
   TToolLogView,
+  TUserMessageView,
   createTerminalApp,
   createStdoutRenderer,
   createStdinDriver,
