@@ -62,12 +62,13 @@ export const TContextMenu = defineComponent({
     return () => {
       if (!props.modelValue) return null;
       const hgt = Math.max(2, props.items.length + 2);
+      const activeIndex = selectedIndex();
       return h(
         TBox as any,
         { x: props.x, y: props.y, w: props.w, h: hgt, zIndex: props.zIndex, style: props.style },
         () =>
           props.items.map((item, index) => {
-            const active = index === props.selectedIndex;
+            const active = index === activeIndex;
             const text = item.shortcut ? `${item.label} ${item.shortcut}` : item.label;
             return h(
               TView as any,

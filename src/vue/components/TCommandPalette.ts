@@ -54,6 +54,35 @@ export const TCommandPalette = defineComponent({
         );
       });
     });
+    const scrollOffset = ref(0);
+
+    function listHeight(): number {
+      const dialogH = Math.max(8, Math.floor(props.h));
+      const innerH = Math.max(1, dialogH - 4);
+      return Math.max(1, innerH - 3);
+    }
+
+    function selectedIndex(): number {
+      const len = filteredItems.value.length;
+      return len > 0 ? ((props.selectedIndex % len) + len) % len : 0;
+    }
+
+    function ensureSelectedVisible(index = selectedIndex()): void {
+      const len = filteredItems.value.length;
+      if (len === 0) {
+        scrollOffset.value = 0;
+        return;
+      }
+
+      const visibleLen = listHeight();
+      const maxOffset = Math.max(0, len - visibleLen);
+      if (index < scrollOffset.value) scrollOffset.value = index;
+      else if (index >= scrollOffset.value + visibleLen) {
+        scrollOffset.value = Math.min(maxOffset, index - visibleLen + 1);
+      } else {
+        scrollOffset.value = Math.min(scrollOffset.value, maxOffset);
+      }
+    }
 
     watch(
       () => [props.modelValue, props.initialQuery] as const,
@@ -63,9 +92,16 @@ export const TCommandPalette = defineComponent({
       { immediate: true },
     );
 
+    watch(
+      () => [filteredItems.value.length, props.selectedIndex, props.h] as const,
+      () => ensureSelectedVisible(),
+      { immediate: true },
+    );
+
     function setSelected(index: number): void {
       const len = filteredItems.value.length;
       const next = len > 0 ? ((index % len) + len) % len : 0;
+      ensureSelectedVisible(next);
       emit("update:selectedIndex", next);
     }
 
@@ -75,7 +111,7 @@ export const TCommandPalette = defineComponent({
     }
 
     function selectCurrent(): void {
-      const item = filteredItems.value[props.selectedIndex] ?? null;
+      const item = filteredItems.value[selectedIndex()] ?? null;
       if (!item || item.disabled) return;
       emit("select", item);
     }
@@ -104,8 +140,12 @@ export const TCommandPalette = defineComponent({
       const innerW = Math.max(1, dialogW - 4);
       const innerH = Math.max(1, dialogH - 4);
       const listY = 2;
-      const listH = Math.max(1, innerH - 3);
-      const visibleItems = filteredItems.value.slice(0, listH);
+      const listH = listHeight();
+      const activeIndex = selectedIndex();
+      const visibleItems = filteredItems.value.slice(
+        scrollOffset.value,
+        scrollOffset.value + listH,
+      );
       const children = [
         h(TInput as any, {
           key: "input",
@@ -139,12 +179,13 @@ export const TCommandPalette = defineComponent({
       } else {
         for (let i = 0; i < visibleItems.length; i++) {
           const item = visibleItems[i]!;
-          const selected = i === props.selectedIndex;
+          const itemIndex = scrollOffset.value + i;
+          const selected = itemIndex === activeIndex;
           const detail = props.showRowDetails && item.detail ? `  ${item.detail}` : "";
           const label = `${selected ? "› " : "  "}${sanitizeInlineText(item.label)}${sanitizeInlineText(detail)}`;
           children.push(
             h(TText as any, {
-              key: `item:${i}:${item.label}`,
+              key: `item:${itemIndex}:${item.label}`,
               x: 0,
               y: listY + i,
               w: innerW,

@@ -240,6 +240,7 @@ const DialogSurface = defineComponent({
       type: [Object, Function] as PropType<Component>,
       required: true,
     },
+    contentVersion: { type: Number, default: 0 },
     buttons: { type: Array as PropType<DialogButton[]>, default: () => [] },
     onRequestClose: { type: Function as PropType<() => void>, required: true },
     onDialogFocus: {
@@ -698,7 +699,7 @@ const DialogSurface = defineComponent({
                 value: "",
                 style: contentStyle,
               }),
-              h(props.content as any),
+              h(props.content as any, { contentVersion: props.contentVersion }),
             ],
           ),
       );
@@ -966,11 +967,15 @@ export const TDialog = defineComponent({
 
     const Content = defineComponent({
       name: "TDialogContent",
-      setup() {
+      props: {
+        contentVersion: { type: Number, default: 0 },
+      },
+      setup(contentProps) {
         provide(DialogContextKey, true);
         let pointerDownButton: { index: number; cellX: number; cellY: number } | null = null;
         let suppressClickButtonIndex: number | null = null;
         return () => {
+          void contentProps.contentVersion;
           const children = slots.default?.() ?? null;
           if (!props.buttons.length) return children;
 
@@ -1081,6 +1086,7 @@ export const TDialog = defineComponent({
 
     const handle = shallowRef<TerminalRuntimeHandle | null>(null);
     const stableButtons = shallowRef(props.buttons);
+    let contentVersion = 0;
 
     function requestClose(): void {
       skipNextCloseEmit.value = true;
@@ -1182,6 +1188,7 @@ export const TDialog = defineComponent({
           tabMode: props.tabMode,
           buttons: stableButtons.value,
           content: Content,
+          contentVersion: contentVersion++,
           onRequestClose: requestClose,
           onDialogFocus,
           onDialogBlur,
@@ -1224,6 +1231,7 @@ export const TDialog = defineComponent({
         tabMode: props.tabMode,
         buttons: stableButtons.value,
         content: Content,
+        contentVersion: contentVersion++,
         onRequestClose: requestClose,
         onDialogFocus,
         onDialogBlur,
@@ -1262,6 +1270,7 @@ export const TDialog = defineComponent({
         tabMode: props.tabMode,
         buttons: props.buttons,
         content: Content,
+        contentVersion: contentVersion++,
         onRequestClose: requestClose,
         onDialogFocus,
         onDialogBlur,

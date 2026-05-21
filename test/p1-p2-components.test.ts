@@ -4,6 +4,7 @@ import {
   TAutocompleteInput,
   TBreadcrumb,
   TCheckbox,
+  TCommandPalette,
   TContextMenu,
   TDataTable,
   TFormField,
@@ -18,7 +19,7 @@ import {
   TTooltip,
   TTree,
 } from "../src/index.js";
-import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
+import { defineComponent, h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
 describe("P1/P2 public components", () => {
   it("renders table, data table, and tree primitives", async () => {
@@ -344,6 +345,146 @@ describe("P1/P2 public components", () => {
 
       expect(onSelect).toHaveBeenCalledWith({ item: items[1], index: 1 });
       expect(open.value).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("renders the clamped context menu selection as active", async () => {
+    const items = [
+      { id: "open", label: "Open Link" },
+      { id: "copy", label: "Copy Link" },
+    ];
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TContextMenu, {
+          modelValue: true,
+          x: 0,
+          y: 0,
+          w: 18,
+          items,
+          selectedIndex: 99,
+          onSelect,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      expect(mounted.terminal.getCell(1, 1).style.inverse).not.toBe(true);
+      expect(mounted.terminal.getCell(1, 2).style.inverse).toBe(true);
+
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 2, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith({ item: items[1], index: 1 });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps command palette keyboard selection visible while scrolling", async () => {
+    const selectedIndex = ref(0);
+    const items = Array.from({ length: 6 }, (_, index) => ({ label: `Command ${index}` }));
+    const onSelect = vi.fn();
+    const PaletteHost = defineComponent({
+      name: "CommandPaletteScrollHost",
+      setup() {
+        return () =>
+          h(TCommandPalette, {
+            modelValue: true,
+            w: 32,
+            h: 10,
+            items,
+            selectedIndex: selectedIndex.value,
+            "onUpdate:selectedIndex": (index: number) => (selectedIndex.value = index),
+            onSelect,
+          });
+      },
+    });
+    const mounted = await mountTerminal(() => h(PaletteHost), 50, 14);
+
+    try {
+      const container = mounted.container()!;
+      for (let i = 0; i < 3; i++) {
+        container.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "ArrowDown",
+            code: "ArrowDown",
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        await nextTick();
+      }
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()!.flushNow();
+
+      expect(selectedIndex.value).toBe(3);
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("› Command 3");
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith(items[3]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses original row indexes for default data table selection keys", async () => {
+    const rows = [
+      { name: "Alpha", rank: 1 },
+      { name: "Beta", rank: 2 },
+    ];
+    const columns = [
+      { key: "name", label: "Name", width: 6 },
+      { key: "rank", label: "Rank", width: 4 },
+    ];
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns,
+          rows,
+          sortable: true,
+          sortBy: "rank",
+          sortDirection: "desc",
+          selectedRowKey: 0,
+        }),
+      16,
+      5,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[2]).toContain("Beta");
+      expect(lines[3]).toContain("Alpha");
+      expect(mounted.terminal.getCell(0, 2).style.inverse).not.toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.inverse).toBe(true);
     } finally {
       mounted.unmount();
     }

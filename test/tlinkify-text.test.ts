@@ -98,6 +98,10 @@ describe("TLinkifyText", () => {
       { text: "see " },
       { text: "/docs", href: "/docs" },
     ]);
+    expect(linkifyTextSegments("src/foo.ts", { allowRelative: true })).toEqual([
+      { text: "src/foo.ts" },
+    ]);
+    expect(linkifyTextSegments("3/4", { allowRelative: true })).toEqual([{ text: "3/4" }]);
   });
 
   it("keeps trailing punctuation outside link hrefs", () => {

@@ -2,7 +2,7 @@ import { afterEach, beforeAll, expect, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import type { Terminal } from "../src/index.js";
 import type { EventManager } from "../src/runtime.js";
-import type { TerminalRuntime } from "../src/vue.js";
+import type { TerminalRuntime, TerminalScheduler } from "../src/vue.js";
 
 if (!(globalThis as any).document) {
   const { Window } = await import("happy-dom");
@@ -103,6 +103,7 @@ type Mounted = {
   events: () => EventManager | null;
   container: () => HTMLElement | null;
   runtime: () => TerminalRuntime | null;
+  scheduler: () => TerminalScheduler | null;
   unmount: () => void;
 };
 
@@ -138,6 +139,7 @@ async function mountTerminal(
     events: null as EventManager | null,
     container: null as HTMLElement | null,
     runtime: null as TerminalRuntime | null,
+    scheduler: null as TerminalScheduler | null,
   };
 
   const Expose = defineComponent({
@@ -146,6 +148,7 @@ async function mountTerminal(
       const ctx = useTerminal();
       exposed.terminal = ctx.terminal;
       exposed.runtime = ctx.runtime;
+      exposed.scheduler = ctx.scheduler;
       watchEffect(() => {
         exposed.events = ctx.events.value;
         exposed.container = ctx.renderer.value?.container ?? null;
@@ -180,6 +183,7 @@ async function mountTerminal(
     events: () => exposed.events,
     container: () => exposed.container,
     runtime: () => exposed.runtime,
+    scheduler: () => exposed.scheduler,
     unmount: () => {
       app.unmount();
       root.remove();

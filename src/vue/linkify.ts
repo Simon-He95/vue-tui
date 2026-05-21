@@ -17,6 +17,7 @@ const DEFAULT_PROTOCOLS: readonly TLinkifyProtocol[] = Object.freeze(["http", "h
 const URL_TEXT_RE = /(?:https?:\/\/|mailto:|file:\/\/|\.{1,2}\/|\/|#|\?)[^\s<>"'`]+/giu;
 const TRAILING_PUNCTUATION_RE = /[.,;:!?]/u;
 const TRAILING_CLOSER_RE = /[)\]}]/u;
+const TEXT_BOUNDARY_RE = /[\s([{<]/u;
 
 function protocolSet(options: TLinkifyOptions): Set<TLinkifyProtocol> {
   return new Set(options.protocols ?? DEFAULT_PROTOCOLS);
@@ -39,6 +40,10 @@ function isRelativeCandidate(raw: string): boolean {
     raw.startsWith("#") ||
     raw.startsWith("?")
   );
+}
+
+function hasTextBoundary(text: string, index: number): boolean {
+  return index === 0 || TEXT_BOUNDARY_RE.test(text[index - 1] ?? "");
 }
 
 function lastChar(value: string): string {
@@ -113,6 +118,8 @@ export function linkifyTextSegments(
     }
 
     const { body, suffix } = splitTrailingPunctuation(raw);
+    if (isRelativeCandidate(body) && !hasTextBoundary(text, match.index)) continue;
+
     const href = normalizeLinkifiedHref(body, options);
     if (!href) continue;
 

@@ -16,6 +16,11 @@ export type TDataTableRowSelectPayload = Readonly<{
   key: unknown;
 }>;
 
+type DataRow = Readonly<{
+  row: TTableRow;
+  originalIndex: number;
+}>;
+
 function rowKey(
   row: TTableRow,
   index: number,
@@ -75,10 +80,13 @@ export const TDataTable = defineComponent({
     rowSelect: (_payload: TDataTableRowSelectPayload) => true,
   },
   setup(props, { emit }) {
+    const indexedRows = computed<readonly DataRow[]>(() =>
+      props.rows.map((row, originalIndex) => ({ row, originalIndex })),
+    );
     const filteredRows = computed(() => {
-      if (!props.filterable || !props.filter.trim()) return props.rows;
+      if (!props.filterable || !props.filter.trim()) return indexedRows.value;
       const query = props.filter.trim().toLowerCase();
-      return props.rows.filter((row) =>
+      return indexedRows.value.filter(({ row }) =>
         props.columns.some((column) =>
           String(row[column.key] ?? "")
             .toLowerCase()
@@ -91,11 +99,12 @@ export const TDataTable = defineComponent({
       const rows = [...filteredRows.value];
       if (!props.sortable || !props.sortBy) return rows;
       rows.sort((a, b) => {
-        const result = compareValues(a[props.sortBy], b[props.sortBy]);
+        const result = compareValues(a.row[props.sortBy], b.row[props.sortBy]);
         return props.sortDirection === "desc" ? -result : result;
       });
       return rows;
     });
+    const tableRows = computed(() => sortedRows.value.map(({ row }) => row));
 
     const columns = computed(() =>
       props.columns.map((column) => {
@@ -105,8 +114,17 @@ export const TDataTable = defineComponent({
       }),
     );
 
+    function originalIndexAt(index: number): number {
+      return sortedRows.value[index]?.originalIndex ?? index;
+    }
+
+    function defaultRowKey(_row: TTableRow, index: number): unknown {
+      return originalIndexAt(index);
+    }
+
     function select(row: TTableRow, index: number): void {
-      const key = rowKey(row, index, props.rowKey as any);
+      const keyIndex = props.rowKey == null ? originalIndexAt(index) : index;
+      const key = rowKey(row, keyIndex, props.rowKey as any);
       if (props.selectable) emit("update:selectedRowKey", key);
       emit("rowSelect", { row, index, key });
     }
@@ -129,8 +147,8 @@ export const TDataTable = defineComponent({
         h: props.h,
         zIndex: props.zIndex,
         columns: columns.value,
-        rows: sortedRows.value,
-        rowKey: props.rowKey,
+        rows: tableRows.value,
+        rowKey: props.rowKey ?? defaultRowKey,
         selectedRowKey: props.selectedRowKey,
         border: props.border,
         style: props.style,
