@@ -109,6 +109,69 @@ describe("stdout renderer (wide emoji alignment)", () => {
     for (const fix of cjkFixes) expect(frame).not.toContain(fix);
   });
 
+  it("keeps table border closed with emoji in first and last visible column under stdout renderer", () => {
+    const firstColumnEmoji = "\u{1F600}";
+    const lastColumnEmoji = "\u2705";
+    const rows = buildMarkdownVisualRows(
+      [
+        "| Start | End |",
+        "|---|---|",
+        `| ${firstColumnEmoji} | ${lastColumnEmoji} |`,
+      ].join("\n"),
+      32,
+      createTuiMarkdownParser(),
+    );
+    const terminal = createTerminal({ cols: 32, rows: rows.length });
+
+    rows.forEach((row, y) => {
+      paintMarkdownVisualRow(terminal, row, {
+        x: 0,
+        y,
+        w: 32,
+        baseStyle: {},
+      });
+    });
+    terminal.commit();
+
+    let frame = "";
+    const renderer = createStdoutRenderer(terminal, {
+      output: {
+        isTTY: true,
+        write: (chunk) => {
+          frame += chunk;
+        },
+      },
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      trackResize: false,
+    });
+
+    renderer.render();
+    renderer.dispose();
+
+    const borderX = rows[0]!.segments.reduce((sum, segment) => sum + segment.cells, 0) - 1;
+    expect(terminal.getCell(borderX, 0).ch).toBe("╮");
+    expect(terminal.getCell(borderX, 1).ch).toBe("│");
+    expect(terminal.getCell(borderX, 2).ch).toBe("┤");
+    expect(terminal.getCell(borderX, rows.length - 1).ch).toBe("╯");
+
+    const expectedFixes: string[] = [];
+    for (let y = 0; y < rows.length; y++) {
+      for (let x = 0; x < 32; x++) {
+        const cell = terminal.getCell(x, y);
+        if (cell.continuation || (cell.ch !== firstColumnEmoji && cell.ch !== lastColumnEmoji)) {
+          continue;
+        }
+        expect(cell.width).toBe(2);
+        expectedFixes.push(`\u001B[${y + 1};${x + 1 + cell.width}H`);
+      }
+    }
+
+    expect(expectedFixes).toHaveLength(2);
+    for (const fix of expectedFixes) expect(frame).toContain(fix);
+  });
+
   it("realigns orphaned zero-width markdown table cells in stdout output", () => {
     const orphaned = [
       String.fromCodePoint(0x0301),
