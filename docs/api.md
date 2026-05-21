@@ -303,8 +303,8 @@ const app = createTerminalApp({
 - `<TCommandPalette />`：命令面板，过滤 `label/detail/keywords`，Enter select，Esc close
 - `<TCheckbox />` / `<TRadioGroup />` / `<TSwitch />` / `<TSlider />`：基础表单控件
 - `<TFormField />` / `<TPasswordInput />` / `<TAutocompleteInput />`：表单字段、密码输入、轻量补全
-- `<TContextMenu />` / `<TPopover />` / `<TTooltip />`：轻量 overlay
-- `<TStatusBar />` / `<TBreadcrumb />` / `<TKeyHint />`：状态栏、路径导航、快捷键提示
+- `/vue` 的 `<TContextMenu />` / `<TPopover />` / `<TTooltip />`：轻量 overlay
+- `/vue` 的 `<TStatusBar />` / `<TBreadcrumb />` / `<TKeyHint />`：状态栏、路径导航、快捷键提示
 
 ### 事件对齐（关键点）
 

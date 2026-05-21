@@ -435,6 +435,8 @@ export const TAutocompleteInput = defineComponent({
   emits: {
     "update:modelValue": (_value: string) => true,
     "update:highlightedIndex": (_index: number) => true,
+    input: (_value: string) => true,
+    change: (_value: string) => true,
     select: (_payload: TAutocompleteSelectPayload) => true,
   },
   setup(props, { emit }) {
@@ -465,6 +467,8 @@ export const TAutocompleteInput = defineComponent({
             placeholder: props.placeholder,
             style: inputStyle.value,
             "onUpdate:modelValue": (value: string) => emit("update:modelValue", value),
+            onInput: (value: string) => emit("input", value),
+            onChange: (value: string) => emit("change", value),
             onKeydown: (event: any) => {
               if (event.key === "ArrowDown") {
                 event.preventDefault?.();

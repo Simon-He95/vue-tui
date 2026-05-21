@@ -157,6 +157,8 @@ export const TDataTable = defineComponent({
         headerStyle: props.headerStyle,
         selectedStyle: props.selectedStyle,
         emptyText: props.emptyText,
+        headerFocusable: props.sortable,
+        rowFocusable: props.selectable,
         onRowClick: ({ row, index }: { row: TTableRow; index: number }) => select(row, index),
         onHeaderClick: ({ column }: { column: TTableColumn }) => sort(column),
       });

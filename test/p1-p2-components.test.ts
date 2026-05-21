@@ -2,24 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createTheme,
   TAutocompleteInput,
-  TBreadcrumb,
   TCheckbox,
   TCommandPalette,
-  TContextMenu,
   TDataTable,
   TFormField,
-  TKeyHint,
   TPasswordInput,
-  TPopover,
   TRadioGroup,
   TSlider,
-  TStatusBar,
   TSwitch,
   TTable,
   TText,
-  TTooltip,
   TTree,
 } from "../src/index.js";
+import { TBreadcrumb, TContextMenu, TKeyHint, TPopover, TStatusBar, TTooltip } from "../src/vue.js";
 import {
   createTerminalApp,
   defineComponent,
@@ -220,6 +215,98 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps static table rows and headers out of the focus flow by default", async () => {
+    const rows = [{ id: "1", name: "build" }];
+    const columns = [
+      { key: "id", label: "ID", width: 3 },
+      { key: "name", label: "Name", width: 8 },
+    ];
+    const mounted = await mountTerminal(
+      () => h(TTable, { x: 0, y: 0, w: 16, h: 3, columns, rows }),
+      20,
+      5,
+    );
+
+    try {
+      expect(
+        mounted
+          .events()!
+          .debugNodes()
+          .filter((node) => node.visible && node.focusable),
+      ).toHaveLength(0);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("opts table focusable rows and headers in explicitly", async () => {
+    const rows = [{ id: "1", name: "build" }];
+    const columns = [
+      { key: "id", label: "ID", width: 3 },
+      { key: "name", label: "Name", width: 8 },
+    ];
+    const mounted = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 3,
+          columns,
+          rows,
+          headerFocusable: true,
+          rowFocusable: true,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      const focusable = mounted
+        .events()!
+        .debugNodes()
+        .filter((node) => node.visible && node.focusable);
+      expect(focusable.some((node) => node.rect.y === 0)).toBe(true);
+      expect(focusable.some((node) => node.rect.y === 2)).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps data table sortable headers and selectable rows focusable", async () => {
+    const rows = [{ id: "1", name: "build" }];
+    const columns = [
+      { key: "id", label: "ID", width: 3 },
+      { key: "name", label: "Name", width: 8 },
+    ];
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 3,
+          columns,
+          rows,
+          sortable: true,
+          selectable: true,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      const focusable = mounted
+        .events()!
+        .debugNodes()
+        .filter((node) => node.visible && node.focusable);
+      expect(focusable.some((node) => node.rect.y === 0)).toBe(true);
+      expect(focusable.some((node) => node.rect.y === 2)).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("preserves TerminalProvider defaultStyle when public components add partial styles", async () => {
     const mounted = await mountTerminal(
       () => [
@@ -388,6 +475,49 @@ describe("P1/P2 public components", () => {
       expect(lines[6]).toContain("apricot");
       expect(mounted.terminal.getCell(22, 0).style.fg).toBe("white");
       expect(mounted.terminal.getCell(22, 2).style.fg).toBe("white");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("forwards autocomplete input and change events from the inner input", async () => {
+    const value = ref("");
+    const inputs: string[] = [];
+    const changes: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          modelValue: value.value,
+          "onUpdate:modelValue": (next: string) => (value.value = next),
+          onInput: (next: string) => inputs.push(next),
+          onChange: (next: string) => changes.push(next),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      await nextTick();
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "a", code: "KeyA", bubbles: true }),
+      );
+      await nextTick();
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }),
+      );
+      await nextTick();
+
+      expect(value.value).toBe("a");
+      expect(inputs).toEqual(["a"]);
+      expect(changes).toEqual(["a"]);
     } finally {
       mounted.unmount();
     }
@@ -626,6 +756,45 @@ describe("P1/P2 public components", () => {
 
       expect(onSelect).toHaveBeenCalledWith({ item: items[3], index: 3 });
       expect(open.value).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("closes an all-disabled context menu on Escape", async () => {
+    const open = ref(true);
+    const onClose = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TContextMenu, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (value: boolean) => (open.value = value),
+          x: 0,
+          y: 0,
+          w: 18,
+          items: [
+            { id: "open", label: "Open Link", disabled: true },
+            { id: "copy", label: "Copy Link", disabled: true },
+          ],
+          onClose,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(open.value).toBe(false);
+      expect(onClose).toHaveBeenCalledTimes(1);
     } finally {
       mounted.unmount();
     }

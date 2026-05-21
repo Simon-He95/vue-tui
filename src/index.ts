@@ -65,10 +65,6 @@ export type {
 } from "./vue/components/link/host.js";
 export { linkifyTextSegments } from "./vue/linkify.js";
 export type { TLinkifyOptions, TLinkifyProtocol, TLinkifySegment } from "./vue/linkify.js";
-export { TBreadcrumb, TKeyHint, TStatusBar } from "./vue/components/TNavigation.js";
-export type { TBreadcrumbItem, TBreadcrumbSelectPayload } from "./vue/components/TNavigation.js";
-export { TContextMenu, TPopover, TTooltip } from "./vue/components/TOverlay.js";
-export type { TContextMenuItem, TContextMenuSelectPayload } from "./vue/components/TOverlay.js";
 export { TSelect } from "./vue/components/TSelect.js";
 export { TTable } from "./vue/components/TTable.js";
 export type {

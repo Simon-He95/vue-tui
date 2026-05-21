@@ -80,65 +80,80 @@ export const TContextMenu = defineComponent({
       return index;
     }
 
+    function handleMenuKeydown(event: any): void {
+      if (event.key === "Escape") {
+        event.preventDefault?.();
+        close();
+      } else if (event.key === "Enter") {
+        event.preventDefault?.();
+        select(selectedIndex());
+      } else if (event.key === "ArrowDown") {
+        event.preventDefault?.();
+        emit("update:selectedIndex", nextEnabledIndex(selectedIndex(), 1));
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault?.();
+        emit("update:selectedIndex", nextEnabledIndex(selectedIndex(), -1));
+      }
+    }
+
     return () => {
       if (!props.modelValue) return null;
       const hgt = Math.max(2, props.items.length + 2);
       const activeIndex = selectedIndex();
+      const hasEnabledItem = props.items.some((item) => !item.disabled);
       return h(
-        TBox as any,
+        TView as any,
         {
           x: props.x,
           y: props.y,
           w: props.w,
           h: hgt,
           zIndex: props.zIndex,
-          style: baseStyle.value,
+          focusable: !hasEnabledItem,
+          autoFocus: !hasEnabledItem,
+          onKeydown: handleMenuKeydown,
         },
         () =>
-          props.items.map((item, index) => {
-            const active = index === activeIndex;
-            const text = item.shortcut ? `${item.label} ${item.shortcut}` : item.label;
-            return h(
-              TView as any,
-              {
-                key: item.id,
-                x: 0,
-                y: index,
-                w: Math.max(1, props.w - 2),
-                h: 1,
-                focusable: !item.disabled,
-                autoFocus: active && !item.disabled,
-                onClick: () => select(index),
-                onKeydown: (event: any) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault?.();
-                    close();
-                  } else if (event.key === "Enter") {
-                    event.preventDefault?.();
-                    select(selectedIndex());
-                  } else if (event.key === "ArrowDown") {
-                    event.preventDefault?.();
-                    emit("update:selectedIndex", nextEnabledIndex(selectedIndex(), 1));
-                  } else if (event.key === "ArrowUp") {
-                    event.preventDefault?.();
-                    emit("update:selectedIndex", nextEnabledIndex(selectedIndex(), -1));
-                  }
-                },
-              },
-              () =>
-                h(TText as any, {
-                  x: 0,
-                  y: 0,
-                  w: Math.max(1, props.w - 2),
-                  value: fitCellText(text, Math.max(1, props.w - 2)),
-                  style: item.disabled
-                    ? mergeStyle(baseStyle.value, props.disabledStyle)
-                    : active
-                      ? mergeStyle(baseStyle.value, props.activeStyle)
-                      : baseStyle.value,
-                }),
-            );
-          }),
+          h(
+            TBox as any,
+            {
+              x: 0,
+              y: 0,
+              w: props.w,
+              h: hgt,
+              style: baseStyle.value,
+            },
+            () =>
+              props.items.map((item, index) => {
+                const active = index === activeIndex;
+                const text = item.shortcut ? `${item.label} ${item.shortcut}` : item.label;
+                return h(
+                  TView as any,
+                  {
+                    key: item.id,
+                    x: 0,
+                    y: index,
+                    w: Math.max(1, props.w - 2),
+                    h: 1,
+                    focusable: !item.disabled,
+                    autoFocus: active && !item.disabled,
+                    onClick: () => select(index),
+                  },
+                  () =>
+                    h(TText as any, {
+                      x: 0,
+                      y: 0,
+                      w: Math.max(1, props.w - 2),
+                      value: fitCellText(text, Math.max(1, props.w - 2)),
+                      style: item.disabled
+                        ? mergeStyle(baseStyle.value, props.disabledStyle)
+                        : active
+                          ? mergeStyle(baseStyle.value, props.activeStyle)
+                          : baseStyle.value,
+                    }),
+                );
+              }),
+          ),
       );
     };
   },

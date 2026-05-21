@@ -8,13 +8,13 @@
 
 ## 导入入口
 
-| API maturity | Import                           | 组件                                                                                                                                                                                                   |
-| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TCommandPalette` `TContextMenu` `TDataTable` `TDialog` `TInput` `TLink` `TLinkifyText` `TList` `TSelect` `TTable` `TText` `TTree` `TView` 和 form/navigation/status helpers |
-| Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition`                                                  |
-| Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                     |
-| Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap`    |
-| Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                    |
+| API maturity | Import                           | 组件                                                                                                                                                                                                |
+| ------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TCommandPalette` `TDataTable` `TDialog` `TInput` `TLink` `TLinkifyText` `TList` `TSelect` `TTable` `TText` `TTree` `TView` 和 form helpers                               |
+| Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition` 和 overlay/navigation/status helpers          |
+| Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                  |
+| Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap` |
+| Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                 |
 
 下面的组件速读按用途分组，不代表 root entrypoint 导出。每个组件的 primary import 以生成的 [组件 API](/generated/components-api) 为准。
 

@@ -123,6 +123,8 @@ export const TTable = defineComponent({
     borderStyle: { type: Object as PropType<Style>, default: undefined },
     selectedStyle: { type: Object as PropType<Style>, default: undefined },
     emptyText: { type: String, default: "No rows" },
+    headerFocusable: { type: Boolean, default: false },
+    rowFocusable: { type: Boolean, default: false },
   },
   emits: {
     rowClick: (_payload: TTableRowClickPayload) => true,
@@ -191,7 +193,7 @@ export const TTable = defineComponent({
               y: 0,
               w: width,
               h: 1,
-              focusable: true,
+              focusable: props.headerFocusable,
               onClick: () => emit("headerClick", { column, index }),
             }),
           );
@@ -239,7 +241,7 @@ export const TTable = defineComponent({
               y,
               w: props.w,
               h: 1,
-              focusable: true,
+              focusable: props.rowFocusable,
               onClick: () => emit("rowClick", { row, index }),
             },
             () => {

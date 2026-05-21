@@ -10,7 +10,6 @@ describe("documented entrypoint exports", () => {
       "TerminalProvider",
       "TBox",
       "TCommandPalette",
-      "TContextMenu",
       "TDataTable",
       "TDialog",
       "TFormField",
@@ -46,6 +45,12 @@ describe("documented entrypoint exports", () => {
       "TRenderPlane",
       "TTransition",
       "TDebugOverlay",
+      "TBreadcrumb",
+      "TContextMenu",
+      "TKeyHint",
+      "TPopover",
+      "TStatusBar",
+      "TTooltip",
       "useTerminal",
     ]) {
       expect(key in vue, key).toBe(true);
