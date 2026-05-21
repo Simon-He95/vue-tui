@@ -44,6 +44,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
+import { TuiThemeContextKey, tuiDefaultTheme } from "../theme.js";
 import { linkifyTextSegments } from "../linkify.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import {
@@ -817,6 +818,12 @@ export const TLogView = defineComponent({
     const plane = inject(RenderPlaneContextKey, ref<TerminalRenderPlane>("default"));
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
+    const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
+    const effectiveLinkStyle = computed<Style>(() => ({
+      ...(theme.value.components.TLink?.style ?? {}),
+      ...(theme.value.components.TLink?.underline === false ? { underline: false } : {}),
+      ...props.linkStyle,
+    }));
 
     const focused = ref(false);
     const innerScrollTop = ref(0);
@@ -984,7 +991,7 @@ export const TLogView = defineComponent({
     }
 
     function linkifyStyleCacheKey(): string {
-      return linkifyEnabled() ? styleCacheKey(props.linkStyle) : "";
+      return linkifyEnabled() ? styleCacheKey(effectiveLinkStyle.value) : "";
     }
 
     function ansiLineCacheKey(
@@ -1401,7 +1408,7 @@ export const TLogView = defineComponent({
         props.source.getLine(index),
         baseStyle,
         linkifyOptions(),
-        props.linkStyle,
+        effectiveLinkStyle.value,
       );
       linkifyLineCache.set(key, {
         key,
@@ -3958,6 +3965,7 @@ export const TLogView = defineComponent({
         () => props.links,
         () => props.linkify,
         () => props.linkStyle,
+        () => effectiveLinkStyle.value,
         () => fullRect.value.w,
       ],
       () => {
@@ -4070,6 +4078,7 @@ export const TLogView = defineComponent({
         props.links,
         props.linkify,
         props.linkStyle,
+        effectiveLinkStyle.value,
         props.keyboardLinks,
         props.linkFocusStyle,
         props.highlightMatches,

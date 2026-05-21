@@ -126,6 +126,65 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("can select expandable tree parents when selectableParents is enabled", async () => {
+    const expandedIds = ref<string[]>(["root"]);
+    const selectedId = ref("");
+    const onSelect = vi.fn();
+    const onToggle = vi.fn();
+    const App = defineComponent({
+      name: "SelectableParentsTreeHost",
+      setup() {
+        return () =>
+          h(TTree, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 4,
+            expandedIds: expandedIds.value,
+            selectedId: selectedId.value,
+            selectableParents: true,
+            "onUpdate:expandedIds": (ids: string[]) => (expandedIds.value = ids),
+            "onUpdate:selectedId": (id: string) => (selectedId.value = id),
+            onSelect,
+            onToggle,
+            nodes: [{ id: "root", label: "root", children: [{ id: "leaf", label: "leaf" }] }],
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 24, rows: 6, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "click", cellX: 3, cellY: 0, time: Date.now() } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(selectedId.value).toBe("root");
+      expect(expandedIds.value).toEqual(["root"]);
+      expect(onSelect).toHaveBeenCalledWith({
+        id: "root",
+        node: { id: "root", label: "root", children: [{ id: "leaf", label: "leaf" }] },
+      });
+
+      app.events.dispatch({ type: "click", cellX: 0, cellY: 0, time: Date.now() } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(expandedIds.value).toEqual([]);
+      expect(selectedId.value).toBe("root");
+      expect(onToggle).toHaveBeenCalledWith({
+        id: "root",
+        expanded: false,
+        node: { id: "root", label: "root", children: [{ id: "leaf", label: "leaf" }] },
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("applies table column header and body styles", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -839,6 +898,45 @@ describe("P1/P2 public components", () => {
           h: 4,
           columns,
           rows,
+          sortable: true,
+          sortBy: "rank",
+          sortDirection: "desc",
+          selectedRowKey: 0,
+        }),
+      16,
+      5,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[2]).toContain("Beta");
+      expect(lines[3]).toContain("Alpha");
+      expect(mounted.terminal.getCell(0, 2).style.inverse).not.toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("passes original row indexes to data table rowKey functions", async () => {
+    const rows = [
+      { name: "Alpha", rank: 1 },
+      { name: "Beta", rank: 2 },
+    ];
+    const columns = [
+      { key: "name", label: "Name", width: 6 },
+      { key: "rank", label: "Rank", width: 4 },
+    ];
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns,
+          rows,
+          rowKey: (_row: unknown, index: number) => index,
           sortable: true,
           sortBy: "rank",
           sortDirection: "desc",

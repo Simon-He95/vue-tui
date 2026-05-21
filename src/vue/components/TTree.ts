@@ -1,5 +1,6 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
+import type { TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/manager/types.js";
 import { computed, defineComponent, h } from "vue";
 import { useTerminal } from "../composables/use-terminal.js";
 import { TText } from "./TText.js";
@@ -68,6 +69,7 @@ export const TTree = defineComponent({
     selectedStyle: { type: Object as PropType<Style>, default: () => ({ inverse: true }) },
     disabledStyle: { type: Object as PropType<Style>, default: () => ({ dim: true }) },
     indent: { type: Number, default: 2 },
+    selectableParents: { type: Boolean, default: false },
   },
   emits: {
     "update:expandedIds": (_ids: string[]) => true,
@@ -97,6 +99,37 @@ export const TTree = defineComponent({
       emit("select", { node: item.node, id: item.node.id });
     }
 
+    function markerX(item: FlatTreeNode): number {
+      return Math.max(0, Math.floor(props.indent)) * item.depth;
+    }
+
+    function handleClick(item: FlatTreeNode, event: TerminalPointerEvent): void {
+      if (!item.expandable) {
+        select(item);
+        return;
+      }
+      if (!props.selectableParents) {
+        toggle(item);
+        return;
+      }
+
+      const rowX = event.currentTarget?.rect.x ?? 0;
+      const localX = event.cellX - rowX;
+      if (localX <= markerX(item) + 1) toggle(item);
+      else select(item);
+    }
+
+    function handleKeydown(item: FlatTreeNode, event: TerminalKeyboardEvent): void {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault?.();
+      if (!item.expandable) {
+        select(item);
+        return;
+      }
+      if (!props.selectableParents || event.key === " ") toggle(item);
+      else select(item);
+    }
+
     return () =>
       h(
         TView as any,
@@ -121,14 +154,8 @@ export const TTree = defineComponent({
                 w: props.w,
                 h: 1,
                 focusable: !item.node.disabled,
-                onClick: () => (item.expandable ? toggle(item) : select(item)),
-                onKeydown: (event: any) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault?.();
-                    if (item.expandable) toggle(item);
-                    else select(item);
-                  }
-                },
+                onClick: (event: TerminalPointerEvent) => handleClick(item, event),
+                onKeydown: (event: TerminalKeyboardEvent) => handleKeydown(item, event),
               },
               () => h(TText as any, { x: 0, y: 0, w: props.w, value: text, style }),
             );

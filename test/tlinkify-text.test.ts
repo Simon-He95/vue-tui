@@ -104,6 +104,18 @@ describe("TLinkifyText", () => {
     expect(linkifyTextSegments("3/4", { allowRelative: true })).toEqual([{ text: "3/4" }]);
   });
 
+  it("does not expose file URL linkification through public protocols", () => {
+    expect(linkifyTextSegments("open file:///tmp/a.txt", { protocols: ["file" as any] })).toEqual([
+      { text: "open file:///tmp/a.txt" },
+    ]);
+    expect(
+      linkifyTextSegments("open file:///tmp/a.txt", {
+        allowRelative: true,
+        protocols: ["file" as any],
+      }),
+    ).toEqual([{ text: "open file:///tmp/a.txt" }]);
+  });
+
   it("requires a text boundary before absolute links", () => {
     expect(linkifyTextSegments("foohttps://example.com")).toEqual([
       { text: "foohttps://example.com" },
@@ -247,6 +259,36 @@ describe("TLinkifyText", () => {
 
     try {
       expect(mounted.terminal.getCell(5, 0).style.href).toBe("https://example.com/");
+      expect(mounted.terminal.getCell(5, 0).style.underline).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses link theme defaults for TLogView linkified links", async () => {
+    const theme = createTheme({ colors: { link: "blueBright" } });
+    const source = {
+      lineCount: () => 1,
+      getLine: () => "open https://example.com",
+    };
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 2,
+          source,
+          version: 1,
+          linkify: true,
+        }),
+      40,
+      3,
+      { theme },
+    );
+
+    try {
+      expect(mounted.terminal.getCell(5, 0).style.fg).toBe("blueBright");
       expect(mounted.terminal.getCell(5, 0).style.underline).toBe(true);
     } finally {
       mounted.unmount();

@@ -1658,20 +1658,21 @@ Import: `@simon_he/vue-tui`
 
 ### Props
 
-| 名称                       | 类型                              | 默认值                                    | 必填 | 说明 |
-| -------------------------- | --------------------------------- | ----------------------------------------- | ---- | ---- |
-| <code>x</code>             | <code>number</code>               | —                                         | 是   | —    |
-| <code>y</code>             | <code>number</code>               | —                                         | 是   | —    |
-| <code>w</code>             | <code>number</code>               | —                                         | 是   | —    |
-| <code>h</code>             | <code>number</code>               | —                                         | 是   | —    |
-| <code>zIndex</code>        | <code>number</code>               | <code>0</code>                            | 否   | —    |
-| <code>nodes</code>         | <code>readonly TTreeNode[]</code> | —                                         | 是   | —    |
-| <code>expandedIds</code>   | <code>readonly string[]</code>    | <code>() =&gt; []</code>                  | 否   | —    |
-| <code>selectedId</code>    | <code>string</code>               | <code>&quot;&quot;</code>                 | 否   | —    |
-| <code>style</code>         | <code>Style</code>                | <code>undefined</code>                    | 否   | —    |
-| <code>selectedStyle</code> | <code>Style</code>                | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
-| <code>disabledStyle</code> | <code>Style</code>                | <code>() =&gt; ({ dim: true })</code>     | 否   | —    |
-| <code>indent</code>        | <code>number</code>               | <code>2</code>                            | 否   | —    |
+| 名称                           | 类型                              | 默认值                                    | 必填 | 说明 |
+| ------------------------------ | --------------------------------- | ----------------------------------------- | ---- | ---- |
+| <code>x</code>                 | <code>number</code>               | —                                         | 是   | —    |
+| <code>y</code>                 | <code>number</code>               | —                                         | 是   | —    |
+| <code>w</code>                 | <code>number</code>               | —                                         | 是   | —    |
+| <code>h</code>                 | <code>number</code>               | —                                         | 是   | —    |
+| <code>zIndex</code>            | <code>number</code>               | <code>0</code>                            | 否   | —    |
+| <code>nodes</code>             | <code>readonly TTreeNode[]</code> | —                                         | 是   | —    |
+| <code>expandedIds</code>       | <code>readonly string[]</code>    | <code>() =&gt; []</code>                  | 否   | —    |
+| <code>selectedId</code>        | <code>string</code>               | <code>&quot;&quot;</code>                 | 否   | —    |
+| <code>style</code>             | <code>Style</code>                | <code>undefined</code>                    | 否   | —    |
+| <code>selectedStyle</code>     | <code>Style</code>                | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
+| <code>disabledStyle</code>     | <code>Style</code>                | <code>() =&gt; ({ dim: true })</code>     | 否   | —    |
+| <code>indent</code>            | <code>number</code>               | <code>2</code>                            | 否   | —    |
+| <code>selectableParents</code> | <code>boolean</code>              | <code>false</code>                        | 否   | —    |
 
 ### Events
 

@@ -121,13 +121,12 @@ export const TDataTable = defineComponent({
       return sortedRows.value[index]?.originalIndex ?? index;
     }
 
-    function defaultRowKey(_row: TTableRow, index: number): unknown {
-      return originalIndexAt(index);
+    function dataTableRowKey(row: TTableRow, index: number): unknown {
+      return rowKey(row, originalIndexAt(index), props.rowKey as any);
     }
 
     function select(row: TTableRow, index: number): void {
-      const keyIndex = props.rowKey == null ? originalIndexAt(index) : index;
-      const key = rowKey(row, keyIndex, props.rowKey as any);
+      const key = dataTableRowKey(row, index);
       if (props.selectable) emit("update:selectedRowKey", key);
       emit("rowSelect", { row, index, key });
     }
@@ -151,7 +150,7 @@ export const TDataTable = defineComponent({
         zIndex: props.zIndex,
         columns: columns.value,
         rows: tableRows.value,
-        rowKey: props.rowKey ?? defaultRowKey,
+        rowKey: dataTableRowKey,
         selectedRowKey: props.selectedRowKey,
         border: props.border,
         style: props.style,

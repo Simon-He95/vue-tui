@@ -1,6 +1,6 @@
-import { sanitizeDomHref, sanitizeTerminalHref } from "../core/hyperlink.js";
+import { sanitizeDomHref } from "../core/hyperlink.js";
 
-export type TLinkifyProtocol = "http" | "https" | "mailto" | "file";
+export type TLinkifyProtocol = "http" | "https" | "mailto";
 
 export type TLinkifyOptions = Readonly<{
   protocols?: readonly TLinkifyProtocol[];
@@ -14,8 +14,7 @@ export type TLinkifySegment = Readonly<{
 }>;
 
 const DEFAULT_PROTOCOLS: readonly TLinkifyProtocol[] = Object.freeze(["http", "https", "mailto"]);
-const URL_TEXT_RE =
-  /(?:https?:\/\/|mailto:|file:\/\/|\.{1,2}\/|\/|#|\?)[^\s<>"'`，。；：！？、]+/giu;
+const URL_TEXT_RE = /(?:https?:\/\/|mailto:|\.{1,2}\/|\/|#|\?)[^\s<>"'`，。；：！？、]+/giu;
 const TRAILING_PUNCTUATION_RE = /[.,;:!?，。；：！？、]/u;
 const TRAILING_CLOSER_RE = /[)\]}）】》」』”’]/u;
 const TEXT_BOUNDARY_RE = /[\s([{<:="'`，。；：！？、（【《「『“‘]/u;
@@ -99,11 +98,6 @@ function normalizeLinkifiedHref(raw: string, options: TLinkifyOptions): string |
   if (rawScheme === "http" || rawScheme === "https" || rawScheme === "mailto") {
     if (!protocols.has(rawScheme)) return null;
     return sanitizeDomHref(raw, { allowRelative: false });
-  }
-
-  if (rawScheme === "file") {
-    if (!protocols.has("file")) return null;
-    return sanitizeTerminalHref(raw, { allowFileUrls: true });
   }
 
   if (options.allowRelative && isRelativeCandidate(raw)) {
