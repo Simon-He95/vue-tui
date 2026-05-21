@@ -121,6 +121,10 @@ export const TTable = defineComponent({
       type: Array as PropType<readonly TTableColumn[]>,
       required: true,
     },
+    /**
+     * Rows are rendered from the top of the current viewport; TTable does not own
+     * scrollTop or virtualization.
+     */
     rows: {
       type: Array as PropType<readonly TTableRow[]>,
       required: true,

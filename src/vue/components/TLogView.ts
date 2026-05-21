@@ -757,11 +757,23 @@ export const TLogView = defineComponent({
       default: undefined,
     },
     ansi: { type: Boolean, default: false },
+    /**
+     * Parses OSC8 links only with ansi=true; OSC8 links preserve parsed ANSI style and
+     * do not inherit TLink theme defaults.
+     */
     links: { type: Boolean, default: false },
+    /**
+     * Plain-text URL linkification for ansi=false rows; generated links inherit TLink
+     * theme defaults before linkStyle.
+     */
     linkify: {
       type: [Boolean, Object] as PropType<boolean | TLinkifyOptions>,
       default: false,
     },
+    /**
+     * Link style override. OSC8 defaults to underline-only over parsed ANSI style;
+     * linkify also inherits TLink theme defaults.
+     */
     linkStyle: {
       type: Object as PropType<Style>,
       default: undefined,

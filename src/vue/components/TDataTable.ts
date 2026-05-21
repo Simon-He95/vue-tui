@@ -62,6 +62,10 @@ export const TDataTable = defineComponent({
       type: Array as PropType<readonly TTableColumn[]>,
       required: true,
     },
+    /**
+     * TDataTable filters/sorts rows and renders the top slice through non-virtual
+     * TTable; it does not own scrollTop or virtualization.
+     */
     rows: {
       type: Array as PropType<readonly TTableRow[]>,
       required: true,

@@ -267,27 +267,38 @@ function detachedExternalOpener(child: ReturnType<typeof spawn>): boolean {
   return true;
 }
 
+type FixedExternalCommand =
+  | "/usr/bin/open"
+  | "C:\\Windows\\System32\\rundll32.exe"
+  | "/usr/bin/xdg-open";
+
+function openWithFixedCommand(command: FixedExternalCommand, args: readonly string[]): boolean {
+  return detachedExternalOpener(
+    spawn(command, [...args], {
+      detached: true,
+      stdio: "ignore",
+      shell: false,
+    }),
+  );
+}
+
 export function openExternalHref(href: string): boolean {
   if (process.env.VT_OPEN_LINKS !== "1") return false;
 
   const normalized = normalizeOpenHref(href);
   if (!normalized) return false;
 
-  const options = { detached: true, stdio: "ignore", shell: false } as const;
   if (process.platform === "darwin") {
-    return detachedExternalOpener(spawn("/usr/bin/open", [normalized], options));
+    return openWithFixedCommand("/usr/bin/open", [normalized]);
   }
   if (process.platform === "win32") {
-    return detachedExternalOpener(
-      spawn(
-        "C:\\Windows\\System32\\rundll32.exe",
-        ["url.dll,FileProtocolHandler", normalized],
-        options,
-      ),
-    );
+    return openWithFixedCommand("C:\\Windows\\System32\\rundll32.exe", [
+      "url.dll,FileProtocolHandler",
+      normalized,
+    ]);
   }
   if (!existsSync("/usr/bin/xdg-open")) return false;
-  return detachedExternalOpener(spawn("/usr/bin/xdg-open", [normalized], options));
+  return openWithFixedCommand("/usr/bin/xdg-open", [normalized]);
 }
 
 function tableDemo(componentName = "TTable"): unknown {

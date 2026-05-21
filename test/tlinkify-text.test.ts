@@ -196,6 +196,13 @@ describe("TLinkifyText", () => {
     ]);
   });
 
+  it("keeps an invalid URL candidate plain before a later valid URL", () => {
+    expect(linkifyTextSegments("foohttps://bad.test then https://ok.test")).toEqual([
+      { text: "foohttps://bad.test then " },
+      { text: "https://ok.test", href: "https://ok.test/" },
+    ]);
+  });
+
   it("keeps trailing punctuation outside link hrefs", () => {
     expect(linkifyTextSegments("see https://example.com/docs.")).toEqual([
       { text: "see " },

@@ -24,7 +24,9 @@ export const TContextMenu = defineComponent({
   name: "TContextMenu",
   props: {
     modelValue: { type: Boolean, required: true },
+    /** Caller-owned x position; no viewport clamp or flip placement is applied. */
     x: { type: Number, required: true },
+    /** Caller-owned y position; no viewport clamp or flip placement is applied. */
     y: { type: Number, required: true },
     w: { type: Number, default: 24 },
     zIndex: { type: Number, default: 20 },
@@ -200,7 +202,9 @@ export const TPopover = defineComponent({
   name: "TPopover",
   props: {
     modelValue: { type: Boolean, required: true },
+    /** Caller-owned x position; no viewport clamp or flip placement is applied. */
     x: { type: Number, required: true },
+    /** Caller-owned y position; no viewport clamp or flip placement is applied. */
     y: { type: Number, required: true },
     w: { type: Number, required: true },
     h: { type: Number, required: true },
