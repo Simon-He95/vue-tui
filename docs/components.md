@@ -169,7 +169,7 @@
 `openMode` 语义：
 
 - `host`: emit `activate`，阻止 DOM native anchor 默认行为，并调用 `linkOpener`
-- `event`: emit `activate`，阻止 DOM native anchor 默认行为，不调用 `linkOpener`
+- `event`: emit `activate`，阻止组件处理的 DOM native anchor click，不调用 `linkOpener`；仍会写入 `Style.href` metadata，terminal OSC8 或 browser context menu 仍可能暴露 href，如需完全不输出 link metadata 请使用 `none`
 - `native`: click emit `activate` 并允许 renderer/native link activation；keyboard emit `activate` 后在有 `linkOpener` 时作为 terminal focus fallback 打开；如果 `modifierClick` 不满足，会阻止 native click
 - `none`: 只渲染文本，不写入 href metadata，不激活
 
@@ -196,7 +196,7 @@
 ### Events
 
 - `activate`: `{ href, label, source }`
-- `open`: `{ href, label, source }`，host opener 接受/尝试打开请求时触发
+- `open`: `{ href, label, source }`，host opener 返回 true 时触发，表示请求已被接受/尝试；不保证 OS 或 browser 实际打开了目标
 - `invalidHref`: `{ href, reason }`
 - `click` / `keydown` / `focus` / `blur`
 

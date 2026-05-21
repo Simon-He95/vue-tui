@@ -111,9 +111,8 @@ export const TLink = defineComponent({
 
     const label = computed(() => sanitizeInlineText(props.label ?? props.href));
     const safeHref = computed(() => sanitizeDomHref(props.href, { allowRelative: true }));
-    const shouldRenderHref = computed(
-      () => !props.disabled && props.openMode !== "none" && Boolean(safeHref.value),
-    );
+    const interactiveMode = computed(() => !props.disabled && props.openMode !== "none");
+    const shouldRenderHref = computed(() => interactiveMode.value && Boolean(safeHref.value));
     const viewWidth = computed(() => {
       const width = props.w ?? textCellWidth(label.value);
       return Math.max(0, Math.floor(width));
@@ -128,7 +127,7 @@ export const TLink = defineComponent({
         props.disabled ? { dim: true } : undefined,
         shouldRenderHref.value ? { href: safeHref.value ?? undefined } : { href: undefined },
       );
-      if (props.disabled) return base;
+      if (!interactiveMode.value) return base;
       return mergeStyle(
         base,
         hovered.value ? props.hoverStyle : undefined,
@@ -212,12 +211,12 @@ export const TLink = defineComponent({
           w: viewWidth.value,
           h: viewHeight.value,
           zIndex: props.zIndex,
-          focusable: !props.disabled && props.openMode !== "none",
-          autoFocus: props.autoFocus && !props.disabled && props.openMode !== "none",
+          focusable: interactiveMode.value,
+          autoFocus: props.autoFocus && interactiveMode.value,
           onClick,
           onKeydown,
           onPointerdown: () => {
-            if (!props.disabled) active.value = true;
+            if (interactiveMode.value) active.value = true;
           },
           onPointerup: () => {
             active.value = false;
@@ -227,7 +226,7 @@ export const TLink = defineComponent({
             active.value = false;
           },
           onPointerenter: () => {
-            hovered.value = true;
+            if (interactiveMode.value) hovered.value = true;
           },
           onFocus: (event: TerminalBaseEvent) => {
             focused.value = true;

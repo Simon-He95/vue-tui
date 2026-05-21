@@ -273,6 +273,11 @@ describe("TLink", () => {
     );
 
     try {
+      await nextTick();
+      await Promise.resolve();
+
+      expect(mounted.terminal.getCell(0, 0).style.href).toBe("/docs");
+
       mounted
         .container()!
         .dispatchEvent(
@@ -509,6 +514,51 @@ describe("TLink", () => {
     }
   });
 
+  it("does not apply hover or active styles in none mode", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          openMode: "none",
+          style: { fg: "white" },
+          hoverStyle: { fg: "redBright" },
+          activeStyle: { bg: "blue" },
+        }),
+      20,
+      2,
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+
+      expect(mounted.terminal.getCell(0, 0).style.fg).toBe("white");
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("mousemove", { clientX: 0, clientY: 0, bubbles: true }));
+      mounted.container()!.dispatchEvent(
+        new MouseEvent("pointerdown", {
+          clientX: 0,
+          clientY: 0,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      await Promise.resolve();
+
+      const style = mounted.terminal.getCell(0, 0).style;
+      expect(style.fg).toBe("white");
+      expect(style.bg).toBeUndefined();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("emits open for the default browser opener when window.open returns null", async () => {
     const win = (globalThis as any).window as {
       open?: (url?: string, target?: string, features?: string) => unknown;
@@ -552,6 +602,45 @@ describe("TLink", () => {
       if (originalOpen) win.open = originalOpen;
       else delete win.open;
       mounted.unmount();
+    }
+  });
+
+  it("does not emit open when linkOpener returns false", async () => {
+    const cases = [vi.fn(() => false), vi.fn(() => Promise.resolve(false))];
+
+    for (const opener of cases) {
+      const onOpen = vi.fn();
+      const mounted = await mountTerminal(
+        () =>
+          h(TLink, {
+            x: 0,
+            y: 0,
+            href: "https://example.com",
+            label: "Example",
+            onOpen,
+          }),
+        20,
+        2,
+        { linkOpener: opener },
+      );
+
+      try {
+        mounted.container()!.dispatchEvent(
+          new MouseEvent("click", {
+            clientX: 0,
+            clientY: 0,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(opener).toHaveBeenCalled();
+        expect(onOpen).not.toHaveBeenCalled();
+      } finally {
+        mounted.unmount();
+      }
     }
   });
 
