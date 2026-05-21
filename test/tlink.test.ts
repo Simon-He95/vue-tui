@@ -221,6 +221,37 @@ describe("TLink", () => {
     }
   });
 
+  it("lets local style override visited theme style", async () => {
+    const theme = createTheme({
+      components: {
+        TLink: {
+          visitedStyle: { fg: "magentaBright", underline: true },
+        },
+      },
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          visited: true,
+          style: { fg: "redBright" },
+        }),
+      20,
+      2,
+      { theme },
+    );
+
+    try {
+      await nextTick();
+      expect(mounted.terminal.getCell(0, 0).style.fg).toBe("redBright");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("does not open when keydown handler prevents default", async () => {
     const opener = vi.fn(() => true);
     const onActivate = vi.fn();

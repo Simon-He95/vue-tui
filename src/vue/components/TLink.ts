@@ -126,9 +126,9 @@ export const TLink = defineComponent({
       const visual = mergeStyle(
         defaultStyle.value,
         theme.value.components.TLink?.style,
+        props.visited ? theme.value.components.TLink?.visitedStyle : undefined,
         theme.value.components.TLink?.underline === false ? { underline: false } : undefined,
         props.style,
-        props.visited ? theme.value.components.TLink?.visitedStyle : undefined,
         props.disabled ? { dim: true } : undefined,
         interactiveMode.value && hovered.value
           ? mergeStyle(
