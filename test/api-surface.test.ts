@@ -263,6 +263,7 @@ describe("public API surface", () => {
         "TView",
         "TVirtualList",
         "TVirtualMarkdown",
+        "computeCommandPaletteMatchRanges",
         "createAppendOnlyLogStore",
         "createMarkdownBlockSource",
         "createTLogDensityBucketsFromMarkers",

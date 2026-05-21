@@ -337,6 +337,10 @@ export const TFormField = defineComponent({
       const message = props.error || props.help;
       const messageStyle = props.error ? errorStyle.value : helpStyle.value;
       const label = props.required && props.label ? `${props.label} *` : props.label;
+      const labelRows = props.label ? 1 : 0;
+      const messageRows = message && props.h - labelRows > 1 ? 1 : 0;
+      const slotY = labelRows;
+      const slotH = Math.max(1, props.h - labelRows - messageRows);
       return h(
         TView as any,
         { x: props.x, y: props.y, w: props.w, h: props.h, zIndex: props.zIndex },
@@ -352,15 +356,11 @@ export const TFormField = defineComponent({
                   : labelStyle.value,
               })
             : null,
-          h(
-            TView as any,
-            { x: 0, y: props.label ? 1 : 0, w: props.w, h: Math.max(1, props.h - 2) },
-            slots.default,
-          ),
-          message && props.h > 1
+          h(TView as any, { x: 0, y: slotY, w: props.w, h: slotH }, slots.default),
+          messageRows
             ? h(TText as any, {
                 x: 0,
-                y: props.h - 1,
+                y: slotY + slotH,
                 w: props.w,
                 value: message,
                 style: messageStyle,

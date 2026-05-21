@@ -6,13 +6,49 @@ import { TInput } from "./TInput.js";
 import { TText } from "./TText.js";
 import { sanitizeInlineText, sliceByCells } from "../utils/text.js";
 
+export type TCommandPaletteMatchRange = Readonly<{
+  start: number;
+  end: number;
+}>;
+
 export type TCommandPaletteItem = Readonly<{
   label: string;
   detail?: string;
   keywords?: readonly string[];
   disabled?: boolean;
   value?: unknown;
+  accentStyle?: Style;
+  highlightAccentStyle?: Style;
+  detailAccentRanges?: readonly TCommandPaletteMatchRange[];
+  detailAccentSegments?: readonly Readonly<{
+    start: number;
+    end: number;
+    style?: Style;
+    highlightStyle?: Style;
+  }>[];
+  [key: string]: unknown;
 }>;
+
+export function computeCommandPaletteMatchRanges(
+  text: string,
+  query: string,
+): TCommandPaletteMatchRange[] {
+  const source = String(text ?? "");
+  const needle = String(query ?? "")
+    .trim()
+    .toLowerCase();
+  if (!source || !needle) return [];
+  const haystack = source.toLowerCase();
+  const ranges: TCommandPaletteMatchRange[] = [];
+  let from = 0;
+  while (from < haystack.length) {
+    const index = haystack.indexOf(needle, from);
+    if (index < 0) break;
+    ranges.push({ start: index, end: index + needle.length });
+    from = index + Math.max(1, needle.length);
+  }
+  return ranges;
+}
 
 export const TCommandPalette = defineComponent({
   name: "TCommandPalette",
@@ -36,7 +72,11 @@ export const TCommandPalette = defineComponent({
     listStyle: { type: Object as PropType<Style>, default: undefined },
     bodyStyle: { type: Object as PropType<Style>, default: undefined },
     highlightStyle: { type: Object as PropType<Style>, default: undefined },
+    matchStyle: { type: Object as PropType<Style>, default: undefined },
+    highlightMatchStyle: { type: Object as PropType<Style>, default: undefined },
+    dividerStyle: { type: Object as PropType<Style>, default: undefined },
     hintStyle: { type: Object as PropType<Style>, default: undefined },
+    detailStyle: { type: Object as PropType<Style>, default: undefined },
     emptyStyle: { type: Object as PropType<Style>, default: undefined },
   },
   emits: ["update:modelValue", "update:selectedIndex", "select", "close"],
@@ -62,9 +102,25 @@ export const TCommandPalette = defineComponent({
       return Math.max(1, innerH - 3);
     }
 
-    function selectedIndex(): number {
+    function normalizedIndex(index: number): number {
       const len = filteredItems.value.length;
-      return len > 0 ? ((props.selectedIndex % len) + len) % len : 0;
+      return len > 0 ? ((index % len) + len) % len : 0;
+    }
+
+    function enabledIndexFrom(index: number, direction: 1 | -1): number {
+      const len = filteredItems.value.length;
+      if (len === 0) return 0;
+      const start = normalizedIndex(index);
+      if (!filteredItems.value[start]?.disabled) return start;
+      for (let step = 1; step < len; step++) {
+        const next = normalizedIndex(start + step * direction);
+        if (!filteredItems.value[next]?.disabled) return next;
+      }
+      return start;
+    }
+
+    function selectedIndex(): number {
+      return enabledIndexFrom(props.selectedIndex, 1);
     }
 
     function ensureSelectedVisible(index = selectedIndex()): void {
@@ -98,9 +154,8 @@ export const TCommandPalette = defineComponent({
       { immediate: true },
     );
 
-    function setSelected(index: number): void {
-      const len = filteredItems.value.length;
-      const next = len > 0 ? ((index % len) + len) % len : 0;
+    function setSelected(index: number, direction: 1 | -1 = 1): void {
+      const next = enabledIndexFrom(index, direction);
       ensureSelectedVisible(next);
       emit("update:selectedIndex", next);
     }
@@ -120,10 +175,10 @@ export const TCommandPalette = defineComponent({
       const key = event?.key;
       if (key === "ArrowDown") {
         event.preventDefault?.();
-        setSelected(props.selectedIndex + 1);
+        setSelected(selectedIndex() + 1, 1);
       } else if (key === "ArrowUp") {
         event.preventDefault?.();
-        setSelected(props.selectedIndex - 1);
+        setSelected(selectedIndex() - 1, -1);
       } else if (key === "Enter") {
         event.preventDefault?.();
         selectCurrent();

@@ -66,7 +66,9 @@ import {
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import {
   TAgentTranscript,
+  computeCommandPaletteMatchRanges,
   type TCommandPaletteItem as AgentTCommandPaletteItem,
+  type TCommandPaletteMatchRange,
   TThinkingView,
   TToolCallView,
   TToolLogView,
@@ -105,10 +107,13 @@ const vueCommandPaletteItem: VueTCommandPaletteItem = {
   label: "Open",
   detail: "workspace",
 };
+const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
 const agentCommandPaletteItem: AgentTCommandPaletteItem = {
   label: "Open",
+  detailAccentRanges: [agentCommandPaletteRange],
   keywords: ["workspace"],
 };
+const agentCommandPaletteRanges = computeCommandPaletteMatchRanges("Open workspace", "open");
 
 console.log(
   TerminalProvider,
@@ -163,6 +168,7 @@ console.log(
   commandPaletteItem,
   vueCommandPaletteItem,
   agentCommandPaletteItem,
+  agentCommandPaletteRanges,
 );
 
 const driver: StdinDriver | null = null;

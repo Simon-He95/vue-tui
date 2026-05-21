@@ -333,6 +333,11 @@ describe("package exports", () => {
     const agent = await import("../src/agent.js");
 
     expect(agent.TCommandPalette).toBeTruthy();
+    expect(agent.computeCommandPaletteMatchRanges).toBeTruthy();
+    expect(agent.computeCommandPaletteMatchRanges("Open file, open folder", "open")).toEqual([
+      { start: 0, end: 4 },
+      { start: 11, end: 15 },
+    ]);
   });
 
   it("re-exports TLogView link navigation types from the experimental entrypoint", () => {

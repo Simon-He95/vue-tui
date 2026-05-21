@@ -16,6 +16,7 @@ import {
   TStatusBar,
   TSwitch,
   TTable,
+  TText,
   TTooltip,
   TTree,
 } from "../src/index.js";
@@ -326,6 +327,34 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("sizes form field slot from visible label and message rows", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TFormField, { x: 0, y: 0, w: 18, h: 3, label: "Name" }, () => [
+          h(TText, { x: 0, y: 0, w: 18, value: "First" }),
+          h(TText, { x: 0, y: 1, w: 18, value: "Second" }),
+        ]),
+        h(TFormField, { x: 22, y: 0, w: 18, h: 2, label: "Token", help: "Help" }, () =>
+          h(TText, { x: 0, y: 0, w: 18, value: "Value" }),
+        ),
+      ],
+      48,
+      5,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]).toContain("Name");
+      expect(lines[0]).toContain("Token");
+      expect(lines[1]).toContain("First");
+      expect(lines[1]).toContain("Value");
+      expect(lines[2]).toContain("Second");
+      expect(lines.join("\n")).not.toContain("Help");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders overlay and navigation helpers", async () => {
     const mounted = await mountTerminal(
       () => [
@@ -623,6 +652,67 @@ describe("P1/P2 public components", () => {
       expect(mounted.terminal.snapshot().lines.join("\n")).toContain("› Command 3");
 
       container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith(items[3]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("skips disabled command palette items for keyboard navigation", async () => {
+    const selectedIndex = ref(0);
+    const items = [
+      { label: "Open", disabled: true },
+      { label: "Copy" },
+      { label: "Save", disabled: true },
+      { label: "Inspect" },
+    ];
+    const onSelect = vi.fn();
+    const PaletteHost = defineComponent({
+      name: "CommandPaletteDisabledHost",
+      setup() {
+        return () =>
+          h(TCommandPalette, {
+            modelValue: true,
+            w: 32,
+            h: 10,
+            items,
+            selectedIndex: selectedIndex.value,
+            "onUpdate:selectedIndex": (index: number) => (selectedIndex.value = index),
+            onSelect,
+          });
+      },
+    });
+    const mounted = await mountTerminal(() => h(PaletteHost), 50, 14);
+
+    try {
+      mounted.scheduler()!.flushNow();
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("› Copy");
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      await Promise.resolve();
+      mounted.scheduler()!.flushNow();
+
+      expect(selectedIndex.value).toBe(3);
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("› Inspect");
+
+      mounted.container()!.dispatchEvent(
         new KeyboardEvent("keydown", {
           key: "Enter",
           code: "Enter",
