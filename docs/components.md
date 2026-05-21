@@ -8,28 +8,29 @@
 
 ## 导入入口
 
-| API maturity | Import                           | 组件                                                                                                                                                                                                |
-| ------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TDialog` `TInput` `TLink` `TLinkifyText` `TList` `TSelect` `TText` `TView`                                                                                               |
-| Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition`                                               |
-| Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                  |
-| Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap` |
-| Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                 |
+| API maturity | Import                           | 组件                                                                                                                                                                                                   |
+| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TCommandPalette` `TContextMenu` `TDataTable` `TDialog` `TInput` `TLink` `TLinkifyText` `TList` `TSelect` `TTable` `TText` `TTree` `TView` 和 form/navigation/status helpers |
+| Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition`                                                  |
+| Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                     |
+| Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap`    |
+| Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                    |
 
 下面的组件速读按用途分组，不代表 root entrypoint 导出。每个组件的 primary import 以生成的 [组件 API](/generated/components-api) 为准。
 
 ## 组件速读
 
-| 类别          | 组件                                                                                                                                                                             | 典型用途                                        | 适配性判断                                         |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
-| Root          | `TerminalProvider`                                                                                                                                                               | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
-| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                   | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
-| Text / Action | `TText` `TLink` `TLinkifyText` `TTransition`                                                                                                                                     | 文本渲染、链接操作、状态切换、动画插值          | 通用                                               |
-| Input         | `TInput` `TInputBox` `TJsonEditor`                                                                                                                                               | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
-| Pickers       | `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择       | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
-| Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                                                                                                      | 对话框、详情查看、调试覆盖层                    | 通用，适合多种宿主                                 |
-| Navigation    | `TRouterView` + `createTerminalRouter()`                                                                                                                                         | 多页面 TUI / shell                              | 通用                                               |
-| Agent Chrome  | `TThinkingView` `TUserMessageView` `TToolCallView`                                                                                                                               | thinking/user/tool-call transcript chrome       | 默认对齐 best-agent 风格，可通过 style props 覆盖  |
+| 类别          | 组件                                                                                                                                                                                               | 典型用途                                        | 适配性判断                                         |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| Root          | `TerminalProvider`                                                                                                                                                                                 | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
+| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                                     | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
+| Text / Action | `TText` `TLink` `TLinkifyText` `TKeyHint` `TTransition`                                                                                                                                            | 文本渲染、链接操作、快捷键提示、状态切换        | 通用                                               |
+| Input / Form  | `TInput` `TInputBox` `TAutocompleteInput` `TCheckbox` `TFormField` `TPasswordInput` `TRadioGroup` `TSlider` `TSwitch` `TJsonEditor`                                                                | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
+| Data / Tree   | `TTable` `TDataTable` `TTree`                                                                                                                                                                      | 多列数据、排序过滤、层级选择                    | 通用                                               |
+| Pickers       | `TCommandPalette` `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择       | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Overlay       | `TDialog` `TContextMenu` `TPopover` `TTooltip` `TMultilineModal` `TDebugOverlay`                                                                                                                   | 对话框、菜单、提示、详情查看、调试覆盖层        | 通用，适合多种宿主                                 |
+| Navigation    | `TBreadcrumb` `TStatusBar` `TRouterView` + `createTerminalRouter()`                                                                                                                                | 路径导航、状态栏、多页面 TUI / shell            | 通用                                               |
+| Agent Chrome  | `TThinkingView` `TUserMessageView` `TToolCallView`                                                                                                                                                 | thinking/user/tool-call transcript chrome       | 默认对齐 best-agent 风格，可通过 style props 覆盖  |
 
 如果你更关心“哪些地方还应该继续做插件化”，建议配合阅读：[扩展性与插件化](./extensibility.md)。
 
@@ -78,6 +79,7 @@
 - `inputPlugins` `(TInputPlugin[])`: 给子树里的 `TInput` / `TInputBox` 注入宿主插件（例如 terminal clipboard、TTY 风格快捷键）；init-only，修改后需重新挂载 provider/input
 - `pathPickerProvider` `(PathPickerProvider?)`: 给子树里的 `TPathPicker` 注入宿主路径 provider
 - `linkOpener` `(TerminalLinkOpener | function?)`: 给 `TLink openMode="host"` 注入外部链接打开能力；浏览器 `TerminalProvider` 默认使用 `window.open`，CLI/headless 需要通过 `createTerminalApp({ linkOpener })` 显式提供
+- `theme` `(TuiThemeOverrides?)`: 组件主题 token 覆盖，当前覆盖 link、table、form-field 的默认样式；局部 `style` props 仍然优先
 - `debugIme` `(boolean)`: 输出 IME 调试信息
 - `debugTrace` `(boolean)`: 开启 trace（commit/event/focus）
 - `domRendererOptions` `(DomRendererOptions?)`: DOM renderer 配置，例如 `syncFlushMaxRows` / `syncFlushCellBudget`；link options 会在更新时刷新，其他选项按 mount-time 使用，修改后需重新挂载 provider
@@ -232,6 +234,147 @@
 
 ```vue
 <TLinkifyText :x="2" :y="6" :w="80" value="build failed: see https://example.com/docs" />
+```
+
+## TCommandPalette
+
+命令面板组件，组合 `TDialog`、`TInput` 和列表行渲染。它接收一组 `items`，按 `label` / `detail` / `keywords` 做文本过滤，`Enter` 触发 `select`，`Esc` 触发 `close`。
+
+```vue
+<TCommandPalette
+  v-model="paletteOpen"
+  :items="commands"
+  title="Command"
+  placeholder="Search commands"
+  @select="runCommand"
+/>
+```
+
+## TTable
+
+`TTable` 是多列静态表格，负责列宽、表头、可选边框和 row click。
+
+## TDataTable
+
+`TDataTable` 在 `TTable` 上增加受控排序、过滤和行选择；点击表头会 emit `sortChange` / `update:sortBy` / `update:sortDirection`。
+
+```vue
+<TDataTable
+  :x="0"
+  :y="0"
+  :w="80"
+  :h="12"
+  :columns="columns"
+  :rows="rows"
+  row-key="id"
+  sortable
+  filterable
+  selectable
+/>
+```
+
+## TTree
+
+`TTree` 渲染层级节点，`expandedIds` 和 `selectedId` 都是受控状态。
+
+## TCheckbox
+
+checkbox 控件，使用 `modelValue` / `update:modelValue`，Space / Enter / click 切换。
+
+## TRadioGroup
+
+radio group 控件，使用 `options` 和受控 `modelValue` 渲染单选列表。
+
+## TSwitch
+
+switch 控件，适合二元配置开关。
+
+## TSlider
+
+slider 控件，使用 `min` / `max` / `step` 和 ArrowLeft / ArrowRight 调整数值。
+
+## TFormField
+
+`TFormField` 统一 label、help、error、required、disabled 的展示边界，不内置验证系统。
+
+```vue
+<TFormField :x="0" :y="0" :w="44" :h="3" label="Token" help="Paste your API token" :error="error">
+  <TPasswordInput v-model="token" :x="0" :y="0" :w="40" />
+</TFormField>
+```
+
+## TPasswordInput
+
+`TPasswordInput` 是 `TInput secret` 的轻量包装，输入值仍由宿主通过 `v-model` 控制，渲染时隐藏明文。
+
+## TAutocompleteInput
+
+`TAutocompleteInput` 组合 `TInput` 和受控 suggestions 列表；选择 suggestion 后 emit `select`。
+
+## TContextMenu
+
+`TContextMenu` 是轻量菜单 overlay，基于现有 `TBox` / `TText` / `TView` 渲染。它不会直接操作系统 clipboard 或浏览器窗口；菜单项动作通过 `select` 交给宿主处理。
+
+```vue
+<TContextMenu
+  v-model="open"
+  :x="cursor.x"
+  :y="cursor.y"
+  :items="[{ id: 'open', label: 'Open Link' }]"
+  @select="handleMenuSelect"
+/>
+```
+
+## TPopover
+
+`TPopover` 是带边框的轻量内容浮层，可以传 `content`，也可以用 default slot 自定义内容。
+
+## TTooltip
+
+`TTooltip` 是单行提示文本，适合说明 unfamiliar controls 或链接打开条件。
+
+## TStatusBar
+
+`TStatusBar` 用于 terminal app 的底部状态栏。它是纯渲染组件，不注册全局快捷键。
+
+```vue
+<TStatusBar :x="0" :y="23" :w="80" left="Ready" center="main" right="Ctrl+K" />
+```
+
+## TBreadcrumb
+
+`TBreadcrumb` 渲染路径导航，点击 item 只 emit `select`。
+
+```vue
+<TBreadcrumb :x="0" :y="0" :w="60" :items="pathSegments" @select="goToPath" />
+```
+
+## TKeyHint
+
+`TKeyHint` 渲染快捷键提示，不绑定或监听快捷键。
+
+```vue
+<TKeyHint :x="62" :y="0" combo="Esc" label="Close" />
+```
+
+## Theme Tokens
+
+`createTheme()` 生成 `TerminalProvider.theme` 可接收的 token 对象。主题 token 只提供默认样式；组件局部传入的 `style`、`hoverStyle`、`focusStyle` 等 props 会覆盖主题。
+
+```ts
+const theme = createTheme({
+  colors: {
+    link: "cyanBright",
+    linkVisited: "magentaBright",
+    danger: "redBright",
+  },
+  components: {
+    TLink: {
+      underline: true,
+      hoverUnderline: true,
+    },
+  },
+});
 ```
 
 ## TAnchor

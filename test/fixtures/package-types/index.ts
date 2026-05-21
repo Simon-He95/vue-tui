@@ -1,12 +1,20 @@
 import {
   TerminalProvider,
   TBox,
+  TCheckbox,
+  TCommandPalette,
+  TDataTable,
+  TFormField,
   TLinkifyText,
+  TTable,
   TText,
+  TTree,
   createTInputHostPlugin,
   createTerminal,
+  createTheme,
   linkifyTextSegments,
   type Style,
+  type TTableColumn,
   type Terminal,
   type TInputHostAdapter,
   type TLinkifyOptions,
@@ -81,12 +89,20 @@ const hostAdapter: TInputHostAdapter = {
 const hostPlugin = createTInputHostPlugin(hostAdapter);
 const linkifyOptions: TLinkifyOptions = { protocols: ["https"], allowRelative: true };
 const linkified = linkifyTextSegments("see https://example.com", linkifyOptions);
+const theme = createTheme({ colors: { link: "cyanBright" } });
+const tableColumns: TTableColumn[] = [{ key: "id", label: "ID", width: 4 }];
 
 console.log(
   TerminalProvider,
   TBox,
+  TCheckbox,
+  TCommandPalette,
+  TDataTable,
+  TFormField,
   TLinkifyText,
+  TTable,
   TText,
+  TTree,
   TMarkdownText,
   TLogView,
   TVirtualList,
@@ -124,6 +140,8 @@ console.log(
   plugin,
   hostPlugin,
   linkified,
+  theme,
+  tableColumns,
 );
 
 const driver: StdinDriver | null = null;

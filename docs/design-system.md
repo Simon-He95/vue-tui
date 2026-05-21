@@ -4,6 +4,23 @@ This repo targets a “terminal-first” design system that can render identical
 
 ## Tokens
 
+`createTheme()` 是 public token helper，返回可传给 `TerminalProvider.theme` 的对象。当前 token 聚焦公共组件默认样式，不替代局部 `style` props。
+
+```ts
+const theme = createTheme({
+  colors: {
+    link: "cyanBright",
+    linkVisited: "magentaBright",
+    danger: "redBright",
+  },
+  components: {
+    TLink: { underline: true, hoverUnderline: true },
+    TTable: { selectedStyle: { inverse: true } },
+    TFormField: { errorStyle: { fg: "redBright" } },
+  },
+});
+```
+
 ### Spacing
 
 - `space.0 = 0`
