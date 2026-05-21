@@ -108,6 +108,30 @@ describe("TLinkifyText", () => {
       { text: "src/foo.ts" },
     ]);
     expect(linkifyTextSegments("3/4", { allowRelative: true })).toEqual([{ text: "3/4" }]);
+    expect(linkifyTextSegments("GET / 200", { allowRelative: true })).toEqual([
+      { text: "GET / 200" },
+    ]);
+    expect(linkifyTextSegments("see ?", { allowRelative: true })).toEqual([{ text: "see ?" }]);
+    expect(linkifyTextSegments("see #", { allowRelative: true })).toEqual([{ text: "see #" }]);
+    expect(linkifyTextSegments("see /,", { allowRelative: true })).toEqual([{ text: "see /," }]);
+    expect(linkifyTextSegments("see ?.", { allowRelative: true })).toEqual([{ text: "see ?." }]);
+    expect(linkifyTextSegments("see #.", { allowRelative: true })).toEqual([{ text: "see #." }]);
+    expect(linkifyTextSegments("see ./docs", { allowRelative: true })).toEqual([
+      { text: "see " },
+      { text: "./docs", href: "./docs" },
+    ]);
+    expect(linkifyTextSegments("see ../docs", { allowRelative: true })).toEqual([
+      { text: "see " },
+      { text: "../docs", href: "../docs" },
+    ]);
+    expect(linkifyTextSegments("see #section", { allowRelative: true })).toEqual([
+      { text: "see " },
+      { text: "#section", href: "#section" },
+    ]);
+    expect(linkifyTextSegments("see ?tab=api", { allowRelative: true })).toEqual([
+      { text: "see " },
+      { text: "?tab=api", href: "?tab=api" },
+    ]);
   });
 
   it("does not expose file URL linkification through public protocols", () => {
@@ -504,6 +528,39 @@ describe("TLinkifyText", () => {
     try {
       expect(mounted.terminal.getCell(5, 0).style.fg).toBe("blueBright");
       expect(mounted.terminal.getCell(5, 0).style.underline).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("honors disabled link underline theme for TLogView linkified links", async () => {
+    const theme = createTheme({
+      components: {
+        TLink: { underline: false },
+      },
+    });
+    const source = {
+      lineCount: () => 1,
+      getLine: () => "open https://example.com",
+    };
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 2,
+          source,
+          version: 1,
+          linkify: true,
+        }),
+      40,
+      3,
+      { theme },
+    );
+
+    try {
+      expect(mounted.terminal.getCell(5, 0).style.underline).toBe(false);
     } finally {
       mounted.unmount();
     }

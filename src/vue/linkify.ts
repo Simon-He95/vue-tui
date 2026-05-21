@@ -45,13 +45,12 @@ function scheme(raw: string): string | null {
 }
 
 function isRelativeCandidate(raw: string): boolean {
-  return (
-    raw.startsWith("./") ||
-    raw.startsWith("../") ||
-    raw.startsWith("/") ||
-    raw.startsWith("#") ||
-    raw.startsWith("?")
-  );
+  if (raw.startsWith("./")) return raw.length > 2;
+  if (raw.startsWith("../")) return raw.length > 3;
+  if (raw.startsWith("/")) return raw.length > 1;
+  if (raw.startsWith("#")) return raw.length > 1;
+  if (raw.startsWith("?")) return raw.length > 1;
+  return false;
 }
 
 function hasTextBoundary(text: string, index: number): boolean {

@@ -260,18 +260,24 @@ export function normalizeOpenHref(href: string): string | null {
   return null;
 }
 
-function openExternalHref(href: string): boolean {
+function openerCommand(normalized: string): { command: string; args: string[] } {
+  if (process.platform === "darwin") return { command: "/usr/bin/open", args: [normalized] };
+  if (process.platform === "win32") {
+    return {
+      command: "C:\\Windows\\System32\\rundll32.exe",
+      args: ["url.dll,FileProtocolHandler", normalized],
+    };
+  }
+  return { command: "/usr/bin/xdg-open", args: [normalized] };
+}
+
+export function openExternalHref(href: string): boolean {
+  if (process.env.VT_OPEN_LINKS !== "1") return false;
+
   const normalized = normalizeOpenHref(href);
   if (!normalized) return false;
 
-  const command =
-    process.platform === "darwin"
-      ? "open"
-      : process.platform === "win32"
-        ? "rundll32.exe"
-        : "xdg-open";
-  const args =
-    process.platform === "win32" ? ["url.dll,FileProtocolHandler", normalized] : [normalized];
+  const { command, args } = openerCommand(normalized);
   const child = spawn(command, args, { detached: true, stdio: "ignore", shell: false });
   child.on("error", () => {});
   child.unref();
@@ -1427,13 +1433,17 @@ const ComponentGallery = defineComponent({
     }
 
     function openVscode(): void {
-      openExternalHref(vscodeHref());
-      status.value = "Opened scripts/run-component-terminal.ts in VS Code";
+      const href = vscodeHref();
+      status.value = openExternalHref(href)
+        ? "Opened scripts/run-component-terminal.ts in VS Code"
+        : `Link: ${href} (set VT_OPEN_LINKS=1 to open)`;
     }
 
     function openBrowser(): void {
-      openExternalHref("https://example.com");
-      status.value = "Opened https://example.com";
+      const href = "https://example.com";
+      status.value = openExternalHref(href)
+        ? "Opened https://example.com"
+        : `Link: ${href} (set VT_OPEN_LINKS=1 to open)`;
     }
 
     function move(delta: number): void {
@@ -1626,6 +1636,11 @@ const ComponentGallery = defineComponent({
           href: "https://example.com",
           label: "open browser with TLink",
           style: liveStyle.value,
+          onActivate: ({ href }: { href: string }) => {
+            if (process.env.VT_OPEN_LINKS !== "1") {
+              status.value = `Link: ${href} (set VT_OPEN_LINKS=1 to open)`;
+            }
+          },
           onOpen: () => {
             status.value = "TLink opened https://example.com";
           },

@@ -299,6 +299,7 @@ export type TLogViewHandle = Readonly<{
 }>;
 
 let nextTLogViewTaskId = 0;
+const DEFAULT_LINK_STYLE: Style = { underline: true };
 const DEFAULT_LOG_RENDER_CACHE_SIZE = 2_000;
 const DEFAULT_LOG_WRAP_CACHE_SIZE = 2_000;
 const DEFAULT_VISUAL_INDEX_CAPACITY = 1_024;
@@ -763,7 +764,7 @@ export const TLogView = defineComponent({
     },
     linkStyle: {
       type: Object as PropType<Style>,
-      default: () => ({ underline: true }),
+      default: undefined,
     },
     keyboardLinks: { type: Boolean, default: false },
     linkFocusStyle: {
@@ -819,10 +820,11 @@ export const TLogView = defineComponent({
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
     const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
+    const effectiveAnsiLinkStyle = computed<Style>(() => props.linkStyle ?? DEFAULT_LINK_STYLE);
     const effectiveLinkStyle = computed<Style>(() => ({
       ...(theme.value.components.TLink?.style ?? {}),
       ...(theme.value.components.TLink?.underline === false ? { underline: false } : {}),
-      ...props.linkStyle,
+      ...(props.linkStyle ?? {}),
     }));
 
     const focused = ref(false);
@@ -989,7 +991,7 @@ export const TLogView = defineComponent({
     const linkifyOptionsKey = computed(() => linkifyOptionsCacheKey());
 
     function linkStyleCacheKey(): string {
-      return linksEnabled() ? styleCacheKey(props.linkStyle) : "";
+      return linksEnabled() ? styleCacheKey(effectiveAnsiLinkStyle.value) : "";
     }
 
     function linkifyStyleCacheKey(): string {
@@ -1261,7 +1263,7 @@ export const TLogView = defineComponent({
         props.source.getLine(index),
         baseStyle,
         linksEnabled(),
-        props.linkStyle,
+        effectiveAnsiLinkStyle.value,
       );
       ansiLineCache.set(key, {
         key,
@@ -4081,7 +4083,7 @@ export const TLogView = defineComponent({
         props.links,
         props.linkify,
         linkifyOptionsKey.value,
-        props.linkStyle,
+        effectiveAnsiLinkStyle.value,
         effectiveLinkStyle.value,
         props.keyboardLinks,
         props.linkFocusStyle,

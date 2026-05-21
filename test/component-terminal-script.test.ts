@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeOpenHref } from "../scripts/run-component-terminal.js";
+import { normalizeOpenHref, openExternalHref } from "../scripts/run-component-terminal.js";
 
 describe("component terminal script", () => {
   it("normalizes only supported external href protocols", () => {
@@ -16,5 +16,19 @@ describe("component terminal script", () => {
     expect(normalizeOpenHref("data:text/plain,hello")).toBeNull();
     expect(normalizeOpenHref(`vscode://file${process.cwd()}/package.json:1`)).toBeNull();
     expect(normalizeOpenHref("not a url")).toBeNull();
+  });
+
+  it("does not open external hrefs unless terminal link opening is explicitly enabled", () => {
+    const previous = process.env.VT_OPEN_LINKS;
+    try {
+      delete process.env.VT_OPEN_LINKS;
+      expect(openExternalHref("https://example.com")).toBe(false);
+
+      process.env.VT_OPEN_LINKS = "0";
+      expect(openExternalHref("https://example.com")).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.VT_OPEN_LINKS;
+      else process.env.VT_OPEN_LINKS = previous;
+    }
   });
 });
