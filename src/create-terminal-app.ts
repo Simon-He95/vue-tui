@@ -6,6 +6,7 @@ import type { TerminalRenderPlane, TerminalRenderPlanes } from "./core/render-pl
 import type { Style, Terminal } from "./core/types.js";
 import type { CliEventManager, TerminalEventRecord } from "./events/index.js";
 import type { ClipboardApi } from "./runtime/index.js";
+import type { TerminalLinkOpenerLike } from "./vue/components/link/host.js";
 import type {
   SelectionTextProvider,
   TerminalSelectionConfig,
@@ -50,6 +51,10 @@ import {
   createDefaultTInputHostAdapter,
   defaultTInputHostPlugin,
 } from "./vue/components/input/plugins/hostPlugin.node.js";
+import {
+  normalizeTerminalLinkOpener,
+  TerminalLinkOpenerContextKey,
+} from "./vue/components/link/host.js";
 import { TRenderPlane } from "./vue/components/TRenderPlane.js";
 import {
   EventZIndexContextKey,
@@ -175,6 +180,7 @@ export type CreateTerminalAppOptions = Readonly<{
   onSelectionCopy?: (payload: TerminalSelectionCopyPayload) => void;
   inputPlugins?: readonly TInputPlugin[];
   pathPickerProvider?: PathPickerProvider;
+  linkOpener?: TerminalLinkOpenerLike;
 }>;
 
 export function createTerminalApp(options: CreateTerminalAppOptions): TerminalApp {
@@ -832,6 +838,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
           })),
         ]
       : [defaultTInputHostPlugin]);
+  const linkOpener = ref(normalizeTerminalLinkOpener(options.linkOpener));
   const offResize = terminal.on("resize", ({ cols, rows }) => {
     rootLayout.clipRect = { x: 0, y: 0, w: cols, h: rows };
     selection.clear();
@@ -887,6 +894,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
         TPathPickerProviderContextKey,
         ref(options.pathPickerProvider ?? createNodePathPickerProvider()) as any,
       );
+      provide(TerminalLinkOpenerContextKey, linkOpener as any);
 
       return () => {
         const portalVNodes = portals.map((p) =>

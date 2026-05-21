@@ -210,6 +210,7 @@ describe("package exports", () => {
       "TBox",
       "TDialog",
       "TInput",
+      "TLink",
       "TList",
       "TSelect",
       "TText",

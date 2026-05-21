@@ -16,6 +16,21 @@ export { TInput } from "./vue/components/TInput.js";
 export type { TInputHostAdapter } from "./vue/components/input/host.js";
 export { createTInputHostPlugin } from "./vue/components/input/plugins/hostPlugin.js";
 export { TList } from "./vue/components/TList.js";
+export { TLink } from "./vue/components/TLink.js";
+export type {
+  TLinkActivatePayload,
+  TLinkActivationSource,
+  TLinkInvalidHrefPayload,
+  TLinkModifierClick,
+  TLinkOpenMode,
+  TLinkOpenPayload,
+} from "./vue/components/TLink.js";
+export type {
+  TerminalLinkOpenContext,
+  TerminalLinkOpener,
+  TerminalLinkOpenerLike,
+  TerminalLinkOpenSource,
+} from "./vue/components/link/host.js";
 export { TSelect } from "./vue/components/TSelect.js";
 export { TText } from "./vue/components/TText.js";
 export { TView } from "./vue/components/TView.js";

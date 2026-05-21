@@ -11,6 +11,7 @@ describe("documented entrypoint exports", () => {
       "TBox",
       "TDialog",
       "TInput",
+      "TLink",
       "TList",
       "TSelect",
       "TText",

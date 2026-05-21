@@ -10,7 +10,7 @@
 
 | API maturity | Import                           | 组件                                                                                                                                                                                                |
 | ------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TDialog` `TInput` `TList` `TSelect` `TText` `TView`                                                                                                                      |
+| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TDialog` `TInput` `TLink` `TList` `TSelect` `TText` `TView`                                                                                                              |
 | Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition`                                               |
 | Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                  |
 | Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap` |
@@ -24,7 +24,7 @@
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------- |
 | Root          | `TerminalProvider`                                                                                                                                                               | 创建 terminal / renderer / event manager 上下文  | 通用，适合所有宿主                                         |
 | Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                   | 布局、裁剪、层级、分层组合                       | 通用，和 CLI 业务无关                                      |
-| Text / Motion | `TText` `TTransition`                                                                                                                                                            | 文本渲染、状态切换、动画插值                     | 通用                                                       |
+| Text / Action | `TText` `TLink` `TTransition`                                                                                                                                                    | 文本渲染、链接操作、状态切换、动画插值           | 通用                                                       |
 | Input         | `TInput` `TInputBox` `TJsonEditor`                                                                                                                                               | prompt、表单、结构化文本编辑                     | 通用，但推荐把补全/校验放到插件层                          |
 | Pickers       | `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择        | `TPathPicker` 本体可复用，路径语义由 provider 注入         |
 | Overlay       | `TDialog` `TMultilineModal` `TDebugOverlay`                                                                                                                                      | 对话框、详情查看、调试覆盖层                     | 通用，适合多种宿主                                         |
@@ -77,6 +77,7 @@
 - `clipboard` `(ClipboardApi?)`: 给 selection auto-copy 注入 clipboard；不传时 browser 使用运行时 clipboard
 - `inputPlugins` `(TInputPlugin[])`: 给子树里的 `TInput` / `TInputBox` 注入宿主插件（例如 terminal clipboard、TTY 风格快捷键）；init-only，修改后需重新挂载 provider/input
 - `pathPickerProvider` `(PathPickerProvider?)`: 给子树里的 `TPathPicker` 注入宿主路径 provider
+- `linkOpener` `(TerminalLinkOpener | function?)`: 给 `TLink openMode="host"` 注入外部链接打开能力；浏览器 `TerminalProvider` 默认使用 `window.open`，CLI/headless 需要通过 `createTerminalApp({ linkOpener })` 显式提供
 - `debugIme` `(boolean)`: 输出 IME 调试信息
 - `debugTrace` `(boolean)`: 开启 trace（commit/event/focus）
 - `domRendererOptions` `(DomRendererOptions?)`: DOM renderer 配置，例如 `syncFlushMaxRows` / `syncFlushCellBudget`；link options 会在更新时刷新，其他选项按 mount-time 使用，修改后需重新挂载 provider
@@ -158,6 +159,44 @@
 `@click`/`@dblclick`/`@pointerdown`/`@pointerup`/`@pointermove`/`@pointerenter`/`@pointerleave`/`@wheel`/`@keydown`/`@keyup`/`@focus`/`@blur`
 
 > 同时支持对应的 `Capture` 版本（例如 `@clickCapture`）。
+
+## TLink
+
+可点击、可聚焦、可键盘激活的单行链接组件。它会把 safe `href` 写入 `Style.href`，因此 DOM renderer links 开启时可以得到原生 anchor，CLI/stdout renderer 可以继续输出 OSC8 hyperlink。
+
+默认 `openMode="host"`：点击或按 `Enter`/`Space` 时会先 emit `activate`，再调用 `TerminalProvider.linkOpener` 或 `createTerminalApp({ linkOpener })` 注入的 `openExternal()`；浏览器 `TerminalProvider` 默认使用 `window.open`，CLI/headless 不会默认执行系统命令。
+
+### Props
+
+- `x`/`y` `(number, required)`
+- `w` `(number?)`: 不传时按 `label || href` 的 cell 宽度计算
+- `h` `(number)`: 命中区域高度，默认 `1`
+- `href` `(string, required)`
+- `label` `(string?)`
+- `style` / `hoverStyle` / `focusStyle` / `activeStyle` `(Style?)`
+- `disabled` `(boolean)`
+- `openMode` `('native' | 'host' | 'event' | 'none')`
+- `activationKeys` `(string[])`: 默认 `['Enter', ' ']`
+- `modifierClick` `('none' | 'ctrl' | 'meta' | 'ctrlOrMeta')`
+- `autoFocus` `(boolean)`
+
+### Events
+
+- `activate`: `{ href, label, source }`
+- `open`: `{ href, label, source }`，仅 host opener 返回 truthy 时触发
+- `invalidHref`: `{ href, reason }`
+- `click` / `keydown` / `focus` / `blur`
+
+```vue
+<TLink
+  :x="2"
+  :y="4"
+  href="https://example.com"
+  label="Open example.com"
+  :focus-style="{ inverse: true }"
+  @activate="onLinkActivate"
+/>
+```
 
 ## TAnchor
 
