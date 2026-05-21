@@ -79,7 +79,7 @@ export const TTree = defineComponent({
     const rows = computed(() => flattenTree(props.nodes, expandedSet.value).slice(0, props.h));
 
     function toggle(item: FlatTreeNode): void {
-      if (!item.expandable) return;
+      if (item.node.disabled || !item.expandable) return;
       const ids = new Set(props.expandedIds);
       if (ids.has(item.node.id)) ids.delete(item.node.id);
       else ids.add(item.node.id);
@@ -117,7 +117,7 @@ export const TTree = defineComponent({
                 y: index,
                 w: props.w,
                 h: 1,
-                focusable: true,
+                focusable: !item.node.disabled,
                 onClick: () => (item.expandable ? toggle(item) : select(item)),
                 onKeydown: (event: any) => {
                   if (event.key === "Enter" || event.key === " ") {

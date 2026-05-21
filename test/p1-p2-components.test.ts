@@ -72,6 +72,51 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not toggle disabled expandable tree nodes", async () => {
+    const expandedIds = ref<string[]>([]);
+    const onToggle = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TTree, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          expandedIds: expandedIds.value,
+          "onUpdate:expandedIds": (ids: string[]) => (expandedIds.value = ids),
+          onToggle,
+          nodes: [
+            {
+              id: "root",
+              label: "root",
+              disabled: true,
+              children: [{ id: "leaf", label: "leaf" }],
+            },
+          ],
+        }),
+      30,
+      5,
+    );
+
+    try {
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+      await nextTick();
+
+      expect(expandedIds.value).toEqual([]);
+      expect(onToggle).not.toHaveBeenCalled();
+      expect(
+        mounted
+          .events()!
+          .debugNodes()
+          .some((node) => node.visible && node.focusable && node.rect.x === 0 && node.rect.y === 0),
+      ).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("applies table column header and body styles", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -202,6 +247,44 @@ describe("P1/P2 public components", () => {
       expect(lines[7]).toContain("Ready");
       expect(lines[8]).toContain("home / src");
       expect(lines[8]).toContain("Esc Close");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses terminal cell width for breadcrumb hit areas", async () => {
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TBreadcrumb, {
+          x: 0,
+          y: 0,
+          w: 12,
+          items: [
+            { id: "home", label: "首页" },
+            { id: "src", label: "源码" },
+          ],
+          onSelect,
+        }),
+      16,
+      2,
+    );
+
+    try {
+      expect(mounted.terminal.getCell(0, 0).ch).toBe("首");
+      expect(mounted.terminal.getCell(2, 0).ch).toBe("页");
+      expect(mounted.terminal.getCell(5, 0).ch).toBe("/");
+      expect(mounted.terminal.getCell(7, 0).ch).toBe("源");
+      expect(mounted.terminal.getCell(9, 0).ch).toBe("码");
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 6, clientY: 0, bubbles: true }));
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith({
+        item: { id: "home", label: "首页" },
+        index: 0,
+      });
     } finally {
       mounted.unmount();
     }

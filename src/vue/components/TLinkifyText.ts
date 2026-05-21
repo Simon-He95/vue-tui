@@ -2,12 +2,13 @@ import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import type { Rect } from "../../events/manager/types.js";
 import type { TLinkifyOptions, TLinkifyProtocol } from "../linkify.js";
-import { computed, defineComponent, h } from "vue";
+import { computed, defineComponent, h, inject, ref } from "vue";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { linkifyTextSegments } from "../linkify.js";
+import { TuiThemeContextKey, tuiDefaultTheme } from "../theme.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
 import {
   forEachTextCellSegment,
@@ -164,7 +165,7 @@ export const TLinkifyText = defineComponent({
     style: { type: Object as PropType<Style>, default: undefined },
     linkStyle: {
       type: Object as PropType<Style>,
-      default: () => ({ fg: "cyanBright", underline: true }),
+      default: undefined,
     },
     clear: { type: Boolean, default: true },
     wrap: { type: Boolean, default: false },
@@ -179,8 +180,16 @@ export const TLinkifyText = defineComponent({
     const { terminal, defaultStyle } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
+    const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
 
     const options = computed(() => linkifyOptions(props));
+    const effectiveLinkStyle = computed(() =>
+      mergeStyle(
+        theme.value.components.TLink?.style,
+        theme.value.components.TLink?.underline === false ? { underline: false } : undefined,
+        props.linkStyle,
+      ),
+    );
     const defaultWidth = computed(() => computeDefaultWidth(props.value, options.value));
     const rows = computed(() => {
       const width = Math.max(0, Math.floor(props.w ?? defaultWidth.value));
@@ -223,7 +232,7 @@ export const TLinkifyText = defineComponent({
         props.h,
         props.wrap,
         props.style,
-        props.linkStyle,
+        effectiveLinkStyle.value,
         props.protocols,
         props.allowRelative,
         props.maxUrlLength,
@@ -253,7 +262,7 @@ export const TLinkifyText = defineComponent({
           let used = 0;
           for (const segment of row) {
             const style = segment.href
-              ? mergeStyle(baseStyle, props.linkStyle, { href: segment.href })
+              ? mergeStyle(baseStyle, effectiveLinkStyle.value, { href: segment.href })
               : baseStyle;
             terminal.write(segment.text, { x: cx, y, style });
             cx += segment.cells;

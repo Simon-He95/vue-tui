@@ -14,11 +14,8 @@ export type {
 } from "./components/input/plugins/types.js";
 export { TAnchor } from "./components/TAnchor.js";
 export { TBox } from "./components/TBox.js";
-export { TCommandPalette, computeCommandPaletteMatchRanges } from "./components/TCommandPalette.js";
-export type {
-  TCommandPaletteItem,
-  TCommandPaletteMatchRange,
-} from "./components/TCommandPalette.js";
+export { TCommandPalette } from "./components/TCommandPalette.js";
+export type { TCommandPaletteItem } from "./components/TCommandPalette.js";
 export { TDataTable } from "./components/TDataTable.js";
 export type {
   TDataTableRowSelectPayload,

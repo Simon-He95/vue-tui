@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { linkifyTextSegments, TLinkifyText, TText } from "../src/index.js";
+import { createTheme, linkifyTextSegments, TLinkifyText, TText } from "../src/index.js";
 import { TLogView } from "../src/experimental.js";
 import {
   defineComponent,
@@ -52,6 +52,39 @@ describe("TLinkifyText", () => {
     try {
       expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://example.com/");
       expect(mounted.terminal.getCell(0, 1).style.href).toBe("https://example.com/");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses link theme defaults and lets linkStyle override them", async () => {
+    const theme = createTheme({ colors: { link: "blueBright" } });
+    const mounted = await mountTerminal(
+      () => [
+        h(TLinkifyText, {
+          x: 0,
+          y: 0,
+          w: 24,
+          value: "https://example.com",
+        }),
+        h(TLinkifyText, {
+          x: 0,
+          y: 1,
+          w: 24,
+          value: "https://example.org",
+          linkStyle: { fg: "greenBright" },
+        }),
+      ],
+      28,
+      3,
+      { theme },
+    );
+
+    try {
+      expect(mounted.terminal.getCell(0, 0).style.fg).toBe("blueBright");
+      expect(mounted.terminal.getCell(0, 0).style.underline).toBe(true);
+      expect(mounted.terminal.getCell(0, 1).style.fg).toBe("greenBright");
+      expect(mounted.terminal.getCell(0, 1).style.underline).toBe(true);
     } finally {
       mounted.unmount();
     }

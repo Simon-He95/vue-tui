@@ -1,6 +1,7 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import { defineComponent, h } from "vue";
+import { textCellWidth } from "../utils/text.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
 import { fitCellText, mergeStyle } from "./simple-utils.js";
@@ -70,7 +71,9 @@ export const TBreadcrumb = defineComponent({
         const item = props.items[index]!;
         const suffix = index < props.items.length - 1 ? ` ${props.separator} ` : "";
         const text = `${item.label}${suffix}`;
-        const w = Math.min(props.w - x, text.length);
+        const remaining = props.w - x;
+        const cellW = textCellWidth(text);
+        const w = Math.min(remaining, cellW);
         if (w <= 0) break;
         children.push(
           h(
@@ -101,6 +104,7 @@ export const TBreadcrumb = defineComponent({
           ),
         );
         x += w;
+        if (w < cellW) break;
       }
       return h(
         TView as any,

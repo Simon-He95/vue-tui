@@ -234,7 +234,6 @@ describe("package exports", () => {
       "TTree",
       "TView",
       "TerminalProvider",
-      "computeCommandPaletteMatchRanges",
       "createDomRenderer",
       "createTInputHostPlugin",
       "createTerminal",
