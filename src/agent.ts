@@ -3,7 +3,9 @@ export { TDialog } from "./vue/components/TDialog.js";
 export { TInput } from "./vue/components/TInput.js";
 export { TSelect } from "./vue/components/TSelect.js";
 export { TText } from "./vue/components/TText.js";
+export { TThinkingView } from "./vue/components/TThinkingView.js";
 export { TToolCallView } from "./vue/components/TToolCallView.js";
+export { TUserMessageView } from "./vue/components/TUserMessageView.js";
 export {
   computeCommandPaletteMatchRanges,
   TCommandPalette,
