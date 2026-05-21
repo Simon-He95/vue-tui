@@ -177,6 +177,33 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("keeps styled emoji table cell links from leaking into padding and borders", async () => {
+    const coder = "\u{1F468}\u{1F3FD}\u200D\u{1F4BB}";
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 5,
+          content: [
+            "| Icon | Link |",
+            "|---|---|",
+            `| [${coder}](https://example.com) | coder |`,
+          ].join("\n"),
+        }),
+      24,
+      6,
+    );
+
+    expect(mounted.terminal.getCell(15, 3).ch).toBe("│");
+    expect(mounted.terminal.getCell(15, 3).style).toMatchObject({ dim: true });
+    expect(mounted.terminal.getCell(15, 3).style.href).toBeUndefined();
+    expect(mounted.terminal.getCell(2, 3).style.href).toBe("https://example.com/");
+    expect(mounted.terminal.getCell(14, 3).style.href).toBeUndefined();
+    mounted.unmount();
+  });
+
   it("keeps TVirtualMarkdown table borders aligned with cjk widthProvider", async () => {
     const mounted = await mountTerminal(
       () =>
