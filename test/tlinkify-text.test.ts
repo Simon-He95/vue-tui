@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { linkifyTextSegments, TLinkifyText } from "../src/index.js";
+import { linkifyTextSegments, TLinkifyText, TText } from "../src/index.js";
 import { TLogView } from "../src/experimental.js";
-import { h, mountTerminal } from "./ui-regressions-support.js";
+import {
+  defineComponent,
+  h,
+  mountTerminal,
+  nextTick,
+  ref,
+  useRenderNode,
+} from "./ui-regressions-support.js";
 
 describe("TLinkifyText", () => {
   it("detects safe absolute links and keeps surrounding text plain", async () => {
@@ -58,6 +65,80 @@ describe("TLinkifyText", () => {
       { text: "see " },
       { text: "/docs", href: "/docs" },
     ]);
+  });
+
+  it("keeps trailing punctuation outside link hrefs", () => {
+    expect(linkifyTextSegments("see https://example.com/docs.")).toEqual([
+      { text: "see " },
+      { text: "https://example.com/docs", href: "https://example.com/docs" },
+      { text: "." },
+    ]);
+    expect(linkifyTextSegments("open (https://example.com/docs).")).toEqual([
+      { text: "open (" },
+      { text: "https://example.com/docs", href: "https://example.com/docs" },
+      { text: ")." },
+    ]);
+    expect(linkifyTextSegments("mail mailto:a@b.com.")).toEqual([
+      { text: "mail " },
+      { text: "mailto:a@b.com", href: "mailto:a@b.com" },
+      { text: "." },
+    ]);
+    expect(linkifyTextSegments("see https://example.com/a_(b).")).toEqual([
+      { text: "see " },
+      { text: "https://example.com/a_(b)", href: "https://example.com/a_(b)" },
+      { text: "." },
+    ]);
+  });
+
+  it("ignores dirty rows outside its rect", async () => {
+    const value = ref("https://example.com/a");
+    const markerVersion = ref(0);
+    const DirtyMarker = defineComponent({
+      name: "LinkifyDirtyMarker",
+      setup() {
+        useRenderNode(() => ({
+          rect: { x: 0, y: 2, w: 8, h: 1 },
+          dirtyRowsHint: markerVersion.value > 0 ? [2] : undefined,
+          deps: markerVersion.value,
+          paint: () => {},
+        }));
+        return () => null;
+      },
+    });
+
+    const mounted = await mountTerminal(
+      () => [
+        h(TText, { x: 0, y: 2, w: 8, value: "PERSIST" }),
+        h(DirtyMarker),
+        h(TLinkifyText, {
+          x: 0,
+          y: 0,
+          zIndex: 10,
+          w: 8,
+          h: 1,
+          value: value.value,
+        }),
+      ],
+      20,
+      4,
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+      expect(mounted.terminal.snapshot().lines[2]).toContain("PERSIST");
+
+      value.value = "https://example.com/b";
+      markerVersion.value++;
+      await nextTick();
+      await Promise.resolve();
+      await nextTick();
+      await Promise.resolve();
+
+      expect(mounted.terminal.snapshot().lines[2]).toContain("PERSIST");
+    } finally {
+      mounted.unmount();
+    }
   });
 
   it("lets TLogView opt into URL linkification without ANSI OSC8 input", async () => {

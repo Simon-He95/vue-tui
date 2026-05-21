@@ -170,6 +170,18 @@ export const TTable = defineComponent({
         for (let index = 0; index < props.columns.length; index++) {
           const column = props.columns[index]!;
           const width = widths.value[index] ?? 1;
+          if (column.headerStyle) {
+            children.push(
+              h(TText as any, {
+                key: `header-cell:${column.key}`,
+                x: cursor,
+                y: 0,
+                w: width,
+                value: fitCellText(column.label ?? column.key, width, column.align),
+                style: mergeStyle(headerStyle.value, column.headerStyle),
+              }),
+            );
+          }
           children.push(
             h(TView as any, {
               key: `header-hit:${column.key}`,
@@ -228,14 +240,40 @@ export const TTable = defineComponent({
               focusable: true,
               onClick: () => emit("rowClick", { row, index }),
             },
-            () =>
-              h(TText as any, {
-                x: 0,
-                y: 0,
-                w: props.w,
-                value: makeRowLine(props.columns, widths.value, row, index, props.border),
-                style: selected ? selectedRowStyle.value : rowStyle.value,
-              }),
+            () => {
+              const baseStyle = selected ? selectedRowStyle.value : rowStyle.value;
+              const rowChildren: any[] = [
+                h(TText as any, {
+                  key: "row-line",
+                  x: 0,
+                  y: 0,
+                  w: props.w,
+                  value: makeRowLine(props.columns, widths.value, row, index, props.border),
+                  style: baseStyle,
+                }),
+              ];
+
+              let cursor = props.border ? 1 : 0;
+              for (let columnIndex = 0; columnIndex < props.columns.length; columnIndex++) {
+                const column = props.columns[columnIndex]!;
+                const width = widths.value[columnIndex] ?? 1;
+                if (column.style) {
+                  rowChildren.push(
+                    h(TText as any, {
+                      key: `cell:${column.key}`,
+                      x: cursor,
+                      y: 0,
+                      w: width,
+                      value: fitCellText(cellValue(column, row, index), width, column.align),
+                      style: mergeStyle(baseStyle, column.style),
+                    }),
+                  );
+                }
+                cursor += width + 1;
+              }
+
+              return rowChildren;
+            },
           ),
         );
       }

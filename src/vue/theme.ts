@@ -95,20 +95,29 @@ export function createTheme(overrides: TuiThemeOverrides = {}): TuiTheme {
   const defaultLink = tuiDefaultTheme.components.TLink;
   const defaultTable = tuiDefaultTheme.components.TTable;
   const defaultFormField = tuiDefaultTheme.components.TFormField;
+  const colors = {
+    ...tuiDefaultTheme.colors,
+    ...(overrides.colors ?? {}),
+  };
+  const defaultLinkFromColors = {
+    ...(defaultLink ?? {}),
+    style: mergeStyleToken(defaultLink?.style, colors.link ? { fg: colors.link } : undefined),
+    visitedStyle: mergeStyleToken(
+      defaultLink?.visitedStyle,
+      colors.linkVisited ? { fg: colors.linkVisited } : undefined,
+    ),
+  };
 
   return {
-    colors: {
-      ...tuiDefaultTheme.colors,
-      ...(overrides.colors ?? {}),
-    },
+    colors,
     components: {
       TLink: {
-        ...(defaultLink ?? {}),
+        ...defaultLinkFromColors,
         ...(link ?? {}),
-        style: mergeStyleToken(defaultLink?.style, link?.style),
-        hoverStyle: mergeStyleToken(defaultLink?.hoverStyle, link?.hoverStyle),
-        focusStyle: mergeStyleToken(defaultLink?.focusStyle, link?.focusStyle),
-        visitedStyle: mergeStyleToken(defaultLink?.visitedStyle, link?.visitedStyle),
+        style: mergeStyleToken(defaultLinkFromColors.style, link?.style),
+        hoverStyle: mergeStyleToken(defaultLinkFromColors.hoverStyle, link?.hoverStyle),
+        focusStyle: mergeStyleToken(defaultLinkFromColors.focusStyle, link?.focusStyle),
+        visitedStyle: mergeStyleToken(defaultLinkFromColors.visitedStyle, link?.visitedStyle),
       },
       TTable: {
         ...(defaultTable ?? {}),

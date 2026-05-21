@@ -239,6 +239,9 @@ export const TLinkifyText = defineComponent({
         const fullY = Math.floor(full.y);
 
         const paintRow = (y: number) => {
+          const relY = y - r.y;
+          if (relY < 0 || relY >= r.h) return;
+
           const i = y - fullY;
           if (i < 0 || i >= rows.value.length) {
             if (props.clear) terminal.write(spaces(r.w), { x: r.x, y, style: baseStyle });
@@ -261,7 +264,7 @@ export const TLinkifyText = defineComponent({
           }
         };
 
-        if (dirtyRows?.length) {
+        if (dirtyRows) {
           for (const y of dirtyRows) paintRow(y);
           return;
         }

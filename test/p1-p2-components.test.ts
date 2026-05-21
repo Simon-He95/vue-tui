@@ -72,6 +72,41 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("applies table column header and body styles", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 3,
+          border: true,
+          headerStyle: { fg: "redBright" },
+          style: { fg: "white" },
+          columns: [
+            {
+              key: "name",
+              label: "Name",
+              width: 8,
+              headerStyle: { fg: "blueBright" },
+              style: { fg: "greenBright" },
+            },
+          ],
+          rows: [{ name: "build" }],
+        }),
+      16,
+      4,
+    );
+
+    try {
+      expect(mounted.terminal.getCell(1, 0).style.fg).toBe("blueBright");
+      expect(mounted.terminal.getCell(1, 2).style.fg).toBe("greenBright");
+      expect(mounted.terminal.getCell(0, 0).style.fg).toBe("redBright");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders form controls and field wrappers", async () => {
     const mounted = await mountTerminal(
       () => [
@@ -286,7 +321,7 @@ describe("P1/P2 public components", () => {
 
   it("creates theme tokens with component overrides", () => {
     const theme = createTheme({
-      colors: { link: "blueBright" },
+      colors: { link: "redBright" },
       components: {
         TLink: {
           style: { fg: "blueBright" },
@@ -298,7 +333,7 @@ describe("P1/P2 public components", () => {
       },
     });
 
-    expect(theme.colors.link).toBe("blueBright");
+    expect(theme.colors.link).toBe("redBright");
     expect(theme.components.TLink?.style?.fg).toBe("blueBright");
     expect(theme.components.TLink?.style?.underline).toBe(true);
     expect(theme.components.TLink?.hoverStyle).toMatchObject({
@@ -313,5 +348,20 @@ describe("P1/P2 public components", () => {
     expect(theme.components.TFormField?.labelStyle?.bold).toBe(true);
     expect(theme.components.TFormField?.errorStyle?.fg).toBe("yellowBright");
     expect(theme.colors.danger).toBe("redBright");
+  });
+
+  it("uses color tokens for link component defaults", () => {
+    const theme = createTheme({
+      colors: { link: "blueBright", linkVisited: "yellowBright" },
+    });
+
+    expect(theme.components.TLink?.style).toMatchObject({
+      fg: "blueBright",
+      underline: true,
+    });
+    expect(theme.components.TLink?.visitedStyle).toMatchObject({
+      fg: "yellowBright",
+      underline: true,
+    });
   });
 });

@@ -15,6 +15,8 @@ export type TLinkifySegment = Readonly<{
 
 const DEFAULT_PROTOCOLS: readonly TLinkifyProtocol[] = Object.freeze(["http", "https", "mailto"]);
 const URL_TEXT_RE = /(?:https?:\/\/|mailto:|file:\/\/|\.{1,2}\/|\/|#|\?)[^\s<>"'`]+/giu;
+const TRAILING_PUNCTUATION_RE = /[.,;:!?]/u;
+const TRAILING_CLOSER_RE = /[)\]}]/u;
 
 function protocolSet(options: TLinkifyOptions): Set<TLinkifyProtocol> {
   return new Set(options.protocols ?? DEFAULT_PROTOCOLS);
@@ -37,6 +39,36 @@ function isRelativeCandidate(raw: string): boolean {
     raw.startsWith("#") ||
     raw.startsWith("?")
   );
+}
+
+function lastChar(value: string): string {
+  return value[value.length - 1] ?? "";
+}
+
+function splitTrailingPunctuation(raw: string): { body: string; suffix: string } {
+  let body = raw;
+  let suffix = "";
+
+  while (body && TRAILING_PUNCTUATION_RE.test(lastChar(body))) {
+    suffix = lastChar(body) + suffix;
+    body = body.slice(0, -1);
+  }
+
+  while (body && TRAILING_CLOSER_RE.test(lastChar(body))) {
+    const ch = lastChar(body);
+    const open = ch === ")" ? "(" : ch === "]" ? "[" : "{";
+    let opens = 0;
+    let closes = 0;
+    for (const c of body) {
+      if (c === open) opens++;
+      else if (c === ch) closes++;
+    }
+    if (closes <= opens) break;
+    suffix = ch + suffix;
+    body = body.slice(0, -1);
+  }
+
+  return { body, suffix };
 }
 
 function normalizeLinkifiedHref(raw: string, options: TLinkifyOptions): string | null {
@@ -80,11 +112,13 @@ export function linkifyTextSegments(
       continue;
     }
 
-    const href = normalizeLinkifiedHref(raw, options);
+    const { body, suffix } = splitTrailingPunctuation(raw);
+    const href = normalizeLinkifiedHref(body, options);
     if (!href) continue;
 
     if (match.index > cursor) out.push({ text: text.slice(cursor, match.index) });
-    out.push({ text: raw, href });
+    out.push({ text: body, href });
+    if (suffix) out.push({ text: suffix });
     cursor = match.index + raw.length;
   }
 
