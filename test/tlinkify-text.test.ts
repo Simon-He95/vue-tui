@@ -2,6 +2,7 @@ import type {
   TLogViewLinkActivatePayload,
   TLogViewLinkClickPayload,
   TLogViewLinkFocusPayload,
+  TLogViewHandle,
 } from "../src/experimental.js";
 import { describe, expect, it } from "vitest";
 import { createTheme, linkifyTextSegments, TLinkifyText, TText } from "../src/index.js";
@@ -169,6 +170,11 @@ describe("TLinkifyText", () => {
       { text: "https://example.com/docs", href: "https://example.com/docs" },
       { text: ")." },
     ]);
+    expect(linkifyTextSegments("see https://example.com.)")).toEqual([
+      { text: "see " },
+      { text: "https://example.com", href: "https://example.com/" },
+      { text: ".)" },
+    ]);
     expect(linkifyTextSegments("mail mailto:a@b.com.")).toEqual([
       { text: "mail " },
       { text: "mailto:a@b.com", href: "mailto:a@b.com" },
@@ -254,6 +260,39 @@ describe("TLinkifyText", () => {
     }
   });
 
+  it("matches TText wrapping for wide glyphs in a one-cell column", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TText, {
+          x: 0,
+          y: 0,
+          w: 1,
+          h: 1,
+          wrap: true,
+          value: "中",
+        }),
+        h(TLinkifyText, {
+          x: 0,
+          y: 1,
+          w: 1,
+          h: 1,
+          wrap: true,
+          value: "中",
+        }),
+      ],
+      2,
+      3,
+    );
+
+    try {
+      expect(mounted.terminal.snapshot().lines[0]).toBe("  ");
+      expect(mounted.terminal.snapshot().lines[1]).toBe("  ");
+      expect(mounted.terminal.getCell(0, 1).style.href).toBeUndefined();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("lets TLogView opt into URL linkification without ANSI OSC8 input", async () => {
     const source = {
       lineCount: () => 1,
@@ -319,6 +358,56 @@ describe("TLinkifyText", () => {
         cellX: 5,
         cellY: 0,
       });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("clears TLogView visible link state when linkify is disabled", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const linkify = ref(true);
+    const payloads: TLogViewLinkClickPayload[] = [];
+    const source = {
+      lineCount: () => 1,
+      getLine: () => "open https://example.com",
+      getLineKey: () => "url",
+    };
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          ref: logView,
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 2,
+          source,
+          version: 1,
+          linkify: linkify.value,
+          onLinkClick: (payload: TLogViewLinkClickPayload) => payloads.push(payload),
+        }),
+      40,
+      3,
+    );
+
+    try {
+      expect(logView.value?.getVisibleLinks()).toHaveLength(1);
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 0, bubbles: true }));
+      expect(payloads).toHaveLength(1);
+
+      payloads.length = 0;
+      linkify.value = false;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(logView.value?.getVisibleLinks()).toEqual([]);
+      expect(mounted.terminal.getCell(5, 0).style.href).toBeUndefined();
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 0, bubbles: true }));
+      expect(payloads).toEqual([]);
     } finally {
       mounted.unmount();
     }

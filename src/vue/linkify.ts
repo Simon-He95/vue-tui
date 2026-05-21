@@ -65,25 +65,32 @@ function lastChar(value: string): string {
 function splitTrailingPunctuation(raw: string): { body: string; suffix: string } {
   let body = raw;
   let suffix = "";
+  let changed = true;
 
-  while (body && TRAILING_PUNCTUATION_RE.test(lastChar(body))) {
-    suffix = lastChar(body) + suffix;
-    body = body.slice(0, -1);
-  }
+  while (changed && body) {
+    changed = false;
 
-  while (body && TRAILING_CLOSER_RE.test(lastChar(body))) {
-    const ch = lastChar(body);
-    const open = CLOSE_TO_OPEN[ch];
-    if (!open) break;
-    let opens = 0;
-    let closes = 0;
-    for (const c of body) {
-      if (c === open) opens++;
-      else if (c === ch) closes++;
+    while (body && TRAILING_PUNCTUATION_RE.test(lastChar(body))) {
+      suffix = lastChar(body) + suffix;
+      body = body.slice(0, -1);
+      changed = true;
     }
-    if (closes <= opens) break;
-    suffix = ch + suffix;
-    body = body.slice(0, -1);
+
+    while (body && TRAILING_CLOSER_RE.test(lastChar(body))) {
+      const ch = lastChar(body);
+      const open = CLOSE_TO_OPEN[ch];
+      if (!open) break;
+      let opens = 0;
+      let closes = 0;
+      for (const c of body) {
+        if (c === open) opens++;
+        else if (c === ch) closes++;
+      }
+      if (closes <= opens) break;
+      suffix = ch + suffix;
+      body = body.slice(0, -1);
+      changed = true;
+    }
   }
 
   return { body, suffix };
