@@ -1,4 +1,5 @@
 import type { App, Component } from "vue";
+import { spawn } from "node:child_process";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import { defineComponent, h, ref } from "vue";
@@ -228,6 +229,16 @@ function simple(name: string, render: () => unknown): Component {
   return defineComponent({ name: `${name}Demo`, setup: () => render });
 }
 
+function openExternalHref(href: string): boolean {
+  const command =
+    process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", href] : [href];
+  const child = spawn(command, args, { detached: true, stdio: "ignore" });
+  child.on("error", () => {});
+  child.unref();
+  return true;
+}
+
 function tableDemo(componentName = "TTable"): unknown {
   return frame(componentName, [
     h(TTable, {
@@ -342,10 +353,8 @@ const demos: Demo[] = [
         h(TLink, {
           x: 0,
           y: 3,
-          w: 28,
           href: "https://example.com",
           label: "example.com",
-          openMode: "event",
           autoFocus: true,
         }),
       ),
@@ -1334,7 +1343,7 @@ function mountDemo(demo: Demo, smoke: boolean): void {
     rows,
     component: demo.component,
     defaultStyle: { fg: "whiteBright" },
-    linkOpener: { openExternal: () => false },
+    linkOpener: { openExternal: openExternalHref },
     selection: true,
   });
 
