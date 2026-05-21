@@ -5231,6 +5231,49 @@ describe("TLogView", () => {
     }
   });
 
+  it("repaints when linkify option fields mutate on the same object", async () => {
+    const linkifyOptions = ref<{ allowRelative?: boolean }>({ allowRelative: false });
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "open /docs",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewLinkifyOptionsMutationApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 1,
+            source,
+            version: 1,
+            linkify: linkifyOptions.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 2, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("open /docs");
+      expect(rowStyles(app, 0)[5]!.href).toBeUndefined();
+
+      linkifyOptions.value.allowRelative = true;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowStyles(app, 0)[5]!.href).toBe("/docs");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("emits retained absolute line indexes for linkClick", async () => {
     const payloads: TLogViewLinkClickPayload[] = [];
     const log = createAppendOnlyLogStore({ maxLines: 3 });

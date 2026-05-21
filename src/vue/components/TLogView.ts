@@ -986,6 +986,8 @@ export const TLogView = defineComponent({
       ]);
     }
 
+    const linkifyOptionsKey = computed(() => linkifyOptionsCacheKey());
+
     function linkStyleCacheKey(): string {
       return linksEnabled() ? styleCacheKey(props.linkStyle) : "";
     }
@@ -1392,7 +1394,7 @@ export const TLogView = defineComponent({
       baseStyle: Style,
       baseStyleKey: string,
       linkKey = linkifyStyleCacheKey(),
-      optionsKey = linkifyOptionsCacheKey(),
+      optionsKey = linkifyOptionsKey.value,
     ): readonly TLogStyledSegment[] {
       if (index < 0 || index >= count) return [];
 
@@ -1425,7 +1427,7 @@ export const TLogView = defineComponent({
       baseStyle: Style,
       baseStyleKey: string,
       linkKey = linkifyStyleCacheKey(),
-      optionsKey = linkifyOptionsCacheKey(),
+      optionsKey = linkifyOptionsKey.value,
     ): readonly TLogVisualRow[] {
       if (index < 0 || index >= count) return [[]];
       width = Math.max(1, Math.floor(width));
@@ -1462,7 +1464,7 @@ export const TLogView = defineComponent({
       clipX: number,
       visibleW: number,
       linkKey = linkifyStyleCacheKey(),
-      optionsKey = linkifyOptionsCacheKey(),
+      optionsKey = linkifyOptionsKey.value,
     ): readonly TLogVisualSegment[] {
       if (index < 0 || index >= count) return [];
       const segments = linkifiedSegmentsForLine(
@@ -3964,6 +3966,7 @@ export const TLogView = defineComponent({
         () => props.ansi,
         () => props.links,
         () => props.linkify,
+        () => linkifyOptionsKey.value,
         () => props.linkStyle,
         () => effectiveLinkStyle.value,
         () => fullRect.value.w,
@@ -4077,6 +4080,7 @@ export const TLogView = defineComponent({
         props.ansi,
         props.links,
         props.linkify,
+        linkifyOptionsKey.value,
         props.linkStyle,
         effectiveLinkStyle.value,
         props.keyboardLinks,
