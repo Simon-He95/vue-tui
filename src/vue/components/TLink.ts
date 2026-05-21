@@ -120,19 +120,18 @@ export const TLink = defineComponent({
     const viewHeight = computed(() => Math.max(1, Math.floor(props.h)));
 
     const textStyle = computed<Style>(() => {
-      const base = mergeStyle(
+      const visual = mergeStyle(
         defaultStyle.value,
         { fg: "cyanBright", underline: true },
         props.style,
         props.disabled ? { dim: true } : undefined,
-        shouldRenderHref.value ? { href: safeHref.value ?? undefined } : { href: undefined },
+        interactiveMode.value && hovered.value ? props.hoverStyle : undefined,
+        interactiveMode.value && focused.value ? props.focusStyle : undefined,
+        interactiveMode.value && active.value ? props.activeStyle : undefined,
       );
-      if (!interactiveMode.value) return base;
       return mergeStyle(
-        base,
-        hovered.value ? props.hoverStyle : undefined,
-        focused.value ? props.focusStyle : undefined,
-        active.value ? props.activeStyle : undefined,
+        visual,
+        shouldRenderHref.value ? { href: safeHref.value ?? undefined } : { href: undefined },
       );
     });
 

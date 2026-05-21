@@ -384,6 +384,63 @@ describe("TLink", () => {
     }
   });
 
+  it("does not let state styles override sanitized href metadata", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://safe.example",
+          label: "Safe",
+          openMode: "native",
+          hoverStyle: { fg: "redBright", href: "https://hover.example" },
+          focusStyle: { bold: true, href: "https://focus.example" },
+          activeStyle: { bg: "blue", href: "https://active.example" },
+        }),
+      20,
+      2,
+      { domRendererOptions: { links: true } },
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+
+      const anchor = mounted.container()!.querySelector("a");
+      expect(anchor?.getAttribute("href")).toBe("https://safe.example/");
+      expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://safe.example/");
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("mousemove", { clientX: 0, clientY: 0, bubbles: true }));
+      await nextTick();
+      await Promise.resolve();
+
+      expect(mounted.terminal.getCell(0, 0).style.fg).toBe("redBright");
+      expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://safe.example/");
+      expect(anchor?.getAttribute("href")).toBe("https://safe.example/");
+
+      mounted.container()!.dispatchEvent(
+        new MouseEvent("mousedown", {
+          clientX: 0,
+          clientY: 0,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      await Promise.resolve();
+
+      const style = mounted.terminal.getCell(0, 0).style;
+      expect(style.bold).toBe(true);
+      expect(style.bg).toBe("blue");
+      expect(style.href).toBe("https://safe.example/");
+      expect(anchor?.getAttribute("href")).toBe("https://safe.example/");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("lets renderer-level event activation win over host mode", async () => {
     const opener = vi.fn(() => true);
     const rendererActivate = vi.fn();
