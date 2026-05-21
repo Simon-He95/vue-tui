@@ -846,6 +846,7 @@ export const TLogView = defineComponent({
     const ansiWrapCache = new Map<TLogRenderCacheKey, TLogAnsiWrapCacheEntry>();
     const ansiRowCache = new Map<TLogRenderCacheKey, TLogAnsiRowCacheEntry>();
     const linkifyLineCache = new Map<TLogRenderCacheKey, TLogAnsiLineCacheEntry>();
+    const linkifyWrapCache = new Map<TLogRenderCacheKey, TLogAnsiWrapCacheEntry>();
     const searchLineCache = new Map<TLogRenderCacheKey, TLogSearchLineCacheEntry>();
     const visibleLinksByRow = new Map<number, TLogVisibleLinkSegment[]>();
     const focusedVisibleLinkIndex = ref(-1);
@@ -1003,6 +1004,16 @@ export const TLogView = defineComponent({
       return JSON.stringify(["linkify-line", key, baseStyleKey, linkKey, optionsKey]);
     }
 
+    function linkifyWrapCacheKey(
+      key: TLogLineKey,
+      width: number,
+      baseStyleKey: string,
+      linkKey: string,
+      optionsKey: string,
+    ): TLogRenderCacheKey {
+      return JSON.stringify(["linkify-wrap", key, width, baseStyleKey, linkKey, optionsKey]);
+    }
+
     function ansiWrapCacheKey(
       key: TLogLineKey,
       width: number,
@@ -1111,6 +1122,18 @@ export const TLogView = defineComponent({
       }
     }
 
+    function trimLinkifyWrapCache(): void {
+      const max = DEFAULT_LOG_WRAP_CACHE_SIZE;
+      if (linkifyWrapCache.size <= max) return;
+
+      const entries = Array.from(linkifyWrapCache.values()).sort(
+        (a, b) => a.touchedAt - b.touchedAt,
+      );
+      for (const entry of entries.slice(0, linkifyWrapCache.size - max)) {
+        linkifyWrapCache.delete(entry.key);
+      }
+    }
+
     function trimSearchLineCache(): void {
       const max = DEFAULT_LOG_RENDER_CACHE_SIZE;
       if (searchLineCache.size <= max) return;
@@ -1130,6 +1153,7 @@ export const TLogView = defineComponent({
       ansiWrapCache.clear();
       ansiRowCache.clear();
       linkifyLineCache.clear();
+      linkifyWrapCache.clear();
       searchLineCache.clear();
       visibleLinksByRow.clear();
     }
@@ -1397,6 +1421,15 @@ export const TLogView = defineComponent({
       optionsKey = linkifyOptionsCacheKey(),
     ): readonly TLogVisualRow[] {
       if (index < 0 || index >= count) return [[]];
+      width = Math.max(1, Math.floor(width));
+      const rawKey = lineKey(index);
+      const key = linkifyWrapCacheKey(rawKey, width, baseStyleKey, linkKey, optionsKey);
+      const cached = linkifyWrapCache.get(key);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.visualRows;
+      }
+
       const segments = linkifiedSegmentsForLine(
         index,
         count,
@@ -1405,7 +1438,13 @@ export const TLogView = defineComponent({
         linkKey,
         optionsKey,
       );
-      return wrapStyledSegmentsByCells(segments, width);
+      const rows = wrapStyledSegmentsByCells(segments, width);
+      linkifyWrapCache.set(key, {
+        key,
+        visualRows: rows,
+        touchedAt: ++cacheClock,
+      });
+      return rows;
     }
 
     function linkifiedFixedRowForLine(
@@ -4244,6 +4283,7 @@ export const TLogView = defineComponent({
           trimAnsiWrapCache();
           trimAnsiRowCache();
           trimLinkifyLineCache();
+          trimLinkifyWrapCache();
           return;
         }
         for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
@@ -4254,6 +4294,7 @@ export const TLogView = defineComponent({
         trimAnsiWrapCache();
         trimAnsiRowCache();
         trimLinkifyLineCache();
+        trimLinkifyWrapCache();
       },
     }));
 

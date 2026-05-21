@@ -215,4 +215,34 @@ describe("TLinkifyText", () => {
       mounted.unmount();
     }
   });
+
+  it("keeps TLogView linkified href metadata across wrapped visual rows", async () => {
+    const source = {
+      lineCount: () => 1,
+      getLine: () => "https://example.com",
+      getLineKey: () => "url",
+    };
+    const mounted = await mountTerminal(
+      () =>
+        h(TLogView, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 3,
+          source,
+          version: 1,
+          wrap: true,
+          linkify: true,
+        }),
+      12,
+      4,
+    );
+
+    try {
+      expect(mounted.terminal.getCell(0, 0).style.href).toBe("https://example.com/");
+      expect(mounted.terminal.getCell(0, 1).style.href).toBe("https://example.com/");
+    } finally {
+      mounted.unmount();
+    }
+  });
 });

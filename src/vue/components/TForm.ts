@@ -1,6 +1,7 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import { computed, defineComponent, h, inject, ref } from "vue";
+import { useTerminal } from "../composables/use-terminal.js";
 import { TuiThemeContextKey, tuiDefaultTheme } from "../theme.js";
 import { TInput } from "./TInput.js";
 import { TText } from "./TText.js";
@@ -37,6 +38,9 @@ export const TCheckbox = defineComponent({
     change: (_value: boolean) => true,
   },
   setup(props, { emit }) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+
     function toggle(): void {
       if (props.disabled) return;
       const next = !props.modelValue;
@@ -68,10 +72,10 @@ export const TCheckbox = defineComponent({
             w: props.w,
             value: fitCellText(`[${props.modelValue ? "x" : " "}] ${props.label}`, props.w),
             style: props.disabled
-              ? mergeStyle(props.style, props.disabledStyle)
+              ? mergeStyle(baseStyle.value, props.disabledStyle)
               : props.modelValue
-                ? mergeStyle(props.style, props.checkedStyle)
-                : props.style,
+                ? mergeStyle(baseStyle.value, props.checkedStyle)
+                : baseStyle.value,
           }),
       );
   },
@@ -96,6 +100,9 @@ export const TSwitch = defineComponent({
     change: (_value: boolean) => true,
   },
   setup(props, { emit }) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+
     function toggle(): void {
       if (props.disabled) return;
       const next = !props.modelValue;
@@ -127,10 +134,10 @@ export const TSwitch = defineComponent({
             w: props.w,
             value: fitCellText(`[${props.modelValue ? "on " : "off"}] ${props.label}`, props.w),
             style: props.disabled
-              ? mergeStyle(props.style, props.disabledStyle)
+              ? mergeStyle(baseStyle.value, props.disabledStyle)
               : props.modelValue
-                ? mergeStyle(props.style, props.activeStyle)
-                : props.style,
+                ? mergeStyle(baseStyle.value, props.activeStyle)
+                : baseStyle.value,
           }),
       );
   },
@@ -158,6 +165,9 @@ export const TRadioGroup = defineComponent({
     change: (_value: string) => true,
   },
   setup(props, { emit }) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+
     function choose(option: TRadioOption): void {
       if (option.disabled) return;
       emit("update:modelValue", option.value);
@@ -194,10 +204,10 @@ export const TRadioGroup = defineComponent({
                   w: props.w,
                   value: fitCellText(`(${active ? "x" : " "}) ${option.label}`, props.w),
                   style: option.disabled
-                    ? mergeStyle(props.style, props.disabledStyle)
+                    ? mergeStyle(baseStyle.value, props.disabledStyle)
                     : active
-                      ? mergeStyle(props.style, props.activeStyle)
-                      : props.style,
+                      ? mergeStyle(baseStyle.value, props.activeStyle)
+                      : baseStyle.value,
                 }),
             );
           }),
@@ -226,6 +236,8 @@ export const TSlider = defineComponent({
     change: (_value: number) => true,
   },
   setup(props, { emit }) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
     const value = computed(() => clamp(props.modelValue, props.min, props.max));
     const ratio = computed(() => {
       const span = props.max - props.min;
@@ -267,8 +279,8 @@ export const TSlider = defineComponent({
             w: props.w,
             value: fitCellText(`[${label}] ${value.value}`, props.w),
             style: props.disabled
-              ? mergeStyle(props.style, props.disabledStyle)
-              : mergeStyle(props.style, props.activeStyle),
+              ? mergeStyle(baseStyle.value, props.disabledStyle)
+              : mergeStyle(baseStyle.value, props.activeStyle),
           }),
       );
     };
@@ -294,15 +306,31 @@ export const TFormField = defineComponent({
     errorStyle: { type: Object as PropType<Style>, default: undefined },
   },
   setup(props, { slots }) {
+    const { defaultStyle } = useTerminal();
     const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
     const labelStyle = computed(() =>
-      mergeStyle(props.style, theme.value.components.TFormField?.labelStyle, props.labelStyle),
+      mergeStyle(
+        defaultStyle.value,
+        props.style,
+        theme.value.components.TFormField?.labelStyle,
+        props.labelStyle,
+      ),
     );
     const helpStyle = computed(() =>
-      mergeStyle(props.style, theme.value.components.TFormField?.helpStyle, props.helpStyle),
+      mergeStyle(
+        defaultStyle.value,
+        props.style,
+        theme.value.components.TFormField?.helpStyle,
+        props.helpStyle,
+      ),
     );
     const errorStyle = computed(() =>
-      mergeStyle(props.style, theme.value.components.TFormField?.errorStyle, props.errorStyle),
+      mergeStyle(
+        defaultStyle.value,
+        props.style,
+        theme.value.components.TFormField?.errorStyle,
+        props.errorStyle,
+      ),
     );
 
     return () => {
@@ -363,6 +391,9 @@ export const TPasswordInput = defineComponent({
     change: (_value: string) => true,
   },
   setup(props, { emit }) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+
     return () =>
       h(TInput as any, {
         x: props.x,
@@ -372,7 +403,7 @@ export const TPasswordInput = defineComponent({
         zIndex: props.zIndex,
         modelValue: props.modelValue,
         placeholder: props.placeholder,
-        style: props.style,
+        style: baseStyle.value,
         autoFocus: props.autoFocus,
         secret: true,
         "onUpdate:modelValue": (value: string) => emit("update:modelValue", value),
@@ -407,6 +438,12 @@ export const TAutocompleteInput = defineComponent({
     select: (_payload: TAutocompleteSelectPayload) => true,
   },
   setup(props, { emit }) {
+    const { defaultStyle } = useTerminal();
+    const inputStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+    const suggestionStyle = computed(() => mergeStyle(defaultStyle.value, props.suggestionStyle));
+    const activeSuggestionStyle = computed(() =>
+      mergeStyle(suggestionStyle.value, props.activeSuggestionStyle),
+    );
     const visibleSuggestions = computed(() => props.suggestions.slice(0, Math.max(0, props.h - 1)));
     function select(index: number): void {
       const value = visibleSuggestions.value[index];
@@ -426,7 +463,7 @@ export const TAutocompleteInput = defineComponent({
             w: props.w,
             modelValue: props.modelValue,
             placeholder: props.placeholder,
-            style: props.style,
+            style: inputStyle.value,
             "onUpdate:modelValue": (value: string) => emit("update:modelValue", value),
             onKeydown: (event: any) => {
               if (event.key === "ArrowDown") {
@@ -466,8 +503,8 @@ export const TAutocompleteInput = defineComponent({
                   value: suggestion,
                   style:
                     index === props.highlightedIndex
-                      ? mergeStyle(props.suggestionStyle, props.activeSuggestionStyle)
-                      : props.suggestionStyle,
+                      ? activeSuggestionStyle.value
+                      : suggestionStyle.value,
                 }),
             ),
           ),

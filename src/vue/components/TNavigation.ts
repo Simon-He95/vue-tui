@@ -1,6 +1,7 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import { defineComponent, h } from "vue";
+import { computed, defineComponent, h } from "vue";
+import { useTerminal } from "../composables/use-terminal.js";
 import { textCellWidth } from "../utils/text.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
@@ -30,6 +31,10 @@ export const TKeyHint = defineComponent({
     comboStyle: { type: Object as PropType<Style>, default: () => ({ inverse: true }) },
   },
   setup(props) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+    const comboStyle = computed(() => mergeStyle(baseStyle.value, props.comboStyle));
+
     return () => {
       const comboW = textCellWidth(props.combo);
       const gap = props.label ? 1 : 0;
@@ -43,7 +48,7 @@ export const TKeyHint = defineComponent({
           zIndex: props.zIndex,
           w: comboRenderW,
           value: props.combo,
-          style: mergeStyle(props.style, props.comboStyle),
+          style: comboStyle.value,
         }),
       ];
       if (gapW > 0) {
@@ -54,7 +59,7 @@ export const TKeyHint = defineComponent({
             zIndex: props.zIndex,
             w: gapW,
             value: " ",
-            style: props.style,
+            style: baseStyle.value,
           }),
         );
       }
@@ -65,7 +70,7 @@ export const TKeyHint = defineComponent({
           zIndex: props.zIndex,
           w: labelW,
           value: props.label,
-          style: props.style,
+          style: baseStyle.value,
         }),
       );
       return children;
@@ -93,6 +98,9 @@ export const TBreadcrumb = defineComponent({
     select: (_payload: TBreadcrumbSelectPayload) => true,
   },
   setup(props, { emit }) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+
     return () => {
       let x = 0;
       const children: any[] = [];
@@ -125,10 +133,10 @@ export const TBreadcrumb = defineComponent({
                 w,
                 value: fitCellText(text, w),
                 style: item.disabled
-                  ? mergeStyle(props.style, props.disabledStyle)
+                  ? mergeStyle(baseStyle.value, props.disabledStyle)
                   : index === props.items.length - 1
-                    ? mergeStyle(props.style, props.activeStyle)
-                    : props.style,
+                    ? mergeStyle(baseStyle.value, props.activeStyle)
+                    : baseStyle.value,
               }),
           ),
         );
@@ -157,6 +165,9 @@ export const TStatusBar = defineComponent({
     style: { type: Object as PropType<Style>, default: () => ({ inverse: true }) },
   },
   setup(props, { slots }) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+
     return () => {
       const children = slots.default?.();
       if (children?.length) {
@@ -173,14 +184,20 @@ export const TStatusBar = defineComponent({
         TView as any,
         { x: props.x, y: props.y, w: props.w, h: 1, zIndex: props.zIndex },
         () => [
-          h(TText as any, { x: 0, y: 0, w: leftW, value: props.left, style: props.style }),
-          h(TText as any, { x: leftW, y: 0, w: centerW, value: props.center, style: props.style }),
+          h(TText as any, { x: 0, y: 0, w: leftW, value: props.left, style: baseStyle.value }),
+          h(TText as any, {
+            x: leftW,
+            y: 0,
+            w: centerW,
+            value: props.center,
+            style: baseStyle.value,
+          }),
           h(TText as any, {
             x: leftW + centerW,
             y: 0,
             w: rightW,
             value: props.right,
-            style: props.style,
+            style: baseStyle.value,
           }),
         ],
       );

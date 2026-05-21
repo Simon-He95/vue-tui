@@ -153,6 +153,127 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("preserves TerminalProvider defaultStyle when public components add partial styles", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 3,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: [{ name: "build" }],
+        }),
+        h(TFormField, { x: 14, y: 0, w: 12, h: 3, label: "Token", help: "Required" }),
+        h(TSlider, { x: 0, y: 4, w: 18, modelValue: 50 }),
+        h(TTree, {
+          x: 20,
+          y: 4,
+          w: 12,
+          h: 2,
+          selectedId: "selected",
+          nodes: [
+            { id: "selected", label: "Selected" },
+            { id: "disabled", label: "Disabled", disabled: true },
+          ],
+        }),
+        h(TContextMenu, {
+          modelValue: true,
+          x: 34,
+          y: 0,
+          w: 12,
+          items: [
+            { id: "open", label: "Open" },
+            { id: "copy", label: "Copy", disabled: true },
+          ],
+        }),
+        h(TKeyHint, { x: 0, y: 7, combo: "Esc", label: "Close" }),
+        h(TBreadcrumb, {
+          x: 14,
+          y: 7,
+          w: 16,
+          items: [
+            { id: "home", label: "home" },
+            { id: "src", label: "src" },
+          ],
+        }),
+        h(TStatusBar, { x: 0, y: 8, w: 32, left: "Ready" }),
+        h(TTooltip, { x: 34, y: 7, content: "Tip" }),
+      ],
+      60,
+      10,
+      { defaultStyle: { fg: "whiteBright", bg: "blue" } },
+    );
+
+    try {
+      expect(mounted.terminal.getCell(0, 0).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+        bold: true,
+      });
+      expect(mounted.terminal.getCell(0, 2).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+      });
+      expect(mounted.terminal.getCell(14, 0).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+        bold: true,
+      });
+      expect(mounted.terminal.getCell(14, 2).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+        dim: true,
+      });
+      expect(mounted.terminal.getCell(1, 4).style).toMatchObject({
+        fg: "cyanBright",
+        bg: "blue",
+      });
+      expect(mounted.terminal.getCell(20, 4).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+        inverse: true,
+      });
+      expect(mounted.terminal.getCell(20, 5).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+        dim: true,
+      });
+      expect(mounted.terminal.getCell(35, 1).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+        inverse: true,
+      });
+      expect(mounted.terminal.getCell(35, 2).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+        dim: true,
+      });
+      expect(mounted.terminal.getCell(0, 7).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+        inverse: true,
+      });
+      expect(mounted.terminal.getCell(21, 7).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+        bold: true,
+      });
+      expect(mounted.terminal.getCell(0, 8).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+        inverse: true,
+      });
+      expect(mounted.terminal.getCell(34, 7).style).toMatchObject({
+        fg: "whiteBright",
+        bg: "blue",
+        inverse: true,
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders form controls and field wrappers", async () => {
     const mounted = await mountTerminal(
       () => [
@@ -325,9 +446,6 @@ describe("P1/P2 public components", () => {
 
     try {
       const container = mounted.container()!;
-      container.dispatchEvent(
-        new MouseEvent("mousedown", { clientX: 1, clientY: 1, bubbles: true }),
-      );
       container.dispatchEvent(
         new KeyboardEvent("keydown", {
           key: "ArrowDown",

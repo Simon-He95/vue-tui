@@ -1,6 +1,7 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import { defineComponent, h } from "vue";
+import { computed, defineComponent, h } from "vue";
+import { useTerminal } from "../composables/use-terminal.js";
 import { TBox } from "./TBox.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
@@ -43,6 +44,9 @@ export const TContextMenu = defineComponent({
     close: () => true,
   },
   setup(props, { emit }) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+
     function close(): void {
       emit("update:modelValue", false);
       emit("close");
@@ -65,7 +69,14 @@ export const TContextMenu = defineComponent({
       const activeIndex = selectedIndex();
       return h(
         TBox as any,
-        { x: props.x, y: props.y, w: props.w, h: hgt, zIndex: props.zIndex, style: props.style },
+        {
+          x: props.x,
+          y: props.y,
+          w: props.w,
+          h: hgt,
+          zIndex: props.zIndex,
+          style: baseStyle.value,
+        },
         () =>
           props.items.map((item, index) => {
             const active = index === activeIndex;
@@ -79,6 +90,7 @@ export const TContextMenu = defineComponent({
                 w: Math.max(1, props.w - 2),
                 h: 1,
                 focusable: !item.disabled,
+                autoFocus: active && !item.disabled,
                 onClick: () => select(index),
                 onKeydown: (event: any) => {
                   if (event.key === "Escape") {
@@ -109,10 +121,10 @@ export const TContextMenu = defineComponent({
                   w: Math.max(1, props.w - 2),
                   value: fitCellText(text, Math.max(1, props.w - 2)),
                   style: item.disabled
-                    ? mergeStyle(props.style, props.disabledStyle)
+                    ? mergeStyle(baseStyle.value, props.disabledStyle)
                     : active
-                      ? mergeStyle(props.style, props.activeStyle)
-                      : props.style,
+                      ? mergeStyle(baseStyle.value, props.activeStyle)
+                      : baseStyle.value,
                 }),
             );
           }),
@@ -136,6 +148,10 @@ export const TPopover = defineComponent({
     contentStyle: { type: Object as PropType<Style>, default: undefined },
   },
   setup(props, { slots }) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+    const contentStyle = computed(() => mergeStyle(defaultStyle.value, props.contentStyle));
+
     return () =>
       props.modelValue
         ? h(
@@ -147,7 +163,7 @@ export const TPopover = defineComponent({
               h: props.h,
               zIndex: props.zIndex,
               title: props.title,
-              style: props.style,
+              style: baseStyle.value,
             },
             () =>
               slots.default?.() ??
@@ -158,7 +174,7 @@ export const TPopover = defineComponent({
                 h: Math.max(1, props.h - 2),
                 value: props.content,
                 wrap: true,
-                style: props.contentStyle,
+                style: contentStyle.value,
               }),
           )
         : null;
@@ -177,6 +193,9 @@ export const TTooltip = defineComponent({
     style: { type: Object as PropType<Style>, default: () => ({ inverse: true }) },
   },
   setup(props) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+
     return () =>
       props.modelValue
         ? h(TText as any, {
@@ -185,7 +204,7 @@ export const TTooltip = defineComponent({
             zIndex: props.zIndex,
             w: props.w,
             value: props.content,
-            style: props.style,
+            style: baseStyle.value,
           })
         : null;
   },

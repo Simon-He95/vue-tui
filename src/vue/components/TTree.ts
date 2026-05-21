@@ -1,6 +1,7 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import { computed, defineComponent, h } from "vue";
+import { useTerminal } from "../composables/use-terminal.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
 import { fitCellText, mergeStyle } from "./simple-utils.js";
@@ -75,6 +76,8 @@ export const TTree = defineComponent({
     toggle: (_payload: TTreeTogglePayload) => true,
   },
   setup(props, { emit }) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
     const expandedSet = computed(() => new Set(props.expandedIds));
     const rows = computed(() => flattenTree(props.nodes, expandedSet.value).slice(0, props.h));
 
@@ -105,10 +108,10 @@ export const TTree = defineComponent({
             const text = fitCellText(`${indent}${marker} ${item.node.label}`, props.w);
             const selected = item.node.id === props.selectedId;
             const style = item.node.disabled
-              ? mergeStyle(props.style, props.disabledStyle)
+              ? mergeStyle(baseStyle.value, props.disabledStyle)
               : selected
-                ? mergeStyle(props.style, props.selectedStyle)
-                : props.style;
+                ? mergeStyle(baseStyle.value, props.selectedStyle)
+                : baseStyle.value;
             return h(
               TView as any,
               {

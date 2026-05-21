@@ -1,6 +1,7 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import { computed, defineComponent, h, inject, ref } from "vue";
+import { useTerminal } from "../composables/use-terminal.js";
 import { TuiThemeContextKey, tuiDefaultTheme } from "../theme.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
@@ -128,6 +129,7 @@ export const TTable = defineComponent({
     headerClick: (_payload: TTableHeaderClickPayload) => true,
   },
   setup(props, { emit }) {
+    const { defaultStyle } = useTerminal();
     const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
     const widths = computed(() => resolveColumnWidths(props.columns, props.w, props.border));
     const headerLine = computed(() => makeHeaderLine(props.columns, widths.value, props.border));
@@ -137,13 +139,13 @@ export const TTable = defineComponent({
       return props.border ? `+${cells.join("+")}+` : cells.join(" ");
     });
     const headerStyle = computed(() =>
-      mergeStyle(theme.value.components.TTable?.headerStyle, props.headerStyle),
+      mergeStyle(defaultStyle.value, theme.value.components.TTable?.headerStyle, props.headerStyle),
     );
     const borderStyle = computed(() =>
-      mergeStyle(theme.value.components.TTable?.borderStyle, props.borderStyle),
+      mergeStyle(defaultStyle.value, theme.value.components.TTable?.borderStyle, props.borderStyle),
     );
     const rowStyle = computed(() =>
-      mergeStyle(theme.value.components.TTable?.rowStyle, props.style),
+      mergeStyle(defaultStyle.value, theme.value.components.TTable?.rowStyle, props.style),
     );
     const selectedRowStyle = computed(() =>
       mergeStyle(rowStyle.value, theme.value.components.TTable?.selectedStyle, props.selectedStyle),
