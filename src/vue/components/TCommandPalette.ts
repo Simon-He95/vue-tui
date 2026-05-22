@@ -271,7 +271,7 @@ export const TCommandPalette = defineComponent({
     initialQuery: { type: String, default: "" },
     items: {
       type: Array as PropType<readonly TCommandPaletteItem[]>,
-      required: true,
+      default: () => [],
     },
     itemsProvider: {
       type: Function as PropType<TCommandPaletteItemsProvider>,

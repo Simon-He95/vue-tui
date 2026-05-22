@@ -253,6 +253,7 @@ export const TSelect = defineComponent({
     emptyText: { type: String, default: "No options" },
     loading: { type: Boolean, default: false },
     loadingText: { type: String, default: "Loading..." },
+    errorText: { type: String, default: "Unable to load options" },
     maxVisible: { type: Number, default: undefined },
   },
   emits: [
@@ -265,6 +266,7 @@ export const TSelect = defineComponent({
     "focus",
     "blur",
     "keydown",
+    "loadError",
   ],
   setup(props, { emit }) {
     const { terminal, scheduler, defaultStyle, events } = useTerminal();
@@ -277,6 +279,7 @@ export const TSelect = defineComponent({
     const focused = ref(false);
     const providerOptions = ref<readonly SelectOption[] | null>(null);
     const providerLoading = ref(false);
+    const providerError = ref<string | null>(null);
     const innerQuery = ref(props.query ?? "");
     let providerAbort: AbortController | null = null;
     let providerTimer: ReturnType<typeof setTimeout> | null = null;
@@ -656,7 +659,10 @@ export const TSelect = defineComponent({
         props.activeIndex,
         props.emptyText,
         props.loading,
+        props.loadingText,
+        props.errorText,
         providerLoading.value,
+        providerError.value,
         focused.value,
         active.value,
         defaultStyle.value,
@@ -678,6 +684,15 @@ export const TSelect = defineComponent({
           const opt = options.value[optIndex];
           if (props.loading || providerLoading.value) {
             const text = i === 0 ? sliceByCells(props.loadingText, r.w) : "";
+            terminal.write(`${text}${spaces(Math.max(0, r.w - textCellWidth(text)))}`, {
+              x: r.x,
+              y: r.y + i,
+              style: base,
+            });
+            return;
+          }
+          if (providerError.value) {
+            const text = i === 0 ? sliceByCells(props.errorText, r.w) : "";
             terminal.write(`${text}${spaces(Math.max(0, r.w - textCellWidth(text)))}`, {
               x: r.x,
               y: r.y + i,
@@ -895,6 +910,7 @@ export const TSelect = defineComponent({
         }
         providerAbort?.abort();
         providerAbort = null;
+        providerError.value = null;
         if (!provider) {
           providerOptions.value = null;
           providerLoading.value = false;
@@ -907,10 +923,15 @@ export const TSelect = defineComponent({
           providerAbort = controller;
           void provider(query, { signal: controller.signal })
             .then((items) => {
-              if (!controller.signal.aborted) providerOptions.value = items;
+              if (controller.signal.aborted) return;
+              providerOptions.value = items;
+              providerError.value = null;
             })
-            .catch(() => {
-              if (!controller.signal.aborted) providerOptions.value = [];
+            .catch((error: unknown) => {
+              if (controller.signal.aborted) return;
+              providerOptions.value = [];
+              providerError.value = error instanceof Error ? error.message : String(error);
+              emit("loadError", { query, error });
             })
             .finally(() => {
               if (!controller.signal.aborted) providerLoading.value = false;

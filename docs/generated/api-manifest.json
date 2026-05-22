@@ -1070,7 +1070,7 @@
           "type": "string",
           "required": false,
           "defaultValue": "\"Loading...\"",
-          "description": "Text rendered while async commands are loading.",
+          "description": "Text rendered while async loading is pending.",
           "descriptionSource": "shared-default"
         },
         {
@@ -1086,7 +1086,7 @@
           "type": "string",
           "required": false,
           "defaultValue": "\"Unable to load suggestions\"",
-          "description": "Text rendered when async commands fail to load.",
+          "description": "Text rendered when async loading fails.",
           "descriptionSource": "shared-default"
         },
         {
@@ -1598,7 +1598,8 @@
         {
           "name": "items",
           "type": "readonly TCommandPaletteItem[]",
-          "required": true,
+          "required": false,
+          "defaultValue": "() => []",
           "description": "Command items rendered and filtered by the palette.",
           "descriptionSource": "component-default"
         },
@@ -1663,7 +1664,7 @@
           "type": "string",
           "required": false,
           "defaultValue": "\"Loading...\"",
-          "description": "Text rendered while async commands are loading.",
+          "description": "Text rendered while async loading is pending.",
           "descriptionSource": "shared-default"
         },
         {
@@ -1671,7 +1672,7 @@
           "type": "string",
           "required": false,
           "defaultValue": "\"Unable to load commands\"",
-          "description": "Text rendered when async commands fail to load.",
+          "description": "Text rendered when async loading fails.",
           "descriptionSource": "shared-default"
         },
         {
@@ -2789,7 +2790,8 @@
           "name": "readOnly",
           "type": "boolean",
           "required": false,
-          "defaultValue": "false"
+          "defaultValue": "false",
+          "description": "Provides a read-only hint to custom form field consumers; built-in controls do not automatically consume it."
         },
         {
           "name": "submitOnEnter",
@@ -5992,8 +5994,16 @@
           "type": "string",
           "required": false,
           "defaultValue": "\"Loading...\"",
-          "description": "Text rendered while async commands are loading.",
-          "descriptionSource": "shared-default"
+          "description": "Text rendered while async loading is pending.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "errorText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Unable to load options\"",
+          "description": "Text rendered when async loading fails.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "maxVisible",
@@ -6067,6 +6077,13 @@
           "payloadSource": "shared-default",
           "description": "Emitted for keydown events.",
           "descriptionSource": "shared-default"
+        },
+        {
+          "name": "loadError",
+          "payload": "{ query: string; error: unknown }",
+          "payloadSource": "component-default",
+          "description": "Emitted when the async option provider rejects.",
+          "descriptionSource": "component-default"
         }
       ]
     },

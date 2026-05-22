@@ -140,9 +140,9 @@ Import: `@simon_he/vue-tui`
 | <code>minChars</code>              | <code>number</code>                          | <code>0</code>                                      | 否   | Minimum input length before suggestions are shown or loaded.   |
 | <code>filterLocal</code>           | <code>boolean</code>                         | <code>false</code>                                  | 否   | Filters provided suggestions against the input value.          |
 | <code>closeOnSelect</code>         | <code>boolean</code>                         | <code>true</code>                                   | 否   | Closes suggestions after a suggestion is selected.             |
-| <code>loadingText</code>           | <code>string</code>                          | <code>&quot;Loading...&quot;</code>                 | 否   | Text rendered while async commands are loading.                |
+| <code>loadingText</code>           | <code>string</code>                          | <code>&quot;Loading...&quot;</code>                 | 否   | Text rendered while async loading is pending.                  |
 | <code>emptyText</code>             | <code>string</code>                          | <code>&quot;&quot;</code>                           | 否   | Text rendered when there are no rows or items.                 |
-| <code>errorText</code>             | <code>string</code>                          | <code>&quot;Unable to load suggestions&quot;</code> | 否   | Text rendered when async commands fail to load.                |
+| <code>errorText</code>             | <code>string</code>                          | <code>&quot;Unable to load suggestions&quot;</code> | 否   | Text rendered when async loading fails.                        |
 | <code>style</code>                 | <code>Style</code>                           | <code>undefined</code>                              | 否   | Base terminal cell style override.                             |
 | <code>suggestionStyle</code>       | <code>Style</code>                           | <code>undefined</code>                              | 否   | Style override for suggestion rows.                            |
 | <code>activeSuggestionStyle</code> | <code>Style</code>                           | <code>() =&gt; ({ inverse: true })</code>           | 否   | Style override for the active suggestion row.                  |
@@ -313,7 +313,7 @@ Import: `@simon_he/vue-tui`
 | <code>title</code>               | <code>string</code>                                         | <code>&quot;&quot;</code>                        | 否   | Optional title text.                                     |
 | <code>query</code>               | <code>string</code>                                         | <code>undefined</code>                           | 否   | Search query used by filtering or async providers.       |
 | <code>initialQuery</code>        | <code>string</code>                                         | <code>&quot;&quot;</code>                        | 否   | Query used when the command palette opens.               |
-| <code>items</code>               | <code>readonly TCommandPaletteItem[]</code>                 | —                                                | 是   | Command items rendered and filtered by the palette.      |
+| <code>items</code>               | <code>readonly TCommandPaletteItem[]</code>                 | <code>() =&gt; []</code>                         | 否   | Command items rendered and filtered by the palette.      |
 | <code>itemsProvider</code>       | <code>TCommandPaletteItemsProvider</code>                   | <code>undefined</code>                           | 否   | Async command provider called with the current query.    |
 | <code>matcher</code>             | <code>TCommandPaletteMatcher</code>                         | <code>undefined</code>                           | 否   | Custom command matcher.                                  |
 | <code>filterStrategy</code>      | <code>&quot;substring&quot; &#124; &quot;fuzzy&quot;</code> | <code>&quot;substring&quot;</code>               | 否   | Built-in command matching strategy.                      |
@@ -321,8 +321,8 @@ Import: `@simon_he/vue-tui`
 | <code>showRowDetails</code>      | <code>boolean</code>                                        | <code>false</code>                               | 否   | Shows command detail text next to labels.                |
 | <code>placeholder</code>         | <code>string</code>                                         | <code>&quot;&quot;</code>                        | 否   | Placeholder text shown when the input is empty.          |
 | <code>noMatchesText</code>       | <code>string</code>                                         | <code>&quot;No matches&quot;</code>              | 否   | Text rendered when filtering returns no commands.        |
-| <code>loadingText</code>         | <code>string</code>                                         | <code>&quot;Loading...&quot;</code>              | 否   | Text rendered while async commands are loading.          |
-| <code>errorText</code>           | <code>string</code>                                         | <code>&quot;Unable to load commands&quot;</code> | 否   | Text rendered when async commands fail to load.          |
+| <code>loadingText</code>         | <code>string</code>                                         | <code>&quot;Loading...&quot;</code>              | 否   | Text rendered while async loading is pending.            |
+| <code>errorText</code>           | <code>string</code>                                         | <code>&quot;Unable to load commands&quot;</code> | 否   | Text rendered when async loading fails.                  |
 | <code>hint</code>                | <code>string</code>                                         | <code>&quot;&quot;</code>                        | 否   | Footer hint text.                                        |
 | <code>debounce</code>            | <code>number</code>                                         | <code>0</code>                                   | 否   | Delay before calling an async provider, in milliseconds. |
 | <code>minQueryLength</code>      | <code>number</code>                                         | <code>0</code>                                   | 否   | Minimum query length before async loading runs.          |
@@ -601,18 +601,18 @@ Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
-| 名称                       | 类型                                         | 默认值                     | 必填 | 说明 |
-| -------------------------- | -------------------------------------------- | -------------------------- | ---- | ---- |
-| <code>x</code>             | <code>number</code>                          | —                          | 是   | —    |
-| <code>y</code>             | <code>number</code>                          | —                          | 是   | —    |
-| <code>w</code>             | <code>number</code>                          | —                          | 是   | —    |
-| <code>h</code>             | <code>number</code>                          | —                          | 是   | —    |
-| <code>zIndex</code>        | <code>number</code>                          | <code>0</code>             | 否   | —    |
-| <code>model</code>         | <code>TFormModel</code>                      | —                          | 是   | —    |
-| <code>rules</code>         | <code>Record&lt;string, TFormRule&gt;</code> | <code>() =&gt; ({})</code> | 否   | —    |
-| <code>disabled</code>      | <code>boolean</code>                         | <code>false</code>         | 否   | —    |
-| <code>readOnly</code>      | <code>boolean</code>                         | <code>false</code>         | 否   | —    |
-| <code>submitOnEnter</code> | <code>boolean</code>                         | <code>false</code>         | 否   | —    |
+| 名称                       | 类型                                         | 默认值                     | 必填 | 说明                                                                                                         |
+| -------------------------- | -------------------------------------------- | -------------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
+| <code>x</code>             | <code>number</code>                          | —                          | 是   | —                                                                                                            |
+| <code>y</code>             | <code>number</code>                          | —                          | 是   | —                                                                                                            |
+| <code>w</code>             | <code>number</code>                          | —                          | 是   | —                                                                                                            |
+| <code>h</code>             | <code>number</code>                          | —                          | 是   | —                                                                                                            |
+| <code>zIndex</code>        | <code>number</code>                          | <code>0</code>             | 否   | —                                                                                                            |
+| <code>model</code>         | <code>TFormModel</code>                      | —                          | 是   | —                                                                                                            |
+| <code>rules</code>         | <code>Record&lt;string, TFormRule&gt;</code> | <code>() =&gt; ({})</code> | 否   | —                                                                                                            |
+| <code>disabled</code>      | <code>boolean</code>                         | <code>false</code>         | 否   | —                                                                                                            |
+| <code>readOnly</code>      | <code>boolean</code>                         | <code>false</code>         | 否   | Provides a read-only hint to custom form field consumers; built-in controls do not automatically consume it. |
+| <code>submitOnEnter</code> | <code>boolean</code>                         | <code>false</code>         | 否   | —                                                                                                            |
 
 ### Events
 
@@ -1577,34 +1577,35 @@ Import: `@simon_he/vue-tui`
 
 ### Props
 
-| 名称                             | 类型                                 | 默认值                              | 必填 | 说明                                                                                                   |
-| -------------------------------- | ------------------------------------ | ----------------------------------- | ---- | ------------------------------------------------------------------------------------------------------ |
-| <code>x</code>                   | <code>number</code>                  | —                                   | 是   | Left position in terminal cells.                                                                       |
-| <code>y</code>                   | <code>number</code>                  | —                                   | 是   | Top position in terminal cells.                                                                        |
-| <code>w</code>                   | <code>number</code>                  | —                                   | 是   | Width in terminal cells.                                                                               |
-| <code>h</code>                   | <code>number</code>                  | —                                   | 是   | Height in terminal cells.                                                                              |
-| <code>zIndex</code>              | <code>number</code>                  | <code>0</code>                      | 否   | Render and event ordering within the current plane.                                                    |
-| <code>options</code>             | <code>readonly SelectOption[]</code> | —                                   | 是   | Options rendered by the control.                                                                       |
-| <code>optionProvider</code>      | <code>TSelectOptionProvider</code>   | <code>undefined</code>              | 否   | Async option provider called with the current query.                                                   |
-| <code>query</code>               | <code>string</code>                  | <code>undefined</code>              | 否   | Search query used by filtering or async providers.                                                     |
-| <code>modelValue</code>          | <code>TSelectModelValue</code>       | <code>0</code>                      | 否   | Controlled component value.                                                                            |
-| <code>valueMode</code>           | <code>TSelectValueMode</code>        | <code>&quot;index&quot;</code>      | 否   | Model value shape emitted by the select v-model.                                                       |
-| <code>activeIndex</code>         | <code>number</code>                  | <code>undefined</code>              | 否   | Controlled active option index.                                                                        |
-| <code>multiple</code>            | <code>boolean</code>                 | <code>false</code>                  | 否   | Enables multi-select mode.                                                                             |
-| <code>multipleEmit</code>        | <code>TSelectMultipleEmitMode</code> | <code>&quot;label&quot;</code>      | 否   | Payload shape used by multi-select change and confirm events; the label emit mode emits option labels. |
-| <code>style</code>               | <code>Style</code>                   | <code>undefined</code>              | 否   | Base terminal cell style override.                                                                     |
-| <code>highlightStyle</code>      | <code>Style</code>                   | <code>undefined</code>              | 否   | Style used for the highlighted row or match.                                                           |
-| <code>matchStyle</code>          | <code>Style</code>                   | <code>undefined</code>              | 否   | Style used for matched text.                                                                           |
-| <code>highlightMatchStyle</code> | <code>Style</code>                   | <code>undefined</code>              | 否   | Style used for highlighted text while the row is active.                                               |
-| <code>autoFocus</code>           | <code>boolean</code>                 | <code>false</code>                  | 否   | Requests focus when the component becomes visible.                                                     |
-| <code>closeOnBlur</code>         | <code>boolean</code>                 | <code>false</code>                  | 否   | Emits close when focus leaves the component.                                                           |
-| <code>searchable</code>          | <code>boolean</code>                 | <code>false</code>                  | 否   | Emits query updates from typed characters; local options are not filtered automatically.               |
-| <code>typeahead</code>           | <code>boolean</code>                 | <code>true</code>                   | 否   | Enables keyboard typeahead navigation.                                                                 |
-| <code>debounce</code>            | <code>number</code>                  | <code>0</code>                      | 否   | Delay before calling an async provider, in milliseconds.                                               |
-| <code>emptyText</code>           | <code>string</code>                  | <code>&quot;No options&quot;</code> | 否   | Text rendered when there are no rows or items.                                                         |
-| <code>loading</code>             | <code>boolean</code>                 | <code>false</code>                  | 否   | Shows the loading row.                                                                                 |
-| <code>loadingText</code>         | <code>string</code>                  | <code>&quot;Loading...&quot;</code> | 否   | Text rendered while async commands are loading.                                                        |
-| <code>maxVisible</code>          | <code>number</code>                  | <code>undefined</code>              | 否   | Maximum number of option rows rendered at once.                                                        |
+| 名称                             | 类型                                 | 默认值                                          | 必填 | 说明                                                                                                   |
+| -------------------------------- | ------------------------------------ | ----------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------ |
+| <code>x</code>                   | <code>number</code>                  | —                                               | 是   | Left position in terminal cells.                                                                       |
+| <code>y</code>                   | <code>number</code>                  | —                                               | 是   | Top position in terminal cells.                                                                        |
+| <code>w</code>                   | <code>number</code>                  | —                                               | 是   | Width in terminal cells.                                                                               |
+| <code>h</code>                   | <code>number</code>                  | —                                               | 是   | Height in terminal cells.                                                                              |
+| <code>zIndex</code>              | <code>number</code>                  | <code>0</code>                                  | 否   | Render and event ordering within the current plane.                                                    |
+| <code>options</code>             | <code>readonly SelectOption[]</code> | —                                               | 是   | Options rendered by the control.                                                                       |
+| <code>optionProvider</code>      | <code>TSelectOptionProvider</code>   | <code>undefined</code>                          | 否   | Async option provider called with the current query.                                                   |
+| <code>query</code>               | <code>string</code>                  | <code>undefined</code>                          | 否   | Search query used by filtering or async providers.                                                     |
+| <code>modelValue</code>          | <code>TSelectModelValue</code>       | <code>0</code>                                  | 否   | Controlled component value.                                                                            |
+| <code>valueMode</code>           | <code>TSelectValueMode</code>        | <code>&quot;index&quot;</code>                  | 否   | Model value shape emitted by the select v-model.                                                       |
+| <code>activeIndex</code>         | <code>number</code>                  | <code>undefined</code>                          | 否   | Controlled active option index.                                                                        |
+| <code>multiple</code>            | <code>boolean</code>                 | <code>false</code>                              | 否   | Enables multi-select mode.                                                                             |
+| <code>multipleEmit</code>        | <code>TSelectMultipleEmitMode</code> | <code>&quot;label&quot;</code>                  | 否   | Payload shape used by multi-select change and confirm events; the label emit mode emits option labels. |
+| <code>style</code>               | <code>Style</code>                   | <code>undefined</code>                          | 否   | Base terminal cell style override.                                                                     |
+| <code>highlightStyle</code>      | <code>Style</code>                   | <code>undefined</code>                          | 否   | Style used for the highlighted row or match.                                                           |
+| <code>matchStyle</code>          | <code>Style</code>                   | <code>undefined</code>                          | 否   | Style used for matched text.                                                                           |
+| <code>highlightMatchStyle</code> | <code>Style</code>                   | <code>undefined</code>                          | 否   | Style used for highlighted text while the row is active.                                               |
+| <code>autoFocus</code>           | <code>boolean</code>                 | <code>false</code>                              | 否   | Requests focus when the component becomes visible.                                                     |
+| <code>closeOnBlur</code>         | <code>boolean</code>                 | <code>false</code>                              | 否   | Emits close when focus leaves the component.                                                           |
+| <code>searchable</code>          | <code>boolean</code>                 | <code>false</code>                              | 否   | Emits query updates from typed characters; local options are not filtered automatically.               |
+| <code>typeahead</code>           | <code>boolean</code>                 | <code>true</code>                               | 否   | Enables keyboard typeahead navigation.                                                                 |
+| <code>debounce</code>            | <code>number</code>                  | <code>0</code>                                  | 否   | Delay before calling an async provider, in milliseconds.                                               |
+| <code>emptyText</code>           | <code>string</code>                  | <code>&quot;No options&quot;</code>             | 否   | Text rendered when there are no rows or items.                                                         |
+| <code>loading</code>             | <code>boolean</code>                 | <code>false</code>                              | 否   | Shows the loading row.                                                                                 |
+| <code>loadingText</code>         | <code>string</code>                  | <code>&quot;Loading...&quot;</code>             | 否   | Text rendered while async loading is pending.                                                          |
+| <code>errorText</code>           | <code>string</code>                  | <code>&quot;Unable to load options&quot;</code> | 否   | Text rendered when async loading fails.                                                                |
+| <code>maxVisible</code>          | <code>number</code>                  | <code>undefined</code>                          | 否   | Maximum number of option rows rendered at once.                                                        |
 
 ### Events
 
@@ -1619,6 +1620,7 @@ Import: `@simon_he/vue-tui`
 | <code>focus</code>              | <code>void</code>                                                                                   | Emitted when the component receives focus.                                                                                                                   |
 | <code>blur</code>               | <code>void</code>                                                                                   | Emitted when the component loses focus.                                                                                                                      |
 | <code>keydown</code>            | <code>TerminalKeyboardEvent</code>                                                                  | Emitted for keydown events.                                                                                                                                  |
+| <code>loadError</code>          | <code>{ query: string; error: unknown }</code>                                                      | Emitted when the async option provider rejects.                                                                                                              |
 
 ## TSlider
 

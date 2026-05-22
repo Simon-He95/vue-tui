@@ -1144,6 +1144,46 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("renders TSelect async provider errors separately from empty state", async () => {
+    const onLoadError = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          options: [],
+          optionProvider: async () => {
+            throw new Error("network down");
+          },
+          errorText: "Failed options",
+          emptyText: "No options",
+          onLoadError,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await waitFor(() => {
+        mounted.scheduler()?.flushNow();
+        const line = mounted.terminal.snapshot().lines[0] ?? "";
+        return line.includes("Failed options") ? line : null;
+      });
+
+      expect(mounted.terminal.snapshot().lines[0]).not.toContain("No options");
+      expect(onLoadError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: "",
+          error: expect.any(Error),
+        }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("clears stale TSelect provider options during debounced query changes", async () => {
     const query = ref("old");
     const debounce = ref(0);

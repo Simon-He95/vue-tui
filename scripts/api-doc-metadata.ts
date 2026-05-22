@@ -21,6 +21,8 @@ export const sharedPublicPropDescriptions: Record<string, string> = {
   name: "Field name used by form context.",
   labelStyle: "Style override for label text.",
   disabled: "Disables pointer and keyboard activation.",
+  readOnly:
+    "Provides a read-only hint to custom form field consumers; built-in controls do not automatically consume it.",
   disabledStyle: "Style used for disabled content.",
   selectedStyle: "Style used for selected rows or nodes.",
   highlightStyle: "Style used for the highlighted row or match.",
@@ -106,8 +108,8 @@ export const sharedPublicPropDescriptions: Record<string, string> = {
   placeholder: "Placeholder text shown when the input is empty.",
   placeholderWhenFocused: "Placeholder text used while the input has focus.",
   noMatchesText: "Text rendered when filtering returns no commands.",
-  loadingText: "Text rendered while async commands are loading.",
-  errorText: "Text rendered when async commands fail to load.",
+  loadingText: "Text rendered while async loading is pending.",
+  errorText: "Text rendered when async loading fails.",
   debounce: "Delay before calling an async provider, in milliseconds.",
   minQueryLength: "Minimum query length before async loading runs.",
   maxVisibleItems: "Maximum number of command rows rendered at once.",
@@ -373,6 +375,8 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
       "typeahead",
       "debounce",
       "loading",
+      "loadingText",
+      "errorText",
       "maxVisible",
     ),
   },
@@ -502,6 +506,7 @@ export const componentPublicEventDescriptions: Record<string, string> = {
   "TSelect.change":
     "For single select, emits the selected option label or null; valueMode only affects update:modelValue. For multiple select, the payload follows multipleEmit.",
   "TSelect.confirm": "Emitted when multi-select commits the current selection.",
+  "TSelect.loadError": "Emitted when the async option provider rejects.",
 };
 
 export const publicEventPayloads: Record<string, string> = {
@@ -538,6 +543,7 @@ export const componentEventPayloads: Record<string, string> = {
   "TPasswordInput.input": "string",
   "TSelect.change": "string | string[] | number[] | TSelectMultipleChangePayload | null",
   "TSelect.confirm": "string[] | number[] | TSelectMultipleChangePayload",
+  "TSelect.loadError": "{ query: string; error: unknown }",
   "TTable.headerClick": "TTableHeaderClickPayload",
   "TTable.rowClick": "TTableRowClickPayload",
   "TTree.select": "TTreeSelectPayload",

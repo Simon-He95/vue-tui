@@ -19,5 +19,5 @@
       "@simon_he/vue-tui/agent": ["dist/agent.d.ts"]
     }
   },
-  "include": ["index.ts"]
+  "include": ["*.ts"]
 }

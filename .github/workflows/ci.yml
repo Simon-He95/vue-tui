@@ -52,6 +52,8 @@ jobs:
 
       - run: git diff --exit-code -- docs/generated
 
+      - run: pnpm run api:diff
+
       - run: pnpm run build:checked
 
       - run: pnpm run check:dist-dts

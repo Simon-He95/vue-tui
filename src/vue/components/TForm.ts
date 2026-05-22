@@ -431,6 +431,7 @@ export const TForm = defineComponent({
       default: () => ({}),
     },
     disabled: { type: Boolean, default: false },
+    /** Provides a read-only hint to custom form field consumers; built-in controls do not automatically consume it. */
     readOnly: { type: Boolean, default: false },
     submitOnEnter: { type: Boolean, default: false },
   },

@@ -342,7 +342,7 @@ const DialogSurface = defineComponent({
                 scheduler.invalidate();
                 return true;
               } catch (err) {
-                console.warn(`[TDialog] Failed to focus node ${nextId}:`, err);
+                void err;
               }
             }
           }
@@ -400,15 +400,14 @@ const DialogSurface = defineComponent({
                 scheduler.invalidate();
                 return true;
               } catch (err) {
-                // If focus fails, fall through to default tab behavior
-                console.warn(`[TDialog] Failed to focus node ${nextId}:`, err);
+                void err;
               }
             }
           }
           // If we can't focus anything, let default tab behavior proceed
         }
       } catch (err) {
-        console.error("[TDialog] Error in Tab handling:", err);
+        void err;
       } finally {
         // Reset on the next microtask so sequential async Tabs can proceed.
         queueMicrotask(() => {
