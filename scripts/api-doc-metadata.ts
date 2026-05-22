@@ -342,6 +342,13 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
     ...pickSharedPublicPropDescriptions("protocols", "allowRelative", "maxUrlLength"),
     value: "Text scanned for links and rendered into terminal cells.",
   },
+  TMarkdownText: {
+    content: "Markdown source rendered into terminal visual rows.",
+    final: "Parses the markdown as a complete document when enabled.",
+    streaming: "Coalesces rapid content updates into frame-scheduled markdown rebuilds.",
+    customHtmlTags: "Additional HTML tag names accepted by the markdown parser.",
+    theme: "Markdown theme token overrides for parsed blocks and inline segments.",
+  },
   TList: {
     ...pickSharedPublicPropDescriptions("itemVersion", "modelValue"),
     items: "List rows rendered by the component.",
@@ -426,6 +433,16 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
   },
   TView: {
     selectable: "Controls whether terminal text selection may start inside the view.",
+  },
+  TVirtualMarkdown: {
+    content: "Markdown source rendered when external blocks are not provided.",
+    blocks: "Prebuilt markdown blocks used instead of parsing content.",
+    scrollTop: "Controlled top visual-row offset within the markdown viewport.",
+    final: "Parses the markdown as a complete document when enabled.",
+    streaming: "Coalesces rapid content updates into frame-scheduled markdown rebuilds.",
+    selectable: "Controls whether native terminal text selection may start inside the markdown viewport.",
+    customHtmlTags: "Additional HTML tag names accepted by the markdown parser.",
+    theme: "Markdown theme token overrides for parsed blocks and inline segments.",
   },
 };
 
@@ -522,5 +539,6 @@ export const componentEventPayloads: Record<string, string> = {
   "TTable.rowClick": "TTableRowClickPayload",
   "TTree.select": "TTreeSelectPayload",
   "TTree.toggle": "TTreeTogglePayload",
+  "TVirtualMarkdown.scroll": "number",
   "TerminalProvider.selectionCopy": "TerminalSelectionCopyPayload",
 };

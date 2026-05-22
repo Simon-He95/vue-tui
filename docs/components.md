@@ -792,13 +792,19 @@ Transcript row viewport：渲染 message / action / tool-call / approval rows，
 
 `TTranscriptSegment.text` 是 inline-only 文本；显式 `\n` / `\r` / `\t` 会按 inline cell 文本规整。需要保留显式换行时，请在 source 层拆成多个 transcript rows，或拆成独立 visual row blocks。
 
-## TMarkdownText / TVirtualMarkdown
+## TMarkdownText
 
-Experimental Markdown renderer / virtual scroller。它们走独立的 `parser -> block -> visual row -> paint` 链路，不会把 Markdown AST 直接交给 `TText` 或 `TVirtualList`。
+Markdown renderer for static or streaming text content。它走独立的 `parser -> block -> visual row -> paint` 链路，不会把 Markdown AST 直接交给 `TText`。
 
-> Experimental markdown import: `@simon_he/vue-tui/markdown`
+> Markdown import: `@simon_he/vue-tui/markdown`
 >
 > `content` string 路径仍然只做 **per-frame coalescing**：一帧内多次 append 会合并成一次 rebuild，但 rebuild 本身仍然会从当前 full markdown string parse。长文档 streaming transcript 场景可以使用 `createMarkdownBlockSource()`，在消息、tool fence 或代码块完成时 `finalizeBlock()`，再把 `blocks` 传给 `TVirtualMarkdown`，避免反复重 parse 已 finalize 的历史。
+
+## TVirtualMarkdown
+
+Virtual Markdown renderer。它复用 `TMarkdownText` 的 markdown parsing / painting pipeline，并为长文档提供 viewport scrolling。
+
+> Markdown import: `@simon_he/vue-tui/markdown`
 >
 > `TVirtualMarkdown` 默认保持文本可选中复制，即使它自身是 focusable 节点；如需列表式交互，可传 `selectable=false`。
 >

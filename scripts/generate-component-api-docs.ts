@@ -990,6 +990,7 @@ async function main(): Promise<void> {
   const packageRoot = path.resolve(here, "..");
   const rootIndex = path.join(packageRoot, "src/index.ts");
   const vueIndex = path.join(packageRoot, "src/vue/index.ts");
+  const markdownIndex = path.join(packageRoot, "src/markdown.ts");
   const experimentalIndex = path.join(packageRoot, "src/experimental.ts");
 
   const rootComponentExports = await listRootComponentExports(rootIndex);
@@ -1003,6 +1004,11 @@ async function main(): Promise<void> {
 
   const components = [
     ...vueComponents,
+    ...(await listExportedComponents(
+      markdownIndex,
+      "public",
+      "@simon_he/vue-tui/markdown",
+    )),
     ...(await listExportedComponents(
       experimentalIndex,
       "experimental",

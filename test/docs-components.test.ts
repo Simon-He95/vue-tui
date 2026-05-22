@@ -8,6 +8,7 @@ const components = [
   "TerminalProvider",
   "TText",
   "TLinkifyText",
+  "TMarkdownText",
   "TBadge",
   "TTag",
   "TDivider",
@@ -31,6 +32,7 @@ const components = [
   "TAutocompleteInput",
   "TList",
   "TVirtualList",
+  "TVirtualMarkdown",
   "TSelect",
   "TPathPicker",
   "TDialog",
@@ -115,6 +117,21 @@ describe("docs: components coverage", () => {
     expect(commandPaletteCloseOnSelect).toContain("command palette");
     expect(commandPaletteCloseOnSelect).not.toContain("suggestions");
     expect(dataTableSelectable).toBe("Enables row selection.");
+  });
+
+  it("records public markdown components in the component manifest", () => {
+    const manifest = JSON.parse(
+      readFileSync(resolve(process.cwd(), "docs/generated/api-manifest.json"), "utf8"),
+    );
+
+    expect(manifest.components.TMarkdownText).toMatchObject({
+      entrypoint: "@simon_he/vue-tui/markdown",
+      maturity: "public",
+    });
+    expect(manifest.components.TVirtualMarkdown).toMatchObject({
+      entrypoint: "@simon_he/vue-tui/markdown",
+      maturity: "public",
+    });
   });
 
   it("records and diffs type-only entrypoint exports", () => {

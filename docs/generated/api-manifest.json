@@ -5171,6 +5171,105 @@
         }
       ]
     },
+    "TMarkdownText": {
+      "entrypoint": "@simon_he/vue-tui/markdown",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": true,
+          "description": "Markdown source rendered into terminal visual rows.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Height in terminal cells.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "final",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Parses the markdown as a complete document when enabled.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "streaming",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Coalesces rapid content updates into frame-scheduled markdown rebuilds.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "clear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Clears the component rectangle before drawing content.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "customHtmlTags",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Additional HTML tag names accepted by the markdown parser.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "theme",
+          "type": "TuiMarkdownThemeOverrides",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Markdown theme token overrides for parsed blocks and inline segments.",
+          "descriptionSource": "component-default"
+        }
+      ],
+      "events": []
+    },
     "TMultilineModal": {
       "entrypoint": "@simon_he/vue-tui/vue",
       "maturity": "advanced",
@@ -7576,6 +7675,165 @@
         },
         {
           "name": "keydown"
+        }
+      ]
+    },
+    "TVirtualMarkdown": {
+      "entrypoint": "@simon_he/vue-tui/markdown",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Markdown source rendered when external blocks are not provided.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "blocks",
+          "type": "readonly TuiMarkdownBlock[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Prebuilt markdown blocks used instead of parsing content.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "scrollTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Controlled top visual-row offset within the markdown viewport.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "final",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Parses the markdown as a complete document when enabled.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "streaming",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Coalesces rapid content updates into frame-scheduled markdown rebuilds.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Requests focus when the component becomes visible.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Controls whether native terminal text selection may start inside the markdown viewport.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "customHtmlTags",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Additional HTML tag names accepted by the markdown parser.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "theme",
+          "type": "TuiMarkdownThemeOverrides",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Markdown theme token overrides for parsed blocks and inline segments.",
+          "descriptionSource": "component-default"
+        }
+      ],
+      "events": [
+        {
+          "name": "update:scrollTop",
+          "payload": "number",
+          "payloadSource": "update-prop",
+          "description": "Emitted when the top visible row offset should change.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "scroll",
+          "payload": "number",
+          "payloadSource": "component-default",
+          "description": "Emitted when the visible scroll offset changes.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "focus",
+          "payload": "void",
+          "payloadSource": "shared-default",
+          "description": "Emitted when the component receives focus.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "blur",
+          "payload": "void",
+          "payloadSource": "shared-default",
+          "description": "Emitted when the component loses focus.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "keydown",
+          "payload": "TerminalKeyboardEvent",
+          "payloadSource": "shared-default",
+          "description": "Emitted for keydown events.",
+          "descriptionSource": "shared-default"
         }
       ]
     }
