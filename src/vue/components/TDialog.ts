@@ -16,21 +16,11 @@ import {
 import { useLayout } from "../composables/use-layout.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { DialogContextKey } from "../context.js";
+import { resolveOverlayPlacement, type TOverlayPlacement as Placement } from "../overlay.js";
 import { textCellWidth } from "../utils/text.js";
 import { TBox } from "./TBox.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
-
-type Placement =
-  | "center"
-  | "top"
-  | "bottom"
-  | "left"
-  | "right"
-  | "top-left"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-right";
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -45,65 +35,13 @@ function computePosition(opts: {
   offsetX: number;
   offsetY: number;
 }): { x: number; y: number } {
-  const cols = Math.max(0, Math.floor(opts.cols));
-  const rows = Math.max(0, Math.floor(opts.rows));
-  const w = Math.max(0, Math.floor(opts.w));
-  const h = Math.max(0, Math.floor(opts.h));
-  const dx = Math.floor(opts.offsetX);
-  const dy = Math.floor(opts.offsetY);
-
-  const maxX = Math.max(0, cols - w);
-  const maxY = Math.max(0, rows - h);
-
-  const centerX = Math.floor((cols - w) / 2);
-  const centerY = Math.floor((rows - h) / 2);
-
-  let x = 0;
-  let y = 0;
-
-  switch (opts.placement) {
-    case "top":
-      x = centerX;
-      y = 0;
-      break;
-    case "bottom":
-      x = centerX;
-      y = maxY;
-      break;
-    case "left":
-      x = 0;
-      y = centerY;
-      break;
-    case "right":
-      x = maxX;
-      y = centerY;
-      break;
-    case "top-left":
-      x = 0;
-      y = 0;
-      break;
-    case "top-right":
-      x = maxX;
-      y = 0;
-      break;
-    case "bottom-left":
-      x = 0;
-      y = maxY;
-      break;
-    case "bottom-right":
-      x = maxX;
-      y = maxY;
-      break;
-    case "center":
-    default:
-      x = centerX;
-      y = centerY;
-      break;
-  }
-
-  x = clamp(x + dx, 0, maxX);
-  y = clamp(y + dy, 0, maxY);
-  return { x, y };
+  return resolveOverlayPlacement({
+    viewport: { w: opts.cols, h: opts.rows },
+    size: { w: opts.w, h: opts.h },
+    placement: opts.placement,
+    offsetX: opts.offsetX,
+    offsetY: opts.offsetY,
+  });
 }
 
 function rectsIntersect(

@@ -1,6 +1,6 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import { computed, defineComponent, h, ref, watch } from "vue";
+import { computed, defineComponent, h, onBeforeUnmount, ref, watch } from "vue";
 import { TDialog } from "./TDialog.js";
 import { TInput } from "./TInput.js";
 import { TText } from "./TText.js";
@@ -14,10 +14,12 @@ export type TCommandPaletteMatchRange = Readonly<{
 }>;
 
 export type TCommandPaletteItem = Readonly<{
+  kind?: "item" | "separator" | "group";
   label: string;
   detail?: string;
   keywords?: readonly string[];
   disabled?: boolean;
+  disabledReason?: string;
   value?: unknown;
   accentStyle?: Style;
   highlightAccentStyle?: Style;
@@ -29,6 +31,29 @@ export type TCommandPaletteItem = Readonly<{
     highlightStyle?: Style;
   }>[];
   [key: string]: unknown;
+}>;
+
+export type TCommandPaletteMatcherResult = Readonly<{
+  score: number;
+  labelRanges?: readonly TCommandPaletteMatchRange[];
+  detailRanges?: readonly TCommandPaletteMatchRange[];
+}>;
+
+export type TCommandPaletteMatcher = (
+  item: TCommandPaletteItem,
+  query: string,
+) => TCommandPaletteMatcherResult | null;
+
+export type TCommandPaletteItemsProvider = (
+  query: string,
+  ctx: { signal: AbortSignal },
+) => Promise<readonly TCommandPaletteItem[]>;
+
+export type TCommandPaletteSelectPayload = Readonly<{
+  item: TCommandPaletteItem;
+  index: number;
+  query: string;
+  source: "keyboard" | "pointer";
 }>;
 
 export function computeCommandPaletteMatchRanges(
@@ -66,6 +91,52 @@ type TCommandPaletteVisualSegment = Readonly<{
 }>;
 
 const DEFAULT_MATCH_STYLE: Style = { bold: true, dim: false, underline: true };
+
+function isCommandPaletteRowSelectable(item: TCommandPaletteItem | undefined): boolean {
+  return Boolean(item && item.kind !== "separator" && item.kind !== "group" && !item.disabled);
+}
+
+function substringMatcher(
+  item: TCommandPaletteItem,
+  query: string,
+): TCommandPaletteMatcherResult | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return { score: 0 };
+  const labelRanges = computeCommandPaletteMatchRanges(item.label, q);
+  const detailRanges = item.detail ? computeCommandPaletteMatchRanges(item.detail, q) : [];
+  const keywordMatch = (item.keywords ?? []).some((keyword) =>
+    String(keyword ?? "")
+      .toLowerCase()
+      .includes(q),
+  );
+  if (!labelRanges.length && !detailRanges.length && !keywordMatch) return null;
+  return {
+    score: labelRanges.length ? 100 : detailRanges.length ? 50 : 10,
+    labelRanges,
+    detailRanges,
+  };
+}
+
+function fuzzyMatcher(
+  item: TCommandPaletteItem,
+  query: string,
+): TCommandPaletteMatcherResult | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return { score: 0 };
+  const source =
+    `${item.label} ${item.detail ?? ""} ${(item.keywords ?? []).join(" ")}`.toLowerCase();
+  let pos = 0;
+  for (const ch of q) {
+    const next = source.indexOf(ch, pos);
+    if (next < 0) return null;
+    pos = next + 1;
+  }
+  return {
+    score: Math.max(1, 100 - pos),
+    labelRanges: computeCommandPaletteMatchRanges(item.label, query),
+    detailRanges: item.detail ? computeCommandPaletteMatchRanges(item.detail, query) : [],
+  };
+}
 
 function normalizeRanges(
   ranges: readonly TCommandPaletteMatchRange[] | undefined,
@@ -195,16 +266,36 @@ export const TCommandPalette = defineComponent({
   props: {
     modelValue: { type: Boolean, required: true },
     title: { type: String, default: "" },
+    query: { type: String, default: undefined },
     initialQuery: { type: String, default: "" },
     items: {
       type: Array as PropType<readonly TCommandPaletteItem[]>,
       required: true,
     },
+    itemsProvider: {
+      type: Function as PropType<TCommandPaletteItemsProvider>,
+      default: undefined,
+    },
+    matcher: {
+      type: Function as PropType<TCommandPaletteMatcher>,
+      default: undefined,
+    },
+    filterStrategy: {
+      type: String as PropType<"substring" | "fuzzy">,
+      default: "substring",
+    },
     selectedIndex: { type: Number, default: undefined },
     showRowDetails: { type: Boolean, default: false },
     placeholder: { type: String, default: "" },
     noMatchesText: { type: String, default: "No matches" },
+    loadingText: { type: String, default: "Loading..." },
+    errorText: { type: String, default: "Unable to load commands" },
     hint: { type: String, default: "" },
+    debounce: { type: Number, default: 0 },
+    minQueryLength: { type: Number, default: 0 },
+    maxVisibleItems: { type: Number, default: undefined },
+    closeOnSelect: { type: Boolean, default: false },
+    resetQueryOnClose: { type: Boolean, default: false },
     w: { type: Number, default: 72 },
     h: { type: Number, default: 18 },
     chromeStyle: { type: Object as PropType<Style>, default: undefined },
@@ -219,43 +310,70 @@ export const TCommandPalette = defineComponent({
     detailStyle: { type: Object as PropType<Style>, default: undefined },
     emptyStyle: { type: Object as PropType<Style>, default: undefined },
   },
-  emits: ["update:modelValue", "update:selectedIndex", "select", "close"],
+  emits: {
+    "update:modelValue": (_value: boolean) => true,
+    "update:query": (_value: string) => true,
+    "update:selectedIndex": (_index: number) => true,
+    select: (_payload: TCommandPaletteSelectPayload) => true,
+    close: () => true,
+  },
   setup(props, { emit }) {
-    const query = ref(props.initialQuery);
+    const innerQuery = ref(props.query ?? props.initialQuery);
     const innerSelectedIndex = ref(0);
-    const filteredItems = computed(() => {
-      const q = query.value.trim().toLowerCase();
-      if (!q) return props.items;
-      return props.items.filter((item) => {
-        const fields = [item.label, item.detail ?? "", ...(item.keywords ?? [])];
-        return fields.some((field) =>
-          String(field ?? "")
-            .toLowerCase()
-            .includes(q),
-        );
-      });
-    });
+    const providerItems = ref<readonly TCommandPaletteItem[] | null>(null);
+    const providerLoading = ref(false);
+    const providerError = ref<string | null>(null);
     const scrollOffset = ref(0);
+    let providerAbort: AbortController | null = null;
+    let providerTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const query = computed(() => props.query ?? innerQuery.value);
+    const filteredEntries = computed(() => {
+      const q = query.value.trim();
+      const sourceItems = props.itemsProvider ? (providerItems.value ?? []) : props.items;
+      const matcher =
+        props.matcher ?? (props.filterStrategy === "fuzzy" ? fuzzyMatcher : substringMatcher);
+      const entries = sourceItems.flatMap((item, sourceIndex) => {
+        if (item.kind === "separator" || item.kind === "group") {
+          return q
+            ? []
+            : [{ item, sourceIndex, match: { score: 0 } as TCommandPaletteMatcherResult }];
+        }
+        const match = matcher(item, q);
+        return match ? [{ item, sourceIndex, match }] : [];
+      });
+      entries.sort((a, b) => b.match.score - a.match.score || a.sourceIndex - b.sourceIndex);
+      return entries;
+    });
+
+    function setQuery(value: string): void {
+      innerQuery.value = value;
+      emit("update:query", value);
+    }
 
     function listHeight(): number {
       const dialogH = Math.max(8, Math.floor(props.h));
       const innerH = Math.max(1, dialogH - 4);
-      return Math.max(1, innerH - 3);
+      const maxVisible =
+        props.maxVisibleItems == null
+          ? Number.POSITIVE_INFINITY
+          : Math.max(1, props.maxVisibleItems);
+      return Math.max(1, Math.min(innerH - 3, maxVisible));
     }
 
     function normalizedIndex(index: number): number {
-      const len = filteredItems.value.length;
+      const len = filteredEntries.value.length;
       return len > 0 ? ((index % len) + len) % len : 0;
     }
 
     function enabledIndexFrom(index: number, direction: 1 | -1): number {
-      const len = filteredItems.value.length;
+      const len = filteredEntries.value.length;
       if (len === 0) return 0;
       const start = normalizedIndex(index);
-      if (!filteredItems.value[start]?.disabled) return start;
+      if (isCommandPaletteRowSelectable(filteredEntries.value[start]?.item)) return start;
       for (let step = 1; step < len; step++) {
         const next = normalizedIndex(start + step * direction);
-        if (!filteredItems.value[next]?.disabled) return next;
+        if (isCommandPaletteRowSelectable(filteredEntries.value[next]?.item)) return next;
       }
       return start;
     }
@@ -265,7 +383,7 @@ export const TCommandPalette = defineComponent({
     }
 
     function ensureSelectedVisible(index = selectedIndex()): void {
-      const len = filteredItems.value.length;
+      const len = filteredEntries.value.length;
       if (len === 0) {
         scrollOffset.value = 0;
         return;
@@ -284,13 +402,14 @@ export const TCommandPalette = defineComponent({
     watch(
       () => [props.modelValue, props.initialQuery] as const,
       ([open, initial]) => {
-        if (open) query.value = initial;
+        if (open && props.query == null) innerQuery.value = initial;
+        if (!open && props.resetQueryOnClose) setQuery("");
       },
       { immediate: true },
     );
 
     watch(
-      () => [filteredItems.value.length, props.selectedIndex, props.h] as const,
+      () => [filteredEntries.value.length, props.selectedIndex, props.h] as const,
       () => {
         const next = selectedIndex();
         innerSelectedIndex.value = next;
@@ -309,20 +428,24 @@ export const TCommandPalette = defineComponent({
     function close(): void {
       emit("update:modelValue", false);
       emit("close");
+      if (props.resetQueryOnClose) setQuery("");
     }
 
-    function selectCurrent(): void {
-      const item = filteredItems.value[selectedIndex()] ?? null;
-      if (!item || item.disabled) return;
-      emit("select", item);
+    function selectCurrent(source: "keyboard" | "pointer" = "keyboard"): void {
+      const index = selectedIndex();
+      const item = filteredEntries.value[index]?.item ?? null;
+      if (!isCommandPaletteRowSelectable(item)) return;
+      emit("select", { item, index, query: query.value, source });
+      if (props.closeOnSelect) close();
     }
 
     function selectItem(index: number): void {
-      const item = filteredItems.value[index] ?? null;
-      if (!item || item.disabled) return;
+      const item = filteredEntries.value[index]?.item ?? null;
+      if (!isCommandPaletteRowSelectable(item)) return;
       innerSelectedIndex.value = index;
       emit("update:selectedIndex", index);
-      emit("select", item);
+      emit("select", { item, index, query: query.value, source: "pointer" });
+      if (props.closeOnSelect) close();
     }
 
     function onKeydown(event: any): void {
@@ -335,12 +458,72 @@ export const TCommandPalette = defineComponent({
         setSelected(selectedIndex() - 1, -1);
       } else if (key === "Enter") {
         event.preventDefault?.();
-        selectCurrent();
+        selectCurrent("keyboard");
       } else if (key === "Escape") {
         event.preventDefault?.();
         close();
       }
     }
+
+    watch(
+      () =>
+        [
+          props.modelValue,
+          query.value,
+          props.itemsProvider,
+          props.debounce,
+          props.minQueryLength,
+        ] as const,
+      ([open, q, provider]) => {
+        if (providerTimer) {
+          clearTimeout(providerTimer);
+          providerTimer = null;
+        }
+        providerAbort?.abort();
+        providerAbort = null;
+        providerError.value = null;
+        if (!provider || !open) {
+          providerItems.value = null;
+          providerLoading.value = false;
+          return;
+        }
+        if (q.trim().length < Math.max(0, props.minQueryLength)) {
+          providerItems.value = [];
+          providerLoading.value = false;
+          return;
+        }
+
+        const run = () => {
+          const controller = new AbortController();
+          providerAbort = controller;
+          providerLoading.value = true;
+          void provider(q, { signal: controller.signal })
+            .then((items) => {
+              if (controller.signal.aborted) return;
+              providerItems.value = items;
+              providerError.value = null;
+            })
+            .catch((error: unknown) => {
+              if (controller.signal.aborted) return;
+              providerItems.value = [];
+              providerError.value = error instanceof Error ? error.message : String(error);
+            })
+            .finally(() => {
+              if (!controller.signal.aborted) providerLoading.value = false;
+            });
+        };
+
+        const delay = Math.max(0, Math.floor(props.debounce));
+        if (delay > 0) providerTimer = setTimeout(run, delay);
+        else run();
+      },
+      { immediate: true },
+    );
+
+    onBeforeUnmount(() => {
+      if (providerTimer) clearTimeout(providerTimer);
+      providerAbort?.abort();
+    });
 
     return () => {
       if (!props.modelValue) return null;
@@ -351,7 +534,7 @@ export const TCommandPalette = defineComponent({
       const listY = 2;
       const listH = listHeight();
       const activeIndex = selectedIndex();
-      const visibleItems = filteredItems.value.slice(
+      const visibleItems = filteredEntries.value.slice(
         scrollOffset.value,
         scrollOffset.value + listH,
       );
@@ -367,14 +550,36 @@ export const TCommandPalette = defineComponent({
           style: props.inputStyle,
           autoFocus: true,
           "onUpdate:modelValue": (value: string) => {
-            query.value = value;
+            setQuery(value);
             setSelected(0);
           },
           onKeydown,
         }),
       ];
 
-      if (visibleItems.length === 0) {
+      if (providerLoading.value) {
+        children.push(
+          h(TText as any, {
+            key: "loading",
+            x: 0,
+            y: listY,
+            w: innerW,
+            value: sliceByCells(props.loadingText, innerW),
+            style: props.emptyStyle ?? props.listStyle,
+          }),
+        );
+      } else if (providerError.value) {
+        children.push(
+          h(TText as any, {
+            key: "error",
+            x: 0,
+            y: listY,
+            w: innerW,
+            value: sliceByCells(props.errorText || providerError.value, innerW),
+            style: props.emptyStyle ?? props.listStyle,
+          }),
+        );
+      } else if (visibleItems.length === 0) {
         children.push(
           h(TText as any, {
             key: "empty",
@@ -387,16 +592,52 @@ export const TCommandPalette = defineComponent({
         );
       } else {
         for (let i = 0; i < visibleItems.length; i++) {
-          const item = visibleItems[i]!;
+          const entry = visibleItems[i]!;
+          const item = entry.item;
           const itemIndex = scrollOffset.value + i;
           const selected = itemIndex === activeIndex;
+          const selectable = isCommandPaletteRowSelectable(item);
           const baseStyle = selected
             ? (props.highlightStyle ?? props.listStyle)
-            : item.disabled
+            : !selectable && item.kind !== "group" && item.kind !== "separator"
               ? mergeStyle(props.listStyle, { dim: true })
               : props.listStyle;
+          if (item.kind === "separator") {
+            children.push(
+              h(TText as any, {
+                key: `separator:${itemIndex}:${item.label}`,
+                x: 0,
+                y: listY + i,
+                w: innerW,
+                value: item.label
+                  ? sliceByCells(
+                      `-- ${sanitizeInlineText(item.label)} ${"-".repeat(innerW)}`,
+                      innerW,
+                    )
+                  : "-".repeat(innerW),
+                style: mergeStyle(props.dividerStyle ?? props.listStyle, { dim: true }),
+              }),
+            );
+            continue;
+          }
+          if (item.kind === "group") {
+            children.push(
+              h(TText as any, {
+                key: `group:${itemIndex}:${item.label}`,
+                x: 0,
+                y: listY + i,
+                w: innerW,
+                value: sliceByCells(sanitizeInlineText(item.label), innerW),
+                style: mergeStyle(props.detailStyle ?? props.listStyle, { bold: true }),
+              }),
+            );
+            continue;
+          }
           const label = sanitizeInlineText(item.label);
-          const detail = props.showRowDetails && item.detail ? sanitizeInlineText(item.detail) : "";
+          const disabledReason = item.disabled && item.disabledReason ? item.disabledReason : "";
+          const detailSource = disabledReason || item.detail || "";
+          const detail =
+            props.showRowDetails && detailSource ? sanitizeInlineText(detailSource) : "";
           const prefix = selected ? "› " : "  ";
           const detailPrefix = detail ? "  " : "";
           const text = `${prefix}${label}${detailPrefix}${detail}`;
@@ -418,9 +659,19 @@ export const TCommandPalette = defineComponent({
             selected ? (item.highlightAccentStyle ?? item.accentStyle) : item.accentStyle,
           );
           const matchRanges = [
-            ...shiftRanges(computeCommandPaletteMatchRanges(label, query.value), labelOffset),
             ...shiftRanges(
-              detail ? computeCommandPaletteMatchRanges(detail, query.value) : [],
+              normalizeRanges(
+                entry.match.labelRanges ?? computeCommandPaletteMatchRanges(label, query.value),
+              ),
+              labelOffset,
+            ),
+            ...shiftRanges(
+              detail
+                ? normalizeRanges(
+                    entry.match.detailRanges ??
+                      computeCommandPaletteMatchRanges(detail, query.value),
+                  )
+                : [],
               detailOffset,
             ),
           ];
@@ -486,7 +737,7 @@ export const TCommandPalette = defineComponent({
                 y: listY + i,
                 w: innerW,
                 h: 1,
-                focusable: !item.disabled,
+                focusable: selectable,
                 onClick: () => selectItem(itemIndex),
                 onKeydown,
               },

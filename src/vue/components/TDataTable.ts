@@ -18,6 +18,17 @@ export type TDataTableRowSelectPayload = Readonly<{
   key: unknown;
 }>;
 
+export type TDataTableSorter = (a: TTableRow, b: TTableRow, column: TTableColumn) => number;
+
+export type TDataTableFilterPredicate = (
+  row: TTableRow,
+  query: string,
+  columns: readonly TTableColumn[],
+  originalIndex: number,
+) => boolean;
+
+export type TDataTableSelectionMode = "none" | "single" | "multiple";
+
 type DataRow = Readonly<{
   row: TTableRow;
   originalIndex: number;
@@ -75,6 +86,11 @@ export const TDataTable = defineComponent({
       default: undefined,
     },
     selectedRowKey: { type: null as any, default: undefined },
+    selectedRowKeys: {
+      type: Array as PropType<readonly unknown[]>,
+      default: undefined,
+    },
+    scrollTop: { type: Number, default: 0 },
     /** Sorts by the raw row value at this key; column format only affects display and filtering. */
     sortBy: { type: String, default: "" },
     sortDirection: {
@@ -82,9 +98,23 @@ export const TDataTable = defineComponent({
       default: "asc",
     },
     sortable: { type: Boolean, default: false },
+    manualSort: { type: Boolean, default: false },
+    sorter: {
+      type: Function as PropType<TDataTableSorter>,
+      default: undefined,
+    },
     filter: { type: String, default: "" },
     filterable: { type: Boolean, default: false },
+    manualFilter: { type: Boolean, default: false },
+    filterPredicate: {
+      type: Function as PropType<TDataTableFilterPredicate>,
+      default: undefined,
+    },
     selectable: { type: Boolean, default: false },
+    selectionMode: {
+      type: String as PropType<TDataTableSelectionMode>,
+      default: "single",
+    },
     border: { type: Boolean, default: false },
     style: { type: Object as PropType<Style>, default: undefined },
     headerStyle: { type: Object as PropType<Style>, default: undefined },
@@ -94,6 +124,8 @@ export const TDataTable = defineComponent({
   },
   emits: {
     "update:selectedRowKey": (_key: unknown) => true,
+    "update:selectedRowKeys": (_keys: unknown[]) => true,
+    "update:scrollTop": (_scrollTop: number) => true,
     "update:sortBy": (_key: string) => true,
     "update:sortDirection": (_direction: TDataTableSortDirection) => true,
     sortChange: (_payload: TDataTableSortChangePayload) => true,
@@ -104,8 +136,14 @@ export const TDataTable = defineComponent({
       props.rows.map((row, originalIndex) => ({ row, originalIndex })),
     );
     const filteredRows = computed(() => {
+      if (props.manualFilter) return indexedRows.value;
       if (!props.filterable || !props.filter.trim()) return indexedRows.value;
       const query = props.filter.trim().toLowerCase();
+      if (props.filterPredicate) {
+        return indexedRows.value.filter(({ row, originalIndex }) =>
+          props.filterPredicate!(row, query, props.columns, originalIndex),
+        );
+      }
       return indexedRows.value.filter(({ row, originalIndex }) =>
         props.columns.some((column) =>
           displayValue(column, row, originalIndex).toLowerCase().includes(query),
@@ -115,14 +153,29 @@ export const TDataTable = defineComponent({
 
     const sortedRows = computed(() => {
       const rows = [...filteredRows.value];
-      if (!props.sortable || !props.sortBy) return rows;
+      if (props.manualSort || !props.sortable || !props.sortBy) return rows;
+      const column = props.columns.find((candidate) => candidate.key === props.sortBy);
       rows.sort((a, b) => {
-        const result = compareValues(a.row[props.sortBy], b.row[props.sortBy]);
+        const result =
+          props.sorter && column
+            ? props.sorter(a.row, b.row, column)
+            : compareValues(a.row[props.sortBy], b.row[props.sortBy]);
         return props.sortDirection === "desc" ? -result : result;
       });
       return rows;
     });
-    const tableRows = computed(() => sortedRows.value.map(({ row }) => row));
+    const visibleRowCapacity = computed(() => Math.max(0, Math.floor(props.h) - 2));
+    const normalizedScrollTop = computed(() => {
+      const max = Math.max(0, sortedRows.value.length - visibleRowCapacity.value);
+      return Math.max(0, Math.min(max, Math.floor(props.scrollTop)));
+    });
+    const visibleRows = computed(() =>
+      sortedRows.value.slice(
+        normalizedScrollTop.value,
+        normalizedScrollTop.value + visibleRowCapacity.value,
+      ),
+    );
+    const tableRows = computed(() => visibleRows.value.map(({ row }) => row));
 
     const columns = computed(() =>
       props.columns.map((column) => {
@@ -133,18 +186,31 @@ export const TDataTable = defineComponent({
     );
 
     function originalIndexAt(index: number): number {
-      return sortedRows.value[index]?.originalIndex ?? index;
+      const absoluteIndex = normalizedScrollTop.value + index;
+      return sortedRows.value[absoluteIndex]?.originalIndex ?? absoluteIndex;
     }
 
     function dataTableRowKey(row: TTableRow, index: number): unknown {
       return rowKey(row, originalIndexAt(index), props.rowKey as any);
     }
 
+    function selectedKeySet(): Set<unknown> {
+      if (props.selectionMode === "multiple") return new Set(props.selectedRowKeys ?? []);
+      return new Set(props.selectedRowKey === undefined ? [] : [props.selectedRowKey]);
+    }
+
     function select(row: TTableRow, index: number): void {
       const originalIndex = originalIndexAt(index);
       const key = rowKey(row, originalIndex, props.rowKey as any);
-      if (!props.selectable) return;
-      emit("update:selectedRowKey", key);
+      if (!props.selectable || props.selectionMode === "none") return;
+      if (props.selectionMode === "multiple") {
+        const keys = selectedKeySet();
+        if (keys.has(key)) keys.delete(key);
+        else keys.add(key);
+        emit("update:selectedRowKeys", [...keys]);
+      } else {
+        emit("update:selectedRowKey", key);
+      }
       emit("rowSelect", { row, index, originalIndex, key });
     }
 
@@ -158,6 +224,39 @@ export const TDataTable = defineComponent({
       emit("sortChange", { sortBy: nextSortBy, sortDirection: nextDirection });
     }
 
+    function selectAbsoluteIndex(absoluteIndex: number): void {
+      const clamped = Math.max(0, Math.min(sortedRows.value.length - 1, absoluteIndex));
+      const entry = sortedRows.value[clamped];
+      if (!entry) return;
+      const visibleIndex = clamped - normalizedScrollTop.value;
+      if (visibleIndex < 0) emit("update:scrollTop", clamped);
+      else if (visibleIndex >= visibleRowCapacity.value) {
+        emit("update:scrollTop", Math.max(0, clamped - visibleRowCapacity.value + 1));
+      }
+      const key = rowKey(entry.row, entry.originalIndex, props.rowKey as any);
+      if (props.selectionMode === "multiple") {
+        const keys = selectedKeySet();
+        keys.add(key);
+        emit("update:selectedRowKeys", [...keys]);
+      } else {
+        emit("update:selectedRowKey", key);
+      }
+      emit("rowSelect", {
+        row: entry.row,
+        index: Math.max(0, Math.min(visibleRowCapacity.value - 1, visibleIndex)),
+        originalIndex: entry.originalIndex,
+        key,
+      });
+    }
+
+    function onRowKeydown({ index, event }: { index: number; event: any }): void {
+      if (!props.selectable || props.selectionMode === "none") return;
+      if (event?.key !== "ArrowDown" && event?.key !== "ArrowUp") return;
+      event.preventDefault?.();
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      selectAbsoluteIndex(normalizedScrollTop.value + index + delta);
+    }
+
     return () =>
       h(TTable as any, {
         x: props.x,
@@ -168,7 +267,8 @@ export const TDataTable = defineComponent({
         columns: columns.value,
         rows: tableRows.value,
         rowKey: dataTableRowKey,
-        selectedRowKey: props.selectedRowKey,
+        selectedRowKey: props.selectionMode === "multiple" ? undefined : props.selectedRowKey,
+        selectedRowKeys: props.selectionMode === "multiple" ? props.selectedRowKeys : undefined,
         border: props.border,
         style: props.style,
         headerStyle: props.headerStyle,
@@ -176,9 +276,10 @@ export const TDataTable = defineComponent({
         selectedStyle: props.selectedStyle,
         emptyText: props.emptyText,
         headerFocusable: props.sortable,
-        rowFocusable: props.selectable,
+        rowFocusable: props.selectable && props.selectionMode !== "none",
         onRowClick: ({ row, index }: { row: TTableRow; index: number }) => select(row, index),
         onHeaderClick: ({ column }: { column: TTableColumn }) => sort(column),
+        onRowKeydown,
       });
   },
 });

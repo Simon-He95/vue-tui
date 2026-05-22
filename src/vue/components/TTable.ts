@@ -11,6 +11,9 @@ export type TTableColumn = Readonly<{
   key: string;
   label?: string;
   width?: number;
+  minWidth?: number;
+  maxWidth?: number;
+  flex?: number;
   align?: "left" | "right";
   style?: Style;
   headerStyle?: Style;
@@ -29,6 +32,12 @@ export type TTableHeaderClickPayload = Readonly<{
   index: number;
 }>;
 
+export type TTableRowKeydownPayload = Readonly<{
+  row: TTableRow;
+  index: number;
+  event: unknown;
+}>;
+
 function resolveColumnWidths(
   columns: readonly TTableColumn[],
   width: number,
@@ -38,18 +47,36 @@ function resolveColumnWidths(
   if (count === 0) return [];
   const separators = border ? count + 1 : Math.max(0, count - 1);
   const available = Math.max(0, Math.floor(width) - separators);
-  const explicit = columns.map((column) =>
-    column.width == null ? 0 : Math.max(1, Math.floor(column.width)),
+  const mins = columns.map((column) =>
+    column.minWidth == null ? 1 : Math.max(0, Math.floor(column.minWidth)),
+  );
+  const maxes = columns.map((column) =>
+    column.maxWidth == null ? Number.POSITIVE_INFINITY : Math.max(0, Math.floor(column.maxWidth)),
+  );
+  const explicit = columns.map((column, index) =>
+    column.width == null
+      ? 0
+      : Math.min(maxes[index]!, Math.max(mins[index]!, Math.floor(column.width))),
   );
   const explicitTotal = explicit.reduce((sum, next) => sum + next, 0);
   const autoIndexes = explicit.flatMap((value, index) => (value > 0 ? [] : [index]));
   const out = [...explicit];
   if (autoIndexes.length > 0) {
     let remaining = Math.max(0, available - explicitTotal);
+    const flexTotal = autoIndexes.reduce(
+      (sum, index) => sum + Math.max(0, columns[index]?.flex ?? 1),
+      0,
+    );
     for (let i = 0; i < autoIndexes.length; i++) {
+      const index = autoIndexes[i]!;
       const slotsLeft = autoIndexes.length - i;
-      const value = Math.ceil(remaining / slotsLeft);
-      out[autoIndexes[i]!] = value;
+      const flex = Math.max(0, columns[index]?.flex ?? 1);
+      const raw = flexTotal > 0 ? Math.floor((available - explicitTotal) * (flex / flexTotal)) : 0;
+      const value = i === autoIndexes.length - 1 ? remaining : Math.max(mins[index]!, raw);
+      out[index] = Math.min(
+        maxes[index]!,
+        Math.max(mins[index]!, value || Math.ceil(remaining / slotsLeft)),
+      );
       remaining -= value;
     }
   }
@@ -134,6 +161,10 @@ export const TTable = defineComponent({
       default: undefined,
     },
     selectedRowKey: { type: null as any, default: undefined },
+    selectedRowKeys: {
+      type: Array as PropType<readonly unknown[]>,
+      default: undefined,
+    },
     border: { type: Boolean, default: false },
     header: { type: Boolean, default: true },
     style: { type: Object as PropType<Style>, default: undefined },
@@ -147,6 +178,7 @@ export const TTable = defineComponent({
   emits: {
     rowClick: (_payload: TTableRowClickPayload) => true,
     headerClick: (_payload: TTableHeaderClickPayload) => true,
+    rowKeydown: (_payload: TTableRowKeydownPayload) => true,
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
@@ -252,14 +284,16 @@ export const TTable = defineComponent({
       for (let index = 0; index < bodyRows.value.length; index++) {
         const row = bodyRows.value[index]!;
         const y = (props.header ? 2 : 0) + index;
+        const key = rowKey(row, index, props.rowKey as any);
         const selected =
-          props.selectedRowKey !== undefined &&
-          rowKey(row, index, props.rowKey as any) === props.selectedRowKey;
+          props.selectedRowKey !== undefined
+            ? key === props.selectedRowKey
+            : Boolean(props.selectedRowKeys?.some((candidate) => candidate === key));
         children.push(
           h(
             TView as any,
             {
-              key: `row:${String(rowKey(row, index, props.rowKey as any))}`,
+              key: `row:${String(key)}`,
               x: 0,
               y,
               w: props.w,
@@ -267,6 +301,7 @@ export const TTable = defineComponent({
               focusable: props.rowFocusable,
               onClick: () => emit("rowClick", { row, index }),
               onKeydown: (event: any) => {
+                emit("rowKeydown", { row, index, event });
                 if (event.key !== "Enter" && event.key !== " ") return;
                 event.preventDefault?.();
                 emit("rowClick", { row, index });

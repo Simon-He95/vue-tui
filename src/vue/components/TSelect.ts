@@ -5,7 +5,16 @@ import type {
   TerminalKeyboardEvent,
   TerminalPointerEvent,
 } from "../../events/manager/types.js";
-import { computed, defineComponent, h, inject, ref, watchEffect } from "vue";
+import {
+  computed,
+  defineComponent,
+  h,
+  inject,
+  onBeforeUnmount,
+  ref,
+  watch,
+  watchEffect,
+} from "vue";
 import { charCellWidth } from "../../core/buffer/width.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
@@ -29,8 +38,10 @@ type TextAccentSegment = Readonly<{
 }>;
 
 export type SelectOptionWithStyle = Readonly<{
-  kind?: "separator";
+  kind?: "option" | "separator" | "group";
   label: string;
+  value?: unknown;
+  disabled?: boolean;
   detail?: string;
   style?: Style;
   highlightStyle?: Style;
@@ -192,6 +203,11 @@ export type TSelectMultipleChangePayload = Readonly<{
   values: string[];
 }>;
 export type TSelectMultipleEmitMode = "value" | "index" | "both";
+export type TSelectValueMode = "index" | "value" | "option";
+export type TSelectOptionProvider = (
+  query: string,
+  ctx: { signal: AbortSignal },
+) => Promise<readonly SelectOption[]>;
 
 export const TSelect = defineComponent({
   name: "TSelect",
@@ -201,11 +217,23 @@ export const TSelect = defineComponent({
     w: { type: Number, required: true },
     h: { type: Number, required: true },
     zIndex: { type: Number, default: 0 },
-    options: { type: Array as PropType<SelectOption[]>, required: true },
+    options: { type: Array as PropType<readonly SelectOption[]>, required: true },
+    optionProvider: {
+      type: Function as PropType<TSelectOptionProvider>,
+      default: undefined,
+    },
+    query: { type: String, default: "" },
     modelValue: {
-      type: [Number, Array] as PropType<number | number[]>,
+      type: [Number, Array, String, Boolean, Object] as PropType<
+        number | number[] | string | string[] | boolean | Record<string, unknown>
+      >,
       default: 0,
     },
+    valueMode: {
+      type: String as PropType<TSelectValueMode>,
+      default: "index",
+    },
+    activeIndex: { type: Number, default: undefined },
     multiple: { type: Boolean, default: false },
     multipleEmit: {
       type: String as PropType<TSelectMultipleEmitMode>,
@@ -220,8 +248,25 @@ export const TSelect = defineComponent({
     },
     autoFocus: { type: Boolean, default: false },
     closeOnBlur: { type: Boolean, default: false },
+    searchable: { type: Boolean, default: false },
+    typeahead: { type: Boolean, default: true },
+    debounce: { type: Number, default: 0 },
+    emptyText: { type: String, default: "No options" },
+    loading: { type: Boolean, default: false },
+    loadingText: { type: String, default: "Loading..." },
+    maxVisible: { type: Number, default: undefined },
   },
-  emits: ["update:modelValue", "change", "confirm", "close", "focus", "blur", "keydown"],
+  emits: [
+    "update:modelValue",
+    "update:activeIndex",
+    "update:query",
+    "change",
+    "confirm",
+    "close",
+    "focus",
+    "blur",
+    "keydown",
+  ],
   setup(props, { emit }) {
     const { terminal, scheduler, defaultStyle, events } = useTerminal();
     const layout = useLayout();
@@ -231,21 +276,43 @@ export const TSelect = defineComponent({
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
 
     const focused = ref(false);
+    const providerOptions = ref<readonly SelectOption[] | null>(null);
+    const providerLoading = ref(false);
+    let providerAbort: AbortController | null = null;
+    let providerTimer: ReturnType<typeof setTimeout> | null = null;
+    let typeaheadTimer: ReturnType<typeof setTimeout> | null = null;
+    const typeaheadQuery = ref("");
+    const options = computed(() => providerOptions.value ?? props.options);
     const initialActive = (() => {
-      const max = Math.max(0, props.options.length - 1);
+      const max = Math.max(0, options.value.length - 1);
       if (!props.multiple) {
-        const idx = typeof props.modelValue === "number" ? props.modelValue : 0;
+        const idx = modelIndex(props.modelValue);
         return clamp(idx, 0, max);
       }
       const selected = Array.isArray(props.modelValue) ? props.modelValue : [];
       const first = selected[0] ?? 0;
-      return clamp(first, 0, max);
+      return clamp(modelIndex(first), 0, max);
     })();
-    const active = ref(initialActive);
+    const innerActive = ref(initialActive);
+    const active = computed(() =>
+      clamp(props.activeIndex ?? innerActive.value, 0, Math.max(0, options.value.length - 1)),
+    );
+
+    function setActive(index: number): void {
+      const next = clamp(index, 0, Math.max(0, options.value.length - 1));
+      innerActive.value = next;
+      emit("update:activeIndex", next);
+    }
 
     function getScrollOffset(r: Rect): number {
-      const visibleH = Math.max(0, Math.floor(r.h));
-      const total = Math.max(0, props.options.length);
+      const visibleH = Math.max(
+        0,
+        Math.min(
+          Math.floor(r.h),
+          props.maxVisible == null ? Number.POSITIVE_INFINITY : Math.max(1, props.maxVisible),
+        ),
+      );
+      const total = Math.max(0, options.value.length);
       if (visibleH <= 0) return 0;
       if (total <= visibleH) return 0;
       const maxOffset = Math.max(0, total - visibleH);
@@ -261,16 +328,16 @@ export const TSelect = defineComponent({
     });
 
     watchEffect(() => {
-      const max = Math.max(0, props.options.length - 1);
+      const max = Math.max(0, options.value.length - 1);
       if (!props.multiple) {
-        const idx = typeof props.modelValue === "number" ? props.modelValue : 0;
+        const idx = modelIndex(props.modelValue);
         const next = clamp(idx, 0, max);
-        active.value = isOptionInteractive(props.options[next])
+        innerActive.value = isOptionInteractive(options.value[next])
           ? next
           : (findNextInteractiveIndex(next, 1) ?? next);
         return;
       }
-      active.value = clamp(active.value, 0, max);
+      innerActive.value = clamp(active.value, 0, max);
     });
 
     function getOptionLabel(opt: SelectOption): string {
@@ -281,18 +348,37 @@ export const TSelect = defineComponent({
       return isOptionObject(opt) ? opt.kind : undefined;
     }
 
+    function getOptionValue(opt: SelectOption, index: number): unknown {
+      if (props.valueMode === "index") return index;
+      if (props.valueMode === "option") return opt;
+      return isOptionObject(opt) && "value" in opt ? opt.value : getOptionLabel(opt);
+    }
+
+    function valuesEqual(a: unknown, b: unknown): boolean {
+      return a === b;
+    }
+
+    function modelIndex(value: unknown): number {
+      if (props.valueMode === "index") return typeof value === "number" ? value : 0;
+      const index = options.value.findIndex((opt, optIndex) =>
+        valuesEqual(getOptionValue(opt, optIndex), value),
+      );
+      return index >= 0 ? index : 0;
+    }
+
     function isOptionInteractive(opt: SelectOption | undefined): boolean {
       if (!opt) return false;
-      return getOptionKind(opt) !== "separator";
+      const kind = getOptionKind(opt);
+      return kind !== "separator" && kind !== "group" && !(isOptionObject(opt) && opt.disabled);
     }
 
     function findNextInteractiveIndex(start: number, delta: number): number | null {
-      const total = Math.max(0, props.options.length);
+      const total = Math.max(0, options.value.length);
       if (total <= 0) return null;
       const step = delta >= 0 ? 1 : -1;
       for (let offset = 1; offset <= total; offset++) {
         const next = (start + step * offset + total) % total;
-        if (isOptionInteractive(props.options[next])) return next;
+        if (isOptionInteractive(options.value[next])) return next;
       }
       return null;
     }
@@ -346,29 +432,28 @@ export const TSelect = defineComponent({
     }
 
     function commitSingle(index: number): void {
-      const next = clamp(index, 0, Math.max(0, props.options.length - 1));
-      if (!isOptionInteractive(props.options[next])) return;
-      active.value = next;
-      emit("update:modelValue", next);
-      const opt = props.options[next];
+      const next = clamp(index, 0, Math.max(0, options.value.length - 1));
+      const opt = options.value[next];
+      if (!isOptionInteractive(opt)) return;
+      setActive(next);
+      emit("update:modelValue", getOptionValue(opt!, next));
       emit("change", opt ? getOptionLabel(opt) : null);
     }
 
     function getSelectedIndices(): number[] {
       if (!props.multiple) return [];
-      const max = Math.max(0, props.options.length - 1);
+      const max = Math.max(0, options.value.length - 1);
       const raw = Array.isArray(props.modelValue) ? props.modelValue : [];
       const set = new Set<number>();
       for (const v of raw) {
-        if (typeof v !== "number" || !Number.isFinite(v)) continue;
-        set.add(clamp(Math.trunc(v), 0, max));
+        set.add(clamp(Math.trunc(modelIndex(v)), 0, max));
       }
       return [...set].sort((a, b) => a - b);
     }
 
     function makeMultiplePayload(indices: number[]): TSelectMultipleChangePayload {
       const values = indices
-        .map((i) => props.options[i])
+        .map((i) => options.value[i])
         .filter(Boolean)
         .map((opt) => getOptionLabel(opt!));
       return { indices, values };
@@ -388,8 +473,9 @@ export const TSelect = defineComponent({
     }
 
     function toggleMultiple(index: number): void {
-      const nextIndex = clamp(index, 0, Math.max(0, props.options.length - 1));
-      active.value = nextIndex;
+      const nextIndex = clamp(index, 0, Math.max(0, options.value.length - 1));
+      if (!isOptionInteractive(options.value[nextIndex])) return;
+      setActive(nextIndex);
 
       const set = new Set(getSelectedIndices());
       if (set.has(nextIndex)) set.delete(nextIndex);
@@ -397,7 +483,12 @@ export const TSelect = defineComponent({
 
       const indices = [...set].sort((a, b) => a - b);
 
-      emit("update:modelValue", indices);
+      emit(
+        "update:modelValue",
+        props.valueMode === "index"
+          ? indices
+          : indices.map((i) => getOptionValue(options.value[i]!, i)),
+      );
       emitMultiple("change", indices);
     }
 
@@ -407,28 +498,51 @@ export const TSelect = defineComponent({
     }
 
     function commit(index: number): void {
-      if (!isOptionInteractive(props.options[index])) return;
+      if (!isOptionInteractive(options.value[index])) return;
       if (props.multiple) toggleMultiple(index);
       else commitSingle(index);
+    }
+
+    function moveTypeahead(char: string): boolean {
+      if (!props.searchable && !props.typeahead) return false;
+      if (char.length !== 1 || char < " ") return false;
+      if (typeaheadTimer) clearTimeout(typeaheadTimer);
+      typeaheadQuery.value += char.toLowerCase();
+      emit("update:query", typeaheadQuery.value);
+      typeaheadTimer = setTimeout(() => {
+        typeaheadQuery.value = "";
+      }, 700);
+      const total = options.value.length;
+      for (let step = 1; step <= total; step++) {
+        const index = (active.value + step) % total;
+        const opt = options.value[index];
+        if (!isOptionInteractive(opt)) continue;
+        if (getOptionLabel(opt).toLowerCase().startsWith(typeaheadQuery.value)) {
+          setActive(index);
+          if (!props.multiple) emit("update:modelValue", getOptionValue(opt, index));
+          return true;
+        }
+      }
+      return true;
     }
 
     function onKeydown(e: TerminalKeyboardEvent): void {
       emit("keydown", e);
       if (e.defaultPrevented) return;
-      const max = Math.max(0, props.options.length - 1);
+      const max = Math.max(0, options.value.length - 1);
       if (e.key === "ArrowUp" || e.code === "ArrowUp") {
         e.preventDefault();
         const next = max <= 0 ? 0 : (findNextInteractiveIndex(active.value, -1) ?? active.value);
-        active.value = next;
-        if (!props.multiple) emit("update:modelValue", active.value);
+        setActive(next);
+        if (!props.multiple) emit("update:modelValue", getOptionValue(options.value[next]!, next));
         scheduler.invalidate();
         return;
       }
       if (e.key === "ArrowDown" || e.code === "ArrowDown") {
         e.preventDefault();
         const next = max <= 0 ? 0 : (findNextInteractiveIndex(active.value, 1) ?? active.value);
-        active.value = next;
-        if (!props.multiple) emit("update:modelValue", active.value);
+        setActive(next);
+        if (!props.multiple) emit("update:modelValue", getOptionValue(options.value[next]!, next));
         scheduler.invalidate();
         return;
       }
@@ -452,6 +566,10 @@ export const TSelect = defineComponent({
       if (e.key === "Escape") {
         e.preventDefault();
         emit("close");
+        return;
+      }
+      if (moveTypeahead(e.key ?? "")) {
+        e.preventDefault();
       }
     }
 
@@ -465,7 +583,7 @@ export const TSelect = defineComponent({
           const r = absRect.value;
           const offset = getScrollOffset(r);
           const idx = offset + (e.cellY - r.y);
-          if (idx >= 0 && idx < props.options.length) commit(idx);
+          if (idx >= 0 && idx < options.value.length) commit(idx);
           else emit("close");
         },
         focus: () => {
@@ -501,7 +619,7 @@ export const TSelect = defineComponent({
         absRect.value,
         props.w,
         props.h,
-        props.options,
+        options.value,
         props.modelValue,
         props.multiple,
         props.multipleEmit,
@@ -509,6 +627,11 @@ export const TSelect = defineComponent({
         props.highlightStyle,
         props.matchStyle,
         props.highlightMatchStyle,
+        props.valueMode,
+        props.activeIndex,
+        props.emptyText,
+        props.loading,
+        providerLoading.value,
         focused.value,
         active.value,
         defaultStyle.value,
@@ -527,10 +650,23 @@ export const TSelect = defineComponent({
 
         const paintRow = (i: number): void => {
           const optIndex = offset + i;
-          const opt = props.options[optIndex];
+          const opt = options.value[optIndex];
+          if ((props.loading || providerLoading.value) && i === 0) {
+            const text = sliceByCells(props.loadingText, r.w);
+            terminal.write(`${text}${spaces(Math.max(0, r.w - textCellWidth(text)))}`, {
+              x: r.x,
+              y: r.y,
+              style: base,
+            });
+            return;
+          }
           if (!opt) {
-            // Empty row
-            terminal.write(spaces(r.w), { x: r.x, y: r.y + i, style: base });
+            const text = optIndex === 0 ? sliceByCells(props.emptyText, r.w) : "";
+            terminal.write(`${text}${spaces(Math.max(0, r.w - textCellWidth(text)))}`, {
+              x: r.x,
+              y: r.y + i,
+              style: base,
+            });
             return;
           }
 
@@ -581,6 +717,15 @@ export const TSelect = defineComponent({
               x: r.x,
               y: r.y + i,
               style: { ...rowBase, dim: true },
+            });
+            return;
+          }
+          if (getOptionKind(opt) === "group") {
+            const text = sliceByCells(getOptionLabel(opt), r.w);
+            terminal.write(`${text}${spaces(Math.max(0, r.w - textCellWidth(text)))}`, {
+              x: r.x,
+              y: r.y + i,
+              style: { ...rowBase, bold: true },
             });
             return;
           }
@@ -715,6 +860,45 @@ export const TSelect = defineComponent({
         }
       },
     }));
+
+    watch(
+      () => [props.optionProvider, props.query, props.debounce] as const,
+      ([provider, query]) => {
+        if (providerTimer) {
+          clearTimeout(providerTimer);
+          providerTimer = null;
+        }
+        providerAbort?.abort();
+        providerAbort = null;
+        if (!provider) {
+          providerOptions.value = null;
+          providerLoading.value = false;
+          return;
+        }
+        const run = () => {
+          const controller = new AbortController();
+          providerAbort = controller;
+          providerLoading.value = true;
+          void provider(query, { signal: controller.signal })
+            .then((items) => {
+              if (!controller.signal.aborted) providerOptions.value = items;
+            })
+            .finally(() => {
+              if (!controller.signal.aborted) providerLoading.value = false;
+            });
+        };
+        const delay = Math.max(0, Math.floor(props.debounce));
+        if (delay > 0) providerTimer = setTimeout(run, delay);
+        else run();
+      },
+      { immediate: true },
+    );
+
+    onBeforeUnmount(() => {
+      if (providerTimer) clearTimeout(providerTimer);
+      if (typeaheadTimer) clearTimeout(typeaheadTimer);
+      providerAbort?.abort();
+    });
 
     return () => h("span", rootProps);
   },

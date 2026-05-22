@@ -1,0 +1,6480 @@
+{
+  "packageVersion": "1.0.0-rc.0",
+  "entrypoints": {
+    "@simon_he/vue-tui": {
+      "maturity": "public",
+      "runtime": "browser-safe",
+      "exports": [
+        "TAutocompleteInput",
+        "TBadge",
+        "TBox",
+        "TCheckbox",
+        "TCode",
+        "TCommandPalette",
+        "TDataTable",
+        "TDialog",
+        "TDivider",
+        "TFormField",
+        "TInput",
+        "TLink",
+        "TLinkifyText",
+        "TList",
+        "TPasswordInput",
+        "TRadioGroup",
+        "TSelect",
+        "TSlider",
+        "TSwitch",
+        "TTable",
+        "TTag",
+        "TText",
+        "TTree",
+        "TView",
+        "TerminalProvider",
+        "computeCommandPaletteMatchRanges",
+        "createDomRenderer",
+        "createTInputHostPlugin",
+        "createTerminal",
+        "createTheme",
+        "linkifyTextSegments",
+        "tuiDefaultTheme"
+      ]
+    },
+    "@simon_he/vue-tui/agent": {
+      "maturity": "experimental",
+      "runtime": "browser-safe",
+      "exports": [
+        "TAgentTranscript",
+        "TBox",
+        "TCommandPalette",
+        "TDialog",
+        "TInput",
+        "TLogLinksPanel",
+        "TLogMinimap",
+        "TLogScrollbar",
+        "TLogSearchBar",
+        "TLogSearchPager",
+        "TLogSearchResults",
+        "TLogView",
+        "TLogVirtualLinksPanel",
+        "TLogVirtualSearchResults",
+        "TRenderPlane",
+        "TSelect",
+        "TText",
+        "TThinkingView",
+        "TToolCallView",
+        "TToolLogView",
+        "TTranscriptView",
+        "TUserMessageView",
+        "TView",
+        "TVirtualList",
+        "TVirtualMarkdown",
+        "computeCommandPaletteMatchRanges",
+        "createAppendOnlyLogStore",
+        "createMarkdownBlockSource",
+        "createTLogDensityBucketsFromMarkers",
+        "createTLogLevelPlugin",
+        "createTLogLineMatcherPlugin",
+        "createTLogLinkActionPlugin",
+        "createTLogOsc8LinkPlugin",
+        "createTLogUrlPlugin",
+        "detectTLogUrls",
+        "dispatchTLogPluginLinkAction",
+        "getTLogPluginMetadata",
+        "parseTLogAnnotatedText",
+        "resolveTLogLinksPanelTheme",
+        "resolveTLogMinimapTheme",
+        "resolveTLogScrollbarTheme",
+        "resolveTLogSearchBarTheme",
+        "resolveTLogSearchPagerTheme",
+        "resolveTLogSearchResultsTheme",
+        "resolveTLogViewTheme",
+        "resolveTThinkingViewModel",
+        "resolveTToolCallViewModel",
+        "resolveTUserMessageViewModel",
+        "stripTLogAnsiText",
+        "tlogDarkPreset",
+        "tlogDarkTheme",
+        "tlogDefaultPreset",
+        "tlogDefaultTheme",
+        "tlogHighContrastPreset",
+        "tlogHighContrastTheme",
+        "toTLogExternalLinkFromVisibleLink",
+        "useTLogLinkController",
+        "useTLogRetainedIndex",
+        "useTLogSearchController",
+        "useTLogSearchResultsPage",
+        "useTLogVirtualSearchResults"
+      ]
+    },
+    "@simon_he/vue-tui/cli": {
+      "maturity": "public",
+      "runtime": "node-only",
+      "exports": [
+        "HEADLESS_RENDERER_CAPABILITIES",
+        "STDOUT_RENDERER_CAPABILITIES",
+        "createCliEventManager",
+        "createDefaultTInputHostAdapter",
+        "createNodeMentionPathProvider",
+        "createNodePathPickerProvider",
+        "createOsc52ClipboardProvider",
+        "createStdinDriver",
+        "createStdoutRenderer",
+        "createTInputHostPlugin",
+        "createTerminalApp",
+        "defaultTInputHostPlugin",
+        "getCliLatencyProfiler",
+        "getStdoutRendererMetrics",
+        "installNodeFileWriters",
+        "installTerminalCleanup",
+        "readEventLog",
+        "resetNodeFileWriters",
+        "resolveUserPath",
+        "sanitizeTerminalHref",
+        "suggestPaths",
+        "writeEventLog",
+        "writeSnapshot"
+      ]
+    },
+    "@simon_he/vue-tui/core": {
+      "maturity": "public",
+      "runtime": "browser-safe",
+      "exports": [
+        "ANSI16_COLORS",
+        "ANSI256_COLORS",
+        "ANSI8_COLORS",
+        "SGR_RESET",
+        "TERMINAL_RENDER_PLANES",
+        "ansiColors",
+        "ansiStyles",
+        "charCellWidth",
+        "createTerminal",
+        "detectTerminalColorCapability",
+        "isSafeRelativeHref",
+        "normalizeNewlines",
+        "parseAnsiSgr",
+        "parsePathQuery",
+        "resolveUserPath",
+        "rgbToAnsi256",
+        "sanitizeDomHref",
+        "sanitizeTerminalHref",
+        "suggestParentHint",
+        "suggestPaths",
+        "truecolorBgOpen",
+        "truecolorFgOpen"
+      ]
+    },
+    "@simon_he/vue-tui/experimental": {
+      "maturity": "experimental",
+      "runtime": "browser-safe",
+      "exports": [
+        "TLogLinksPanel",
+        "TLogMinimap",
+        "TLogScrollbar",
+        "TLogSearchBar",
+        "TLogSearchPager",
+        "TLogSearchResults",
+        "TLogView",
+        "TLogVirtualLinksPanel",
+        "TLogVirtualSearchResults",
+        "TTranscriptView",
+        "TVirtualList",
+        "captureTLogViewSessionState",
+        "createAppendOnlyLogStore",
+        "createTLogDensityBucketsFromMarkers",
+        "createTLogLevelPlugin",
+        "createTLogLineMatcherPlugin",
+        "createTLogLinkActionPlugin",
+        "createTLogOsc8LinkPlugin",
+        "createTLogUrlPlugin",
+        "createTLogViewSessionStore",
+        "deserializeTLogViewSessionState",
+        "detectTLogUrls",
+        "dispatchTLogPluginLinkAction",
+        "getTLogPluginMetadata",
+        "handleTLogKeymapEvent",
+        "matchesTLogKeyBinding",
+        "parseTLogAnnotatedText",
+        "resolveTLogLinksPanelTheme",
+        "resolveTLogMinimapTheme",
+        "resolveTLogScrollbarTheme",
+        "resolveTLogSearchBarTheme",
+        "resolveTLogSearchPagerTheme",
+        "resolveTLogSearchResultsTheme",
+        "resolveTLogViewTheme",
+        "restoreTLogViewSessionState",
+        "sanitizeTerminalHref",
+        "serializeTLogViewSessionState",
+        "stripTLogAnsiText",
+        "tlogDarkPreset",
+        "tlogDarkTheme",
+        "tlogDefaultKeymap",
+        "tlogDefaultPreset",
+        "tlogDefaultTheme",
+        "tlogHighContrastKeymap",
+        "tlogHighContrastPreset",
+        "tlogHighContrastTheme",
+        "toTLogExternalLinkFromVisibleLink",
+        "useTLogLinkController",
+        "useTLogRetainedIndex",
+        "useTLogSearchController",
+        "useTLogSearchResultsPage",
+        "useTLogVirtualSearchResults"
+      ]
+    },
+    "@simon_he/vue-tui/markdown": {
+      "maturity": "public",
+      "runtime": "browser-safe",
+      "exports": [
+        "TMarkdownText",
+        "TVirtualMarkdown",
+        "buildMarkdownBlocks",
+        "buildMarkdownVisualRows",
+        "createMarkdownBlockSource",
+        "createTuiMarkdownParser",
+        "isSafeMarkdownLink",
+        "layoutMarkdownBlocks"
+      ]
+    },
+    "@simon_he/vue-tui/observability": {
+      "maturity": "advanced",
+      "runtime": "browser-safe",
+      "exports": [
+        "createFramePerfStore",
+        "createJsonlPerfSink",
+        "createTraceStore",
+        "framePerfNow",
+        "installTuiPerf"
+      ]
+    },
+    "@simon_he/vue-tui/renderer/dom": {
+      "maturity": "public",
+      "runtime": "browser-safe",
+      "exports": ["DOM_RENDERER_CAPABILITIES", "createDomRenderer"]
+    },
+    "@simon_he/vue-tui/runtime": {
+      "maturity": "advanced",
+      "runtime": "mixed",
+      "exports": [
+        "createEventManager",
+        "createRuntime",
+        "createTerminalSelectionController",
+        "terminalSelectionRowSpans",
+        "terminalSelectionVisibleRowSpans"
+      ]
+    },
+    "@simon_he/vue-tui/vue": {
+      "maturity": "advanced",
+      "runtime": "browser-safe",
+      "exports": [
+        "TAnchor",
+        "TAutocompleteInput",
+        "TBadge",
+        "TBox",
+        "TBreadcrumb",
+        "TCheckbox",
+        "TCode",
+        "TCommandPalette",
+        "TContextMenu",
+        "TDataTable",
+        "TDebugOverlay",
+        "TDialog",
+        "TDivider",
+        "TFlow",
+        "TForm",
+        "TFormField",
+        "TInput",
+        "TInputBox",
+        "TInputPluginsContextKey",
+        "TJsonEditor",
+        "TKeyHint",
+        "TLink",
+        "TLinkifyText",
+        "TList",
+        "TMultilineModal",
+        "TPasswordInput",
+        "TPathPicker",
+        "TPopover",
+        "TProgress",
+        "TRadioGroup",
+        "TRenderLayer",
+        "TRenderPlane",
+        "TRouterView",
+        "TSelect",
+        "TSlider",
+        "TSpinner",
+        "TSplitPane",
+        "TStatusBar",
+        "TSwitch",
+        "TTable",
+        "TTabs",
+        "TTag",
+        "TText",
+        "TToastViewport",
+        "TTooltip",
+        "TTransition",
+        "TTree",
+        "TView",
+        "TerminalProvider",
+        "applyWheelScroll",
+        "clearTextCaches",
+        "computeCommandPaletteMatchRanges",
+        "createOverlayFocusStack",
+        "createPromptMentionPlugin",
+        "createTInputHostPlugin",
+        "createTerminalRouter",
+        "createTextRestrictionPlugin",
+        "createTheme",
+        "createWheelScrollState",
+        "formatInlineCellLine",
+        "linkifyTextSegments",
+        "lintJsonText",
+        "padEndByCells",
+        "resolveOverlayPlacement",
+        "sanitizeInlineText",
+        "sanitizeTextBlock",
+        "sliceByCells",
+        "sliceByCellsRange",
+        "spaces",
+        "textCellWidth",
+        "tuiDefaultTheme",
+        "useLayout",
+        "useRenderNode",
+        "useRoute",
+        "useRouter",
+        "useTerminal",
+        "useTerminalNode",
+        "useTerminalRuntime",
+        "useVisibility",
+        "wrapByCells"
+      ]
+    }
+  },
+  "components": {
+    "TAnchor": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "left",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "top",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "right",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "bottom",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": [
+        {
+          "name": "clickCapture"
+        },
+        {
+          "name": "click"
+        },
+        {
+          "name": "dblclickCapture"
+        },
+        {
+          "name": "dblclick"
+        },
+        {
+          "name": "pointerdownCapture"
+        },
+        {
+          "name": "pointerdown"
+        },
+        {
+          "name": "pointerupCapture"
+        },
+        {
+          "name": "pointerup"
+        },
+        {
+          "name": "pointermoveCapture"
+        },
+        {
+          "name": "pointermove"
+        },
+        {
+          "name": "wheelCapture"
+        },
+        {
+          "name": "wheel"
+        },
+        {
+          "name": "keydownCapture"
+        },
+        {
+          "name": "keydown"
+        },
+        {
+          "name": "keyupCapture"
+        },
+        {
+          "name": "keyup"
+        },
+        {
+          "name": "focusCapture"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blurCapture"
+        },
+        {
+          "name": "blur"
+        }
+      ]
+    },
+    "TAutocompleteInput": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "5",
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "modelValue",
+          "type": "string",
+          "required": true,
+          "description": "Controlled component value."
+        },
+        {
+          "name": "suggestions",
+          "type": "readonly TAutocompleteOption[]",
+          "required": false,
+          "defaultValue": "() => []",
+          "description": "Autocomplete suggestions."
+        },
+        {
+          "name": "suggestionProvider",
+          "type": "TAutocompleteSuggestionProvider",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Async suggestion provider called with the current input value."
+        },
+        {
+          "name": "open",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Controlled suggestion popup visibility."
+        },
+        {
+          "name": "highlightedIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Controlled highlighted suggestion index."
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Placeholder text shown when the input is empty."
+        },
+        {
+          "name": "debounce",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Delay before calling an async provider, in milliseconds."
+        },
+        {
+          "name": "minChars",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Minimum input length before suggestions are shown or loaded."
+        },
+        {
+          "name": "filterLocal",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Filters provided suggestions against the input value."
+        },
+        {
+          "name": "closeOnSelect",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Closes suggestions after a suggestion is selected."
+        },
+        {
+          "name": "loadingText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Loading...\"",
+          "description": "Text rendered while async commands are loading."
+        },
+        {
+          "name": "emptyText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Text rendered when there are no rows or items."
+        },
+        {
+          "name": "errorText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Unable to load suggestions\"",
+          "description": "Text rendered when async commands fail to load."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "suggestionStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for suggestion rows."
+        },
+        {
+          "name": "activeSuggestionStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })",
+          "description": "Style override for the active suggestion row."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "string",
+          "description": "Emitted when the controlled model value changes."
+        },
+        {
+          "name": "update:open",
+          "payload": "boolean",
+          "description": "Emitted when popup visibility changes."
+        },
+        {
+          "name": "update:highlightedIndex",
+          "payload": "number",
+          "description": "Emitted when the active autocomplete suggestion changes."
+        },
+        {
+          "name": "input",
+          "payload": "string",
+          "description": "Emitted for input edits."
+        },
+        {
+          "name": "change",
+          "payload": "string",
+          "description": "Emitted when the component commits a value change."
+        },
+        {
+          "name": "select",
+          "payload": "TAutocompleteSelectPayload",
+          "description": "Emitted when the active item is selected."
+        }
+      ]
+    },
+    "TBadge": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "value",
+          "type": "string | number",
+          "required": true,
+          "description": "Text or scalar value rendered by the component."
+        },
+        {
+          "name": "tone",
+          "type": "TFeedbackTone",
+          "required": false,
+          "defaultValue": "\"default\"",
+          "description": "Semantic color tone."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        }
+      ],
+      "events": []
+    },
+    "TBox": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "border",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Draws a border around the component."
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Optional title text."
+        },
+        {
+          "name": "padding",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Inner padding in terminal cells."
+        },
+        {
+          "name": "scrollX",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Horizontal content offset in terminal cells."
+        },
+        {
+          "name": "scrollY",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Vertical content offset in terminal cells."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "titleStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for title text."
+        },
+        {
+          "name": "clear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Clears the component rectangle before drawing content."
+        }
+      ],
+      "events": [
+        {
+          "name": "pointerenterCapture",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted when the pointer enters the component. Runs during capture."
+        },
+        {
+          "name": "pointerenter",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted when the pointer enters the component."
+        },
+        {
+          "name": "pointerleaveCapture",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted when the pointer leaves the component. Runs during capture."
+        },
+        {
+          "name": "pointerleave",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted when the pointer leaves the component."
+        }
+      ]
+    },
+    "TBreadcrumb": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "items",
+          "type": "readonly TBreadcrumbItem[]",
+          "required": true
+        },
+        {
+          "name": "separator",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"/\""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ bold: true })"
+        },
+        {
+          "name": "disabledStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })"
+        }
+      ],
+      "events": [
+        {
+          "name": "select",
+          "payload": "TBreadcrumbSelectPayload"
+        }
+      ]
+    },
+    "TCheckbox": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "modelValue",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Controlled component value."
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Visible label text."
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Disables pointer and keyboard activation."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "checkedStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used when the checkbox is checked."
+        },
+        {
+          "name": "disabledStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })",
+          "description": "Style used for disabled content."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "boolean",
+          "description": "Emitted when the controlled model value changes."
+        },
+        {
+          "name": "change",
+          "payload": "boolean",
+          "description": "Emitted when the component commits a value change."
+        }
+      ]
+    },
+    "TCode": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true,
+          "description": "Text or scalar value rendered by the component."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"yellowBright\" })",
+          "description": "Base terminal cell style override."
+        }
+      ],
+      "events": []
+    },
+    "TCommandPalette": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "modelValue",
+          "type": "boolean",
+          "required": true,
+          "description": "Controlled component value."
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Optional title text."
+        },
+        {
+          "name": "query",
+          "type": "string",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Controlled search query."
+        },
+        {
+          "name": "initialQuery",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Query used when the command palette opens."
+        },
+        {
+          "name": "items",
+          "type": "readonly TCommandPaletteItem[]",
+          "required": true,
+          "description": "Items rendered by the component."
+        },
+        {
+          "name": "itemsProvider",
+          "type": "TCommandPaletteItemsProvider",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Async command provider called with the current query."
+        },
+        {
+          "name": "matcher",
+          "type": "TCommandPaletteMatcher",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Custom command matcher."
+        },
+        {
+          "name": "filterStrategy",
+          "type": "\"substring\" | \"fuzzy\"",
+          "required": false,
+          "defaultValue": "\"substring\"",
+          "description": "Built-in command matching strategy."
+        },
+        {
+          "name": "selectedIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Controlled active item index."
+        },
+        {
+          "name": "showRowDetails",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Shows command detail text next to labels."
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Placeholder text shown when the input is empty."
+        },
+        {
+          "name": "noMatchesText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"No matches\"",
+          "description": "Text rendered when filtering returns no commands."
+        },
+        {
+          "name": "loadingText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Loading...\"",
+          "description": "Text rendered while async commands are loading."
+        },
+        {
+          "name": "errorText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Unable to load commands\"",
+          "description": "Text rendered when async commands fail to load."
+        },
+        {
+          "name": "hint",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Footer hint text."
+        },
+        {
+          "name": "debounce",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Delay before calling an async provider, in milliseconds."
+        },
+        {
+          "name": "minQueryLength",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Minimum query length before async loading runs."
+        },
+        {
+          "name": "maxVisibleItems",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Maximum number of command rows rendered at once."
+        },
+        {
+          "name": "closeOnSelect",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Closes suggestions after a suggestion is selected."
+        },
+        {
+          "name": "resetQueryOnClose",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Resets the query when the palette closes."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "72",
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "18",
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "chromeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for command palette chrome."
+        },
+        {
+          "name": "inputStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for the embedded input."
+        },
+        {
+          "name": "listStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for list rows."
+        },
+        {
+          "name": "bodyStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for dialog body cells."
+        },
+        {
+          "name": "highlightStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used for the highlighted row or match."
+        },
+        {
+          "name": "matchStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used for matched text."
+        },
+        {
+          "name": "highlightMatchStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used for highlighted text while the row is active."
+        },
+        {
+          "name": "dividerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for dividers."
+        },
+        {
+          "name": "hintStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for hint text."
+        },
+        {
+          "name": "detailStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for detail text."
+        },
+        {
+          "name": "emptyStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used when rendering an empty state."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "boolean",
+          "description": "Emitted when the controlled model value changes."
+        },
+        {
+          "name": "update:query",
+          "payload": "string",
+          "description": "Emitted when the controlled query changes."
+        },
+        {
+          "name": "update:selectedIndex",
+          "payload": "number",
+          "description": "Emitted when the controlled active index changes."
+        },
+        {
+          "name": "select",
+          "payload": "TCommandPaletteSelectPayload",
+          "description": "Emitted when the active item is selected."
+        },
+        {
+          "name": "close",
+          "payload": "void",
+          "description": "Emitted when the component requests to close."
+        }
+      ]
+    },
+    "TContextMenu": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "modelValue",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Caller-owned x position; no viewport clamp or flip placement is applied."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Caller-owned y position; no viewport clamp or flip placement is applied."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "24"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "20"
+        },
+        {
+          "name": "items",
+          "type": "readonly TContextMenuItem[]",
+          "required": true
+        },
+        {
+          "name": "selectedIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "closeOnOutside",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        },
+        {
+          "name": "disabledStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })"
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "boolean"
+        },
+        {
+          "name": "update:selectedIndex",
+          "payload": "number"
+        },
+        {
+          "name": "select",
+          "payload": "TContextMenuSelectPayload"
+        },
+        {
+          "name": "close"
+        }
+      ]
+    },
+    "TDataTable": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "columns",
+          "type": "readonly TTableColumn[]",
+          "required": true,
+          "description": "Table column definitions."
+        },
+        {
+          "name": "rows",
+          "type": "readonly TTableRow[]",
+          "required": true,
+          "description": "TDataTable filters/sorts rows and renders the top slice through non-virtual\nTTable; it does not own scrollTop or virtualization."
+        },
+        {
+          "name": "rowKey",
+          "type": "string | ((row: TTableRow, index: number) => unknown)",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Row key field or resolver."
+        },
+        {
+          "name": "selectedRowKey",
+          "type": "unknown",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Controlled selected row key."
+        },
+        {
+          "name": "selectedRowKeys",
+          "type": "readonly unknown[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Controlled selected row keys for multi-select tables."
+        },
+        {
+          "name": "scrollTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Controlled top row offset."
+        },
+        {
+          "name": "sortBy",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Sorts by the raw row value at this key; column format only affects display and filtering."
+        },
+        {
+          "name": "sortDirection",
+          "type": "TDataTableSortDirection",
+          "required": false,
+          "defaultValue": "\"asc\"",
+          "description": "Controlled sort direction."
+        },
+        {
+          "name": "sortable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables sortable column header interactions."
+        },
+        {
+          "name": "manualSort",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Disables built-in sorting while keeping sort events controlled by the host."
+        },
+        {
+          "name": "sorter",
+          "type": "TDataTableSorter",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Custom row comparison function."
+        },
+        {
+          "name": "filter",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Controlled filter query."
+        },
+        {
+          "name": "filterable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables built-in row filtering."
+        },
+        {
+          "name": "manualFilter",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Disables built-in filtering while keeping filter state host-owned."
+        },
+        {
+          "name": "filterPredicate",
+          "type": "TDataTableFilterPredicate",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Custom row filter predicate."
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Controls whether terminal text selection may start inside the component."
+        },
+        {
+          "name": "selectionMode",
+          "type": "TDataTableSelectionMode",
+          "required": false,
+          "defaultValue": "\"single\"",
+          "description": "Row selection mode."
+        },
+        {
+          "name": "border",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Draws a border around the component."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "headerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for table header cells."
+        },
+        {
+          "name": "borderStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for border cells."
+        },
+        {
+          "name": "selectedStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used for selected rows or nodes."
+        },
+        {
+          "name": "emptyText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"No rows\"",
+          "description": "Text rendered when there are no rows or items."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:selectedRowKey",
+          "payload": "unknown",
+          "description": "Emitted when the selected row key changes."
+        },
+        {
+          "name": "update:selectedRowKeys",
+          "payload": "unknown[]",
+          "description": "Emitted when selected row keys change."
+        },
+        {
+          "name": "update:scrollTop",
+          "payload": "number",
+          "description": "Emitted when the top visible row offset should change."
+        },
+        {
+          "name": "update:sortBy",
+          "payload": "string",
+          "description": "Emitted when the sorted column key changes."
+        },
+        {
+          "name": "update:sortDirection",
+          "payload": "TDataTableSortDirection",
+          "description": "Emitted when the sort direction changes."
+        },
+        {
+          "name": "sortChange",
+          "payload": "TDataTableSortChangePayload",
+          "description": "Emitted when table sort state changes."
+        },
+        {
+          "name": "rowSelect",
+          "payload": "TDataTableRowSelectPayload",
+          "description": "Emitted when a data table row is selected."
+        }
+      ]
+    },
+    "TDebugOverlay": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "mode",
+          "type": "\"focus\" | \"all\"",
+          "required": false,
+          "defaultValue": "\"focus\""
+        },
+        {
+          "name": "panel",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "maxRects",
+          "type": "number",
+          "required": false,
+          "defaultValue": "40"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "90"
+        }
+      ],
+      "events": []
+    },
+    "TDialog": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "modelValue",
+          "type": "boolean",
+          "required": true,
+          "description": "Controlled component value."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Optional title text."
+        },
+        {
+          "name": "padding",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1",
+          "description": "Inner padding in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1000",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "titleStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for title text."
+        },
+        {
+          "name": "contentStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for dialog or popover content cells."
+        },
+        {
+          "name": "backdropStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for backdrop cells."
+        },
+        {
+          "name": "placement",
+          "type": "Placement",
+          "required": false,
+          "defaultValue": "\"center\"",
+          "description": "Dialog placement within the current layout."
+        },
+        {
+          "name": "offsetX",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Horizontal placement offset in cells."
+        },
+        {
+          "name": "offsetY",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Vertical placement offset in cells."
+        },
+        {
+          "name": "backdrop",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Renders a backdrop behind the dialog."
+        },
+        {
+          "name": "closeOnBackdrop",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Closes the dialog when the backdrop is clicked."
+        },
+        {
+          "name": "closeOnEsc",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Closes the dialog on Escape."
+        },
+        {
+          "name": "closeOnBlur",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Emits close when focus leaves the component."
+        },
+        {
+          "name": "teleport",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Mounts the dialog into the overlay runtime plane."
+        },
+        {
+          "name": "tabMode",
+          "type": "\"cycle\" | \"wrapFromButtons\"",
+          "required": false,
+          "defaultValue": "\"cycle\"",
+          "description": "Keyboard Tab behavior inside the dialog."
+        },
+        {
+          "name": "buttons",
+          "type": "DialogButton[]",
+          "required": false,
+          "defaultValue": "() => []",
+          "description": "Dialog footer buttons."
+        },
+        {
+          "name": "closeOnConfirm",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Closes the dialog after a footer button confirms."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "boolean",
+          "description": "Emitted when the controlled model value changes."
+        },
+        {
+          "name": "close",
+          "payload": "void",
+          "description": "Emitted when the component requests to close."
+        },
+        {
+          "name": "focus",
+          "payload": "void",
+          "description": "Emitted when the component receives focus."
+        },
+        {
+          "name": "blur",
+          "payload": "void",
+          "description": "Emitted when the component loses focus."
+        },
+        {
+          "name": "keydown",
+          "payload": "TerminalKeyboardEvent",
+          "description": "Emitted for keydown events."
+        },
+        {
+          "name": "confirm",
+          "payload": "DialogButton & { index: number }",
+          "description": "Emitted when a focused action is confirmed."
+        }
+      ]
+    },
+    "TDivider": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Optional title text."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        }
+      ],
+      "events": []
+    },
+    "TerminalProvider": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "cols",
+          "type": "number",
+          "required": true,
+          "description": "Terminal column count."
+        },
+        {
+          "name": "rows",
+          "type": "number",
+          "required": true,
+          "description": "Terminal row count or table row data, depending on component."
+        },
+        {
+          "name": "widthProvider",
+          "type": "WidthProvider",
+          "required": false,
+          "defaultValue": "\"default\"",
+          "description": "Cell width provider used by the terminal buffer."
+        },
+        {
+          "name": "defaultStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({})",
+          "description": "Default terminal cell style for descendants."
+        },
+        {
+          "name": "theme",
+          "type": "TuiThemeOverrides",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Theme token overrides for component defaults."
+        },
+        {
+          "name": "autoResize",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Resizes the terminal from the host element when enabled."
+        },
+        {
+          "name": "minCols",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1",
+          "description": "Minimum column count used by auto resize."
+        },
+        {
+          "name": "minRows",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1",
+          "description": "Minimum row count used by auto resize."
+        },
+        {
+          "name": "recordEvents",
+          "type": "((e: TerminalEventRecord) => void) | undefined",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Optional event recorder callback."
+        },
+        {
+          "name": "inputPlugins",
+          "type": "readonly TInputPlugin[]",
+          "required": false,
+          "defaultValue": "() => [defaultTInputHostPlugin]",
+          "description": "Input plugins provided to descendant text inputs."
+        },
+        {
+          "name": "pathPickerProvider",
+          "type": "PathPickerProvider",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Path provider injected into descendant path pickers."
+        },
+        {
+          "name": "linkOpener",
+          "type": "TerminalLinkOpenerLike",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Host link opener used by components with host-owned activation."
+        },
+        {
+          "name": "debugIme",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables IME debugging output."
+        },
+        {
+          "name": "debugTrace",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables runtime trace logging."
+        },
+        {
+          "name": "domRendererOptions",
+          "type": "DomRendererOptions",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "DOM renderer options used by TerminalProvider."
+        },
+        {
+          "name": "clipboard",
+          "type": "ClipboardApi",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Clipboard implementation used for terminal selection copy."
+        },
+        {
+          "name": "selection",
+          "type": "TerminalProviderSelectionConfig",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Terminal cell selection configuration."
+        }
+      ],
+      "events": [
+        {
+          "name": "selectionCopy",
+          "payload": "TerminalSelectionCopyPayload",
+          "description": "Emitted after terminal selection copy."
+        }
+      ]
+    },
+    "TFlow": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "items",
+          "type": "unknown[]",
+          "required": true
+        },
+        {
+          "name": "direction",
+          "type": "Direction",
+          "required": false,
+          "defaultValue": "\"vertical\""
+        },
+        {
+          "name": "gap",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "itemSize",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        }
+      ],
+      "events": []
+    },
+    "TForm": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "model",
+          "type": "TFormModel",
+          "required": true
+        },
+        {
+          "name": "rules",
+          "type": "Record<string, TFormRule>",
+          "required": false,
+          "defaultValue": "() => ({})"
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "readOnly",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "submitOnEnter",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        }
+      ],
+      "events": [
+        {
+          "name": "submit",
+          "payload": "TFormSubmitPayload"
+        },
+        {
+          "name": "validation",
+          "payload": "Record<string, string>"
+        }
+      ]
+    },
+    "TFormField": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Field name used by form context."
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Visible label text."
+        },
+        {
+          "name": "help",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Help text rendered below the field."
+        },
+        {
+          "name": "error",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Error text rendered below the field."
+        },
+        {
+          "name": "required",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Marks the field label as required."
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Disables pointer and keyboard activation."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "labelStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for label text."
+        },
+        {
+          "name": "helpStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for help text."
+        },
+        {
+          "name": "errorStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for error text."
+        }
+      ],
+      "events": []
+    },
+    "TInput": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1",
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "modelValue",
+          "type": "string",
+          "required": true,
+          "description": "Controlled component value."
+        },
+        {
+          "name": "cursorToEndOnExternalUpdate",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Moves the cursor to the end after external model updates."
+        },
+        {
+          "name": "cursorToEndOnFirstFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Moves the cursor to the end on first focus."
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Placeholder text shown when the input is empty."
+        },
+        {
+          "name": "placeholderWhenFocused",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Placeholder text used while the input has focus."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Requests focus when the component becomes visible."
+        },
+        {
+          "name": "cursorBlink",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Enables cursor blink rendering."
+        },
+        {
+          "name": "cursorShape",
+          "type": "\"block\" | \"underline\" | \"bar\"",
+          "required": false,
+          "defaultValue": "\"block\"",
+          "description": "Cursor glyph shape."
+        },
+        {
+          "name": "blinkInterval",
+          "type": "number",
+          "required": false,
+          "defaultValue": "500",
+          "description": "Cursor blink interval in milliseconds."
+        },
+        {
+          "name": "promptSuggestions",
+          "type": "readonly PromptSuggestion[]",
+          "required": false,
+          "defaultValue": "() => []",
+          "description": "Prompt popup suggestions."
+        },
+        {
+          "name": "promptTrigger",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"/\"",
+          "description": "Prompt popup trigger character."
+        },
+        {
+          "name": "promptTriggers",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Prompt popup trigger characters."
+        },
+        {
+          "name": "promptMaxItems",
+          "type": "number",
+          "required": false,
+          "defaultValue": "6",
+          "description": "Maximum prompt popup rows."
+        },
+        {
+          "name": "promptAlign",
+          "type": "\"input\" | \"center\"",
+          "required": false,
+          "defaultValue": "\"input\"",
+          "description": "Prompt popup alignment."
+        },
+        {
+          "name": "promptSelectedStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for the active prompt suggestion."
+        },
+        {
+          "name": "promptPopupStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for the prompt popup body."
+        },
+        {
+          "name": "promptPopupBorderStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for the prompt popup border."
+        },
+        {
+          "name": "promptPopupMatchStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for prompt match highlights."
+        },
+        {
+          "name": "skillTrigger",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Trigger used for skill suggestions."
+        },
+        {
+          "name": "skillSuggestions",
+          "type": "readonly PromptSuggestion[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Skill suggestions shown in the prompt popup."
+        },
+        {
+          "name": "skillHighlightStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for highlighted skill chips."
+        },
+        {
+          "name": "mentionTrigger",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"@\"",
+          "description": "Trigger used for path or mention suggestions."
+        },
+        {
+          "name": "mentionWorkspace",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Workspace root used by mention providers."
+        },
+        {
+          "name": "mentionMode",
+          "type": "PathPickMode",
+          "required": false,
+          "defaultValue": "\"file\"",
+          "description": "Mention provider mode."
+        },
+        {
+          "name": "mentionShowHidden",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Includes hidden paths in mention suggestions."
+        },
+        {
+          "name": "mentionSuggestions",
+          "type": "readonly PromptSuggestion[]",
+          "required": false,
+          "defaultValue": "() => []",
+          "description": "Mention suggestions supplied by the host."
+        },
+        {
+          "name": "mentionMaxItems",
+          "type": "number",
+          "required": false,
+          "defaultValue": "8",
+          "description": "Maximum mention rows."
+        },
+        {
+          "name": "mentionChipStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for mention chips."
+        },
+        {
+          "name": "multilineChipStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for multiline chips."
+        },
+        {
+          "name": "dedupeMentions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Removes duplicate mention entries."
+        },
+        {
+          "name": "collectMentions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Collects mention values from committed input."
+        },
+        {
+          "name": "mentions",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "() => []",
+          "description": "Controlled collected mention values."
+        },
+        {
+          "name": "collapseMultiline",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Collapses multiline pasted text into chips."
+        },
+        {
+          "name": "multilineTexts",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "() => []",
+          "description": "Controlled multiline chip text values."
+        },
+        {
+          "name": "secret",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Masks input text when enabled."
+        },
+        {
+          "name": "maskChar",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"•\"",
+          "description": "Character used to mask secret input."
+        },
+        {
+          "name": "submitOnEnter",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Emits change on Enter."
+        },
+        {
+          "name": "clearOnEscape",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Clears the input on Escape."
+        },
+        {
+          "name": "plugins",
+          "type": "readonly TInputPlugin[]",
+          "required": false,
+          "defaultValue": "() => []",
+          "description": "Input plugins attached to this input."
+        },
+        {
+          "name": "pasteImageHandler",
+          "type": "() => Promise<string | null> | string | null",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Host handler for pasted images."
+        },
+        {
+          "name": "filePasteHandler",
+          "type": "(absPath: string) => Promise<string | null> | string | null",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Host handler for pasted files."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "string",
+          "description": "Emitted when the controlled model value changes."
+        },
+        {
+          "name": "input",
+          "payload": "string",
+          "description": "Emitted for input edits."
+        },
+        {
+          "name": "change",
+          "payload": "string",
+          "description": "Emitted when the component commits a value change."
+        },
+        {
+          "name": "keydown",
+          "payload": "TerminalKeyboardEvent",
+          "description": "Emitted for keydown events."
+        },
+        {
+          "name": "focus",
+          "payload": "void",
+          "description": "Emitted when the component receives focus."
+        },
+        {
+          "name": "blur",
+          "payload": "void",
+          "description": "Emitted when the component loses focus."
+        },
+        {
+          "name": "pointerenter",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted when the pointer enters the component."
+        },
+        {
+          "name": "pointerleave",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted when the pointer leaves the component."
+        },
+        {
+          "name": "update:mentions",
+          "payload": "readonly string[]",
+          "description": "Emitted when collected mentions change."
+        },
+        {
+          "name": "mentionClick",
+          "payload": "(absPath: string, event: TerminalPointerEvent)",
+          "description": "Emitted when a rendered mention chip is clicked."
+        },
+        {
+          "name": "update:multilineTexts",
+          "payload": "readonly string[]",
+          "description": "Emitted when multiline chip text values change."
+        },
+        {
+          "name": "multilineClick",
+          "payload": "number",
+          "description": "Emitted when a multiline chip is clicked."
+        },
+        {
+          "name": "validationError",
+          "payload": "{ reason: string }",
+          "description": "Emitted when input validation rejects a host action."
+        }
+      ]
+    },
+    "TInputBox": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "padding",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "modelValue",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "plugins",
+          "type": "readonly TInputPlugin[]",
+          "required": false,
+          "defaultValue": "() => []"
+        },
+        {
+          "name": "cursorBlink",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "cursorShape",
+          "type": "\"block\" | \"underline\" | \"bar\"",
+          "required": false,
+          "defaultValue": "\"block\""
+        },
+        {
+          "name": "blinkInterval",
+          "type": "number",
+          "required": false,
+          "defaultValue": "500"
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue"
+        },
+        {
+          "name": "input"
+        },
+        {
+          "name": "change"
+        },
+        {
+          "name": "keydown"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blur"
+        }
+      ]
+    },
+    "TJsonEditor": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "8"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "modelValue",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "showIndentGuides",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "indentSize",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2"
+        },
+        {
+          "name": "guideColors",
+          "type": "readonly AnsiColorName[]",
+          "required": false,
+          "defaultValue": "() => [...DEFAULT_GUIDE_COLORS]"
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "cursorToEndOnFirstFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "cursorToEndOnExternalUpdate",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "submitOnEnter",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue"
+        },
+        {
+          "name": "keydown"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blur"
+        },
+        {
+          "name": "undo"
+        },
+        {
+          "name": "redo"
+        },
+        {
+          "name": "lintChange"
+        },
+        {
+          "name": "validationError"
+        }
+      ]
+    },
+    "TKeyHint": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "combo",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "comboStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        }
+      ],
+      "events": []
+    },
+    "TLink": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1",
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "href",
+          "type": "string",
+          "required": true,
+          "description": "Link target to render and activate."
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Visible label text."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "hoverStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style applied while the pointer hovers the link."
+        },
+        {
+          "name": "focusStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style applied while the link has keyboard focus."
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used for the active item or enabled state."
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Disables pointer and keyboard activation."
+        },
+        {
+          "name": "visited",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Marks the link as already visited for styling."
+        },
+        {
+          "name": "openMode",
+          "type": "TLinkOpenMode",
+          "required": false,
+          "defaultValue": "\"host\"",
+          "description": "Link activation mode."
+        },
+        {
+          "name": "activationKeys",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "() => DEFAULT_ACTIVATION_KEYS",
+          "description": "Keyboard keys that activate the link."
+        },
+        {
+          "name": "modifierClick",
+          "type": "TLinkModifierClick",
+          "required": false,
+          "defaultValue": "\"none\"",
+          "description": "Pointer modifier required for click activation."
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Requests focus when the component becomes visible."
+        }
+      ],
+      "events": [
+        {
+          "name": "activate",
+          "payload": "TLinkActivatePayload",
+          "description": "Emitted when the link is activated."
+        },
+        {
+          "name": "open",
+          "payload": "TLinkOpenPayload",
+          "description": "Emitted when the host opener accepts a link open request."
+        },
+        {
+          "name": "invalidHref",
+          "payload": "TLinkInvalidHrefPayload",
+          "description": "Emitted when a link href is rejected by the sanitizer."
+        },
+        {
+          "name": "click",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for click events."
+        },
+        {
+          "name": "keydown",
+          "payload": "TerminalKeyboardEvent",
+          "description": "Emitted for keydown events."
+        },
+        {
+          "name": "focus",
+          "payload": "TerminalBaseEvent",
+          "description": "Emitted when the component receives focus."
+        },
+        {
+          "name": "blur",
+          "payload": "TerminalBaseEvent",
+          "description": "Emitted when the component loses focus."
+        }
+      ]
+    },
+    "TLinkifyText": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true,
+          "description": "Text or scalar value rendered by the component."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "linkStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style applied to detected link segments."
+        },
+        {
+          "name": "clear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Clears the component rectangle before drawing content."
+        },
+        {
+          "name": "wrap",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Wraps text to the available cell width."
+        },
+        {
+          "name": "protocols",
+          "type": "readonly TLinkifyProtocol[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "URL protocols accepted by linkification."
+        },
+        {
+          "name": "allowRelative",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Allows relative hrefs in detected link segments."
+        },
+        {
+          "name": "maxUrlLength",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Maximum detected URL length."
+        }
+      ],
+      "events": []
+    },
+    "TList": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "items",
+          "type": "string[]",
+          "required": true,
+          "description": "Items rendered by the component."
+        },
+        {
+          "name": "itemVersion",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "External version key for item changes that keep array identity stable."
+        },
+        {
+          "name": "modelValue",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Controlled component value."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Requests focus when the component becomes visible."
+        },
+        {
+          "name": "closeOnBlur",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Emits close when focus leaves the component."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "number",
+          "description": "Emitted when the controlled model value changes."
+        },
+        {
+          "name": "change",
+          "payload": "{ index: number; value: string }",
+          "description": "Emitted when the component commits a value change."
+        },
+        {
+          "name": "scroll",
+          "payload": "number",
+          "description": "Emitted when the visible scroll offset changes."
+        },
+        {
+          "name": "close",
+          "payload": "void",
+          "description": "Emitted when the component requests to close."
+        },
+        {
+          "name": "focus",
+          "payload": "void",
+          "description": "Emitted when the component receives focus."
+        },
+        {
+          "name": "blur",
+          "payload": "void",
+          "description": "Emitted when the component loses focus."
+        },
+        {
+          "name": "keydown",
+          "payload": "TerminalKeyboardEvent",
+          "description": "Emitted for keydown events."
+        }
+      ]
+    },
+    "TLogLinksPanel": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "links",
+          "type": "readonly TLogLinkPanelItem[]",
+          "required": false,
+          "defaultValue": "() => []"
+        },
+        {
+          "name": "activeIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "-1"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        },
+        {
+          "name": "currentStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ bold: true })"
+        },
+        {
+          "name": "hrefStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ underline: true })"
+        },
+        {
+          "name": "disabledStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })"
+        },
+        {
+          "name": "showLineNumbers",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "showHref",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        }
+      ],
+      "events": [
+        {
+          "name": "select"
+        },
+        {
+          "name": "activate"
+        },
+        {
+          "name": "activeChange"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blur"
+        },
+        {
+          "name": "keydown"
+        }
+      ]
+    },
+    "TLogMinimap": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "metrics",
+          "type": "TLogMinimapMetrics | null",
+          "required": false,
+          "defaultValue": "null"
+        },
+        {
+          "name": "markers",
+          "type": "readonly TLogMinimapMarker[]",
+          "required": false,
+          "defaultValue": "() => []"
+        },
+        {
+          "name": "density",
+          "type": "readonly TLogMinimapDensityBucket[]",
+          "required": false,
+          "defaultValue": "() => []"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "densityStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "markerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "currentMarkerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "viewportStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "estimatedStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "showMarkers",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "showDensity",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "showViewport",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        }
+      ],
+      "events": [
+        {
+          "name": "scrollTo"
+        },
+        {
+          "name": "markerClick"
+        }
+      ]
+    },
+    "TLogScrollbar": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "metrics",
+          "type": "TLogScrollbarMetrics | null",
+          "required": false,
+          "defaultValue": "null"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "thumbStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "trackStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "measuringStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "markers",
+          "type": "readonly TLogScrollbarMarker[]",
+          "required": false,
+          "defaultValue": "() => []"
+        },
+        {
+          "name": "markerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"yellowBright\" })"
+        },
+        {
+          "name": "currentMarkerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"redBright\", bold: true })"
+        },
+        {
+          "name": "showMarkers",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "showArrows",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        }
+      ],
+      "events": [
+        {
+          "name": "scrollTo"
+        },
+        {
+          "name": "scrollBy"
+        },
+        {
+          "name": "markerClick"
+        }
+      ]
+    },
+    "TLogSearchBar": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "state",
+          "type": "TLogSearchBarState",
+          "required": true
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Search…\""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "inputStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        },
+        {
+          "name": "errorStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"redBright\", bold: true })"
+        },
+        {
+          "name": "disabledStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })"
+        },
+        {
+          "name": "toggleStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "showModeToggle",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "showCaseToggle",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "showWholeWordToggle",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "showCount",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "showNavigation",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        }
+      ],
+      "events": [
+        {
+          "name": "update"
+        },
+        {
+          "name": "update:query"
+        },
+        {
+          "name": "update:mode"
+        },
+        {
+          "name": "update:caseSensitive"
+        },
+        {
+          "name": "update:wholeWord"
+        },
+        {
+          "name": "previous"
+        },
+        {
+          "name": "next"
+        },
+        {
+          "name": "clear"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blur"
+        },
+        {
+          "name": "keydown"
+        }
+      ]
+    },
+    "TLogSearchPager": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "state",
+          "type": "TLogSearchPagerState | null",
+          "required": false,
+          "defaultValue": "null"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "disabledStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })"
+        },
+        {
+          "name": "errorStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"redBright\", bold: true })"
+        },
+        {
+          "name": "showCount",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        }
+      ],
+      "events": [
+        {
+          "name": "previousPage"
+        },
+        {
+          "name": "nextPage"
+        },
+        {
+          "name": "pageChange"
+        }
+      ]
+    },
+    "TLogSearchResults": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "results",
+          "type": "readonly TLogSearchResultItem[]",
+          "required": false,
+          "defaultValue": "() => []"
+        },
+        {
+          "name": "activeIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "-1"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        },
+        {
+          "name": "matchStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ underline: true })"
+        },
+        {
+          "name": "currentStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ bold: true })"
+        },
+        {
+          "name": "showLineNumbers",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        }
+      ],
+      "events": [
+        {
+          "name": "select"
+        },
+        {
+          "name": "activeChange"
+        },
+        {
+          "name": "keydown"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blur"
+        }
+      ]
+    },
+    "TLogView": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "source",
+          "type": "TLogDataSource",
+          "required": true
+        },
+        {
+          "name": "version",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "scrollTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "defaultScrollTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "autoStickToBottom",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "overscan",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2"
+        },
+        {
+          "name": "wrap",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "visualIndexMode",
+          "type": "\"estimated\" | \"exact\"",
+          "required": false,
+          "defaultValue": "\"estimated\""
+        },
+        {
+          "name": "visualIndexOptions",
+          "type": "TLogViewVisualIndexOptions",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "ansi",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "links",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Parses OSC8 links only with ansi=true; OSC8 links preserve parsed ANSI style and\ndo not inherit TLink theme defaults."
+        },
+        {
+          "name": "linkify",
+          "type": "boolean | TLinkifyOptions",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Plain-text URL linkification for ansi=false rows; generated links inherit TLink\ntheme defaults before linkStyle."
+        },
+        {
+          "name": "linkStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Link style override. OSC8 defaults to underline-only over parsed ANSI style;\nlinkify also inherits TLink theme defaults."
+        },
+        {
+          "name": "keyboardLinks",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "linkFocusStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        },
+        {
+          "name": "searchQuery",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "searchOptions",
+          "type": "TLogViewSearchOptions",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "highlightMatches",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "matchStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        },
+        {
+          "name": "currentMatchStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true, bold: true })"
+        },
+        {
+          "name": "rowScrollMode",
+          "type": "RowScrollMode",
+          "required": false,
+          "defaultValue": "\"off\""
+        }
+      ],
+      "events": [
+        {
+          "name": "scroll"
+        },
+        {
+          "name": "update:scrollTop"
+        },
+        {
+          "name": "update:searchQuery"
+        },
+        {
+          "name": "search"
+        },
+        {
+          "name": "searchMatch"
+        },
+        {
+          "name": "searchMarkers"
+        },
+        {
+          "name": "linkClick"
+        },
+        {
+          "name": "linkFocus"
+        },
+        {
+          "name": "linkActivate"
+        },
+        {
+          "name": "visualIndex"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blur"
+        },
+        {
+          "name": "keydown"
+        }
+      ]
+    },
+    "TLogVirtualLinksPanel": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "links",
+          "type": "readonly TLogLinkPanelItem[]",
+          "required": false,
+          "defaultValue": "() => []"
+        },
+        {
+          "name": "modelValue",
+          "type": "number",
+          "required": false,
+          "defaultValue": "-1"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "showLineNumbers",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "rowScrollMode",
+          "type": "RowScrollMode",
+          "required": false,
+          "defaultValue": "\"off\""
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue"
+        },
+        {
+          "name": "activeChange"
+        },
+        {
+          "name": "select"
+        },
+        {
+          "name": "activate"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blur"
+        },
+        {
+          "name": "keydown"
+        },
+        {
+          "name": "scroll"
+        }
+      ]
+    },
+    "TLogVirtualSearchResults": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "itemCount",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "itemVersion",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "getItem",
+          "type": "(index: number) => TLogSearchResultItem | null",
+          "required": true
+        },
+        {
+          "name": "modelValue",
+          "type": "number",
+          "required": false,
+          "defaultValue": "-1"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "showLineNumbers",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "rowScrollMode",
+          "type": "RowScrollMode",
+          "required": false,
+          "defaultValue": "\"off\""
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue"
+        },
+        {
+          "name": "activeChange"
+        },
+        {
+          "name": "select"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blur"
+        },
+        {
+          "name": "keydown"
+        },
+        {
+          "name": "scroll"
+        }
+      ]
+    },
+    "TMultilineModal": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "visible",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Multiline Text\""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1000"
+        }
+      ],
+      "events": [
+        {
+          "name": "close"
+        }
+      ]
+    },
+    "TPasswordInput": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1",
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "modelValue",
+          "type": "string",
+          "required": true,
+          "description": "Controlled component value."
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Placeholder text shown when the input is empty."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Requests focus when the component becomes visible."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "string",
+          "description": "Emitted when the controlled model value changes."
+        },
+        {
+          "name": "input",
+          "payload": "string",
+          "description": "Emitted for input edits."
+        },
+        {
+          "name": "change",
+          "payload": "string",
+          "description": "Emitted when the component commits a value change."
+        }
+      ]
+    },
+    "TPathPicker": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "workspace",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "mode",
+          "type": "PathPickMode",
+          "required": false,
+          "defaultValue": "\"any\""
+        },
+        {
+          "name": "modelValue",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "inputStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "matchStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "showHidden",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "maxSuggestions",
+          "type": "number",
+          "required": false,
+          "defaultValue": "50"
+        },
+        {
+          "name": "provider",
+          "type": "PathPickerProvider",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue"
+        },
+        {
+          "name": "select"
+        },
+        {
+          "name": "invalid"
+        },
+        {
+          "name": "keydown"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blur"
+        }
+      ]
+    },
+    "TPopover": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "modelValue",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Caller-owned x position; no viewport clamp or flip placement is applied."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Caller-owned y position; no viewport clamp or flip placement is applied."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "15"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "contentStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": []
+    },
+    "TProgress": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "value",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "max",
+          "type": "number",
+          "required": false,
+          "defaultValue": "100"
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "showPercent",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "barStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": []
+    },
+    "TRadioGroup": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "modelValue",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Controlled component value."
+        },
+        {
+          "name": "options",
+          "type": "readonly TRadioOption[]",
+          "required": true,
+          "description": "Options rendered by the control."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })",
+          "description": "Style used for the active item or enabled state."
+        },
+        {
+          "name": "disabledStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })",
+          "description": "Style used for disabled content."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "string",
+          "description": "Emitted when the controlled model value changes."
+        },
+        {
+          "name": "change",
+          "payload": "string",
+          "description": "Emitted when the component commits a value change."
+        }
+      ]
+    },
+    "TRenderLayer": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        }
+      ],
+      "events": []
+    },
+    "TRenderPlane": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "plane",
+          "type": "TerminalRenderPlane",
+          "required": false,
+          "defaultValue": "\"default\""
+        }
+      ],
+      "events": []
+    },
+    "TRouterView": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "routes",
+          "type": "TerminalRouteRecord[]",
+          "required": true
+        },
+        {
+          "name": "forceRemount",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        }
+      ],
+      "events": []
+    },
+    "TSelect": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "options",
+          "type": "readonly SelectOption[]",
+          "required": true,
+          "description": "Options rendered by the control."
+        },
+        {
+          "name": "optionProvider",
+          "type": "TSelectOptionProvider",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Async option provider called with the current query."
+        },
+        {
+          "name": "query",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Controlled search query."
+        },
+        {
+          "name": "modelValue",
+          "type": "number | number[] | string | string[] | boolean | Record<string, unknown>",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Controlled component value."
+        },
+        {
+          "name": "valueMode",
+          "type": "TSelectValueMode",
+          "required": false,
+          "defaultValue": "\"index\"",
+          "description": "Model value shape emitted by the select."
+        },
+        {
+          "name": "activeIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Controlled active option index."
+        },
+        {
+          "name": "multiple",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables multi-select mode."
+        },
+        {
+          "name": "multipleEmit",
+          "type": "TSelectMultipleEmitMode",
+          "required": false,
+          "defaultValue": "\"value\"",
+          "description": "Payload shape used by multi-select change and confirm events."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "highlightStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used for the highlighted row or match."
+        },
+        {
+          "name": "matchStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used for matched text."
+        },
+        {
+          "name": "highlightMatchStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used for highlighted text while the row is active."
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Requests focus when the component becomes visible."
+        },
+        {
+          "name": "closeOnBlur",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Emits close when focus leaves the component."
+        },
+        {
+          "name": "searchable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables query updates from typed characters."
+        },
+        {
+          "name": "typeahead",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Enables keyboard typeahead navigation."
+        },
+        {
+          "name": "debounce",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Delay before calling an async provider, in milliseconds."
+        },
+        {
+          "name": "emptyText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"No options\"",
+          "description": "Text rendered when there are no rows or items."
+        },
+        {
+          "name": "loading",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Shows the loading row."
+        },
+        {
+          "name": "loadingText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Loading...\"",
+          "description": "Text rendered while async commands are loading."
+        },
+        {
+          "name": "maxVisible",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Maximum number of option rows rendered at once."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "number | number[] | string | string[] | boolean | Record<string, unknown>",
+          "description": "Emitted when the controlled model value changes."
+        },
+        {
+          "name": "update:activeIndex",
+          "payload": "number",
+          "description": "Emitted when the active option index changes."
+        },
+        {
+          "name": "update:query",
+          "payload": "string",
+          "description": "Emitted when the controlled query changes."
+        },
+        {
+          "name": "change",
+          "payload": "string | string[] | number[] | TSelectMultipleChangePayload | null",
+          "description": "Emitted when the component commits a value change."
+        },
+        {
+          "name": "confirm",
+          "payload": "string[] | number[] | TSelectMultipleChangePayload",
+          "description": "Emitted when a focused action is confirmed."
+        },
+        {
+          "name": "close",
+          "payload": "void",
+          "description": "Emitted when the component requests to close."
+        },
+        {
+          "name": "focus",
+          "payload": "void",
+          "description": "Emitted when the component receives focus."
+        },
+        {
+          "name": "blur",
+          "payload": "void",
+          "description": "Emitted when the component loses focus."
+        },
+        {
+          "name": "keydown",
+          "payload": "TerminalKeyboardEvent",
+          "description": "Emitted for keydown events."
+        }
+      ]
+    },
+    "TSlider": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "modelValue",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Controlled component value."
+        },
+        {
+          "name": "min",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Minimum numeric value."
+        },
+        {
+          "name": "max",
+          "type": "number",
+          "required": false,
+          "defaultValue": "100",
+          "description": "Maximum numeric value."
+        },
+        {
+          "name": "step",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1",
+          "description": "Keyboard increment step."
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Disables pointer and keyboard activation."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"cyanBright\" })",
+          "description": "Style used for the active item or enabled state."
+        },
+        {
+          "name": "disabledStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })",
+          "description": "Style used for disabled content."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "number",
+          "description": "Emitted when the controlled model value changes."
+        },
+        {
+          "name": "change",
+          "payload": "number",
+          "description": "Emitted when the component commits a value change."
+        }
+      ]
+    },
+    "TSpinner": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "frames",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "() => [\"|\", \"/\", \"-\", \"\\\\\"]"
+        },
+        {
+          "name": "frameIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "running",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": []
+    },
+    "TSplitPane": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "direction",
+          "type": "TSplitPaneDirection",
+          "required": false,
+          "defaultValue": "\"horizontal\""
+        },
+        {
+          "name": "sizes",
+          "type": "readonly number[]",
+          "required": true
+        },
+        {
+          "name": "minSizes",
+          "type": "readonly number[]",
+          "required": false,
+          "defaultValue": "() => []"
+        },
+        {
+          "name": "separatorStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })"
+        }
+      ],
+      "events": [
+        {
+          "name": "update:sizes",
+          "payload": "number[]"
+        },
+        {
+          "name": "resize",
+          "payload": "number[]"
+        }
+      ]
+    },
+    "TStatusBar": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "left",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "center",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "right",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        }
+      ],
+      "events": []
+    },
+    "TSwitch": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "modelValue",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Controlled component value."
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Visible label text."
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Disables pointer and keyboard activation."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"greenBright\" })",
+          "description": "Style used for the active item or enabled state."
+        },
+        {
+          "name": "disabledStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })",
+          "description": "Style used for disabled content."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue",
+          "payload": "boolean",
+          "description": "Emitted when the controlled model value changes."
+        },
+        {
+          "name": "change",
+          "payload": "boolean",
+          "description": "Emitted when the component commits a value change."
+        }
+      ]
+    },
+    "TTable": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "columns",
+          "type": "readonly TTableColumn[]",
+          "required": true,
+          "description": "Table column definitions."
+        },
+        {
+          "name": "rows",
+          "type": "readonly TTableRow[]",
+          "required": true,
+          "description": "Rows are rendered from the top of the current viewport; TTable does not own\nscrollTop or virtualization."
+        },
+        {
+          "name": "rowKey",
+          "type": "string | ((row: TTableRow, index: number) => unknown)",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Row key field or resolver."
+        },
+        {
+          "name": "selectedRowKey",
+          "type": "unknown",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Controlled selected row key."
+        },
+        {
+          "name": "selectedRowKeys",
+          "type": "readonly unknown[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Controlled selected row keys for multi-select tables."
+        },
+        {
+          "name": "border",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Draws a border around the component."
+        },
+        {
+          "name": "header",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Shows the table header when enabled."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "headerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for table header cells."
+        },
+        {
+          "name": "borderStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style override for border cells."
+        },
+        {
+          "name": "selectedStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used for selected rows or nodes."
+        },
+        {
+          "name": "emptyText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"No rows\"",
+          "description": "Text rendered when there are no rows or items."
+        },
+        {
+          "name": "headerFocusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Makes header cells keyboard focusable."
+        },
+        {
+          "name": "rowFocusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Makes body rows keyboard focusable."
+        }
+      ],
+      "events": [
+        {
+          "name": "rowClick",
+          "payload": "TTableRowClickPayload",
+          "description": "Emitted when a table row is clicked or confirmed."
+        },
+        {
+          "name": "headerClick",
+          "payload": "TTableHeaderClickPayload",
+          "description": "Emitted when a table header is clicked or confirmed."
+        },
+        {
+          "name": "rowKeydown",
+          "payload": "TTableRowKeydownPayload",
+          "description": "Emitted when a focused table row receives a keydown event."
+        }
+      ]
+    },
+    "TTabs": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "items",
+          "type": "readonly TTabsItem[]",
+          "required": true
+        },
+        {
+          "name": "activeKey",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        },
+        {
+          "name": "disabledStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })"
+        }
+      ],
+      "events": [
+        {
+          "name": "update:activeKey",
+          "payload": "string"
+        },
+        {
+          "name": "change",
+          "payload": "TTabsItem"
+        }
+      ]
+    },
+    "TTag": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": true,
+          "description": "Visible label text."
+        },
+        {
+          "name": "tone",
+          "type": "TFeedbackTone",
+          "required": false,
+          "defaultValue": "\"default\"",
+          "description": "Semantic color tone."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        }
+      ],
+      "events": []
+    },
+    "TText": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true,
+          "description": "Text or scalar value rendered by the component."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "clear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Clears the component rectangle before drawing content."
+        },
+        {
+          "name": "wrap",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Wraps text to the available cell width."
+        },
+        {
+          "name": "depsKey",
+          "type": "unknown",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Optional key that participates in render-node dependency tracking.\nUseful for forcing a repaint when the rendered output might change\neven if `value`, `style`, and geometry are unchanged (e.g. external\nterminal writes or higher-level virtualized row reuse)."
+        }
+      ],
+      "events": []
+    },
+    "TToastViewport": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "40"
+        },
+        {
+          "name": "max",
+          "type": "number",
+          "required": false,
+          "defaultValue": "3"
+        },
+        {
+          "name": "placement",
+          "type": "\"top-right\" | \"top-left\" | \"bottom-right\" | \"bottom-left\"",
+          "required": false,
+          "defaultValue": "\"top-right\""
+        },
+        {
+          "name": "items",
+          "type": "readonly TToastItem[]",
+          "required": true
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": [
+        {
+          "name": "dismiss",
+          "payload": "string"
+        }
+      ]
+    },
+    "TTooltip": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "modelValue",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "30"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        }
+      ],
+      "events": []
+    },
+    "TTranscriptView": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "source",
+          "type": "TTranscriptDataSource",
+          "required": true
+        },
+        {
+          "name": "version",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "scrollTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "defaultScrollTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "autoStickToBottom",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "wrap",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "hoverStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "focusStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "wheelScroll",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "keyboardRegions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "rowScrollMode",
+          "type": "RowScrollMode",
+          "required": false,
+          "defaultValue": "\"unsafe-full-row\""
+        }
+      ],
+      "events": [
+        {
+          "name": "scroll"
+        },
+        {
+          "name": "update:scrollTop"
+        },
+        {
+          "name": "rowClick"
+        },
+        {
+          "name": "actionClick"
+        },
+        {
+          "name": "linkClick"
+        },
+        {
+          "name": "foldToggle"
+        },
+        {
+          "name": "toolClick"
+        },
+        {
+          "name": "hoverRegion"
+        }
+      ]
+    },
+    "TTransition": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "show",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "duration",
+          "type": "number",
+          "required": false,
+          "defaultValue": "200"
+        },
+        {
+          "name": "beforeEnter",
+          "type": "TransitionHook",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "enter",
+          "type": "TransitionHook",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "afterEnter",
+          "type": "TransitionHook",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "beforeLeave",
+          "type": "TransitionHook",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "leave",
+          "type": "TransitionHook",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "afterLeave",
+          "type": "TransitionHook",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": []
+    },
+    "TTree": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "nodes",
+          "type": "readonly TTreeNode[]",
+          "required": true,
+          "description": "Tree nodes."
+        },
+        {
+          "name": "expandedIds",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "() => []",
+          "description": "Controlled expanded tree node ids."
+        },
+        {
+          "name": "selectedId",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Controlled selected tree node id."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Base terminal cell style override."
+        },
+        {
+          "name": "selectedStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })",
+          "description": "Style used for selected rows or nodes."
+        },
+        {
+          "name": "disabledStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ dim: true })",
+          "description": "Style used for disabled content."
+        },
+        {
+          "name": "indent",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2",
+          "description": "Indent width per tree depth."
+        },
+        {
+          "name": "selectableParents",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Allows expandable parent tree nodes to be selected from their label."
+        }
+      ],
+      "events": [
+        {
+          "name": "update:expandedIds",
+          "payload": "string[]",
+          "description": "Emitted when expanded tree node ids change."
+        },
+        {
+          "name": "update:selectedId",
+          "payload": "string",
+          "description": "Emitted when the selected tree node id changes."
+        },
+        {
+          "name": "select",
+          "payload": "TTreeSelectPayload",
+          "description": "Emitted when the active item is selected."
+        },
+        {
+          "name": "toggle",
+          "payload": "TTreeTogglePayload",
+          "description": "Emitted when a tree node expands or collapses."
+        }
+      ]
+    },
+    "TView": {
+      "entrypoint": "@simon_he/vue-tui",
+      "maturity": "public",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Render and event ordering within the current plane."
+        },
+        {
+          "name": "scrollX",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Horizontal content offset in terminal cells."
+        },
+        {
+          "name": "scrollY",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Vertical content offset in terminal cells."
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Adds the component to keyboard focus navigation."
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Controls whether terminal text selection may start inside the component."
+        },
+        {
+          "name": "selectionScrollBy",
+          "type": "(deltaRows: number) => boolean | void",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Scroll callback used while a pointer selection reaches the viewport edge."
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Requests focus when the component becomes visible."
+        }
+      ],
+      "events": [
+        {
+          "name": "clickCapture",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for click events. Runs during capture."
+        },
+        {
+          "name": "click",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for click events."
+        },
+        {
+          "name": "dblclickCapture",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for double-click events. Runs during capture."
+        },
+        {
+          "name": "dblclick",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for double-click events."
+        },
+        {
+          "name": "pointerdownCapture",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for pointer down events. Runs during capture."
+        },
+        {
+          "name": "pointerdown",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for pointer down events."
+        },
+        {
+          "name": "pointerupCapture",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for pointer up events. Runs during capture."
+        },
+        {
+          "name": "pointerup",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for pointer up events."
+        },
+        {
+          "name": "pointermoveCapture",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for pointer move events. Runs during capture."
+        },
+        {
+          "name": "pointermove",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for pointer move events."
+        },
+        {
+          "name": "pointerenterCapture",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted when the pointer enters the component. Runs during capture."
+        },
+        {
+          "name": "pointerenter",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted when the pointer enters the component."
+        },
+        {
+          "name": "pointerleaveCapture",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted when the pointer leaves the component. Runs during capture."
+        },
+        {
+          "name": "pointerleave",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted when the pointer leaves the component."
+        },
+        {
+          "name": "wheelCapture",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for wheel events. Runs during capture."
+        },
+        {
+          "name": "wheel",
+          "payload": "TerminalPointerEvent",
+          "description": "Emitted for wheel events."
+        },
+        {
+          "name": "keydownCapture",
+          "payload": "TerminalKeyboardEvent",
+          "description": "Emitted for keydown events. Runs during capture."
+        },
+        {
+          "name": "keydown",
+          "payload": "TerminalKeyboardEvent",
+          "description": "Emitted for keydown events."
+        },
+        {
+          "name": "keyupCapture",
+          "payload": "TerminalKeyboardEvent",
+          "description": "Emitted for keyup events. Runs during capture."
+        },
+        {
+          "name": "keyup",
+          "payload": "TerminalKeyboardEvent",
+          "description": "Emitted for keyup events."
+        },
+        {
+          "name": "focusCapture",
+          "payload": "void",
+          "description": "Emitted when the component receives focus. Runs during capture."
+        },
+        {
+          "name": "focus",
+          "payload": "void",
+          "description": "Emitted when the component receives focus."
+        },
+        {
+          "name": "blurCapture",
+          "payload": "void",
+          "description": "Emitted when the component loses focus. Runs during capture."
+        },
+        {
+          "name": "blur",
+          "payload": "void",
+          "description": "Emitted when the component loses focus."
+        }
+      ]
+    },
+    "TVirtualList": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "itemCount",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "itemVersion",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "getItem",
+          "type": "(index: number) => unknown",
+          "required": true
+        },
+        {
+          "name": "renderItem",
+          "type": "(item: unknown, index: number) => unknown",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "modelValue",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "scrollTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "selectionText",
+          "type": "(item: unknown, index: number) => string",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "rowScrollMode",
+          "type": "RowScrollMode",
+          "required": false,
+          "defaultValue": "\"off\""
+        }
+      ],
+      "events": [
+        {
+          "name": "update:modelValue"
+        },
+        {
+          "name": "update:scrollTop"
+        },
+        {
+          "name": "change"
+        },
+        {
+          "name": "itemClick"
+        },
+        {
+          "name": "scroll"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blur"
+        },
+        {
+          "name": "keydown"
+        }
+      ]
+    }
+  }
+}

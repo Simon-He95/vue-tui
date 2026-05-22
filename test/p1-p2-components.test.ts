@@ -2,20 +2,36 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createTheme,
   TAutocompleteInput,
+  TBadge,
   TCheckbox,
+  TCode,
   TCommandPalette,
   TDataTable,
+  TDivider,
   TFormField,
   TPasswordInput,
   TRadioGroup,
   TSlider,
   TSwitch,
   TTable,
+  TTag,
   TText,
   TTree,
   TView,
 } from "../src/index.js";
-import { TBreadcrumb, TContextMenu, TKeyHint, TPopover, TStatusBar, TTooltip } from "../src/vue.js";
+import {
+  TBreadcrumb,
+  TContextMenu,
+  TKeyHint,
+  TPopover,
+  TProgress,
+  TSpinner,
+  TSplitPane,
+  TStatusBar,
+  TTabs,
+  TToastViewport,
+  TTooltip,
+} from "../src/vue.js";
 import {
   createTerminalApp,
   defineComponent,
@@ -595,6 +611,78 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("renders feedback primitives, tabs, split panes, and toast viewport", async () => {
+    const activeKey = ref("logs");
+    const sizes = ref([10, 10]);
+    const mounted = await mountTerminal(
+      () => [
+        h(TBadge, { x: 0, y: 0, value: "12", tone: "warning" }),
+        h(TTag, { x: 6, y: 0, label: "beta", tone: "info" }),
+        h(TDivider, { x: 0, y: 1, w: 18, title: "Logs" }),
+        h(TCode, { x: 0, y: 2, w: 18, value: "pnpm test" }),
+        h(TProgress, { x: 0, y: 3, w: 24, value: 5, max: 10, label: "Index" }),
+        h(TSpinner, { x: 0, y: 4, w: 18, frameIndex: 1, label: "Thinking" }),
+        h(TToastViewport, {
+          x: 0,
+          y: 6,
+          w: 24,
+          max: 1,
+          items: [{ id: "saved", level: "success", title: "Saved", message: "Profile updated" }],
+        }),
+        h(TTabs, {
+          x: 28,
+          y: 0,
+          w: 28,
+          activeKey: activeKey.value,
+          "onUpdate:activeKey": (key: string) => (activeKey.value = key),
+          items: [
+            { key: "chat", label: "Chat" },
+            { key: "logs", label: "Logs", badge: "2" },
+          ],
+        }),
+        h(
+          TSplitPane as any,
+          {
+            x: 28,
+            y: 2,
+            w: 24,
+            h: 3,
+            sizes: sizes.value,
+            "onUpdate:sizes": (next: number[]) => (sizes.value = next),
+          },
+          ({ panes }: any) => [
+            h(TText, { ...panes[0], value: "Left" }),
+            h(TText, { ...panes[1], value: "Right" }),
+          ],
+        ),
+      ],
+      70,
+      12,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]).toContain("[12]");
+      expect(lines[0]).toContain("<beta>");
+      expect(lines[1]).toContain("Logs");
+      expect(lines[2]).toContain("pnpm test");
+      expect(lines[3]).toContain("Index [");
+      expect(lines[4]).toContain("/ Thinking");
+      expect(lines[7]).toContain("Saved");
+      expect(lines[0]).toContain("Logs 2");
+      expect(lines[2]).toContain("Left");
+      expect(lines[2]).toContain("Right");
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 29, clientY: 0, bubbles: true }));
+      await nextTick();
+      expect(activeKey.value).toBe("chat");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("forwards autocomplete input and change events from the inner input", async () => {
     const value = ref("");
     const inputs: string[] = [];
@@ -717,7 +805,9 @@ describe("P1/P2 public components", () => {
 
       expect(value.value).toBe("apple");
       expect(changes).toEqual(["apple"]);
-      expect(onSelect).toHaveBeenCalledWith({ value: "apple", index: 0 });
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ value: "apple", index: 0, query: "ap" }),
+      );
     } finally {
       mounted.unmount();
     }
@@ -764,7 +854,9 @@ describe("P1/P2 public components", () => {
       expect(value.value).toBe("apricot");
       expect(changes).toEqual(["apricot"]);
       expect(inputs).toEqual([]);
-      expect(onSelect).toHaveBeenCalledWith({ value: "apricot", index: 1 });
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ value: "apricot", index: 1, query: "ap" }),
+      );
     } finally {
       mounted.unmount();
     }
@@ -1312,7 +1404,9 @@ describe("P1/P2 public components", () => {
       );
       await nextTick();
 
-      expect(onSelect).toHaveBeenCalledWith(items[3]);
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ item: items[3], index: 3, source: "keyboard" }),
+      );
     } finally {
       mounted.unmount();
     }
@@ -1356,7 +1450,9 @@ describe("P1/P2 public components", () => {
       );
       await nextTick();
 
-      expect(onSelect).toHaveBeenCalledWith(items[1]);
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ item: items[1], index: 1, source: "keyboard" }),
+      );
     } finally {
       mounted.unmount();
     }
@@ -1442,7 +1538,9 @@ describe("P1/P2 public components", () => {
       await nextTick();
 
       expect(selectedIndex.value).toBe(1);
-      expect(onSelect).toHaveBeenCalledWith(items[1]);
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ item: items[1], index: 1, source: "pointer" }),
+      );
     } finally {
       app.dispose();
     }
@@ -1503,7 +1601,9 @@ describe("P1/P2 public components", () => {
       );
       await nextTick();
 
-      expect(onSelect).toHaveBeenCalledWith(items[3]);
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ item: items[3], index: 3, source: "keyboard" }),
+      );
     } finally {
       mounted.unmount();
     }
@@ -1545,7 +1645,9 @@ describe("P1/P2 public components", () => {
       await nextTick();
       app.scheduler.flushNow();
 
-      expect(onSelect).toHaveBeenCalledWith(items[0]);
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ item: items[0], index: 0, source: "keyboard" }),
+      );
       expect(open.value).toBe(true);
       expect(onClose).not.toHaveBeenCalled();
       expect(app.terminal.snapshot().lines.join("\n")).toContain("Open");

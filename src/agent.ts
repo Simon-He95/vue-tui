@@ -66,7 +66,11 @@ export {
 export type { RowScrollMode } from "./vue/components/TVirtualList.js";
 export type {
   TCommandPaletteItem,
+  TCommandPaletteItemsProvider,
+  TCommandPaletteMatcher,
+  TCommandPaletteMatcherResult,
   TCommandPaletteMatchRange,
+  TCommandPaletteSelectPayload,
 } from "./vue/components/TCommandPalette.js";
 export type {
   TToolCallStatus,
