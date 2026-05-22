@@ -306,6 +306,7 @@ describe("docs: components coverage", () => {
 
       expect(result.status).toBe(0);
       expect(result.stdout).toContain("TBadge.value changed required true -> false");
+      expect(result.stderr).not.toContain("Non-public API changes require");
     } finally {
       rmSync(tmp, { force: true, recursive: true });
     }

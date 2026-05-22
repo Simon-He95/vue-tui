@@ -96,18 +96,24 @@ if (!base) {
 
 const breaking: string[] = [];
 const notes: string[] = [];
+const reviewRequiredNotes: string[] = [];
 const failOnNonPublicNotes =
   process.env.VUE_TUI_API_DIFF_FAIL_ON_NOTES === "1" ||
   (process.env.CI === "true" && process.env.VUE_TUI_API_DIFF_ALLOW_NOTES !== "1");
 
+function addNote(line: string, options: { reviewRequired?: boolean } = {}): void {
+  notes.push(line);
+  if (options.reviewRequired) reviewRequiredNotes.push(line);
+}
+
 function report(maturity: Maturity, line: string): void {
   if (maturity === "public") breaking.push(line);
-  else notes.push(line);
+  else addNote(line, { reviewRequired: true });
 }
 
 function reportEntrypointChange(previous: Entrypoint, next: Entrypoint, line: string): void {
   if (previous.maturity === "public" || next.maturity === "public") breaking.push(line);
-  else notes.push(line);
+  else addNote(line, { reviewRequired: true });
 }
 
 function valueExports(entrypoint: Entrypoint): readonly string[] {
@@ -186,7 +192,7 @@ for (const [name, previous] of Object.entries(base.components)) {
     if (!prop.required && nextProp.required) {
       report(previous.maturity, `${name}.${prop.name} changed required false -> true`);
     } else if (prop.required && !nextProp.required) {
-      notes.push(`${name}.${prop.name} changed required true -> false`);
+      addNote(`${name}.${prop.name} changed required true -> false`);
     }
     if ((prop.defaultValue ?? "") !== (nextProp.defaultValue ?? "")) {
       const previousDefault = prop.defaultValue ?? "-";
@@ -231,10 +237,11 @@ if (notes.length) {
 }
 
 if (breaking.length) process.exit(1);
-if (notes.length && failOnNonPublicNotes) {
+if (reviewRequiredNotes.length && failOnNonPublicNotes) {
   console.error(
     "Non-public API changes require a release note, deprecation note, or explicit CI override.",
   );
+  for (const item of reviewRequiredNotes) console.error(`- ${item}`);
   console.error("Set VUE_TUI_API_DIFF_ALLOW_NOTES=1 only for reviewed intentional changes.");
   process.exit(1);
 }
