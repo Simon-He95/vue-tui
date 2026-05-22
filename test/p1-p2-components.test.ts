@@ -949,6 +949,57 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("resizes split panes from minimal controlled sizes with keyboard input", async () => {
+    const sizes = ref([1, 1]);
+    const updates: number[][] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TSplitPane as any,
+          {
+            x: 0,
+            y: 0,
+            w: 21,
+            h: 3,
+            sizes: sizes.value,
+            "onUpdate:sizes": (next: number[]) => {
+              updates.push(next);
+              sizes.value = next;
+            },
+          },
+          ({ panes }: any) => [
+            h(TText, { ...panes[0], value: "Left" }),
+            h(TText, { ...panes[1], value: "Right" }),
+          ],
+        ),
+      30,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(updates).toHaveLength(1);
+      expect(sizes.value).not.toEqual([1, 1]);
+      expect(sizes.value[0]! + sizes.value[1]!).toBe(20);
+      expect(sizes.value[0]).toBeGreaterThan(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("keeps split panes inside the container when minSizes exceed available space", async () => {
     let seenPanes: any[] = [];
     const mounted = await mountTerminal(

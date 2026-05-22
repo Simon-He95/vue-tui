@@ -129,22 +129,21 @@ function resolvePaneSizes(
     return out;
   }
 
-  const out = [...mins];
-  let remaining = available - minTotal;
-  const weights = sizes.map((size) => Math.max(0, size));
-  const hasWeights = weights.some((weight) => weight > 0);
-  const weightTotal = hasWeights ? weights.reduce((sum, weight) => sum + weight, 0) : count;
-  const order = weights
-    .map((weight, index) => {
-      const raw = (remaining * (hasWeights ? weight : 1)) / weightTotal;
-      const extra = Math.floor(raw);
-      out[index]! += extra;
-      return { index, fraction: raw - extra };
-    })
-    .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
-  remaining = available - out.reduce((sum, size) => sum + size, 0);
-  for (let i = 0; remaining > 0 && i < order.length; i++, remaining--) {
-    out[order[i]!.index]! += 1;
+  const out = sizes.map((size, index) => Math.max(mins[index]!, Math.floor(size)));
+  const used = out.reduce((sum, size) => sum + size, 0);
+
+  if (used > available) {
+    let overflow = used - available;
+    for (let i = out.length - 1; i >= 0 && overflow > 0; i--) {
+      const shrink = Math.min(out[i]! - mins[i]!, overflow);
+      out[i]! -= shrink;
+      overflow -= shrink;
+    }
+    return out;
+  }
+
+  if (used < available) {
+    out[out.length - 1]! += available - used;
   }
   return out;
 }
@@ -196,12 +195,17 @@ export const TSplitPane = defineComponent({
     });
 
     function resizeAt(index: number, delta: number): void {
-      const next = props.sizes.map((size) => Math.max(0, size));
+      const count = Math.max(1, props.sizes.length);
+      const total = props.direction === "horizontal" ? props.w : props.h;
+      const separatorTotal = Math.max(0, count - 1);
+      const available = Math.max(0, total - separatorTotal);
+      const sizes = props.sizes.length ? props.sizes : [1];
+      const next = resolvePaneSizes(sizes, props.minSizes, available);
       if (index < 0 || index >= next.length - 1) return;
       const left0 = next[index]!;
       const right0 = next[index + 1]!;
-      const leftMin = props.minSizes[index] ?? 1;
-      const rightMin = props.minSizes[index + 1] ?? 1;
+      const leftMin = Math.max(0, Math.floor(props.minSizes[index] ?? 1));
+      const rightMin = Math.max(0, Math.floor(props.minSizes[index + 1] ?? 1));
       const applied = Math.max(leftMin - left0, Math.min(right0 - rightMin, delta));
       next[index] = left0 + applied;
       next[index + 1] = right0 - applied;

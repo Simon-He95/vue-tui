@@ -152,4 +152,30 @@ describe("docs: components coverage", () => {
       rmSync(tmp, { force: true, recursive: true });
     }
   });
+
+  it("flags newly added required public props as breaking", () => {
+    const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+    const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
+    try {
+      const basePath = resolve(tmp, "api-manifest.json");
+      const base = JSON.parse(JSON.stringify(manifest));
+      base.components.TBadge.props = base.components.TBadge.props.filter(
+        (prop: { name: string }) => prop.name !== "value",
+      );
+      writeFileSync(basePath, `${JSON.stringify(base)}\n`);
+
+      const result = spawnSync(
+        resolve(process.cwd(), "node_modules/.bin/tsx"),
+        ["scripts/diff-api-manifest.ts", "--base", basePath],
+        { encoding: "utf8" },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("TBadge.value required prop was added");
+    } finally {
+      rmSync(tmp, { force: true, recursive: true });
+    }
+  });
 });

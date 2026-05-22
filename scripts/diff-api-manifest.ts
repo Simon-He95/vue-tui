@@ -98,6 +98,7 @@ for (const [name, previous] of Object.entries(base.components)) {
   }
 
   const nextProps = new Map(next.props.map((prop) => [prop.name, prop]));
+  const previousProps = new Map(previous.props.map((prop) => [prop.name, prop]));
   for (const prop of previous.props) {
     const nextProp = nextProps.get(prop.name);
     if (!nextProp) {
@@ -115,6 +116,13 @@ for (const [name, previous] of Object.entries(base.components)) {
       if (previous.maturity === "public") breaking.push(line);
       else notes.push(line);
     }
+  }
+  for (const nextProp of next.props) {
+    if (previousProps.has(nextProp.name)) continue;
+    if (!nextProp.required) continue;
+    const line = `${name}.${nextProp.name} required prop was added`;
+    if (previous.maturity === "public") breaking.push(line);
+    else notes.push(line);
   }
 
   const nextEvents = new Map(next.events.map((event) => [event.name, event]));

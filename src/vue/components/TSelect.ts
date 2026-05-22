@@ -202,7 +202,7 @@ export type TSelectMultipleChangePayload = Readonly<{
   indices: number[];
   values: string[];
 }>;
-export type TSelectMultipleEmitMode = "value" | "index" | "both";
+export type TSelectMultipleEmitMode = "label" | "index" | "both";
 export type TSelectModelValue = string | number | boolean | object | readonly unknown[];
 export type TSelectValueMode = "index" | "value" | "option";
 export type TSelectOptionProvider = (
@@ -236,7 +236,7 @@ export const TSelect = defineComponent({
     multiple: { type: Boolean, default: false },
     multipleEmit: {
       type: String as PropType<TSelectMultipleEmitMode>,
-      default: "value",
+      default: "label",
     },
     style: { type: Object as PropType<Style>, default: undefined },
     highlightStyle: { type: Object as PropType<Style>, default: undefined },

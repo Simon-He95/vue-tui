@@ -7,12 +7,21 @@ import ts from "typescript";
 
 const execFileAsync = promisify(execFile);
 
+type DescriptionSource = "jsdoc" | "component-default" | "shared-default" | "missing";
+type PayloadSource =
+  | "emits-signature"
+  | "component-default"
+  | "shared-default"
+  | "update-prop"
+  | "missing";
+
 type PropMeta = {
   name: string;
   type: string;
   required: boolean;
   defaultValue: string | null;
   description: string | null;
+  descriptionSource: DescriptionSource;
   deprecated: string | null;
   internalDocSkip: boolean;
 };
@@ -20,7 +29,9 @@ type PropMeta = {
 type EventMeta = {
   name: string;
   payload: string | null;
+  payloadSource: PayloadSource;
   description: string | null;
+  descriptionSource: DescriptionSource;
   internalDocSkip: boolean;
 };
 
@@ -130,7 +141,7 @@ const sharedPublicPropDescriptions: Record<string, string> = {
   itemVersion: "External version key for item changes that keep array identity stable.",
   multiple: "Enables multi-select mode.",
   multipleEmit:
-    "Payload shape used by multi-select change and confirm events; the value emit mode emits option labels.",
+    "Payload shape used by multi-select change and confirm events; the label emit mode emits option labels.",
   closeOnBlur: "Emits close when focus leaves the component.",
   initialQuery: "Query used when the command palette opens.",
   showRowDetails: "Shows command detail text next to labels.",
@@ -232,34 +243,225 @@ const sharedPublicPropDescriptions: Record<string, string> = {
   filePasteHandler: "Host handler for pasted files.",
 };
 
+function pickSharedPublicPropDescriptions(...names: string[]): Record<string, string> {
+  return Object.fromEntries(names.map((name) => [name, sharedPublicPropDescriptions[name]!]));
+}
+
 const componentPublicPropDescriptions: Record<string, Record<string, string>> = {
   TAutocompleteInput: {
+    ...pickSharedPublicPropDescriptions(
+      "modelValue",
+      "suggestions",
+      "suggestionProvider",
+      "open",
+      "highlightedIndex",
+      "debounce",
+      "minChars",
+      "filterLocal",
+    ),
     closeOnSelect: "Closes suggestions after a suggestion is selected.",
   },
   TBadge: {
+    ...pickSharedPublicPropDescriptions("tone"),
     value: "Text or scalar value rendered by the badge.",
+  },
+  TCheckbox: {
+    ...pickSharedPublicPropDescriptions("modelValue"),
   },
   TCode: {
     value: "Code text rendered inside the code block.",
   },
   TCommandPalette: {
+    ...pickSharedPublicPropDescriptions(
+      "modelValue",
+      "query",
+      "initialQuery",
+      "itemsProvider",
+      "matcher",
+      "filterStrategy",
+      "selectedIndex",
+      "showRowDetails",
+      "noMatchesText",
+      "hint",
+      "debounce",
+      "minQueryLength",
+      "maxVisibleItems",
+      "resetQueryOnClose",
+    ),
     closeOnSelect: "Closes the command palette after a command is selected.",
     items: "Command items rendered and filtered by the palette.",
   },
   TDataTable: {
+    ...pickSharedPublicPropDescriptions(
+      "columns",
+      "rowKey",
+      "selectedRowKey",
+      "selectedRowKeys",
+      "scrollTop",
+      "sortDirection",
+      "sortable",
+      "manualSort",
+      "sorter",
+      "filter",
+      "filterable",
+      "manualFilter",
+      "filterPredicate",
+      "selectionMode",
+    ),
     selectable: "Enables row selection.",
   },
+  TDialog: {
+    ...pickSharedPublicPropDescriptions(
+      "modelValue",
+      "placement",
+      "offsetX",
+      "offsetY",
+      "backdrop",
+      "closeOnBackdrop",
+      "closeOnEsc",
+      "teleport",
+      "tabMode",
+      "buttons",
+      "closeOnConfirm",
+    ),
+  },
+  TFormField: {
+    ...pickSharedPublicPropDescriptions("name", "help", "error", "required"),
+  },
+  TInput: {
+    ...pickSharedPublicPropDescriptions(
+      "modelValue",
+      "cursorToEndOnExternalUpdate",
+      "cursorToEndOnFirstFocus",
+      "cursorBlink",
+      "cursorShape",
+      "blinkInterval",
+      "promptSuggestions",
+      "promptTrigger",
+      "promptTriggers",
+      "promptMaxItems",
+      "promptAlign",
+      "promptSelectedStyle",
+      "promptPopupStyle",
+      "promptPopupBorderStyle",
+      "promptPopupMatchStyle",
+      "skillTrigger",
+      "skillSuggestions",
+      "skillHighlightStyle",
+      "mentionTrigger",
+      "mentionWorkspace",
+      "mentionMode",
+      "mentionShowHidden",
+      "mentionSuggestions",
+      "mentionMaxItems",
+      "mentionChipStyle",
+      "multilineChipStyle",
+      "dedupeMentions",
+      "collectMentions",
+      "mentions",
+      "collapseMultiline",
+      "multilineTexts",
+      "secret",
+      "maskChar",
+      "submitOnEnter",
+      "clearOnEscape",
+      "plugins",
+      "pasteImageHandler",
+      "filePasteHandler",
+    ),
+  },
+  TLink: {
+    ...pickSharedPublicPropDescriptions(
+      "href",
+      "visited",
+      "openMode",
+      "activationKeys",
+      "modifierClick",
+    ),
+  },
   TLinkifyText: {
+    ...pickSharedPublicPropDescriptions("protocols", "allowRelative", "maxUrlLength"),
     value: "Text scanned for links and rendered into terminal cells.",
   },
   TList: {
+    ...pickSharedPublicPropDescriptions("itemVersion", "modelValue"),
     items: "List rows rendered by the component.",
   },
+  TPasswordInput: {
+    ...pickSharedPublicPropDescriptions("modelValue"),
+  },
+  TRadioGroup: {
+    ...pickSharedPublicPropDescriptions("modelValue", "options"),
+  },
+  TSelect: {
+    ...pickSharedPublicPropDescriptions(
+      "options",
+      "optionProvider",
+      "query",
+      "modelValue",
+      "valueMode",
+      "activeIndex",
+      "multiple",
+      "multipleEmit",
+      "searchable",
+      "typeahead",
+      "debounce",
+      "loading",
+      "maxVisible",
+    ),
+  },
+  TSlider: {
+    ...pickSharedPublicPropDescriptions("modelValue", "min", "max", "step"),
+  },
+  TSwitch: {
+    ...pickSharedPublicPropDescriptions("modelValue"),
+  },
+  TTable: {
+    ...pickSharedPublicPropDescriptions(
+      "columns",
+      "rowKey",
+      "selectedRowKey",
+      "selectedRowKeys",
+      "header",
+      "headerFocusable",
+      "rowFocusable",
+    ),
+  },
+  TTag: {
+    ...pickSharedPublicPropDescriptions("tone"),
+  },
   TerminalProvider: {
+    ...pickSharedPublicPropDescriptions(
+      "cols",
+      "widthProvider",
+      "defaultStyle",
+      "theme",
+      "autoResize",
+      "minCols",
+      "minRows",
+      "recordEvents",
+      "inputPlugins",
+      "pathPickerProvider",
+      "linkOpener",
+      "debugIme",
+      "debugTrace",
+      "domRendererOptions",
+      "clipboard",
+      "selection",
+    ),
     rows: "Terminal row count.",
   },
   TText: {
     value: "Text content rendered into terminal cells.",
+  },
+  TTree: {
+    ...pickSharedPublicPropDescriptions(
+      "nodes",
+      "expandedIds",
+      "selectedId",
+      "indent",
+      "selectableParents",
+    ),
   },
   TView: {
     selectable: "Controls whether terminal text selection may start inside the view.",
@@ -353,12 +555,15 @@ type ApiManifest = {
         required: boolean;
         defaultValue?: string;
         description?: string;
+        descriptionSource?: DescriptionSource;
         deprecated?: string;
       }>;
       events: Array<{
         name: string;
         payload?: string;
+        payloadSource?: PayloadSource;
         description?: string;
+        descriptionSource?: DescriptionSource;
       }>;
       slots?: Array<{ name: string; props?: string; description?: string }>;
       exposed?: Array<{ name: string; type: string; description?: string }>;
@@ -659,6 +864,7 @@ function extractProps(
         required,
         defaultValue,
         description,
+        descriptionSource: description ? "jsdoc" : "missing",
         deprecated,
         internalDocSkip,
       });
@@ -673,6 +879,7 @@ function extractProps(
       required: false,
       defaultValue: null,
       description,
+      descriptionSource: description ? "jsdoc" : "missing",
       deprecated,
       internalDocSkip,
     });
@@ -706,8 +913,20 @@ function formatEventPayload(init: ts.Expression, printer: ts.Printer): string | 
 function extractEventDocs(
   sourceFile: ts.SourceFile,
   componentName: string,
-): Map<string, Pick<EventMeta, "payload" | "description" | "internalDocSkip">> {
-  const out = new Map<string, Pick<EventMeta, "payload" | "description" | "internalDocSkip">>();
+): Map<
+  string,
+  Pick<
+    EventMeta,
+    "payload" | "payloadSource" | "description" | "descriptionSource" | "internalDocSkip"
+  >
+> {
+  const out = new Map<
+    string,
+    Pick<
+      EventMeta,
+      "payload" | "payloadSource" | "description" | "descriptionSource" | "internalDocSkip"
+    >
+  >();
   for (const docsName of [`${componentName}Events`, `${componentName}EventDocs`]) {
     const init = getTopLevelInitializerByName(sourceFile, docsName);
     if (!init) continue;
@@ -718,11 +937,15 @@ function extractEventDocs(
       const eventName = propertyNameText(prop.name);
       if (!eventName) continue;
       const meta = resolveToObjectLiteral(sourceFile, prop.initializer);
+      const payload = meta ? stringLiteralValue(getObjectPropertyValue(meta, "payload")) : null;
+      const description =
+        (meta ? stringLiteralValue(getObjectPropertyValue(meta, "description")) : null) ??
+        getJsDocDescription(prop);
       out.set(eventName, {
-        payload: meta ? stringLiteralValue(getObjectPropertyValue(meta, "payload")) : null,
-        description:
-          (meta ? stringLiteralValue(getObjectPropertyValue(meta, "description")) : null) ??
-          getJsDocDescription(prop),
+        payload,
+        payloadSource: payload ? "component-default" : "missing",
+        description,
+        descriptionSource: description ? "component-default" : "missing",
         internalDocSkip: getJsDocTag(prop, "internalDocSkip") !== null,
       });
     }
@@ -734,7 +957,13 @@ function extractEvents(
   sourceFile: ts.SourceFile,
   emitsExpr: ts.Expression,
   printer: ts.Printer,
-  docs: Map<string, Pick<EventMeta, "payload" | "description" | "internalDocSkip">>,
+  docs: Map<
+    string,
+    Pick<
+      EventMeta,
+      "payload" | "payloadSource" | "description" | "descriptionSource" | "internalDocSkip"
+    >
+  >,
 ): EventMeta[] {
   const arr = resolveToArrayLiteral(sourceFile, emitsExpr);
   if (arr) {
@@ -746,7 +975,9 @@ function extractEvents(
         names.push({
           name: expr.text,
           payload: meta?.payload ?? null,
+          payloadSource: meta?.payloadSource ?? "missing",
           description: meta?.description ?? null,
+          descriptionSource: meta?.descriptionSource ?? "missing",
           internalDocSkip: meta?.internalDocSkip ?? false,
         });
       }
@@ -764,12 +995,25 @@ function extractEvents(
 
       const init = unwrapExpression(prop.initializer);
       const meta = docs.get(eventName);
-      const payload = meta?.payload ?? formatEventPayload(init, printer);
+      const signaturePayload = formatEventPayload(init, printer);
+      const payload = meta?.payload ?? signaturePayload;
+      const jsDocDescription = getJsDocDescription(prop);
+      const description = meta?.description ?? jsDocDescription;
 
       events.push({
         name: eventName,
         payload,
-        description: meta?.description ?? getJsDocDescription(prop),
+        payloadSource: meta?.payload
+          ? meta.payloadSource
+          : signaturePayload
+            ? "emits-signature"
+            : "missing",
+        description,
+        descriptionSource: meta?.description
+          ? meta.descriptionSource
+          : jsDocDescription
+            ? "jsdoc"
+            : "missing",
         internalDocSkip: meta?.internalDocSkip ?? getJsDocTag(prop, "internalDocSkip") !== null,
       });
     }
@@ -781,7 +1025,9 @@ function extractEvents(
     {
       name: printer.printNode(ts.EmitHint.Expression, emitsExpr, emitsExpr.getSourceFile()),
       payload: null,
+      payloadSource: "missing",
       description: null,
+      descriptionSource: "missing",
       internalDocSkip: false,
     },
   ];
@@ -861,11 +1107,17 @@ function eventBaseName(name: string): string {
   return name.replace(/Capture$/u, "");
 }
 
-function inferEventPayload(component: ComponentMeta, event: EventMeta): string | null {
-  if (event.payload) return event.payload;
+type DescriptionResult = { description: string | null; source: DescriptionSource };
+type PayloadResult = { payload: string | null; source: PayloadSource };
+
+function inferEventPayload(component: ComponentMeta, event: EventMeta): PayloadResult {
+  if (event.payload) return { payload: event.payload, source: event.payloadSource };
   if (event.name.startsWith("update:")) {
     const propName = event.name.slice("update:".length);
-    return component.props.find((prop) => prop.name === propName)?.type ?? "unknown";
+    return {
+      payload: component.props.find((prop) => prop.name === propName)?.type ?? "unknown",
+      source: "update-prop",
+    };
   }
   const byComponent = `${component.name}.${event.name}`;
   const componentPayloads: Record<string, string> = {
@@ -892,45 +1144,72 @@ function inferEventPayload(component: ComponentMeta, event: EventMeta): string |
     "TTree.toggle": "TTreeTogglePayload",
     "TerminalProvider.selectionCopy": "TerminalSelectionCopyPayload",
   };
-  if (componentPayloads[byComponent]) return componentPayloads[byComponent];
-  if (event.name === "change" || event.name === "input") {
-    return component.props.find((prop) => prop.name === "modelValue")?.type ?? "unknown";
+  if (componentPayloads[byComponent]) {
+    return { payload: componentPayloads[byComponent], source: "component-default" };
   }
-  return publicEventPayloads[eventBaseName(event.name)] ?? "void";
+  if (event.name === "change" || event.name === "input") {
+    return {
+      payload: component.props.find((prop) => prop.name === "modelValue")?.type ?? "unknown",
+      source: "update-prop",
+    };
+  }
+  return {
+    payload: publicEventPayloads[eventBaseName(event.name)] ?? "void",
+    source: "shared-default",
+  };
 }
 
-function describeEvent(event: EventMeta): string | null {
-  if (event.description) return event.description;
+function describeEvent(event: EventMeta): DescriptionResult {
+  if (event.description) {
+    return { description: event.description, source: event.descriptionSource };
+  }
   const baseName = eventBaseName(event.name);
-  if (baseName.endsWith("Capture")) return null;
+  if (baseName.endsWith("Capture")) return { description: null, source: "missing" };
   if (event.name.endsWith("Capture")) {
     const baseDescription = publicEventDescriptions[baseName];
-    return baseDescription ? `${baseDescription} Runs during capture.` : null;
+    return baseDescription
+      ? { description: `${baseDescription} Runs during capture.`, source: "shared-default" }
+      : { description: null, source: "missing" };
   }
-  return publicEventDescriptions[baseName] ?? null;
+  const description = publicEventDescriptions[baseName] ?? null;
+  return { description, source: description ? "shared-default" : "missing" };
 }
 
-function describePublicProp(componentName: string, prop: PropMeta): string | null {
-  if (prop.description) return prop.description;
+function describePublicProp(componentName: string, prop: PropMeta): DescriptionResult {
+  if (prop.description) {
+    return { description: prop.description, source: prop.descriptionSource };
+  }
   const componentDescription = componentPublicPropDescriptions[componentName]?.[prop.name];
-  if (componentDescription) return componentDescription;
-  if (ambiguousPublicPropNames.has(prop.name)) return null;
-  return sharedPublicPropDescriptions[prop.name] ?? null;
+  if (componentDescription) {
+    return { description: componentDescription, source: "component-default" };
+  }
+  if (ambiguousPublicPropNames.has(prop.name)) return { description: null, source: "missing" };
+  const sharedDescription = sharedPublicPropDescriptions[prop.name] ?? null;
+  return {
+    description: sharedDescription,
+    source: sharedDescription ? "shared-default" : "missing",
+  };
 }
 
 function fillPublicDocDefaults(component: ComponentMeta): ComponentMeta {
   if (component.maturity !== "public") return component;
   return {
     ...component,
-    props: component.props.map((prop) => ({
-      ...prop,
-      description: describePublicProp(component.name, prop),
-    })),
-    events: component.events.map((event) => ({
-      ...event,
-      payload: inferEventPayload(component, event),
-      description: describeEvent(event),
-    })),
+    props: component.props.map((prop) => {
+      const { description, source } = describePublicProp(component.name, prop);
+      return { ...prop, description, descriptionSource: source };
+    }),
+    events: component.events.map((event) => {
+      const payload = inferEventPayload(component, event);
+      const description = describeEvent(event);
+      return {
+        ...event,
+        payload: payload.payload,
+        payloadSource: payload.source,
+        description: description.description,
+        descriptionSource: description.source,
+      };
+    }),
   };
 }
 
@@ -1209,12 +1488,19 @@ function renderManifest(
             required: prop.required,
             ...(prop.defaultValue ? { defaultValue: prop.defaultValue } : {}),
             ...(prop.description ? { description: prop.description } : {}),
+            ...(component.maturity === "public"
+              ? { descriptionSource: prop.descriptionSource }
+              : {}),
             ...(prop.deprecated ? { deprecated: prop.deprecated } : {}),
           })),
           events: component.events.map((event) => ({
             name: event.name,
             ...(event.payload ? { payload: event.payload } : {}),
+            ...(component.maturity === "public" ? { payloadSource: event.payloadSource } : {}),
             ...(event.description ? { description: event.description } : {}),
+            ...(component.maturity === "public"
+              ? { descriptionSource: event.descriptionSource }
+              : {}),
           })),
         },
       ]),

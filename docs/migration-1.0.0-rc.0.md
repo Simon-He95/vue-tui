@@ -25,6 +25,8 @@ function onSelect(payload: TCommandPaletteSelectPayload) {
 
 `TAutocompleteInput` now closes suggestions after selection by default. Set `closeOnSelect=false` to preserve the previous always-visible suggestions behavior.
 
+`TSelect multipleEmit="value"` was renamed to `multipleEmit="label"` so it no longer conflicts with `valueMode="value"`. The emitted payload is still the selected option labels.
+
 ## Root Entrypoint Narrowed
 
 `@simon_he/vue-tui` now keeps only stable browser-safe API at the root. Move imports that depend on Vue internals, runtime wiring, observability, core sanitizers, or Node-aware CLI helpers to the explicit subpath entrypoints below.
