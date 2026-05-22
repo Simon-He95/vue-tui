@@ -17,6 +17,10 @@ import {
 } from "./ui-regressions-support.js";
 
 describe("TLinkifyText", () => {
+  it("returns no public linkify segments for empty input", () => {
+    expect(linkifyTextSegments("")).toEqual([]);
+  });
+
   it("detects safe absolute links and keeps surrounding text plain", async () => {
     const mounted = await mountTerminal(
       () =>

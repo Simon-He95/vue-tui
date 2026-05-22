@@ -517,7 +517,9 @@ function styleCacheKey(style: Style): string {
 }
 
 function mergeHighlightStyle(baseStyle: Style, highlightStyle: Style): Style {
-  return { ...baseStyle, ...highlightStyle };
+  const { href: _href, ...visualHighlightStyle } = highlightStyle;
+  const next = { ...baseStyle, ...visualHighlightStyle };
+  return baseStyle.href !== undefined ? { ...next, href: baseStyle.href } : next;
 }
 
 function mergeLinkOverlayStyle(baseStyle: Style, overlayStyle: Style): Style {

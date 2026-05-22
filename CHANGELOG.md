@@ -42,6 +42,7 @@ import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
 - Internal `createFrameMailbox()` for coalescing latest-only producer updates into one scheduler frame task.
 - `RenderManager.markDirtyRows(id, rows)` for absolute dirty-row repaint within the node's plane.
 - `TerminalFrameContext.reportDroppedUpdates()` for coalesced producer metrics.
+- Public root entrypoint promotions for `TCommandPalette`, `TDataTable`, form controls, `TTable`, `TTree`, `TLinkifyText`, `createTheme()`, and the lightweight `linkifyTextSegments()` helper; `/vue` overlay, navigation, router, render-plane, and composable helpers remain Advanced.
 
 ### Changed
 

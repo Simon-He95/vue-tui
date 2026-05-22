@@ -219,6 +219,8 @@
 
 默认只识别 `http:` / `https:` / `mailto:`。relative href 需要显式 opt in，避免把日志或路径文本误标成可打开链接；`file:` 不属于 public linkify 协议。
 
+Public helper `linkifyTextSegments("")` returns an empty segment array; non-empty plain text with no links returns one plain `{ text }` segment.
+
 ### Props
 
 - `x`/`y` `(number, required)`

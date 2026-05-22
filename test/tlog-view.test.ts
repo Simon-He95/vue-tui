@@ -5210,6 +5210,7 @@ describe("TLogView", () => {
             linkify: true,
             searchQuery: "example",
             highlightMatches: true,
+            matchStyle: { href: "https://wrong.test", inverse: true } as any,
             keyboardLinks: true,
             searchOptions: { scanBudgetMs: 1000 },
             onLinkClick: (payload: TLogViewLinkClickPayload) => payloads.push(payload),
