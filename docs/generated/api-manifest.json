@@ -6210,14 +6210,16 @@
       "maturity": "advanced",
       "props": [
         {
-          "name": "x",
+          "name": "offsetX",
           "type": "number",
-          "required": true
+          "required": false,
+          "defaultValue": "0"
         },
         {
-          "name": "y",
+          "name": "offsetY",
           "type": "number",
-          "required": true
+          "required": false,
+          "defaultValue": "0"
         },
         {
           "name": "w",

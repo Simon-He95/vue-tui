@@ -360,6 +360,8 @@ Advanced 表单上下文组件，从 `@simon_he/vue-tui/vue` 引入。它提供 
 
 Advanced toast 视口，从 `@simon_he/vue-tui/vue` 引入。它只渲染传入的 `items`，不会创建全局 singleton，也不会自己启动计时器；宿主负责 duration、dismiss 和队列状态。
 
+`placement` 基于当前 layout / clipRect 放置 toast stack；`offsetX` / `offsetY` 是相对所选角的 cell inset，因此组件可以放在 `TView`、`TBox` 或 split pane 子树里。
+
 ## TProgress
 
 Advanced determinate progress，渲染 `value / max`、可选 label 和百分比。它不启动动画，适合 stdout/headless 快照。

@@ -1,6 +1,8 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import { computed, defineComponent, h } from "vue";
+import { resolveOverlayPlacement } from "../overlay.js";
+import { useLayout } from "../composables/use-layout.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { fitCellText, mergeStyle } from "./simple-utils.js";
 import { TBox } from "./TBox.js";
@@ -29,8 +31,8 @@ function toneStyle(tone: TFeedbackTone): Style {
 export const TToastViewport = defineComponent({
   name: "TToastViewport",
   props: {
-    x: { type: Number, required: true },
-    y: { type: Number, required: true },
+    offsetX: { type: Number, default: 0 },
+    offsetY: { type: Number, default: 0 },
     w: { type: Number, required: true },
     zIndex: { type: Number, default: 40 },
     max: { type: Number, default: 3 },
@@ -48,7 +50,8 @@ export const TToastViewport = defineComponent({
     dismiss: (_id: string) => true,
   },
   setup(props, { emit }) {
-    const { defaultStyle, terminal } = useTerminal();
+    const { defaultStyle } = useTerminal();
+    const layout = useLayout();
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
 
     return () => {
@@ -56,8 +59,25 @@ export const TToastViewport = defineComponent({
       const items = props.items.slice(0, max);
       const bottom = props.placement.startsWith("bottom");
       const left = props.placement.endsWith("left");
-      const x = left ? props.x : Math.max(0, terminal.size().cols - props.x - props.w);
-      let cursorY = props.y;
+      const stackHeight = items.reduce((sum, item) => sum + (item.title ? 2 : 1), 0);
+      const clip = layout.clipRect;
+      const viewport = clip
+        ? {
+            x: Math.max(0, clip.x - layout.originX),
+            y: Math.max(0, clip.y - layout.originY),
+            w: Math.max(0, clip.w),
+            h: Math.max(0, clip.h),
+          }
+        : { x: 0, y: 0, w: Math.max(0, props.w), h: Math.max(0, stackHeight) };
+      const placed = resolveOverlayPlacement({
+        viewport,
+        size: { w: props.w, h: stackHeight },
+        placement: props.placement,
+        offsetX: left ? props.offsetX : -props.offsetX,
+        offsetY: bottom ? -props.offsetY : props.offsetY,
+      });
+      const x = viewport.x + placed.x;
+      let cursorY = viewport.y + (bottom ? placed.y + stackHeight : placed.y);
       return items.map((item, index) => {
         const hgt = item.title ? 2 : 1;
         const y = bottom ? cursorY - hgt : cursorY;

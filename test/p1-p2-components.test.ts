@@ -688,8 +688,7 @@ describe("P1/P2 public components", () => {
         h(TProgress, { x: 0, y: 3, w: 24, value: 5, max: 10, label: "Index" }),
         h(TSpinner, { x: 0, y: 4, w: 18, frameIndex: 1, label: "Thinking" }),
         h(TToastViewport, {
-          x: 0,
-          y: 6,
+          offsetY: 6,
           w: 24,
           max: 1,
           items: [{ id: "saved", level: "success", title: "Saved", message: "Profile updated" }],
@@ -791,6 +790,73 @@ describe("P1/P2 public components", () => {
       } finally {
         mounted.unmount();
       }
+    }
+  });
+
+  it("does not emit TSelect query updates for default typeahead navigation", async () => {
+    const queryUpdates: string[] = [];
+    const modelUpdates: unknown[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: ["apple", "banana"],
+          autoFocus: true,
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+          "onUpdate:modelValue": (value: unknown) => modelUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await nextTick();
+
+      expect(queryUpdates).toEqual([]);
+      expect(modelUpdates).toEqual([1]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits TSelect query updates without typeahead movement when disabled", async () => {
+    const activeUpdates: number[] = [];
+    const modelUpdates: unknown[] = [];
+    const queryUpdates: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: ["apple", "banana"],
+          autoFocus: true,
+          searchable: true,
+          typeahead: false,
+          "onUpdate:activeIndex": (value: number) => activeUpdates.push(value),
+          "onUpdate:modelValue": (value: unknown) => modelUpdates.push(value),
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await nextTick();
+
+      expect(queryUpdates).toEqual(["b"]);
+      expect(activeUpdates).toEqual([]);
+      expect(modelUpdates).toEqual([]);
+    } finally {
+      mounted.unmount();
     }
   });
 
@@ -918,25 +984,25 @@ describe("P1/P2 public components", () => {
     }
   });
 
-  it("anchors toast viewport horizontally from placement", async () => {
+  it("places toast viewport from the current layout clip rect", async () => {
     const mounted = await mountTerminal(
       () => [
         h(TToastViewport, {
-          x: 2,
-          y: 0,
+          offsetX: 2,
           w: 10,
           max: 1,
           placement: "top-left",
           items: [{ id: "left", title: "Left", message: "L" }],
         }),
-        h(TToastViewport, {
-          x: 2,
-          y: 3,
-          w: 10,
-          max: 1,
-          placement: "top-right",
-          items: [{ id: "right", title: "Right", message: "R" }],
-        }),
+        h(TView, { x: 4, y: 3, w: 20, h: 3 }, () =>
+          h(TToastViewport, {
+            offsetX: 1,
+            w: 8,
+            max: 1,
+            placement: "top-right",
+            items: [{ id: "right", title: "Right", message: "R" }],
+          }),
+        ),
       ],
       30,
       6,
@@ -945,7 +1011,7 @@ describe("P1/P2 public components", () => {
     try {
       const lines = mounted.terminal.snapshot().lines;
       expect(lines[0]?.indexOf("Left")).toBe(3);
-      expect(lines[3]?.indexOf("Right")).toBe(19);
+      expect(lines[3]?.indexOf("Right")).toBe(16);
     } finally {
       mounted.unmount();
     }

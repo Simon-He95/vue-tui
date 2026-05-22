@@ -1861,8 +1861,8 @@ Import: `@simon_he/vue-tui/vue`
 
 | 名称                   | 类型                                                                                                                          | 默认值                             | 必填 | 说明 |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ---- | ---- |
-| <code>x</code>         | <code>number</code>                                                                                                           | —                                  | 是   | —    |
-| <code>y</code>         | <code>number</code>                                                                                                           | —                                  | 是   | —    |
+| <code>offsetX</code>   | <code>number</code>                                                                                                           | <code>0</code>                     | 否   | —    |
+| <code>offsetY</code>   | <code>number</code>                                                                                                           | <code>0</code>                     | 否   | —    |
 | <code>w</code>         | <code>number</code>                                                                                                           | —                                  | 是   | —    |
 | <code>zIndex</code>    | <code>number</code>                                                                                                           | <code>40</code>                    | 否   | —    |
 | <code>max</code>       | <code>number</code>                                                                                                           | <code>3</code>                     | 否   | —    |

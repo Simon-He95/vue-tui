@@ -512,15 +512,16 @@ export const TSelect = defineComponent({
       else commitSingle(index);
     }
 
-    function moveTypeahead(char: string): boolean {
+    function handlePrintableKey(char: string): boolean {
       if (!props.searchable && !props.typeahead) return false;
       if (char.length !== 1 || char < " ") return false;
       if (typeaheadTimer) clearTimeout(typeaheadTimer);
       typeaheadQuery.value += char.toLowerCase();
-      emit("update:query", typeaheadQuery.value);
       typeaheadTimer = setTimeout(() => {
         typeaheadQuery.value = "";
       }, 700);
+      if (props.searchable) emit("update:query", typeaheadQuery.value);
+      if (!props.typeahead) return true;
       const total = options.value.length;
       for (let step = 1; step <= total; step++) {
         const index = (active.value + step) % total;
@@ -582,7 +583,7 @@ export const TSelect = defineComponent({
         emit("close");
         return;
       }
-      if (moveTypeahead(e.key ?? "")) {
+      if (handlePrintableKey(e.key ?? "")) {
         e.preventDefault();
       }
     }
