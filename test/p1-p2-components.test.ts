@@ -860,6 +860,51 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("accepts unknown TSelect model values in value mode", async () => {
+    const values = [null, undefined, Symbol("key"), () => "value"];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      for (const value of values) {
+        const updates: unknown[] = [];
+        const mounted = await mountTerminal(
+          () =>
+            h(TSelect, {
+              x: 0,
+              y: 0,
+              w: 20,
+              h: 3,
+              options: [{ label: "item", value }],
+              valueMode: "value",
+              modelValue: value,
+              autoFocus: true,
+              "onUpdate:modelValue": (next: unknown) => updates.push(next),
+            }),
+          24,
+          5,
+        );
+
+        try {
+          await nextTick();
+          mounted
+            .container()!
+            .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+          await nextTick();
+
+          expect(updates.at(-1)).toBe(value);
+        } finally {
+          mounted.unmount();
+        }
+      }
+
+      expect(warn.mock.calls.some(([message]) => String(message).includes("Invalid prop"))).toBe(
+        false,
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("emits TSelect query updates without typeahead movement when disabled", async () => {
     const activeUpdates: number[] = [];
     const modelUpdates: unknown[] = [];
@@ -890,6 +935,41 @@ describe("P1/P2 public components", () => {
 
       expect(queryUpdates).toEqual(["b"]);
       expect(activeUpdates).toEqual([]);
+      expect(modelUpdates).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("moves TSelect active option without committing model while searchable", async () => {
+    const activeUpdates: number[] = [];
+    const modelUpdates: unknown[] = [];
+    const queryUpdates: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: ["apple", "banana"],
+          autoFocus: true,
+          searchable: true,
+          "onUpdate:activeIndex": (value: number) => activeUpdates.push(value),
+          "onUpdate:modelValue": (value: unknown) => modelUpdates.push(value),
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await nextTick();
+
+      expect(queryUpdates).toEqual(["b"]);
+      expect(activeUpdates).toEqual([1]);
       expect(modelUpdates).toEqual([]);
     } finally {
       mounted.unmount();

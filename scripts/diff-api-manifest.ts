@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 type Maturity = "public" | "advanced" | "experimental";
 type Component = {
+  entrypoint: string;
   maturity: Maturity;
   props: Array<{ name: string; type: string; required: boolean; deprecated?: string }>;
   events: Array<{ name: string; payload?: string }>;
@@ -51,8 +52,13 @@ function readBaseFromLatestTag(): ApiManifest | null {
 const current = readCurrent();
 const base = readBaseFromArg() ?? readBaseFromLatestTag();
 if (!base) {
-  console.log("api:diff skipped: no base manifest found in --base or latest git tag");
-  process.exit(0);
+  const message = "api:diff missing base manifest";
+  if (process.env.VUE_TUI_API_DIFF_ALLOW_MISSING_BASE === "1") {
+    console.log(`${message}; skipped by explicit env`);
+    process.exit(0);
+  }
+  console.error(message);
+  process.exit(1);
 }
 
 const breaking: string[] = [];
@@ -95,6 +101,18 @@ for (const [name, previous] of Object.entries(base.components)) {
     if (previous.maturity === "public") breaking.push(`${name} component was removed`);
     else notes.push(`${name} component was removed`);
     continue;
+  }
+
+  if (previous.entrypoint !== next.entrypoint) {
+    const line = `${name} entrypoint changed ${previous.entrypoint} -> ${next.entrypoint}`;
+    if (previous.maturity === "public") breaking.push(line);
+    else notes.push(line);
+  }
+
+  if (previous.maturity !== next.maturity) {
+    const line = `${name} maturity changed ${previous.maturity} -> ${next.maturity}`;
+    if (previous.maturity === "public") breaking.push(line);
+    else notes.push(line);
   }
 
   const nextProps = new Map(next.props.map((prop) => [prop.name, prop]));

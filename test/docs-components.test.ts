@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -174,6 +174,73 @@ describe("docs: components coverage", () => {
 
       expect(result.status).toBe(1);
       expect(result.stderr).toContain("TBadge.value required prop was added");
+    } finally {
+      rmSync(tmp, { force: true, recursive: true });
+    }
+  });
+
+  it("requires an explicit env override before skipping a missing API diff base", () => {
+    const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
+
+    try {
+      mkdirSync(resolve(tmp, "docs/generated"), { recursive: true });
+      writeFileSync(
+        resolve(tmp, "docs/generated/api-manifest.json"),
+        `${JSON.stringify(manifest)}\n`,
+      );
+
+      const script = resolve(process.cwd(), "scripts/diff-api-manifest.ts");
+      const tsx = resolve(process.cwd(), "node_modules/.bin/tsx");
+      const failed = spawnSync(tsx, [script], {
+        cwd: tmp,
+        encoding: "utf8",
+      });
+      expect(failed.status).toBe(1);
+      expect(failed.stderr).toContain("api:diff missing base manifest");
+
+      const skipped = spawnSync(tsx, [script], {
+        cwd: tmp,
+        encoding: "utf8",
+        env: { ...process.env, VUE_TUI_API_DIFF_ALLOW_MISSING_BASE: "1" },
+      });
+      expect(skipped.status).toBe(0);
+      expect(skipped.stdout).toContain("api:diff missing base manifest; skipped by explicit env");
+    } finally {
+      rmSync(tmp, { force: true, recursive: true });
+    }
+  });
+
+  it("flags public component entrypoint and maturity drift", () => {
+    const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
+
+    try {
+      const basePath = resolve(tmp, "api-manifest.json");
+      const current = JSON.parse(JSON.stringify(manifest));
+      current.components.TBadge.entrypoint = "@simon_he/vue-tui/vue";
+      current.components.TBadge.maturity = "advanced";
+
+      mkdirSync(resolve(tmp, "docs/generated"), { recursive: true });
+      writeFileSync(basePath, `${JSON.stringify(manifest)}\n`);
+      writeFileSync(
+        resolve(tmp, "docs/generated/api-manifest.json"),
+        `${JSON.stringify(current)}\n`,
+      );
+
+      const result = spawnSync(
+        resolve(process.cwd(), "node_modules/.bin/tsx"),
+        [resolve(process.cwd(), "scripts/diff-api-manifest.ts"), "--base", basePath],
+        { cwd: tmp, encoding: "utf8" },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        "TBadge entrypoint changed @simon_he/vue-tui -> @simon_he/vue-tui/vue",
+      );
+      expect(result.stderr).toContain("TBadge maturity changed public -> advanced");
     } finally {
       rmSync(tmp, { force: true, recursive: true });
     }

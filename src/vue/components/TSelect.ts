@@ -203,7 +203,7 @@ export type TSelectMultipleChangePayload = Readonly<{
   values: string[];
 }>;
 export type TSelectMultipleEmitMode = "label" | "index" | "both";
-export type TSelectModelValue = string | number | boolean | object | readonly unknown[];
+export type TSelectModelValue = unknown;
 export type TSelectValueMode = "index" | "value" | "option";
 export type TSelectOptionProvider = (
   query: string,
@@ -225,8 +225,8 @@ export const TSelect = defineComponent({
     },
     query: { type: String, default: "" },
     modelValue: {
-      type: [Number, Array, String, Boolean, Object] as PropType<TSelectModelValue>,
-      default: 0,
+      type: null as unknown as PropType<TSelectModelValue>,
+      default: 0 as TSelectModelValue,
     },
     valueMode: {
       type: String as PropType<TSelectValueMode>,
@@ -529,7 +529,9 @@ export const TSelect = defineComponent({
         if (!isOptionInteractive(opt)) continue;
         if (getOptionLabel(opt).toLowerCase().startsWith(typeaheadQuery.value)) {
           setActive(index);
-          if (!props.multiple) emit("update:modelValue", getOptionValue(opt, index));
+          if (!props.multiple && !props.searchable) {
+            emit("update:modelValue", getOptionValue(opt, index));
+          }
           return true;
         }
       }
