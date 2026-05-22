@@ -34,6 +34,7 @@ export type {
 } from "./components/TDataTable.js";
 export { TDebugOverlay } from "./components/TDebugOverlay.js";
 export { TDialog } from "./components/TDialog.js";
+export type { DialogButton } from "./components/TDialog.js";
 export type {
   TerminalProviderSelectionConfig,
   TerminalProviderSelectionOptions,
@@ -107,6 +108,7 @@ export { TRenderPlane } from "./components/TRenderPlane.js";
 export { TSelect } from "./components/TSelect.js";
 export type {
   SelectOption,
+  SelectOptionWithStyle,
   TSelectMultipleChangePayload,
   TSelectMultipleEmitMode,
   TSelectModelValue,

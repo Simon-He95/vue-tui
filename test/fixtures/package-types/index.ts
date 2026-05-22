@@ -45,6 +45,8 @@ import {
   useTerminal,
   type TCommandPaletteItem as VueTCommandPaletteItem,
   type TCommandPaletteMatchRange as VueTCommandPaletteMatchRange,
+  type DialogButton as VueDialogButton,
+  type SelectOptionWithStyle as VueSelectOptionWithStyle,
   type TInputPlugin,
 } from "@simon_he/vue-tui/vue";
 
@@ -115,6 +117,8 @@ const rootCommandPaletteRange: RootTCommandPaletteMatchRange = { start: 0, end: 
 const vueCommandPaletteRange: VueTCommandPaletteMatchRange = { start: 0, end: 4 };
 const rootCommandPaletteRanges = computeRootCommandPaletteMatchRanges("Open workspace", "open");
 const vueCommandPaletteRanges = computeVueCommandPaletteMatchRanges("Open workspace", "open");
+const vueDialogButton: VueDialogButton = { label: "OK" };
+const vueSelectOption: VueSelectOptionWithStyle = { label: "Remote", value: "remote" };
 const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
 const agentCommandPaletteItem: AgentTCommandPaletteItem = {
   label: "Open",
@@ -179,6 +183,8 @@ console.log(
   vueCommandPaletteRange,
   rootCommandPaletteRanges,
   vueCommandPaletteRanges,
+  vueDialogButton,
+  vueSelectOption,
   agentCommandPaletteItem,
   agentCommandPaletteRanges,
 );

@@ -189,6 +189,49 @@ describe("docs: components coverage", () => {
     }
   });
 
+  it("reports newly added public API surface as notes", () => {
+    const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+    const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
+    try {
+      const basePath = resolve(tmp, "api-manifest.json");
+      const base = JSON.parse(JSON.stringify(manifest));
+      delete base.entrypoints["@simon_he/vue-tui/markdown"];
+      base.entrypoints["@simon_he/vue-tui"].valueExports = base.entrypoints[
+        "@simon_he/vue-tui"
+      ].valueExports.filter((name: string) => name !== "TBadge");
+      base.entrypoints["@simon_he/vue-tui"].typeExports = base.entrypoints[
+        "@simon_he/vue-tui"
+      ].typeExports.filter((name: string) => name !== "TFeedbackTone");
+      delete base.components.TTag;
+      base.components.TSelect.props = base.components.TSelect.props.filter(
+        (prop: { name: string }) => prop.name !== "valueMode",
+      );
+      base.components.TSelect.events = base.components.TSelect.events.filter(
+        (event: { name: string }) => event.name !== "change",
+      );
+      writeFileSync(basePath, `${JSON.stringify(base)}\n`);
+
+      const result = spawnSync(
+        resolve(process.cwd(), "node_modules/.bin/tsx"),
+        ["scripts/diff-api-manifest.ts", "--base", basePath],
+        { encoding: "utf8" },
+      );
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("@simon_he/vue-tui/markdown entrypoint was added");
+      expect(result.stdout).toContain("@simon_he/vue-tui.TBadge value export was added");
+      expect(result.stdout).toContain("@simon_he/vue-tui.TFeedbackTone type export was added");
+      expect(result.stdout).toContain("TTag component was added at @simon_he/vue-tui");
+      expect(result.stdout).toContain("TSelect.valueMode optional prop was added");
+      expect(result.stdout).toContain("TSelect.change event was added");
+      expect(result.stdout).not.toContain("No API drift detected.");
+    } finally {
+      rmSync(tmp, { force: true, recursive: true });
+    }
+  });
+
   it("flags public entrypoint maturity and runtime drift", () => {
     const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));

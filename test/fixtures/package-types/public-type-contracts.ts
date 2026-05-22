@@ -1,4 +1,7 @@
 import type {
+  DialogButton,
+  SelectOptionWithStyle,
+  Style,
   TCommandPaletteItem,
   TCommandPaletteSelectPayload,
   TSelectMultipleChangePayload,
@@ -10,6 +13,34 @@ type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
 type Assert<T extends true> = T;
+
+type _DialogButtonShape = Assert<
+  Equal<
+    DialogButton,
+    Readonly<{
+      label: string;
+      value?: unknown;
+      id?: string;
+      kind?: "default" | "primary" | "danger" | "muted" | "accent";
+      default?: boolean;
+      style?: Style;
+      selectedStyle?: Style;
+    }>
+  >
+>;
+
+type _SelectOptionWithStyleShape = Assert<
+  SelectOptionWithStyle extends Readonly<{
+    kind?: "option" | "separator" | "group";
+    label: string;
+    value?: unknown;
+    disabled?: boolean;
+    detail?: string;
+    style?: Style;
+  }>
+    ? true
+    : false
+>;
 
 type _TSelectMultipleChangePayloadShape = Assert<
   Equal<

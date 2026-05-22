@@ -160,6 +160,28 @@ for (const [specifier, previous] of Object.entries(base.entrypoints)) {
   }
 }
 
+for (const [specifier, next] of Object.entries(current.entrypoints)) {
+  const previous = base.entrypoints[specifier];
+  if (!previous) {
+    addNote(`${specifier} entrypoint was added`, {
+      reviewRequired: next.maturity !== "public",
+    });
+    continue;
+  }
+
+  const previousValueExports = new Set(valueExports(previous));
+  for (const name of valueExports(next)) {
+    if (previousValueExports.has(name)) continue;
+    addNote(`${specifier}.${name} value export was added`);
+  }
+
+  const previousTypeExports = new Set(typeExports(previous));
+  for (const name of typeExports(next)) {
+    if (previousTypeExports.has(name)) continue;
+    addNote(`${specifier}.${name} type export was added`);
+  }
+}
+
 for (const [name, previous] of Object.entries(base.components)) {
   const next = current.components[name];
   if (!next) {
@@ -223,6 +245,29 @@ for (const [name, previous] of Object.entries(base.components)) {
       }`;
       report(previous.maturity, line);
     }
+  }
+}
+
+for (const [name, next] of Object.entries(current.components)) {
+  const previous = base.components[name];
+  if (!previous) {
+    addNote(`${name} component was added at ${next.entrypoint}`, {
+      reviewRequired: next.maturity !== "public",
+    });
+    continue;
+  }
+
+  const previousProps = new Set(previous.props.map((prop) => prop.name));
+  for (const prop of next.props) {
+    if (previousProps.has(prop.name)) continue;
+    if (prop.required) continue;
+    addNote(`${name}.${prop.name} optional prop was added`);
+  }
+
+  const previousEvents = new Set(previous.events.map((event) => event.name));
+  for (const event of next.events) {
+    if (previousEvents.has(event.name)) continue;
+    addNote(`${name}.${event.name} event was added`);
   }
 }
 

@@ -40,6 +40,7 @@ export type {
   TDataTableSorter,
 } from "./vue/components/TDataTable.js";
 export { TDialog } from "./vue/components/TDialog.js";
+export type { DialogButton } from "./vue/components/TDialog.js";
 export { TBadge, TCode, TDivider, TTag } from "./vue/components/TFeedback.js";
 export type { TFeedbackTone } from "./vue/components/TFeedback.js";
 export {
@@ -82,6 +83,7 @@ export type { TLinkifyOptions, TLinkifyProtocol, TLinkifySegment } from "./vue/l
 export { TSelect } from "./vue/components/TSelect.js";
 export type {
   SelectOption,
+  SelectOptionWithStyle,
   TSelectMultipleChangePayload,
   TSelectMultipleEmitMode,
   TSelectModelValue,
