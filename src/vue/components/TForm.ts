@@ -732,7 +732,11 @@ export const TAutocompleteInput = defineComponent({
               ) {
                 event.preventDefault?.();
               } else if (event.key === "Escape") {
-                setOpen(false);
+                if (isOpen.value) {
+                  event.preventDefault?.();
+                  event.stopPropagation?.();
+                  setOpen(false);
+                }
               }
             },
           }),

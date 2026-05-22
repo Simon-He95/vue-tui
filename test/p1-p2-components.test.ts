@@ -7,6 +7,7 @@ import {
   TCode,
   TCommandPalette,
   TDataTable,
+  TDialog,
   TDivider,
   TFormField,
   TInput,
@@ -1885,6 +1886,67 @@ describe("P1/P2 public components", () => {
       expect(onSelect).toHaveBeenCalledWith(
         expect.objectContaining({ value: "apricot", index: 1, query: "ap" }),
       );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("closes autocomplete suggestions on Escape without closing the parent dialog", async () => {
+    const dialogOpen = ref(true);
+    const autocompleteOpen = ref(true);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog,
+          {
+            modelValue: dialogOpen.value,
+            "onUpdate:modelValue": (value: boolean) => (dialogOpen.value = value),
+            w: 24,
+            h: 6,
+            title: "Search",
+            closeOnEsc: true,
+          },
+          () =>
+            h(TAutocompleteInput, {
+              x: 0,
+              y: 0,
+              w: 18,
+              h: 3,
+              modelValue: "ap",
+              suggestions: ["apple"],
+              open: autocompleteOpen.value,
+              "onUpdate:open": (value: boolean) => (autocompleteOpen.value = value),
+            }),
+        ),
+      32,
+      10,
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", {
+          clientX: 6,
+          clientY: 4,
+          bubbles: true,
+        }),
+      );
+      await nextTick();
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(autocompleteOpen.value).toBe(false);
+      expect(dialogOpen.value).toBe(true);
     } finally {
       mounted.unmount();
     }

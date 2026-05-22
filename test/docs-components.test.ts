@@ -178,6 +178,42 @@ describe("docs: components coverage", () => {
     }
   });
 
+  it("flags public entrypoint maturity and runtime drift", () => {
+    const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
+
+    try {
+      const basePath = resolve(tmp, "api-manifest.json");
+      const current = JSON.parse(JSON.stringify(manifest));
+      current.entrypoints["@simon_he/vue-tui"].maturity = "advanced";
+      current.entrypoints["@simon_he/vue-tui"].runtime = "node-only";
+
+      mkdirSync(resolve(tmp, "docs/generated"), { recursive: true });
+      writeFileSync(basePath, `${JSON.stringify(manifest)}\n`);
+      writeFileSync(
+        resolve(tmp, "docs/generated/api-manifest.json"),
+        `${JSON.stringify(current)}\n`,
+      );
+
+      const result = spawnSync(
+        resolve(process.cwd(), "node_modules/.bin/tsx"),
+        [resolve(process.cwd(), "scripts/diff-api-manifest.ts"), "--base", basePath],
+        { cwd: tmp, encoding: "utf8" },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        "@simon_he/vue-tui entrypoint maturity changed public -> advanced",
+      );
+      expect(result.stderr).toContain(
+        "@simon_he/vue-tui entrypoint runtime changed browser-safe -> node-only",
+      );
+    } finally {
+      rmSync(tmp, { force: true, recursive: true });
+    }
+  });
+
   it("flags newly added required public props as breaking", () => {
     const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));

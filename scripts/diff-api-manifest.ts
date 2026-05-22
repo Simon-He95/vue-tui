@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 
 type Maturity = "public" | "advanced" | "experimental";
+type EntrypointRuntime = "browser-safe" | "node-only" | "mixed";
 type Component = {
   entrypoint: string;
   maturity: Maturity;
@@ -16,6 +17,7 @@ type Component = {
 };
 type Entrypoint = {
   maturity: Maturity;
+  runtime?: EntrypointRuntime;
   valueExports?: string[];
   typeExports?: string[];
   exports?: string[];
@@ -100,6 +102,11 @@ function report(maturity: Maturity, line: string): void {
   else notes.push(line);
 }
 
+function reportEntrypointChange(previous: Entrypoint, next: Entrypoint, line: string): void {
+  if (previous.maturity === "public" || next.maturity === "public") breaking.push(line);
+  else notes.push(line);
+}
+
 function valueExports(entrypoint: Entrypoint): readonly string[] {
   return entrypoint.valueExports ?? entrypoint.exports ?? [];
 }
@@ -113,6 +120,22 @@ for (const [specifier, previous] of Object.entries(base.entrypoints)) {
   if (!next) {
     report(previous.maturity, `${specifier} entrypoint was removed`);
     continue;
+  }
+  if (previous.maturity !== next.maturity) {
+    reportEntrypointChange(
+      previous,
+      next,
+      `${specifier} entrypoint maturity changed ${previous.maturity} -> ${next.maturity}`,
+    );
+  }
+  if (previous.runtime && previous.runtime !== next.runtime) {
+    reportEntrypointChange(
+      previous,
+      next,
+      `${specifier} entrypoint runtime changed ${previous.runtime} -> ${
+        next.runtime ?? "unspecified"
+      }`,
+    );
   }
   const nextValueExports = new Set(valueExports(next));
   for (const name of valueExports(previous)) {
