@@ -5185,6 +5185,124 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
+  it("preserves linkified href metadata when search highlights URL text", async () => {
+    const logView = ref<TLogViewHandle | null>(null);
+    const payloads: TLogViewLinkClickPayload[] = [];
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "open https://example.com/docs",
+      getLineKey: () => "line",
+    };
+    const urlStart = "open ".length;
+
+    const App = defineComponent({
+      name: "TLogViewLinkifySearchHighlightApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 32,
+            h: 1,
+            source,
+            version: 1,
+            linkify: true,
+            searchQuery: "example",
+            highlightMatches: true,
+            matchStyle: { href: "https://wrong.test", inverse: true } as any,
+            keyboardLinks: true,
+            searchOptions: { scanBudgetMs: 1000 },
+            onLinkClick: (payload: TLogViewLinkClickPayload) => payloads.push(payload),
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 32, rows: 2, component: App });
+    try {
+      app.mount();
+      await flushSearch(app, logView.value!);
+
+      expect(rowText(app, 0)).toBe("open https://example.com/docs");
+      const highlightedCell = app.terminal.getCell(urlStart + 8, 0);
+      expect(highlightedCell.style.href).toBe("https://example.com/docs");
+      expect(highlightedCell.style.underline).toBe(true);
+      expect(highlightedCell.style.inverse).toBe(true);
+
+      const link = logView.value!.getVisibleLinks()[0];
+      expect(link).toMatchObject({
+        href: "https://example.com/docs",
+        text: "https://example.com/docs",
+        startCell: urlStart,
+        endCell: urlStart + "https://example.com/docs".length,
+      });
+
+      app.events.dispatch({
+        type: "click",
+        cellX: urlStart + 8,
+        cellY: 0,
+        time: Date.now(),
+      } as any);
+      expect(payloads).toEqual([
+        {
+          href: "https://example.com/docs",
+          text: "https://example.com/docs",
+          absoluteLineIndex: 0,
+          index: 0,
+          startCell: urlStart,
+          endCell: urlStart + "https://example.com/docs".length,
+          cellX: urlStart + 8,
+          cellY: 0,
+        },
+      ]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints when linkify option fields mutate on the same object", async () => {
+    const linkifyOptions = ref<{ allowRelative?: boolean }>({ allowRelative: false });
+    const source: TLogDataSource = {
+      lineCount: () => 1,
+      getLine: () => "open /docs",
+      getLineKey: () => "line",
+    };
+
+    const App = defineComponent({
+      name: "TLogViewLinkifyOptionsMutationApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 1,
+            source,
+            version: 1,
+            linkify: linkifyOptions.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 2, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("open /docs");
+      expect(rowStyles(app, 0)[5]!.href).toBeUndefined();
+
+      linkifyOptions.value.allowRelative = true;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowStyles(app, 0)[5]!.href).toBe("/docs");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("emits retained absolute line indexes for linkClick", async () => {
     const payloads: TLogViewLinkClickPayload[] = [];
     const log = createAppendOnlyLogStore({ maxLines: 3 });

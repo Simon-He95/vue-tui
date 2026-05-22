@@ -9,14 +9,23 @@ describe("documented entrypoint exports", () => {
       "createDomRenderer",
       "TerminalProvider",
       "TBox",
+      "TCommandPalette",
+      "TDataTable",
       "TDialog",
+      "TFormField",
       "TInput",
       "TLink",
+      "TLinkifyText",
       "TList",
       "TSelect",
+      "TTable",
       "TText",
+      "TTree",
       "TView",
       "createTInputHostPlugin",
+      "computeCommandPaletteMatchRanges",
+      "createTheme",
+      "linkifyTextSegments",
     ]) {
       expect(key in root, key).toBe(true);
     }
@@ -36,6 +45,12 @@ describe("documented entrypoint exports", () => {
       "TRenderPlane",
       "TTransition",
       "TDebugOverlay",
+      "TBreadcrumb",
+      "TContextMenu",
+      "TKeyHint",
+      "TPopover",
+      "TStatusBar",
+      "TTooltip",
       "useTerminal",
     ]) {
       expect(key in vue, key).toBe(true);

@@ -20,6 +20,7 @@ import type {
   TLogViewVisualIndexOptions,
   TLogViewVisualIndexStatus,
 } from "../log/types.js";
+import type { TLinkifyOptions } from "../linkify.js";
 import { applyAnsiSgrStyle, parseAnsiSgr } from "../../core/ansi/sgr.js";
 import {
   terminalSelectionRowSpans,
@@ -43,6 +44,8 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
+import { TuiThemeContextKey, tuiDefaultTheme } from "../theme.js";
+import { linkifyTextSegments } from "../linkify.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import {
   forEachTextCellSegment,
@@ -296,6 +299,7 @@ export type TLogViewHandle = Readonly<{
 }>;
 
 let nextTLogViewTaskId = 0;
+const DEFAULT_LINK_STYLE: Style = { underline: true };
 const DEFAULT_LOG_RENDER_CACHE_SIZE = 2_000;
 const DEFAULT_LOG_WRAP_CACHE_SIZE = 2_000;
 const DEFAULT_VISUAL_INDEX_CAPACITY = 1_024;
@@ -513,7 +517,9 @@ function styleCacheKey(style: Style): string {
 }
 
 function mergeHighlightStyle(baseStyle: Style, highlightStyle: Style): Style {
-  return { ...baseStyle, ...highlightStyle };
+  const { href: _href, ...visualHighlightStyle } = highlightStyle;
+  const next = { ...baseStyle, ...visualHighlightStyle };
+  return baseStyle.href !== undefined ? { ...next, href: baseStyle.href } : next;
 }
 
 function mergeLinkOverlayStyle(baseStyle: Style, overlayStyle: Style): Style {
@@ -753,10 +759,26 @@ export const TLogView = defineComponent({
       default: undefined,
     },
     ansi: { type: Boolean, default: false },
+    /**
+     * Parses OSC8 links only with ansi=true; OSC8 links preserve parsed ANSI style and
+     * do not inherit TLink theme defaults.
+     */
     links: { type: Boolean, default: false },
+    /**
+     * Plain-text URL linkification for ansi=false rows; generated links inherit TLink
+     * theme defaults before linkStyle.
+     */
+    linkify: {
+      type: [Boolean, Object] as PropType<boolean | TLinkifyOptions>,
+      default: false,
+    },
+    /**
+     * Link style override. OSC8 defaults to underline-only over parsed ANSI style;
+     * linkify also inherits TLink theme defaults.
+     */
     linkStyle: {
       type: Object as PropType<Style>,
-      default: () => ({ underline: true }),
+      default: undefined,
     },
     keyboardLinks: { type: Boolean, default: false },
     linkFocusStyle: {
@@ -811,6 +833,12 @@ export const TLogView = defineComponent({
     const plane = inject(RenderPlaneContextKey, ref<TerminalRenderPlane>("default"));
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
+    const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
+    const effectiveAnsiLinkStyle = computed<Style>(() => props.linkStyle ?? DEFAULT_LINK_STYLE);
+    const effectiveLinkStyle = computed<Style>(() => ({
+      ...(theme.value.components.TLink?.style ?? {}),
+      ...(props.linkStyle ?? {}),
+    }));
 
     const focused = ref(false);
     const innerScrollTop = ref(0);
@@ -839,6 +867,8 @@ export const TLogView = defineComponent({
     const ansiLineCache = new Map<TLogRenderCacheKey, TLogAnsiLineCacheEntry>();
     const ansiWrapCache = new Map<TLogRenderCacheKey, TLogAnsiWrapCacheEntry>();
     const ansiRowCache = new Map<TLogRenderCacheKey, TLogAnsiRowCacheEntry>();
+    const linkifyLineCache = new Map<TLogRenderCacheKey, TLogAnsiLineCacheEntry>();
+    const linkifyWrapCache = new Map<TLogRenderCacheKey, TLogAnsiWrapCacheEntry>();
     const searchLineCache = new Map<TLogRenderCacheKey, TLogSearchLineCacheEntry>();
     const visibleLinksByRow = new Map<number, TLogVisibleLinkSegment[]>();
     const focusedVisibleLinkIndex = ref(-1);
@@ -947,8 +977,38 @@ export const TLogView = defineComponent({
       return props.ansi && props.links;
     }
 
+    function linkifyEnabled(): boolean {
+      return (
+        props.ansi !== true &&
+        (props.linkify === true || (typeof props.linkify === "object" && props.linkify != null))
+      );
+    }
+
+    function visualLinksEnabled(): boolean {
+      return linksEnabled() || linkifyEnabled();
+    }
+
+    function linkifyOptions(): TLinkifyOptions {
+      return typeof props.linkify === "object" && props.linkify != null ? props.linkify : {};
+    }
+
+    function linkifyOptionsCacheKey(): string {
+      const options = linkifyOptions();
+      return JSON.stringify([
+        options.allowRelative ? 1 : 0,
+        options.maxUrlLength ?? "",
+        options.protocols ?? [],
+      ]);
+    }
+
+    const linkifyOptionsKey = computed(() => linkifyOptionsCacheKey());
+
     function linkStyleCacheKey(): string {
-      return linksEnabled() ? styleCacheKey(props.linkStyle) : "";
+      return linksEnabled() ? styleCacheKey(effectiveAnsiLinkStyle.value) : "";
+    }
+
+    function linkifyStyleCacheKey(): string {
+      return linkifyEnabled() ? styleCacheKey(effectiveLinkStyle.value) : "";
     }
 
     function ansiLineCacheKey(
@@ -957,6 +1017,25 @@ export const TLogView = defineComponent({
       linkKey: string,
     ): TLogRenderCacheKey {
       return JSON.stringify(["ansi-line", key, baseStyleKey, linksEnabled() ? 1 : 0, linkKey]);
+    }
+
+    function linkifyLineCacheKey(
+      key: TLogLineKey,
+      baseStyleKey: string,
+      linkKey: string,
+      optionsKey: string,
+    ): TLogRenderCacheKey {
+      return JSON.stringify(["linkify-line", key, baseStyleKey, linkKey, optionsKey]);
+    }
+
+    function linkifyWrapCacheKey(
+      key: TLogLineKey,
+      width: number,
+      baseStyleKey: string,
+      linkKey: string,
+      optionsKey: string,
+    ): TLogRenderCacheKey {
+      return JSON.stringify(["linkify-wrap", key, width, baseStyleKey, linkKey, optionsKey]);
     }
 
     function ansiWrapCacheKey(
@@ -1055,6 +1134,30 @@ export const TLogView = defineComponent({
       }
     }
 
+    function trimLinkifyLineCache(): void {
+      const max = DEFAULT_LOG_RENDER_CACHE_SIZE;
+      if (linkifyLineCache.size <= max) return;
+
+      const entries = Array.from(linkifyLineCache.values()).sort(
+        (a, b) => a.touchedAt - b.touchedAt,
+      );
+      for (const entry of entries.slice(0, linkifyLineCache.size - max)) {
+        linkifyLineCache.delete(entry.key);
+      }
+    }
+
+    function trimLinkifyWrapCache(): void {
+      const max = DEFAULT_LOG_WRAP_CACHE_SIZE;
+      if (linkifyWrapCache.size <= max) return;
+
+      const entries = Array.from(linkifyWrapCache.values()).sort(
+        (a, b) => a.touchedAt - b.touchedAt,
+      );
+      for (const entry of entries.slice(0, linkifyWrapCache.size - max)) {
+        linkifyWrapCache.delete(entry.key);
+      }
+    }
+
     function trimSearchLineCache(): void {
       const max = DEFAULT_LOG_RENDER_CACHE_SIZE;
       if (searchLineCache.size <= max) return;
@@ -1073,6 +1176,8 @@ export const TLogView = defineComponent({
       ansiLineCache.clear();
       ansiWrapCache.clear();
       ansiRowCache.clear();
+      linkifyLineCache.clear();
+      linkifyWrapCache.clear();
       searchLineCache.clear();
       visibleLinksByRow.clear();
     }
@@ -1171,7 +1276,7 @@ export const TLogView = defineComponent({
         props.source.getLine(index),
         baseStyle,
         linksEnabled(),
-        props.linkStyle,
+        effectiveAnsiLinkStyle.value,
       );
       ansiLineCache.set(key, {
         key,
@@ -1282,6 +1387,110 @@ export const TLogView = defineComponent({
         touchedAt: ++cacheClock,
       });
       return visualSegments;
+    }
+
+    function linkifiedSegmentsForText(
+      text: string,
+      baseStyle: Style,
+      options: TLinkifyOptions,
+      linkStyle: Style,
+    ): readonly TLogStyledSegment[] {
+      const clean = sanitizeInlineText(text);
+      if (!clean) return [];
+      return linkifyTextSegments(clean, options).map((segment) => ({
+        text: segment.text,
+        style: segment.href ? { ...baseStyle, ...linkStyle, href: segment.href } : baseStyle,
+      }));
+    }
+
+    function linkifiedSegmentsForLine(
+      index: number,
+      count: number,
+      baseStyle: Style,
+      baseStyleKey: string,
+      linkKey = linkifyStyleCacheKey(),
+      optionsKey = linkifyOptionsKey.value,
+    ): readonly TLogStyledSegment[] {
+      if (index < 0 || index >= count) return [];
+
+      const rawKey = lineKey(index);
+      const key = linkifyLineCacheKey(rawKey, baseStyleKey, linkKey, optionsKey);
+      const cached = linkifyLineCache.get(key);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.segments;
+      }
+
+      const segments = linkifiedSegmentsForText(
+        props.source.getLine(index),
+        baseStyle,
+        linkifyOptions(),
+        effectiveLinkStyle.value,
+      );
+      linkifyLineCache.set(key, {
+        key,
+        segments,
+        touchedAt: ++cacheClock,
+      });
+      return segments;
+    }
+
+    function linkifiedWrappedRowsForLine(
+      index: number,
+      count: number,
+      width: number,
+      baseStyle: Style,
+      baseStyleKey: string,
+      linkKey = linkifyStyleCacheKey(),
+      optionsKey = linkifyOptionsKey.value,
+    ): readonly TLogVisualRow[] {
+      if (index < 0 || index >= count) return [[]];
+      width = Math.max(1, Math.floor(width));
+      const rawKey = lineKey(index);
+      const key = linkifyWrapCacheKey(rawKey, width, baseStyleKey, linkKey, optionsKey);
+      const cached = linkifyWrapCache.get(key);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.visualRows;
+      }
+
+      const segments = linkifiedSegmentsForLine(
+        index,
+        count,
+        baseStyle,
+        baseStyleKey,
+        linkKey,
+        optionsKey,
+      );
+      const rows = wrapStyledSegmentsByCells(segments, width);
+      linkifyWrapCache.set(key, {
+        key,
+        visualRows: rows,
+        touchedAt: ++cacheClock,
+      });
+      return rows;
+    }
+
+    function linkifiedFixedRowForLine(
+      index: number,
+      count: number,
+      baseStyle: Style,
+      baseStyleKey: string,
+      clipX: number,
+      visibleW: number,
+      linkKey = linkifyStyleCacheKey(),
+      optionsKey = linkifyOptionsKey.value,
+    ): readonly TLogVisualSegment[] {
+      if (index < 0 || index >= count) return [];
+      const segments = linkifiedSegmentsForLine(
+        index,
+        count,
+        baseStyle,
+        baseStyleKey,
+        linkKey,
+        optionsKey,
+      );
+      return clipStyledSegmentsByCells(segments, clipX, clipX + visibleW);
     }
 
     function normalizedSearchQuery(): string {
@@ -2413,7 +2622,7 @@ export const TLogView = defineComponent({
       visibleStartCell: number,
     ): void {
       visibleLinksByRow.delete(y);
-      if (!linksEnabled()) return;
+      if (!visualLinksEnabled()) return;
 
       const rowLinks: TLogVisibleLinkSegment[] = [];
       let x = normalizedRect().x;
@@ -3739,9 +3948,9 @@ export const TLogView = defineComponent({
     );
 
     watch(
-      () => [props.ansi, props.links],
-      ([ansi, links]) => {
-        if (ansi && links) return;
+      () => [props.ansi, props.links, props.linkify],
+      () => {
+        if (visualLinksEnabled()) return;
         clearLinkFocus();
       },
     );
@@ -3771,7 +3980,10 @@ export const TLogView = defineComponent({
         () => props.visualIndexOptions?.maxMeasuredLines,
         () => props.ansi,
         () => props.links,
+        () => props.linkify,
+        () => linkifyOptionsKey.value,
         () => props.linkStyle,
+        () => effectiveLinkStyle.value,
         () => fullRect.value.w,
       ],
       () => {
@@ -3882,7 +4094,10 @@ export const TLogView = defineComponent({
         props.wrap,
         props.ansi,
         props.links,
-        props.linkStyle,
+        props.linkify,
+        linkifyOptionsKey.value,
+        effectiveAnsiLinkStyle.value,
+        effectiveLinkStyle.value,
         props.keyboardLinks,
         props.linkFocusStyle,
         props.highlightMatches,
@@ -3968,6 +4183,40 @@ export const TLogView = defineComponent({
               return;
             }
 
+            if (linkifyEnabled()) {
+              const linkifiedRows = linkifiedWrappedRowsForLine(
+                located.lineIndex,
+                count,
+                full.w,
+                base,
+                baseStyleKey,
+              );
+              if (
+                located.lineIndex === count - 1 &&
+                located.partIndex === linkifiedRows.length - 1 &&
+                y === r.y + r.h - 1
+              ) {
+                lastPaintedBottom = { index: located.lineIndex, lineKey: rawKey };
+              }
+              const visualSegments = clipVisualSegmentsByCells(
+                linkifiedRows[located.partIndex] ?? [],
+                clipX,
+                clipX + r.w,
+              );
+              const visibleStartCell =
+                wrappedAnsiRowStartCell(linkifiedRows, located.partIndex) + clipX;
+              const highlighted = applySearchHighlightsToSegments(
+                visualSegments,
+                located.lineIndex,
+                visibleStartCell,
+              );
+              recordVisibleLinks(y, highlighted, located.lineIndex, visibleStartCell);
+              writeStyledRow(
+                applyLinkFocusToSegments(highlighted, located.lineIndex, visibleStartCell),
+                y,
+              );
+              return;
+            }
             const wrappedRows = wrappedRowsForLine(located.lineIndex, count, full.w);
             if (
               located.lineIndex === count - 1 &&
@@ -4020,12 +4269,39 @@ export const TLogView = defineComponent({
             return;
           }
           if (props.highlightMatches && matchesByLine.has(idx)) {
+            if (linkifyEnabled()) {
+              const visualSegments = linkifiedFixedRowForLine(
+                idx,
+                count,
+                base,
+                baseStyleKey,
+                clipX,
+                r.w,
+              );
+              const highlighted = applySearchHighlightsToSegments(visualSegments, idx, clipX);
+              recordVisibleLinks(y, highlighted, idx, clipX);
+              writeStyledRow(applyLinkFocusToSegments(highlighted, idx, clipX), y);
+              return;
+            }
             const text = sanitizeInlineText(props.source.getLine(idx));
             const clipped = sliceByCellsRange(text, clipX, clipX + r.w);
             writeStyledRow(
               applySearchHighlightsToSegments(plainVisualSegments(clipped, base), idx, clipX),
               y,
             );
+            return;
+          }
+          if (linkifyEnabled()) {
+            const visualSegments = linkifiedFixedRowForLine(
+              idx,
+              count,
+              base,
+              baseStyleKey,
+              clipX,
+              r.w,
+            );
+            recordVisibleLinks(y, visualSegments, idx, clipX);
+            writeStyledRow(applyLinkFocusToSegments(visualSegments, idx, clipX), y);
             return;
           }
           const line = renderLine(idx, count, full.w, clipX, r.w);
@@ -4041,6 +4317,8 @@ export const TLogView = defineComponent({
           trimAnsiLineCache();
           trimAnsiWrapCache();
           trimAnsiRowCache();
+          trimLinkifyLineCache();
+          trimLinkifyWrapCache();
           return;
         }
         for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
@@ -4050,6 +4328,8 @@ export const TLogView = defineComponent({
         trimAnsiLineCache();
         trimAnsiWrapCache();
         trimAnsiRowCache();
+        trimLinkifyLineCache();
+        trimLinkifyWrapCache();
       },
     }));
 

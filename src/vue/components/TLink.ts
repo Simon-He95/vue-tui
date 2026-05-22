@@ -9,6 +9,7 @@ import type { TerminalLinkOpener } from "./link/host.js";
 import { computed, defineComponent, h, inject, ref } from "vue";
 import { sanitizeDomHref } from "../../core/hyperlink.js";
 import { useTerminal } from "../composables/use-terminal.js";
+import { TuiThemeContextKey, tuiDefaultTheme } from "../theme.js";
 import { sanitizeInlineText, textCellWidth } from "../utils/text.js";
 import { TerminalLinkOpenerContextKey } from "./link/host.js";
 import { TText } from "./TText.js";
@@ -76,6 +77,7 @@ export const TLink = defineComponent({
     focusStyle: { type: Object as PropType<Style>, default: undefined },
     activeStyle: { type: Object as PropType<Style>, default: undefined },
     disabled: { type: Boolean, default: false },
+    visited: { type: Boolean, default: false },
     openMode: {
       type: String as PropType<TLinkOpenMode>,
       default: "host",
@@ -105,6 +107,7 @@ export const TLink = defineComponent({
       TerminalLinkOpenerContextKey,
       ref<TerminalLinkOpener | undefined>(undefined),
     );
+    const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
     const focused = ref(false);
     const hovered = ref(false);
     const active = ref(false);
@@ -122,11 +125,20 @@ export const TLink = defineComponent({
     const textStyle = computed<Style>(() => {
       const visual = mergeStyle(
         defaultStyle.value,
-        { fg: "cyanBright", underline: true },
+        theme.value.components.TLink?.style,
+        props.visited ? theme.value.components.TLink?.visitedStyle : undefined,
         props.style,
         props.disabled ? { dim: true } : undefined,
-        interactiveMode.value && hovered.value ? props.hoverStyle : undefined,
-        interactiveMode.value && focused.value ? props.focusStyle : undefined,
+        interactiveMode.value && hovered.value
+          ? mergeStyle(
+              theme.value.components.TLink?.hoverStyle,
+              theme.value.components.TLink?.hoverUnderline ? { underline: true } : undefined,
+              props.hoverStyle,
+            )
+          : undefined,
+        interactiveMode.value && focused.value
+          ? mergeStyle(theme.value.components.TLink?.focusStyle, props.focusStyle)
+          : undefined,
         interactiveMode.value && active.value ? props.activeStyle : undefined,
       );
       return mergeStyle(

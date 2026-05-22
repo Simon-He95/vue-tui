@@ -13,6 +13,7 @@ import type {
 } from "../../selection/terminal-selection.js";
 import type { ImeAnchor, LayoutContext, TerminalContext } from "../context.js";
 import type { TInputPlugin } from "./input/plugins/types.js";
+import type { TuiThemeOverrides } from "../theme.js";
 import {
   computed,
   defineComponent,
@@ -59,6 +60,7 @@ import {
   TerminalLinkOpenerContextKey,
   type TerminalLinkOpenerLike,
 } from "./link/host.js";
+import { createTheme, TuiThemeContextKey } from "../theme.js";
 import { TRenderPlane } from "./TRenderPlane.js";
 import { createCopyToastState } from "./terminal-provider/copy-toast.js";
 import { createTerminalPortals } from "./terminal-provider/portals.js";
@@ -89,6 +91,10 @@ export const TerminalProvider = defineComponent({
       default: "default",
     },
     defaultStyle: { type: Object as PropType<Style>, default: () => ({}) },
+    theme: {
+      type: Object as PropType<TuiThemeOverrides>,
+      default: undefined,
+    },
     autoResize: { type: Boolean, default: false },
     minCols: { type: Number, default: 1 },
     minRows: { type: Number, default: 1 },
@@ -143,6 +149,7 @@ export const TerminalProvider = defineComponent({
     const linkOpener = computed(
       () => normalizeTerminalLinkOpener(props.linkOpener) ?? defaultLinkOpener,
     );
+    const theme = computed(() => createTheme(props.theme));
     const rendererCapabilities = shallowRef(DOM_RENDERER_CAPABILITIES);
     const events = shallowRef<EventManager | null>(null);
     const imeTimeline = shallowReactive<
@@ -313,6 +320,7 @@ export const TerminalProvider = defineComponent({
     provide(TInputPluginsContextKey, toRef(props, "inputPlugins") as any);
     provide(TPathPickerProviderContextKey, toRef(props, "pathPickerProvider") as any);
     provide(TerminalLinkOpenerContextKey, linkOpener as any);
+    provide(TuiThemeContextKey, theme as any);
     const initialWidthProvider = props.widthProvider;
     watch(
       () => props.widthProvider,

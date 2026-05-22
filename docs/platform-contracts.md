@@ -37,6 +37,28 @@ createDomRenderer(terminal, container, {
 
 当前 ARIA contract 不承诺把每个 terminal cell 映射成 DOM grid。DOM renderer 的 DOM rows 是 renderer implementation detail；屏幕阅读器 contract 是 container 级语义、focusability、label/live-region 选择，以及应用层提供的 keyboard flow。
 
+## Keyboard And Link Protocols
+
+组件键盘契约按“局部组件拥有局部按键”处理，不注册全局 shortcut：
+
+| 组件族                        | 默认键盘行为                                                                      |
+| ----------------------------- | --------------------------------------------------------------------------------- |
+| `TInput` / `TPasswordInput`   | 文本编辑、IME、paste、光标移动；宿主特定快捷键走 input plugin                     |
+| `TList` / `TSelect`           | Arrow keys 移动当前项，Enter 选择；multi-select 使用 Space 切换                   |
+| `TLink`                       | 默认 Enter 激活；`activationKeys` 可改；`modifierClick` 只约束 pointer activation |
+| `TLogView keyboardLinks=true` | 只在当前 visible links 内处理 Tab / Shift+Tab / Enter / Escape                    |
+| `TCommandPalette`             | ArrowUp / ArrowDown 移动，Enter select（宿主关闭），Escape close                  |
+| form controls                 | Space / Enter 切换或选择；`TSlider` 使用 ArrowLeft / ArrowRight 调整              |
+| overlays                      | `TContextMenu` Enter select，Escape close；popover/tooltip 不抢占键盘             |
+
+link 在 DOM 和 CLI 的差异：
+
+- DOM renderer 只有启用 `domRendererOptions.links` 后才把 `Style.href` 渲染成 `<a>`。
+- `TLink openMode="host"` 默认阻止 native anchor activation，并调用显式 `linkOpener`。
+- `TLink openMode="event"` 只 emit `activate`，由应用决定是否打开、复制或路由。
+- CLI/stdout renderer 只输出 safe OSC8 hyperlink，不捕获 terminal emulator 的 Ctrl/Cmd+Click。
+- 终端 selection 与链接点击冲突时，组件只负责 emit link/pointer 事件；是否 open/copy/preview 由宿主 action 决定。
+
 ## Renderer Capabilities
 
 组件通过 `RendererCapabilities` 判断 renderer 能力：

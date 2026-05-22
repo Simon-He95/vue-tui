@@ -1,12 +1,26 @@
 import {
   TerminalProvider,
   TBox,
+  TCheckbox,
+  TCommandPalette,
+  TDataTable,
+  TFormField,
+  TLinkifyText,
+  TTable,
   TText,
+  TTree,
   createTInputHostPlugin,
   createTerminal,
+  createTheme,
+  computeCommandPaletteMatchRanges as computeRootCommandPaletteMatchRanges,
+  linkifyTextSegments,
   type Style,
+  type TTableColumn,
   type Terminal,
   type TInputHostAdapter,
+  type TLinkifyOptions,
+  type TCommandPaletteItem as RootTCommandPaletteItem,
+  type TCommandPaletteMatchRange as RootTCommandPaletteMatchRange,
 } from "@simon_he/vue-tui";
 
 import { sanitizeDomHref } from "@simon_he/vue-tui/core";
@@ -27,7 +41,10 @@ import {
   TRenderLayer,
   TRenderPlane,
   TTransition,
+  computeCommandPaletteMatchRanges as computeVueCommandPaletteMatchRanges,
   useTerminal,
+  type TCommandPaletteItem as VueTCommandPaletteItem,
+  type TCommandPaletteMatchRange as VueTCommandPaletteMatchRange,
   type TInputPlugin,
 } from "@simon_he/vue-tui/vue";
 
@@ -53,6 +70,9 @@ import {
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import {
   TAgentTranscript,
+  computeCommandPaletteMatchRanges,
+  type TCommandPaletteItem as AgentTCommandPaletteItem,
+  type TCommandPaletteMatchRange,
   TThinkingView,
   TToolCallView,
   TToolLogView,
@@ -76,11 +96,44 @@ const hostAdapter: TInputHostAdapter = {
   isTerminalLike: false,
 };
 const hostPlugin = createTInputHostPlugin(hostAdapter);
+const linkifyOptions: TLinkifyOptions = { protocols: ["https"], allowRelative: true };
+const linkified = linkifyTextSegments("see https://example.com", linkifyOptions);
+const theme = createTheme({ colors: { link: "cyanBright" } });
+const tableColumns: TTableColumn[] = [{ key: "id", label: "ID", width: 4 }];
+const commandPaletteItem: RootTCommandPaletteItem = {
+  label: "Open",
+  detail: "workspace",
+  keywords: ["project"],
+  disabled: false,
+  value: { id: "open" },
+};
+const vueCommandPaletteItem: VueTCommandPaletteItem = {
+  label: "Open",
+  detail: "workspace",
+};
+const rootCommandPaletteRange: RootTCommandPaletteMatchRange = { start: 0, end: 4 };
+const vueCommandPaletteRange: VueTCommandPaletteMatchRange = { start: 0, end: 4 };
+const rootCommandPaletteRanges = computeRootCommandPaletteMatchRanges("Open workspace", "open");
+const vueCommandPaletteRanges = computeVueCommandPaletteMatchRanges("Open workspace", "open");
+const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
+const agentCommandPaletteItem: AgentTCommandPaletteItem = {
+  label: "Open",
+  detailAccentRanges: [agentCommandPaletteRange],
+  keywords: ["workspace"],
+};
+const agentCommandPaletteRanges = computeCommandPaletteMatchRanges("Open workspace", "open");
 
 console.log(
   TerminalProvider,
   TBox,
+  TCheckbox,
+  TCommandPalette,
+  TDataTable,
+  TFormField,
+  TLinkifyText,
+  TTable,
   TText,
+  TTree,
   TMarkdownText,
   TLogView,
   TVirtualList,
@@ -117,6 +170,17 @@ console.log(
   runtime,
   plugin,
   hostPlugin,
+  linkified,
+  theme,
+  tableColumns,
+  commandPaletteItem,
+  vueCommandPaletteItem,
+  rootCommandPaletteRange,
+  vueCommandPaletteRange,
+  rootCommandPaletteRanges,
+  vueCommandPaletteRanges,
+  agentCommandPaletteItem,
+  agentCommandPaletteRanges,
 );
 
 const driver: StdinDriver | null = null;

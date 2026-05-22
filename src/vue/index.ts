@@ -14,6 +14,17 @@ export type {
 } from "./components/input/plugins/types.js";
 export { TAnchor } from "./components/TAnchor.js";
 export { TBox } from "./components/TBox.js";
+export { computeCommandPaletteMatchRanges, TCommandPalette } from "./components/TCommandPalette.js";
+export type {
+  TCommandPaletteItem,
+  TCommandPaletteMatchRange,
+} from "./components/TCommandPalette.js";
+export { TDataTable } from "./components/TDataTable.js";
+export type {
+  TDataTableRowSelectPayload,
+  TDataTableSortChangePayload,
+  TDataTableSortDirection,
+} from "./components/TDataTable.js";
 export { TDebugOverlay } from "./components/TDebugOverlay.js";
 export { TDialog } from "./components/TDialog.js";
 export type {
@@ -22,11 +33,22 @@ export type {
 } from "./components/TerminalProvider.js";
 export { TerminalProvider } from "./components/TerminalProvider.js";
 export { TFlow } from "./components/TFlow.js";
+export {
+  TAutocompleteInput,
+  TCheckbox,
+  TFormField,
+  TPasswordInput,
+  TRadioGroup,
+  TSlider,
+  TSwitch,
+} from "./components/TForm.js";
+export type { TAutocompleteSelectPayload, TRadioOption } from "./components/TForm.js";
 export { TInput } from "./components/TInput.js";
 export { TInputBox } from "./components/TInputBox.js";
 export { lintJsonText, TJsonEditor } from "./components/TJsonEditor.js";
 export { TList } from "./components/TList.js";
 export { TLink } from "./components/TLink.js";
+export { TLinkifyText } from "./components/TLinkifyText.js";
 export type {
   TLinkActivatePayload,
   TLinkActivationSource,
@@ -41,7 +63,13 @@ export type {
   TerminalLinkOpenerLike,
   TerminalLinkOpenSource,
 } from "./components/link/host.js";
+export { linkifyTextSegments } from "./linkify.js";
+export type { TLinkifyOptions, TLinkifyProtocol, TLinkifySegment } from "./linkify.js";
 export { TMultilineModal } from "./components/TMultilineModal.js";
+export { TBreadcrumb, TKeyHint, TStatusBar } from "./components/TNavigation.js";
+export type { TBreadcrumbItem, TBreadcrumbSelectPayload } from "./components/TNavigation.js";
+export { TContextMenu, TPopover, TTooltip } from "./components/TOverlay.js";
+export type { TContextMenuItem, TContextMenuSelectPayload } from "./components/TOverlay.js";
 export { TPathPicker } from "./components/TPathPicker.js";
 export { TRenderLayer } from "./components/TRenderLayer.js";
 export { TRenderPlane } from "./components/TRenderPlane.js";
@@ -51,8 +79,17 @@ export type {
   TSelectMultipleChangePayload,
   TSelectMultipleEmitMode,
 } from "./components/TSelect.js";
+export { TTable } from "./components/TTable.js";
+export type {
+  TTableColumn,
+  TTableHeaderClickPayload,
+  TTableRow,
+  TTableRowClickPayload,
+} from "./components/TTable.js";
 export { TText } from "./components/TText.js";
 export { TTransition } from "./components/TTransition.js";
+export { TTree } from "./components/TTree.js";
+export type { TTreeNode, TTreeSelectPayload, TTreeTogglePayload } from "./components/TTree.js";
 export { TView } from "./components/TView.js";
 
 export { useLayout } from "./composables/use-layout.js";
@@ -62,6 +99,13 @@ export { useTerminalNode } from "./composables/use-terminal-node.js";
 export { useTerminal } from "./composables/use-terminal.js";
 export { useVisibility } from "./composables/use-visibility.js";
 export type { TuiMarkdownTheme, TuiMarkdownThemeOverrides } from "./markdown/theme.js";
+export { createTheme, tuiDefaultTheme } from "./theme.js";
+export type {
+  TuiTheme,
+  TuiThemeColorTokens,
+  TuiThemeComponentTokens,
+  TuiThemeOverrides,
+} from "./theme.js";
 
 export type {
   LayoutContext,

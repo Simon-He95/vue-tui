@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { createStdinDriver } from "../src/cli.js";
+import { createTheme } from "../src/index.js";
 import {
   createTerminalApp,
   defineComponent,
@@ -154,6 +155,100 @@ describe("TLink", () => {
         cellX: undefined,
         cellY: undefined,
       });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("applies theme focus style when focused", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          autoFocus: true,
+        }),
+      20,
+      2,
+    );
+
+    try {
+      await nextTick();
+      expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not re-enable underline on hover when hoverUnderline is false", async () => {
+    const theme = createTheme({
+      components: {
+        TLink: {
+          underline: false,
+          hoverUnderline: false,
+        },
+      },
+    });
+    expect(theme.components.TLink?.style?.underline).toBe(false);
+    expect(theme.components.TLink?.visitedStyle?.underline).toBe(false);
+    expect(theme.components.TLink?.hoverStyle?.underline).toBe(false);
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+        }),
+      20,
+      2,
+      { theme },
+    );
+
+    try {
+      await nextTick();
+      expect(mounted.terminal.getCell(0, 0).style.underline).toBe(false);
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("mousemove", { clientX: 0, clientY: 0, bubbles: true }));
+      await nextTick();
+      await Promise.resolve();
+
+      expect(mounted.terminal.getCell(0, 0).style.underline).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("lets local style override visited theme style", async () => {
+    const theme = createTheme({
+      components: {
+        TLink: {
+          visitedStyle: { fg: "magentaBright", underline: true },
+        },
+      },
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TLink, {
+          x: 0,
+          y: 0,
+          href: "https://example.com",
+          label: "Example",
+          visited: true,
+          style: { fg: "redBright" },
+        }),
+      20,
+      2,
+      { theme },
+    );
+
+    try {
+      await nextTick();
+      expect(mounted.terminal.getCell(0, 0).style.fg).toBe("redBright");
     } finally {
       mounted.unmount();
     }

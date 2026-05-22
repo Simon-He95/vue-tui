@@ -5,15 +5,24 @@
 ## 目录
 
 - [TAnchor](#tanchor)
+- [TAutocompleteInput](#tautocompleteinput)
 - [TBox](#tbox)
+- [TBreadcrumb](#tbreadcrumb)
+- [TCheckbox](#tcheckbox)
+- [TCommandPalette](#tcommandpalette)
+- [TContextMenu](#tcontextmenu)
+- [TDataTable](#tdatatable)
 - [TDebugOverlay](#tdebugoverlay)
 - [TDialog](#tdialog)
 - [TerminalProvider](#terminalprovider)
 - [TFlow](#tflow)
+- [TFormField](#tformfield)
 - [TInput](#tinput)
 - [TInputBox](#tinputbox)
 - [TJsonEditor](#tjsoneditor)
+- [TKeyHint](#tkeyhint)
 - [TLink](#tlink)
+- [TLinkifyText](#tlinkifytext)
 - [TList](#tlist)
 - [TLogLinksPanel](#tloglinkspanel)
 - [TLogMinimap](#tlogminimap)
@@ -25,14 +34,23 @@
 - [TLogVirtualLinksPanel](#tlogvirtuallinkspanel)
 - [TLogVirtualSearchResults](#tlogvirtualsearchresults)
 - [TMultilineModal](#tmultilinemodal)
+- [TPasswordInput](#tpasswordinput)
 - [TPathPicker](#tpathpicker)
+- [TPopover](#tpopover)
+- [TRadioGroup](#tradiogroup)
 - [TRenderLayer](#trenderlayer)
 - [TRenderPlane](#trenderplane)
 - [TRouterView](#trouterview)
 - [TSelect](#tselect)
+- [TSlider](#tslider)
+- [TStatusBar](#tstatusbar)
+- [TSwitch](#tswitch)
+- [TTable](#ttable)
 - [TText](#ttext)
+- [TTooltip](#ttooltip)
 - [TTranscriptView](#ttranscriptview)
 - [TTransition](#ttransition)
+- [TTree](#ttree)
 - [TView](#tview)
 - [TVirtualList](#tvirtuallist)
 
@@ -83,6 +101,41 @@ Import: `@simon_he/vue-tui/vue`
 | <code>blurCapture</code>        | —       | —    |
 | <code>blur</code>               | —       | —    |
 
+## TAutocompleteInput
+
+源码：`src/vue/components/TForm.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                               | 类型                           | 默认值                                    | 必填 | 说明 |
+| ---------------------------------- | ------------------------------ | ----------------------------------------- | ---- | ---- |
+| <code>x</code>                     | <code>number</code>            | —                                         | 是   | —    |
+| <code>y</code>                     | <code>number</code>            | —                                         | 是   | —    |
+| <code>w</code>                     | <code>number</code>            | —                                         | 是   | —    |
+| <code>h</code>                     | <code>number</code>            | <code>5</code>                            | 否   | —    |
+| <code>zIndex</code>                | <code>number</code>            | <code>0</code>                            | 否   | —    |
+| <code>modelValue</code>            | <code>string</code>            | —                                         | 是   | —    |
+| <code>suggestions</code>           | <code>readonly string[]</code> | <code>() =&gt; []</code>                  | 否   | —    |
+| <code>highlightedIndex</code>      | <code>number</code>            | <code>0</code>                            | 否   | —    |
+| <code>placeholder</code>           | <code>string</code>            | <code>&quot;&quot;</code>                 | 否   | —    |
+| <code>style</code>                 | <code>Style</code>             | <code>undefined</code>                    | 否   | —    |
+| <code>suggestionStyle</code>       | <code>Style</code>             | <code>undefined</code>                    | 否   | —    |
+| <code>activeSuggestionStyle</code> | <code>Style</code>             | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
+
+### Events
+
+| 名称                                 | Payload                                                         | 说明 |
+| ------------------------------------ | --------------------------------------------------------------- | ---- |
+| <code>update:modelValue</code>       | <code>(\_value: string) =&gt; true</code>                       | —    |
+| <code>update:highlightedIndex</code> | <code>(\_index: number) =&gt; true</code>                       | —    |
+| <code>input</code>                   | <code>(\_value: string) =&gt; true</code>                       | —    |
+| <code>change</code>                  | <code>(\_value: string) =&gt; true</code>                       | —    |
+| <code>select</code>                  | <code>(\_payload: TAutocompleteSelectPayload) =&gt; true</code> | —    |
+
 ## TBox
 
 源码：`src/vue/components/TBox.ts`
@@ -117,6 +170,185 @@ Import: `@simon_he/vue-tui`
 | <code>pointerenter</code>        | —       | —    |
 | <code>pointerleaveCapture</code> | —       | —    |
 | <code>pointerleave</code>        | —       | —    |
+
+## TBreadcrumb
+
+源码：`src/vue/components/TNavigation.ts`
+
+API maturity: **Advanced**
+
+Import: `@simon_he/vue-tui/vue`
+
+### Props
+
+| 名称                       | 类型                                    | 默认值                                 | 必填 | 说明 |
+| -------------------------- | --------------------------------------- | -------------------------------------- | ---- | ---- |
+| <code>x</code>             | <code>number</code>                     | —                                      | 是   | —    |
+| <code>y</code>             | <code>number</code>                     | —                                      | 是   | —    |
+| <code>w</code>             | <code>number</code>                     | —                                      | 是   | —    |
+| <code>zIndex</code>        | <code>number</code>                     | <code>0</code>                         | 否   | —    |
+| <code>items</code>         | <code>readonly TBreadcrumbItem[]</code> | —                                      | 是   | —    |
+| <code>separator</code>     | <code>string</code>                     | <code>&quot;/&quot;</code>             | 否   | —    |
+| <code>style</code>         | <code>Style</code>                      | <code>undefined</code>                 | 否   | —    |
+| <code>activeStyle</code>   | <code>Style</code>                      | <code>() =&gt; ({ bold: true })</code> | 否   | —    |
+| <code>disabledStyle</code> | <code>Style</code>                      | <code>() =&gt; ({ dim: true })</code>  | 否   | —    |
+
+### Events
+
+| 名称                | Payload                                                       | 说明 |
+| ------------------- | ------------------------------------------------------------- | ---- |
+| <code>select</code> | <code>(\_payload: TBreadcrumbSelectPayload) =&gt; true</code> | —    |
+
+## TCheckbox
+
+源码：`src/vue/components/TForm.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                       | 类型                 | 默认值                                | 必填 | 说明 |
+| -------------------------- | -------------------- | ------------------------------------- | ---- | ---- |
+| <code>x</code>             | <code>number</code>  | —                                     | 是   | —    |
+| <code>y</code>             | <code>number</code>  | —                                     | 是   | —    |
+| <code>w</code>             | <code>number</code>  | —                                     | 是   | —    |
+| <code>zIndex</code>        | <code>number</code>  | <code>0</code>                        | 否   | —    |
+| <code>modelValue</code>    | <code>boolean</code> | <code>false</code>                    | 否   | —    |
+| <code>label</code>         | <code>string</code>  | <code>&quot;&quot;</code>             | 否   | —    |
+| <code>disabled</code>      | <code>boolean</code> | <code>false</code>                    | 否   | —    |
+| <code>style</code>         | <code>Style</code>   | <code>undefined</code>                | 否   | —    |
+| <code>checkedStyle</code>  | <code>Style</code>   | <code>undefined</code>                | 否   | —    |
+| <code>disabledStyle</code> | <code>Style</code>   | <code>() =&gt; ({ dim: true })</code> | 否   | —    |
+
+### Events
+
+| 名称                           | Payload                                    | 说明 |
+| ------------------------------ | ------------------------------------------ | ---- |
+| <code>update:modelValue</code> | <code>(\_value: boolean) =&gt; true</code> | —    |
+| <code>change</code>            | <code>(\_value: boolean) =&gt; true</code> | —    |
+
+## TCommandPalette
+
+源码：`src/vue/components/TCommandPalette.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                             | 类型                                        | 默认值                              | 必填 | 说明 |
+| -------------------------------- | ------------------------------------------- | ----------------------------------- | ---- | ---- |
+| <code>modelValue</code>          | <code>boolean</code>                        | —                                   | 是   | —    |
+| <code>title</code>               | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
+| <code>initialQuery</code>        | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
+| <code>items</code>               | <code>readonly TCommandPaletteItem[]</code> | —                                   | 是   | —    |
+| <code>selectedIndex</code>       | <code>number</code>                         | <code>undefined</code>              | 否   | —    |
+| <code>showRowDetails</code>      | <code>boolean</code>                        | <code>false</code>                  | 否   | —    |
+| <code>placeholder</code>         | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
+| <code>noMatchesText</code>       | <code>string</code>                         | <code>&quot;No matches&quot;</code> | 否   | —    |
+| <code>hint</code>                | <code>string</code>                         | <code>&quot;&quot;</code>           | 否   | —    |
+| <code>w</code>                   | <code>number</code>                         | <code>72</code>                     | 否   | —    |
+| <code>h</code>                   | <code>number</code>                         | <code>18</code>                     | 否   | —    |
+| <code>chromeStyle</code>         | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>inputStyle</code>          | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>listStyle</code>           | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>bodyStyle</code>           | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>highlightStyle</code>      | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>matchStyle</code>          | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>highlightMatchStyle</code> | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>dividerStyle</code>        | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>hintStyle</code>           | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>detailStyle</code>         | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+| <code>emptyStyle</code>          | <code>Style</code>                          | <code>undefined</code>              | 否   | —    |
+
+### Events
+
+| 名称                              | Payload | 说明 |
+| --------------------------------- | ------- | ---- |
+| <code>update:modelValue</code>    | —       | —    |
+| <code>update:selectedIndex</code> | —       | —    |
+| <code>select</code>               | —       | —    |
+| <code>close</code>                | —       | —    |
+
+## TContextMenu
+
+源码：`src/vue/components/TOverlay.ts`
+
+API maturity: **Advanced**
+
+Import: `@simon_he/vue-tui/vue`
+
+### Props
+
+| 名称                        | 类型                                     | 默认值                                    | 必填 | 说明                                                                     |
+| --------------------------- | ---------------------------------------- | ----------------------------------------- | ---- | ------------------------------------------------------------------------ |
+| <code>modelValue</code>     | <code>boolean</code>                     | —                                         | 是   | —                                                                        |
+| <code>x</code>              | <code>number</code>                      | —                                         | 是   | Caller-owned x position; no viewport clamp or flip placement is applied. |
+| <code>y</code>              | <code>number</code>                      | —                                         | 是   | Caller-owned y position; no viewport clamp or flip placement is applied. |
+| <code>w</code>              | <code>number</code>                      | <code>24</code>                           | 否   | —                                                                        |
+| <code>zIndex</code>         | <code>number</code>                      | <code>20</code>                           | 否   | —                                                                        |
+| <code>items</code>          | <code>readonly TContextMenuItem[]</code> | —                                         | 是   | —                                                                        |
+| <code>selectedIndex</code>  | <code>number</code>                      | <code>undefined</code>                    | 否   | —                                                                        |
+| <code>closeOnOutside</code> | <code>boolean</code>                     | <code>true</code>                         | 否   | —                                                                        |
+| <code>style</code>          | <code>Style</code>                       | <code>undefined</code>                    | 否   | —                                                                        |
+| <code>activeStyle</code>    | <code>Style</code>                       | <code>() =&gt; ({ inverse: true })</code> | 否   | —                                                                        |
+| <code>disabledStyle</code>  | <code>Style</code>                       | <code>() =&gt; ({ dim: true })</code>     | 否   | —                                                                        |
+
+### Events
+
+| 名称                              | Payload                                                        | 说明 |
+| --------------------------------- | -------------------------------------------------------------- | ---- |
+| <code>update:modelValue</code>    | <code>(\_value: boolean) =&gt; true</code>                     | —    |
+| <code>update:selectedIndex</code> | <code>(\_index: number) =&gt; true</code>                      | —    |
+| <code>select</code>               | <code>(\_payload: TContextMenuSelectPayload) =&gt; true</code> | —    |
+| <code>close</code>                | <code>() =&gt; true</code>                                     | —    |
+
+## TDataTable
+
+源码：`src/vue/components/TDataTable.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                        | 类型                                                                       | 默认值                           | 必填 | 说明                                                                                                                                |
+| --------------------------- | -------------------------------------------------------------------------- | -------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| <code>x</code>              | <code>number</code>                                                        | —                                | 是   | —                                                                                                                                   |
+| <code>y</code>              | <code>number</code>                                                        | —                                | 是   | —                                                                                                                                   |
+| <code>w</code>              | <code>number</code>                                                        | —                                | 是   | —                                                                                                                                   |
+| <code>h</code>              | <code>number</code>                                                        | —                                | 是   | —                                                                                                                                   |
+| <code>zIndex</code>         | <code>number</code>                                                        | <code>0</code>                   | 否   | —                                                                                                                                   |
+| <code>columns</code>        | <code>readonly TTableColumn[]</code>                                       | —                                | 是   | —                                                                                                                                   |
+| <code>rows</code>           | <code>readonly TTableRow[]</code>                                          | —                                | 是   | TDataTable filters/sorts rows and renders the top slice through non-virtual<br>TTable; it does not own scrollTop or virtualization. |
+| <code>rowKey</code>         | <code>string &#124; ((row: TTableRow, index: number) =&gt; unknown)</code> | <code>undefined</code>           | 否   | —                                                                                                                                   |
+| <code>selectedRowKey</code> | <code>unknown</code>                                                       | <code>undefined</code>           | 否   | —                                                                                                                                   |
+| <code>sortBy</code>         | <code>string</code>                                                        | <code>&quot;&quot;</code>        | 否   | Sorts by the raw row value at this key; column format only affects display and filtering.                                           |
+| <code>sortDirection</code>  | <code>TDataTableSortDirection</code>                                       | <code>&quot;asc&quot;</code>     | 否   | —                                                                                                                                   |
+| <code>sortable</code>       | <code>boolean</code>                                                       | <code>false</code>               | 否   | —                                                                                                                                   |
+| <code>filter</code>         | <code>string</code>                                                        | <code>&quot;&quot;</code>        | 否   | —                                                                                                                                   |
+| <code>filterable</code>     | <code>boolean</code>                                                       | <code>false</code>               | 否   | —                                                                                                                                   |
+| <code>selectable</code>     | <code>boolean</code>                                                       | <code>false</code>               | 否   | —                                                                                                                                   |
+| <code>border</code>         | <code>boolean</code>                                                       | <code>false</code>               | 否   | —                                                                                                                                   |
+| <code>style</code>          | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                                                                   |
+| <code>headerStyle</code>    | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                                                                   |
+| <code>borderStyle</code>    | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                                                                   |
+| <code>selectedStyle</code>  | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                                                                   |
+| <code>emptyText</code>      | <code>string</code>                                                        | <code>&quot;No rows&quot;</code> | 否   | —                                                                                                                                   |
+
+### Events
+
+| 名称                               | Payload                                                          | 说明 |
+| ---------------------------------- | ---------------------------------------------------------------- | ---- |
+| <code>update:selectedRowKey</code> | <code>(\_key: unknown) =&gt; true</code>                         | —    |
+| <code>update:sortBy</code>         | <code>(\_key: string) =&gt; true</code>                          | —    |
+| <code>update:sortDirection</code>  | <code>(\_direction: TDataTableSortDirection) =&gt; true</code>   | —    |
+| <code>sortChange</code>            | <code>(\_payload: TDataTableSortChangePayload) =&gt; true</code> | —    |
+| <code>rowSelect</code>             | <code>(\_payload: TDataTableRowSelectPayload) =&gt; true</code>  | —    |
 
 ## TDebugOverlay
 
@@ -200,6 +432,7 @@ Import: `@simon_he/vue-tui`
 | <code>rows</code>               | <code>number</code>                                                 | —                                               | 是   | —    |
 | <code>widthProvider</code>      | <code>WidthProvider</code>                                          | <code>&quot;default&quot;</code>                | 否   | —    |
 | <code>defaultStyle</code>       | <code>Style</code>                                                  | <code>() =&gt; ({})</code>                      | 否   | —    |
+| <code>theme</code>              | <code>TuiThemeOverrides</code>                                      | <code>undefined</code>                          | 否   | —    |
 | <code>autoResize</code>         | <code>boolean</code>                                                | <code>false</code>                              | 否   | —    |
 | <code>minCols</code>            | <code>number</code>                                                 | <code>1</code>                                  | 否   | —    |
 | <code>minRows</code>            | <code>number</code>                                                 | <code>1</code>                                  | 否   | —    |
@@ -240,6 +473,37 @@ Import: `@simon_he/vue-tui/vue`
 | <code>gap</code>       | <code>number</code>    | <code>0</code>                    | 否   | —    |
 | <code>itemSize</code>  | <code>number</code>    | <code>1</code>                    | 否   | —    |
 | <code>zIndex</code>    | <code>number</code>    | <code>0</code>                    | 否   | —    |
+
+### Events
+
+—
+
+## TFormField
+
+源码：`src/vue/components/TForm.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                    | 类型                 | 默认值                    | 必填 | 说明 |
+| ----------------------- | -------------------- | ------------------------- | ---- | ---- |
+| <code>x</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>y</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>w</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>h</code>          | <code>number</code>  | —                         | 是   | —    |
+| <code>zIndex</code>     | <code>number</code>  | <code>0</code>            | 否   | —    |
+| <code>label</code>      | <code>string</code>  | <code>&quot;&quot;</code> | 否   | —    |
+| <code>help</code>       | <code>string</code>  | <code>&quot;&quot;</code> | 否   | —    |
+| <code>error</code>      | <code>string</code>  | <code>&quot;&quot;</code> | 否   | —    |
+| <code>required</code>   | <code>boolean</code> | <code>false</code>        | 否   | —    |
+| <code>disabled</code>   | <code>boolean</code> | <code>false</code>        | 否   | —    |
+| <code>style</code>      | <code>Style</code>   | <code>undefined</code>    | 否   | —    |
+| <code>labelStyle</code> | <code>Style</code>   | <code>undefined</code>    | 否   | —    |
+| <code>helpStyle</code>  | <code>Style</code>   | <code>undefined</code>    | 否   | —    |
+| <code>errorStyle</code> | <code>Style</code>   | <code>undefined</code>    | 否   | —    |
 
 ### Events
 
@@ -403,6 +667,31 @@ Import: `@simon_he/vue-tui/vue`
 | <code>lintChange</code>        | —       | —    |
 | <code>validationError</code>   | —       | —    |
 
+## TKeyHint
+
+源码：`src/vue/components/TNavigation.ts`
+
+API maturity: **Advanced**
+
+Import: `@simon_he/vue-tui/vue`
+
+### Props
+
+| 名称                    | 类型                | 默认值                                    | 必填 | 说明 |
+| ----------------------- | ------------------- | ----------------------------------------- | ---- | ---- |
+| <code>x</code>          | <code>number</code> | —                                         | 是   | —    |
+| <code>y</code>          | <code>number</code> | —                                         | 是   | —    |
+| <code>w</code>          | <code>number</code> | <code>undefined</code>                    | 否   | —    |
+| <code>zIndex</code>     | <code>number</code> | <code>0</code>                            | 否   | —    |
+| <code>combo</code>      | <code>string</code> | —                                         | 是   | —    |
+| <code>label</code>      | <code>string</code> | —                                         | 是   | —    |
+| <code>style</code>      | <code>Style</code>  | <code>undefined</code>                    | 否   | —    |
+| <code>comboStyle</code> | <code>Style</code>  | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
+
+### Events
+
+—
+
 ## TLink
 
 源码：`src/vue/components/TLink.ts`
@@ -427,6 +716,7 @@ Import: `@simon_he/vue-tui`
 | <code>focusStyle</code>     | <code>Style</code>              | <code>undefined</code>                        | 否   | —    |
 | <code>activeStyle</code>    | <code>Style</code>              | <code>undefined</code>                        | 否   | —    |
 | <code>disabled</code>       | <code>boolean</code>            | <code>false</code>                            | 否   | —    |
+| <code>visited</code>        | <code>boolean</code>            | <code>false</code>                            | 否   | —    |
 | <code>openMode</code>       | <code>TLinkOpenMode</code>      | <code>&quot;host&quot;</code>                 | 否   | —    |
 | <code>activationKeys</code> | <code>readonly string[]</code>  | <code>() =&gt; DEFAULT_ACTIVATION_KEYS</code> | 否   | —    |
 | <code>modifierClick</code>  | <code>TLinkModifierClick</code> | <code>&quot;none&quot;</code>                 | 否   | —    |
@@ -443,6 +733,36 @@ Import: `@simon_he/vue-tui`
 | <code>keydown</code>     | <code>(\_event: TerminalKeyboardEvent) =&gt; true</code>     | —    |
 | <code>focus</code>       | <code>(\_event: TerminalBaseEvent) =&gt; true</code>         | —    |
 | <code>blur</code>        | <code>(\_event: TerminalBaseEvent) =&gt; true</code>         | —    |
+
+## TLinkifyText
+
+源码：`src/vue/components/TLinkifyText.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                       | 类型                                     | 默认值                 | 必填 | 说明 |
+| -------------------------- | ---------------------------------------- | ---------------------- | ---- | ---- |
+| <code>x</code>             | <code>number</code>                      | —                      | 是   | —    |
+| <code>y</code>             | <code>number</code>                      | —                      | 是   | —    |
+| <code>zIndex</code>        | <code>number</code>                      | <code>0</code>         | 否   | —    |
+| <code>value</code>         | <code>string</code>                      | —                      | 是   | —    |
+| <code>w</code>             | <code>number</code>                      | <code>undefined</code> | 否   | —    |
+| <code>h</code>             | <code>number</code>                      | <code>undefined</code> | 否   | —    |
+| <code>style</code>         | <code>Style</code>                       | <code>undefined</code> | 否   | —    |
+| <code>linkStyle</code>     | <code>Style</code>                       | <code>undefined</code> | 否   | —    |
+| <code>clear</code>         | <code>boolean</code>                     | <code>true</code>      | 否   | —    |
+| <code>wrap</code>          | <code>boolean</code>                     | <code>false</code>     | 否   | —    |
+| <code>protocols</code>     | <code>readonly TLinkifyProtocol[]</code> | <code>undefined</code> | 否   | —    |
+| <code>allowRelative</code> | <code>boolean</code>                     | <code>false</code>     | 否   | —    |
+| <code>maxUrlLength</code>  | <code>number</code>                      | <code>undefined</code> | 否   | —    |
+
+### Events
+
+—
 
 ## TList
 
@@ -715,36 +1035,37 @@ Import: `@simon_he/vue-tui/experimental`
 
 ### Props
 
-| 名称                            | 类型                                                        | 默认值                                                | 必填 | 说明 |
-| ------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------- | ---- | ---- |
-| <code>x</code>                  | <code>number</code>                                         | —                                                     | 是   | —    |
-| <code>y</code>                  | <code>number</code>                                         | —                                                     | 是   | —    |
-| <code>w</code>                  | <code>number</code>                                         | —                                                     | 是   | —    |
-| <code>h</code>                  | <code>number</code>                                         | —                                                     | 是   | —    |
-| <code>zIndex</code>             | <code>number</code>                                         | <code>0</code>                                        | 否   | —    |
-| <code>source</code>             | <code>TLogDataSource</code>                                 | —                                                     | 是   | —    |
-| <code>version</code>            | <code>number</code>                                         | —                                                     | 是   | —    |
-| <code>scrollTop</code>          | <code>number</code>                                         | <code>undefined</code>                                | 否   | —    |
-| <code>defaultScrollTop</code>   | <code>number</code>                                         | <code>undefined</code>                                | 否   | —    |
-| <code>style</code>              | <code>Style</code>                                          | <code>undefined</code>                                | 否   | —    |
-| <code>autoFocus</code>          | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
-| <code>selectable</code>         | <code>boolean</code>                                        | <code>true</code>                                     | 否   | —    |
-| <code>autoStickToBottom</code>  | <code>boolean</code>                                        | <code>true</code>                                     | 否   | —    |
-| <code>overscan</code>           | <code>number</code>                                         | <code>2</code>                                        | 否   | —    |
-| <code>wrap</code>               | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
-| <code>visualIndexMode</code>    | <code>&quot;estimated&quot; &#124; &quot;exact&quot;</code> | <code>&quot;estimated&quot;</code>                    | 否   | —    |
-| <code>visualIndexOptions</code> | <code>TLogViewVisualIndexOptions</code>                     | <code>undefined</code>                                | 否   | —    |
-| <code>ansi</code>               | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
-| <code>links</code>              | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
-| <code>linkStyle</code>          | <code>Style</code>                                          | <code>() =&gt; ({ underline: true })</code>           | 否   | —    |
-| <code>keyboardLinks</code>      | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —    |
-| <code>linkFocusStyle</code>     | <code>Style</code>                                          | <code>() =&gt; ({ inverse: true })</code>             | 否   | —    |
-| <code>searchQuery</code>        | <code>string</code>                                         | <code>&quot;&quot;</code>                             | 否   | —    |
-| <code>searchOptions</code>      | <code>TLogViewSearchOptions</code>                          | <code>undefined</code>                                | 否   | —    |
-| <code>highlightMatches</code>   | <code>boolean</code>                                        | <code>true</code>                                     | 否   | —    |
-| <code>matchStyle</code>         | <code>Style</code>                                          | <code>() =&gt; ({ inverse: true })</code>             | 否   | —    |
-| <code>currentMatchStyle</code>  | <code>Style</code>                                          | <code>() =&gt; ({ inverse: true, bold: true })</code> | 否   | —    |
-| <code>rowScrollMode</code>      | <code>RowScrollMode</code>                                  | <code>&quot;off&quot;</code>                          | 否   | —    |
+| 名称                            | 类型                                                        | 默认值                                                | 必填 | 说明                                                                                                                        |
+| ------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------- |
+| <code>x</code>                  | <code>number</code>                                         | —                                                     | 是   | —                                                                                                                           |
+| <code>y</code>                  | <code>number</code>                                         | —                                                     | 是   | —                                                                                                                           |
+| <code>w</code>                  | <code>number</code>                                         | —                                                     | 是   | —                                                                                                                           |
+| <code>h</code>                  | <code>number</code>                                         | —                                                     | 是   | —                                                                                                                           |
+| <code>zIndex</code>             | <code>number</code>                                         | <code>0</code>                                        | 否   | —                                                                                                                           |
+| <code>source</code>             | <code>TLogDataSource</code>                                 | —                                                     | 是   | —                                                                                                                           |
+| <code>version</code>            | <code>number</code>                                         | —                                                     | 是   | —                                                                                                                           |
+| <code>scrollTop</code>          | <code>number</code>                                         | <code>undefined</code>                                | 否   | —                                                                                                                           |
+| <code>defaultScrollTop</code>   | <code>number</code>                                         | <code>undefined</code>                                | 否   | —                                                                                                                           |
+| <code>style</code>              | <code>Style</code>                                          | <code>undefined</code>                                | 否   | —                                                                                                                           |
+| <code>autoFocus</code>          | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —                                                                                                                           |
+| <code>selectable</code>         | <code>boolean</code>                                        | <code>true</code>                                     | 否   | —                                                                                                                           |
+| <code>autoStickToBottom</code>  | <code>boolean</code>                                        | <code>true</code>                                     | 否   | —                                                                                                                           |
+| <code>overscan</code>           | <code>number</code>                                         | <code>2</code>                                        | 否   | —                                                                                                                           |
+| <code>wrap</code>               | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —                                                                                                                           |
+| <code>visualIndexMode</code>    | <code>&quot;estimated&quot; &#124; &quot;exact&quot;</code> | <code>&quot;estimated&quot;</code>                    | 否   | —                                                                                                                           |
+| <code>visualIndexOptions</code> | <code>TLogViewVisualIndexOptions</code>                     | <code>undefined</code>                                | 否   | —                                                                                                                           |
+| <code>ansi</code>               | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —                                                                                                                           |
+| <code>links</code>              | <code>boolean</code>                                        | <code>false</code>                                    | 否   | Parses OSC8 links only with ansi=true; OSC8 links preserve parsed ANSI style and<br>do not inherit TLink theme defaults.    |
+| <code>linkify</code>            | <code>boolean &#124; TLinkifyOptions</code>                 | <code>false</code>                                    | 否   | Plain-text URL linkification for ansi=false rows; generated links inherit TLink<br>theme defaults before linkStyle.         |
+| <code>linkStyle</code>          | <code>Style</code>                                          | <code>undefined</code>                                | 否   | Link style override. OSC8 defaults to underline-only over parsed ANSI style;<br>linkify also inherits TLink theme defaults. |
+| <code>keyboardLinks</code>      | <code>boolean</code>                                        | <code>false</code>                                    | 否   | —                                                                                                                           |
+| <code>linkFocusStyle</code>     | <code>Style</code>                                          | <code>() =&gt; ({ inverse: true })</code>             | 否   | —                                                                                                                           |
+| <code>searchQuery</code>        | <code>string</code>                                         | <code>&quot;&quot;</code>                             | 否   | —                                                                                                                           |
+| <code>searchOptions</code>      | <code>TLogViewSearchOptions</code>                          | <code>undefined</code>                                | 否   | —                                                                                                                           |
+| <code>highlightMatches</code>   | <code>boolean</code>                                        | <code>true</code>                                     | 否   | —                                                                                                                           |
+| <code>matchStyle</code>         | <code>Style</code>                                          | <code>() =&gt; ({ inverse: true })</code>             | 否   | —                                                                                                                           |
+| <code>currentMatchStyle</code>  | <code>Style</code>                                          | <code>() =&gt; ({ inverse: true, bold: true })</code> | 否   | —                                                                                                                           |
+| <code>rowScrollMode</code>      | <code>RowScrollMode</code>                                  | <code>&quot;off&quot;</code>                          | 否   | —                                                                                                                           |
 
 ### Events
 
@@ -863,6 +1184,36 @@ Import: `@simon_he/vue-tui/vue`
 | ------------------ | ------- | ---- |
 | <code>close</code> | —       | —    |
 
+## TPasswordInput
+
+源码：`src/vue/components/TForm.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                     | 类型                 | 默认值                    | 必填 | 说明 |
+| ------------------------ | -------------------- | ------------------------- | ---- | ---- |
+| <code>x</code>           | <code>number</code>  | —                         | 是   | —    |
+| <code>y</code>           | <code>number</code>  | —                         | 是   | —    |
+| <code>w</code>           | <code>number</code>  | —                         | 是   | —    |
+| <code>h</code>           | <code>number</code>  | <code>1</code>            | 否   | —    |
+| <code>zIndex</code>      | <code>number</code>  | <code>0</code>            | 否   | —    |
+| <code>modelValue</code>  | <code>string</code>  | —                         | 是   | —    |
+| <code>placeholder</code> | <code>string</code>  | <code>&quot;&quot;</code> | 否   | —    |
+| <code>style</code>       | <code>Style</code>   | <code>undefined</code>    | 否   | —    |
+| <code>autoFocus</code>   | <code>boolean</code> | <code>false</code>        | 否   | —    |
+
+### Events
+
+| 名称                           | Payload                                   | 说明 |
+| ------------------------------ | ----------------------------------------- | ---- |
+| <code>update:modelValue</code> | <code>(\_value: string) =&gt; true</code> | —    |
+| <code>input</code>             | <code>(\_value: string) =&gt; true</code> | —    |
+| <code>change</code>            | <code>(\_value: string) =&gt; true</code> | —    |
+
 ## TPathPicker
 
 源码：`src/vue/components/TPathPicker.ts`
@@ -903,6 +1254,63 @@ Import: `@simon_he/vue-tui/vue`
 | <code>keydown</code>           | —       | —    |
 | <code>focus</code>             | —       | —    |
 | <code>blur</code>              | —       | —    |
+
+## TPopover
+
+源码：`src/vue/components/TOverlay.ts`
+
+API maturity: **Advanced**
+
+Import: `@simon_he/vue-tui/vue`
+
+### Props
+
+| 名称                      | 类型                 | 默认值                    | 必填 | 说明                                                                     |
+| ------------------------- | -------------------- | ------------------------- | ---- | ------------------------------------------------------------------------ |
+| <code>modelValue</code>   | <code>boolean</code> | —                         | 是   | —                                                                        |
+| <code>x</code>            | <code>number</code>  | —                         | 是   | Caller-owned x position; no viewport clamp or flip placement is applied. |
+| <code>y</code>            | <code>number</code>  | —                         | 是   | Caller-owned y position; no viewport clamp or flip placement is applied. |
+| <code>w</code>            | <code>number</code>  | —                         | 是   | —                                                                        |
+| <code>h</code>            | <code>number</code>  | —                         | 是   | —                                                                        |
+| <code>zIndex</code>       | <code>number</code>  | <code>15</code>           | 否   | —                                                                        |
+| <code>title</code>        | <code>string</code>  | <code>&quot;&quot;</code> | 否   | —                                                                        |
+| <code>content</code>      | <code>string</code>  | <code>&quot;&quot;</code> | 否   | —                                                                        |
+| <code>style</code>        | <code>Style</code>   | <code>undefined</code>    | 否   | —                                                                        |
+| <code>contentStyle</code> | <code>Style</code>   | <code>undefined</code>    | 否   | —                                                                        |
+
+### Events
+
+—
+
+## TRadioGroup
+
+源码：`src/vue/components/TForm.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                       | 类型                                 | 默认值                                    | 必填 | 说明 |
+| -------------------------- | ------------------------------------ | ----------------------------------------- | ---- | ---- |
+| <code>x</code>             | <code>number</code>                  | —                                         | 是   | —    |
+| <code>y</code>             | <code>number</code>                  | —                                         | 是   | —    |
+| <code>w</code>             | <code>number</code>                  | —                                         | 是   | —    |
+| <code>h</code>             | <code>number</code>                  | —                                         | 是   | —    |
+| <code>zIndex</code>        | <code>number</code>                  | <code>0</code>                            | 否   | —    |
+| <code>modelValue</code>    | <code>string</code>                  | <code>&quot;&quot;</code>                 | 否   | —    |
+| <code>options</code>       | <code>readonly TRadioOption[]</code> | —                                         | 是   | —    |
+| <code>style</code>         | <code>Style</code>                   | <code>undefined</code>                    | 否   | —    |
+| <code>activeStyle</code>   | <code>Style</code>                   | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
+| <code>disabledStyle</code> | <code>Style</code>                   | <code>() =&gt; ({ dim: true })</code>     | 否   | —    |
+
+### Events
+
+| 名称                           | Payload                                   | 说明 |
+| ------------------------------ | ----------------------------------------- | ---- |
+| <code>update:modelValue</code> | <code>(\_value: string) =&gt; true</code> | —    |
+| <code>change</code>            | <code>(\_value: string) =&gt; true</code> | —    |
 
 ## TRenderLayer
 
@@ -999,6 +1407,131 @@ Import: `@simon_he/vue-tui`
 | <code>blur</code>              | —       | —    |
 | <code>keydown</code>           | —       | —    |
 
+## TSlider
+
+源码：`src/vue/components/TForm.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                       | 类型                 | 默认值                                                 | 必填 | 说明 |
+| -------------------------- | -------------------- | ------------------------------------------------------ | ---- | ---- |
+| <code>x</code>             | <code>number</code>  | —                                                      | 是   | —    |
+| <code>y</code>             | <code>number</code>  | —                                                      | 是   | —    |
+| <code>w</code>             | <code>number</code>  | —                                                      | 是   | —    |
+| <code>zIndex</code>        | <code>number</code>  | <code>0</code>                                         | 否   | —    |
+| <code>modelValue</code>    | <code>number</code>  | <code>0</code>                                         | 否   | —    |
+| <code>min</code>           | <code>number</code>  | <code>0</code>                                         | 否   | —    |
+| <code>max</code>           | <code>number</code>  | <code>100</code>                                       | 否   | —    |
+| <code>step</code>          | <code>number</code>  | <code>1</code>                                         | 否   | —    |
+| <code>disabled</code>      | <code>boolean</code> | <code>false</code>                                     | 否   | —    |
+| <code>style</code>         | <code>Style</code>   | <code>undefined</code>                                 | 否   | —    |
+| <code>activeStyle</code>   | <code>Style</code>   | <code>() =&gt; ({ fg: &quot;cyanBright&quot; })</code> | 否   | —    |
+| <code>disabledStyle</code> | <code>Style</code>   | <code>() =&gt; ({ dim: true })</code>                  | 否   | —    |
+
+### Events
+
+| 名称                           | Payload                                   | 说明 |
+| ------------------------------ | ----------------------------------------- | ---- |
+| <code>update:modelValue</code> | <code>(\_value: number) =&gt; true</code> | —    |
+| <code>change</code>            | <code>(\_value: number) =&gt; true</code> | —    |
+
+## TStatusBar
+
+源码：`src/vue/components/TNavigation.ts`
+
+API maturity: **Advanced**
+
+Import: `@simon_he/vue-tui/vue`
+
+### Props
+
+| 名称                | 类型                | 默认值                                    | 必填 | 说明 |
+| ------------------- | ------------------- | ----------------------------------------- | ---- | ---- |
+| <code>x</code>      | <code>number</code> | —                                         | 是   | —    |
+| <code>y</code>      | <code>number</code> | —                                         | 是   | —    |
+| <code>w</code>      | <code>number</code> | —                                         | 是   | —    |
+| <code>zIndex</code> | <code>number</code> | <code>0</code>                            | 否   | —    |
+| <code>left</code>   | <code>string</code> | <code>&quot;&quot;</code>                 | 否   | —    |
+| <code>center</code> | <code>string</code> | <code>&quot;&quot;</code>                 | 否   | —    |
+| <code>right</code>  | <code>string</code> | <code>&quot;&quot;</code>                 | 否   | —    |
+| <code>style</code>  | <code>Style</code>  | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
+
+### Events
+
+—
+
+## TSwitch
+
+源码：`src/vue/components/TForm.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                       | 类型                 | 默认值                                                  | 必填 | 说明 |
+| -------------------------- | -------------------- | ------------------------------------------------------- | ---- | ---- |
+| <code>x</code>             | <code>number</code>  | —                                                       | 是   | —    |
+| <code>y</code>             | <code>number</code>  | —                                                       | 是   | —    |
+| <code>w</code>             | <code>number</code>  | —                                                       | 是   | —    |
+| <code>zIndex</code>        | <code>number</code>  | <code>0</code>                                          | 否   | —    |
+| <code>modelValue</code>    | <code>boolean</code> | <code>false</code>                                      | 否   | —    |
+| <code>label</code>         | <code>string</code>  | <code>&quot;&quot;</code>                               | 否   | —    |
+| <code>disabled</code>      | <code>boolean</code> | <code>false</code>                                      | 否   | —    |
+| <code>style</code>         | <code>Style</code>   | <code>undefined</code>                                  | 否   | —    |
+| <code>activeStyle</code>   | <code>Style</code>   | <code>() =&gt; ({ fg: &quot;greenBright&quot; })</code> | 否   | —    |
+| <code>disabledStyle</code> | <code>Style</code>   | <code>() =&gt; ({ dim: true })</code>                   | 否   | —    |
+
+### Events
+
+| 名称                           | Payload                                    | 说明 |
+| ------------------------------ | ------------------------------------------ | ---- |
+| <code>update:modelValue</code> | <code>(\_value: boolean) =&gt; true</code> | —    |
+| <code>change</code>            | <code>(\_value: boolean) =&gt; true</code> | —    |
+
+## TTable
+
+源码：`src/vue/components/TTable.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                         | 类型                                                                       | 默认值                           | 必填 | 说明                                                                                                        |
+| ---------------------------- | -------------------------------------------------------------------------- | -------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------- |
+| <code>x</code>               | <code>number</code>                                                        | —                                | 是   | —                                                                                                           |
+| <code>y</code>               | <code>number</code>                                                        | —                                | 是   | —                                                                                                           |
+| <code>w</code>               | <code>number</code>                                                        | —                                | 是   | —                                                                                                           |
+| <code>h</code>               | <code>number</code>                                                        | —                                | 是   | —                                                                                                           |
+| <code>zIndex</code>          | <code>number</code>                                                        | <code>0</code>                   | 否   | —                                                                                                           |
+| <code>columns</code>         | <code>readonly TTableColumn[]</code>                                       | —                                | 是   | —                                                                                                           |
+| <code>rows</code>            | <code>readonly TTableRow[]</code>                                          | —                                | 是   | Rows are rendered from the top of the current viewport; TTable does not own<br>scrollTop or virtualization. |
+| <code>rowKey</code>          | <code>string &#124; ((row: TTableRow, index: number) =&gt; unknown)</code> | <code>undefined</code>           | 否   | —                                                                                                           |
+| <code>selectedRowKey</code>  | <code>unknown</code>                                                       | <code>undefined</code>           | 否   | —                                                                                                           |
+| <code>border</code>          | <code>boolean</code>                                                       | <code>false</code>               | 否   | —                                                                                                           |
+| <code>header</code>          | <code>boolean</code>                                                       | <code>true</code>                | 否   | —                                                                                                           |
+| <code>style</code>           | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                                           |
+| <code>headerStyle</code>     | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                                           |
+| <code>borderStyle</code>     | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                                           |
+| <code>selectedStyle</code>   | <code>Style</code>                                                         | <code>undefined</code>           | 否   | —                                                                                                           |
+| <code>emptyText</code>       | <code>string</code>                                                        | <code>&quot;No rows&quot;</code> | 否   | —                                                                                                           |
+| <code>headerFocusable</code> | <code>boolean</code>                                                       | <code>false</code>               | 否   | —                                                                                                           |
+| <code>rowFocusable</code>    | <code>boolean</code>                                                       | <code>false</code>               | 否   | —                                                                                                           |
+
+### Events
+
+| 名称                     | Payload                                                       | 说明 |
+| ------------------------ | ------------------------------------------------------------- | ---- |
+| <code>rowClick</code>    | <code>(\_payload: TTableRowClickPayload) =&gt; true</code>    | —    |
+| <code>headerClick</code> | <code>(\_payload: TTableHeaderClickPayload) =&gt; true</code> | —    |
+
 ## TText
 
 源码：`src/vue/components/TText.ts`
@@ -1021,6 +1554,30 @@ Import: `@simon_he/vue-tui`
 | <code>clear</code>   | <code>boolean</code> | <code>true</code>      | 否   | —                                                                                                                                                                                                                                                                          |
 | <code>wrap</code>    | <code>boolean</code> | <code>false</code>     | 否   | —                                                                                                                                                                                                                                                                          |
 | <code>depsKey</code> | <code>unknown</code> | <code>undefined</code> | 否   | Optional key that participates in render-node dependency tracking.<br>Useful for forcing a repaint when the rendered output might change<br>even if `value`, `style`, and geometry are unchanged (e.g. external<br>terminal writes or higher-level virtualized row reuse). |
+
+### Events
+
+—
+
+## TTooltip
+
+源码：`src/vue/components/TOverlay.ts`
+
+API maturity: **Advanced**
+
+Import: `@simon_he/vue-tui/vue`
+
+### Props
+
+| 名称                    | 类型                 | 默认值                                    | 必填 | 说明 |
+| ----------------------- | -------------------- | ----------------------------------------- | ---- | ---- |
+| <code>modelValue</code> | <code>boolean</code> | <code>true</code>                         | 否   | —    |
+| <code>x</code>          | <code>number</code>  | —                                         | 是   | —    |
+| <code>y</code>          | <code>number</code>  | —                                         | 是   | —    |
+| <code>w</code>          | <code>number</code>  | <code>undefined</code>                    | 否   | —    |
+| <code>zIndex</code>     | <code>number</code>  | <code>30</code>                           | 否   | —    |
+| <code>content</code>    | <code>string</code>  | —                                         | 是   | —    |
+| <code>style</code>      | <code>Style</code>   | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
 
 ### Events
 
@@ -1096,6 +1653,41 @@ Import: `@simon_he/vue-tui/vue`
 ### Events
 
 —
+
+## TTree
+
+源码：`src/vue/components/TTree.ts`
+
+API maturity: **Public**
+
+Import: `@simon_he/vue-tui`
+
+### Props
+
+| 名称                           | 类型                              | 默认值                                    | 必填 | 说明 |
+| ------------------------------ | --------------------------------- | ----------------------------------------- | ---- | ---- |
+| <code>x</code>                 | <code>number</code>               | —                                         | 是   | —    |
+| <code>y</code>                 | <code>number</code>               | —                                         | 是   | —    |
+| <code>w</code>                 | <code>number</code>               | —                                         | 是   | —    |
+| <code>h</code>                 | <code>number</code>               | —                                         | 是   | —    |
+| <code>zIndex</code>            | <code>number</code>               | <code>0</code>                            | 否   | —    |
+| <code>nodes</code>             | <code>readonly TTreeNode[]</code> | —                                         | 是   | —    |
+| <code>expandedIds</code>       | <code>readonly string[]</code>    | <code>() =&gt; []</code>                  | 否   | —    |
+| <code>selectedId</code>        | <code>string</code>               | <code>&quot;&quot;</code>                 | 否   | —    |
+| <code>style</code>             | <code>Style</code>                | <code>undefined</code>                    | 否   | —    |
+| <code>selectedStyle</code>     | <code>Style</code>                | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
+| <code>disabledStyle</code>     | <code>Style</code>                | <code>() =&gt; ({ dim: true })</code>     | 否   | —    |
+| <code>indent</code>            | <code>number</code>               | <code>2</code>                            | 否   | —    |
+| <code>selectableParents</code> | <code>boolean</code>              | <code>false</code>                        | 否   | —    |
+
+### Events
+
+| 名称                            | Payload                                                 | 说明 |
+| ------------------------------- | ------------------------------------------------------- | ---- |
+| <code>update:expandedIds</code> | <code>(\_ids: string[]) =&gt; true</code>               | —    |
+| <code>update:selectedId</code>  | <code>(\_id: string) =&gt; true</code>                  | —    |
+| <code>select</code>             | <code>(\_payload: TTreeSelectPayload) =&gt; true</code> | —    |
+| <code>toggle</code>             | <code>(\_payload: TTreeTogglePayload) =&gt; true</code> | —    |
 
 ## TView
 
