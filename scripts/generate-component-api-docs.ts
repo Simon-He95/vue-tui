@@ -1004,11 +1004,7 @@ async function main(): Promise<void> {
 
   const components = [
     ...vueComponents,
-    ...(await listExportedComponents(
-      markdownIndex,
-      "public",
-      "@simon_he/vue-tui/markdown",
-    )),
+    ...(await listExportedComponents(markdownIndex, "public", "@simon_he/vue-tui/markdown")),
     ...(await listExportedComponents(
       experimentalIndex,
       "experimental",

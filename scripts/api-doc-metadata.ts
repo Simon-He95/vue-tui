@@ -440,7 +440,8 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
     scrollTop: "Controlled top visual-row offset within the markdown viewport.",
     final: "Parses the markdown as a complete document when enabled.",
     streaming: "Coalesces rapid content updates into frame-scheduled markdown rebuilds.",
-    selectable: "Controls whether native terminal text selection may start inside the markdown viewport.",
+    selectable:
+      "Controls whether native terminal text selection may start inside the markdown viewport.",
     customHtmlTags: "Additional HTML tag names accepted by the markdown parser.",
     theme: "Markdown theme token overrides for parsed blocks and inline segments.",
   },
