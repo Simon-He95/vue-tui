@@ -84,6 +84,7 @@ export type {
   SelectOption,
   TSelectMultipleChangePayload,
   TSelectMultipleEmitMode,
+  TSelectModelValue,
   TSelectOptionProvider,
   TSelectValueMode,
 } from "./vue/components/TSelect.js";

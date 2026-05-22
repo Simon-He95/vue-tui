@@ -53,31 +53,45 @@ function resolveColumnWidths(
   const maxes = columns.map((column) =>
     column.maxWidth == null ? Number.POSITIVE_INFINITY : Math.max(0, Math.floor(column.maxWidth)),
   );
-  const explicit = columns.map((column, index) =>
+  const clampColumn = (index: number, value: number) =>
+    Math.min(maxes[index]!, Math.max(Math.min(mins[index]!, maxes[index]!), value));
+  const out = columns.map((column, index) =>
     column.width == null
-      ? 0
-      : Math.min(maxes[index]!, Math.max(mins[index]!, Math.floor(column.width))),
+      ? Math.min(mins[index]!, maxes[index]!)
+      : clampColumn(index, Math.floor(column.width)),
   );
-  const explicitTotal = explicit.reduce((sum, next) => sum + next, 0);
-  const autoIndexes = explicit.flatMap((value, index) => (value > 0 ? [] : [index]));
-  const out = [...explicit];
+  const autoIndexes = columns.flatMap((column, index) => (column.width == null ? [index] : []));
   if (autoIndexes.length > 0) {
-    let remaining = Math.max(0, available - explicitTotal);
-    const flexTotal = autoIndexes.reduce(
-      (sum, index) => sum + Math.max(0, columns[index]?.flex ?? 1),
-      0,
-    );
-    for (let i = 0; i < autoIndexes.length; i++) {
-      const index = autoIndexes[i]!;
-      const slotsLeft = autoIndexes.length - i;
-      const flex = Math.max(0, columns[index]?.flex ?? 1);
-      const raw = flexTotal > 0 ? Math.floor((available - explicitTotal) * (flex / flexTotal)) : 0;
-      const value = i === autoIndexes.length - 1 ? remaining : Math.max(mins[index]!, raw);
-      out[index] = Math.min(
-        maxes[index]!,
-        Math.max(mins[index]!, value || Math.ceil(remaining / slotsLeft)),
+    let remaining = Math.max(0, available - out.reduce((sum, next) => sum + next, 0));
+    const candidates = () => autoIndexes.filter((index) => out[index]! < maxes[index]!);
+    while (remaining > 0) {
+      const open = candidates();
+      if (open.length === 0) break;
+      const flexTotal = open.reduce(
+        (sum, index) => sum + Math.max(0, columns[index]?.flex ?? 1),
+        0,
       );
-      remaining -= value;
+      const weightTotal = flexTotal || open.length;
+      let assigned = 0;
+      const order = open
+        .map((index) => {
+          const flex = Math.max(0, columns[index]?.flex ?? 1);
+          const weight = flexTotal ? flex : 1;
+          const raw = (remaining * weight) / weightTotal;
+          const grant = Math.min(maxes[index]! - out[index]!, Math.floor(raw));
+          out[index]! += grant;
+          assigned += grant;
+          return { index, fraction: raw - grant };
+        })
+        .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+      remaining -= assigned;
+      for (const { index } of order) {
+        if (remaining <= 0) break;
+        if (out[index]! >= maxes[index]!) continue;
+        out[index]! += 1;
+        remaining -= 1;
+      }
+      if (assigned === 0 && order.every(({ index }) => out[index]! >= maxes[index]!)) break;
     }
   }
 

@@ -1588,9 +1588,11 @@ function onPanelActiveChange(payload: TLogLinksPanelActiveChangePayload) {
 
 - `x`/`y`/`w`/`h` `(number, required)`
 - `options` `((string | { label, detail? })[], required)`
-- `modelValue` `(number | number[])` + `update:modelValue`
+- `modelValue` follows `valueMode`: index values by default, option values for `value`, option objects for `option`
 - `multiple` `(boolean)`
-- `multipleEmit` `('value'|'index'|'both')`
+- `valueMode` `('index'|'value'|'option')`
+- `multipleEmit` `('value'|'index'|'both')`; `value` emits selected labels for `change` / `confirm`
+- `searchable` emits `update:query` from typed characters; it does not filter local `options` by itself
 - `style`/`highlightStyle` `(Style?)`
 - `autoFocus` `(boolean)`
 - `closeOnBlur` `(boolean)`

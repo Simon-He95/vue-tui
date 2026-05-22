@@ -479,7 +479,7 @@ export const TForm = defineComponent({
           zIndex: props.zIndex,
           onKeydown: (event: any) => {
             if (!props.submitOnEnter) return;
-            if (event.key !== "Enter" || !event.ctrlKey) return;
+            if (event.key !== "Enter") return;
             event.preventDefault?.();
             submit();
           },

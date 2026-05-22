@@ -807,6 +807,43 @@ describe("ui regressions portal select and text", () => {
     mounted.unmount();
   });
 
+  it('TSelect valueMode="option" emits option arrays in multi-select mode', async () => {
+    const alpha = { label: "Alpha", value: { id: "a" } };
+    const beta = { label: "Beta", value: { id: "b" } };
+    const selected = ref<unknown[]>([]);
+    const changes: unknown[] = [];
+
+    const mounted = await mountTerminal(() =>
+      h(TSelect, {
+        x: 0,
+        y: 0,
+        w: 14,
+        h: 2,
+        multiple: true,
+        valueMode: "option",
+        modelValue: selected.value,
+        options: [alpha, beta],
+        "onUpdate:modelValue": (value: unknown) => {
+          selected.value = Array.isArray(value) ? value : [value];
+        },
+        onChange: (value: unknown) => changes.push(value),
+        autoFocus: true,
+      }),
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: " ", code: "Space", bubbles: true }),
+    );
+    await nextTick();
+
+    expect(selected.value).toEqual([alpha]);
+    expect(changes).toEqual([["Alpha"]]);
+    mounted.unmount();
+  });
+
   it("TSelect multiple toggles selection with Space and confirms with Enter", async () => {
     const selected = ref<number[]>([]);
     const confirmed = ref<string>("");

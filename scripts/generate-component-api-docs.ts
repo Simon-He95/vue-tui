@@ -99,7 +99,8 @@ const sharedPublicPropDescriptions: Record<string, string> = {
   allowRelative: "Allows relative hrefs in detected link segments.",
   maxUrlLength: "Maximum detected URL length.",
   columns: "Table column definitions.",
-  minWidth: "Minimum column width in terminal cells.",
+  minWidth:
+    "Minimum column width in terminal cells; treated as a soft minimum when space is constrained.",
   maxWidth: "Maximum column width in terminal cells.",
   flex: "Relative width share for auto-sized table columns.",
   contentStyle: "Style override for dialog or popover content cells.",
@@ -128,7 +129,8 @@ const sharedPublicPropDescriptions: Record<string, string> = {
   filterStrategy: "Built-in command matching strategy.",
   itemVersion: "External version key for item changes that keep array identity stable.",
   multiple: "Enables multi-select mode.",
-  multipleEmit: "Payload shape used by multi-select change and confirm events.",
+  multipleEmit:
+    "Payload shape used by multi-select change and confirm events; the value emit mode emits option labels.",
   closeOnBlur: "Emits close when focus leaves the component.",
   initialQuery: "Query used when the command palette opens.",
   showRowDetails: "Shows command detail text next to labels.",
@@ -163,9 +165,10 @@ const sharedPublicPropDescriptions: Record<string, string> = {
   checkedStyle: "Style used when the checkbox is checked.",
   options: "Options rendered by the control.",
   optionProvider: "Async option provider called with the current query.",
-  valueMode: "Model value shape emitted by the select.",
+  valueMode: "Model value shape emitted by the select v-model.",
   activeIndex: "Controlled active option index.",
-  searchable: "Enables query updates from typed characters.",
+  searchable:
+    "Emits query updates from typed characters; local options are not filtered automatically.",
   typeahead: "Enables keyboard typeahead navigation.",
   loading: "Shows the loading row.",
   maxVisible: "Maximum number of option rows rendered at once.",

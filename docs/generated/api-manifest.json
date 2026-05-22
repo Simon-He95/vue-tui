@@ -71,6 +71,7 @@
         "TLinkifyProtocol",
         "TLinkifySegment",
         "TRadioOption",
+        "TSelectModelValue",
         "TSelectMultipleChangePayload",
         "TSelectMultipleEmitMode",
         "TSelectOptionProvider",
@@ -775,6 +776,7 @@
         "TOverlayPlacementOptions",
         "TOverlayRect",
         "TRadioOption",
+        "TSelectModelValue",
         "TSelectMultipleChangePayload",
         "TSelectMultipleEmitMode",
         "TSelectOptionProvider",
@@ -1872,7 +1874,7 @@
           "name": "rows",
           "type": "readonly TTableRow[]",
           "required": true,
-          "description": "TDataTable filters/sorts rows and renders the top slice through non-virtual\nTTable; it does not own scrollTop or virtualization."
+          "description": "TDataTable owns a controlled viewport offset through scrollTop. It is still\nnon-virtual: rows are sorted/filtered in memory and only the visible slice is\npassed to TTable."
         },
         {
           "name": "rowKey",
@@ -5335,7 +5337,7 @@
         },
         {
           "name": "modelValue",
-          "type": "number | number[] | string | string[] | boolean | Record<string, unknown>",
+          "type": "TSelectModelValue",
           "required": false,
           "defaultValue": "0",
           "description": "Controlled component value."
@@ -5345,7 +5347,7 @@
           "type": "TSelectValueMode",
           "required": false,
           "defaultValue": "\"index\"",
-          "description": "Model value shape emitted by the select."
+          "description": "Model value shape emitted by the select v-model."
         },
         {
           "name": "activeIndex",
@@ -5366,7 +5368,7 @@
           "type": "TSelectMultipleEmitMode",
           "required": false,
           "defaultValue": "\"value\"",
-          "description": "Payload shape used by multi-select change and confirm events."
+          "description": "Payload shape used by multi-select change and confirm events; the value emit mode emits option labels."
         },
         {
           "name": "style",
@@ -5415,7 +5417,7 @@
           "type": "boolean",
           "required": false,
           "defaultValue": "false",
-          "description": "Enables query updates from typed characters."
+          "description": "Emits query updates from typed characters; local options are not filtered automatically."
         },
         {
           "name": "typeahead",
@@ -5463,7 +5465,7 @@
       "events": [
         {
           "name": "update:modelValue",
-          "payload": "number | number[] | string | string[] | boolean | Record<string, unknown>",
+          "payload": "TSelectModelValue",
           "description": "Emitted when the controlled model value changes."
         },
         {

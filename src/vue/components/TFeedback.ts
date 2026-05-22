@@ -59,7 +59,7 @@ export const TToastViewport = defineComponent({
       const x = left ? props.x : Math.max(0, terminal.size().cols - props.x - props.w);
       let cursorY = props.y;
       return items.map((item, index) => {
-        const hgt = item.title ? 3 : 2;
+        const hgt = item.title ? 2 : 1;
         const y = bottom ? cursorY - hgt : cursorY;
         cursorY += bottom ? -hgt : hgt;
         const level = item.level ?? "info";
@@ -72,6 +72,7 @@ export const TToastViewport = defineComponent({
             w: props.w,
             h: hgt,
             zIndex: props.zIndex + index,
+            border: false,
             padding: 0,
             style: mergeStyle(baseStyle.value, toneStyle(level)),
           },

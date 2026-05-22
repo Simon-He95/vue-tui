@@ -102,6 +102,53 @@ export const TTabs = defineComponent({
 export type TSplitPaneDirection = "horizontal" | "vertical";
 export type TSplitPaneRect = Readonly<{ x: number; y: number; w: number; h: number }>;
 
+function resolvePaneSizes(
+  sizes: readonly number[],
+  minSizes: readonly number[],
+  available: number,
+): number[] {
+  const count = sizes.length;
+  if (count === 0) return [];
+  if (available <= 0) return sizes.map(() => 0);
+  const mins = sizes.map((_, index) => Math.max(0, Math.floor(minSizes[index] ?? 1)));
+  const minTotal = mins.reduce((sum, min) => sum + min, 0);
+
+  if (minTotal >= available) {
+    if (minTotal === 0) return sizes.map(() => 0);
+    const out = mins.map((min) => Math.floor((available * min) / minTotal));
+    let remaining = available - out.reduce((sum, size) => sum + size, 0);
+    const order = mins
+      .map((min, index) => ({
+        index,
+        fraction: (available * min) / minTotal - Math.floor((available * min) / minTotal),
+      }))
+      .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+    for (let i = 0; remaining > 0 && i < order.length; i++, remaining--) {
+      out[order[i]!.index]! += 1;
+    }
+    return out;
+  }
+
+  const out = [...mins];
+  let remaining = available - minTotal;
+  const weights = sizes.map((size) => Math.max(0, size));
+  const hasWeights = weights.some((weight) => weight > 0);
+  const weightTotal = hasWeights ? weights.reduce((sum, weight) => sum + weight, 0) : count;
+  const order = weights
+    .map((weight, index) => {
+      const raw = (remaining * (hasWeights ? weight : 1)) / weightTotal;
+      const extra = Math.floor(raw);
+      out[index]! += extra;
+      return { index, fraction: raw - extra };
+    })
+    .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+  remaining = available - out.reduce((sum, size) => sum + size, 0);
+  for (let i = 0; remaining > 0 && i < order.length; i++, remaining--) {
+    out[order[i]!.index]! += 1;
+  }
+  return out;
+}
+
 export const TSplitPane = defineComponent({
   name: "TSplitPane",
   props: {
@@ -135,14 +182,10 @@ export const TSplitPane = defineComponent({
       const total = props.direction === "horizontal" ? props.w : props.h;
       const separatorTotal = Math.max(0, count - 1);
       const available = Math.max(0, total - separatorTotal);
-      const rawTotal = props.sizes.reduce((sum, size) => sum + Math.max(0, size), 0) || count;
+      const sizes = props.sizes.length ? props.sizes : [1];
+      const paneSizes = resolvePaneSizes(sizes, props.minSizes, available);
       let cursor = 0;
-      return props.sizes.map((size, index) => {
-        const min = Math.max(0, props.minSizes[index] ?? 1);
-        const paneSize =
-          index === count - 1
-            ? Math.max(min, available - cursor)
-            : Math.max(min, Math.floor((available * Math.max(0, size)) / rawTotal));
+      return paneSizes.map((paneSize) => {
         const rect =
           props.direction === "horizontal"
             ? { x: cursor, y: 0, w: paneSize, h: props.h }

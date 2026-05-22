@@ -23,6 +23,7 @@ import {
 import {
   TBreadcrumb,
   TContextMenu,
+  TForm,
   TKeyHint,
   TPopover,
   TProgress,
@@ -89,6 +90,69 @@ describe("P1/P2 public components", () => {
       expect(lines[7]).toContain("1");
       expect(lines[0]).toContain("v src");
       expect(lines[1]).toContain("index.ts");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps TDataTable rowSelect indices correct with scrollTop", async () => {
+    const onRowSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }],
+          selectable: true,
+          scrollTop: 1,
+          onRowSelect,
+        }),
+      24,
+      6,
+    );
+
+    try {
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 2, bubbles: true }));
+      await nextTick();
+
+      expect(onRowSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          row: { name: "Beta" },
+          index: 0,
+          originalIndex: 1,
+          key: 1,
+        }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("redistributes TTable auto width after maxWidth clamps a column", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 3,
+          columns: [
+            { key: "a", label: "A", maxWidth: 3 },
+            { key: "b", label: "B" },
+          ],
+          rows: [{ a: "abcdef", b: "123456789" }],
+        }),
+      12,
+      4,
+    );
+
+    try {
+      expect(mounted.terminal.snapshot().lines[2]?.slice(0, 10)).toBe("abc 123456");
     } finally {
       mounted.unmount();
     }
@@ -669,7 +733,8 @@ describe("P1/P2 public components", () => {
       expect(lines[2]).toContain("pnpm test");
       expect(lines[3]).toContain("Index [");
       expect(lines[4]).toContain("/ Thinking");
-      expect(lines[7]).toContain("Saved");
+      expect(lines[6]).toContain("Saved");
+      expect(lines[7]).toContain("Profile updated");
       expect(lines[0]).toContain("Logs 2");
       expect(lines[2]).toContain("Left");
       expect(lines[2]).toContain("Right");
@@ -818,6 +883,41 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps split panes inside the container when minSizes exceed available space", async () => {
+    let seenPanes: any[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TSplitPane as any,
+          {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 2,
+            sizes: [1, 1],
+            minSizes: [10, 10],
+          },
+          ({ panes }: any) => {
+            seenPanes = panes;
+            return panes.map((pane: any, index: number) =>
+              h(TText, { ...pane, value: index === 0 ? "Left" : "Right" }),
+            );
+          },
+        ),
+      12,
+      4,
+    );
+
+    try {
+      await nextTick();
+      expect(seenPanes).toHaveLength(2);
+      expect(seenPanes[1].x + seenPanes[1].w).toBeLessThanOrEqual(8);
+      expect(seenPanes[0].w + seenPanes[1].w).toBe(7);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("anchors toast viewport horizontally from placement", async () => {
     const mounted = await mountTerminal(
       () => [
@@ -844,8 +944,8 @@ describe("P1/P2 public components", () => {
 
     try {
       const lines = mounted.terminal.snapshot().lines;
-      expect(lines[1]?.indexOf("Left")).toBe(4);
-      expect(lines[4]?.indexOf("Right")).toBe(20);
+      expect(lines[0]?.indexOf("Left")).toBe(3);
+      expect(lines[3]?.indexOf("Right")).toBe(19);
     } finally {
       mounted.unmount();
     }
@@ -1095,6 +1195,46 @@ describe("P1/P2 public components", () => {
       expect(lines[1]).toContain("Value");
       expect(lines[2]).toContain("Second");
       expect(lines.join("\n")).not.toContain("Help");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("submits TForm on Enter when submitOnEnter is enabled", async () => {
+    const onSubmit = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 2,
+            model: { name: "Ada" },
+            submitOnEnter: true,
+            onSubmit,
+          },
+          () => h(TView, { x: 0, y: 0, w: 20, h: 1, focusable: true, autoFocus: true }),
+        ),
+      24,
+      4,
+    );
+
+    try {
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ model: { name: "Ada" }, valid: true, errors: {} }),
+      );
     } finally {
       mounted.unmount();
     }

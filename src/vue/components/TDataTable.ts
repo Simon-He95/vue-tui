@@ -74,8 +74,9 @@ export const TDataTable = defineComponent({
       required: true,
     },
     /**
-     * TDataTable filters/sorts rows and renders the top slice through non-virtual
-     * TTable; it does not own scrollTop or virtualization.
+     * TDataTable owns a controlled viewport offset through scrollTop. It is still
+     * non-virtual: rows are sorted/filtered in memory and only the visible slice is
+     * passed to TTable.
      */
     rows: {
       type: Array as PropType<readonly TTableRow[]>,
