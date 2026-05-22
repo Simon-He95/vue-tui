@@ -9,6 +9,7 @@ import {
   TDataTable,
   TDivider,
   TFormField,
+  TInput,
   TPasswordInput,
   TRadioGroup,
   TSelect,
@@ -1754,6 +1755,58 @@ describe("P1/P2 public components", () => {
       expect(onSubmit).toHaveBeenCalledWith(
         expect.objectContaining({ model: { name: "Ada" }, valid: true, errors: {} }),
       );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("submits TForm on Enter from a focused child input and renders field errors", async () => {
+    const onSubmit = vi.fn();
+    const model = { name: "" };
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 24,
+            h: 3,
+            model,
+            rules: {
+              name: (value: unknown) => (value ? null : "Name required"),
+            },
+            submitOnEnter: true,
+            onSubmit,
+          },
+          () =>
+            h(TFormField, { x: 0, y: 0, w: 24, h: 3, name: "name", label: "Name" }, () =>
+              h(TInput, { x: 0, y: 0, w: 20, modelValue: "", autoFocus: true }),
+            ),
+        ),
+      28,
+      5,
+    );
+
+    try {
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model,
+          valid: false,
+          errors: { name: "Name required" },
+        }),
+      );
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Name required");
     } finally {
       mounted.unmount();
     }

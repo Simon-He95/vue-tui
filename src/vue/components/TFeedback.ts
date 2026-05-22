@@ -17,7 +17,6 @@ export type TToastItem = Readonly<{
   level?: "info" | "success" | "warning" | "error";
   title?: string;
   message: string;
-  duration?: number;
   closable?: boolean;
 }>;
 
