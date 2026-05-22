@@ -676,6 +676,53 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("clamps autocomplete highlighted index to visible suggestions", async () => {
+    const value = ref("ap");
+    const changes: string[] = [];
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          modelValue: value.value,
+          "onUpdate:modelValue": (next: string) => (value.value = next),
+          suggestions: ["apple"],
+          highlightedIndex: 4,
+          onChange: (next: string) => changes.push(next),
+          onSelect,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
+
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(value.value).toBe("apple");
+      expect(changes).toEqual(["apple"]);
+      expect(onSelect).toHaveBeenCalledWith({ value: "apple", index: 0 });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("selects a focused autocomplete suggestion with Enter", async () => {
     const value = ref("ap");
     const changes: string[] = [];

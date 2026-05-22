@@ -447,6 +447,10 @@ export const TAutocompleteInput = defineComponent({
       mergeStyle(suggestionStyle.value, props.activeSuggestionStyle),
     );
     const visibleSuggestions = computed(() => props.suggestions.slice(0, Math.max(0, props.h - 1)));
+    const activeIndex = computed(() => {
+      const count = visibleSuggestions.value.length;
+      return count > 0 ? clamp(props.highlightedIndex, 0, count - 1) : 0;
+    });
     function select(index: number): boolean {
       const value = visibleSuggestions.value[index];
       if (value == null) return false;
@@ -490,7 +494,7 @@ export const TAutocompleteInput = defineComponent({
               } else if (
                 event.key === "Enter" &&
                 suggestionCount > 0 &&
-                select(props.highlightedIndex)
+                select(activeIndex.value)
               ) {
                 event.preventDefault?.();
               }
@@ -520,7 +524,7 @@ export const TAutocompleteInput = defineComponent({
                   w: props.w,
                   value: suggestion,
                   style:
-                    index === props.highlightedIndex
+                    index === activeIndex.value
                       ? activeSuggestionStyle.value
                       : suggestionStyle.value,
                 }),
