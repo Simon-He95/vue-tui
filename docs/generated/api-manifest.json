@@ -2230,8 +2230,8 @@
           "name": "rowSelect",
           "payload": "TDataTableRowSelectPayload",
           "payloadSource": "emits-signature",
-          "description": "Emitted when a data table row is selected.",
-          "descriptionSource": "shared-default"
+          "description": "Emitted when a data table row is selected; index is viewport-local, dataIndex is filtered/sorted, and originalIndex is the input row index.",
+          "descriptionSource": "component-default"
         }
       ]
     },

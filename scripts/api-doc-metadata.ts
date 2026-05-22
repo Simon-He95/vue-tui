@@ -497,6 +497,8 @@ export const publicEventDescriptions: Record<string, string> = {
 };
 
 export const componentPublicEventDescriptions: Record<string, string> = {
+  "TDataTable.rowSelect":
+    "Emitted when a data table row is selected; index is viewport-local, dataIndex is filtered/sorted, and originalIndex is the input row index.",
   "TSelect.change":
     "For single select, emits the selected option label or null; valueMode only affects update:modelValue. For multiple select, the payload follows multipleEmit.",
   "TSelect.confirm": "Emitted when multi-select commits the current selection.",

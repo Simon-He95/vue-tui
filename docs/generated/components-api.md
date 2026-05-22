@@ -430,15 +430,15 @@ Import: `@simon_he/vue-tui`
 
 ### Events
 
-| 名称                                | Payload                                  | 说明                                                   |
-| ----------------------------------- | ---------------------------------------- | ------------------------------------------------------ |
-| <code>update:selectedRowKey</code>  | <code>unknown</code>                     | Emitted when the selected row key changes.             |
-| <code>update:selectedRowKeys</code> | <code>unknown[]</code>                   | Emitted when selected row keys change.                 |
-| <code>update:scrollTop</code>       | <code>number</code>                      | Emitted when the top visible row offset should change. |
-| <code>update:sortBy</code>          | <code>string</code>                      | Emitted when the sorted column key changes.            |
-| <code>update:sortDirection</code>   | <code>TDataTableSortDirection</code>     | Emitted when the sort direction changes.               |
-| <code>sortChange</code>             | <code>TDataTableSortChangePayload</code> | Emitted when table sort state changes.                 |
-| <code>rowSelect</code>              | <code>TDataTableRowSelectPayload</code>  | Emitted when a data table row is selected.             |
+| 名称                                | Payload                                  | 说明                                                                                                                                        |
+| ----------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| <code>update:selectedRowKey</code>  | <code>unknown</code>                     | Emitted when the selected row key changes.                                                                                                  |
+| <code>update:selectedRowKeys</code> | <code>unknown[]</code>                   | Emitted when selected row keys change.                                                                                                      |
+| <code>update:scrollTop</code>       | <code>number</code>                      | Emitted when the top visible row offset should change.                                                                                      |
+| <code>update:sortBy</code>          | <code>string</code>                      | Emitted when the sorted column key changes.                                                                                                 |
+| <code>update:sortDirection</code>   | <code>TDataTableSortDirection</code>     | Emitted when the sort direction changes.                                                                                                    |
+| <code>sortChange</code>             | <code>TDataTableSortChangePayload</code> | Emitted when table sort state changes.                                                                                                      |
+| <code>rowSelect</code>              | <code>TDataTableRowSelectPayload</code>  | Emitted when a data table row is selected; index is viewport-local, dataIndex is filtered/sorted, and originalIndex is the input row index. |
 
 ## TDebugOverlay
 

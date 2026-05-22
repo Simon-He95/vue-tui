@@ -14,7 +14,11 @@ export type TDataTableSortChangePayload = Readonly<{
 
 export type TDataTableRowSelectPayload = Readonly<{
   row: TTableRow;
+  /** Visible row index within the current viewport. */
   index: number;
+  /** Absolute row index in the filtered/sorted result set. */
+  dataIndex: number;
+  /** Original index in the input rows array. */
   originalIndex: number;
   key: unknown;
 }>;
@@ -224,7 +228,7 @@ export const TDataTable = defineComponent({
       return clamped;
     }
 
-    function commitSelection(entry: DataRow, index: number): void {
+    function commitSelection(entry: DataRow, index: number, dataIndex: number): void {
       const key = rowKey(entry.row, entry.originalIndex, props.rowKey as any);
       if (props.selectionMode === "multiple") {
         const keys = selectedKeySet();
@@ -234,15 +238,22 @@ export const TDataTable = defineComponent({
       } else {
         emit("update:selectedRowKey", key);
       }
-      emit("rowSelect", { row: entry.row, index, originalIndex: entry.originalIndex, key });
+      emit("rowSelect", {
+        row: entry.row,
+        index,
+        dataIndex,
+        originalIndex: entry.originalIndex,
+        key,
+      });
     }
 
     function select(row: TTableRow, index: number): void {
       if (!props.selectable || props.selectionMode === "none") return;
       keyboardActive.value = false;
+      const dataIndex = normalizedScrollTop.value + index;
       const originalIndex = originalIndexAt(index);
-      setActiveAbsoluteIndex(normalizedScrollTop.value + index);
-      commitSelection({ row, originalIndex }, index);
+      setActiveAbsoluteIndex(dataIndex);
+      commitSelection({ row, originalIndex }, index, dataIndex);
     }
 
     function sort(column: TTableColumn): void {
@@ -279,6 +290,7 @@ export const TDataTable = defineComponent({
         commitSelection(
           entry,
           Math.max(0, Math.min(Math.max(0, visibleRowCapacity.value - 1), visibleIndex)),
+          clamped,
         );
         return;
       }

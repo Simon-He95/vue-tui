@@ -109,10 +109,18 @@ function baseEventName(name: string): string {
   return name.endsWith("Capture") ? name.slice(0, -"Capture".length) : name;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+}
+
+function hasDocsSection(markdown: string, componentName: string): boolean {
+  return new RegExp(`^##\\s+${escapeRegExp(componentName)}\\s*$`, "m").test(markdown);
+}
+
 for (const [name, component] of Object.entries(manifest.components)) {
   if (component.maturity !== "public") continue;
 
-  if (!componentsDocs.includes(`## ${name}`)) {
+  if (!hasDocsSection(componentsDocs, name)) {
     errors.push(`${name} is Public but has no docs/components.md section`);
   }
 

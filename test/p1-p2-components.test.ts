@@ -126,6 +126,7 @@ describe("P1/P2 public components", () => {
         expect.objectContaining({
           row: { name: "Beta" },
           index: 0,
+          dataIndex: 1,
           originalIndex: 1,
           key: 1,
         }),
@@ -351,6 +352,7 @@ describe("P1/P2 public components", () => {
       expect(onRowSelect).toHaveBeenCalledWith({
         row: rows[0],
         index: 0,
+        dataIndex: 0,
         originalIndex: 0,
         key: "2",
       });
@@ -2932,6 +2934,7 @@ describe("P1/P2 public components", () => {
       expect(onRowSelect).toHaveBeenCalledWith({
         row: rows[1],
         index: 0,
+        dataIndex: 0,
         originalIndex: 1,
         key: 1,
       });

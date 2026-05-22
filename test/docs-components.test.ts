@@ -53,10 +53,18 @@ const components = [
   "TRouterView",
 ] as const;
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+}
+
+function hasDocsSection(markdown: string, componentName: string): boolean {
+  return new RegExp(`^##\\s+${escapeRegExp(componentName)}\\s*$`, "m").test(markdown);
+}
+
 describe("docs: components coverage", () => {
   it("docs/components.md lists all exported components", () => {
     const md = readFileSync(resolve(process.cwd(), "docs/components.md"), "utf8");
-    for (const name of components) expect(md).toContain(`## ${name}`);
+    for (const name of components) expect(hasDocsSection(md, name)).toBe(true);
   });
 
   it("docs/generated/components-api.md mentions key components", () => {
