@@ -783,9 +783,37 @@ async function collectSourceExports(
     if (ts.isExportDeclaration(stmt)) {
       if (stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
         const declarationTypeOnly = stmt.isTypeOnly;
+        const child =
+          stmt.moduleSpecifier && ts.isStringLiteral(stmt.moduleSpecifier)
+            ? resolveSourceSpecifier(resolved, stmt.moduleSpecifier.text)
+            : null;
+
+        // Use a cloned seen set for named re-export classification so resolving
+        // `export { Foo } from "./x.js"` does not poison later `export * from "./x.js"`.
+        const childExports = child ? await collectSourceExports(child, new Set(seen)) : null;
+
         for (const el of stmt.exportClause.elements) {
-          if (declarationTypeOnly || el.isTypeOnly) out.typeExports.add(el.name.text);
-          else out.valueExports.add(el.name.text);
+          const exportedName = el.name.text;
+          const importedName = (el.propertyName ?? el.name).text;
+
+          if (declarationTypeOnly || el.isTypeOnly) {
+            out.typeExports.add(exportedName);
+            continue;
+          }
+
+          if (!childExports) {
+            out.valueExports.add(exportedName);
+            continue;
+          }
+
+          const hasValue = childExports.valueExports.has(importedName);
+          const hasType = childExports.typeExports.has(importedName);
+
+          if (hasValue) out.valueExports.add(exportedName);
+          if (hasType) out.typeExports.add(exportedName);
+
+          // Unknown external/local shape: keep the previous conservative behavior.
+          if (!hasValue && !hasType) out.valueExports.add(exportedName);
         }
         continue;
       }

@@ -1,6 +1,6 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import { computed, defineComponent, h, ref } from "vue";
+import { computed, defineComponent, h, ref, watch } from "vue";
 import { sliceByCells, textCellWidth } from "../utils/text.js";
 import { TTable, type TTableColumn, type TTableRow } from "./TTable.js";
 import { TView } from "./TView.js";
@@ -171,11 +171,24 @@ export const TDataTable = defineComponent({
       });
       return rows;
     });
-    const visibleRowCapacity = computed(() => Math.max(0, Math.floor(props.h) - 2));
+    function nonNegativeInteger(value: unknown): number {
+      const n = Math.floor(Number(value));
+      return Number.isFinite(n) ? Math.max(0, n) : 0;
+    }
+
+    const visibleRowCapacity = computed(() => Math.max(0, nonNegativeInteger(props.h) - 2));
+    const requestedScrollTop = computed(() => nonNegativeInteger(props.scrollTop));
     const normalizedScrollTop = computed(() => {
       const max = Math.max(0, sortedRows.value.length - visibleRowCapacity.value);
-      return Math.max(0, Math.min(max, Math.floor(props.scrollTop)));
+      return Math.min(max, requestedScrollTop.value);
     });
+    watch(
+      () => [normalizedScrollTop.value, requestedScrollTop.value] as const,
+      ([next, requested]) => {
+        if (next !== requested) emit("update:scrollTop", next);
+      },
+      { immediate: true },
+    );
     const visibleRows = computed(() =>
       sortedRows.value.slice(
         normalizedScrollTop.value,

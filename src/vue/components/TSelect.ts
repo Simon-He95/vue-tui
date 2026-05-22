@@ -463,14 +463,20 @@ export const TSelect = defineComponent({
 
     function getSelectedIndices(): number[] {
       if (!props.multiple) return [];
-      const max = Math.max(0, options.value.length - 1);
+
+      const total = options.value.length;
+      if (total <= 0) return [];
+
       const raw = Array.isArray(props.modelValue) ? props.modelValue : [];
       const set = new Set<number>();
+
       for (const v of raw) {
         const index = Math.trunc(modelIndex(v));
-        if (!Number.isFinite(index) || index < 0) continue;
-        set.add(clamp(index, 0, max));
+        if (!Number.isFinite(index)) continue;
+        if (index < 0 || index >= total) continue;
+        set.add(index);
       }
+
       return [...set].sort((a, b) => a - b);
     }
 

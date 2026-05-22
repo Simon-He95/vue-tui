@@ -182,6 +182,55 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("drops stale multiple TSelect model indices instead of remapping them", async () => {
+    const onConfirm = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          multiple: true,
+          multipleEmit: "index",
+          options: [{ label: "Alpha" }],
+          modelValue: [99],
+          onConfirm,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const selectNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.x === 0 && node.rect.y === 0);
+
+      expect(selectNode).toBeTruthy();
+      mounted.events()!.focus(selectNode!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(onConfirm).toHaveBeenCalledWith([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders table, data table, and tree primitives", async () => {
     const rows = [
       { id: "2", name: "build", status: "fail" },
@@ -298,6 +347,38 @@ describe("P1/P2 public components", () => {
           key: 1,
         }),
       );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits clamped TDataTable scrollTop when rows shrink below the viewport", async () => {
+    const scrollTop = ref(99);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: [{ name: "Alpha" }],
+          scrollTop: scrollTop.value,
+          "onUpdate:scrollTop": (next: number) => {
+            scrollTop.value = next;
+          },
+        }),
+      24,
+      6,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(scrollTop.value).toBe(0);
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Alpha");
     } finally {
       mounted.unmount();
     }
