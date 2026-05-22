@@ -300,9 +300,8 @@ export const TTable = defineComponent({
         const y = (props.header ? 2 : 0) + index;
         const key = rowKey(row, index, props.rowKey as any);
         const selected =
-          props.selectedRowKey !== undefined
-            ? key === props.selectedRowKey
-            : Boolean(props.selectedRowKeys?.some((candidate) => candidate === key));
+          (props.selectedRowKey !== undefined && key === props.selectedRowKey) ||
+          Boolean(props.selectedRowKeys?.some((candidate) => candidate === key));
         children.push(
           h(
             TView as any,

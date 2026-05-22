@@ -955,6 +955,49 @@ describe("ui regressions portal select and text", () => {
     mounted.unmount();
   });
 
+  it('TSelect multipleEmit="both" emits labels in the structured payload', async () => {
+    const selected = ref<string[]>(["alpha", "gamma"]);
+    const confirmed = ref<any>(null);
+
+    const mounted = await mountTerminal(() =>
+      h(TSelect, {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 3,
+        options: [
+          { label: "Alpha", value: "alpha" },
+          { label: "Beta", value: "beta" },
+          { label: "Gamma", value: "gamma" },
+        ],
+        valueMode: "value",
+        multiple: true,
+        multipleEmit: "both",
+        modelValue: selected.value,
+        onConfirm: (v: any) => {
+          confirmed.value = v;
+        },
+        autoFocus: true,
+      } as any),
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    expect(confirmed.value).toEqual({ indices: [0, 2], labels: ["Alpha", "Gamma"] });
+    expect(confirmed.value).not.toHaveProperty("values");
+    mounted.unmount();
+  });
+
   it("TSelect sanitizes newline so it does not write outside its rect", async () => {
     const mounted = await mountTerminal(() =>
       h(TSelect, {

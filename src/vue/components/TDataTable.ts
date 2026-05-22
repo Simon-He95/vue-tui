@@ -1,8 +1,9 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import { computed, defineComponent, h } from "vue";
+import { computed, defineComponent, h, ref } from "vue";
 import { sliceByCells, textCellWidth } from "../utils/text.js";
 import { TTable, type TTableColumn, type TTableRow } from "./TTable.js";
+import { TView } from "./TView.js";
 
 export type TDataTableSortDirection = "asc" | "desc";
 
@@ -177,6 +178,8 @@ export const TDataTable = defineComponent({
       ),
     );
     const tableRows = computed(() => visibleRows.value.map(({ row }) => row));
+    const activeAbsoluteIndex = ref<number | null>(null);
+    const keyboardActive = ref(false);
 
     const columns = computed(() =>
       props.columns.map((column) => {
@@ -200,10 +203,28 @@ export const TDataTable = defineComponent({
       return new Set(props.selectedRowKey === undefined ? [] : [props.selectedRowKey]);
     }
 
-    function select(row: TTableRow, index: number): void {
-      const originalIndex = originalIndexAt(index);
-      const key = rowKey(row, originalIndex, props.rowKey as any);
-      if (!props.selectable || props.selectionMode === "none") return;
+    const activeRowKey = computed(() => {
+      const index = activeAbsoluteIndex.value;
+      if (index == null) return undefined;
+      const entry = sortedRows.value[index];
+      return entry ? rowKey(entry.row, entry.originalIndex, props.rowKey as any) : undefined;
+    });
+
+    function setActiveAbsoluteIndex(absoluteIndex: number): number | null {
+      const clamped = Math.max(0, Math.min(sortedRows.value.length - 1, absoluteIndex));
+      const entry = sortedRows.value[clamped];
+      if (!entry) return null;
+      activeAbsoluteIndex.value = clamped;
+      const visibleIndex = clamped - normalizedScrollTop.value;
+      if (visibleIndex < 0) emit("update:scrollTop", clamped);
+      else if (visibleIndex >= visibleRowCapacity.value) {
+        emit("update:scrollTop", Math.max(0, clamped - visibleRowCapacity.value + 1));
+      }
+      return clamped;
+    }
+
+    function commitSelection(entry: DataRow, index: number): void {
+      const key = rowKey(entry.row, entry.originalIndex, props.rowKey as any);
       if (props.selectionMode === "multiple") {
         const keys = selectedKeySet();
         if (keys.has(key)) keys.delete(key);
@@ -212,11 +233,20 @@ export const TDataTable = defineComponent({
       } else {
         emit("update:selectedRowKey", key);
       }
-      emit("rowSelect", { row, index, originalIndex, key });
+      emit("rowSelect", { row: entry.row, index, originalIndex: entry.originalIndex, key });
+    }
+
+    function select(row: TTableRow, index: number): void {
+      if (!props.selectable || props.selectionMode === "none") return;
+      keyboardActive.value = false;
+      const originalIndex = originalIndexAt(index);
+      setActiveAbsoluteIndex(normalizedScrollTop.value + index);
+      commitSelection({ row, originalIndex }, index);
     }
 
     function sort(column: TTableColumn): void {
       if (!props.sortable || props.columns.length === 0) return;
+      keyboardActive.value = false;
       const nextSortBy = column.key;
       const nextDirection =
         props.sortBy === nextSortBy && props.sortDirection === "asc" ? "desc" : "asc";
@@ -225,62 +255,88 @@ export const TDataTable = defineComponent({
       emit("sortChange", { sortBy: nextSortBy, sortDirection: nextDirection });
     }
 
-    function selectAbsoluteIndex(absoluteIndex: number): void {
-      const clamped = Math.max(0, Math.min(sortedRows.value.length - 1, absoluteIndex));
-      const entry = sortedRows.value[clamped];
-      if (!entry) return;
-      const visibleIndex = clamped - normalizedScrollTop.value;
-      if (visibleIndex < 0) emit("update:scrollTop", clamped);
-      else if (visibleIndex >= visibleRowCapacity.value) {
-        emit("update:scrollTop", Math.max(0, clamped - visibleRowCapacity.value + 1));
+    function handleKeydown(event: any, fallbackAbsoluteIndex: number): void {
+      if (event?.defaultPrevented) return;
+      if (!props.selectable || props.selectionMode === "none") return;
+      if (
+        event?.key !== "ArrowDown" &&
+        event?.key !== "ArrowUp" &&
+        event?.key !== "Enter" &&
+        event?.key !== " "
+      ) {
+        return;
       }
-      const key = rowKey(entry.row, entry.originalIndex, props.rowKey as any);
-      if (props.selectionMode === "multiple") {
-        const keys = selectedKeySet();
-        keys.add(key);
-        emit("update:selectedRowKeys", [...keys]);
-      } else {
-        emit("update:selectedRowKey", key);
+      event.preventDefault?.();
+      keyboardActive.value = true;
+      const current = activeAbsoluteIndex.value ?? fallbackAbsoluteIndex;
+      if (event.key === "Enter" || event.key === " ") {
+        const clamped = setActiveAbsoluteIndex(current);
+        if (clamped == null) return;
+        const entry = sortedRows.value[clamped];
+        if (!entry) return;
+        const visibleIndex = clamped - normalizedScrollTop.value;
+        commitSelection(
+          entry,
+          Math.max(0, Math.min(Math.max(0, visibleRowCapacity.value - 1), visibleIndex)),
+        );
+        return;
       }
-      emit("rowSelect", {
-        row: entry.row,
-        index: Math.max(0, Math.min(visibleRowCapacity.value - 1, visibleIndex)),
-        originalIndex: entry.originalIndex,
-        key,
-      });
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      setActiveAbsoluteIndex(current + delta);
+    }
+
+    function onKeydown(event: any): void {
+      handleKeydown(event, normalizedScrollTop.value);
     }
 
     function onRowKeydown({ index, event }: { index: number; event: any }): void {
-      if (!props.selectable || props.selectionMode === "none") return;
       if (event?.key !== "ArrowDown" && event?.key !== "ArrowUp") return;
-      event.preventDefault?.();
-      const delta = event.key === "ArrowDown" ? 1 : -1;
-      selectAbsoluteIndex(normalizedScrollTop.value + index + delta);
+      handleKeydown(event, normalizedScrollTop.value + index);
     }
 
     return () =>
-      h(TTable as any, {
-        x: props.x,
-        y: props.y,
-        w: props.w,
-        h: props.h,
-        zIndex: props.zIndex,
-        columns: columns.value,
-        rows: tableRows.value,
-        rowKey: dataTableRowKey,
-        selectedRowKey: props.selectionMode === "multiple" ? undefined : props.selectedRowKey,
-        selectedRowKeys: props.selectionMode === "multiple" ? props.selectedRowKeys : undefined,
-        border: props.border,
-        style: props.style,
-        headerStyle: props.headerStyle,
-        borderStyle: props.borderStyle,
-        selectedStyle: props.selectedStyle,
-        emptyText: props.emptyText,
-        headerFocusable: props.sortable,
-        rowFocusable: props.selectable && props.selectionMode !== "none",
-        onRowClick: ({ row, index }: { row: TTableRow; index: number }) => select(row, index),
-        onHeaderClick: ({ column }: { column: TTableColumn }) => sort(column),
-        onRowKeydown,
-      });
+      h(
+        TView as any,
+        {
+          x: props.x,
+          y: props.y,
+          w: props.w,
+          h: props.h,
+          zIndex: props.zIndex,
+          focusable: props.selectable && props.selectionMode !== "none",
+          autoFocus: keyboardActive.value,
+          onKeydown,
+        },
+        () =>
+          h(TTable as any, {
+            x: 0,
+            y: 0,
+            w: props.w,
+            h: props.h,
+            columns: columns.value,
+            rows: tableRows.value,
+            rowKey: dataTableRowKey,
+            selectedRowKey:
+              activeRowKey.value ??
+              (props.selectionMode === "multiple" ? undefined : props.selectedRowKey),
+            selectedRowKeys:
+              props.selectionMode === "multiple"
+                ? props.selectedRowKeys
+                : props.selectedRowKey === undefined
+                  ? undefined
+                  : [props.selectedRowKey],
+            border: props.border,
+            style: props.style,
+            headerStyle: props.headerStyle,
+            borderStyle: props.borderStyle,
+            selectedStyle: props.selectedStyle,
+            emptyText: props.emptyText,
+            headerFocusable: props.sortable,
+            rowFocusable: props.selectable && props.selectionMode !== "none",
+            onRowClick: ({ row, index }: { row: TTableRow; index: number }) => select(row, index),
+            onHeaderClick: ({ column }: { column: TTableColumn }) => sort(column),
+            onRowKeydown,
+          }),
+      );
   },
 });

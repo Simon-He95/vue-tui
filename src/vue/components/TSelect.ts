@@ -200,7 +200,7 @@ function writeHighlightedText(
 
 export type TSelectMultipleChangePayload = Readonly<{
   indices: number[];
-  values: string[];
+  labels: string[];
 }>;
 export type TSelectMultipleEmitMode = "label" | "index" | "both";
 export type TSelectModelValue = unknown;
@@ -468,11 +468,11 @@ export const TSelect = defineComponent({
     }
 
     function makeMultiplePayload(indices: number[]): TSelectMultipleChangePayload {
-      const values = indices
+      const labels = indices
         .map((i) => options.value[i])
         .filter(Boolean)
         .map((opt) => getOptionLabel(opt!));
-      return { indices, values };
+      return { indices, labels };
     }
 
     function emitMultiple(name: "change" | "confirm", indices: number[]): void {
@@ -485,7 +485,7 @@ export const TSelect = defineComponent({
         emit(name, payload satisfies TSelectMultipleChangePayload);
         return;
       }
-      emit(name, payload.values);
+      emit(name, payload.labels);
     }
 
     function toggleMultiple(index: number): void {

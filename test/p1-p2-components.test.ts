@@ -134,6 +134,87 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not mutate multiple data table selection during arrow navigation", async () => {
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+      { id: "c", name: "Gamma" },
+    ];
+    const selectedRowKeys = ref<unknown[]>([]);
+    const scrollTop = ref(0);
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          selectionMode: "multiple",
+          selectedRowKeys: selectedRowKeys.value,
+          scrollTop: scrollTop.value,
+          "onUpdate:selectedRowKeys": (keys: unknown[]) => (selectedRowKeys.value = keys),
+          "onUpdate:scrollTop": (next: number) => (scrollTop.value = next),
+        }),
+      16,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 2, bubbles: true }));
+      await nextTick();
+
+      expect(selectedRowKeys.value).toEqual(["a"]);
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(selectedRowKeys.value).toEqual(["a"]);
+      expect(scrollTop.value).toBe(0);
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(selectedRowKeys.value).toEqual(["a"]);
+      expect(scrollTop.value).toBe(1);
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          code: "Space",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(selectedRowKeys.value).toEqual(["a", "c"]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("redistributes TTable auto width after maxWidth clamps a column", async () => {
     const mounted = await mountTerminal(
       () =>
