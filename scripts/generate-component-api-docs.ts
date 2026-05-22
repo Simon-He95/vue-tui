@@ -602,7 +602,7 @@ function maturityLabel(maturity: ApiMaturity): string {
 }
 
 function eventBaseName(name: string): string {
-  return name.replace(/Capture$/u, "");
+  return name.endsWith("Capture") ? name.slice(0, -"Capture".length) : name;
 }
 
 type DescriptionResult = { description: string | null; source: DescriptionSource };

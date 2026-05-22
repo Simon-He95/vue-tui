@@ -478,8 +478,12 @@ export const TForm = defineComponent({
           h: props.h,
           zIndex: props.zIndex,
           onKeydown: (event: any) => {
+            const allowDefaultPreventedEnter =
+              event?.key === "Enter" && event?.__tuiFormSubmit === true;
+            if (event?.defaultPrevented && !allowDefaultPreventedEnter) return;
             if (!props.submitOnEnter) return;
             if (event.key !== "Enter") return;
+            if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
             event.preventDefault?.();
             submit();
           },

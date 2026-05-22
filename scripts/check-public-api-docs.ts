@@ -106,7 +106,7 @@ const allowedSharedPayloadEvents = new Set([
 ]);
 
 function baseEventName(name: string): string {
-  return name.replace(/Capture$/u, "");
+  return name.endsWith("Capture") ? name.slice(0, -"Capture".length) : name;
 }
 
 for (const [name, component] of Object.entries(manifest.components)) {

@@ -1429,6 +1429,27 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("applies toast level style to titleless messages", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TToastViewport, {
+          w: 16,
+          max: 1,
+          placement: "top-left",
+          items: [{ id: "saved", level: "success", message: "Saved" }],
+        }),
+      20,
+      4,
+    );
+
+    try {
+      expect(mounted.terminal.snapshot().lines[0]).toContain("Saved");
+      expect(mounted.terminal.getCell(1, 0).style.fg).toBe("greenBright");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("keeps autocomplete suggestions open when closeOnSelect is false", async () => {
     const value = ref("ap");
     const mounted = await mountTerminal(
@@ -1715,6 +1736,64 @@ describe("P1/P2 public components", () => {
       expect(lines[1]).toContain("Value");
       expect(lines[2]).toContain("Second");
       expect(lines.join("\n")).not.toContain("Help");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not submit TForm when autocomplete consumes Enter for a suggestion", async () => {
+    const value = ref("ap");
+    const onSelect = vi.fn();
+    const onSubmit = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            model: { query: value.value },
+            submitOnEnter: true,
+            onSubmit,
+          },
+          () =>
+            h(TAutocompleteInput, {
+              x: 0,
+              y: 0,
+              w: 20,
+              h: 3,
+              modelValue: value.value,
+              "onUpdate:modelValue": (next: string) => (value.value = next),
+              suggestions: ["apple", "apricot"],
+              onSelect,
+            }),
+        ),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(value.value).toBe("apple");
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ value: "apple", index: 0, query: "ap" }),
+      );
+      expect(onSubmit).not.toHaveBeenCalled();
     } finally {
       mounted.unmount();
     }
