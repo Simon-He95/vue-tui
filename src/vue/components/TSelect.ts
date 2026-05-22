@@ -304,14 +304,18 @@ export const TSelect = defineComponent({
       emit("update:activeIndex", next);
     }
 
-    function getScrollOffset(r: Rect): number {
-      const visibleH = Math.max(
+    function visibleRowCount(r: Rect): number {
+      return Math.max(
         0,
         Math.min(
           Math.floor(r.h),
           props.maxVisible == null ? Number.POSITIVE_INFINITY : Math.max(1, props.maxVisible),
         ),
       );
+    }
+
+    function getScrollOffset(r: Rect): number {
+      const visibleH = visibleRowCount(r);
       const total = Math.max(0, options.value.length);
       if (visibleH <= 0) return 0;
       if (total <= visibleH) return 0;
@@ -325,6 +329,11 @@ export const TSelect = defineComponent({
       const translated = translateRect(raw, layout.originX, layout.originY);
       if (!layout.clipRect) return translated;
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
+    });
+
+    const visibleRect = computed<Rect>(() => {
+      const r = absRect.value;
+      return { ...r, h: visibleRowCount(r) };
     });
 
     watchEffect(() => {
@@ -359,11 +368,10 @@ export const TSelect = defineComponent({
     }
 
     function modelIndex(value: unknown): number {
-      if (props.valueMode === "index") return typeof value === "number" ? value : 0;
-      const index = options.value.findIndex((opt, optIndex) =>
+      if (props.valueMode === "index") return typeof value === "number" ? value : -1;
+      return options.value.findIndex((opt, optIndex) =>
         valuesEqual(getOptionValue(opt, optIndex), value),
       );
-      return index >= 0 ? index : 0;
     }
 
     function isOptionInteractive(opt: SelectOption | undefined): boolean {
@@ -446,7 +454,9 @@ export const TSelect = defineComponent({
       const raw = Array.isArray(props.modelValue) ? props.modelValue : [];
       const set = new Set<number>();
       for (const v of raw) {
-        set.add(clamp(Math.trunc(modelIndex(v)), 0, max));
+        const index = Math.trunc(modelIndex(v));
+        if (!Number.isFinite(index) || index < 0) continue;
+        set.add(clamp(index, 0, max));
       }
       return [...set].sort((a, b) => a - b);
     }
@@ -574,13 +584,13 @@ export const TSelect = defineComponent({
     }
 
     const { id } = useTerminalNode(() => ({
-      rect: absRect.value,
+      rect: visibleRect.value,
       zIndex: eventZ.value,
       visible: visible.value,
       focusable: true,
       handlers: {
         click: (e: TerminalPointerEvent) => {
-          const r = absRect.value;
+          const r = visibleRect.value;
           const offset = getScrollOffset(r);
           const idx = offset + (e.cellY - r.y);
           if (idx >= 0 && idx < options.value.length) commit(idx);
@@ -613,12 +623,13 @@ export const TSelect = defineComponent({
 
     useRenderNode(() => ({
       zIndex: props.zIndex,
-      rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
+      rect: visible.value ? visibleRect.value : { x: 0, y: 0, w: 0, h: 0 },
       deps: [
         visible.value,
         absRect.value,
         props.w,
         props.h,
+        props.maxVisible,
         options.value,
         props.modelValue,
         props.multiple,
@@ -638,7 +649,7 @@ export const TSelect = defineComponent({
       ],
       paint: (dirtyRows) => {
         if (!visible.value) return;
-        const r = absRect.value;
+        const r = visibleRect.value;
         if (r.w <= 0 || r.h <= 0) return;
         const offset = getScrollOffset(r);
         const base = props.style ?? defaultStyle.value;
@@ -882,6 +893,9 @@ export const TSelect = defineComponent({
           void provider(query, { signal: controller.signal })
             .then((items) => {
               if (!controller.signal.aborted) providerOptions.value = items;
+            })
+            .catch(() => {
+              if (!controller.signal.aborted) providerOptions.value = [];
             })
             .finally(() => {
               if (!controller.signal.aborted) providerLoading.value = false;

@@ -170,7 +170,7 @@ Import: `@simon_he/vue-tui`
 | ------------------- | --------------------------------- | -------------------------------- | ---- | --------------------------------------------------- |
 | <code>x</code>      | <code>number</code>               | —                                | 是   | Left position in terminal cells.                    |
 | <code>y</code>      | <code>number</code>               | —                                | 是   | Top position in terminal cells.                     |
-| <code>value</code>  | <code>string &#124; number</code> | —                                | 是   | Text or scalar value rendered by the component.     |
+| <code>value</code>  | <code>string &#124; number</code> | —                                | 是   | Text or scalar value rendered by the badge.         |
 | <code>tone</code>   | <code>TFeedbackTone</code>        | <code>&quot;default&quot;</code> | 否   | Semantic color tone.                                |
 | <code>zIndex</code> | <code>number</code>               | <code>0</code>                   | 否   | Render and event ordering within the current plane. |
 | <code>style</code>  | <code>Style</code>                | <code>undefined</code>           | 否   | Base terminal cell style override.                  |
@@ -287,7 +287,7 @@ Import: `@simon_he/vue-tui`
 | <code>x</code>      | <code>number</code> | —                                                        | 是   | Left position in terminal cells.                    |
 | <code>y</code>      | <code>number</code> | —                                                        | 是   | Top position in terminal cells.                     |
 | <code>w</code>      | <code>number</code> | <code>undefined</code>                                   | 否   | Width in terminal cells.                            |
-| <code>value</code>  | <code>string</code> | —                                                        | 是   | Text or scalar value rendered by the component.     |
+| <code>value</code>  | <code>string</code> | —                                                        | 是   | Code text rendered inside the code block.           |
 | <code>zIndex</code> | <code>number</code> | <code>0</code>                                           | 否   | Render and event ordering within the current plane. |
 | <code>style</code>  | <code>Style</code>  | <code>() =&gt; ({ fg: &quot;yellowBright&quot; })</code> | 否   | Base terminal cell style override.                  |
 
@@ -311,7 +311,7 @@ Import: `@simon_he/vue-tui`
 | <code>title</code>               | <code>string</code>                                         | <code>&quot;&quot;</code>                        | 否   | Optional title text.                                     |
 | <code>query</code>               | <code>string</code>                                         | <code>undefined</code>                           | 否   | Controlled search query.                                 |
 | <code>initialQuery</code>        | <code>string</code>                                         | <code>&quot;&quot;</code>                        | 否   | Query used when the command palette opens.               |
-| <code>items</code>               | <code>readonly TCommandPaletteItem[]</code>                 | —                                                | 是   | Items rendered by the component.                         |
+| <code>items</code>               | <code>readonly TCommandPaletteItem[]</code>                 | —                                                | 是   | Command items rendered and filtered by the palette.      |
 | <code>itemsProvider</code>       | <code>TCommandPaletteItemsProvider</code>                   | <code>undefined</code>                           | 否   | Async command provider called with the current query.    |
 | <code>matcher</code>             | <code>TCommandPaletteMatcher</code>                         | <code>undefined</code>                           | 否   | Custom command matcher.                                  |
 | <code>filterStrategy</code>      | <code>&quot;substring&quot; &#124; &quot;fuzzy&quot;</code> | <code>&quot;substring&quot;</code>               | 否   | Built-in command matching strategy.                      |
@@ -325,7 +325,7 @@ Import: `@simon_he/vue-tui`
 | <code>debounce</code>            | <code>number</code>                                         | <code>0</code>                                   | 否   | Delay before calling an async provider, in milliseconds. |
 | <code>minQueryLength</code>      | <code>number</code>                                         | <code>0</code>                                   | 否   | Minimum query length before async loading runs.          |
 | <code>maxVisibleItems</code>     | <code>number</code>                                         | <code>undefined</code>                           | 否   | Maximum number of command rows rendered at once.         |
-| <code>closeOnSelect</code>       | <code>boolean</code>                                        | <code>false</code>                               | 否   | Closes suggestions after a suggestion is selected.       |
+| <code>closeOnSelect</code>       | <code>boolean</code>                                        | <code>false</code>                               | 否   | Closes the command palette after a command is selected.  |
 | <code>resetQueryOnClose</code>   | <code>boolean</code>                                        | <code>false</code>                               | 否   | Resets the query when the palette closes.                |
 | <code>w</code>                   | <code>number</code>                                         | <code>72</code>                                  | 否   | Width in terminal cells.                                 |
 | <code>h</code>                   | <code>number</code>                                         | <code>18</code>                                  | 否   | Height in terminal cells.                                |
@@ -416,7 +416,7 @@ Import: `@simon_he/vue-tui`
 | <code>filterable</code>      | <code>boolean</code>                                                       | <code>false</code>               | 否   | Enables built-in row filtering.                                                                                                     |
 | <code>manualFilter</code>    | <code>boolean</code>                                                       | <code>false</code>               | 否   | Disables built-in filtering while keeping filter state host-owned.                                                                  |
 | <code>filterPredicate</code> | <code>TDataTableFilterPredicate</code>                                     | <code>undefined</code>           | 否   | Custom row filter predicate.                                                                                                        |
-| <code>selectable</code>      | <code>boolean</code>                                                       | <code>false</code>               | 否   | Controls whether terminal text selection may start inside the component.                                                            |
+| <code>selectable</code>      | <code>boolean</code>                                                       | <code>false</code>               | 否   | Enables row selection.                                                                                                              |
 | <code>selectionMode</code>   | <code>TDataTableSelectionMode</code>                                       | <code>&quot;single&quot;</code>  | 否   | Row selection mode.                                                                                                                 |
 | <code>border</code>          | <code>boolean</code>                                                       | <code>false</code>               | 否   | Draws a border around the component.                                                                                                |
 | <code>style</code>           | <code>Style</code>                                                         | <code>undefined</code>           | 否   | Base terminal cell style override.                                                                                                  |
@@ -539,7 +539,7 @@ Import: `@simon_he/vue-tui`
 | 名称                            | 类型                                                                | 默认值                                          | 必填 | 说明                                                            |
 | ------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- | ---- | --------------------------------------------------------------- |
 | <code>cols</code>               | <code>number</code>                                                 | —                                               | 是   | Terminal column count.                                          |
-| <code>rows</code>               | <code>number</code>                                                 | —                                               | 是   | Terminal row count or table row data, depending on component.   |
+| <code>rows</code>               | <code>number</code>                                                 | —                                               | 是   | Terminal row count.                                             |
 | <code>widthProvider</code>      | <code>WidthProvider</code>                                          | <code>&quot;default&quot;</code>                | 否   | Cell width provider used by the terminal buffer.                |
 | <code>defaultStyle</code>       | <code>Style</code>                                                  | <code>() =&gt; ({})</code>                      | 否   | Default terminal cell style for descendants.                    |
 | <code>theme</code>              | <code>TuiThemeOverrides</code>                                      | <code>undefined</code>                          | 否   | Theme token overrides for component defaults.                   |
@@ -885,21 +885,21 @@ Import: `@simon_he/vue-tui`
 
 ### Props
 
-| 名称                       | 类型                                     | 默认值                 | 必填 | 说明                                                   |
-| -------------------------- | ---------------------------------------- | ---------------------- | ---- | ------------------------------------------------------ |
-| <code>x</code>             | <code>number</code>                      | —                      | 是   | Left position in terminal cells.                       |
-| <code>y</code>             | <code>number</code>                      | —                      | 是   | Top position in terminal cells.                        |
-| <code>zIndex</code>        | <code>number</code>                      | <code>0</code>         | 否   | Render and event ordering within the current plane.    |
-| <code>value</code>         | <code>string</code>                      | —                      | 是   | Text or scalar value rendered by the component.        |
-| <code>w</code>             | <code>number</code>                      | <code>undefined</code> | 否   | Width in terminal cells.                               |
-| <code>h</code>             | <code>number</code>                      | <code>undefined</code> | 否   | Height in terminal cells.                              |
-| <code>style</code>         | <code>Style</code>                       | <code>undefined</code> | 否   | Base terminal cell style override.                     |
-| <code>linkStyle</code>     | <code>Style</code>                       | <code>undefined</code> | 否   | Style applied to detected link segments.               |
-| <code>clear</code>         | <code>boolean</code>                     | <code>true</code>      | 否   | Clears the component rectangle before drawing content. |
-| <code>wrap</code>          | <code>boolean</code>                     | <code>false</code>     | 否   | Wraps text to the available cell width.                |
-| <code>protocols</code>     | <code>readonly TLinkifyProtocol[]</code> | <code>undefined</code> | 否   | URL protocols accepted by linkification.               |
-| <code>allowRelative</code> | <code>boolean</code>                     | <code>false</code>     | 否   | Allows relative hrefs in detected link segments.       |
-| <code>maxUrlLength</code>  | <code>number</code>                      | <code>undefined</code> | 否   | Maximum detected URL length.                           |
+| 名称                       | 类型                                     | 默认值                 | 必填 | 说明                                                     |
+| -------------------------- | ---------------------------------------- | ---------------------- | ---- | -------------------------------------------------------- |
+| <code>x</code>             | <code>number</code>                      | —                      | 是   | Left position in terminal cells.                         |
+| <code>y</code>             | <code>number</code>                      | —                      | 是   | Top position in terminal cells.                          |
+| <code>zIndex</code>        | <code>number</code>                      | <code>0</code>         | 否   | Render and event ordering within the current plane.      |
+| <code>value</code>         | <code>string</code>                      | —                      | 是   | Text scanned for links and rendered into terminal cells. |
+| <code>w</code>             | <code>number</code>                      | <code>undefined</code> | 否   | Width in terminal cells.                                 |
+| <code>h</code>             | <code>number</code>                      | <code>undefined</code> | 否   | Height in terminal cells.                                |
+| <code>style</code>         | <code>Style</code>                       | <code>undefined</code> | 否   | Base terminal cell style override.                       |
+| <code>linkStyle</code>     | <code>Style</code>                       | <code>undefined</code> | 否   | Style applied to detected link segments.                 |
+| <code>clear</code>         | <code>boolean</code>                     | <code>true</code>      | 否   | Clears the component rectangle before drawing content.   |
+| <code>wrap</code>          | <code>boolean</code>                     | <code>false</code>     | 否   | Wraps text to the available cell width.                  |
+| <code>protocols</code>     | <code>readonly TLinkifyProtocol[]</code> | <code>undefined</code> | 否   | URL protocols accepted by linkification.                 |
+| <code>allowRelative</code> | <code>boolean</code>                     | <code>false</code>     | 否   | Allows relative hrefs in detected link segments.         |
+| <code>maxUrlLength</code>  | <code>number</code>                      | <code>undefined</code> | 否   | Maximum detected URL length.                             |
 
 ### Events
 
@@ -922,7 +922,7 @@ Import: `@simon_he/vue-tui`
 | <code>w</code>           | <code>number</code>   | —                      | 是   | Width in terminal cells.                                               |
 | <code>h</code>           | <code>number</code>   | —                      | 是   | Height in terminal cells.                                              |
 | <code>zIndex</code>      | <code>number</code>   | <code>0</code>         | 否   | Render and event ordering within the current plane.                    |
-| <code>items</code>       | <code>string[]</code> | —                      | 是   | Items rendered by the component.                                       |
+| <code>items</code>       | <code>string[]</code> | —                      | 是   | List rows rendered by the component.                                   |
 | <code>itemVersion</code> | <code>number</code>   | <code>0</code>         | 否   | External version key for item changes that keep array identity stable. |
 | <code>modelValue</code>  | <code>number</code>   | <code>0</code>         | 否   | Controlled component value.                                            |
 | <code>style</code>       | <code>Style</code>    | <code>undefined</code> | 否   | Base terminal cell style override.                                     |
@@ -1837,7 +1837,7 @@ Import: `@simon_he/vue-tui`
 | <code>x</code>       | <code>number</code>  | —                      | 是   | Left position in terminal cells.                                                                                                                                                                                                                                           |
 | <code>y</code>       | <code>number</code>  | —                      | 是   | Top position in terminal cells.                                                                                                                                                                                                                                            |
 | <code>zIndex</code>  | <code>number</code>  | <code>0</code>         | 否   | Render and event ordering within the current plane.                                                                                                                                                                                                                        |
-| <code>value</code>   | <code>string</code>  | —                      | 是   | Text or scalar value rendered by the component.                                                                                                                                                                                                                            |
+| <code>value</code>   | <code>string</code>  | —                      | 是   | Text content rendered into terminal cells.                                                                                                                                                                                                                                 |
 | <code>w</code>       | <code>number</code>  | <code>undefined</code> | 否   | Width in terminal cells.                                                                                                                                                                                                                                                   |
 | <code>h</code>       | <code>number</code>  | <code>undefined</code> | 否   | Height in terminal cells.                                                                                                                                                                                                                                                  |
 | <code>style</code>   | <code>Style</code>   | <code>undefined</code> | 否   | Base terminal cell style override.                                                                                                                                                                                                                                         |
@@ -2026,7 +2026,7 @@ Import: `@simon_he/vue-tui`
 | <code>scrollX</code>           | <code>number</code>                                        | <code>0</code>         | 否   | Horizontal content offset in terminal cells.                              |
 | <code>scrollY</code>           | <code>number</code>                                        | <code>0</code>         | 否   | Vertical content offset in terminal cells.                                |
 | <code>focusable</code>         | <code>boolean</code>                                       | <code>false</code>     | 否   | Adds the component to keyboard focus navigation.                          |
-| <code>selectable</code>        | <code>boolean</code>                                       | <code>undefined</code> | 否   | Controls whether terminal text selection may start inside the component.  |
+| <code>selectable</code>        | <code>boolean</code>                                       | <code>undefined</code> | 否   | Controls whether terminal text selection may start inside the view.       |
 | <code>selectionScrollBy</code> | <code>(deltaRows: number) =&gt; boolean &#124; void</code> | <code>undefined</code> | 否   | Scroll callback used while a pointer selection reaches the viewport edge. |
 | <code>autoFocus</code>         | <code>boolean</code>                                       | <code>false</code>     | 否   | Requests focus when the component becomes visible.                        |
 

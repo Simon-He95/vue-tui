@@ -7,8 +7,14 @@ type Component = {
   props: Array<{ name: string; type: string; required: boolean; deprecated?: string }>;
   events: Array<{ name: string; payload?: string }>;
 };
+type Entrypoint = {
+  maturity: Maturity;
+  valueExports?: string[];
+  typeExports?: string[];
+  exports?: string[];
+};
 type ApiManifest = {
-  entrypoints: Record<string, { maturity: Maturity; exports: string[] }>;
+  entrypoints: Record<string, Entrypoint>;
   components: Record<string, Component>;
 };
 
@@ -52,6 +58,14 @@ if (!base) {
 const breaking: string[] = [];
 const notes: string[] = [];
 
+function valueExports(entrypoint: Entrypoint): readonly string[] {
+  return entrypoint.valueExports ?? entrypoint.exports ?? [];
+}
+
+function typeExports(entrypoint: Entrypoint): readonly string[] {
+  return entrypoint.typeExports ?? [];
+}
+
 for (const [specifier, previous] of Object.entries(base.entrypoints)) {
   const next = current.entrypoints[specifier];
   if (!next) {
@@ -59,10 +73,17 @@ for (const [specifier, previous] of Object.entries(base.entrypoints)) {
     else notes.push(`${specifier} entrypoint was removed`);
     continue;
   }
-  const nextExports = new Set(next.exports);
-  for (const name of previous.exports) {
-    if (nextExports.has(name)) continue;
-    const line = `${specifier}.${name} export was removed`;
+  const nextValueExports = new Set(valueExports(next));
+  for (const name of valueExports(previous)) {
+    if (nextValueExports.has(name)) continue;
+    const line = `${specifier}.${name} value export was removed`;
+    if (previous.maturity === "public") breaking.push(line);
+    else notes.push(line);
+  }
+  const nextTypeExports = new Set(typeExports(next));
+  for (const name of typeExports(previous)) {
+    if (nextTypeExports.has(name)) continue;
+    const line = `${specifier}.${name} type export was removed`;
     if (previous.maturity === "public") breaking.push(line);
     else notes.push(line);
   }

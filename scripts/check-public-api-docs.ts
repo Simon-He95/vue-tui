@@ -17,6 +17,10 @@ const manifest = JSON.parse(
 const componentsDocs = readFileSync("docs/components.md", "utf8");
 const readme = readFileSync("README.md", "utf8");
 const errors: string[] = [];
+const requiredPropDescriptions: Record<string, RegExp> = {
+  "TCommandPalette.closeOnSelect": /command palette/u,
+  "TDataTable.selectable": /row selection/u,
+};
 
 for (const [name, component] of Object.entries(manifest.components)) {
   if (component.maturity !== "public") continue;
@@ -27,6 +31,10 @@ for (const [name, component] of Object.entries(manifest.components)) {
 
   for (const prop of component.props) {
     if (!prop.description) errors.push(`${name}.${prop.name} prop is missing description`);
+    const required = requiredPropDescriptions[`${name}.${prop.name}`];
+    if (required && !required.test(prop.description ?? "")) {
+      errors.push(`${name}.${prop.name} prop description has the wrong semantics`);
+    }
   }
 
   for (const event of component.events) {

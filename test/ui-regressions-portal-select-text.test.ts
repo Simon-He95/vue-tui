@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createCliEventManager,
   createEventManager,
@@ -716,6 +716,94 @@ describe("ui regressions portal select and text", () => {
     // Active row is the selected index (1) so the 1-row select should render "Close".
     expect(mounted.terminal.getCell(4, 0).ch).toBe("C");
     expect(rowHasHighlight(0)).toBe(true);
+    mounted.unmount();
+  });
+
+  it("TSelect maxVisible limits rendered option rows", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 8,
+          maxVisible: 3,
+          options: ["a", "b", "c", "d", "e"],
+        }),
+      12,
+      8,
+    );
+
+    await nextTick();
+    mounted.scheduler()!.flushNow();
+
+    const snapshot = mounted.terminal.snapshot().lines.join("\n");
+    expect(snapshot).toContain("a");
+    expect(snapshot).toContain("c");
+    expect(snapshot).not.toContain("d");
+
+    mounted.unmount();
+  });
+
+  it("TSelect optionProvider rejects without an unhandled rejection", async () => {
+    const provider = vi.fn().mockRejectedValue(new Error("load failed"));
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+
+    const mounted = await mountTerminal(() =>
+      h(TSelect, {
+        x: 0,
+        y: 0,
+        w: 16,
+        h: 3,
+        options: [],
+        optionProvider: provider,
+        query: "",
+      }),
+    );
+
+    try {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await nextTick();
+      mounted.scheduler()!.flushNow();
+
+      expect(provider).toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("No options");
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+      mounted.unmount();
+    }
+  });
+
+  it('TSelect valueMode="value" ignores stale multi-select values', async () => {
+    const mounted = await mountTerminal(() =>
+      h(TSelect, {
+        x: 0,
+        y: 0,
+        w: 14,
+        h: 2,
+        multiple: true,
+        valueMode: "value",
+        modelValue: ["missing"],
+        options: [
+          { label: "Alpha", value: "a" },
+          { label: "Beta", value: "b" },
+        ],
+      }),
+    );
+
+    await nextTick();
+    mounted.scheduler()!.flushNow();
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe("[");
+    expect(mounted.terminal.getCell(1, 0).ch).toBe(" ");
+    expect(mounted.terminal.getCell(2, 0).ch).toBe("]");
+
     mounted.unmount();
   });
 

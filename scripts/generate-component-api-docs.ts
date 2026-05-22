@@ -36,14 +36,15 @@ type ComponentMeta = {
   events: EventMeta[];
 };
 
-const publicPropDescriptions: Record<string, string> = {
+const ambiguousPublicPropNames = new Set(["closeOnSelect", "items", "rows", "selectable", "value"]);
+
+const sharedPublicPropDescriptions: Record<string, string> = {
   x: "Left position in terminal cells.",
   y: "Top position in terminal cells.",
   w: "Width in terminal cells.",
   h: "Height in terminal cells.",
   zIndex: "Render and event ordering within the current plane.",
   modelValue: "Controlled component value.",
-  value: "Text or scalar value rendered by the component.",
   tone: "Semantic color tone.",
   style: "Base terminal cell style override.",
   title: "Optional title text.",
@@ -67,11 +68,9 @@ const publicPropDescriptions: Record<string, string> = {
   scrollX: "Horizontal content offset in terminal cells.",
   scrollY: "Vertical content offset in terminal cells.",
   focusable: "Adds the component to keyboard focus navigation.",
-  selectable: "Controls whether terminal text selection may start inside the component.",
   selectionScrollBy: "Scroll callback used while a pointer selection reaches the viewport edge.",
   autoFocus: "Requests focus when the component becomes visible.",
   cols: "Terminal column count.",
-  rows: "Terminal row count or table row data, depending on component.",
   widthProvider: "Cell width provider used by the terminal buffer.",
   defaultStyle: "Default terminal cell style for descendants.",
   theme: "Theme token overrides for component defaults.",
@@ -124,7 +123,6 @@ const publicPropDescriptions: Record<string, string> = {
   selectionMode: "Row selection mode.",
   selectedIndex: "Controlled active item index.",
   query: "Controlled search query.",
-  items: "Items rendered by the component.",
   itemsProvider: "Async command provider called with the current query.",
   matcher: "Custom command matcher.",
   filterStrategy: "Built-in command matching strategy.",
@@ -142,7 +140,6 @@ const publicPropDescriptions: Record<string, string> = {
   debounce: "Delay before calling an async provider, in milliseconds.",
   minQueryLength: "Minimum query length before async loading runs.",
   maxVisibleItems: "Maximum number of command rows rendered at once.",
-  closeOnSelect: "Closes the palette after a command is selected.",
   resetQueryOnClose: "Resets the query when the palette closes.",
   hint: "Footer hint text.",
   hintStyle: "Style override for hint text.",
@@ -186,7 +183,6 @@ const publicPropDescriptions: Record<string, string> = {
   highlightedIndex: "Controlled highlighted suggestion index.",
   minChars: "Minimum input length before suggestions are shown or loaded.",
   filterLocal: "Filters provided suggestions against the input value.",
-  closeOnSelect: "Closes suggestions after a suggestion is selected.",
   suggestionStyle: "Style override for suggestion rows.",
   activeSuggestionStyle: "Style override for the active suggestion row.",
   nodes: "Tree nodes.",
@@ -231,6 +227,40 @@ const publicPropDescriptions: Record<string, string> = {
   plugins: "Input plugins attached to this input.",
   pasteImageHandler: "Host handler for pasted images.",
   filePasteHandler: "Host handler for pasted files.",
+};
+
+const componentPublicPropDescriptions: Record<string, Record<string, string>> = {
+  TAutocompleteInput: {
+    closeOnSelect: "Closes suggestions after a suggestion is selected.",
+  },
+  TBadge: {
+    value: "Text or scalar value rendered by the badge.",
+  },
+  TCode: {
+    value: "Code text rendered inside the code block.",
+  },
+  TCommandPalette: {
+    closeOnSelect: "Closes the command palette after a command is selected.",
+    items: "Command items rendered and filtered by the palette.",
+  },
+  TDataTable: {
+    selectable: "Enables row selection.",
+  },
+  TLinkifyText: {
+    value: "Text scanned for links and rendered into terminal cells.",
+  },
+  TList: {
+    items: "List rows rendered by the component.",
+  },
+  TerminalProvider: {
+    rows: "Terminal row count.",
+  },
+  TText: {
+    value: "Text content rendered into terminal cells.",
+  },
+  TView: {
+    selectable: "Controls whether terminal text selection may start inside the view.",
+  },
 };
 
 const publicEventDescriptions: Record<string, string> = {
@@ -305,7 +335,8 @@ type ApiManifest = {
     {
       maturity: ApiMaturity;
       runtime: EntrypointRuntime;
-      exports: string[];
+      valueExports: string[];
+      typeExports: string[];
     }
   >;
   components: Record<
@@ -876,13 +907,21 @@ function describeEvent(event: EventMeta): string | null {
   return publicEventDescriptions[baseName] ?? null;
 }
 
+function describePublicProp(componentName: string, prop: PropMeta): string | null {
+  if (prop.description) return prop.description;
+  const componentDescription = componentPublicPropDescriptions[componentName]?.[prop.name];
+  if (componentDescription) return componentDescription;
+  if (ambiguousPublicPropNames.has(prop.name)) return null;
+  return sharedPublicPropDescriptions[prop.name] ?? null;
+}
+
 function fillPublicDocDefaults(component: ComponentMeta): ComponentMeta {
   if (component.maturity !== "public") return component;
   return {
     ...component,
     props: component.props.map((prop) => ({
       ...prop,
-      description: prop.description ?? publicPropDescriptions[prop.name] ?? null,
+      description: describePublicProp(component.name, prop),
     })),
     events: component.events.map((event) => ({
       ...event,
@@ -953,33 +992,58 @@ function resolveSourceSpecifier(from: string, specifier: string): string | null 
   return candidates.find((candidate) => ts.sys.fileExists(candidate)) ?? null;
 }
 
-async function collectSourceValueExports(
+type SourceExports = {
+  valueExports: Set<string>;
+  typeExports: Set<string>;
+};
+
+function emptySourceExports(): SourceExports {
+  return { valueExports: new Set(), typeExports: new Set() };
+}
+
+function mergeSourceExports(target: SourceExports, source: SourceExports): void {
+  for (const name of source.valueExports) target.valueExports.add(name);
+  for (const name of source.typeExports) target.typeExports.add(name);
+}
+
+async function collectSourceExports(
   absPath: string,
   seen = new Set<string>(),
-): Promise<Set<string>> {
+): Promise<SourceExports> {
   const resolved = path.resolve(absPath);
-  if (seen.has(resolved)) return new Set();
+  if (seen.has(resolved)) return emptySourceExports();
   seen.add(resolved);
 
   const text = await fs.readFile(resolved, "utf8");
   const sourceFile = ts.createSourceFile(resolved, text, ts.ScriptTarget.Latest, true);
-  const out = new Set<string>();
+  const out = emptySourceExports();
 
   for (const stmt of sourceFile.statements) {
     if (ts.isExportDeclaration(stmt)) {
       if (stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
         const declarationTypeOnly = stmt.isTypeOnly;
         for (const el of stmt.exportClause.elements) {
-          if (declarationTypeOnly || el.isTypeOnly) continue;
-          out.add(el.name.text);
+          if (declarationTypeOnly || el.isTypeOnly) out.typeExports.add(el.name.text);
+          else out.valueExports.add(el.name.text);
         }
         continue;
       }
       if (!stmt.exportClause && stmt.moduleSpecifier && ts.isStringLiteral(stmt.moduleSpecifier)) {
         const child = resolveSourceSpecifier(resolved, stmt.moduleSpecifier.text);
         if (!child) continue;
-        for (const name of await collectSourceValueExports(child, seen)) out.add(name);
+        const childExports = await collectSourceExports(child, seen);
+        if (stmt.isTypeOnly) {
+          for (const name of childExports.typeExports) out.typeExports.add(name);
+        } else {
+          mergeSourceExports(out, childExports);
+        }
       }
+      continue;
+    }
+
+    if (ts.isTypeAliasDeclaration(stmt) || ts.isInterfaceDeclaration(stmt)) {
+      if (!stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
+      out.typeExports.add(stmt.name.text);
       continue;
     }
 
@@ -991,10 +1055,10 @@ async function collectSourceValueExports(
       if (!stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
       if (ts.isVariableStatement(stmt)) {
         for (const decl of stmt.declarationList.declarations) {
-          if (ts.isIdentifier(decl.name)) out.add(decl.name.text);
+          if (ts.isIdentifier(decl.name)) out.valueExports.add(decl.name.text);
         }
       } else if (stmt.name) {
-        out.add(stmt.name.text);
+        out.valueExports.add(stmt.name.text);
       }
     }
   }
@@ -1043,12 +1107,12 @@ async function collectManifestEntrypoints(
     if (raw === "./package.json") continue;
     const specifier = raw === "." ? "@simon_he/vue-tui" : `@simon_he/vue-tui/${raw.slice(2)}`;
     const meta = entrypointMeta(specifier);
+    const sourceExports = await collectSourceExports(path.join(packageRoot, meta.sourceRelPath));
     out[specifier] = {
       maturity: meta.maturity,
       runtime: meta.runtime,
-      exports: [
-        ...(await collectSourceValueExports(path.join(packageRoot, meta.sourceRelPath))),
-      ].sort(),
+      valueExports: [...sourceExports.valueExports].sort(),
+      typeExports: [...sourceExports.typeExports].sort(),
     };
   }
   return Object.fromEntries(Object.entries(out).sort(([a], [b]) => a.localeCompare(b)));

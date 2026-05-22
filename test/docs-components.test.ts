@@ -1,5 +1,7 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 const components = [
@@ -96,5 +98,58 @@ describe("docs: components coverage", () => {
     expect(contracts).toContain("Browser Accessibility");
     expect(contracts).toContain("Renderer Capabilities");
     expect(contracts).toContain("Terminal Permissions");
+  });
+
+  it("keeps ambiguous public prop descriptions component-specific", () => {
+    const manifest = JSON.parse(
+      readFileSync(resolve(process.cwd(), "docs/generated/api-manifest.json"), "utf8"),
+    );
+
+    const commandPaletteCloseOnSelect = manifest.components.TCommandPalette.props.find(
+      (prop: { name: string }) => prop.name === "closeOnSelect",
+    )?.description;
+    const dataTableSelectable = manifest.components.TDataTable.props.find(
+      (prop: { name: string }) => prop.name === "selectable",
+    )?.description;
+
+    expect(commandPaletteCloseOnSelect).toContain("command palette");
+    expect(commandPaletteCloseOnSelect).not.toContain("suggestions");
+    expect(dataTableSelectable).toBe("Enables row selection.");
+  });
+
+  it("records and diffs type-only entrypoint exports", () => {
+    const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const root = manifest.entrypoints["@simon_he/vue-tui"];
+
+    expect(root.valueExports).toContain("TSelect");
+    expect(root.typeExports).toEqual(
+      expect.arrayContaining([
+        "TCommandPaletteSelectPayload",
+        "TDataTableSorter",
+        "TSelectValueMode",
+      ]),
+    );
+
+    const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
+    try {
+      const basePath = resolve(tmp, "api-manifest.json");
+      const base = JSON.parse(JSON.stringify(manifest));
+      base.entrypoints["@simon_he/vue-tui"].typeExports.push("RemovedPublicType");
+      writeFileSync(basePath, `${JSON.stringify(base)}\n`);
+
+      const result = spawnSync(
+        resolve(process.cwd(), "node_modules/.bin/tsx"),
+        ["scripts/diff-api-manifest.ts", "--base", basePath],
+        { encoding: "utf8" },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        "@simon_he/vue-tui.RemovedPublicType type export was removed",
+      );
+    } finally {
+      rmSync(tmp, { force: true, recursive: true });
+    }
   });
 });
