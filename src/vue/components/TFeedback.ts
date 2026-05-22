@@ -4,6 +4,7 @@ import { computed, defineComponent, h } from "vue";
 import { resolveOverlayPlacement } from "../overlay.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useTerminal } from "../composables/use-terminal.js";
+import { textCellWidth } from "../utils/text.js";
 import { fitCellText, mergeStyle } from "./simple-utils.js";
 import { TBox } from "./TBox.js";
 import { TText } from "./TText.js";
@@ -166,7 +167,7 @@ export const TProgress = defineComponent({
       const ratio = Math.max(0, Math.min(1, props.value / max));
       const suffix = props.showPercent ? ` ${Math.round(ratio * 100)}%` : "";
       const prefix = props.label ? `${props.label} ` : "";
-      const barW = Math.max(1, props.w - prefix.length - suffix.length - 2);
+      const barW = Math.max(1, props.w - textCellWidth(prefix) - textCellWidth(suffix) - 2);
       const filled = Math.round(barW * ratio);
       const text = `${prefix}[${"=".repeat(filled)}${"-".repeat(barW - filled)}]${suffix}`;
       return h(TText as any, {
@@ -275,8 +276,9 @@ export const TDivider = defineComponent({
     const { defaultStyle } = useTerminal();
     return () => {
       const title = props.title ? ` ${props.title} ` : "";
-      const left = Math.max(0, Math.floor((props.w - title.length) / 2));
-      const right = Math.max(0, props.w - title.length - left);
+      const titleW = textCellWidth(title);
+      const left = Math.max(0, Math.floor((props.w - titleW) / 2));
+      const right = Math.max(0, props.w - titleW - left);
       return h(TText as any, {
         x: props.x,
         y: props.y,

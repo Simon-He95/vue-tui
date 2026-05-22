@@ -748,6 +748,42 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("uses cell widths for wide feedback labels and tab hit areas", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TProgress, { x: 0, y: 0, w: 10, value: 5, max: 10, label: "中" }),
+        h(TTabs, {
+          x: 0,
+          y: 1,
+          w: 12,
+          activeKey: "wide",
+          items: [
+            { key: "wide", label: "中" },
+            { key: "ascii", label: "B" },
+          ],
+        }),
+      ],
+      16,
+      4,
+    );
+
+    try {
+      expect(mounted.terminal.snapshot().lines[0]).toContain("50%");
+      const hitRects = mounted
+        .events()!
+        .debugNodes()
+        .filter((node) => node.visible && node.focusable && node.rect.y === 1)
+        .map((node) => node.rect)
+        .sort((a, b) => a.x - b.x);
+      expect(hitRects).toEqual([
+        { x: 0, y: 1, w: 4, h: 1 },
+        { x: 4, y: 1, w: 3, h: 1 },
+      ]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("does not emit invalid TSelect values when moving through empty options", async () => {
     for (const valueMode of ["index", "value", "option"] as const) {
       const updates: unknown[] = [];

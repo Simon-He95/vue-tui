@@ -2,6 +2,7 @@ import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import { computed, defineComponent, h } from "vue";
 import { useTerminal } from "../composables/use-terminal.js";
+import { textCellWidth } from "../utils/text.js";
 import { fitCellText, mergeStyle } from "./simple-utils.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
@@ -57,7 +58,7 @@ export const TTabs = defineComponent({
       for (const item of props.items) {
         const label = item.badge == null ? item.label : `${item.label} ${item.badge}`;
         const text = ` ${label} `;
-        const width = Math.min(props.w - x, text.length);
+        const width = Math.min(props.w - x, textCellWidth(text));
         if (width <= 0) break;
         const active = item.key === props.activeKey;
         children.push(
