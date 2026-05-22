@@ -136,6 +136,36 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("passes original row indices to TDataTable column format after scrollTop", async () => {
+    const format = vi.fn((value: unknown, _row: unknown, index: number) => `${index}:${value}`);
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 12, format }],
+          rows: [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }],
+          scrollTop: 1,
+        }),
+      24,
+      6,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()!.flushNow();
+
+      const snapshot = mounted.terminal.snapshot().lines.join("\n");
+      expect(snapshot).toContain("1:Beta");
+      expect(snapshot).toContain("2:Gamma");
+      expect(format).toHaveBeenCalledWith("Beta", { name: "Beta" }, 1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("does not mutate multiple data table selection during arrow navigation", async () => {
     const rows = [
       { id: "a", name: "Alpha" },

@@ -663,6 +663,7 @@
         "TDivider",
         "TFlow",
         "TForm",
+        "TFormContextKey",
         "TFormField",
         "TInput",
         "TInputBox",
@@ -723,6 +724,7 @@
         "useRenderNode",
         "useRoute",
         "useRouter",
+        "useTForm",
         "useTerminal",
         "useTerminalNode",
         "useTerminalRuntime",
@@ -756,6 +758,7 @@
         "TDataTableSortDirection",
         "TDataTableSorter",
         "TFeedbackTone",
+        "TFormContext",
         "TFormModel",
         "TFormRule",
         "TFormSubmitPayload",
@@ -5850,7 +5853,7 @@
           "type": "TSelectOptionProvider",
           "required": false,
           "defaultValue": "undefined",
-          "description": "Async option provider called with the current query.",
+          "description": "Async option provider called with the current query and an AbortSignal for stale requests.",
           "descriptionSource": "component-default"
         },
         {
@@ -5898,7 +5901,7 @@
           "type": "TSelectMultipleEmitMode",
           "required": false,
           "defaultValue": "\"label\"",
-          "description": "Payload shape used by multi-select change and confirm events; the label emit mode emits option labels.",
+          "description": "Payload shape used by multi-select change and confirm events; \"value\" is a deprecated alias for \"label\".",
           "descriptionSource": "component-default"
         },
         {
@@ -5986,7 +5989,7 @@
           "type": "boolean",
           "required": false,
           "defaultValue": "false",
-          "description": "Shows the loading row.",
+          "description": "Shows the loading row; true also covers pending async option providers.",
           "descriptionSource": "component-default"
         },
         {
@@ -6082,7 +6085,7 @@
           "name": "loadError",
           "payload": "{ query: string; error: unknown }",
           "payloadSource": "component-default",
-          "description": "Emitted when the async option provider rejects.",
+          "description": "Emitted when the async option provider rejects; aborted stale requests do not emit.",
           "descriptionSource": "component-default"
         }
       ]

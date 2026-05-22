@@ -748,6 +748,7 @@ describe("ui regressions portal select and text", () => {
   it("TSelect optionProvider rejects without an unhandled rejection", async () => {
     const provider = vi.fn().mockRejectedValue(new Error("load failed"));
     const unhandled: unknown[] = [];
+    const loadErrors: unknown[] = [];
     const onUnhandled = (reason: unknown) => {
       unhandled.push(reason);
     };
@@ -762,6 +763,8 @@ describe("ui regressions portal select and text", () => {
         options: [],
         optionProvider: provider,
         query: "",
+        errorText: "Load failed",
+        onLoadError: (payload: unknown) => loadErrors.push(payload),
       }),
     );
 
@@ -773,7 +776,9 @@ describe("ui regressions portal select and text", () => {
 
       expect(provider).toHaveBeenCalled();
       expect(unhandled).toEqual([]);
-      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("No options");
+      expect(loadErrors).toHaveLength(1);
+      expect(loadErrors[0]).toMatchObject({ query: "", error: expect.any(Error) });
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Load failed");
     } finally {
       process.off("unhandledRejection", onUnhandled);
       mounted.unmount();
@@ -993,8 +998,53 @@ describe("ui regressions portal select and text", () => {
     );
     await nextTick();
 
-    expect(confirmed.value).toEqual({ indices: [0, 2], labels: ["Alpha", "Gamma"] });
-    expect(confirmed.value).not.toHaveProperty("values");
+    expect(confirmed.value).toEqual({
+      indices: [0, 2],
+      labels: ["Alpha", "Gamma"],
+      values: ["Alpha", "Gamma"],
+    });
+    mounted.unmount();
+  });
+
+  it('TSelect multipleEmit="value" remains a label alias', async () => {
+    const selected = ref<string[]>(["alpha", "gamma"]);
+    const confirmed = ref<any>(null);
+
+    const mounted = await mountTerminal(() =>
+      h(TSelect, {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 3,
+        options: [
+          { label: "Alpha", value: "alpha" },
+          { label: "Beta", value: "beta" },
+          { label: "Gamma", value: "gamma" },
+        ],
+        valueMode: "value",
+        multiple: true,
+        multipleEmit: "value",
+        modelValue: selected.value,
+        onConfirm: (v: any) => {
+          confirmed.value = v;
+        },
+        autoFocus: true,
+      }),
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    expect(confirmed.value).toEqual(["Alpha", "Gamma"]);
     mounted.unmount();
   });
 

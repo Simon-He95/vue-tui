@@ -188,9 +188,18 @@ export const TDataTable = defineComponent({
 
     const columns = computed(() =>
       props.columns.map((column) => {
-        if (!props.sortable || column.key !== props.sortBy) return column;
+        const format = column.format
+          ? (value: unknown, row: TTableRow, visibleIndex: number) => {
+              const absoluteIndex = normalizedScrollTop.value + visibleIndex;
+              const originalIndex = sortedRows.value[absoluteIndex]?.originalIndex ?? absoluteIndex;
+              return column.format!(value, row, originalIndex);
+            }
+          : undefined;
+        if (!props.sortable || column.key !== props.sortBy) {
+          return format ? { ...column, format } : column;
+        }
         const marker = props.sortDirection === "desc" ? "v" : "^";
-        return { ...column, label: sortLabel(column, marker) };
+        return { ...column, label: sortLabel(column, marker), ...(format ? { format } : {}) };
       }),
     );
 

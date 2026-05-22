@@ -30,7 +30,7 @@ function onSelect(payload: TCommandPaletteSelectPayload) {
 
 `TAutocompleteInput` now closes suggestions after selection by default. Set `closeOnSelect=false` to preserve the previous always-visible suggestions behavior.
 
-`TSelect multipleEmit="value"` was renamed to `multipleEmit="label"` so it no longer conflicts with `valueMode="value"`. The default emitted payload is still the selected option labels. `multipleEmit="both"` now emits `{ indices, labels }`.
+`TSelect multipleEmit="value"` was renamed to `multipleEmit="label"` so it no longer conflicts with `valueMode="value"`. The default emitted payload is still the selected option labels. `multipleEmit="value"` remains as a deprecated alias during the RC window. `multipleEmit="both"` now emits `{ indices, labels, values }`, where `values` is a deprecated alias of `labels`.
 
 ## Root Entrypoint Narrowed
 

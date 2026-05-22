@@ -17,12 +17,13 @@ type _TSelectMultipleChangePayloadShape = Assert<
     Readonly<{
       indices: number[];
       labels: string[];
+      values: string[];
     }>
   >
 >;
 
 type _TSelectMultipleEmitModeShape = Assert<
-  Equal<TSelectMultipleEmitMode, "label" | "index" | "both">
+  Equal<TSelectMultipleEmitMode, "label" | "value" | "index" | "both">
 >;
 
 type _TSelectValueModeShape = Assert<Equal<TSelectValueMode, "index" | "value" | "option">>;

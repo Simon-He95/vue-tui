@@ -45,12 +45,14 @@ describe("documented entrypoint exports", () => {
       "TRenderPlane",
       "TTransition",
       "TDebugOverlay",
+      "TFormContextKey",
       "TBreadcrumb",
       "TContextMenu",
       "TKeyHint",
       "TPopover",
       "TStatusBar",
       "TTooltip",
+      "useTForm",
       "useTerminal",
     ]) {
       expect(key in vue, key).toBe(true);

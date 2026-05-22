@@ -44,7 +44,7 @@ export type TFormSubmitPayload = Readonly<{
   errors: Record<string, string>;
 }>;
 
-type TFormContext = Readonly<{
+export type TFormContext = Readonly<{
   model: Readonly<Ref<TFormModel>>;
   rules: Readonly<Ref<Record<string, TFormRule>>>;
   errors: Ref<Record<string, string>>;
@@ -53,7 +53,11 @@ type TFormContext = Readonly<{
   validate: () => boolean;
 }>;
 
-const TFormContextKey: InjectionKey<TFormContext> = Symbol("TFormContext");
+export const TFormContextKey: InjectionKey<TFormContext> = Symbol("TFormContext");
+
+export function useTForm(): TFormContext | null {
+  return inject(TFormContextKey, null);
+}
 
 export const TCheckbox = defineComponent({
   name: "TCheckbox",
@@ -345,7 +349,7 @@ export const TFormField = defineComponent({
   setup(props, { slots }) {
     const { defaultStyle } = useTerminal();
     const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
-    const form = inject(TFormContextKey, null);
+    const form = useTForm();
     const fieldError = computed(
       () => props.error || (props.name ? form?.errors.value[props.name] : "") || "",
     );

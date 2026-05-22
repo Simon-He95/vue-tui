@@ -726,7 +726,8 @@ async function listExportedComponents(
 
     for (const el of stmt.exportClause.elements) {
       const name = el.name.text;
-      const isComponentName = name.startsWith("T") || name === "TerminalProvider";
+      const isComponentName =
+        (name.startsWith("T") || name === "TerminalProvider") && !name.endsWith("ContextKey");
       if (!isComponentName) continue;
       const tsPath = spec.replace(/\.js$/u, ".ts");
       const absPath = path.resolve(vueDir, tsPath);

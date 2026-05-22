@@ -201,8 +201,9 @@ function writeHighlightedText(
 export type TSelectMultipleChangePayload = Readonly<{
   indices: number[];
   labels: string[];
+  values: string[];
 }>;
-export type TSelectMultipleEmitMode = "label" | "index" | "both";
+export type TSelectMultipleEmitMode = "label" | "value" | "index" | "both";
 export type TSelectModelValue = unknown;
 export type TSelectValueMode = "index" | "value" | "option";
 export type TSelectOptionProvider = (
@@ -475,7 +476,7 @@ export const TSelect = defineComponent({
         .map((i) => options.value[i])
         .filter(Boolean)
         .map((opt) => getOptionLabel(opt!));
-      return { indices, labels };
+      return { indices, labels, values: labels };
     }
 
     function emitMultiple(name: "change" | "confirm", indices: number[]): void {

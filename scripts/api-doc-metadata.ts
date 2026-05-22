@@ -101,7 +101,7 @@ export const sharedPublicPropDescriptions: Record<string, string> = {
   itemVersion: "External version key for item changes that keep array identity stable.",
   multiple: "Enables multi-select mode.",
   multipleEmit:
-    "Payload shape used by multi-select change and confirm events; the label emit mode emits option labels.",
+    'Payload shape used by multi-select change and confirm events; "value" is a deprecated alias for "label".',
   closeOnBlur: "Emits close when focus leaves the component.",
   initialQuery: "Query used when the command palette opens.",
   showRowDetails: "Shows command detail text next to labels.",
@@ -135,13 +135,14 @@ export const sharedPublicPropDescriptions: Record<string, string> = {
   buttons: "Dialog footer buttons.",
   checkedStyle: "Style used when the checkbox is checked.",
   options: "Options rendered by the control.",
-  optionProvider: "Async option provider called with the current query.",
+  optionProvider:
+    "Async option provider called with the current query and an AbortSignal for stale requests.",
   valueMode: "Model value shape emitted by the select v-model.",
   activeIndex: "Controlled active option index.",
   searchable:
     "Emits query updates from typed characters; local options are not filtered automatically.",
   typeahead: "Enables keyboard typeahead navigation.",
-  loading: "Shows the loading row.",
+  loading: "Shows the loading row; true also covers pending async option providers.",
   maxVisible: "Maximum number of option rows rendered at once.",
   min: "Minimum numeric value.",
   max: "Maximum numeric value.",
@@ -506,7 +507,8 @@ export const componentPublicEventDescriptions: Record<string, string> = {
   "TSelect.change":
     "For single select, emits the selected option label or null; valueMode only affects update:modelValue. For multiple select, the payload follows multipleEmit.",
   "TSelect.confirm": "Emitted when multi-select commits the current selection.",
-  "TSelect.loadError": "Emitted when the async option provider rejects.",
+  "TSelect.loadError":
+    "Emitted when the async option provider rejects; aborted stale requests do not emit.",
 };
 
 export const publicEventPayloads: Record<string, string> = {
