@@ -11,6 +11,7 @@ import {
   TFormField,
   TPasswordInput,
   TRadioGroup,
+  TSelect,
   TSlider,
   TSwitch,
   TTable,
@@ -678,6 +679,215 @@ describe("P1/P2 public components", () => {
         .dispatchEvent(new MouseEvent("click", { clientX: 29, clientY: 0, bubbles: true }));
       await nextTick();
       expect(activeKey.value).toBe("chat");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not emit invalid TSelect values when moving through empty options", async () => {
+    for (const valueMode of ["index", "value", "option"] as const) {
+      const updates: unknown[] = [];
+      const mounted = await mountTerminal(
+        () =>
+          h(TSelect, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            options: [],
+            valueMode,
+            "onUpdate:modelValue": (value: unknown) => updates.push(value),
+          }),
+        24,
+        5,
+      );
+
+      try {
+        const container = mounted.container()!;
+        container.dispatchEvent(
+          new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+        );
+
+        for (const key of ["ArrowDown", "ArrowUp"]) {
+          expect(() =>
+            container.dispatchEvent(
+              new KeyboardEvent("keydown", {
+                key,
+                code: key,
+                bubbles: true,
+                cancelable: true,
+              }),
+            ),
+          ).not.toThrow();
+        }
+        await nextTick();
+
+        expect(updates).toEqual([]);
+      } finally {
+        mounted.unmount();
+      }
+    }
+  });
+
+  it("clears stale TSelect provider options while loading a new query", async () => {
+    const query = ref("old");
+    const provider = vi.fn((q: string) => {
+      if (q === "old") return Promise.resolve(["old-a", "old-b"]);
+      return new Promise<readonly string[]>(() => {});
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: [],
+          optionProvider: provider,
+          query: query.value,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("old-a");
+
+      query.value = "new";
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      const loadingFrame = mounted.terminal.snapshot().lines.join("\n");
+
+      expect(loadingFrame).toContain("Loading...");
+      expect(loadingFrame).not.toContain("old-a");
+      expect(loadingFrame).not.toContain("old-b");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("preserves split pane size sum when keyboard resize reaches min bounds", async () => {
+    const sizes = ref([10, 10]);
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TSplitPane as any,
+          {
+            x: 0,
+            y: 0,
+            w: 21,
+            h: 3,
+            sizes: sizes.value,
+            minSizes: [1, 1],
+            "onUpdate:sizes": (next: number[]) => (sizes.value = next),
+          },
+          ({ panes }: any) => [
+            h(TText, { ...panes[0], value: "Left" }),
+            h(TText, { ...panes[1], value: "Right" }),
+          ],
+        ),
+      30,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 10, clientY: 0, bubbles: true }),
+      );
+      for (let i = 0; i < 30; i++) {
+        container.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "ArrowRight",
+            code: "ArrowRight",
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        await nextTick();
+      }
+
+      expect(sizes.value[0]! + sizes.value[1]!).toBe(20);
+      expect(sizes.value[0]).toBeGreaterThanOrEqual(1);
+      expect(sizes.value[1]).toBeGreaterThanOrEqual(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("anchors toast viewport horizontally from placement", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TToastViewport, {
+          x: 2,
+          y: 0,
+          w: 10,
+          max: 1,
+          placement: "top-left",
+          items: [{ id: "left", title: "Left", message: "L" }],
+        }),
+        h(TToastViewport, {
+          x: 2,
+          y: 3,
+          w: 10,
+          max: 1,
+          placement: "top-right",
+          items: [{ id: "right", title: "Right", message: "R" }],
+        }),
+      ],
+      30,
+      6,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[1]?.indexOf("Left")).toBe(4);
+      expect(lines[4]?.indexOf("Right")).toBe(20);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps autocomplete suggestions open when closeOnSelect is false", async () => {
+    const value = ref("ap");
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          modelValue: value.value,
+          "onUpdate:modelValue": (next: string) => (value.value = next),
+          suggestions: ["apple", "apricot"],
+          closeOnSelect: false,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const lines = mounted.terminal.snapshot().lines.join("\n");
+      expect(value.value).toBe("apple");
+      expect(lines).toContain("apple");
     } finally {
       mounted.unmount();
     }

@@ -23,6 +23,8 @@ function onSelect(payload: TCommandPaletteSelectPayload) {
 
 `TAutocompleteInput` `select` payload now also includes `option`, `query`, and `source` so static and async suggestions can share one handler shape.
 
+`TAutocompleteInput` now closes suggestions after selection by default. Set `closeOnSelect=false` to preserve the previous always-visible suggestions behavior.
+
 ## Root Entrypoint Narrowed
 
 `@simon_he/vue-tui` now keeps only stable browser-safe API at the root. Move imports that depend on Vue internals, runtime wiring, observability, core sanitizers, or Node-aware CLI helpers to the explicit subpath entrypoints below.

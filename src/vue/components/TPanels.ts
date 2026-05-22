@@ -155,12 +155,13 @@ export const TSplitPane = defineComponent({
     function resizeAt(index: number, delta: number): void {
       const next = props.sizes.map((size) => Math.max(0, size));
       if (index < 0 || index >= next.length - 1) return;
+      const left0 = next[index]!;
+      const right0 = next[index + 1]!;
       const leftMin = props.minSizes[index] ?? 1;
       const rightMin = props.minSizes[index + 1] ?? 1;
-      const left = Math.max(leftMin, next[index]! + delta);
-      const right = Math.max(rightMin, next[index + 1]! - delta);
-      next[index] = left;
-      next[index + 1] = right;
+      const applied = Math.max(leftMin - left0, Math.min(right0 - rightMin, delta));
+      next[index] = left0 + applied;
+      next[index + 1] = right0 - applied;
       emit("update:sizes", next);
       emit("resize", next);
     }

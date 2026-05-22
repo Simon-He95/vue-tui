@@ -45,8 +45,8 @@ export type TFormSubmitPayload = Readonly<{
 }>;
 
 type TFormContext = Readonly<{
-  model: TFormModel;
-  rules: Record<string, TFormRule>;
+  model: Readonly<Ref<TFormModel>>;
+  rules: Readonly<Ref<Record<string, TFormRule>>>;
   errors: Ref<Record<string, string>>;
   disabled: Ref<boolean>;
   readOnly: Ref<boolean>;
@@ -460,8 +460,8 @@ export const TForm = defineComponent({
     }
 
     provide(TFormContextKey, {
-      model: props.model,
-      rules: props.rules,
+      model: computed(() => props.model),
+      rules: computed(() => props.rules),
       errors,
       disabled,
       readOnly,

@@ -48,13 +48,15 @@ export const TToastViewport = defineComponent({
     dismiss: (_id: string) => true,
   },
   setup(props, { emit }) {
-    const { defaultStyle } = useTerminal();
+    const { defaultStyle, terminal } = useTerminal();
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
 
     return () => {
       const max = Math.max(0, Math.floor(props.max));
       const items = props.items.slice(0, max);
       const bottom = props.placement.startsWith("bottom");
+      const left = props.placement.endsWith("left");
+      const x = left ? props.x : Math.max(0, terminal.size().cols - props.x - props.w);
       let cursorY = props.y;
       return items.map((item, index) => {
         const hgt = item.title ? 3 : 2;
@@ -65,7 +67,7 @@ export const TToastViewport = defineComponent({
           TBox as any,
           {
             key: item.id,
-            x: props.x,
+            x,
             y,
             w: props.w,
             h: hgt,

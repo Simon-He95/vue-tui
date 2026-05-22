@@ -855,7 +855,7 @@ function maturityLabel(maturity: ApiMaturity): string {
 }
 
 function eventBaseName(name: string): string {
-  return name.replace(/Capture$/u, "").replace(/^update:/u, "update:");
+  return name.replace(/Capture$/u, "");
 }
 
 function inferEventPayload(component: ComponentMeta, event: EventMeta): string | null {

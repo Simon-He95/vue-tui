@@ -58,8 +58,8 @@ export type SelectOptionWithStyle = Readonly<{
 
 export type SelectOption = string | SelectOptionWithStyle;
 
-function isOptionObject(opt: SelectOption): opt is SelectOptionWithStyle {
-  return typeof opt !== "string";
+function isOptionObject(opt: SelectOption | undefined | null): opt is SelectOptionWithStyle {
+  return typeof opt === "object" && opt !== null;
 }
 
 function normalizeHighlightRanges(
@@ -374,7 +374,7 @@ export const TSelect = defineComponent({
       );
     }
 
-    function isOptionInteractive(opt: SelectOption | undefined): boolean {
+    function isOptionInteractive(opt: SelectOption | undefined): opt is SelectOption {
       if (!opt) return false;
       const kind = getOptionKind(opt);
       return kind !== "separator" && kind !== "group" && !(isOptionObject(opt) && opt.disabled);
@@ -539,20 +539,25 @@ export const TSelect = defineComponent({
     function onKeydown(e: TerminalKeyboardEvent): void {
       emit("keydown", e);
       if (e.defaultPrevented) return;
-      const max = Math.max(0, options.value.length - 1);
       if (e.key === "ArrowUp" || e.code === "ArrowUp") {
         e.preventDefault();
-        const next = max <= 0 ? 0 : (findNextInteractiveIndex(active.value, -1) ?? active.value);
+        if (options.value.length === 0) return;
+        const next = findNextInteractiveIndex(active.value, -1) ?? active.value;
+        const opt = options.value[next];
+        if (!isOptionInteractive(opt)) return;
         setActive(next);
-        if (!props.multiple) emit("update:modelValue", getOptionValue(options.value[next]!, next));
+        if (!props.multiple) emit("update:modelValue", getOptionValue(opt, next));
         scheduler.invalidate();
         return;
       }
       if (e.key === "ArrowDown" || e.code === "ArrowDown") {
         e.preventDefault();
-        const next = max <= 0 ? 0 : (findNextInteractiveIndex(active.value, 1) ?? active.value);
+        if (options.value.length === 0) return;
+        const next = findNextInteractiveIndex(active.value, 1) ?? active.value;
+        const opt = options.value[next];
+        if (!isOptionInteractive(opt)) return;
         setActive(next);
-        if (!props.multiple) emit("update:modelValue", getOptionValue(options.value[next]!, next));
+        if (!props.multiple) emit("update:modelValue", getOptionValue(opt, next));
         scheduler.invalidate();
         return;
       }
@@ -662,11 +667,11 @@ export const TSelect = defineComponent({
         const paintRow = (i: number): void => {
           const optIndex = offset + i;
           const opt = options.value[optIndex];
-          if ((props.loading || providerLoading.value) && i === 0) {
-            const text = sliceByCells(props.loadingText, r.w);
+          if (props.loading || providerLoading.value) {
+            const text = i === 0 ? sliceByCells(props.loadingText, r.w) : "";
             terminal.write(`${text}${spaces(Math.max(0, r.w - textCellWidth(text)))}`, {
               x: r.x,
-              y: r.y,
+              y: r.y + i,
               style: base,
             });
             return;
@@ -889,6 +894,7 @@ export const TSelect = defineComponent({
         const run = () => {
           const controller = new AbortController();
           providerAbort = controller;
+          providerOptions.value = [];
           providerLoading.value = true;
           void provider(query, { signal: controller.signal })
             .then((items) => {
