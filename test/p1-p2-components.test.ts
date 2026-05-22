@@ -47,6 +47,73 @@ import {
 } from "./ui-regressions-support.js";
 
 describe("P1/P2 public components", () => {
+  it("lets TForm consume Enter without also confirming the parent dialog", async () => {
+    const open = ref(true);
+    const value = ref("");
+    const onSubmit = vi.fn();
+    const onConfirm = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (next: boolean) => (open.value = next),
+            w: 44,
+            h: 8,
+            buttons: [{ label: "OK", default: true }],
+            onConfirm,
+          },
+          () =>
+            h(
+              TForm,
+              {
+                x: 0,
+                y: 0,
+                w: 40,
+                h: 4,
+                model: { value: value.value },
+                submitOnEnter: true,
+                onSubmit,
+              },
+              () =>
+                h(TInput, {
+                  x: 0,
+                  y: 0,
+                  w: 20,
+                  modelValue: value.value,
+                  autoFocus: true,
+                  "onUpdate:modelValue": (next: string) => (value.value = next),
+                }),
+            ),
+        ),
+      60,
+      12,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()!.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onConfirm).not.toHaveBeenCalled();
+      expect(open.value).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders table, data table, and tree primitives", async () => {
     const rows = [
       { id: "2", name: "build", status: "fail" },
@@ -93,6 +160,37 @@ describe("P1/P2 public components", () => {
       expect(lines[7]).toContain("1");
       expect(lines[0]).toContain("v src");
       expect(lines[1]).toContain("index.ts");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps TTable minWidth when explicit widths overflow but minima still fit", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 3,
+          border: false,
+          columns: [
+            { key: "a", label: "AAAAA", width: 100, minWidth: 5 },
+            { key: "b", label: "BBBB", width: 10, minWidth: 4 },
+          ],
+          rows: [{ a: "aaaaa", b: "bbbb" }],
+        }),
+      16,
+      4,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()!.flushNow();
+      const lines = mounted.terminal.snapshot().lines;
+
+      expect(lines[0]).toContain("AAAAA BBBB");
+      expect(lines[2]).toContain("aaaaa bbbb");
     } finally {
       mounted.unmount();
     }
@@ -1403,6 +1501,35 @@ describe("P1/P2 public components", () => {
         return mounted.terminal.snapshot().lines.join("\n").includes("b-result") || null;
       });
       expect(mounted.terminal.snapshot().lines.join("\n")).toContain("b-result");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("allows TSelect to use optionProvider without a static options prop", async () => {
+    const provider = vi.fn(async () => [{ label: "Remote", value: "remote" }]);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 3,
+          optionProvider: provider,
+          valueMode: "value",
+          modelValue: "remote",
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await waitFor(() => {
+        mounted.scheduler()!.flushNow();
+        return mounted.terminal.snapshot().lines.join("\n").includes("Remote") || null;
+      });
+      expect(provider).toHaveBeenCalled();
     } finally {
       mounted.unmount();
     }

@@ -1595,7 +1595,7 @@ function onPanelActiveChange(payload: TLogLinksPanelActiveChangePayload) {
 ### Props（核心）
 
 - `x`/`y`/`w`/`h` `(number, required)`
-- `options` `((string | { label, detail? })[], required)`
+- `options` `((string | { label, detail? })[], default [])`
 - `modelValue` follows `valueMode`: index values by default, option values for `value`, option objects for `option`
 - `multiple` `(boolean)`
 - `valueMode` `('index'|'value'|'option')`

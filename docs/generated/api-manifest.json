@@ -5844,7 +5844,8 @@
         {
           "name": "options",
           "type": "readonly SelectOption[]",
-          "required": true,
+          "required": false,
+          "defaultValue": "() => []",
           "description": "Options rendered by the control.",
           "descriptionSource": "component-default"
         },

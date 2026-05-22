@@ -219,7 +219,10 @@ export const TSelect = defineComponent({
     w: { type: Number, required: true },
     h: { type: Number, required: true },
     zIndex: { type: Number, default: 0 },
-    options: { type: Array as PropType<readonly SelectOption[]>, required: true },
+    options: {
+      type: Array as PropType<readonly SelectOption[]>,
+      default: () => [],
+    },
     optionProvider: {
       type: Function as PropType<TSelectOptionProvider>,
       default: undefined,

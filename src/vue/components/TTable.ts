@@ -99,14 +99,59 @@ function resolveColumnWidths(
   if (total <= available) return out;
   if (available <= 0 || total <= 0) return out.map(() => 0);
 
-  const clamped = out.map((value) => Math.floor((value / total) * available));
-  let remaining = available - clamped.reduce((sum, next) => sum + next, 0);
-  const remainders = out.map((value, index) => {
-    const raw = (value / total) * available;
-    return { index, fraction: raw - Math.floor(raw) };
-  });
-  remainders.sort((a, b) => b.fraction - a.fraction || a.index - b.index);
-  for (let i = 0; i < remaining; i++) clamped[remainders[i]!.index]! += 1;
+  const effectiveMins = mins.map((min, index) => Math.min(min, maxes[index]!));
+  const minTotal = effectiveMins.reduce((sum, next) => sum + next, 0);
+
+  if (minTotal >= available) {
+    if (minTotal <= 0) return out.map(() => 0);
+    const clamped = effectiveMins.map((min) => Math.floor((min / minTotal) * available));
+    let remaining = available - clamped.reduce((sum, next) => sum + next, 0);
+    const remainders = effectiveMins
+      .map((min, index) => {
+        const raw = (min / minTotal) * available;
+        return { index, fraction: raw - Math.floor(raw) };
+      })
+      .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+    for (let i = 0; remaining > 0 && i < remainders.length; i++, remaining--) {
+      clamped[remainders[i]!.index]! += 1;
+    }
+    return clamped;
+  }
+
+  const clamped = [...out];
+  let overflow = total - available;
+
+  while (overflow > 0) {
+    const candidates = clamped
+      .map((value, index) => ({ index, room: Math.max(0, value - effectiveMins[index]!) }))
+      .filter((candidate) => candidate.room > 0);
+
+    if (candidates.length === 0) break;
+
+    const roomTotal = candidates.reduce((sum, candidate) => sum + candidate.room, 0);
+    let assigned = 0;
+    const order = candidates
+      .map(({ index, room }) => {
+        const raw = (overflow * room) / roomTotal;
+        const shrink = Math.min(room, Math.floor(raw));
+        clamped[index]! -= shrink;
+        assigned += shrink;
+        return { index, fraction: raw - shrink };
+      })
+      .sort((a, b) => b.fraction - a.fraction || b.index - a.index);
+
+    overflow -= assigned;
+    for (const { index } of order) {
+      if (overflow <= 0) break;
+      if (clamped[index]! <= effectiveMins[index]!) continue;
+      clamped[index]! -= 1;
+      overflow -= 1;
+    }
+
+    if (assigned === 0 && order.every(({ index }) => clamped[index]! <= effectiveMins[index]!)) {
+      break;
+    }
+  }
 
   return clamped;
 }

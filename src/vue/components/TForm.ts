@@ -491,6 +491,8 @@ export const TForm = defineComponent({
             if (event.key !== "Enter") return;
             if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
             event.preventDefault?.();
+            event.stopPropagation?.();
+            event.__tuiDialogConfirm = false;
             submit();
           },
         },
