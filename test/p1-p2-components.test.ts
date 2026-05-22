@@ -114,6 +114,74 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not confirm the parent dialog when single TSelect handles Enter", async () => {
+    const open = ref(true);
+    const selected = ref<unknown>("alpha");
+    const changes: string[] = [];
+    const onConfirm = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (value: boolean) => (open.value = value),
+            w: 28,
+            h: 6,
+            buttons: [{ label: "OK", default: true }],
+            onConfirm,
+          },
+          () =>
+            h(TSelect, {
+              x: 0,
+              y: 0,
+              w: 16,
+              h: 2,
+              options: [
+                { label: "Alpha", value: "alpha" },
+                { label: "Beta", value: "beta" },
+              ],
+              valueMode: "value",
+              modelValue: selected.value,
+              "onUpdate:modelValue": (value: unknown) => (selected.value = value),
+              onChange: (value: string) => changes.push(value),
+            }),
+        ),
+      40,
+      10,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const selectNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.w === 16 && node.rect.h === 2);
+
+      expect(selectNode).toBeTruthy();
+      mounted.events()!.focus(selectNode!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(changes).toEqual(["Alpha"]);
+      expect(onConfirm).not.toHaveBeenCalled();
+      expect(open.value).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders table, data table, and tree primitives", async () => {
     const rows = [
       { id: "2", name: "build", status: "fail" },
@@ -2159,6 +2227,68 @@ describe("P1/P2 public components", () => {
       expect(onSelect).toHaveBeenCalledWith(
         expect.objectContaining({ value: "apple", index: 0, query: "ap" }),
       );
+      expect(onSubmit).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not submit TForm when autocomplete active suggestion is disabled", async () => {
+    const value = ref("ap");
+    const changes: string[] = [];
+    const onSelect = vi.fn();
+    const onSubmit = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            model: { query: value.value },
+            submitOnEnter: true,
+            onSubmit,
+          },
+          () =>
+            h(TAutocompleteInput, {
+              x: 0,
+              y: 0,
+              w: 20,
+              h: 3,
+              modelValue: value.value,
+              "onUpdate:modelValue": (next: string) => (value.value = next),
+              suggestions: [{ label: "apple", disabled: true }],
+              highlightedIndex: 0,
+              onChange: (next: string) => changes.push(next),
+              onSelect,
+            }),
+        ),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(value.value).toBe("ap");
+      expect(changes).toEqual([]);
+      expect(onSelect).not.toHaveBeenCalled();
       expect(onSubmit).not.toHaveBeenCalled();
     } finally {
       mounted.unmount();

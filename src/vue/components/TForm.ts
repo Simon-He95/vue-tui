@@ -625,10 +625,24 @@ export const TAutocompleteInput = defineComponent({
     const visibleSuggestions = computed(() =>
       isOpen.value ? filteredSuggestions.value.slice(0, Math.max(0, props.h - 1)) : [],
     );
-    const activeIndex = computed(() => {
+
+    function enabledSuggestionIndexFrom(index: number, direction: 1 | -1): number {
       const count = visibleSuggestions.value.length;
-      return count > 0 ? clamp(props.highlightedIndex, 0, count - 1) : 0;
-    });
+      if (count === 0) return 0;
+
+      const start = clamp(index, 0, count - 1);
+      if (!optionDisabled(visibleSuggestions.value[start]!)) return start;
+
+      for (let step = 1; step < count; step++) {
+        const next = (start + step * direction + count) % count;
+        if (!optionDisabled(visibleSuggestions.value[next]!)) return next;
+      }
+
+      return start;
+    }
+
+    const activeIndex = computed(() => enabledSuggestionIndexFrom(props.highlightedIndex, 1));
+
     function select(index: number, source: "keyboard" | "pointer"): boolean {
       const option = visibleSuggestions.value[index];
       if (option == null || optionDisabled(option)) return false;
@@ -718,21 +732,18 @@ export const TAutocompleteInput = defineComponent({
                 event.preventDefault?.();
                 emit(
                   "update:highlightedIndex",
-                  clamp(props.highlightedIndex + 1, 0, suggestionCount - 1),
+                  enabledSuggestionIndexFrom(activeIndex.value + 1, 1),
                 );
               } else if (event.key === "ArrowUp") {
                 if (suggestionCount === 0) return;
                 event.preventDefault?.();
                 emit(
                   "update:highlightedIndex",
-                  clamp(props.highlightedIndex - 1, 0, suggestionCount - 1),
+                  enabledSuggestionIndexFrom(activeIndex.value - 1, -1),
                 );
-              } else if (
-                event.key === "Enter" &&
-                suggestionCount > 0 &&
-                select(activeIndex.value, "keyboard")
-              ) {
+              } else if (event.key === "Enter" && suggestionCount > 0) {
                 event.preventDefault?.();
+                select(activeIndex.value, "keyboard");
               } else if (event.key === "Escape") {
                 if (isOpen.value) {
                   event.preventDefault?.();

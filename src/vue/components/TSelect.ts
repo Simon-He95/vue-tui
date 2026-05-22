@@ -616,6 +616,7 @@ export const TSelect = defineComponent({
           confirmMultiple();
           return;
         }
+        e.preventDefault();
         commit(active.value);
         return;
       }
