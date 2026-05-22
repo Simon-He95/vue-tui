@@ -50,7 +50,7 @@ jobs:
 
       - run: pnpm run docs:build
 
-      - run: git diff --exit-code docs/generated/components-api.md
+      - run: git diff --exit-code -- docs/generated
 
       - run: pnpm run build:checked
 

@@ -246,14 +246,25 @@ export const TSplitPane = defineComponent({
               },
             },
             () =>
-              h(TText as any, {
-                x: 0,
-                y: 0,
-                w: separator.w,
-                h: separator.h,
-                value: separator.text,
-                style: mergeStyle(defaultStyle.value, props.separatorStyle),
-              }),
+              props.direction === "horizontal"
+                ? Array.from({ length: separator.h }, (_, row) =>
+                    h(TText as any, {
+                      key: `separator-line:${row}`,
+                      x: 0,
+                      y: row,
+                      w: 1,
+                      value: separator.text,
+                      style: mergeStyle(defaultStyle.value, props.separatorStyle),
+                    }),
+                  )
+                : h(TText as any, {
+                    x: 0,
+                    y: 0,
+                    w: separator.w,
+                    h: separator.h,
+                    value: separator.text,
+                    style: mergeStyle(defaultStyle.value, props.separatorStyle),
+                  }),
           );
         }),
       ];

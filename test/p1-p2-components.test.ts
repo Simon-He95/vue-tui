@@ -1110,6 +1110,37 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("renders horizontal split pane separator through the full height", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TSplitPane as any,
+          {
+            x: 0,
+            y: 0,
+            w: 21,
+            h: 3,
+            sizes: [10, 10],
+          },
+          ({ panes }: any) => [
+            h(TText, { ...panes[0], value: "Left" }),
+            h(TText, { ...panes[1], value: "Right" }),
+          ],
+        ),
+      30,
+      5,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]?.[10]).toBe("|");
+      expect(lines[1]?.[10]).toBe("|");
+      expect(lines[2]?.[10]).toBe("|");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("resizes split panes from minimal controlled sizes with keyboard input", async () => {
     const sizes = ref([1, 1]);
     const updates: number[][] = [];

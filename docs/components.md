@@ -256,7 +256,7 @@ Public helper `linkifyTextSegments("")` returns an empty segment array; non-empt
 
 ## TCommandPalette
 
-命令面板组件，组合 `TDialog`、`TInput` 和列表行渲染。默认按 `label` / `detail` / `keywords` 做 substring 过滤，也支持 `v-model:query`、custom matcher、async `itemsProvider`、group/separator 行和 `closeOnSelect`。`select` payload 包含 `{ item, index, query, source }`；默认选择命令不会自动关闭面板，宿主可在 `@select` 中更新 `v-model`，或显式开启 `closeOnSelect`。
+命令面板组件，组合 `TDialog`、`TInput` 和列表行渲染。默认按 `label` / `detail` / `keywords` 做 substring 过滤，也支持 `v-model:query`、custom matcher、async `itemsProvider`、group/separator 行和 `closeOnSelect`。`select` payload 包含 `{ item, index, sourceIndex, query, source }`，其中 `index` 是过滤/渲染后的 row index，`sourceIndex` 是原始 `items` 或 provider result index；默认选择命令不会自动关闭面板，宿主可在 `@select` 中更新 `v-model`，或显式开启 `closeOnSelect`。
 
 ```vue
 <TCommandPalette
@@ -274,7 +274,7 @@ Public helper `linkifyTextSegments("")` returns an empty segment array; non-empt
 
 ## TDataTable
 
-`TDataTable` 在 `TTable` 上增加受控排序、过滤和行选择；点击表头会 emit `sortChange` / `update:sortBy` / `update:sortDirection`。`rowKey` 函数收到的 `index` 是原始 rows index，排序/过滤后仍保持行 identity。列 `format` 会影响显示和过滤匹配，排序使用 `row[sortBy]` 的原始值。它同样是非虚拟、非滚动表格：过滤/排序后的结果会交给 `TTable` 渲染顶部可见切片。
+`TDataTable` 在 `TTable` 上增加受控排序、过滤、行选择和受控 viewport offset；点击表头会 emit `sortChange` / `update:sortBy` / `update:sortDirection`。`scrollTop` 表示过滤/排序后结果集里的顶部可见行。`rowKey` 函数收到的 `index` 是原始 rows index，排序/过滤后仍保持行 identity。列 `format` 会影响显示和过滤匹配，排序使用 `row[sortBy]` 的原始值。它仍然是 non-virtual：rows 会在内存中排序/过滤，然后只把当前 visible slice 传给 `TTable`。
 
 ```vue
 <TDataTable
