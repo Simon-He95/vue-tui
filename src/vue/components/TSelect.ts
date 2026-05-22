@@ -223,7 +223,7 @@ export const TSelect = defineComponent({
       type: Function as PropType<TSelectOptionProvider>,
       default: undefined,
     },
-    query: { type: String, default: "" },
+    query: { type: String, default: undefined },
     modelValue: {
       type: null as unknown as PropType<TSelectModelValue>,
       default: 0 as TSelectModelValue,
@@ -277,10 +277,12 @@ export const TSelect = defineComponent({
     const focused = ref(false);
     const providerOptions = ref<readonly SelectOption[] | null>(null);
     const providerLoading = ref(false);
+    const innerQuery = ref(props.query ?? "");
     let providerAbort: AbortController | null = null;
     let providerTimer: ReturnType<typeof setTimeout> | null = null;
     let typeaheadTimer: ReturnType<typeof setTimeout> | null = null;
     const typeaheadQuery = ref("");
+    const query = computed(() => props.query ?? innerQuery.value);
     const options = computed(() => providerOptions.value ?? props.options);
     const initialActive = (() => {
       const max = Math.max(0, options.value.length - 1);
@@ -301,6 +303,11 @@ export const TSelect = defineComponent({
       const next = clamp(index, 0, Math.max(0, options.value.length - 1));
       innerActive.value = next;
       emit("update:activeIndex", next);
+    }
+
+    function setQuery(value: string): void {
+      innerQuery.value = value;
+      emit("update:query", value);
     }
 
     function visibleRowCount(r: Rect): number {
@@ -520,7 +527,7 @@ export const TSelect = defineComponent({
       typeaheadTimer = setTimeout(() => {
         typeaheadQuery.value = "";
       }, 700);
-      if (props.searchable) emit("update:query", typeaheadQuery.value);
+      if (props.searchable) setQuery(typeaheadQuery.value);
       if (!props.typeahead) return true;
       const total = options.value.length;
       for (let step = 1; step <= total; step++) {
@@ -880,7 +887,7 @@ export const TSelect = defineComponent({
     }));
 
     watch(
-      () => [props.optionProvider, props.query, props.debounce] as const,
+      () => [props.optionProvider, query.value, props.debounce] as const,
       ([provider, query]) => {
         if (providerTimer) {
           clearTimeout(providerTimer);

@@ -52,6 +52,7 @@ export type TCommandPaletteItemsProvider = (
 export type TCommandPaletteSelectPayload = Readonly<{
   item: TCommandPaletteItem;
   index: number;
+  sourceIndex: number;
   query: string;
   source: "keyboard" | "pointer";
 }>;
@@ -403,7 +404,7 @@ export const TCommandPalette = defineComponent({
       () => [props.modelValue, props.initialQuery] as const,
       ([open, initial]) => {
         if (open && props.query == null) innerQuery.value = initial;
-        if (!open && props.resetQueryOnClose) setQuery("");
+        if (!open && props.resetQueryOnClose && query.value !== "") setQuery("");
       },
       { immediate: true },
     );
@@ -428,23 +429,30 @@ export const TCommandPalette = defineComponent({
     function close(): void {
       emit("update:modelValue", false);
       emit("close");
-      if (props.resetQueryOnClose) setQuery("");
     }
 
     function selectCurrent(source: "keyboard" | "pointer" = "keyboard"): void {
       const index = selectedIndex();
-      const item = filteredEntries.value[index]?.item ?? null;
-      if (!isCommandPaletteRowSelectable(item)) return;
-      emit("select", { item, index, query: query.value, source });
+      const entry = filteredEntries.value[index];
+      const item = entry?.item ?? null;
+      if (!entry || !isCommandPaletteRowSelectable(item)) return;
+      emit("select", { item, index, sourceIndex: entry.sourceIndex, query: query.value, source });
       if (props.closeOnSelect) close();
     }
 
     function selectItem(index: number): void {
-      const item = filteredEntries.value[index]?.item ?? null;
-      if (!isCommandPaletteRowSelectable(item)) return;
+      const entry = filteredEntries.value[index];
+      const item = entry?.item ?? null;
+      if (!entry || !isCommandPaletteRowSelectable(item)) return;
       innerSelectedIndex.value = index;
       emit("update:selectedIndex", index);
-      emit("select", { item, index, query: query.value, source: "pointer" });
+      emit("select", {
+        item,
+        index,
+        sourceIndex: entry.sourceIndex,
+        query: query.value,
+        source: "pointer",
+      });
       if (props.closeOnSelect) close();
     }
 

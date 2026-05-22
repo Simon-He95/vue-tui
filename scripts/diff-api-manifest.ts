@@ -32,27 +32,48 @@ function readBaseFromArg(): ApiManifest | null {
   return JSON.parse(readFileSync(file, "utf8")) as ApiManifest;
 }
 
-function readBaseFromLatestTag(): ApiManifest | null {
+function latestTag(): string | null {
   try {
     const tag = execFileSync("git", ["describe", "--tags", "--abbrev=0"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
-    if (!tag) return null;
-    const text = execFileSync("git", ["show", `${tag}:docs/generated/api-manifest.json`], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    return JSON.parse(text) as ApiManifest;
+    return tag || null;
   } catch {
     return null;
   }
 }
 
+function tagHasManifest(tag: string): boolean {
+  try {
+    execFileSync("git", ["cat-file", "-e", `${tag}:docs/generated/api-manifest.json`], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readBaseFromTag(tag: string): ApiManifest {
+  const text = execFileSync("git", ["show", `${tag}:docs/generated/api-manifest.json`], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  return JSON.parse(text) as ApiManifest;
+}
+
 const current = readCurrent();
-const base = readBaseFromArg() ?? readBaseFromLatestTag();
+const argBase = readBaseFromArg();
+const tag = argBase ? null : latestTag();
+const tagIncludesManifest = tag ? tagHasManifest(tag) : false;
+const base = argBase ?? (tag && tagIncludesManifest ? readBaseFromTag(tag) : null);
 if (!base) {
   const message = "api:diff missing base manifest";
+  if (!argBase && tag && !tagIncludesManifest) {
+    console.log(`${message}; skipped for first manifest baseline after ${tag}`);
+    process.exit(0);
+  }
   if (process.env.VUE_TUI_API_DIFF_ALLOW_MISSING_BASE === "1") {
     console.log(`${message}; skipped by explicit env`);
     process.exit(0);

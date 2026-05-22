@@ -41,6 +41,7 @@ import {
   mountTerminal,
   nextTick,
   ref,
+  waitFor,
 } from "./ui-regressions-support.js";
 
 describe("P1/P2 public components", () => {
@@ -1011,6 +1012,50 @@ describe("P1/P2 public components", () => {
       expect(loadingFrame).toContain("Loading...");
       expect(loadingFrame).not.toContain("old-a");
       expect(loadingFrame).not.toContain("old-b");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses internal TSelect query for searchable async options when query is uncontrolled", async () => {
+    const queryUpdates: string[] = [];
+    const provider = vi.fn((q: string) => Promise.resolve(q ? [`${q}-result`] : ["initial"]));
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: [],
+          optionProvider: provider,
+          searchable: true,
+          typeahead: false,
+          autoFocus: true,
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await nextTick();
+      await Promise.resolve();
+      mounted.scheduler()?.flushNow();
+
+      expect(queryUpdates).toEqual(["b"]);
+      expect(provider.mock.calls.map(([q]) => q)).toContain("b");
+      await waitFor(() => {
+        mounted.scheduler()?.flushNow();
+        return mounted.terminal.snapshot().lines.join("\n").includes("b-result") || null;
+      });
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("b-result");
     } finally {
       mounted.unmount();
     }
@@ -2036,6 +2081,93 @@ describe("P1/P2 public components", () => {
       expect(onSelect).toHaveBeenCalledWith(
         expect.objectContaining({ item: items[1], index: 1, source: "keyboard" }),
       );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("includes sourceIndex in command palette select payloads", async () => {
+    const items = [
+      { label: "Group", kind: "group" as const },
+      { label: "Open" },
+      { label: "Copy" },
+    ];
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 32,
+          h: 10,
+          initialQuery: "copy",
+          items,
+          onSelect,
+        }),
+      50,
+      14,
+    );
+
+    try {
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          item: items[2],
+          index: 0,
+          sourceIndex: 2,
+          source: "keyboard",
+        }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits one command palette query reset when closing", async () => {
+    const open = ref(true);
+    const query = ref("copy");
+    const queryUpdates: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (value: boolean) => (open.value = value),
+          query: query.value,
+          "onUpdate:query": (value: string) => {
+            queryUpdates.push(value);
+            query.value = value;
+          },
+          resetQueryOnClose: true,
+          w: 32,
+          h: 10,
+          items: [{ label: "Open" }, { label: "Copy" }],
+        }),
+      50,
+      14,
+    );
+
+    try {
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      await nextTick();
+
+      expect(open.value).toBe(false);
+      expect(queryUpdates).toEqual([""]);
     } finally {
       mounted.unmount();
     }

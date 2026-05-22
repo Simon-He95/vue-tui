@@ -179,7 +179,7 @@ describe("docs: components coverage", () => {
     }
   });
 
-  it("requires an explicit env override before skipping a missing API diff base", () => {
+  it("only skips a missing API diff base for the first manifest baseline or explicit env", () => {
     const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
@@ -199,6 +199,44 @@ describe("docs: components coverage", () => {
       });
       expect(failed.status).toBe(1);
       expect(failed.stderr).toContain("api:diff missing base manifest");
+
+      const repo = resolve(tmp, "repo");
+      mkdirSync(repo);
+      expect(spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+      writeFileSync(resolve(repo, "README.md"), "baseline\n");
+      expect(spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" }).status).toBe(
+        0,
+      );
+      expect(
+        spawnSync(
+          "git",
+          [
+            "-c",
+            "user.name=vue-tui-test",
+            "-c",
+            "user.email=vue-tui-test@example.com",
+            "commit",
+            "-m",
+            "baseline",
+          ],
+          { cwd: repo, encoding: "utf8" },
+        ).status,
+      ).toBe(0);
+      expect(spawnSync("git", ["tag", "v0.0.0"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+      mkdirSync(resolve(repo, "docs/generated"), { recursive: true });
+      writeFileSync(
+        resolve(repo, "docs/generated/api-manifest.json"),
+        `${JSON.stringify(manifest)}\n`,
+      );
+
+      const skippedFirstBaseline = spawnSync(tsx, [script], {
+        cwd: repo,
+        encoding: "utf8",
+      });
+      expect(skippedFirstBaseline.status).toBe(0);
+      expect(skippedFirstBaseline.stdout).toContain(
+        "api:diff missing base manifest; skipped for first manifest baseline after v0.0.0",
+      );
 
       const skipped = spawnSync(tsx, [script], {
         cwd: tmp,

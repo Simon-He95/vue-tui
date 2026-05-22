@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createCliEventManager,
   createEventManager,
+  createTerminalApp,
   createPromptMentionPlugin,
   defineComponent,
   expectBoxBorder,
@@ -36,6 +37,70 @@ import {
 import type { PropType } from "vue";
 
 describe("ui regressions dialog", () => {
+  it("keeps dialog footer buttons on the dialog focus layer with custom zIndex", async () => {
+    const open = ref(true);
+    const value = ref("");
+    const onConfirm = vi.fn();
+    const App = defineComponent({
+      name: "DialogCustomZIndexButtonsApp",
+      setup() {
+        return () =>
+          h(
+            TDialog,
+            {
+              modelValue: open.value,
+              "onUpdate:modelValue": (next: boolean) => (open.value = next),
+              w: 30,
+              h: 8,
+              zIndex: 2000,
+              buttons: [{ label: "OK", default: true }],
+              onConfirm,
+            },
+            () =>
+              h(TInput, {
+                x: 0,
+                y: 0,
+                w: 10,
+                h: 1,
+                modelValue: value.value,
+                "onUpdate:modelValue": (next: string) => (value.value = next),
+              }),
+          );
+      },
+    });
+
+    const app = createTerminalApp({ cols: 50, rows: 14, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const nodes = app.events.debugNodes().filter((node) => node.visible && node.focusable);
+      const dialogNode = nodes.find((node) => node.rect.w === 30 && node.rect.h === 8);
+      const inputNode = nodes.find((node) => node.rect.w === 10 && node.rect.h === 1);
+      const buttonNode = nodes.find((node) => node.rect.w === 6 && node.rect.h === 1);
+
+      expect(dialogNode).toBeTruthy();
+      expect(inputNode?.zIndex).toBe(dialogNode?.zIndex);
+      expect(buttonNode?.zIndex).toBe(dialogNode?.zIndex);
+      expect(app.events.getFocused()).toBe(buttonNode?.id);
+
+      app.events.dispatch({
+        type: "keydown",
+        key: "Enter",
+        code: "Enter",
+        time: Date.now(),
+      } as any);
+      await nextTick();
+
+      expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ label: "OK", index: 0 }));
+      expect(open.value).toBe(false);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("dirty-row repaint never lets lower zIndex overwrite overlay", async () => {
     const cols = 70;
     const rows = 22;

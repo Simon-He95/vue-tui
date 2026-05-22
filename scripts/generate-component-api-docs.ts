@@ -23,7 +23,6 @@ type PropMeta = {
   description: string | null;
   descriptionSource: DescriptionSource;
   deprecated: string | null;
-  internalDocSkip: boolean;
 };
 
 type EventMeta = {
@@ -32,7 +31,6 @@ type EventMeta = {
   payloadSource: PayloadSource;
   description: string | null;
   descriptionSource: DescriptionSource;
-  internalDocSkip: boolean;
 };
 
 type ApiMaturity = "public" | "advanced" | "experimental";
@@ -134,7 +132,7 @@ const sharedPublicPropDescriptions: Record<string, string> = {
   filterPredicate: "Custom row filter predicate.",
   selectionMode: "Row selection mode.",
   selectedIndex: "Controlled active item index.",
-  query: "Controlled search query.",
+  query: "Search query used by filtering or async providers.",
   itemsProvider: "Async command provider called with the current query.",
   matcher: "Custom command matcher.",
   filterStrategy: "Built-in command matching strategy.",
@@ -843,8 +841,6 @@ function extractProps(
 
     const description = getJsDocDescription(prop);
     const deprecated = getJsDocTag(prop, "deprecated");
-    const internalDocSkip = getJsDocTag(prop, "internalDocSkip") !== null;
-
     const init = unwrapExpression(prop.initializer);
     if (ts.isObjectLiteralExpression(init)) {
       const typeExpr = getObjectPropertyValue(init, "type");
@@ -863,7 +859,6 @@ function extractProps(
         description,
         descriptionSource: description ? "jsdoc" : "missing",
         deprecated,
-        internalDocSkip,
       });
       continue;
     }
@@ -878,7 +873,6 @@ function extractProps(
       description,
       descriptionSource: description ? "jsdoc" : "missing",
       deprecated,
-      internalDocSkip,
     });
   }
 
@@ -910,19 +904,10 @@ function formatEventPayload(init: ts.Expression, printer: ts.Printer): string | 
 function extractEventDocs(
   sourceFile: ts.SourceFile,
   componentName: string,
-): Map<
-  string,
-  Pick<
-    EventMeta,
-    "payload" | "payloadSource" | "description" | "descriptionSource" | "internalDocSkip"
-  >
-> {
+): Map<string, Pick<EventMeta, "payload" | "payloadSource" | "description" | "descriptionSource">> {
   const out = new Map<
     string,
-    Pick<
-      EventMeta,
-      "payload" | "payloadSource" | "description" | "descriptionSource" | "internalDocSkip"
-    >
+    Pick<EventMeta, "payload" | "payloadSource" | "description" | "descriptionSource">
   >();
   for (const docsName of [`${componentName}Events`, `${componentName}EventDocs`]) {
     const init = getTopLevelInitializerByName(sourceFile, docsName);
@@ -943,7 +928,6 @@ function extractEventDocs(
         payloadSource: payload ? "component-default" : "missing",
         description,
         descriptionSource: description ? "component-default" : "missing",
-        internalDocSkip: getJsDocTag(prop, "internalDocSkip") !== null,
       });
     }
   }
@@ -956,10 +940,7 @@ function extractEvents(
   printer: ts.Printer,
   docs: Map<
     string,
-    Pick<
-      EventMeta,
-      "payload" | "payloadSource" | "description" | "descriptionSource" | "internalDocSkip"
-    >
+    Pick<EventMeta, "payload" | "payloadSource" | "description" | "descriptionSource">
   >,
 ): EventMeta[] {
   const arr = resolveToArrayLiteral(sourceFile, emitsExpr);
@@ -975,7 +956,6 @@ function extractEvents(
           payloadSource: meta?.payloadSource ?? "missing",
           description: meta?.description ?? null,
           descriptionSource: meta?.descriptionSource ?? "missing",
-          internalDocSkip: meta?.internalDocSkip ?? false,
         });
       }
     }
@@ -1011,7 +991,6 @@ function extractEvents(
           : jsDocDescription
             ? "jsdoc"
             : "missing",
-        internalDocSkip: meta?.internalDocSkip ?? getJsDocTag(prop, "internalDocSkip") !== null,
       });
     }
     return events;
@@ -1025,7 +1004,6 @@ function extractEvents(
       payloadSource: "missing",
       description: null,
       descriptionSource: "missing",
-      internalDocSkip: false,
     },
   ];
 }
@@ -1161,7 +1139,6 @@ function describeEvent(event: EventMeta): DescriptionResult {
     return { description: event.description, source: event.descriptionSource };
   }
   const baseName = eventBaseName(event.name);
-  if (baseName.endsWith("Capture")) return { description: null, source: "missing" };
   if (event.name.endsWith("Capture")) {
     const baseDescription = publicEventDescriptions[baseName];
     return baseDescription

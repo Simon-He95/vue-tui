@@ -1584,7 +1584,7 @@
           "type": "string",
           "required": false,
           "defaultValue": "undefined",
-          "description": "Controlled search query.",
+          "description": "Search query used by filtering or async providers.",
           "descriptionSource": "component-default"
         },
         {
@@ -5748,8 +5748,8 @@
           "name": "query",
           "type": "string",
           "required": false,
-          "defaultValue": "\"\"",
-          "description": "Controlled search query.",
+          "defaultValue": "undefined",
+          "description": "Search query used by filtering or async providers.",
           "descriptionSource": "component-default"
         },
         {

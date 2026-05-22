@@ -8,10 +8,13 @@
 type TCommandPaletteSelectPayload = {
   item: TCommandPaletteItem;
   index: number;
+  sourceIndex: number;
   query: string;
   source: "keyboard" | "pointer";
 };
 ```
+
+`index` is the filtered/rendered command row index; `sourceIndex` is the original `items` or provider result index.
 
 Update handlers that previously received the item directly:
 

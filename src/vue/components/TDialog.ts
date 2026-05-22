@@ -204,6 +204,10 @@ const DialogSurface = defineComponent({
     const layout = useLayout();
     const cols = computed(() => layout.clipRect?.w ?? 0);
     const rows = computed(() => layout.clipRect?.h ?? 0);
+    const dialogLayerZ = computed(() => props.zIndex + (props.backdrop ? 1 : 0));
+    const dialogEventZ = computed(() =>
+      props.backdrop ? props.zIndex + dialogLayerZ.value : dialogLayerZ.value,
+    );
 
     let pendingBlur = false;
     let focusedWithin = false;
@@ -240,7 +244,7 @@ const DialogSurface = defineComponent({
         const { x, y } = pos.value;
         const boxW = Math.max(0, Math.floor(props.w));
         const boxH = Math.max(0, Math.floor(props.h));
-        const dialogZIndex = props.zIndex + (props.backdrop ? 1 : 0);
+        const dialogZIndex = dialogEventZ.value;
         const dialogBounds = { x, y, w: boxW, h: boxH };
 
         const debugNodes = manager.debugNodes();
@@ -484,7 +488,7 @@ const DialogSurface = defineComponent({
             const { x, y } = pos.value;
             const boxW = Math.max(0, Math.floor(props.w));
             const boxH = Math.max(0, Math.floor(props.h));
-            const dialogZIndex = props.zIndex + (props.backdrop ? 1 : 0);
+            const dialogZIndex = dialogEventZ.value;
 
             // Find all focusable nodes within the dialog bounds
             const dialogBounds = { x, y, w: boxW, h: boxH };
@@ -601,7 +605,7 @@ const DialogSurface = defineComponent({
           y,
           w: boxW,
           h: boxH,
-          zIndex: props.zIndex + (props.backdrop ? 1 : 0),
+          zIndex: dialogLayerZ.value,
           focusable: true,
           // Delay autoFocus to let inner elements (e.g. TInput with autoFocus) claim it first
           autoFocus: false,
@@ -748,12 +752,17 @@ export const TDialog = defineComponent({
       };
     }
 
+    function getDialogEventZIndex(): number {
+      const surfaceZ = props.zIndex + (props.backdrop ? 1 : 0);
+      return props.backdrop ? props.zIndex + surfaceZ : surfaceZ;
+    }
+
     function getButtonNodes(manager: NonNullable<typeof events.value>) {
       if (!props.buttons.length) return [] as Array<{ id: string } | null>;
 
       const debugNodes = manager.debugNodes();
       const dialogBounds = getDialogBounds();
-      const dialogZIndex = props.zIndex + (props.backdrop ? 1 : 0);
+      const dialogZIndex = getDialogEventZIndex();
       const content = contentLayout({
         w: props.w,
         h: props.h,
@@ -971,9 +980,7 @@ export const TDialog = defineComponent({
                 y: layout.y,
                 w: layout.w,
                 h: 1,
-                // Keep button hitboxes at the same interaction layer as dialog inputs.
-                // Otherwise modal focus lock can refuse mousedown focus changes to buttons.
-                zIndex: 1002,
+                zIndex: 0,
                 focusable: true,
                 onFocus: () => {
                   selectedButtonIndex.value = i;
