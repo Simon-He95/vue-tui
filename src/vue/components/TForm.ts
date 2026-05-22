@@ -648,10 +648,11 @@ export const TAutocompleteInput = defineComponent({
           providerLoading.value = false;
           return;
         }
+        providerSuggestions.value = [];
+        providerLoading.value = true;
         const run = () => {
           const controller = new AbortController();
           providerAbort = controller;
-          providerLoading.value = true;
           void provider(query, { signal: controller.signal })
             .then((suggestions) => {
               if (!controller.signal.aborted) providerSuggestions.value = suggestions;

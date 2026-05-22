@@ -900,11 +900,11 @@ export const TSelect = defineComponent({
           providerLoading.value = false;
           return;
         }
+        providerOptions.value = [];
+        providerLoading.value = true;
         const run = () => {
           const controller = new AbortController();
           providerAbort = controller;
-          providerOptions.value = [];
-          providerLoading.value = true;
           void provider(query, { signal: controller.signal })
             .then((items) => {
               if (!controller.signal.aborted) providerOptions.value = items;

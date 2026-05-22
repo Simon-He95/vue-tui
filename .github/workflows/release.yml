@@ -33,6 +33,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Require npm token for release verification
         if: ${{ env.HAS_NPM_TOKEN != 'true' }}

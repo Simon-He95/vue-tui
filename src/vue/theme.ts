@@ -27,6 +27,7 @@ export type TuiThemeComponentTokens = Readonly<{
     borderStyle?: Style;
     rowStyle?: Style;
     selectedStyle?: Style;
+    activeStyle?: Style;
   }>;
   TFormField?: Readonly<{
     labelStyle?: Style;
@@ -70,6 +71,7 @@ export const tuiDefaultTheme: TuiTheme = Object.freeze({
       borderStyle: Object.freeze({ dim: true }),
       rowStyle: Object.freeze({}),
       selectedStyle: Object.freeze({ inverse: true }),
+      activeStyle: Object.freeze({ underline: true }),
     }),
     TFormField: Object.freeze({
       labelStyle: Object.freeze({ bold: true }),
@@ -142,6 +144,7 @@ export function createTheme(overrides: TuiThemeOverrides = {}): TuiTheme {
         borderStyle: mergeStyleToken(defaultTable?.borderStyle, table?.borderStyle),
         rowStyle: mergeStyleToken(defaultTable?.rowStyle, table?.rowStyle),
         selectedStyle: mergeStyleToken(defaultTable?.selectedStyle, table?.selectedStyle),
+        activeStyle: mergeStyleToken(defaultTable?.activeStyle, table?.activeStyle),
       },
       TFormField: {
         ...(defaultFormField ?? {}),

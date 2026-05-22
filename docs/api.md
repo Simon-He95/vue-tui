@@ -299,6 +299,7 @@ const app = createTerminalApp({
 - `<TSelect />` / `<TList />`：
   - `autoFocus` 打开后自动接收键盘
   - `<TSelect />`：上下键切换，Enter 选择
+  - `<TSelect />` 单选 `@change` 保持 label/null 语义；`valueMode='index|value|option'` 只决定 `v-model`
   - `<TSelect multiple />`：上下键移动光标，Space 切换勾选，Enter confirm；`v-model` 由 `valueMode='index|value|option'` 决定；`multipleEmit='label|index|both'` 控制 `@change/@confirm` 参数（默认 `label`）
   - `<TList />`：上下键切换，wheel 滚动
 - `<TCommandPalette />`：命令面板，过滤 `label/detail/keywords`，Enter select，Esc close；select 后由宿主更新 `v-model` 关闭

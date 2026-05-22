@@ -5,7 +5,13 @@ type Maturity = "public" | "advanced" | "experimental";
 type Component = {
   entrypoint: string;
   maturity: Maturity;
-  props: Array<{ name: string; type: string; required: boolean; deprecated?: string }>;
+  props: Array<{
+    name: string;
+    type: string;
+    required: boolean;
+    defaultValue?: string;
+    deprecated?: string;
+  }>;
   events: Array<{ name: string; payload?: string }>;
 };
 type Entrypoint = {
@@ -78,12 +84,21 @@ if (!base) {
     console.log(`${message}; skipped by explicit env`);
     process.exit(0);
   }
+  if (!argBase && !tag && process.env.CI !== "true") {
+    console.log(`${message}; skipped because no git tag was found outside CI`);
+    process.exit(0);
+  }
   console.error(message);
   process.exit(1);
 }
 
 const breaking: string[] = [];
 const notes: string[] = [];
+
+function report(maturity: Maturity, line: string): void {
+  if (maturity === "public") breaking.push(line);
+  else notes.push(line);
+}
 
 function valueExports(entrypoint: Entrypoint): readonly string[] {
   return entrypoint.valueExports ?? entrypoint.exports ?? [];
@@ -96,44 +111,38 @@ function typeExports(entrypoint: Entrypoint): readonly string[] {
 for (const [specifier, previous] of Object.entries(base.entrypoints)) {
   const next = current.entrypoints[specifier];
   if (!next) {
-    if (previous.maturity === "public") breaking.push(`${specifier} entrypoint was removed`);
-    else notes.push(`${specifier} entrypoint was removed`);
+    report(previous.maturity, `${specifier} entrypoint was removed`);
     continue;
   }
   const nextValueExports = new Set(valueExports(next));
   for (const name of valueExports(previous)) {
     if (nextValueExports.has(name)) continue;
     const line = `${specifier}.${name} value export was removed`;
-    if (previous.maturity === "public") breaking.push(line);
-    else notes.push(line);
+    report(previous.maturity, line);
   }
   const nextTypeExports = new Set(typeExports(next));
   for (const name of typeExports(previous)) {
     if (nextTypeExports.has(name)) continue;
     const line = `${specifier}.${name} type export was removed`;
-    if (previous.maturity === "public") breaking.push(line);
-    else notes.push(line);
+    report(previous.maturity, line);
   }
 }
 
 for (const [name, previous] of Object.entries(base.components)) {
   const next = current.components[name];
   if (!next) {
-    if (previous.maturity === "public") breaking.push(`${name} component was removed`);
-    else notes.push(`${name} component was removed`);
+    report(previous.maturity, `${name} component was removed`);
     continue;
   }
 
   if (previous.entrypoint !== next.entrypoint) {
     const line = `${name} entrypoint changed ${previous.entrypoint} -> ${next.entrypoint}`;
-    if (previous.maturity === "public") breaking.push(line);
-    else notes.push(line);
+    report(previous.maturity, line);
   }
 
   if (previous.maturity !== next.maturity) {
     const line = `${name} maturity changed ${previous.maturity} -> ${next.maturity}`;
-    if (previous.maturity === "public") breaking.push(line);
-    else notes.push(line);
+    report(previous.maturity, line);
   }
 
   const nextProps = new Map(next.props.map((prop) => [prop.name, prop]));
@@ -141,43 +150,46 @@ for (const [name, previous] of Object.entries(base.components)) {
   for (const prop of previous.props) {
     const nextProp = nextProps.get(prop.name);
     if (!nextProp) {
-      if (previous.maturity === "public") breaking.push(`${name}.${prop.name} prop was removed`);
-      else notes.push(`${name}.${prop.name} prop was removed`);
+      report(previous.maturity, `${name}.${prop.name} prop was removed`);
       continue;
     }
     if (prop.type !== nextProp.type) {
       const line = `${name}.${prop.name} changed type ${prop.type} -> ${nextProp.type}`;
-      if (previous.maturity === "public") breaking.push(line);
-      else notes.push(line);
+      report(previous.maturity, line);
     }
-    if (prop.required !== nextProp.required) {
-      const line = `${name}.${prop.name} changed required ${prop.required} -> ${nextProp.required}`;
-      if (previous.maturity === "public") breaking.push(line);
-      else notes.push(line);
+    if (!prop.required && nextProp.required) {
+      report(previous.maturity, `${name}.${prop.name} changed required false -> true`);
+    } else if (prop.required && !nextProp.required) {
+      notes.push(`${name}.${prop.name} changed required true -> false`);
+    }
+    if ((prop.defaultValue ?? "") !== (nextProp.defaultValue ?? "")) {
+      const previousDefault = prop.defaultValue ?? "-";
+      const nextDefault = nextProp.defaultValue ?? "-";
+      report(
+        previous.maturity,
+        `${name}.${prop.name} changed default ${previousDefault} -> ${nextDefault}`,
+      );
     }
   }
   for (const nextProp of next.props) {
     if (previousProps.has(nextProp.name)) continue;
     if (!nextProp.required) continue;
     const line = `${name}.${nextProp.name} required prop was added`;
-    if (previous.maturity === "public") breaking.push(line);
-    else notes.push(line);
+    report(previous.maturity, line);
   }
 
   const nextEvents = new Map(next.events.map((event) => [event.name, event]));
   for (const event of previous.events) {
     const nextEvent = nextEvents.get(event.name);
     if (!nextEvent) {
-      if (previous.maturity === "public") breaking.push(`${name}.${event.name} event was removed`);
-      else notes.push(`${name}.${event.name} event was removed`);
+      report(previous.maturity, `${name}.${event.name} event was removed`);
       continue;
     }
     if ((event.payload ?? "") !== (nextEvent.payload ?? "")) {
       const line = `${name}.${event.name} changed payload ${event.payload ?? "-"} -> ${
         nextEvent.payload ?? "-"
       }`;
-      if (previous.maturity === "public") breaking.push(line);
-      else notes.push(line);
+      report(previous.maturity, line);
     }
   }
 }
@@ -188,7 +200,7 @@ if (breaking.length) {
 }
 
 if (notes.length) {
-  console.log("Non-public API changes:");
+  console.log("API change notes:");
   for (const item of notes) console.log(`- ${item}`);
 }
 

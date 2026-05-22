@@ -423,6 +423,7 @@ Import: `@simon_he/vue-tui`
 | <code>headerStyle</code>     | <code>Style</code>                                                         | <code>undefined</code>           | 否   | Style override for table header cells.                                                                                                                                            |
 | <code>borderStyle</code>     | <code>Style</code>                                                         | <code>undefined</code>           | 否   | Style override for border cells.                                                                                                                                                  |
 | <code>selectedStyle</code>   | <code>Style</code>                                                         | <code>undefined</code>           | 否   | Style used for selected rows or nodes.                                                                                                                                            |
+| <code>activeStyle</code>     | <code>Style</code>                                                         | <code>undefined</code>           | 否   | Style used for the active item or row.                                                                                                                                            |
 | <code>emptyText</code>       | <code>string</code>                                                        | <code>&quot;No rows&quot;</code> | 否   | Text rendered when there are no rows or items.                                                                                                                                    |
 
 ### Events
@@ -855,7 +856,7 @@ Import: `@simon_he/vue-tui`
 | <code>style</code>          | <code>Style</code>              | <code>undefined</code>                        | 否   | Base terminal cell style override.                  |
 | <code>hoverStyle</code>     | <code>Style</code>              | <code>undefined</code>                        | 否   | Style applied while the pointer hovers the link.    |
 | <code>focusStyle</code>     | <code>Style</code>              | <code>undefined</code>                        | 否   | Style applied while the link has keyboard focus.    |
-| <code>activeStyle</code>    | <code>Style</code>              | <code>undefined</code>                        | 否   | Style used for the active item or enabled state.    |
+| <code>activeStyle</code>    | <code>Style</code>              | <code>undefined</code>                        | 否   | Style used for the active item or row.              |
 | <code>disabled</code>       | <code>boolean</code>            | <code>false</code>                            | 否   | Disables pointer and keyboard activation.           |
 | <code>visited</code>        | <code>boolean</code>            | <code>false</code>                            | 否   | Marks the link as already visited for styling.      |
 | <code>openMode</code>       | <code>TLinkOpenMode</code>      | <code>&quot;host&quot;</code>                 | 否   | Link activation mode.                               |
@@ -1470,7 +1471,7 @@ Import: `@simon_he/vue-tui`
 | <code>modelValue</code>    | <code>string</code>                  | <code>&quot;&quot;</code>                 | 否   | Controlled component value.                         |
 | <code>options</code>       | <code>readonly TRadioOption[]</code> | —                                         | 是   | Options rendered by the control.                    |
 | <code>style</code>         | <code>Style</code>                   | <code>undefined</code>                    | 否   | Base terminal cell style override.                  |
-| <code>activeStyle</code>   | <code>Style</code>                   | <code>() =&gt; ({ inverse: true })</code> | 否   | Style used for the active item or enabled state.    |
+| <code>activeStyle</code>   | <code>Style</code>                   | <code>() =&gt; ({ inverse: true })</code> | 否   | Style used for the active item or row.              |
 | <code>disabledStyle</code> | <code>Style</code>                   | <code>() =&gt; ({ dim: true })</code>     | 否   | Style used for disabled content.                    |
 
 ### Events
@@ -1576,17 +1577,17 @@ Import: `@simon_he/vue-tui`
 
 ### Events
 
-| 名称                            | Payload                                                                                             | 说明                                               |
-| ------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| <code>update:modelValue</code>  | <code>TSelectModelValue</code>                                                                      | Emitted when the controlled model value changes.   |
-| <code>update:activeIndex</code> | <code>number</code>                                                                                 | Emitted when the active option index changes.      |
-| <code>update:query</code>       | <code>string</code>                                                                                 | Emitted when the controlled query changes.         |
-| <code>change</code>             | <code>string &#124; string[] &#124; number[] &#124; TSelectMultipleChangePayload &#124; null</code> | Emitted when the component commits a value change. |
-| <code>confirm</code>            | <code>string[] &#124; number[] &#124; TSelectMultipleChangePayload</code>                           | Emitted when a focused action is confirmed.        |
-| <code>close</code>              | <code>void</code>                                                                                   | Emitted when the component requests to close.      |
-| <code>focus</code>              | <code>void</code>                                                                                   | Emitted when the component receives focus.         |
-| <code>blur</code>               | <code>void</code>                                                                                   | Emitted when the component loses focus.            |
-| <code>keydown</code>            | <code>TerminalKeyboardEvent</code>                                                                  | Emitted for keydown events.                        |
+| 名称                            | Payload                                                                                             | 说明                                                                                                                                                         |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| <code>update:modelValue</code>  | <code>TSelectModelValue</code>                                                                      | Emitted when the controlled model value changes.                                                                                                             |
+| <code>update:activeIndex</code> | <code>number</code>                                                                                 | Emitted when the active option index changes.                                                                                                                |
+| <code>update:query</code>       | <code>string</code>                                                                                 | Emitted when the controlled query changes.                                                                                                                   |
+| <code>change</code>             | <code>string &#124; string[] &#124; number[] &#124; TSelectMultipleChangePayload &#124; null</code> | For single select, emits the selected option label or null; valueMode only affects update:modelValue. For multiple select, the payload follows multipleEmit. |
+| <code>confirm</code>            | <code>string[] &#124; number[] &#124; TSelectMultipleChangePayload</code>                           | Emitted when multi-select commits the current selection.                                                                                                     |
+| <code>close</code>              | <code>void</code>                                                                                   | Emitted when the component requests to close.                                                                                                                |
+| <code>focus</code>              | <code>void</code>                                                                                   | Emitted when the component receives focus.                                                                                                                   |
+| <code>blur</code>               | <code>void</code>                                                                                   | Emitted when the component loses focus.                                                                                                                      |
+| <code>keydown</code>            | <code>TerminalKeyboardEvent</code>                                                                  | Emitted for keydown events.                                                                                                                                  |
 
 ## TSlider
 
@@ -1610,7 +1611,7 @@ Import: `@simon_he/vue-tui`
 | <code>step</code>          | <code>number</code>  | <code>1</code>                                         | 否   | Keyboard increment step.                            |
 | <code>disabled</code>      | <code>boolean</code> | <code>false</code>                                     | 否   | Disables pointer and keyboard activation.           |
 | <code>style</code>         | <code>Style</code>   | <code>undefined</code>                                 | 否   | Base terminal cell style override.                  |
-| <code>activeStyle</code>   | <code>Style</code>   | <code>() =&gt; ({ fg: &quot;cyanBright&quot; })</code> | 否   | Style used for the active item or enabled state.    |
+| <code>activeStyle</code>   | <code>Style</code>   | <code>() =&gt; ({ fg: &quot;cyanBright&quot; })</code> | 否   | Style used for the active item or row.              |
 | <code>disabledStyle</code> | <code>Style</code>   | <code>() =&gt; ({ dim: true })</code>                  | 否   | Style used for disabled content.                    |
 
 ### Events
@@ -1720,7 +1721,7 @@ Import: `@simon_he/vue-tui`
 | <code>label</code>         | <code>string</code>  | <code>&quot;&quot;</code>                               | 否   | Visible label text.                                 |
 | <code>disabled</code>      | <code>boolean</code> | <code>false</code>                                      | 否   | Disables pointer and keyboard activation.           |
 | <code>style</code>         | <code>Style</code>   | <code>undefined</code>                                  | 否   | Base terminal cell style override.                  |
-| <code>activeStyle</code>   | <code>Style</code>   | <code>() =&gt; ({ fg: &quot;greenBright&quot; })</code> | 否   | Style used for the active item or enabled state.    |
+| <code>activeStyle</code>   | <code>Style</code>   | <code>() =&gt; ({ fg: &quot;greenBright&quot; })</code> | 否   | Style used for the active item or row.              |
 | <code>disabledStyle</code> | <code>Style</code>   | <code>() =&gt; ({ dim: true })</code>                   | 否   | Style used for disabled content.                    |
 
 ### Events
@@ -1752,12 +1753,14 @@ Import: `@simon_he/vue-tui`
 | <code>rowKey</code>          | <code>string &#124; ((row: TTableRow, index: number) =&gt; unknown)</code> | <code>undefined</code>           | 否   | Row key field or resolver.                                                                                  |
 | <code>selectedRowKey</code>  | <code>unknown</code>                                                       | <code>undefined</code>           | 否   | Controlled selected row key.                                                                                |
 | <code>selectedRowKeys</code> | <code>readonly unknown[]</code>                                            | <code>undefined</code>           | 否   | Controlled selected row keys for multi-select tables.                                                       |
+| <code>activeRowKey</code>    | <code>unknown</code>                                                       | <code>undefined</code>           | 否   | Controlled active row key.                                                                                  |
 | <code>border</code>          | <code>boolean</code>                                                       | <code>false</code>               | 否   | Draws a border around the component.                                                                        |
 | <code>header</code>          | <code>boolean</code>                                                       | <code>true</code>                | 否   | Shows the table header when enabled.                                                                        |
 | <code>style</code>           | <code>Style</code>                                                         | <code>undefined</code>           | 否   | Base terminal cell style override.                                                                          |
 | <code>headerStyle</code>     | <code>Style</code>                                                         | <code>undefined</code>           | 否   | Style override for table header cells.                                                                      |
 | <code>borderStyle</code>     | <code>Style</code>                                                         | <code>undefined</code>           | 否   | Style override for border cells.                                                                            |
 | <code>selectedStyle</code>   | <code>Style</code>                                                         | <code>undefined</code>           | 否   | Style used for selected rows or nodes.                                                                      |
+| <code>activeStyle</code>     | <code>Style</code>                                                         | <code>undefined</code>           | 否   | Style used for the active item or row.                                                                      |
 | <code>emptyText</code>       | <code>string</code>                                                        | <code>&quot;No rows&quot;</code> | 否   | Text rendered when there are no rows or items.                                                              |
 | <code>headerFocusable</code> | <code>boolean</code>                                                       | <code>false</code>               | 否   | Makes header cells keyboard focusable.                                                                      |
 | <code>rowFocusable</code>    | <code>boolean</code>                                                       | <code>false</code>               | 否   | Makes body rows keyboard focusable.                                                                         |

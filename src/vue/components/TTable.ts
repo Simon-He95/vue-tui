@@ -179,12 +179,14 @@ export const TTable = defineComponent({
       type: Array as PropType<readonly unknown[]>,
       default: undefined,
     },
+    activeRowKey: { type: null as any, default: undefined },
     border: { type: Boolean, default: false },
     header: { type: Boolean, default: true },
     style: { type: Object as PropType<Style>, default: undefined },
     headerStyle: { type: Object as PropType<Style>, default: undefined },
     borderStyle: { type: Object as PropType<Style>, default: undefined },
     selectedStyle: { type: Object as PropType<Style>, default: undefined },
+    activeStyle: { type: Object as PropType<Style>, default: undefined },
     emptyText: { type: String, default: "No rows" },
     headerFocusable: { type: Boolean, default: false },
     rowFocusable: { type: Boolean, default: false },
@@ -215,6 +217,9 @@ export const TTable = defineComponent({
     );
     const selectedRowStyle = computed(() =>
       mergeStyle(rowStyle.value, theme.value.components.TTable?.selectedStyle, props.selectedStyle),
+    );
+    const activeRowStyle = computed(() =>
+      mergeStyle(theme.value.components.TTable?.activeStyle, props.activeStyle),
     );
     const bodyRows = computed(() => {
       const top = props.header ? 2 : 0;
@@ -302,6 +307,7 @@ export const TTable = defineComponent({
         const selected =
           (props.selectedRowKey !== undefined && key === props.selectedRowKey) ||
           Boolean(props.selectedRowKeys?.some((candidate) => candidate === key));
+        const active = props.activeRowKey !== undefined && key === props.activeRowKey;
         children.push(
           h(
             TView as any,
@@ -321,7 +327,14 @@ export const TTable = defineComponent({
               },
             },
             () => {
-              const baseStyle = selected ? selectedRowStyle.value : rowStyle.value;
+              const baseStyle = active
+                ? mergeStyle(
+                    selected ? selectedRowStyle.value : rowStyle.value,
+                    activeRowStyle.value,
+                  )
+                : selected
+                  ? selectedRowStyle.value
+                  : rowStyle.value;
               const rowChildren: any[] = [
                 h(TText as any, {
                   key: "row-line",

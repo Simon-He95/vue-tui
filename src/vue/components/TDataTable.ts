@@ -122,6 +122,7 @@ export const TDataTable = defineComponent({
     headerStyle: { type: Object as PropType<Style>, default: undefined },
     borderStyle: { type: Object as PropType<Style>, default: undefined },
     selectedStyle: { type: Object as PropType<Style>, default: undefined },
+    activeStyle: { type: Object as PropType<Style>, default: undefined },
     emptyText: { type: String, default: "No rows" },
   },
   emits: {
@@ -316,9 +317,8 @@ export const TDataTable = defineComponent({
             columns: columns.value,
             rows: tableRows.value,
             rowKey: dataTableRowKey,
-            selectedRowKey:
-              activeRowKey.value ??
-              (props.selectionMode === "multiple" ? undefined : props.selectedRowKey),
+            activeRowKey: keyboardActive.value ? activeRowKey.value : undefined,
+            selectedRowKey: props.selectionMode === "multiple" ? undefined : props.selectedRowKey,
             selectedRowKeys:
               props.selectionMode === "multiple"
                 ? props.selectedRowKeys
@@ -330,6 +330,7 @@ export const TDataTable = defineComponent({
             headerStyle: props.headerStyle,
             borderStyle: props.borderStyle,
             selectedStyle: props.selectedStyle,
+            activeStyle: props.activeStyle,
             emptyText: props.emptyText,
             headerFocusable: props.sortable,
             rowFocusable: props.selectable && props.selectionMode !== "none",

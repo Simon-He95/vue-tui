@@ -215,6 +215,49 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("uses activeStyle for keyboard-active data table rows without selectedStyle", async () => {
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+    ];
+    const selectedRowKeys = ref<unknown[]>(["a"]);
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          selectionMode: "multiple",
+          selectedRowKeys: selectedRowKeys.value,
+          activeStyle: { underline: true },
+        }),
+      16,
+      5,
+    );
+
+    try {
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }));
+      mounted
+        .container()!
+        .dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.getCell(0, 2).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.underline).toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.inverse).not.toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("redistributes TTable auto width after maxWidth clamps a column", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -1098,6 +1141,50 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("clears stale TSelect provider options during debounced query changes", async () => {
+    const query = ref("old");
+    const debounce = ref(0);
+    const provider = vi.fn((q: string) => {
+      if (q === "old") return Promise.resolve(["old-a", "old-b"]);
+      return new Promise<readonly string[]>(() => {});
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: [],
+          optionProvider: provider,
+          query: query.value,
+          debounce: debounce.value,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("old-a");
+
+      query.value = "new";
+      debounce.value = 50;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      const loadingFrame = mounted.terminal.snapshot().lines.join("\n");
+
+      expect(provider.mock.calls.map(([q]) => q)).not.toContain("new");
+      expect(loadingFrame).toContain("Loading...");
+      expect(loadingFrame).not.toContain("old-a");
+      expect(loadingFrame).not.toContain("old-b");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("uses internal TSelect query for searchable async options when query is uncontrolled", async () => {
     const queryUpdates: string[] = [];
     const provider = vi.fn((q: string) => Promise.resolve(q ? [`${q}-result`] : ["initial"]));
@@ -1378,6 +1465,48 @@ describe("P1/P2 public components", () => {
       const lines = mounted.terminal.snapshot().lines.join("\n");
       expect(value.value).toBe("apple");
       expect(lines).toContain("apple");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("clears stale autocomplete suggestions during debounced query changes", async () => {
+    const value = ref("old");
+    const debounce = ref(0);
+    const provider = vi.fn((q: string) => {
+      if (q === "old") return Promise.resolve(["old-suggestion"]);
+      return new Promise<readonly string[]>(() => {});
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          modelValue: value.value,
+          suggestionProvider: provider,
+          debounce: debounce.value,
+        }),
+      28,
+      5,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("old-suggestion");
+
+      value.value = "new";
+      debounce.value = 50;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      const loadingFrame = mounted.terminal.snapshot().lines.join("\n");
+
+      expect(provider.mock.calls.map(([q]) => q)).not.toContain("new");
+      expect(loadingFrame).toContain("Loading...");
+      expect(loadingFrame).not.toContain("old-suggestion");
     } finally {
       mounted.unmount();
     }
@@ -2238,6 +2367,48 @@ describe("P1/P2 public components", () => {
           source: "keyboard",
         }),
       );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("clears stale command palette items during debounced query changes", async () => {
+    const query = ref("old");
+    const debounce = ref(0);
+    const provider = vi.fn((q: string) => {
+      if (q === "old") return Promise.resolve([{ label: "Old command" }]);
+      return new Promise<readonly { label: string }[]>(() => {});
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 32,
+          h: 10,
+          items: [],
+          itemsProvider: provider,
+          query: query.value,
+          debounce: debounce.value,
+        }),
+      50,
+      14,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Old command");
+
+      query.value = "new";
+      debounce.value = 50;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      const loadingFrame = mounted.terminal.snapshot().lines.join("\n");
+
+      expect(provider.mock.calls.map(([q]) => q)).not.toContain("new");
+      expect(loadingFrame).toContain("Loading...");
+      expect(loadingFrame).not.toContain("Old command");
     } finally {
       mounted.unmount();
     }

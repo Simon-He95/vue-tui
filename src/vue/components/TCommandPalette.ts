@@ -500,11 +500,12 @@ export const TCommandPalette = defineComponent({
           providerLoading.value = false;
           return;
         }
+        providerItems.value = [];
+        providerLoading.value = true;
 
         const run = () => {
           const controller = new AbortController();
           providerAbort = controller;
-          providerLoading.value = true;
           void provider(q, { signal: controller.signal })
             .then((items) => {
               if (controller.signal.aborted) return;

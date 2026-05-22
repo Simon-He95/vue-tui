@@ -179,7 +179,67 @@ describe("docs: components coverage", () => {
     }
   });
 
-  it("only skips a missing API diff base for the first manifest baseline or explicit env", () => {
+  it("flags public prop default changes as breaking", () => {
+    const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+    const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
+    try {
+      const basePath = resolve(tmp, "api-manifest.json");
+      const base = JSON.parse(JSON.stringify(manifest));
+      const prop = base.components.TAutocompleteInput.props.find(
+        (candidate: { name: string }) => candidate.name === "closeOnSelect",
+      );
+      prop.defaultValue = "false";
+      writeFileSync(basePath, `${JSON.stringify(base)}\n`);
+
+      const result = spawnSync(
+        resolve(process.cwd(), "node_modules/.bin/tsx"),
+        ["scripts/diff-api-manifest.ts", "--base", basePath],
+        { encoding: "utf8" },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("TAutocompleteInput.closeOnSelect changed default");
+    } finally {
+      rmSync(tmp, { force: true, recursive: true });
+    }
+  });
+
+  it("reports public props becoming optional as non-breaking notes", () => {
+    const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+    const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
+    try {
+      const basePath = resolve(tmp, "api-manifest.json");
+      const current = JSON.parse(JSON.stringify(manifest));
+      const prop = current.components.TBadge.props.find(
+        (candidate: { name: string }) => candidate.name === "value",
+      );
+      prop.required = false;
+
+      mkdirSync(resolve(tmp, "docs/generated"), { recursive: true });
+      writeFileSync(basePath, `${JSON.stringify(manifest)}\n`);
+      writeFileSync(
+        resolve(tmp, "docs/generated/api-manifest.json"),
+        `${JSON.stringify(current)}\n`,
+      );
+
+      const result = spawnSync(
+        resolve(process.cwd(), "node_modules/.bin/tsx"),
+        [resolve(process.cwd(), "scripts/diff-api-manifest.ts"), "--base", basePath],
+        { cwd: tmp, encoding: "utf8" },
+      );
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("TBadge.value changed required true -> false");
+    } finally {
+      rmSync(tmp, { force: true, recursive: true });
+    }
+  });
+
+  it("only skips a missing API diff base for the first manifest baseline, non-CI no-tag clones, or explicit env", () => {
     const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
@@ -196,9 +256,20 @@ describe("docs: components coverage", () => {
       const failed = spawnSync(tsx, [script], {
         cwd: tmp,
         encoding: "utf8",
+        env: { ...process.env, CI: "true" },
       });
       expect(failed.status).toBe(1);
       expect(failed.stderr).toContain("api:diff missing base manifest");
+
+      const skippedNoTag = spawnSync(tsx, [script], {
+        cwd: tmp,
+        encoding: "utf8",
+        env: { ...process.env, CI: "false" },
+      });
+      expect(skippedNoTag.status).toBe(0);
+      expect(skippedNoTag.stdout).toContain(
+        "api:diff missing base manifest; skipped because no git tag was found outside CI",
+      );
 
       const repo = resolve(tmp, "repo");
       mkdirSync(repo);

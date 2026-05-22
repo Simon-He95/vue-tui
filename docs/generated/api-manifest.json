@@ -2167,6 +2167,14 @@
           "descriptionSource": "shared-default"
         },
         {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used for the active item or row.",
+          "descriptionSource": "component-default"
+        },
+        {
           "name": "emptyText",
           "type": "string",
           "required": false,
@@ -3761,7 +3769,7 @@
           "type": "Style",
           "required": false,
           "defaultValue": "undefined",
-          "description": "Style used for the active item or enabled state.",
+          "description": "Style used for the active item or row.",
           "descriptionSource": "shared-default"
         },
         {
@@ -5616,7 +5624,7 @@
           "type": "Style",
           "required": false,
           "defaultValue": "() => ({ inverse: true })",
-          "description": "Style used for the active item or enabled state.",
+          "description": "Style used for the active item or row.",
           "descriptionSource": "shared-default"
         },
         {
@@ -5923,15 +5931,15 @@
           "name": "change",
           "payload": "string | string[] | number[] | TSelectMultipleChangePayload | null",
           "payloadSource": "component-default",
-          "description": "Emitted when the component commits a value change.",
-          "descriptionSource": "shared-default"
+          "description": "For single select, emits the selected option label or null; valueMode only affects update:modelValue. For multiple select, the payload follows multipleEmit.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "confirm",
           "payload": "string[] | number[] | TSelectMultipleChangePayload",
           "payloadSource": "component-default",
-          "description": "Emitted when a focused action is confirmed.",
-          "descriptionSource": "shared-default"
+          "description": "Emitted when multi-select commits the current selection.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "close",
@@ -6049,7 +6057,7 @@
           "type": "Style",
           "required": false,
           "defaultValue": "() => ({ fg: \"cyanBright\" })",
-          "description": "Style used for the active item or enabled state.",
+          "description": "Style used for the active item or row.",
           "descriptionSource": "shared-default"
         },
         {
@@ -6324,7 +6332,7 @@
           "type": "Style",
           "required": false,
           "defaultValue": "() => ({ fg: \"greenBright\" })",
-          "description": "Style used for the active item or enabled state.",
+          "description": "Style used for the active item or row.",
           "descriptionSource": "shared-default"
         },
         {
@@ -6432,6 +6440,14 @@
           "descriptionSource": "component-default"
         },
         {
+          "name": "activeRowKey",
+          "type": "unknown",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Controlled active row key.",
+          "descriptionSource": "component-default"
+        },
+        {
           "name": "border",
           "type": "boolean",
           "required": false,
@@ -6478,6 +6494,14 @@
           "defaultValue": "undefined",
           "description": "Style used for selected rows or nodes.",
           "descriptionSource": "shared-default"
+        },
+        {
+          "name": "activeStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Style used for the active item or row.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "emptyText",

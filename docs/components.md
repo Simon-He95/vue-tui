@@ -274,7 +274,7 @@ Public helper `linkifyTextSegments("")` returns an empty segment array; non-empt
 
 ## TDataTable
 
-`TDataTable` 在 `TTable` 上增加受控排序、过滤、行选择和受控 viewport offset；点击表头会 emit `sortChange` / `update:sortBy` / `update:sortDirection`。`scrollTop` 表示过滤/排序后结果集里的顶部可见行。`rowKey` 函数收到的 `index` 是原始 rows index，排序/过滤后仍保持行 identity。列 `format` 会影响显示和过滤匹配，排序使用 `row[sortBy]` 的原始值。它仍然是 non-virtual：rows 会在内存中排序/过滤，然后只把当前 visible slice 传给 `TTable`。
+`TDataTable` 在 `TTable` 上增加受控排序、过滤、行选择和受控 viewport offset；点击表头会 emit `sortChange` / `update:sortBy` / `update:sortDirection`。`scrollTop` 表示过滤/排序后结果集里的顶部可见行。`rowKey` 函数收到的 `index` 是原始 rows index，排序/过滤后仍保持行 identity。列 `format` 会影响显示和过滤匹配，排序使用 `row[sortBy]` 的原始值。键盘移动的 active row 使用 `activeStyle`，已提交选择继续使用 `selectedStyle`。它仍然是 non-virtual：rows 会在内存中排序/过滤，然后只把当前 visible slice 传给 `TTable`。
 
 ```vue
 <TDataTable
@@ -1601,7 +1601,9 @@ function onPanelActiveChange(payload: TLogLinksPanelActiveChangePayload) {
 
 ### Events
 
-- `change` / `confirm` / `close` / `focus` / `blur` / `keydown`
+- `change`: single-select emits the selected label or `null`; `valueMode` only affects `v-model`
+- `confirm`: multi-select emits the payload selected by `multipleEmit`
+- `close` / `focus` / `blur` / `keydown`
 
 ## TPathPicker
 
