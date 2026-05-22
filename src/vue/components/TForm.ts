@@ -1,7 +1,8 @@
-import type { InjectionKey, PropType, Ref } from "vue";
+import type { PropType, Ref } from "vue";
 import type { Style } from "../../core/types.js";
 import { computed, defineComponent, h, inject, onBeforeUnmount, provide, ref, watch } from "vue";
 import { useTerminal } from "../composables/use-terminal.js";
+import { injectionKey } from "../injection-key.js";
 import { TuiThemeContextKey, tuiDefaultTheme } from "../theme.js";
 import { TInput } from "./TInput.js";
 import { TText } from "./TText.js";
@@ -53,7 +54,7 @@ export type TFormContext = Readonly<{
   validate: () => boolean;
 }>;
 
-export const TFormContextKey: InjectionKey<TFormContext> = Symbol("TFormContext");
+export const TFormContextKey = injectionKey<TFormContext>("TFormContext");
 
 export function useTForm(): TFormContext | null {
   return inject(TFormContextKey, null);

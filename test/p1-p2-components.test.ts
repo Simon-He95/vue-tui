@@ -136,6 +136,73 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("commits the keyboard-active data table row after in-viewport arrow navigation", async () => {
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+    ];
+    const selectedRowKey = ref<unknown>(undefined);
+    const onRowSelect = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          selectedRowKey: selectedRowKey.value,
+          "onUpdate:selectedRowKey": (key: unknown) => (selectedRowKey.value = key),
+          onRowSelect,
+        }),
+      16,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(selectedRowKey.value).toBe("b");
+      expect(onRowSelect).toHaveBeenCalledWith({
+        row: rows[1],
+        index: 1,
+        dataIndex: 1,
+        originalIndex: 1,
+        key: "b",
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("passes original row indices to TDataTable column format after scrollTop", async () => {
     const format = vi.fn((value: unknown, _row: unknown, index: number) => `${index}:${value}`);
     const mounted = await mountTerminal(
@@ -1131,6 +1198,44 @@ describe("P1/P2 public components", () => {
       expect(modelUpdates).toEqual([]);
     } finally {
       mounted.unmount();
+    }
+  });
+
+  it("keeps TSelect searchable query persistent after the typeahead timeout", async () => {
+    vi.useFakeTimers();
+    const queryUpdates: string[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: ["banana"],
+          autoFocus: true,
+          searchable: true,
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await nextTick();
+
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await nextTick();
+
+      vi.advanceTimersByTime(800);
+
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+      await nextTick();
+
+      expect(queryUpdates).toEqual(["b", "ba"]);
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
     }
   });
 

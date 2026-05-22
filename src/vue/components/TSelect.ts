@@ -523,30 +523,55 @@ export const TSelect = defineComponent({
       else commitSingle(index);
     }
 
-    function handlePrintableKey(char: string): boolean {
-      if (!props.searchable && !props.typeahead) return false;
-      if (char.length !== 1 || char < " ") return false;
+    function scheduleTypeaheadReset(): void {
       if (typeaheadTimer) clearTimeout(typeaheadTimer);
-      typeaheadQuery.value += char.toLowerCase();
       typeaheadTimer = setTimeout(() => {
         typeaheadQuery.value = "";
       }, 700);
-      if (props.searchable) setQuery(typeaheadQuery.value);
-      if (!props.typeahead) return true;
+    }
+
+    function moveToTypeaheadMatch(rawPrefix: string, commitModel: boolean): boolean {
+      const prefix = rawPrefix.toLowerCase();
       const total = options.value.length;
+      if (!prefix || total <= 0) return true;
+
       for (let step = 1; step <= total; step++) {
         const index = (active.value + step) % total;
         const opt = options.value[index];
         if (!isOptionInteractive(opt)) continue;
-        if (getOptionLabel(opt).toLowerCase().startsWith(typeaheadQuery.value)) {
-          setActive(index);
-          if (!props.multiple && !props.searchable) {
-            emit("update:modelValue", getOptionValue(opt, index));
-          }
-          return true;
+        if (!getOptionLabel(opt).toLowerCase().startsWith(prefix)) continue;
+
+        setActive(index);
+        if (commitModel && !props.multiple) {
+          emit("update:modelValue", getOptionValue(opt, index));
         }
+        return true;
       }
+
       return true;
+    }
+
+    function handleSearchEditingKey(e: TerminalKeyboardEvent): boolean {
+      if (!props.searchable) return false;
+      if (e.key !== "Backspace") return false;
+      setQuery(query.value.slice(0, -1));
+      return true;
+    }
+
+    function handlePrintableKey(char: string): boolean {
+      if (!props.searchable && !props.typeahead) return false;
+      if (char.length !== 1 || char < " ") return false;
+
+      if (props.searchable) {
+        const nextQuery = `${query.value}${char}`;
+        setQuery(nextQuery);
+        if (props.typeahead) moveToTypeaheadMatch(nextQuery, false);
+        return true;
+      }
+
+      typeaheadQuery.value += char.toLowerCase();
+      scheduleTypeaheadReset();
+      return moveToTypeaheadMatch(typeaheadQuery.value, !props.multiple);
     }
 
     function onKeydown(e: TerminalKeyboardEvent): void {
@@ -594,6 +619,10 @@ export const TSelect = defineComponent({
       if (e.key === "Escape") {
         e.preventDefault();
         emit("close");
+        return;
+      }
+      if (handleSearchEditingKey(e)) {
+        e.preventDefault();
         return;
       }
       if (handlePrintableKey(e.key ?? "")) {

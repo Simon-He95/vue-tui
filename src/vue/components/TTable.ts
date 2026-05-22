@@ -321,6 +321,7 @@ export const TTable = defineComponent({
               onClick: () => emit("rowClick", { row, index }),
               onKeydown: (event: any) => {
                 emit("rowKeydown", { row, index, event });
+                if (event?.defaultPrevented) return;
                 if (event.key !== "Enter" && event.key !== " ") return;
                 event.preventDefault?.();
                 emit("rowClick", { row, index });

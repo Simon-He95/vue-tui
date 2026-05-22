@@ -312,7 +312,6 @@ export const TDataTable = defineComponent({
     }
 
     function onRowKeydown({ index, event }: { index: number; event: any }): void {
-      if (event?.key !== "ArrowDown" && event?.key !== "ArrowUp") return;
       handleKeydown(event, normalizedScrollTop.value + index);
     }
 
