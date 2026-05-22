@@ -644,6 +644,14 @@ export const TSelect = defineComponent({
           const r = visibleRect.value;
           const offset = getScrollOffset(r);
           const idx = offset + (e.cellY - r.y);
+          if (
+            props.loading ||
+            providerLoading.value ||
+            providerError.value ||
+            options.value.length === 0
+          ) {
+            return;
+          }
           if (idx >= 0 && idx < options.value.length) commit(idx);
           else emit("close");
         },

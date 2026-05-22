@@ -142,6 +142,17 @@ describe("docs: components coverage", () => {
     });
   });
 
+  it("does not treat type-only exports as components", () => {
+    const manifest = JSON.parse(
+      readFileSync(resolve(process.cwd(), "docs/generated/api-manifest.json"), "utf8"),
+    );
+
+    expect(manifest.components).not.toHaveProperty("TFormRule");
+    expect(manifest.components).not.toHaveProperty("TFormContext");
+    expect(manifest.components).not.toHaveProperty("TSelectValueMode");
+    expect(manifest.components).not.toHaveProperty("TCommandPaletteMatcher");
+  });
+
   it("records and diffs type-only entrypoint exports", () => {
     const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -295,6 +306,65 @@ describe("docs: components coverage", () => {
 
       expect(result.status).toBe(0);
       expect(result.stdout).toContain("TBadge.value changed required true -> false");
+    } finally {
+      rmSync(tmp, { force: true, recursive: true });
+    }
+  });
+
+  it("fails non-public API notes in CI unless explicitly allowed", () => {
+    const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
+
+    try {
+      const basePath = resolve(tmp, "api-manifest.json");
+      const base = JSON.parse(JSON.stringify(manifest));
+      base.entrypoints["@simon_he/vue-tui/vue"].typeExports.push("RemovedAdvancedType");
+      writeFileSync(basePath, `${JSON.stringify(base)}\n`);
+
+      const tsx = resolve(process.cwd(), "node_modules/.bin/tsx");
+      const args = ["scripts/diff-api-manifest.ts", "--base", basePath];
+      const local = spawnSync(tsx, args, {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          CI: "false",
+          VUE_TUI_API_DIFF_ALLOW_NOTES: "0",
+          VUE_TUI_API_DIFF_FAIL_ON_NOTES: "0",
+        },
+      });
+
+      expect(local.status).toBe(0);
+      expect(local.stdout).toContain(
+        "@simon_he/vue-tui/vue.RemovedAdvancedType type export was removed",
+      );
+
+      const ciFailed = spawnSync(tsx, args, {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          CI: "true",
+          VUE_TUI_API_DIFF_ALLOW_NOTES: "0",
+          VUE_TUI_API_DIFF_FAIL_ON_NOTES: "0",
+        },
+      });
+
+      expect(ciFailed.status).toBe(1);
+      expect(ciFailed.stderr).toContain(
+        "Non-public API changes require a release note, deprecation note, or explicit CI override.",
+      );
+
+      const allowed = spawnSync(tsx, args, {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          CI: "true",
+          VUE_TUI_API_DIFF_ALLOW_NOTES: "1",
+          VUE_TUI_API_DIFF_FAIL_ON_NOTES: "0",
+        },
+      });
+
+      expect(allowed.status).toBe(0);
     } finally {
       rmSync(tmp, { force: true, recursive: true });
     }

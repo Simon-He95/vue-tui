@@ -1486,6 +1486,96 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps TSelect loading, error, and empty rows inert on click", async () => {
+    const onLoadingClose = vi.fn();
+    const loading = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          options: [],
+          loading: true,
+          onClose: onLoadingClose,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      loading.scheduler()?.flushNow();
+      loading
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+      await nextTick();
+      expect(onLoadingClose).not.toHaveBeenCalled();
+    } finally {
+      loading.unmount();
+    }
+
+    const onErrorClose = vi.fn();
+    const error = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          options: [],
+          optionProvider: async () => {
+            throw new Error("network down");
+          },
+          errorText: "Failed options",
+          onClose: onErrorClose,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await waitFor(() => {
+        error.scheduler()?.flushNow();
+        const line = error.terminal.snapshot().lines[0] ?? "";
+        return line.includes("Failed options") ? line : null;
+      });
+      error
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+      await nextTick();
+      expect(onErrorClose).not.toHaveBeenCalled();
+    } finally {
+      error.unmount();
+    }
+
+    const onEmptyClose = vi.fn();
+    const empty = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          options: [],
+          emptyText: "No options",
+          onClose: onEmptyClose,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      empty.scheduler()?.flushNow();
+      empty
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+      await nextTick();
+      expect(onEmptyClose).not.toHaveBeenCalled();
+    } finally {
+      empty.unmount();
+    }
+  });
+
   it("clears stale TSelect provider options during debounced query changes", async () => {
     const query = ref("old");
     const debounce = ref(0);

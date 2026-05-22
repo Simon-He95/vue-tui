@@ -96,6 +96,9 @@ if (!base) {
 
 const breaking: string[] = [];
 const notes: string[] = [];
+const failOnNonPublicNotes =
+  process.env.VUE_TUI_API_DIFF_FAIL_ON_NOTES === "1" ||
+  (process.env.CI === "true" && process.env.VUE_TUI_API_DIFF_ALLOW_NOTES !== "1");
 
 function report(maturity: Maturity, line: string): void {
   if (maturity === "public") breaking.push(line);
@@ -228,4 +231,11 @@ if (notes.length) {
 }
 
 if (breaking.length) process.exit(1);
+if (notes.length && failOnNonPublicNotes) {
+  console.error(
+    "Non-public API changes require a release note, deprecation note, or explicit CI override.",
+  );
+  console.error("Set VUE_TUI_API_DIFF_ALLOW_NOTES=1 only for reviewed intentional changes.");
+  process.exit(1);
+}
 if (!notes.length) console.log("No API drift detected.");

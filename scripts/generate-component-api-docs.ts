@@ -725,6 +725,7 @@ async function listExportedComponents(
     if (!isComponentModule) continue;
 
     for (const el of stmt.exportClause.elements) {
+      if (el.isTypeOnly) continue;
       const name = el.name.text;
       const isComponentName =
         (name.startsWith("T") || name === "TerminalProvider") && !name.endsWith("ContextKey");
