@@ -65,6 +65,11 @@ export function useTForm(): TFormContext | null {
   return inject(TFormContextKey, null);
 }
 
+function useFormDisabled(props?: Readonly<{ disabled?: boolean }>) {
+  const form = useTForm();
+  return computed(() => Boolean(props?.disabled || form?.disabled.value));
+}
+
 export const TCheckbox = defineComponent({
   name: "TCheckbox",
   props: {
@@ -85,10 +90,11 @@ export const TCheckbox = defineComponent({
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
+    const disabled = useFormDisabled(props);
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
 
     function toggle(): void {
-      if (props.disabled) return;
+      if (disabled.value) return;
       const next = !props.modelValue;
       emit("update:modelValue", next);
       emit("change", next);
@@ -103,7 +109,7 @@ export const TCheckbox = defineComponent({
           w: props.w,
           h: 1,
           zIndex: props.zIndex,
-          focusable: !props.disabled,
+          focusable: !disabled.value,
           onClick: toggle,
           onKeydown: (event: any) => {
             if (event.key !== " " && event.key !== "Enter") return;
@@ -117,7 +123,7 @@ export const TCheckbox = defineComponent({
             y: 0,
             w: props.w,
             value: fitCellText(`[${props.modelValue ? "x" : " "}] ${props.label}`, props.w),
-            style: props.disabled
+            style: disabled.value
               ? mergeStyle(baseStyle.value, props.disabledStyle)
               : props.modelValue
                 ? mergeStyle(baseStyle.value, props.checkedStyle)
@@ -147,10 +153,11 @@ export const TSwitch = defineComponent({
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
+    const disabled = useFormDisabled(props);
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
 
     function toggle(): void {
-      if (props.disabled) return;
+      if (disabled.value) return;
       const next = !props.modelValue;
       emit("update:modelValue", next);
       emit("change", next);
@@ -165,7 +172,7 @@ export const TSwitch = defineComponent({
           w: props.w,
           h: 1,
           zIndex: props.zIndex,
-          focusable: !props.disabled,
+          focusable: !disabled.value,
           onClick: toggle,
           onKeydown: (event: any) => {
             if (event.key !== " " && event.key !== "Enter") return;
@@ -179,7 +186,7 @@ export const TSwitch = defineComponent({
             y: 0,
             w: props.w,
             value: fitCellText(`[${props.modelValue ? "on " : "off"}] ${props.label}`, props.w),
-            style: props.disabled
+            style: disabled.value
               ? mergeStyle(baseStyle.value, props.disabledStyle)
               : props.modelValue
                 ? mergeStyle(baseStyle.value, props.activeStyle)
@@ -212,10 +219,11 @@ export const TRadioGroup = defineComponent({
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
+    const disabled = useFormDisabled();
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
 
     function choose(option: TRadioOption): void {
-      if (option.disabled) return;
+      if (disabled.value || option.disabled) return;
       emit("update:modelValue", option.value);
       emit("change", option.value);
     }
@@ -227,6 +235,7 @@ export const TRadioGroup = defineComponent({
         () =>
           props.options.slice(0, props.h).map((option, index) => {
             const active = option.value === props.modelValue;
+            const optionDisabled = disabled.value || Boolean(option.disabled);
             return h(
               TView as any,
               {
@@ -235,7 +244,7 @@ export const TRadioGroup = defineComponent({
                 y: index,
                 w: props.w,
                 h: 1,
-                focusable: !option.disabled,
+                focusable: !optionDisabled,
                 onClick: () => choose(option),
                 onKeydown: (event: any) => {
                   if (event.key !== " " && event.key !== "Enter") return;
@@ -249,7 +258,7 @@ export const TRadioGroup = defineComponent({
                   y: 0,
                   w: props.w,
                   value: fitCellText(`(${active ? "x" : " "}) ${option.label}`, props.w),
-                  style: option.disabled
+                  style: optionDisabled
                     ? mergeStyle(baseStyle.value, props.disabledStyle)
                     : active
                       ? mergeStyle(baseStyle.value, props.activeStyle)
@@ -283,6 +292,7 @@ export const TSlider = defineComponent({
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
+    const disabled = useFormDisabled(props);
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
     const value = computed(() => clamp(props.modelValue, props.min, props.max));
     const ratio = computed(() => {
@@ -291,7 +301,7 @@ export const TSlider = defineComponent({
     });
 
     function setValue(next: number): void {
-      if (props.disabled) return;
+      if (disabled.value) return;
       const step = Math.max(0.000001, Math.abs(props.step));
       const rounded = Math.round((next - props.min) / step) * step + props.min;
       const clamped = clamp(rounded, props.min, props.max);
@@ -311,7 +321,7 @@ export const TSlider = defineComponent({
           w: props.w,
           h: 1,
           zIndex: props.zIndex,
-          focusable: !props.disabled,
+          focusable: !disabled.value,
           onKeydown: (event: any) => {
             if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
             event.preventDefault?.();
@@ -324,7 +334,7 @@ export const TSlider = defineComponent({
             y: 0,
             w: props.w,
             value: fitCellText(`[${label}] ${value.value}`, props.w),
-            style: props.disabled
+            style: disabled.value
               ? mergeStyle(baseStyle.value, props.disabledStyle)
               : mergeStyle(baseStyle.value, props.activeStyle),
           }),
@@ -663,8 +673,15 @@ export const TAutocompleteInput = defineComponent({
     }
 
     watch(
-      () => [props.suggestionProvider, props.modelValue, props.debounce, props.minChars] as const,
-      ([provider, query]) => {
+      () =>
+        [
+          props.suggestionProvider,
+          props.modelValue,
+          props.debounce,
+          props.minChars,
+          isOpen.value,
+        ] as const,
+      ([provider, query, _debounce, _minChars, open]) => {
         if (providerTimer) {
           clearTimeout(providerTimer);
           providerTimer = null;
@@ -674,6 +691,10 @@ export const TAutocompleteInput = defineComponent({
         providerError.value = null;
         if (!provider) {
           providerSuggestions.value = null;
+          providerLoading.value = false;
+          return;
+        }
+        if (!open) {
           providerLoading.value = false;
           return;
         }

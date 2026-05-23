@@ -1197,6 +1197,14 @@
           "descriptionSource": "shared-default"
         },
         {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Width in terminal cells.",
+          "descriptionSource": "shared-default"
+        },
+        {
           "name": "value",
           "type": "string | number",
           "required": true,
@@ -6776,6 +6784,14 @@
           "type": "number",
           "required": true,
           "description": "Top position in terminal cells.",
+          "descriptionSource": "shared-default"
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Width in terminal cells.",
           "descriptionSource": "shared-default"
         },
         {

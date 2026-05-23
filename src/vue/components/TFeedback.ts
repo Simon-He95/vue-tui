@@ -28,6 +28,35 @@ function toneStyle(tone: TFeedbackTone): Style {
   return {};
 }
 
+function progressLineText(
+  opts: Readonly<{
+    width: number;
+    label: string;
+    showPercent: boolean;
+    ratio: number;
+  }>,
+): string {
+  const width = Math.max(0, Math.floor(opts.width));
+  if (width <= 0) return "";
+
+  const percent = `${Math.round(opts.ratio * 100)}%`;
+  const suffix = opts.showPercent ? ` ${percent}` : "";
+  const prefix = opts.label ? `${opts.label} ` : "";
+  const reserved = textCellWidth(prefix) + textCellWidth(suffix) + 2;
+
+  if (width < reserved + 1) {
+    const fallback = opts.showPercent ? `${prefix}${percent}` : prefix.trimEnd();
+    return fitCellText(fallback, width);
+  }
+
+  const barW = Math.max(1, width - reserved);
+  const filled = Math.max(0, Math.min(barW, Math.round(barW * opts.ratio)));
+  return fitCellText(
+    `${prefix}[${"=".repeat(filled)}${"-".repeat(barW - filled)}]${suffix}`,
+    width,
+  );
+}
+
 export const TToastViewport = defineComponent({
   name: "TToastViewport",
   props: {
@@ -165,11 +194,12 @@ export const TProgress = defineComponent({
     return () => {
       const max = Math.max(0.000001, props.max);
       const ratio = Math.max(0, Math.min(1, props.value / max));
-      const suffix = props.showPercent ? ` ${Math.round(ratio * 100)}%` : "";
-      const prefix = props.label ? `${props.label} ` : "";
-      const barW = Math.max(1, props.w - textCellWidth(prefix) - textCellWidth(suffix) - 2);
-      const filled = Math.round(barW * ratio);
-      const text = `${prefix}[${"=".repeat(filled)}${"-".repeat(barW - filled)}]${suffix}`;
+      const text = progressLineText({
+        width: props.w,
+        label: props.label,
+        showPercent: props.showPercent,
+        ratio,
+      });
       return h(TText as any, {
         x: props.x,
         y: props.y,
@@ -221,6 +251,7 @@ export const TBadge = defineComponent({
   props: {
     x: { type: Number, required: true },
     y: { type: Number, required: true },
+    w: { type: Number, default: undefined },
     value: { type: [String, Number], required: true },
     tone: { type: String as PropType<TFeedbackTone>, default: "default" },
     zIndex: { type: Number, default: 0 },
@@ -228,14 +259,17 @@ export const TBadge = defineComponent({
   },
   setup(props) {
     const { defaultStyle } = useTerminal();
-    return () =>
-      h(TText as any, {
+    return () => {
+      const text = `[${props.value}]`;
+      return h(TText as any, {
         x: props.x,
         y: props.y,
+        w: props.w,
         zIndex: props.zIndex,
-        value: `[${props.value}]`,
+        value: props.w == null ? text : fitCellText(text, props.w),
         style: mergeStyle(defaultStyle.value, toneStyle(props.tone), props.style),
       });
+    };
   },
 });
 
@@ -244,6 +278,7 @@ export const TTag = defineComponent({
   props: {
     x: { type: Number, required: true },
     y: { type: Number, required: true },
+    w: { type: Number, default: undefined },
     label: { type: String, required: true },
     tone: { type: String as PropType<TFeedbackTone>, default: "default" },
     zIndex: { type: Number, default: 0 },
@@ -251,14 +286,17 @@ export const TTag = defineComponent({
   },
   setup(props) {
     const { defaultStyle } = useTerminal();
-    return () =>
-      h(TText as any, {
+    return () => {
+      const text = `<${props.label}>`;
+      return h(TText as any, {
         x: props.x,
         y: props.y,
+        w: props.w,
         zIndex: props.zIndex,
-        value: `<${props.label}>`,
+        value: props.w == null ? text : fitCellText(text, props.w),
         style: mergeStyle(defaultStyle.value, toneStyle(props.tone), props.style),
       });
+    };
   },
 });
 

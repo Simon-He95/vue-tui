@@ -1341,6 +1341,32 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps narrow progress, badge, and tag text inside their cell widths", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TProgress, { x: 0, y: 0, w: 3, value: 50 }),
+        h(TProgress, { x: 0, y: 1, w: 8, value: 50, label: "Build" }),
+        h(TProgress, { x: 0, y: 2, w: 20, value: 50, label: "Build" }),
+        h(TBadge, { x: 0, y: 3, w: 4, value: "long", tone: "info" }),
+        h(TTag, { x: 6, y: 3, w: 5, label: "alpha", tone: "success" }),
+      ],
+      30,
+      5,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]!.slice(0, 3)).toBe("50%");
+      expect(lines[0]!.slice(0, 3)).not.toContain("[");
+      expect(lines[1]!.slice(0, 8)).toBe("Build 50");
+      expect(lines[2]).toContain("Build [");
+      expect(lines[3]!.slice(0, 4)).toBe("[lon");
+      expect(lines[3]!.slice(6, 11)).toBe("<alph");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("does not emit invalid TSelect values when moving through empty options", async () => {
     for (const valueMode of ["index", "value", "option"] as const) {
       const updates: unknown[] = [];
@@ -2162,6 +2188,44 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not call autocomplete provider while controlled closed", async () => {
+    const value = ref("ap");
+    const open = ref(false);
+    const provider = vi.fn((query: string) => Promise.resolve([`${query}-suggestion`]));
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          modelValue: value.value,
+          open: open.value,
+          suggestionProvider: provider,
+        }),
+      28,
+      5,
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+      expect(provider).not.toHaveBeenCalled();
+
+      value.value = "app";
+      await nextTick();
+      await Promise.resolve();
+      expect(provider).not.toHaveBeenCalled();
+
+      open.value = true;
+      await waitFor(() => (provider.mock.calls.length ? true : null));
+      expect(provider).toHaveBeenCalledTimes(1);
+      expect(provider.mock.calls[0]?.[0]).toBe("app");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("emits autocomplete provider loadError", async () => {
     const onLoadError = vi.fn();
     const mounted = await mountTerminal(
@@ -2705,6 +2769,174 @@ describe("P1/P2 public components", () => {
 
       expect(disabledSubmit).not.toHaveBeenCalled();
       expect(readOnlySubmit).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("applies TForm disabled to built-in form controls", async () => {
+    const disabled = ref(false);
+    const checkboxChange = vi.fn();
+    const switchChange = vi.fn();
+    const radioChange = vi.fn();
+    const sliderChange = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 24,
+            h: 6,
+            model: {},
+            disabled: disabled.value,
+          },
+          () => [
+            h(TCheckbox, {
+              x: 0,
+              y: 0,
+              w: 20,
+              modelValue: false,
+              label: "Check",
+              onChange: checkboxChange,
+            }),
+            h(TSwitch, {
+              x: 0,
+              y: 1,
+              w: 20,
+              modelValue: false,
+              label: "Live",
+              onChange: switchChange,
+            }),
+            h(TRadioGroup, {
+              x: 0,
+              y: 2,
+              w: 20,
+              h: 2,
+              modelValue: "a",
+              options: [
+                { label: "Alpha", value: "a" },
+                { label: "Beta", value: "b" },
+              ],
+              onChange: radioChange,
+            }),
+            h(TSlider, {
+              x: 0,
+              y: 4,
+              w: 20,
+              modelValue: 10,
+              onChange: sliderChange,
+            }),
+          ],
+        ),
+      30,
+      7,
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }),
+      );
+      disabled.value = true;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          code: "Space",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      disabled.value = false;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 1, bubbles: true }),
+      );
+      disabled.value = true;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 1, bubbles: true }));
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          code: "Space",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      disabled.value = false;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 3, bubbles: true }),
+      );
+      disabled.value = true;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 3, bubbles: true }));
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          code: "Space",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      disabled.value = false;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 4, bubbles: true }),
+      );
+      disabled.value = true;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      expect(checkboxChange).not.toHaveBeenCalled();
+      expect(switchChange).not.toHaveBeenCalled();
+      expect(radioChange).not.toHaveBeenCalled();
+      expect(sliderChange).not.toHaveBeenCalled();
     } finally {
       mounted.unmount();
     }

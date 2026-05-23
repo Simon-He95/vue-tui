@@ -173,6 +173,7 @@ Import: `@simon_he/vue-tui`
 | ------------------- | --------------------------------- | -------------------------------- | ---- | --------------------------------------------------- |
 | <code>x</code>      | <code>number</code>               | —                                | 是   | Left position in terminal cells.                    |
 | <code>y</code>      | <code>number</code>               | —                                | 是   | Top position in terminal cells.                     |
+| <code>w</code>      | <code>number</code>               | <code>undefined</code>           | 否   | Width in terminal cells.                            |
 | <code>value</code>  | <code>string &#124; number</code> | —                                | 是   | Text or scalar value rendered by the badge.         |
 | <code>tone</code>   | <code>TFeedbackTone</code>        | <code>&quot;default&quot;</code> | 否   | Semantic color tone.                                |
 | <code>zIndex</code> | <code>number</code>               | <code>0</code>                   | 否   | Render and event ordering within the current plane. |
@@ -1851,6 +1852,7 @@ Import: `@simon_he/vue-tui`
 | ------------------- | -------------------------- | -------------------------------- | ---- | --------------------------------------------------- |
 | <code>x</code>      | <code>number</code>        | —                                | 是   | Left position in terminal cells.                    |
 | <code>y</code>      | <code>number</code>        | —                                | 是   | Top position in terminal cells.                     |
+| <code>w</code>      | <code>number</code>        | <code>undefined</code>           | 否   | Width in terminal cells.                            |
 | <code>label</code>  | <code>string</code>        | —                                | 是   | Visible label text.                                 |
 | <code>tone</code>   | <code>TFeedbackTone</code> | <code>&quot;default&quot;</code> | 否   | Semantic color tone.                                |
 | <code>zIndex</code> | <code>number</code>        | <code>0</code>                   | 否   | Render and event ordering within the current plane. |
