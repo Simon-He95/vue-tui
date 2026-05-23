@@ -39,6 +39,8 @@ type DataRow = Readonly<{
   originalIndex: number;
 }>;
 
+const NO_ACTIVE_ROW = Symbol("TDataTable.noActiveRow");
+
 function rowKey(
   row: TTableRow,
   index: number,
@@ -215,6 +217,7 @@ export const TDataTable = defineComponent({
     );
     const tableRows = computed(() => visibleRows.value.map(({ row }) => row));
     const activeAbsoluteIndex = ref<number | null>(null);
+    const activeRowIdentity = ref<unknown>(NO_ACTIVE_ROW);
     const keyboardActive = ref(false);
 
     const columns = computed(() =>
@@ -243,25 +246,54 @@ export const TDataTable = defineComponent({
       return rowKey(row, originalIndexAt(index), props.rowKey as any);
     }
 
+    function dataRowKey(entry: DataRow): unknown {
+      return rowKey(entry.row, entry.originalIndex, props.rowKey as any);
+    }
+
+    function clearActiveRow(): void {
+      activeAbsoluteIndex.value = null;
+      activeRowIdentity.value = NO_ACTIVE_ROW;
+      keyboardActive.value = false;
+    }
+
     function selectedKeySet(): Set<unknown> {
       if (props.selectionMode === "multiple") return new Set(props.selectedRowKeys ?? []);
       return new Set(props.selectedRowKey === undefined ? [] : [props.selectedRowKey]);
     }
 
-    const activeRowKey = computed(() => {
-      const index = activeAbsoluteIndex.value;
-      if (index == null) return undefined;
-      const entry = sortedRows.value[index];
-      return entry ? rowKey(entry.row, entry.originalIndex, props.rowKey as any) : undefined;
-    });
+    const activeRowKey = computed(() =>
+      activeRowIdentity.value === NO_ACTIVE_ROW ? undefined : activeRowIdentity.value,
+    );
+
+    watch(
+      () => [props.rowKey, ...sortedRows.value.map((entry) => dataRowKey(entry))] as const,
+      () => {
+        if (activeRowIdentity.value === NO_ACTIVE_ROW) return;
+
+        const nextIndex = sortedRows.value.findIndex((entry) =>
+          Object.is(dataRowKey(entry), activeRowIdentity.value),
+        );
+
+        if (nextIndex < 0) {
+          clearActiveRow();
+          return;
+        }
+
+        activeAbsoluteIndex.value = nextIndex;
+      },
+    );
 
     function setActiveAbsoluteIndex(
       absoluteIndex: number,
     ): { dataIndex: number; scrollTop: number } | null {
       const clamped = Math.max(0, Math.min(sortedRows.value.length - 1, absoluteIndex));
       const entry = sortedRows.value[clamped];
-      if (!entry) return null;
+      if (!entry) {
+        clearActiveRow();
+        return null;
+      }
       activeAbsoluteIndex.value = clamped;
+      activeRowIdentity.value = dataRowKey(entry);
       let nextScrollTop = normalizedScrollTop.value;
       const visibleIndex = clamped - nextScrollTop;
       if (visibleIndex < 0) nextScrollTop = setScrollTop(clamped);

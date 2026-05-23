@@ -37,6 +37,24 @@ function optionalCellCount(value: number | undefined): number | undefined {
   return value == null ? undefined : normalizeCellCount(value);
 }
 
+function normalizeRatio(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+}
+
+function progressRatio(value: number, max: number): number {
+  const v = Number(value);
+  const m = Number(max);
+  if (!Number.isFinite(v) || !Number.isFinite(m) || m <= 0) return 0;
+  return normalizeRatio(v / m);
+}
+
+function normalizeFrameIndex(value: number, length: number): number {
+  if (length <= 0) return 0;
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return 0;
+  return ((n % length) + length) % length;
+}
+
 function progressLineText(
   opts: Readonly<{
     width: number;
@@ -48,7 +66,8 @@ function progressLineText(
   const width = normalizeCellCount(opts.width);
   if (width <= 0) return "";
 
-  const percent = `${Math.round(opts.ratio * 100)}%`;
+  const ratio = normalizeRatio(opts.ratio);
+  const percent = `${Math.round(ratio * 100)}%`;
   const suffix = opts.showPercent ? ` ${percent}` : "";
   const prefix = opts.label ? `${opts.label} ` : "";
   const reserved = textCellWidth(prefix) + textCellWidth(suffix) + 2;
@@ -59,7 +78,7 @@ function progressLineText(
   }
 
   const barW = Math.max(1, width - reserved);
-  const filled = Math.max(0, Math.min(barW, Math.round(barW * opts.ratio)));
+  const filled = Math.max(0, Math.min(barW, Math.round(barW * ratio)));
   return fitCellText(
     `${prefix}[${"=".repeat(filled)}${"-".repeat(barW - filled)}]${suffix}`,
     width,
@@ -219,8 +238,7 @@ export const TProgress = defineComponent({
     const { defaultStyle } = useTerminal();
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
     return () => {
-      const max = Math.max(0.000001, props.max);
-      const ratio = Math.max(0, Math.min(1, props.value / max));
+      const ratio = progressRatio(props.value, props.max);
       const width = normalizeCellCount(props.w);
       const text = progressLineText({
         width,
@@ -258,8 +276,7 @@ export const TSpinner = defineComponent({
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
     return () => {
       const frames = props.frames.length ? props.frames : ["|"];
-      const index =
-        ((Math.floor(props.frameIndex) % frames.length) + frames.length) % frames.length;
+      const index = normalizeFrameIndex(props.frameIndex, frames.length);
       const frame = props.running ? frames[index] : frames[0];
       const text = props.label ? `${frame} ${props.label}` : frame;
       const width = optionalCellCount(props.w);

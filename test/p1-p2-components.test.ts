@@ -881,6 +881,65 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps keyboard-active TDataTable row identity after sorting changes", async () => {
+    const sortDirection = ref<"asc" | "desc">("asc");
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+    ];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          sortable: true,
+          sortBy: "name",
+          sortDirection: sortDirection.value,
+          activeStyle: { underline: true },
+        }),
+      20,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.snapshot().lines[3]).toContain("Beta");
+      expect(mounted.terminal.getCell(0, 3).style.underline).toBe(true);
+
+      sortDirection.value = "desc";
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.snapshot().lines[2]).toContain("Beta");
+      expect(mounted.terminal.getCell(0, 2).style.underline).toBe(true);
+      expect(mounted.terminal.snapshot().lines[3]).toContain("Alpha");
+      expect(mounted.terminal.getCell(0, 3).style.underline).not.toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("redistributes TTable auto width after maxWidth clamps a column", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -1729,6 +1788,35 @@ describe("P1/P2 public components", () => {
     try {
       await nextTick();
       expect(() => mounted.scheduler()?.flushNow()).not.toThrow();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("normalizes non-finite progress values and spinner frame indexes", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TProgress, { x: 0, y: 0, w: 12, value: Number.NaN, max: Number.NaN }),
+        h(TSpinner, {
+          x: 0,
+          y: 1,
+          frames: ["a", "b"],
+          frameIndex: Number.POSITIVE_INFINITY,
+          label: "Loading",
+        }),
+      ],
+      20,
+      3,
+    );
+
+    try {
+      await nextTick();
+      expect(() => mounted.scheduler()?.flushNow()).not.toThrow();
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]).toContain("0%");
+      expect(lines[0]).not.toContain("NaN");
+      expect(lines[1]).toContain("a Loading");
+      expect(lines[1]).not.toContain("undefined");
     } finally {
       mounted.unmount();
     }

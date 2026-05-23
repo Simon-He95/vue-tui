@@ -67,13 +67,24 @@ for (const specifier of Object.keys(manifest.entrypoints)) {
 
 const root = manifest.entrypoints["@simon_he/vue-tui"];
 if (root) {
-  for (const forbidden of [
+  const forbiddenRootExports = [
     "TForm",
+    "TFormContext",
+    "TFormHandle",
+    "TFormModel",
+    "TFormRule",
+    "TFormSubmitPayload",
+    "TFormContextKey",
+    "useTForm",
     "TToastViewport",
+    "TToastItem",
     "TProgress",
     "TSpinner",
     "TTabs",
+    "TTabsItem",
     "TSplitPane",
+    "TSplitPaneDirection",
+    "TSplitPaneRect",
     "TVirtualList",
     "TLogView",
     "createTerminalApp",
@@ -81,9 +92,14 @@ if (root) {
     "createStdinDriver",
     "createRuntime",
     "createFramePerfStore",
-  ]) {
+  ];
+
+  for (const forbidden of forbiddenRootExports) {
     if (root.valueExports.includes(forbidden)) {
       errors.push(`Root public entrypoint must not export ${forbidden}`);
+    }
+    if (root.typeExports.includes(forbidden)) {
+      errors.push(`Root public entrypoint must not export type ${forbidden}`);
     }
   }
 }
