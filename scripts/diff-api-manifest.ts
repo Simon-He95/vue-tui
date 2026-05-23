@@ -49,9 +49,6 @@ function readBaseFromArg(): ApiManifest | null {
 function readBaseRefFromArgOrEnv(): string | null {
   const explicit = readArg("--base-ref") ?? process.env.VUE_TUI_API_DIFF_BASE_REF ?? null;
   if (explicit?.trim()) return explicit.trim();
-  if (process.env.GITHUB_BASE_REF?.trim()) {
-    return `refs/remotes/origin/${process.env.GITHUB_BASE_REF.trim()}`;
-  }
   return null;
 }
 

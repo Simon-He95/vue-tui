@@ -1603,6 +1603,7 @@ function onPanelActiveChange(payload: TLogLinksPanelActiveChangePayload) {
 - When using `optionProvider`, prefer `valueMode="value"` with stable option `value` fields. `valueMode="option"` compares selected options by object identity, so async providers that return fresh objects may not preserve selection across reloads.
 - Provider loading, or `loading=true`, renders `loadingText`; provider rejection renders `errorText` and emits `loadError`
 - `multipleEmit` `('label'|'value'|'index'|'both')`; `label` emits labels, `value` emits option values, `index` emits indices, and `both` emits `{ indices, labels, values }`
+- `valueMode` controls the `modelValue` shape. `multipleEmit` controls the `change` / `confirm` payload shape separately. For object options with `value`, set `multipleEmit="value"` if `change` / `confirm` should emit option values instead of labels.
 - `searchable` emits `update:query` from typed characters; it does not filter local `options` by itself
 - `style`/`highlightStyle` `(Style?)`
 - `autoFocus` `(boolean)`

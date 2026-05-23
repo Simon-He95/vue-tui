@@ -61,6 +61,18 @@ function hasDocsSection(markdown: string, componentName: string): boolean {
   return new RegExp(`^##\\s+${escapeRegExp(componentName)}\\s*$`, "m").test(markdown);
 }
 
+function apiDiffEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+
+  delete env.GITHUB_BASE_REF;
+  delete env.VUE_TUI_API_DIFF_BASE_REF;
+  delete env.VUE_TUI_API_DIFF_ALLOW_MISSING_BASE;
+  delete env.VUE_TUI_API_DIFF_ALLOW_NOTES;
+  delete env.VUE_TUI_API_DIFF_FAIL_ON_NOTES;
+
+  return { ...env, ...overrides };
+}
+
 describe("docs: components coverage", () => {
   it("docs/components.md lists all exported components", () => {
     const md = readFileSync(resolve(process.cwd(), "docs/components.md"), "utf8");
@@ -431,7 +443,7 @@ describe("docs: components coverage", () => {
       const failed = spawnSync(tsx, [script], {
         cwd: tmp,
         encoding: "utf8",
-        env: { ...process.env, CI: "true" },
+        env: apiDiffEnv({ CI: "true" }),
       });
       expect(failed.status).toBe(1);
       expect(failed.stderr).toContain("api:diff missing base manifest");
@@ -439,7 +451,7 @@ describe("docs: components coverage", () => {
       const skippedNoTag = spawnSync(tsx, [script], {
         cwd: tmp,
         encoding: "utf8",
-        env: { ...process.env, CI: "false" },
+        env: apiDiffEnv({ CI: "false" }),
       });
       expect(skippedNoTag.status).toBe(0);
       expect(skippedNoTag.stdout).toContain(
@@ -478,6 +490,7 @@ describe("docs: components coverage", () => {
       const skippedFirstBaseline = spawnSync(tsx, [script], {
         cwd: repo,
         encoding: "utf8",
+        env: apiDiffEnv(),
       });
       expect(skippedFirstBaseline.status).toBe(0);
       expect(skippedFirstBaseline.stdout).toContain(
@@ -487,7 +500,7 @@ describe("docs: components coverage", () => {
       const skipped = spawnSync(tsx, [script], {
         cwd: tmp,
         encoding: "utf8",
-        env: { ...process.env, VUE_TUI_API_DIFF_ALLOW_MISSING_BASE: "1" },
+        env: apiDiffEnv({ VUE_TUI_API_DIFF_ALLOW_MISSING_BASE: "1" }),
       });
       expect(skipped.status).toBe(0);
       expect(skipped.stdout).toContain("api:diff missing base manifest; skipped by explicit env");
