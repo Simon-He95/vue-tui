@@ -416,7 +416,14 @@ export const TCommandPalette = defineComponent({
     );
 
     watch(
-      () => [filteredEntries.value.length, props.selectedIndex, props.h] as const,
+      () =>
+        [
+          filteredEntries.value.length,
+          query.value,
+          props.selectedIndex,
+          props.h,
+          props.maxVisibleItems,
+        ] as const,
       () => {
         const next = selectedIndex();
         innerSelectedIndex.value = next;

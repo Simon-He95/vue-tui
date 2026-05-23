@@ -54,8 +54,8 @@ export type TFormContext = Readonly<{
   model: Readonly<Ref<TFormModel>>;
   rules: Readonly<Ref<Record<string, TFormRule>>>;
   errors: Ref<Record<string, string>>;
-  disabled: Ref<boolean>;
-  readOnly: Ref<boolean>;
+  disabled: Readonly<Ref<boolean>>;
+  readOnly: Readonly<Ref<boolean>>;
   validate: () => boolean;
 }>;
 
@@ -466,6 +466,7 @@ export const TForm = defineComponent({
     }
 
     function submit(): void {
+      if (props.disabled || props.readOnly) return;
       const valid = validate();
       emit("submit", { model: props.model, valid, errors: errors.value });
     }
@@ -495,6 +496,7 @@ export const TForm = defineComponent({
             if (!props.submitOnEnter) return;
             if (event.key !== "Enter") return;
             if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+            if (props.disabled || props.readOnly) return;
             event.preventDefault?.();
             event.stopPropagation?.();
             event.__tuiDialogConfirm = false;

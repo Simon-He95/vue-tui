@@ -2621,6 +2621,95 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not submit TForm when disabled or readOnly", async () => {
+    const value = ref("");
+    const disabledSubmit = vi.fn();
+    const readOnlySubmit = vi.fn();
+
+    const mounted = await mountTerminal(
+      () => [
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 30,
+            h: 2,
+            model: { value: value.value },
+            submitOnEnter: true,
+            disabled: true,
+            onSubmit: disabledSubmit,
+          },
+          () =>
+            h(TInput, {
+              x: 0,
+              y: 0,
+              w: 12,
+              modelValue: value.value,
+              autoFocus: true,
+              "onUpdate:modelValue": (next: string) => (value.value = next),
+            }),
+        ),
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 3,
+            w: 30,
+            h: 2,
+            model: { value: value.value },
+            submitOnEnter: true,
+            readOnly: true,
+            onSubmit: readOnlySubmit,
+          },
+          () =>
+            h(TInput, {
+              x: 0,
+              y: 0,
+              w: 12,
+              modelValue: value.value,
+            }),
+        ),
+      ],
+      40,
+      8,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 3, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(disabledSubmit).not.toHaveBeenCalled();
+      expect(readOnlySubmit).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("submits TForm on Enter from a focused child input and renders field errors", async () => {
     const onSubmit = vi.fn();
     const model = { name: "" };
@@ -3190,6 +3279,41 @@ describe("P1/P2 public components", () => {
       expect(onSelect).toHaveBeenCalledWith(
         expect.objectContaining({ item: items[3], index: 3, source: "keyboard" }),
       );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps command palette selected row visible when maxVisibleItems changes", async () => {
+    const open = ref(true);
+    const maxVisibleItems = ref(2);
+    const selectedIndex = ref(4);
+    const items = Array.from({ length: 6 }, (_, index) => ({ label: `Command ${index}` }));
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          items,
+          selectedIndex: selectedIndex.value,
+          maxVisibleItems: maxVisibleItems.value,
+          w: 40,
+          h: 10,
+        }),
+      50,
+      12,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      maxVisibleItems.value = 1;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const snapshot = mounted.terminal.snapshot().lines.join("\n");
+      expect(snapshot).toContain("› Command 4");
     } finally {
       mounted.unmount();
     }
