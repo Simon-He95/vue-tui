@@ -756,6 +756,7 @@
         "TDataTableSorter",
         "TFeedbackTone",
         "TFormContext",
+        "TFormHandle",
         "TFormModel",
         "TFormRule",
         "TFormSubmitPayload",

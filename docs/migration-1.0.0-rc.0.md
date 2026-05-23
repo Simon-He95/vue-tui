@@ -42,7 +42,7 @@ function runCommand(item: TCommandPaletteItem) {
 }
 ```
 
-`TAutocompleteInput` `select` payload now also includes `option`, `query`, and `source` so static and async suggestions can share one handler shape.
+`TAutocompleteInput` `select` payload now also includes `sourceIndex`, `option`, `query`, and `source` so static and async suggestions can share one handler shape.
 
 `TAutocompleteInput` now closes suggestions after selection by default. Set `closeOnSelect=false` to preserve the previous always-visible suggestions behavior.
 

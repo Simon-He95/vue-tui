@@ -3,6 +3,8 @@ import type {
   SelectOptionWithStyle,
   Style,
   TAutocompleteLoadErrorPayload,
+  TAutocompleteOption,
+  TAutocompleteSelectPayload,
   TCommandPaletteItem,
   TCommandPaletteLoadErrorPayload,
   TCommandPaletteSelectPayload,
@@ -80,4 +82,18 @@ type _TCommandPaletteLoadErrorPayloadShape = Assert<
 
 type _TAutocompleteLoadErrorPayloadShape = Assert<
   Equal<TAutocompleteLoadErrorPayload, Readonly<{ query: string; error: unknown }>>
+>;
+
+type _TAutocompleteSelectPayloadShape = Assert<
+  Equal<
+    TAutocompleteSelectPayload,
+    Readonly<{
+      value: string;
+      index: number;
+      sourceIndex: number;
+      option: TAutocompleteOption;
+      query: string;
+      source: "keyboard" | "pointer";
+    }>
+  >
 >;

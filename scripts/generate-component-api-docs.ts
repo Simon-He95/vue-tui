@@ -608,12 +608,20 @@ function eventBaseName(name: string): string {
 type DescriptionResult = { description: string | null; source: DescriptionSource };
 type PayloadResult = { payload: string | null; source: PayloadSource };
 
+const UPDATE_EVENT_PREFIX = "update:";
+
+function updateEventPropName(eventName: string): string | null {
+  return eventName.startsWith(UPDATE_EVENT_PREFIX)
+    ? eventName.slice(UPDATE_EVENT_PREFIX.length)
+    : null;
+}
+
 function inferEventPayload(component: ComponentMeta, event: EventMeta): PayloadResult {
   if (event.payload) return { payload: event.payload, source: event.payloadSource };
-  if (event.name.startsWith("update:")) {
-    const propName = event.name.slice("update:".length);
+  const updatePropName = updateEventPropName(event.name);
+  if (updatePropName) {
     return {
-      payload: component.props.find((prop) => prop.name === propName)?.type ?? "unknown",
+      payload: component.props.find((prop) => prop.name === updatePropName)?.type ?? "unknown",
       source: "update-prop",
     };
   }

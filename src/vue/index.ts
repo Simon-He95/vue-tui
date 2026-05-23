@@ -60,6 +60,7 @@ export type {
   TAutocompleteSelectPayload,
   TAutocompleteSuggestionProvider,
   TFormContext,
+  TFormHandle,
   TFormModel,
   TFormRule,
   TFormSubmitPayload,

@@ -38,6 +38,7 @@ import {
   TTooltip,
   resolveOverlayPlacement,
 } from "../src/vue.js";
+import type { TFormHandle } from "../src/vue.js";
 import {
   createTerminalApp,
   defineComponent,
@@ -112,6 +113,52 @@ describe("P1/P2 public components", () => {
       expect(onSubmit).toHaveBeenCalledTimes(1);
       expect(onConfirm).not.toHaveBeenCalled();
       expect(open.value).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("exposes TForm validation helpers through template refs", async () => {
+    const form = ref<TFormHandle | null>(null);
+    const model = { name: "" };
+    const validationEvents: Record<string, string>[] = [];
+    const submitEvents: unknown[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TForm, {
+          ref: form,
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 4,
+          model,
+          rules: {
+            name: (value: unknown) => (value ? null : "Required"),
+          },
+          onValidation: (errors: Record<string, string>) => validationEvents.push(errors),
+          onSubmit: (payload: unknown) => submitEvents.push(payload),
+        }),
+      30,
+      6,
+    );
+
+    try {
+      await nextTick();
+
+      expect(form.value?.validate()).toBe(false);
+      expect(validationEvents.at(-1)).toEqual({ name: "Required" });
+
+      form.value?.setFieldError("token", "Invalid");
+      expect(validationEvents.at(-1)).toEqual({ name: "Required", token: "Invalid" });
+
+      form.value?.clearValidation();
+      expect(validationEvents.at(-1)).toEqual({});
+
+      model.name = "Ada";
+      expect(form.value?.validate()).toBe(true);
+      form.value?.submit();
+      expect(submitEvents.at(-1)).toEqual({ model, valid: true, errors: {} });
     } finally {
       mounted.unmount();
     }
@@ -2351,6 +2398,53 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not typeahead against stale TSelect provider options while searching", async () => {
+    const query = ref("");
+    const activeUpdates: number[] = [];
+    const queryUpdates: string[] = [];
+    const provider = vi.fn((q: string) => {
+      if (q === "") return Promise.resolve(["Alpha", "Beta"]);
+      return new Promise<readonly string[]>(() => {});
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          query: query.value,
+          optionProvider: provider,
+          searchable: true,
+          typeahead: true,
+          autoFocus: true,
+          "onUpdate:query": (value: string) => {
+            query.value = value;
+            queryUpdates.push(value);
+          },
+          "onUpdate:activeIndex": (value: number) => activeUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Beta");
+
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await nextTick();
+
+      expect(queryUpdates).toEqual(["b"]);
+      expect(activeUpdates).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("allows TSelect to use optionProvider without a static options prop", async () => {
     const provider = vi.fn(async () => [{ label: "Remote", value: "remote" }]);
 
@@ -3095,6 +3189,99 @@ describe("P1/P2 public components", () => {
       expect(onSelect).toHaveBeenCalledWith(
         expect.objectContaining({ value: "apricot", index: 1, query: "ap" }),
       );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("includes visible and source indexes in autocomplete select payloads", async () => {
+    const value = ref("ap");
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 2,
+          modelValue: value.value,
+          "onUpdate:modelValue": (next: string) => (value.value = next),
+          suggestions: ["alpha", "beta", "apricot"],
+          filterLocal: true,
+          onSelect,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          value: "apricot",
+          index: 0,
+          sourceIndex: 2,
+          query: "ap",
+        }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("resets autocomplete highlighted index when input changes", async () => {
+    const value = ref("ap");
+    const highlighted = ref(1);
+    const highlightedUpdates: number[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          modelValue: value.value,
+          highlightedIndex: highlighted.value,
+          "onUpdate:modelValue": (next: string) => (value.value = next),
+          "onUpdate:highlightedIndex": (index: number) => {
+            highlighted.value = index;
+            highlightedUpdates.push(index);
+          },
+          suggestions: ["apple", "apricot"],
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "x",
+          code: "KeyX",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(highlightedUpdates).toEqual([0]);
     } finally {
       mounted.unmount();
     }

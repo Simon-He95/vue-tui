@@ -598,7 +598,7 @@ export const TSelect = defineComponent({
       if (props.searchable) {
         const nextQuery = `${query.value}${char}`;
         setQuery(nextQuery);
-        if (props.typeahead) moveToTypeaheadMatch(nextQuery, false);
+        if (props.typeahead && !props.optionProvider) moveToTypeaheadMatch(nextQuery, false);
         return true;
       }
 

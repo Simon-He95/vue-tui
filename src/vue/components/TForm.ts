@@ -18,6 +18,7 @@ export type TRadioOption = Readonly<{
 export type TAutocompleteSelectPayload = Readonly<{
   value: string;
   index: number;
+  sourceIndex: number;
   option: TAutocompleteOption;
   query: string;
   source: "keyboard" | "pointer";
@@ -42,12 +43,24 @@ export type TAutocompleteLoadErrorPayload = Readonly<{
   error: unknown;
 }>;
 
+type TAutocompleteEntry = Readonly<{
+  option: TAutocompleteOption;
+  sourceIndex: number;
+}>;
+
 export type TFormModel = Record<string, unknown>;
 export type TFormRule = (value: unknown, model: TFormModel) => string | null | undefined;
 export type TFormSubmitPayload = Readonly<{
   model: TFormModel;
   valid: boolean;
   errors: Record<string, string>;
+}>;
+
+export type TFormHandle = Readonly<{
+  validate: () => boolean;
+  submit: () => void;
+  clearValidation: () => void;
+  setFieldError: (name: string, message: string | null | undefined) => void;
 }>;
 
 export type TFormContext = Readonly<{
@@ -459,7 +472,7 @@ export const TForm = defineComponent({
     submit: (_payload: TFormSubmitPayload) => true,
     validation: (_errors: Record<string, string>) => true,
   },
-  setup(props, { emit, slots }) {
+  setup(props, { emit, expose, slots }) {
     const errors = ref<Record<string, string>>({});
     const disabled = computed(() => props.disabled);
     const readOnly = computed(() => props.readOnly);
@@ -480,6 +493,26 @@ export const TForm = defineComponent({
       const valid = validate();
       emit("submit", { model: props.model, valid, errors: errors.value });
     }
+
+    function clearValidation(): void {
+      errors.value = {};
+      emit("validation", {});
+    }
+
+    function setFieldError(name: string, message: string | null | undefined): void {
+      const next = { ...errors.value };
+      if (message) next[name] = message;
+      else delete next[name];
+      errors.value = next;
+      emit("validation", next);
+    }
+
+    expose({
+      validate,
+      submit,
+      clearValidation,
+      setFieldError,
+    } satisfies TFormHandle);
 
     provide(TFormContextKey, {
       model: computed(() => props.model),
@@ -632,16 +665,22 @@ export const TAutocompleteInput = defineComponent({
     }
 
     const suggestionSource = computed(() => providerSuggestions.value ?? props.suggestions);
-    const filteredSuggestions = computed(() => {
+    const suggestionEntries = computed<TAutocompleteEntry[]>(() =>
+      suggestionSource.value.map((option, sourceIndex) => ({ option, sourceIndex })),
+    );
+    const filteredSuggestionEntries = computed(() => {
       if (props.modelValue.length < Math.max(0, props.minChars)) return [];
-      if (!props.filterLocal) return suggestionSource.value;
+      if (!props.filterLocal) return suggestionEntries.value;
       const query = props.modelValue.toLowerCase();
-      return suggestionSource.value.filter((suggestion) =>
-        optionLabel(suggestion).toLowerCase().includes(query),
+      return suggestionEntries.value.filter((entry) =>
+        optionLabel(entry.option).toLowerCase().includes(query),
       );
     });
+    const visibleSuggestionEntries = computed(() =>
+      isOpen.value ? filteredSuggestionEntries.value.slice(0, Math.max(0, props.h - 1)) : [],
+    );
     const visibleSuggestions = computed(() =>
-      isOpen.value ? filteredSuggestions.value.slice(0, Math.max(0, props.h - 1)) : [],
+      visibleSuggestionEntries.value.map((entry) => entry.option),
     );
 
     function enabledSuggestionIndexFrom(index: number, direction: 1 | -1): number {
@@ -662,12 +701,20 @@ export const TAutocompleteInput = defineComponent({
     const activeIndex = computed(() => enabledSuggestionIndexFrom(props.highlightedIndex, 1));
 
     function select(index: number, source: "keyboard" | "pointer"): boolean {
-      const option = visibleSuggestions.value[index];
+      const entry = visibleSuggestionEntries.value[index];
+      const option = entry?.option;
       if (option == null || optionDisabled(option)) return false;
       const value = optionValue(option);
       emit("update:modelValue", value);
       emit("change", value);
-      emit("select", { value, index, option, query: props.modelValue, source });
+      emit("select", {
+        value,
+        index,
+        sourceIndex: entry.sourceIndex,
+        option,
+        query: props.modelValue,
+        source,
+      });
       if (props.closeOnSelect) setOpen(false);
       return true;
     }
@@ -756,6 +803,7 @@ export const TAutocompleteInput = defineComponent({
             style: inputStyle.value,
             "onUpdate:modelValue": (value: string) => {
               emit("update:modelValue", value);
+              emit("update:highlightedIndex", 0);
               setOpen(true);
             },
             onInput: (value: string) => {
@@ -820,11 +868,12 @@ export const TAutocompleteInput = defineComponent({
                   })
                 : null,
           ...(!providerLoading.value && !providerError.value
-            ? visibleSuggestions.value.map((suggestion, index) =>
-                h(
+            ? visibleSuggestionEntries.value.map((entry, index) => {
+                const suggestion = entry.option;
+                return h(
                   TView as any,
                   {
-                    key: `${index}:${optionLabel(suggestion)}`,
+                    key: `${entry.sourceIndex}:${optionLabel(suggestion)}`,
                     x: 0,
                     y: index + 1,
                     w: props.w,
@@ -848,8 +897,8 @@ export const TAutocompleteInput = defineComponent({
                           ? activeSuggestionStyle.value
                           : suggestionStyle.value,
                     }),
-                ),
-              )
+                );
+              })
             : []),
         ],
       );

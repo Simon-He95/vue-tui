@@ -47,6 +47,7 @@ import {
   type TCommandPaletteMatchRange as VueTCommandPaletteMatchRange,
   type DialogButton as VueDialogButton,
   type SelectOptionWithStyle as VueSelectOptionWithStyle,
+  type TFormHandle,
   type TInputPlugin,
 } from "@simon_he/vue-tui/vue";
 
@@ -91,6 +92,13 @@ const linkConfig: DomRendererLinkConfig = {
     return href.length > 0;
   },
 };
+const formHandle: TFormHandle = {
+  validate: () => true,
+  submit: () => {},
+  clearValidation: () => {},
+  setFieldError: () => {},
+};
+void formHandle;
 const terminal: Terminal = createTerminal({ cols: 80, rows: 24 });
 const runtime = createRuntime();
 const plugin: TInputPlugin = { name: "test", install: () => {} };
