@@ -1073,7 +1073,9 @@ async function main(): Promise<void> {
     `${JSON.stringify(renderManifest(packageJson.version, entrypoints, metas), null, 2)}\n`,
     "utf8",
   );
-  await execFileAsync("pnpm", ["exec", "oxfmt", "--write", manifestPath], { cwd: packageRoot });
+  await execFileAsync("pnpm", ["exec", "oxfmt", "--write", outPath, manifestPath], {
+    cwd: packageRoot,
+  });
 }
 
 await main();

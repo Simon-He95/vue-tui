@@ -1438,6 +1438,57 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("normalizes fractional and non-finite dimensions before repeat-based rendering", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TDivider, { x: 0, y: 0, w: 9.5, title: "A" }),
+        h(TTabs, {
+          x: 0,
+          y: 1,
+          w: 8.5,
+          activeKey: "a",
+          items: [{ key: "a", label: "A" }],
+        }),
+        h(TTabs, {
+          x: 12,
+          y: 1,
+          w: Number.POSITIVE_INFINITY,
+          activeKey: "a",
+          items: [{ key: "a", label: "A" }],
+        }),
+        h(
+          TSplitPane as any,
+          {
+            x: 0,
+            y: 2,
+            w: 9.5,
+            h: 3,
+            direction: "vertical",
+            sizes: [1, 1],
+          },
+          ({ panes }: any) =>
+            panes.map((pane: any, index: number) =>
+              h(TText, { ...pane, value: index === 0 ? "Top" : "Bottom" }),
+            ),
+        ),
+      ],
+      24,
+      6,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]!.slice(0, 9)).toContain("A");
+      expect(lines[1]!.slice(0, 8)).toContain("A");
+      expect(lines[3]!.slice(0, 9)).toBe("---------");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("keeps narrow progress, badge, and tag text inside their cell widths", async () => {
     const mounted = await mountTerminal(
       () => [

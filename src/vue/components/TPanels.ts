@@ -7,6 +7,11 @@ import { fitCellText, mergeStyle } from "./simple-utils.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
 
+function normalizeCellCount(value: number): number {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
 export type TTabsItem = Readonly<{
   key: string;
   label: string;
@@ -46,29 +51,30 @@ export const TTabs = defineComponent({
     }
 
     return () => {
+      const width = normalizeCellCount(props.w);
       let x = 0;
       const children: any[] = [
         h(TText as any, {
           x: 0,
           y: 0,
-          w: props.w,
-          value: " ".repeat(Math.max(0, props.w)),
+          w: width,
+          value: " ".repeat(width),
           style: baseStyle.value,
         }),
       ];
       for (const item of props.items) {
         const label = item.badge == null ? item.label : `${item.label} ${item.badge}`;
         const text = ` ${label} `;
-        const width = Math.min(props.w - x, textCellWidth(text));
-        if (width <= 0) break;
+        const itemWidth = Math.min(width - x, textCellWidth(text));
+        if (itemWidth <= 0) break;
         const active = item.key === props.activeKey;
         children.push(
           h(TText as any, {
             key: `text:${item.key}`,
             x,
             y: 0,
-            w: width,
-            value: fitCellText(text, width),
+            w: itemWidth,
+            value: fitCellText(text, itemWidth),
             style: item.disabled
               ? mergeStyle(baseStyle.value, props.disabledStyle)
               : active
@@ -79,7 +85,7 @@ export const TTabs = defineComponent({
             key: `hit:${item.key}`,
             x,
             y: 0,
-            w: width,
+            w: itemWidth,
             h: 1,
             focusable: !item.disabled,
             onClick: () => activate(item),
@@ -90,11 +96,11 @@ export const TTabs = defineComponent({
             },
           }),
         );
-        x += width;
+        x += itemWidth;
       }
       return h(
         TView as any,
-        { x: props.x, y: props.y, w: props.w, h: 1, zIndex: props.zIndex },
+        { x: props.x, y: props.y, w: width, h: 1, zIndex: props.zIndex },
         () => children,
       );
     };
@@ -179,18 +185,20 @@ export const TSplitPane = defineComponent({
   setup(props, { emit, slots }) {
     const { defaultStyle } = useTerminal();
     const panes = computed<TSplitPaneRect[]>(() => {
-      const count = Math.max(1, props.sizes.length);
-      const total = props.direction === "horizontal" ? props.w : props.h;
+      const width = normalizeCellCount(props.w);
+      const height = normalizeCellCount(props.h);
+      const sizes = props.sizes.length ? props.sizes : [1];
+      const count = Math.max(1, sizes.length);
+      const total = props.direction === "horizontal" ? width : height;
       const separatorTotal = Math.max(0, count - 1);
       const available = Math.max(0, total - separatorTotal);
-      const sizes = props.sizes.length ? props.sizes : [1];
       const paneSizes = resolvePaneSizes(sizes, props.minSizes, available);
       let cursor = 0;
       return paneSizes.map((paneSize) => {
         const rect =
           props.direction === "horizontal"
-            ? { x: cursor, y: 0, w: paneSize, h: props.h }
-            : { x: 0, y: cursor, w: props.w, h: paneSize };
+            ? { x: cursor, y: 0, w: paneSize, h: height }
+            : { x: 0, y: cursor, w: width, h: paneSize };
         cursor += paneSize + 1;
         return rect;
       });
@@ -198,7 +206,10 @@ export const TSplitPane = defineComponent({
 
     function resizeAt(index: number, delta: number): void {
       const count = Math.max(1, props.sizes.length);
-      const total = props.direction === "horizontal" ? props.w : props.h;
+      const total =
+        props.direction === "horizontal"
+          ? normalizeCellCount(props.w)
+          : normalizeCellCount(props.h);
       const separatorTotal = Math.max(0, count - 1);
       const available = Math.max(0, total - separatorTotal);
       const sizes = props.sizes.length ? props.sizes : [1];
@@ -220,8 +231,8 @@ export const TSplitPane = defineComponent({
       const separatorChildren = panes.value.slice(0, -1).map((pane, index) => {
         const separator =
           props.direction === "horizontal"
-            ? { x: pane.x + pane.w, y: 0, w: 1, h: props.h, text: "|" }
-            : { x: 0, y: pane.y + pane.h, w: props.w, h: 1, text: "-".repeat(props.w) };
+            ? { x: pane.x + pane.w, y: 0, w: 1, h: pane.h, text: "|" }
+            : { x: 0, y: pane.y + pane.h, w: pane.w, h: 1, text: "-".repeat(pane.w) };
         return h(
           TView as any,
           {
@@ -270,7 +281,13 @@ export const TSplitPane = defineComponent({
       const children = [...paneChildren, ...separatorChildren];
       return h(
         TView as any,
-        { x: props.x, y: props.y, w: props.w, h: props.h, zIndex: props.zIndex },
+        {
+          x: props.x,
+          y: props.y,
+          w: normalizeCellCount(props.w),
+          h: normalizeCellCount(props.h),
+          zIndex: props.zIndex,
+        },
         () => children,
       );
     };

@@ -28,6 +28,11 @@ function toneStyle(tone: TFeedbackTone): Style {
   return {};
 }
 
+function normalizeCellCount(value: number): number {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
 function progressLineText(
   opts: Readonly<{
     width: number;
@@ -317,16 +322,18 @@ export const TDivider = defineComponent({
   setup(props) {
     const { defaultStyle } = useTerminal();
     return () => {
-      const title = props.title ? ` ${props.title} ` : "";
+      const width = normalizeCellCount(props.w);
+      const title = props.title ? fitCellText(` ${props.title} `, width) : "";
       const titleW = textCellWidth(title);
-      const left = Math.max(0, Math.floor((props.w - titleW) / 2));
-      const right = Math.max(0, props.w - titleW - left);
+      const left = Math.max(0, Math.floor((width - titleW) / 2));
+      const right = Math.max(0, width - titleW - left);
+      const value = fitCellText(`${"-".repeat(left)}${title}${"-".repeat(right)}`, width);
       return h(TText as any, {
         x: props.x,
         y: props.y,
-        w: props.w,
+        w: width,
         zIndex: props.zIndex,
-        value: fitCellText(`${"-".repeat(left)}${title}${"-".repeat(right)}`, props.w),
+        value,
         style: mergeStyle(defaultStyle.value, props.style),
       });
     };

@@ -2030,7 +2030,7 @@ Import: `@simon_he/vue-tui/agent`
 | <code>markerCollapsed</code> | <code>string</code>          | <code>&quot;▸&quot;</code>       | 否   | —    |
 | <code>markerExpanded</code>  | <code>string</code>          | <code>&quot;▾&quot;</code>       | 否   | —    |
 | <code>statusDot</code>       | <code>string</code>          | <code>&quot;●&quot;</code>       | 否   | —    |
-| <code>previewPrefix</code>   | <code>string</code>          | <code>&quot;  ⎿ &quot;</code>    | 否   | —    |
+| <code>previewPrefix</code>   | <code>string</code>          | <code>&quot; ⎿ &quot;</code>     | 否   | —    |
 | <code>style</code>           | <code>Style</code>           | <code>undefined</code>           | 否   | —    |
 | <code>mutedStyle</code>      | <code>Style</code>           | <code>undefined</code>           | 否   | —    |
 | <code>headerStyle</code>     | <code>Style</code>           | <code>undefined</code>           | 否   | —    |
