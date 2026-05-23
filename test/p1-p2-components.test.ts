@@ -1877,9 +1877,9 @@ describe("P1/P2 public components", () => {
       await nextTick();
       mounted.scheduler()?.flushNow();
 
-      mounted.container()!.dispatchEvent(
-        new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }),
-      );
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }));
 
       mounted.container()!.dispatchEvent(
         new KeyboardEvent("keydown", {
