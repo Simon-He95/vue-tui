@@ -18,11 +18,27 @@ type TCommandPaletteSelectPayload = {
 
 `index` is the filtered/rendered command row index; `sourceIndex` is the original `items` or provider result index.
 
-Update handlers that previously received the item directly:
+Before:
+
+```vue
+<TCommandPalette @select="runCommand" />
+```
 
 ```ts
-function onSelect(payload: TCommandPaletteSelectPayload) {
-  runCommand(payload.item);
+function runCommand(item: TCommandPaletteItem) {
+  // ...
+}
+```
+
+After:
+
+```vue
+<TCommandPalette @select="({ item }) => runCommand(item)" />
+```
+
+```ts
+function runCommand(item: TCommandPaletteItem) {
+  // ...
 }
 ```
 

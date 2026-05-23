@@ -83,6 +83,44 @@ function latestTag(): string | null {
   }
 }
 
+function changedFilesSince(ref: string): string[] {
+  const attempts: string[][] = [
+    ["diff", "--name-only", `${ref}...HEAD`],
+    ["diff", "--name-only", `${ref}..HEAD`],
+  ];
+
+  for (const args of attempts) {
+    try {
+      const out = execFileSync("git", args, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      return out
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    } catch {
+      // Try the next diff form. Some local/tag situations may not have a merge base.
+    }
+  }
+
+  return [];
+}
+
+function hasNonPublicApiReviewNote(ref: string | null): boolean {
+  if (process.env.VUE_TUI_API_DIFF_ALLOW_NOTES === "1") return true;
+  if (!ref) return false;
+
+  const files = changedFilesSince(ref);
+  return files.some(
+    (file) =>
+      file === "CHANGELOG.md" ||
+      file === "docs/release-candidate.md" ||
+      file === "docs/api-maturity.md" ||
+      /^docs\/migration-[^/]+\.md$/u.test(file),
+  );
+}
+
 function tagHasManifest(tag: string): boolean {
   try {
     execFileSync("git", ["cat-file", "-e", `${tag}:docs/generated/api-manifest.json`], {
@@ -108,6 +146,8 @@ const baseRef = argBase ? null : readBaseRefFromArgOrEnv();
 const baseRefIncludesManifest = baseRef ? refHasManifest(baseRef) : false;
 const refBase = baseRef && baseRefIncludesManifest ? readBaseFromRef(baseRef) : null;
 const tag = argBase || baseRef ? null : latestTag();
+const nonPublicReviewBaseRef = argBase ? null : (baseRef ?? tag ?? null);
+const nonPublicApiReviewNotePresent = hasNonPublicApiReviewNote(nonPublicReviewBaseRef);
 const tagIncludesManifest = tag ? tagHasManifest(tag) : false;
 const base = argBase ?? refBase ?? (tag && tagIncludesManifest ? readBaseFromTag(tag) : null);
 if (!base) {
@@ -316,12 +356,27 @@ if (notes.length) {
 }
 
 if (breaking.length) process.exit(1);
-if (reviewRequiredNotes.length && failOnNonPublicNotes) {
+if (reviewRequiredNotes.length && failOnNonPublicNotes && !nonPublicApiReviewNotePresent) {
   console.error(
-    "Non-public API changes require a release note, deprecation note, or explicit CI override.",
+    "Non-public API changes require a release note, migration note, API maturity note, or explicit CI override.",
   );
   for (const item of reviewRequiredNotes) console.error(`- ${item}`);
-  console.error("Set VUE_TUI_API_DIFF_ALLOW_NOTES=1 only for reviewed intentional changes.");
+  console.error(
+    [
+      "Add or update one of:",
+      "- CHANGELOG.md",
+      "- docs/release-candidate.md",
+      "- docs/api-maturity.md",
+      "- docs/migration-*.md",
+      "",
+      "Set VUE_TUI_API_DIFF_ALLOW_NOTES=1 only after maintainer review.",
+    ].join("\n"),
+  );
   process.exit(1);
+}
+if (reviewRequiredNotes.length && nonPublicApiReviewNotePresent) {
+  console.log(
+    "Non-public API changes were accepted because a release/migration/API maturity note changed.",
+  );
 }
 if (!notes.length) console.log("No API drift detected.");
