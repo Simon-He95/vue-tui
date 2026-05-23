@@ -1908,6 +1908,87 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps TTabs Enter and Space aligned with arrow-navigation active tab", async () => {
+    const activeKey = ref("one");
+    const changes: string[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TTabs, {
+          x: 0,
+          y: 0,
+          w: 32,
+          items: [
+            { key: "one", label: "One" },
+            { key: "two", label: "Two" },
+            { key: "three", label: "Three" },
+          ],
+          activeKey: activeKey.value,
+          "onUpdate:activeKey": (key: string) => {
+            activeKey.value = key;
+          },
+          onChange: (item: { key: string }) => {
+            changes.push(item.key);
+          },
+        }),
+      40,
+      4,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const firstTab = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.x === 0 && node.rect.y === 0);
+
+      expect(firstTab).toBeTruthy();
+      mounted.events()!.focus(firstTab!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(activeKey.value).toBe("three");
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          code: "Space",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(activeKey.value).toBe("three");
+      expect(changes).toEqual(["two", "three"]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("uses cell widths for wide feedback labels and tab hit areas", async () => {
     const mounted = await mountTerminal(
       () => [
@@ -2928,6 +3009,48 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("normalizes non-finite TSplitPane sizes", async () => {
+    let resolvedPanes: readonly { x: number; y: number; w: number; h: number }[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TSplitPane as any,
+          {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 3,
+            sizes: [Number.NaN as any, 2],
+            minSizes: [1, 1],
+          },
+          {
+            default: ({
+              panes,
+            }: {
+              panes: readonly { x: number; y: number; w: number; h: number }[];
+            }) => {
+              resolvedPanes = panes;
+              return [];
+            },
+          },
+        ),
+      12,
+      5,
+    );
+
+    try {
+      await nextTick();
+
+      expect(resolvedPanes).toEqual([
+        { x: 0, y: 0, w: 1, h: 3 },
+        { x: 2, y: 0, w: 6, h: 3 },
+      ]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("resizes split panes from minimal controlled sizes with keyboard input", async () => {
     const sizes = ref([1, 1]);
     const updates: number[][] = [];
@@ -3199,6 +3322,26 @@ describe("P1/P2 public components", () => {
         placement: "top-left",
       }),
     ).toEqual({ x: 20, y: 1 });
+  });
+
+  it("normalizes non-finite overlay placement inputs", () => {
+    expect(
+      resolveOverlayPlacement({
+        viewport: { w: Number.NaN as any, h: 5 },
+        size: { w: 2, h: Number.NaN as any },
+        offsetX: Number.NaN,
+        offsetY: Number.NaN,
+      }),
+    ).toEqual({ x: 0, y: 2 });
+
+    expect(
+      resolveOverlayPlacement({
+        viewport: { w: 10, h: 10 },
+        size: { w: 2, h: 2 },
+        placement: "bottom-right",
+        anchor: { x: Number.NaN, y: 1, w: Number.NaN, h: 1 } as any,
+      }),
+    ).toEqual({ x: 0, y: 2 });
   });
 
   it("keeps autocomplete suggestions open when closeOnSelect is false", async () => {
@@ -5185,6 +5328,74 @@ describe("P1/P2 public components", () => {
       expect(onClose).toHaveBeenCalledTimes(1);
 
       allowClose = true;
+      const dialogNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.focusable && node.rect.w === 32 && node.rect.h === 10);
+
+      expect(dialogNode).toBeTruthy();
+      mounted.events()!.focus(dialogNode!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(open.value).toBe(false);
+      expect(onClose).toHaveBeenCalledTimes(2);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("clears command palette close suppression when reopened after accepted close", async () => {
+    const open = ref(true);
+    const onClose = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (next: boolean) => {
+            open.value = next;
+          },
+          items: [{ label: "Open file" }],
+          closeOnSelect: true,
+          w: 32,
+          h: 10,
+          onClose,
+        }),
+      80,
+      24,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(open.value).toBe(false);
+      expect(onClose).toHaveBeenCalledTimes(1);
+
+      open.value = true;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
       const dialogNode = mounted
         .events()!
         .debugNodes()
