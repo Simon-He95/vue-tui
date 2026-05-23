@@ -440,6 +440,12 @@ export const TCommandPalette = defineComponent({
       emit("update:selectedIndex", next);
     }
 
+    function resetSelectedAfterQueryInput(): void {
+      innerSelectedIndex.value = 0;
+      scrollOffset.value = 0;
+      emit("update:selectedIndex", 0);
+    }
+
     function close(): void {
       suppressNextDialogClose = true;
       emit("update:modelValue", false);
@@ -590,7 +596,7 @@ export const TCommandPalette = defineComponent({
           autoFocus: true,
           "onUpdate:modelValue": (value: string) => {
             setQuery(value);
-            setSelected(0);
+            resetSelectedAfterQueryInput();
           },
           onKeydown,
         }),

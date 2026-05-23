@@ -1612,6 +1612,29 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("wraps negative spinner frame indexes from the end", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TSpinner, {
+          x: 0,
+          y: 0,
+          frames: ["a", "b", "c"],
+          frameIndex: -1,
+        }),
+      10,
+      2,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.snapshot().lines[0]![0]).toBe("c");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("keeps narrow progress, badge, and tag text inside their cell widths", async () => {
     const mounted = await mountTerminal(
       () => [
@@ -4233,6 +4256,48 @@ describe("P1/P2 public components", () => {
       expect(onSelect).toHaveBeenCalledWith(
         expect.objectContaining({ item: items[1], index: 1, source: "keyboard" }),
       );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("resets controlled command palette selection without reading stale filtered entries", async () => {
+    const query = ref("old");
+    const selectedIndex = ref(1);
+    const selectedUpdates: number[] = [];
+    const items = [
+      { label: "old unavailable", disabled: true },
+      { label: "old command" },
+      { label: "other command" },
+    ];
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 32,
+          h: 10,
+          items,
+          query: query.value,
+          selectedIndex: selectedIndex.value,
+          "onUpdate:query": (value: string) => {
+            query.value = value;
+          },
+          "onUpdate:selectedIndex": (index: number) => {
+            selectedUpdates.push(index);
+            selectedIndex.value = index;
+          },
+        }),
+      50,
+      14,
+    );
+
+    try {
+      await nextTick();
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "n", bubbles: true }));
+      await nextTick();
+
+      expect(query.value).toBe("nold");
+      expect(selectedUpdates).toEqual([0]);
     } finally {
       mounted.unmount();
     }

@@ -26,7 +26,7 @@ import {
 import { TBox, TDialog, TSelect, TText, TView } from "@simon_he/vue-tui";
 import { TToolCallView } from "@simon_he/vue-tui/agent";
 import { TInputBox, TRenderPlane, useTerminal } from "@simon_he/vue-tui/vue";
-import { padEndByCells, sliceByCells, textCellWidth } from "../../../src/vue/utils/text.js";
+import { padEndByCells, sliceByCells, textCellWidth } from "../../shared/text-utils";
 import { TVirtualMarkdown } from "@simon_he/vue-tui/markdown";
 import { TLogView } from "@simon_he/vue-tui/experimental";
 import { handleAgentConsoleKeymap } from "./keymap";

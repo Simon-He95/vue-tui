@@ -458,9 +458,6 @@ const DialogSurface = defineComponent({
     }
 
     const dialogNodeId = ref<string | null>(null);
-    let isSettingInitialFocus = false;
-    // Prevent TypeScript "unused" error - this is used in the watch callback below
-    void isSettingInitialFocus;
 
     // When dialog opens, ensure something within it is focused.
     // If no inner element has autoFocus, focus the dialog container itself.
@@ -557,25 +554,15 @@ const DialogSurface = defineComponent({
                   }
                 }
               }
-              isSettingInitialFocus = true;
-              try {
-                manager.focus(innerFocusable[0]!.id);
-                scheduler.invalidate();
-              } finally {
-                isSettingInitialFocus = false;
-              }
+              manager.focus(innerFocusable[0]!.id);
+              scheduler.invalidate();
               return;
             }
 
             // Fallback: focus the dialog container itself
             if (dialogNodeId.value) {
-              isSettingInitialFocus = true;
-              try {
-                manager.focus(dialogNodeId.value);
-                scheduler.invalidate();
-              } finally {
-                isSettingInitialFocus = false;
-              }
+              manager.focus(dialogNodeId.value);
+              scheduler.invalidate();
             }
           });
         });

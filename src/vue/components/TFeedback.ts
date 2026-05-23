@@ -258,9 +258,9 @@ export const TSpinner = defineComponent({
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
     return () => {
       const frames = props.frames.length ? props.frames : ["|"];
-      const frame = props.running
-        ? frames[Math.abs(Math.floor(props.frameIndex)) % frames.length]
-        : frames[0];
+      const index =
+        ((Math.floor(props.frameIndex) % frames.length) + frames.length) % frames.length;
+      const frame = props.running ? frames[index] : frames[0];
       const text = props.label ? `${frame} ${props.label}` : frame;
       const width = optionalCellCount(props.w);
       return h(TText as any, {
