@@ -1325,6 +1325,98 @@ describe("ui regressions", () => {
     mounted.unmount();
   });
 
+  it("dialog restores focus only after controlled close is accepted", async () => {
+    const cols = 50;
+    const rows = 12;
+    const open = ref(false);
+    const allowClose = ref(false);
+    const targetId = ref<string | null>(null);
+
+    const Target = defineComponent({
+      name: "ControlledDialogFocusTarget",
+      setup() {
+        const { events } = useTerminal();
+        const { id } = useTerminalNode(() => ({
+          rect: { x: 24, y: 1, w: 8, h: 1 },
+          zIndex: 10,
+          visible: true,
+          focusable: true,
+        }));
+        let didFocus = false;
+        watchEffect(() => {
+          targetId.value = id.value;
+          if (!id.value || !events.value || didFocus) return;
+          events.value.focus(id.value);
+          didFocus = true;
+        });
+        return () => h(TText, { x: 24, y: 1, w: 8, value: "Target" });
+      },
+    });
+
+    const mounted = await mountTerminal(
+      () => [
+        h(TView, { x: 0, y: 1, w: 20, h: 1, focusable: true }),
+        h(Target),
+        h(
+          TDialog,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (next: boolean) => {
+              if (!next && !allowClose.value) return;
+              open.value = next;
+            },
+            w: 22,
+            h: 5,
+            closeOnEsc: true,
+          },
+          () => h(TText, { x: 0, y: 0, w: 18, value: "Confirm" }),
+        ),
+      ],
+      cols,
+      rows,
+    );
+
+    try {
+      const before = await waitFor(() =>
+        mounted.events()?.getFocused() === targetId.value ? targetId.value : null,
+      );
+
+      open.value = true;
+      await nextTick();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      await waitFor(() => {
+        const focused = mounted.events()?.getFocused();
+        return focused && focused !== before ? focused : null;
+      });
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(open.value).toBe(true);
+      expect(mounted.events()?.getFocused()).not.toBe(before);
+      await new Promise<void>((resolve) =>
+        queueMicrotask(() =>
+          queueMicrotask(() => queueMicrotask(() => queueMicrotask(() => resolve()))),
+        ),
+      );
+      await nextTick();
+
+      allowClose.value = true;
+      open.value = false;
+      await waitFor(() => (mounted.events()?.getFocused() === before ? true : null));
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("dialog auto-focuses inner TInput when opened", async () => {
     const cols = 50;
     const rows = 14;

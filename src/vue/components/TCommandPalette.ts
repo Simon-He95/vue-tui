@@ -444,6 +444,10 @@ export const TCommandPalette = defineComponent({
       emit("close");
     }
 
+    function handleDialogClose(): void {
+      emit("close");
+    }
+
     function selectCurrent(source: "keyboard" | "pointer" = "keyboard"): void {
       const index = selectedIndex();
       const entry = filteredEntries.value[index];
@@ -797,7 +801,7 @@ export const TCommandPalette = defineComponent({
           closeOnBackdrop: false,
           style: props.chromeStyle,
           contentStyle: props.bodyStyle,
-          onClose: close,
+          onClose: handleDialogClose,
         },
         () => children,
       );

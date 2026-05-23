@@ -3802,6 +3802,55 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not duplicate command palette model updates from inner dialog close", async () => {
+    const open = ref(true);
+    const onUpdate = vi.fn((value: boolean) => {
+      open.value = value;
+    });
+    const onClose = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          "onUpdate:modelValue": onUpdate,
+          onClose,
+          w: 32,
+          h: 10,
+          items: [{ label: "Open" }],
+        }),
+      50,
+      14,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const dialogNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.focusable && node.rect.w === 32 && node.rect.h === 10);
+      expect(dialogNode).toBeTruthy();
+      mounted.events()!.focus(dialogNode!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onUpdate.mock.calls.filter(([value]) => value === false)).toHaveLength(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders command palette match and detail accent styles", async () => {
     const items = [
       {

@@ -1038,7 +1038,6 @@ export const TDialog = defineComponent({
       skipNextCloseEmit.value = true;
       emit("update:modelValue", false);
       emit("close");
-      restoreFocus();
     }
 
     function onDialogFocus(): void {
@@ -1099,11 +1098,10 @@ export const TDialog = defineComponent({
           );
         }
         if (!prev || next) return;
-        if (skipNextCloseEmit.value) {
-          skipNextCloseEmit.value = false;
-          return;
-        }
-        emit("close");
+        const closeAlreadyEmitted = skipNextCloseEmit.value;
+        skipNextCloseEmit.value = false;
+
+        if (!closeAlreadyEmitted) emit("close");
         restoreFocus();
       },
       { immediate: true },
