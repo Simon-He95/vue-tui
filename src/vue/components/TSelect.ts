@@ -664,10 +664,12 @@ export const TSelect = defineComponent({
       }
       if (handleSearchEditingKey(e)) {
         e.preventDefault();
+        scheduler.invalidate();
         return;
       }
       if (handlePrintableKey(e)) {
         e.preventDefault();
+        scheduler.invalidate();
       }
     }
 

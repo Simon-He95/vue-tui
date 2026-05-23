@@ -1022,6 +1022,7 @@ async function main(): Promise<void> {
   const vueIndex = path.join(packageRoot, "src/vue/index.ts");
   const markdownIndex = path.join(packageRoot, "src/markdown.ts");
   const experimentalIndex = path.join(packageRoot, "src/experimental.ts");
+  const agentIndex = path.join(packageRoot, "src/agent.ts");
 
   const rootComponentExports = await listRootComponentExports(rootIndex);
   const vueComponents = await listExportedComponents(vueIndex, "advanced", "@simon_he/vue-tui/vue");
@@ -1032,7 +1033,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const components = [
+  const baseComponents = [
     ...vueComponents,
     ...(await listExportedComponents(markdownIndex, "public", "@simon_he/vue-tui/markdown")),
     ...(await listExportedComponents(
@@ -1040,7 +1041,19 @@ async function main(): Promise<void> {
       "experimental",
       "@simon_he/vue-tui/experimental",
     )),
-  ].sort((a, b) => a.name.localeCompare(b.name));
+  ];
+  const seenComponentNames = new Set(baseComponents.map((component) => component.name));
+  const agentComponents = (
+    await listExportedComponents(agentIndex, "experimental", "@simon_he/vue-tui/agent")
+  ).filter((component) => {
+    if (seenComponentNames.has(component.name)) return false;
+    seenComponentNames.add(component.name);
+    return true;
+  });
+
+  const components = [...baseComponents, ...agentComponents].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
   const metas = components
     .map((c) => extractComponentMeta(c.name, c.absPath, packageRoot, c.maturity, c.entrypoint))
     .map(fillPublicDocDefaults);

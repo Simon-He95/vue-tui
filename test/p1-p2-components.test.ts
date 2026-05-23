@@ -232,6 +232,63 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("repaints TSelect active row after typeahead without a model update", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          multiple: true,
+          modelValue: [],
+          options: ["Alpha", "Beta"],
+          typeahead: true,
+          autoFocus: true,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const selectNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.x === 0 && node.rect.y === 0);
+
+      expect(selectNode).toBeTruthy();
+      mounted.events()!.focus(selectNode!.id);
+      mounted.scheduler()?.flushNow();
+
+      const invalidate = vi.spyOn(mounted.scheduler()!, "invalidate");
+      try {
+        mounted.container()!.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "b",
+            code: "KeyB",
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+
+        expect(invalidate).toHaveBeenCalled();
+      } finally {
+        invalidate.mockRestore();
+      }
+
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 0).style.inverse).not.toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders table, data table, and tree primitives", async () => {
     const rows = [
       { id: "2", name: "build", status: "fail" },

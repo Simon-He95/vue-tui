@@ -835,6 +835,152 @@
     }
   },
   "components": {
+    "TAgentTranscript": {
+      "entrypoint": "@simon_he/vue-tui/agent",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "source",
+          "type": "TTranscriptDataSource",
+          "required": true
+        },
+        {
+          "name": "version",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "scrollTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "defaultScrollTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "autoStickToBottom",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "wrap",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "hoverStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "focusStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "wheelScroll",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "keyboardRegions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "rowScrollMode",
+          "type": "RowScrollMode",
+          "required": false,
+          "defaultValue": "\"unsafe-full-row\""
+        }
+      ],
+      "events": [
+        {
+          "name": "scroll"
+        },
+        {
+          "name": "update:scrollTop"
+        },
+        {
+          "name": "rowClick"
+        },
+        {
+          "name": "actionClick"
+        },
+        {
+          "name": "linkClick"
+        },
+        {
+          "name": "foldToggle"
+        },
+        {
+          "name": "toolClick"
+        },
+        {
+          "name": "hoverRegion"
+        }
+      ]
+    },
     "TAnchor": {
       "entrypoint": "@simon_he/vue-tui/vue",
       "maturity": "advanced",
@@ -6912,6 +7058,113 @@
       ],
       "events": []
     },
+    "TThinkingView": {
+      "entrypoint": "@simon_he/vue-tui/agent",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Thinking\""
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "collapsed",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "pulseFrame",
+          "type": "number | null",
+          "required": false,
+          "defaultValue": "null"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "headerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => DEFAULT_HEADER_STYLE"
+        },
+        {
+          "name": "markerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "titleStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "bodyStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => DEFAULT_BODY_STYLE"
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": [
+        {
+          "name": "click"
+        },
+        {
+          "name": "toggle"
+        }
+      ]
+    },
     "TToastViewport": {
       "entrypoint": "@simon_he/vue-tui/vue",
       "maturity": "advanced",
@@ -6967,6 +7220,402 @@
         {
           "name": "dismiss",
           "payload": "string"
+        }
+      ]
+    },
+    "TToolCallView": {
+      "entrypoint": "@simon_he/vue-tui/agent",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "collapsed",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "status",
+          "type": "TToolCallStatus",
+          "required": false,
+          "defaultValue": "\"pending\""
+        },
+        {
+          "name": "suffix",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "preview",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "nested",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "selected",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "markerCollapsed",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"▸\""
+        },
+        {
+          "name": "markerExpanded",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"▾\""
+        },
+        {
+          "name": "statusDot",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"●\""
+        },
+        {
+          "name": "previewPrefix",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"  ⎿ \""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "mutedStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "headerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "collapsedStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "expandedStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "markerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "statusStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "titleStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "suffixStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "previewStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": [
+        {
+          "name": "click"
+        },
+        {
+          "name": "toggle"
+        }
+      ]
+    },
+    "TToolLogView": {
+      "entrypoint": "@simon_he/vue-tui/agent",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "source",
+          "type": "TLogDataSource",
+          "required": true
+        },
+        {
+          "name": "version",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "scrollTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "defaultScrollTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "autoStickToBottom",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "overscan",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2"
+        },
+        {
+          "name": "wrap",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "visualIndexMode",
+          "type": "\"estimated\" | \"exact\"",
+          "required": false,
+          "defaultValue": "\"estimated\""
+        },
+        {
+          "name": "visualIndexOptions",
+          "type": "TLogViewVisualIndexOptions",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "ansi",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "links",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Parses OSC8 links only with ansi=true; OSC8 links preserve parsed ANSI style and\ndo not inherit TLink theme defaults."
+        },
+        {
+          "name": "linkify",
+          "type": "boolean | TLinkifyOptions",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Plain-text URL linkification for ansi=false rows; generated links inherit TLink\ntheme defaults before linkStyle."
+        },
+        {
+          "name": "linkStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Link style override. OSC8 defaults to underline-only over parsed ANSI style;\nlinkify also inherits TLink theme defaults."
+        },
+        {
+          "name": "keyboardLinks",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "linkFocusStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        },
+        {
+          "name": "searchQuery",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "searchOptions",
+          "type": "TLogViewSearchOptions",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "highlightMatches",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "matchStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true })"
+        },
+        {
+          "name": "currentMatchStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ inverse: true, bold: true })"
+        },
+        {
+          "name": "rowScrollMode",
+          "type": "RowScrollMode",
+          "required": false,
+          "defaultValue": "\"off\""
+        }
+      ],
+      "events": [
+        {
+          "name": "scroll"
+        },
+        {
+          "name": "update:scrollTop"
+        },
+        {
+          "name": "update:searchQuery"
+        },
+        {
+          "name": "search"
+        },
+        {
+          "name": "searchMatch"
+        },
+        {
+          "name": "searchMarkers"
+        },
+        {
+          "name": "linkClick"
+        },
+        {
+          "name": "linkFocus"
+        },
+        {
+          "name": "linkActivate"
+        },
+        {
+          "name": "visualIndex"
+        },
+        {
+          "name": "focus"
+        },
+        {
+          "name": "blur"
+        },
+        {
+          "name": "keydown"
         }
       ]
     },
@@ -7350,6 +7999,135 @@
           "descriptionSource": "shared-default"
         }
       ]
+    },
+    "TUserMessageView": {
+      "entrypoint": "@simon_he/vue-tui/agent",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"user\""
+        },
+        {
+          "name": "prefix",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"> \""
+        },
+        {
+          "name": "meta",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "indent",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2"
+        },
+        {
+          "name": "topBlank",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "bottomBlank",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "segments",
+          "type": "readonly TUserMessageSegment[]",
+          "required": false,
+          "defaultValue": "() => []"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => DEFAULT_BLOCK_STYLE"
+        },
+        {
+          "name": "headerStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => DEFAULT_HEADER_STYLE"
+        },
+        {
+          "name": "prefixStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => DEFAULT_LABEL_STYLE"
+        },
+        {
+          "name": "labelStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => DEFAULT_LABEL_STYLE"
+        },
+        {
+          "name": "contentStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "segmentStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => DEFAULT_SEGMENT_STYLE"
+        },
+        {
+          "name": "focusable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "selectable",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": []
     },
     "TView": {
       "entrypoint": "@simon_he/vue-tui",
