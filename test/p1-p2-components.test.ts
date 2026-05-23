@@ -1721,6 +1721,62 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("ignores stale TSelect optionProvider results after query changes", async () => {
+    let resolveA!: (items: readonly { label: string; value: string }[]) => void;
+    let resolveB!: (items: readonly { label: string; value: string }[]) => void;
+    const loadError = vi.fn();
+    const query = ref("a");
+    const provider = vi.fn((q: string, { signal }: { signal: AbortSignal }) => {
+      return new Promise<readonly { label: string; value: string }[]>((resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        if (q === "a") resolveA = resolve;
+        if (q === "b") resolveB = resolve;
+      });
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          searchable: true,
+          query: query.value,
+          "onUpdate:query": (next: string) => {
+            query.value = next;
+          },
+          optionProvider: provider,
+          valueMode: "value",
+          modelValue: "b",
+          onLoadError: loadError,
+        }),
+      30,
+      6,
+    );
+
+    try {
+      await nextTick();
+
+      query.value = "b";
+      await nextTick();
+
+      resolveA([{ label: "Alpha", value: "a" }]);
+      resolveB([{ label: "Beta", value: "b" }]);
+
+      const snapshot = await waitFor(() => {
+        mounted.scheduler()?.flushNow();
+        const frame = mounted.terminal.snapshot().lines.join("\n");
+        return frame.includes("Beta") ? frame : null;
+      });
+      expect(snapshot).toContain("Beta");
+      expect(snapshot).not.toContain("Alpha");
+      expect(loadError).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders TSelect async provider errors separately from empty state", async () => {
     const onLoadError = vi.fn();
     const mounted = await mountTerminal(
@@ -4106,6 +4162,92 @@ describe("P1/P2 public components", () => {
 
       expect(open.value).toBe(false);
       expect(queryUpdates).toEqual([""]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits TCommandPalette close only once when Escape closes the palette", async () => {
+    const open = ref(true);
+    const onClose = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (next: boolean) => {
+            open.value = next;
+          },
+          items: [{ label: "Open file" }],
+          onClose,
+        }),
+      80,
+      24,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(open.value).toBe(false);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits TCommandPalette close only once when closeOnSelect closes the palette", async () => {
+    const open = ref(true);
+    const onClose = vi.fn();
+    const onSelect = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (next: boolean) => {
+            open.value = next;
+          },
+          items: [{ label: "Open file" }],
+          closeOnSelect: true,
+          onClose,
+          onSelect,
+        }),
+      80,
+      24,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(open.value).toBe(false);
+      expect(onClose).toHaveBeenCalledTimes(1);
     } finally {
       mounted.unmount();
     }

@@ -333,6 +333,7 @@ export const TCommandPalette = defineComponent({
     const scrollOffset = ref(0);
     let providerAbort: AbortController | null = null;
     let providerTimer: ReturnType<typeof setTimeout> | null = null;
+    let suppressNextDialogClose = false;
 
     const query = computed(() => props.query ?? innerQuery.value);
     const filteredEntries = computed(() => {
@@ -440,11 +441,16 @@ export const TCommandPalette = defineComponent({
     }
 
     function close(): void {
+      suppressNextDialogClose = true;
       emit("update:modelValue", false);
       emit("close");
     }
 
     function handleDialogClose(): void {
+      if (suppressNextDialogClose) {
+        suppressNextDialogClose = false;
+        return;
+      }
       emit("close");
     }
 
