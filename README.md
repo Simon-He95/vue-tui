@@ -213,7 +213,7 @@ Unhandled promise rejections stay host-owned by default. Setting `cleanupOnUnhan
 | Runtime        | `@simon_he/vue-tui/runtime`      | runtime, event, and selection APIs                                                                                                                                         |
 | CLI            | `@simon_he/vue-tui/cli`          | `createTerminalApp`, `createStdoutRenderer`, `createStdinDriver`, Node host adapters                                                                                       |
 
-See [docs/components.md](./docs/components.md) and [docs/generated/components-api.md](./docs/generated/components-api.md) for props and events.
+This table is a category overview. The generated API reference for root, `/vue`, and `/experimental` components lives in [docs/generated/components-api.md](./docs/generated/components-api.md) for humans and [docs/generated/api-manifest.json](./docs/generated/api-manifest.json) for CI, release checks, and README/docs drift checks; the manifest also tracks package entrypoint exports.
 
 ## Documentation
 

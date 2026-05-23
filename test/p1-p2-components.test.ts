@@ -1,21 +1,44 @@
 import { describe, expect, it, vi } from "vitest";
+import { provide } from "vue";
 import {
   createTheme,
   TAutocompleteInput,
+  TBadge,
   TCheckbox,
+  TCode,
   TCommandPalette,
   TDataTable,
+  TDialog,
+  TDivider,
   TFormField,
+  TInput,
   TPasswordInput,
   TRadioGroup,
+  TSelect,
   TSlider,
   TSwitch,
   TTable,
+  TTag,
   TText,
   TTree,
   TView,
 } from "../src/index.js";
-import { TBreadcrumb, TContextMenu, TKeyHint, TPopover, TStatusBar, TTooltip } from "../src/vue.js";
+import {
+  TBreadcrumb,
+  TContextMenu,
+  TForm,
+  TKeyHint,
+  TPopover,
+  TProgress,
+  TSpinner,
+  TSplitPane,
+  TStatusBar,
+  TTabs,
+  TToastViewport,
+  TTooltip,
+  resolveOverlayPlacement,
+} from "../src/vue.js";
+import type { TFormHandle } from "../src/vue.js";
 import {
   createTerminalApp,
   defineComponent,
@@ -23,9 +46,444 @@ import {
   mountTerminal,
   nextTick,
   ref,
+  waitFor,
 } from "./ui-regressions-support.js";
+import { LayoutContextKey } from "../src/vue/context.js";
 
 describe("P1/P2 public components", () => {
+  it("lets TForm consume Enter without also confirming the parent dialog", async () => {
+    const open = ref(true);
+    const value = ref("");
+    const onSubmit = vi.fn();
+    const onConfirm = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (next: boolean) => (open.value = next),
+            w: 44,
+            h: 8,
+            buttons: [{ label: "OK", default: true }],
+            onConfirm,
+          },
+          () =>
+            h(
+              TForm,
+              {
+                x: 0,
+                y: 0,
+                w: 40,
+                h: 4,
+                model: { value: value.value },
+                submitOnEnter: true,
+                onSubmit,
+              },
+              () =>
+                h(TInput, {
+                  x: 0,
+                  y: 0,
+                  w: 20,
+                  modelValue: value.value,
+                  autoFocus: true,
+                  "onUpdate:modelValue": (next: string) => (value.value = next),
+                }),
+            ),
+        ),
+      60,
+      12,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()!.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onConfirm).not.toHaveBeenCalled();
+      expect(open.value).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("exposes TForm validation helpers through template refs", async () => {
+    const form = ref<TFormHandle | null>(null);
+    const model = { name: "" };
+    const validationEvents: Record<string, string>[] = [];
+    const submitEvents: unknown[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TForm, {
+          ref: form,
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 4,
+          model,
+          rules: {
+            name: (value: unknown) => (value ? null : "Required"),
+          },
+          onValidation: (errors: Record<string, string>) => validationEvents.push(errors),
+          onSubmit: (payload: unknown) => submitEvents.push(payload),
+        }),
+      30,
+      6,
+    );
+
+    try {
+      await nextTick();
+
+      expect(form.value?.validate()).toBe(false);
+      expect(validationEvents.at(-1)).toEqual({ name: "Required" });
+
+      form.value?.setFieldError("token", "Invalid");
+      expect(validationEvents.at(-1)).toEqual({ name: "Required", token: "Invalid" });
+
+      form.value?.clearValidation();
+      expect(validationEvents.at(-1)).toEqual({});
+
+      model.name = "Ada";
+      expect(form.value?.validate()).toBe(true);
+      form.value?.submit();
+      expect(submitEvents.at(-1)).toEqual({ model, valid: true, errors: {} });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not confirm the parent dialog when single TSelect handles Enter", async () => {
+    const open = ref(true);
+    const selected = ref<unknown>("alpha");
+    const changes: string[] = [];
+    const onConfirm = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (value: boolean) => (open.value = value),
+            w: 28,
+            h: 6,
+            buttons: [{ label: "OK", default: true }],
+            onConfirm,
+          },
+          () =>
+            h(TSelect, {
+              x: 0,
+              y: 0,
+              w: 16,
+              h: 2,
+              options: [
+                { label: "Alpha", value: "alpha" },
+                { label: "Beta", value: "beta" },
+              ],
+              valueMode: "value",
+              modelValue: selected.value,
+              "onUpdate:modelValue": (value: unknown) => (selected.value = value),
+              onChange: (value: string) => changes.push(value),
+            }),
+        ),
+      40,
+      10,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const selectNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.w === 16 && node.rect.h === 2);
+
+      expect(selectNode).toBeTruthy();
+      mounted.events()!.focus(selectNode!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(changes).toEqual(["Alpha"]);
+      expect(onConfirm).not.toHaveBeenCalled();
+      expect(open.value).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not leak TDialog close suppression when parent vetoes close", async () => {
+    const open = ref(true);
+    const onClose = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDialog, {
+          modelValue: open.value,
+          "onUpdate:modelValue": () => {},
+          w: 20,
+          h: 5,
+          onClose,
+        }),
+      30,
+      8,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      await Promise.resolve();
+
+      expect(open.value).toBe(true);
+      expect(onClose).toHaveBeenCalledTimes(1);
+
+      open.value = false;
+      await nextTick();
+
+      expect(onClose).toHaveBeenCalledTimes(2);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("drops stale multiple TSelect model indices instead of remapping them", async () => {
+    const onConfirm = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          multiple: true,
+          multipleEmit: "index",
+          options: [{ label: "Alpha" }],
+          modelValue: [99],
+          onConfirm,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const selectNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.x === 0 && node.rect.y === 0);
+
+      expect(selectNode).toBeTruthy();
+      mounted.events()!.focus(selectNode!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(onConfirm).toHaveBeenCalledWith([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("matches NaN TSelect option values when valueMode is value", async () => {
+    const selected = ref<unknown>(Number.NaN);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          valueMode: "value",
+          modelValue: selected.value,
+          "onUpdate:modelValue": (value: unknown) => {
+            selected.value = value;
+          },
+          options: [
+            { label: "Other", value: "other" },
+            { label: "NaN", value: Number.NaN },
+          ],
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.getCell(0, 0).style.inverse).not.toBe(true);
+      expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits close when clicking an empty TSelect viewport", async () => {
+    const onClose = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          options: [],
+          onClose,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+
+      await nextTick();
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("repaints TSelect active row after typeahead without a model update", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          multiple: true,
+          modelValue: [],
+          options: ["Alpha", "Beta"],
+          typeahead: true,
+          autoFocus: true,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const selectNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.x === 0 && node.rect.y === 0);
+
+      expect(selectNode).toBeTruthy();
+      mounted.events()!.focus(selectNode!.id);
+      mounted.scheduler()?.flushNow();
+
+      const invalidate = vi.spyOn(mounted.scheduler()!, "invalidate");
+      try {
+        mounted.container()!.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "b",
+            code: "KeyB",
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+
+        expect(invalidate).toHaveBeenCalled();
+      } finally {
+        invalidate.mockRestore();
+      }
+
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 0).style.inverse).not.toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("clears stale TSelect rows when maxVisible shrinks", async () => {
+    const maxVisible = ref(3);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 3,
+          maxVisible: maxVisible.value,
+          options: ["Alpha", "Beta", "Gamma"],
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines[2]).toContain("Gamma");
+
+      maxVisible.value = 1;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.snapshot().lines[0]).toContain("Alpha");
+      expect(mounted.terminal.snapshot().lines[1].trim()).toBe("");
+      expect(mounted.terminal.snapshot().lines[2].trim()).toBe("");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders table, data table, and tree primitives", async () => {
     const rows = [
       { id: "2", name: "build", status: "fail" },
@@ -72,6 +530,612 @@ describe("P1/P2 public components", () => {
       expect(lines[7]).toContain("1");
       expect(lines[0]).toContain("v src");
       expect(lines[1]).toContain("index.ts");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps TTable minWidth when explicit widths overflow but minima still fit", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 3,
+          border: false,
+          columns: [
+            { key: "a", label: "AAAAA", width: 100, minWidth: 5 },
+            { key: "b", label: "BBBB", width: 10, minWidth: 4 },
+          ],
+          rows: [{ a: "aaaaa", b: "bbbb" }],
+        }),
+      16,
+      4,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()!.flushNow();
+      const lines = mounted.terminal.snapshot().lines;
+
+      expect(lines[0]).toContain("AAAAA BBBB");
+      expect(lines[2]).toContain("aaaaa bbbb");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("matches NaN row keys for selected and active TTable rows", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 3,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: [{ id: Number.NaN, name: "Alpha" }],
+          rowKey: "id",
+          selectedRowKey: Number.NaN,
+          activeRowKey: Number.NaN,
+          activeStyle: { underline: true },
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.getCell(0, 2).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 2).style.underline).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps TDataTable rowSelect indices correct with scrollTop", async () => {
+    const onRowSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }],
+          selectable: true,
+          scrollTop: 1,
+          onRowSelect,
+        }),
+      24,
+      6,
+    );
+
+    try {
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 2, bubbles: true }));
+      await nextTick();
+
+      expect(onRowSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          row: { name: "Beta" },
+          index: 0,
+          dataIndex: 1,
+          originalIndex: 1,
+          key: 1,
+        }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits clamped TDataTable scrollTop when rows shrink below the viewport", async () => {
+    const scrollTop = ref(99);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: [{ name: "Alpha" }],
+          scrollTop: scrollTop.value,
+          "onUpdate:scrollTop": (next: number) => {
+            scrollTop.value = next;
+          },
+        }),
+      24,
+      6,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(scrollTop.value).toBe(0);
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Alpha");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("commits the keyboard-active data table row after in-viewport arrow navigation", async () => {
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+    ];
+    const selectedRowKey = ref<unknown>(undefined);
+    const onRowSelect = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          selectedRowKey: selectedRowKey.value,
+          "onUpdate:selectedRowKey": (key: unknown) => (selectedRowKey.value = key),
+          onRowSelect,
+        }),
+      16,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(selectedRowKey.value).toBe("b");
+      expect(onRowSelect).toHaveBeenCalledWith({
+        row: rows[1],
+        index: 1,
+        dataIndex: 1,
+        originalIndex: 1,
+        key: "b",
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps TDataTable keyboard scrolling usable when scrollTop is uncontrolled", async () => {
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+      { id: "c", name: "Gamma" },
+    ];
+    const selectedRowKey = ref<unknown>(undefined);
+    const onRowSelect = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          selectedRowKey: selectedRowKey.value,
+          "onUpdate:selectedRowKey": (key: unknown) => (selectedRowKey.value = key),
+          onRowSelect,
+        }),
+      16,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const snapshot = mounted.terminal.snapshot().lines.join("\n");
+      expect(snapshot).toContain("Beta");
+      expect(snapshot).toContain("Gamma");
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          code: "Space",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(selectedRowKey.value).toBe("c");
+      expect(onRowSelect).toHaveBeenCalledWith({
+        row: rows[2],
+        index: 1,
+        dataIndex: 2,
+        originalIndex: 2,
+        key: "c",
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits correct viewport index when controlled TDataTable scrolls from keyboard before commit", async () => {
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+      { id: "c", name: "Gamma" },
+    ];
+    const scrollTop = ref(0);
+    const selectedRowKey = ref<unknown>(undefined);
+    const onRowSelect = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          scrollTop: scrollTop.value,
+          selectedRowKey: selectedRowKey.value,
+          "onUpdate:scrollTop": (next: number) => {
+            scrollTop.value = next;
+          },
+          "onUpdate:selectedRowKey": (key: unknown) => {
+            selectedRowKey.value = key;
+          },
+          onRowSelect,
+        }),
+      16,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(scrollTop.value).toBe(1);
+      expect(selectedRowKey.value).toBe("c");
+      expect(onRowSelect).toHaveBeenCalledWith({
+        row: rows[2],
+        index: 1,
+        dataIndex: 2,
+        originalIndex: 2,
+        key: "c",
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("passes original row indices to TDataTable column format after scrollTop", async () => {
+    const format = vi.fn((value: unknown, _row: unknown, index: number) => `${index}:${value}`);
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 12, format }],
+          rows: [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }],
+          scrollTop: 1,
+        }),
+      24,
+      6,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()!.flushNow();
+
+      const snapshot = mounted.terminal.snapshot().lines.join("\n");
+      expect(snapshot).toContain("1:Beta");
+      expect(snapshot).toContain("2:Gamma");
+      expect(format).toHaveBeenCalledWith("Beta", { name: "Beta" }, 1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not mutate multiple data table selection during arrow navigation", async () => {
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+      { id: "c", name: "Gamma" },
+    ];
+    const selectedRowKeys = ref<unknown[]>([]);
+    const scrollTop = ref(0);
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          selectionMode: "multiple",
+          selectedRowKeys: selectedRowKeys.value,
+          scrollTop: scrollTop.value,
+          "onUpdate:selectedRowKeys": (keys: unknown[]) => (selectedRowKeys.value = keys),
+          "onUpdate:scrollTop": (next: number) => (scrollTop.value = next),
+        }),
+      16,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }),
+      );
+      container.dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 2, bubbles: true }));
+      await nextTick();
+
+      expect(selectedRowKeys.value).toEqual(["a"]);
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(selectedRowKeys.value).toEqual(["a"]);
+      expect(scrollTop.value).toBe(0);
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(selectedRowKeys.value).toEqual(["a"]);
+      expect(scrollTop.value).toBe(1);
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          code: "Space",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(selectedRowKeys.value).toEqual(["a", "c"]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses activeStyle for keyboard-active data table rows without selectedStyle", async () => {
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+    ];
+    const selectedRowKeys = ref<unknown[]>(["a"]);
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          selectionMode: "multiple",
+          selectedRowKeys: selectedRowKeys.value,
+          activeStyle: { underline: true },
+        }),
+      16,
+      5,
+    );
+
+    try {
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }));
+      mounted
+        .container()!
+        .dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.getCell(0, 2).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.underline).toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.inverse).not.toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps keyboard-active TDataTable row identity after sorting changes", async () => {
+    const sortDirection = ref<"asc" | "desc">("asc");
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+    ];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          sortable: true,
+          sortBy: "name",
+          sortDirection: sortDirection.value,
+          activeStyle: { underline: true },
+        }),
+      20,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.snapshot().lines[3]).toContain("Beta");
+      expect(mounted.terminal.getCell(0, 3).style.underline).toBe(true);
+
+      sortDirection.value = "desc";
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.snapshot().lines[2]).toContain("Beta");
+      expect(mounted.terminal.getCell(0, 2).style.underline).toBe(true);
+      expect(mounted.terminal.snapshot().lines[3]).toContain("Alpha");
+      expect(mounted.terminal.getCell(0, 3).style.underline).not.toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("redistributes TTable auto width after maxWidth clamps a column", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 3,
+          columns: [
+            { key: "a", label: "A", maxWidth: 3 },
+            { key: "b", label: "B" },
+          ],
+          rows: [{ a: "abcdef", b: "123456789" }],
+        }),
+      12,
+      4,
+    );
+
+    try {
+      expect(mounted.terminal.snapshot().lines[2]?.slice(0, 10)).toBe("abc 123456");
     } finally {
       mounted.unmount();
     }
@@ -144,6 +1208,7 @@ describe("P1/P2 public components", () => {
       expect(onRowSelect).toHaveBeenCalledWith({
         row: rows[0],
         index: 0,
+        dataIndex: 0,
         originalIndex: 0,
         key: "2",
       });
@@ -595,6 +1660,1735 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("renders feedback primitives, tabs, split panes, and toast viewport", async () => {
+    const activeKey = ref("logs");
+    const sizes = ref([10, 10]);
+    const mounted = await mountTerminal(
+      () => [
+        h(TBadge, { x: 0, y: 0, value: "12", tone: "warning" }),
+        h(TTag, { x: 6, y: 0, label: "beta", tone: "info" }),
+        h(TDivider, { x: 0, y: 1, w: 18, title: "Logs" }),
+        h(TCode, { x: 0, y: 2, w: 18, value: "pnpm test" }),
+        h(TProgress, { x: 0, y: 3, w: 24, value: 5, max: 10, label: "Index" }),
+        h(TSpinner, { x: 0, y: 4, w: 18, frameIndex: 1, label: "Thinking" }),
+        h(TToastViewport, {
+          offsetY: 6,
+          w: 24,
+          max: 1,
+          items: [{ id: "saved", level: "success", title: "Saved", message: "Profile updated" }],
+        }),
+        h(TTabs, {
+          x: 28,
+          y: 0,
+          w: 28,
+          activeKey: activeKey.value,
+          "onUpdate:activeKey": (key: string) => (activeKey.value = key),
+          items: [
+            { key: "chat", label: "Chat" },
+            { key: "logs", label: "Logs", badge: "2" },
+          ],
+        }),
+        h(
+          TSplitPane as any,
+          {
+            x: 28,
+            y: 2,
+            w: 24,
+            h: 3,
+            sizes: sizes.value,
+            "onUpdate:sizes": (next: number[]) => (sizes.value = next),
+          },
+          ({ panes }: any) => [
+            h(TText, { ...panes[0], value: "Left" }),
+            h(TText, { ...panes[1], value: "Right" }),
+          ],
+        ),
+      ],
+      70,
+      12,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]).toContain("[12]");
+      expect(lines[0]).toContain("<beta>");
+      expect(lines[1]).toContain("Logs");
+      expect(lines[2]).toContain("pnpm test");
+      expect(lines[3]).toContain("Index [");
+      expect(lines[4]).toContain("/ Thinking");
+      expect(lines[6]).toContain("Saved");
+      expect(lines[7]).toContain("Profile updated");
+      expect(lines[0]).toContain("Logs 2");
+      expect(lines[2]).toContain("Left");
+      expect(lines[2]).toContain("Right");
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 29, clientY: 0, bubbles: true }));
+      await nextTick();
+      expect(activeKey.value).toBe("chat");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not emit TTabs change when activating the current tab", async () => {
+    const activeKey = ref("logs");
+    const onChange = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TTabs, {
+          x: 0,
+          y: 0,
+          w: 24,
+          activeKey: activeKey.value,
+          "onUpdate:activeKey": (key: string) => (activeKey.value = key),
+          onChange,
+          items: [
+            { key: "chat", label: "Chat" },
+            { key: "logs", label: "Logs" },
+          ],
+        }),
+      30,
+      4,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 7, clientY: 0, bubbles: true }));
+
+      await nextTick();
+
+      expect(activeKey.value).toBe("logs");
+      expect(onChange).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("lets TTabs navigate enabled tabs with arrow/home/end keys", async () => {
+    const activeKey = ref("one");
+    const changes: string[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TTabs, {
+          x: 0,
+          y: 0,
+          w: 30,
+          items: [
+            { key: "one", label: "One" },
+            { key: "two", label: "Two", disabled: true },
+            { key: "three", label: "Three" },
+          ],
+          activeKey: activeKey.value,
+          "onUpdate:activeKey": (key: string) => (activeKey.value = key),
+          onChange: (item: { key: string }) => changes.push(item.key),
+        }),
+      40,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const tabNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.y === 0 && node.rect.x === 0);
+
+      expect(tabNode).toBeTruthy();
+      mounted.events()!.focus(tabNode!.id);
+
+      const press = async (key: string): Promise<void> => {
+        mounted.container()!.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key,
+            code: key,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        await nextTick();
+      };
+
+      await press("ArrowRight");
+      expect(activeKey.value).toBe("three");
+      expect(changes).toEqual(["three"]);
+
+      await press("Home");
+      expect(activeKey.value).toBe("one");
+      expect(changes).toEqual(["three", "one"]);
+
+      await press("End");
+      expect(activeKey.value).toBe("three");
+      expect(changes).toEqual(["three", "one", "three"]);
+
+      const thirdTabNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.y === 0 && node.rect.x > 0);
+
+      expect(thirdTabNode).toBeTruthy();
+      mounted.events()!.focus(thirdTabNode!.id);
+
+      await press("ArrowLeft");
+      expect(activeKey.value).toBe("one");
+      expect(changes).toEqual(["three", "one", "three", "one"]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("navigates TTabs from the active tab, not the stale focused tab", async () => {
+    const activeKey = ref("one");
+    const changes: string[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TTabs, {
+          x: 0,
+          y: 0,
+          w: 32,
+          items: [
+            { key: "one", label: "One" },
+            { key: "two", label: "Two" },
+            { key: "three", label: "Three" },
+          ],
+          activeKey: activeKey.value,
+          "onUpdate:activeKey": (key: string) => {
+            activeKey.value = key;
+          },
+          onChange: (item: { key: string }) => {
+            changes.push(item.key);
+          },
+        }),
+      40,
+      4,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }));
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(activeKey.value).toBe("three");
+      expect(changes).toEqual(["two", "three"]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses cell widths for wide feedback labels and tab hit areas", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TProgress, { x: 0, y: 0, w: 10, value: 5, max: 10, label: "中" }),
+        h(TTabs, {
+          x: 0,
+          y: 1,
+          w: 12,
+          activeKey: "wide",
+          items: [
+            { key: "wide", label: "中" },
+            { key: "ascii", label: "B" },
+          ],
+        }),
+      ],
+      16,
+      4,
+    );
+
+    try {
+      expect(mounted.terminal.snapshot().lines[0]).toContain("50%");
+      const hitRects = mounted
+        .events()!
+        .debugNodes()
+        .filter((node) => node.visible && node.focusable && node.rect.y === 1)
+        .map((node) => node.rect)
+        .sort((a, b) => a.x - b.x);
+      expect(hitRects).toEqual([
+        { x: 0, y: 1, w: 4, h: 1 },
+        { x: 4, y: 1, w: 3, h: 1 },
+      ]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("normalizes fractional and non-finite dimensions before repeat-based rendering", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TDivider, { x: 0, y: 0, w: 9.5, title: "A" }),
+        h(TTabs, {
+          x: 0,
+          y: 1,
+          w: 8.5,
+          activeKey: "a",
+          items: [{ key: "a", label: "A" }],
+        }),
+        h(TTabs, {
+          x: 12,
+          y: 1,
+          w: Number.POSITIVE_INFINITY,
+          activeKey: "a",
+          items: [{ key: "a", label: "A" }],
+        }),
+        h(
+          TSplitPane as any,
+          {
+            x: 0,
+            y: 2,
+            w: 9.5,
+            h: 3,
+            direction: "vertical",
+            sizes: [1, 1],
+          },
+          ({ panes }: any) =>
+            panes.map((pane: any, index: number) =>
+              h(TText, { ...pane, value: index === 0 ? "Top" : "Bottom" }),
+            ),
+        ),
+      ],
+      24,
+      6,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]!.slice(0, 9)).toContain("A");
+      expect(lines[1]!.slice(0, 8)).toContain("A");
+      expect(lines[3]!.slice(0, 9)).toBe("---------");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("normalizes non-finite feedback component widths", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TProgress, { x: 0, y: 0, w: Number.POSITIVE_INFINITY, value: 50 }),
+        h(TBadge, { x: 0, y: 1, w: Number.POSITIVE_INFINITY, value: "long" }),
+        h(TTag, { x: 0, y: 2, w: Number.POSITIVE_INFINITY, label: "alpha" }),
+        h(TSpinner, {
+          x: 0,
+          y: 3,
+          w: Number.POSITIVE_INFINITY,
+          label: "Thinking",
+        }),
+        h(TCode, {
+          x: 0,
+          y: 4,
+          w: Number.POSITIVE_INFINITY,
+          value: "pnpm test",
+        }),
+        h(TToastViewport, {
+          offsetY: 5,
+          w: Number.POSITIVE_INFINITY,
+          items: [{ id: "saved", message: "Saved" }],
+        }),
+      ],
+      30,
+      8,
+    );
+
+    try {
+      await nextTick();
+      expect(() => mounted.scheduler()?.flushNow()).not.toThrow();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("normalizes non-finite progress values and spinner frame indexes", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TProgress, { x: 0, y: 0, w: 12, value: Number.NaN, max: Number.NaN }),
+        h(TSpinner, {
+          x: 0,
+          y: 1,
+          frames: ["a", "b"],
+          frameIndex: Number.POSITIVE_INFINITY,
+          label: "Loading",
+        }),
+      ],
+      20,
+      3,
+    );
+
+    try {
+      await nextTick();
+      expect(() => mounted.scheduler()?.flushNow()).not.toThrow();
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]).toContain("0%");
+      expect(lines[0]).not.toContain("NaN");
+      expect(lines[1]).toContain("a Loading");
+      expect(lines[1]).not.toContain("undefined");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("wraps negative spinner frame indexes from the end", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TSpinner, {
+          x: 0,
+          y: 0,
+          frames: ["a", "b", "c"],
+          frameIndex: -1,
+        }),
+      10,
+      2,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.snapshot().lines[0]![0]).toBe("c");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps narrow progress, badge, and tag text inside their cell widths", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TProgress, { x: 0, y: 0, w: 3, value: 50 }),
+        h(TProgress, { x: 0, y: 1, w: 8, value: 50, label: "Build" }),
+        h(TProgress, { x: 0, y: 2, w: 20, value: 50, label: "Build" }),
+        h(TBadge, { x: 0, y: 3, w: 4, value: "long", tone: "info" }),
+        h(TTag, { x: 6, y: 3, w: 5, label: "alpha", tone: "success" }),
+      ],
+      30,
+      5,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]!.slice(0, 3)).toBe("50%");
+      expect(lines[0]!.slice(0, 3)).not.toContain("[");
+      expect(lines[1]!.slice(0, 8)).toBe("Build 50");
+      expect(lines[2]).toContain("Build [");
+      expect(lines[3]!.slice(0, 4)).toBe("[lon");
+      expect(lines[3]!.slice(6, 11)).toBe("<alph");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not emit invalid TSelect values when moving through empty options", async () => {
+    for (const valueMode of ["index", "value", "option"] as const) {
+      const updates: unknown[] = [];
+      const mounted = await mountTerminal(
+        () =>
+          h(TSelect, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            options: [],
+            valueMode,
+            "onUpdate:modelValue": (value: unknown) => updates.push(value),
+          }),
+        24,
+        5,
+      );
+
+      try {
+        const container = mounted.container()!;
+        container.dispatchEvent(
+          new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+        );
+
+        for (const key of ["ArrowDown", "ArrowUp"]) {
+          expect(() =>
+            container.dispatchEvent(
+              new KeyboardEvent("keydown", {
+                key,
+                code: key,
+                bubbles: true,
+                cancelable: true,
+              }),
+            ),
+          ).not.toThrow();
+        }
+        await nextTick();
+
+        expect(updates).toEqual([]);
+      } finally {
+        mounted.unmount();
+      }
+    }
+  });
+
+  it("does not emit TSelect query updates for default typeahead navigation", async () => {
+    const queryUpdates: string[] = [];
+    const modelUpdates: unknown[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: ["apple", "banana"],
+          autoFocus: true,
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+          "onUpdate:modelValue": (value: unknown) => modelUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await nextTick();
+
+      expect(queryUpdates).toEqual([]);
+      expect(modelUpdates).toEqual([1]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not treat modified printable shortcuts as TSelect search/typeahead input", async () => {
+    const queryUpdates: string[] = [];
+    const modelUpdates: unknown[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: ["apple", "banana"],
+          searchable: true,
+          typeahead: true,
+          autoFocus: true,
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+          "onUpdate:modelValue": (value: unknown) => modelUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await nextTick();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "b",
+          code: "KeyB",
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(queryUpdates).toEqual([]);
+      expect(modelUpdates).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("accepts unknown TSelect model values in value mode", async () => {
+    const values = [null, undefined, Symbol("key"), () => "value"];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      for (const value of values) {
+        const updates: unknown[] = [];
+        const mounted = await mountTerminal(
+          () =>
+            h(TSelect, {
+              x: 0,
+              y: 0,
+              w: 20,
+              h: 3,
+              options: [{ label: "item", value }],
+              valueMode: "value",
+              modelValue: value,
+              autoFocus: true,
+              "onUpdate:modelValue": (next: unknown) => updates.push(next),
+            }),
+          24,
+          5,
+        );
+
+        try {
+          await nextTick();
+          mounted
+            .container()!
+            .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+          await nextTick();
+
+          expect(updates.at(-1)).toBe(value);
+        } finally {
+          mounted.unmount();
+        }
+      }
+
+      expect(warn.mock.calls.some(([message]) => String(message).includes("Invalid prop"))).toBe(
+        false,
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("emits TSelect query updates without typeahead movement when disabled", async () => {
+    const activeUpdates: number[] = [];
+    const modelUpdates: unknown[] = [];
+    const queryUpdates: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: ["apple", "banana"],
+          autoFocus: true,
+          searchable: true,
+          typeahead: false,
+          "onUpdate:activeIndex": (value: number) => activeUpdates.push(value),
+          "onUpdate:modelValue": (value: unknown) => modelUpdates.push(value),
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await nextTick();
+
+      expect(queryUpdates).toEqual(["b"]);
+      expect(activeUpdates).toEqual([]);
+      expect(modelUpdates).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("moves TSelect active option without committing model while searchable", async () => {
+    const activeUpdates: number[] = [];
+    const modelUpdates: unknown[] = [];
+    const queryUpdates: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: ["apple", "banana"],
+          autoFocus: true,
+          searchable: true,
+          "onUpdate:activeIndex": (value: number) => activeUpdates.push(value),
+          "onUpdate:modelValue": (value: unknown) => modelUpdates.push(value),
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await nextTick();
+
+      expect(queryUpdates).toEqual(["b"]);
+      expect(activeUpdates).toEqual([1]);
+      expect(modelUpdates).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps TSelect searchable query persistent after the typeahead timeout", async () => {
+    vi.useFakeTimers();
+    const queryUpdates: string[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: ["banana"],
+          autoFocus: true,
+          searchable: true,
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await nextTick();
+
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await nextTick();
+
+      vi.advanceTimersByTime(800);
+
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+      await nextTick();
+
+      expect(queryUpdates).toEqual(["b", "ba"]);
+    } finally {
+      mounted.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears stale TSelect provider options while loading a new query", async () => {
+    const query = ref("old");
+    const provider = vi.fn((q: string) => {
+      if (q === "old") return Promise.resolve(["old-a", "old-b"]);
+      return new Promise<readonly string[]>(() => {});
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: [],
+          optionProvider: provider,
+          query: query.value,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("old-a");
+
+      query.value = "new";
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      const loadingFrame = mounted.terminal.snapshot().lines.join("\n");
+
+      expect(loadingFrame).toContain("Loading...");
+      expect(loadingFrame).not.toContain("old-a");
+      expect(loadingFrame).not.toContain("old-b");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("ignores stale TSelect optionProvider results after query changes", async () => {
+    let resolveA!: (items: readonly { label: string; value: string }[]) => void;
+    let resolveB!: (items: readonly { label: string; value: string }[]) => void;
+    const loadError = vi.fn();
+    const query = ref("a");
+    const provider = vi.fn((q: string, { signal }: { signal: AbortSignal }) => {
+      return new Promise<readonly { label: string; value: string }[]>((resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        if (q === "a") resolveA = resolve;
+        if (q === "b") resolveB = resolve;
+      });
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          searchable: true,
+          query: query.value,
+          "onUpdate:query": (next: string) => {
+            query.value = next;
+          },
+          optionProvider: provider,
+          valueMode: "value",
+          modelValue: "b",
+          onLoadError: loadError,
+        }),
+      30,
+      6,
+    );
+
+    try {
+      await nextTick();
+
+      query.value = "b";
+      await nextTick();
+
+      resolveA([{ label: "Alpha", value: "a" }]);
+      resolveB([{ label: "Beta", value: "b" }]);
+
+      const snapshot = await waitFor(() => {
+        mounted.scheduler()?.flushNow();
+        const frame = mounted.terminal.snapshot().lines.join("\n");
+        return frame.includes("Beta") ? frame : null;
+      });
+      expect(snapshot).toContain("Beta");
+      expect(snapshot).not.toContain("Alpha");
+      expect(loadError).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("renders TSelect async provider errors separately from empty state", async () => {
+    const onLoadError = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          options: [],
+          optionProvider: async () => {
+            throw new Error("network down");
+          },
+          errorText: "Failed options",
+          emptyText: "No options",
+          onLoadError,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await waitFor(() => {
+        mounted.scheduler()?.flushNow();
+        const line = mounted.terminal.snapshot().lines[0] ?? "";
+        return line.includes("Failed options") ? line : null;
+      });
+
+      expect(mounted.terminal.snapshot().lines[0]).not.toContain("No options");
+      expect(onLoadError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: "",
+          error: expect.any(Error),
+        }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits TSelect loadError when optionProvider throws synchronously", async () => {
+    const onLoadError = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          optionProvider: () => {
+            throw new Error("sync option failure");
+          },
+          errorText: "Failed options",
+          onLoadError,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await waitFor(() => (onLoadError.mock.calls.length ? true : null));
+      mounted.scheduler()?.flushNow();
+
+      expect(onLoadError).toHaveBeenCalledWith({
+        query: "",
+        error: expect.any(Error),
+      });
+      expect(mounted.terminal.snapshot().lines[0]).toContain("Failed options");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps TSelect loading and error rows inert on click", async () => {
+    const onLoadingClose = vi.fn();
+    const loading = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          options: [],
+          loading: true,
+          onClose: onLoadingClose,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      loading.scheduler()?.flushNow();
+      loading
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+      await nextTick();
+      expect(onLoadingClose).not.toHaveBeenCalled();
+    } finally {
+      loading.unmount();
+    }
+
+    const onErrorClose = vi.fn();
+    const error = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          options: [],
+          optionProvider: async () => {
+            throw new Error("network down");
+          },
+          errorText: "Failed options",
+          onClose: onErrorClose,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await waitFor(() => {
+        error.scheduler()?.flushNow();
+        const line = error.terminal.snapshot().lines[0] ?? "";
+        return line.includes("Failed options") ? line : null;
+      });
+      error
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+      await nextTick();
+      expect(onErrorClose).not.toHaveBeenCalled();
+    } finally {
+      error.unmount();
+    }
+  });
+
+  it("keeps hidden TSelect loading options inert on keyboard", async () => {
+    const selected = ref<unknown[]>([]);
+    const activeUpdates: number[] = [];
+    const changes: unknown[] = [];
+    const confirms: unknown[] = [];
+    const updates: unknown[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          options: [
+            { label: "Alpha", value: "alpha" },
+            { label: "Beta", value: "beta" },
+          ],
+          modelValue: selected.value,
+          valueMode: "value",
+          multiple: true,
+          loading: true,
+          autoFocus: true,
+          "onUpdate:activeIndex": (value: number) => activeUpdates.push(value),
+          "onUpdate:modelValue": (value: unknown) => {
+            updates.push(value);
+            selected.value = value as unknown[];
+          },
+          onChange: (value: unknown) => changes.push(value),
+          onConfirm: (value: unknown) => confirms.push(value),
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      const frame = mounted.terminal.snapshot().lines.join("\n");
+      expect(frame).toContain("Loading...");
+      expect(frame).not.toContain("Alpha");
+
+      const container = mounted.container()!;
+      for (const [key, code] of [
+        ["ArrowDown", "ArrowDown"],
+        [" ", "Space"],
+        ["Enter", "Enter"],
+      ] as const) {
+        container.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key,
+            code,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        await nextTick();
+      }
+
+      expect(activeUpdates).toEqual([]);
+      expect(updates).toEqual([]);
+      expect(changes).toEqual([]);
+      expect(confirms).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("clears stale TSelect provider options during debounced query changes", async () => {
+    const query = ref("old");
+    const debounce = ref(0);
+    const provider = vi.fn((q: string) => {
+      if (q === "old") return Promise.resolve(["old-a", "old-b"]);
+      return new Promise<readonly string[]>(() => {});
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: [],
+          optionProvider: provider,
+          query: query.value,
+          debounce: debounce.value,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("old-a");
+
+      query.value = "new";
+      debounce.value = 50;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      const loadingFrame = mounted.terminal.snapshot().lines.join("\n");
+
+      expect(provider.mock.calls.map(([q]) => q)).not.toContain("new");
+      expect(loadingFrame).toContain("Loading...");
+      expect(loadingFrame).not.toContain("old-a");
+      expect(loadingFrame).not.toContain("old-b");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("uses internal TSelect query for searchable async options when query is uncontrolled", async () => {
+    const queryUpdates: string[] = [];
+    const provider = vi.fn((q: string) => Promise.resolve(q ? [`${q}-result`] : ["initial"]));
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: [],
+          optionProvider: provider,
+          searchable: true,
+          typeahead: false,
+          autoFocus: true,
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await nextTick();
+      await Promise.resolve();
+      mounted.scheduler()?.flushNow();
+
+      expect(queryUpdates).toEqual(["b"]);
+      expect(provider.mock.calls.map(([q]) => q)).toContain("b");
+      await waitFor(() => {
+        mounted.scheduler()?.flushNow();
+        return mounted.terminal.snapshot().lines.join("\n").includes("b-result") || null;
+      });
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("b-result");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not typeahead against stale TSelect provider options while searching", async () => {
+    const query = ref("");
+    const activeUpdates: number[] = [];
+    const queryUpdates: string[] = [];
+    const provider = vi.fn((q: string) => {
+      if (q === "") return Promise.resolve(["Alpha", "Beta"]);
+      return new Promise<readonly string[]>(() => {});
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          query: query.value,
+          optionProvider: provider,
+          searchable: true,
+          typeahead: true,
+          autoFocus: true,
+          "onUpdate:query": (value: string) => {
+            query.value = value;
+            queryUpdates.push(value);
+          },
+          "onUpdate:activeIndex": (value: number) => activeUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Beta");
+
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+      await nextTick();
+
+      expect(queryUpdates).toEqual(["b"]);
+      expect(activeUpdates).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("allows TSelect to use optionProvider without a static options prop", async () => {
+    const provider = vi.fn(async () => [{ label: "Remote", value: "remote" }]);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 3,
+          optionProvider: provider,
+          valueMode: "value",
+          modelValue: "remote",
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await waitFor(() => {
+        mounted.scheduler()!.flushNow();
+        return mounted.terminal.snapshot().lines.join("\n").includes("Remote") || null;
+      });
+      expect(provider).toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("preserves split pane size sum when keyboard resize reaches min bounds", async () => {
+    const sizes = ref([10, 10]);
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TSplitPane as any,
+          {
+            x: 0,
+            y: 0,
+            w: 21,
+            h: 3,
+            sizes: sizes.value,
+            minSizes: [1, 1],
+            "onUpdate:sizes": (next: number[]) => (sizes.value = next),
+          },
+          ({ panes }: any) => [
+            h(TText, { ...panes[0], value: "Left" }),
+            h(TText, { ...panes[1], value: "Right" }),
+          ],
+        ),
+      30,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 10, clientY: 0, bubbles: true }),
+      );
+      for (let i = 0; i < 30; i++) {
+        container.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "ArrowRight",
+            code: "ArrowRight",
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        await nextTick();
+      }
+
+      expect(sizes.value[0]! + sizes.value[1]!).toBe(20);
+      expect(sizes.value[0]).toBeGreaterThanOrEqual(1);
+      expect(sizes.value[1]).toBeGreaterThanOrEqual(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("renders horizontal split pane separator through the full height", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TSplitPane as any,
+          {
+            x: 0,
+            y: 0,
+            w: 21,
+            h: 3,
+            sizes: [10, 10],
+          },
+          ({ panes }: any) => [
+            h(TText, { ...panes[0], value: "Left" }),
+            h(TText, { ...panes[1], value: "Right" }),
+          ],
+        ),
+      30,
+      5,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]?.[10]).toBe("|");
+      expect(lines[1]?.[10]).toBe("|");
+      expect(lines[2]?.[10]).toBe("|");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("resizes split panes from minimal controlled sizes with keyboard input", async () => {
+    const sizes = ref([1, 1]);
+    const updates: number[][] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TSplitPane as any,
+          {
+            x: 0,
+            y: 0,
+            w: 21,
+            h: 3,
+            sizes: sizes.value,
+            "onUpdate:sizes": (next: number[]) => {
+              updates.push(next);
+              sizes.value = next;
+            },
+          },
+          ({ panes }: any) => [
+            h(TText, { ...panes[0], value: "Left" }),
+            h(TText, { ...panes[1], value: "Right" }),
+          ],
+        ),
+      30,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(updates).toHaveLength(1);
+      expect(sizes.value).not.toEqual([1, 1]);
+      expect(sizes.value[0]! + sizes.value[1]!).toBe(20);
+      expect(sizes.value[0]).toBeGreaterThan(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps split panes inside the container when minSizes exceed available space", async () => {
+    let seenPanes: any[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TSplitPane as any,
+          {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 2,
+            sizes: [1, 1],
+            minSizes: [10, 10],
+          },
+          ({ panes }: any) => {
+            seenPanes = panes;
+            return panes.map((pane: any, index: number) =>
+              h(TText, { ...pane, value: index === 0 ? "Left" : "Right" }),
+            );
+          },
+        ),
+      12,
+      4,
+    );
+
+    try {
+      await nextTick();
+      expect(seenPanes).toHaveLength(2);
+      expect(seenPanes[1].x + seenPanes[1].w).toBeLessThanOrEqual(8);
+      expect(seenPanes[0].w + seenPanes[1].w).toBe(7);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("places toast viewport from the current layout clip rect", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TToastViewport, {
+          offsetX: 2,
+          w: 10,
+          max: 1,
+          placement: "top-left",
+          items: [{ id: "left", title: "Left", message: "L" }],
+        }),
+        h(TView, { x: 4, y: 3, w: 20, h: 3 }, () =>
+          h(TToastViewport, {
+            offsetX: 1,
+            w: 8,
+            max: 1,
+            placement: "top-right",
+            items: [{ id: "right", title: "Right", message: "R" }],
+          }),
+        ),
+      ],
+      30,
+      6,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]?.indexOf("Left")).toBe(3);
+      expect(lines[3]?.indexOf("Right")).toBe(16);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("places TToastViewport against an explicit viewport width without a parent clip rect", async () => {
+    const NoClipLayout = defineComponent({
+      setup(_, { slots }) {
+        provide(LayoutContextKey, { originX: 0, originY: 0, clipRect: null });
+        return () => slots.default?.();
+      },
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(NoClipLayout, () =>
+          h(TToastViewport, {
+            w: 10,
+            viewportW: 30,
+            viewportH: 4,
+            placement: "top-right",
+            items: [{ id: "saved", title: "Saved", message: "OK" }],
+          }),
+        ),
+      30,
+      4,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]?.indexOf("Saved")).toBe(21);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("applies toast level style to titleless messages", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TToastViewport, {
+          w: 16,
+          max: 1,
+          placement: "top-left",
+          items: [{ id: "saved", level: "success", message: "Saved" }],
+        }),
+      20,
+      4,
+    );
+
+    try {
+      expect(mounted.terminal.snapshot().lines[0]).toContain("Saved");
+      expect(mounted.terminal.getCell(1, 0).style.fg).toBe("greenBright");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("reserves a dismiss column for closable toast text", async () => {
+    const dismissed: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TToastViewport, {
+          w: 12,
+          items: [
+            {
+              id: "long",
+              level: "success",
+              title: "Very long title",
+              message: "Very long message",
+              closable: true,
+            },
+          ],
+          onDismiss: (id: string) => dismissed.push(id),
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]![18]).toBe("x");
+      expect(lines[0]![17]).toBe(" ");
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 18, clientY: 0, bubbles: true }));
+      await nextTick();
+      expect(dismissed).toEqual(["long"]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not render a toast dismiss hitbox when the viewport is too narrow", async () => {
+    const onDismiss = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TToastViewport, {
+          w: 3,
+          offsetX: 0,
+          offsetY: 0,
+          items: [{ id: "a", message: "Saved", closable: true }],
+          onDismiss,
+        }),
+      10,
+      3,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const focusable = mounted
+        .events()!
+        .debugNodes()
+        .filter((node) => node.visible && node.focusable);
+
+      expect(focusable).toHaveLength(0);
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+
+      await nextTick();
+      expect(onDismiss).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("aligns anchored bottom-right overlays to the anchor right edge", () => {
+    expect(
+      resolveOverlayPlacement({
+        viewport: { w: 80, h: 24 },
+        size: { w: 10, h: 4 },
+        anchor: { x: 20, y: 5, w: 8, h: 2 },
+        placement: "bottom-right",
+      }),
+    ).toEqual({ x: 18, y: 7 });
+  });
+
+  it("aligns anchored top-left overlays to the anchor left edge", () => {
+    expect(
+      resolveOverlayPlacement({
+        viewport: { w: 80, h: 24 },
+        size: { w: 10, h: 4 },
+        anchor: { x: 20, y: 5, w: 8, h: 2 },
+        placement: "top-left",
+      }),
+    ).toEqual({ x: 20, y: 1 });
+  });
+
+  it("keeps autocomplete suggestions open when closeOnSelect is false", async () => {
+    const value = ref("ap");
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          modelValue: value.value,
+          "onUpdate:modelValue": (next: string) => (value.value = next),
+          suggestions: ["apple", "apricot"],
+          closeOnSelect: false,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 1, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const lines = mounted.terminal.snapshot().lines.join("\n");
+      expect(value.value).toBe("apple");
+      expect(lines).toContain("apple");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("clears stale autocomplete suggestions during debounced query changes", async () => {
+    const value = ref("old");
+    const debounce = ref(0);
+    const provider = vi.fn((q: string) => {
+      if (q === "old") return Promise.resolve(["old-suggestion"]);
+      return new Promise<readonly string[]>(() => {});
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          modelValue: value.value,
+          suggestionProvider: provider,
+          debounce: debounce.value,
+        }),
+      28,
+      5,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("old-suggestion");
+
+      value.value = "new";
+      debounce.value = 50;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      const loadingFrame = mounted.terminal.snapshot().lines.join("\n");
+
+      expect(provider.mock.calls.map(([q]) => q)).not.toContain("new");
+      expect(loadingFrame).toContain("Loading...");
+      expect(loadingFrame).not.toContain("old-suggestion");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not call autocomplete provider while controlled closed", async () => {
+    const value = ref("ap");
+    const open = ref(false);
+    const provider = vi.fn((query: string) => Promise.resolve([`${query}-suggestion`]));
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          modelValue: value.value,
+          open: open.value,
+          suggestionProvider: provider,
+        }),
+      28,
+      5,
+    );
+
+    try {
+      await nextTick();
+      await Promise.resolve();
+      expect(provider).not.toHaveBeenCalled();
+
+      value.value = "app";
+      await nextTick();
+      await Promise.resolve();
+      expect(provider).not.toHaveBeenCalled();
+
+      open.value = true;
+      await waitFor(() => (provider.mock.calls.length ? true : null));
+      expect(provider).toHaveBeenCalledTimes(1);
+      expect(provider.mock.calls[0]?.[0]).toBe("app");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits autocomplete provider loadError", async () => {
+    const onLoadError = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          modelValue: "a",
+          suggestionProvider: async () => {
+            throw new Error("autocomplete network down");
+          },
+          onLoadError,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await waitFor(() => (onLoadError.mock.calls.length ? true : null));
+
+      expect(onLoadError).toHaveBeenCalledWith({
+        query: "a",
+        error: expect.any(Error),
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits autocomplete loadError when suggestionProvider throws synchronously", async () => {
+    const onLoadError = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          modelValue: "a",
+          suggestionProvider: () => {
+            throw new Error("sync autocomplete failure");
+          },
+          errorText: "Failed suggestions",
+          onLoadError,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await waitFor(() => (onLoadError.mock.calls.length ? true : null));
+      mounted.scheduler()?.flushNow();
+
+      expect(onLoadError).toHaveBeenCalledWith({
+        query: "a",
+        error: expect.any(Error),
+      });
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Failed suggestions");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("forwards autocomplete input and change events from the inner input", async () => {
     const value = ref("");
     const inputs: string[] = [];
@@ -717,7 +3511,9 @@ describe("P1/P2 public components", () => {
 
       expect(value.value).toBe("apple");
       expect(changes).toEqual(["apple"]);
-      expect(onSelect).toHaveBeenCalledWith({ value: "apple", index: 0 });
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ value: "apple", index: 0, query: "ap" }),
+      );
     } finally {
       mounted.unmount();
     }
@@ -764,7 +3560,163 @@ describe("P1/P2 public components", () => {
       expect(value.value).toBe("apricot");
       expect(changes).toEqual(["apricot"]);
       expect(inputs).toEqual([]);
-      expect(onSelect).toHaveBeenCalledWith({ value: "apricot", index: 1 });
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ value: "apricot", index: 1, query: "ap" }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("includes visible and source indexes in autocomplete select payloads", async () => {
+    const value = ref("ap");
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 2,
+          modelValue: value.value,
+          "onUpdate:modelValue": (next: string) => (value.value = next),
+          suggestions: ["alpha", "beta", "apricot"],
+          filterLocal: true,
+          onSelect,
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          value: "apricot",
+          index: 0,
+          sourceIndex: 2,
+          query: "ap",
+        }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("resets autocomplete highlighted index when input changes", async () => {
+    const value = ref("ap");
+    const highlighted = ref(1);
+    const highlightedUpdates: number[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          modelValue: value.value,
+          highlightedIndex: highlighted.value,
+          "onUpdate:modelValue": (next: string) => (value.value = next),
+          "onUpdate:highlightedIndex": (index: number) => {
+            highlighted.value = index;
+            highlightedUpdates.push(index);
+          },
+          suggestions: ["apple", "apricot"],
+        }),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "x",
+          code: "KeyX",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(highlightedUpdates).toEqual([0]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("closes autocomplete suggestions on Escape without closing the parent dialog", async () => {
+    const dialogOpen = ref(true);
+    const autocompleteOpen = ref(true);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog,
+          {
+            modelValue: dialogOpen.value,
+            "onUpdate:modelValue": (value: boolean) => (dialogOpen.value = value),
+            w: 24,
+            h: 6,
+            title: "Search",
+            closeOnEsc: true,
+          },
+          () =>
+            h(TAutocompleteInput, {
+              x: 0,
+              y: 0,
+              w: 18,
+              h: 3,
+              modelValue: "ap",
+              suggestions: ["apple"],
+              open: autocompleteOpen.value,
+              "onUpdate:open": (value: boolean) => (autocompleteOpen.value = value),
+            }),
+        ),
+      32,
+      10,
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", {
+          clientX: 6,
+          clientY: 4,
+          bubbles: true,
+        }),
+      );
+      await nextTick();
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(autocompleteOpen.value).toBe(false);
+      expect(dialogOpen.value).toBe(true);
     } finally {
       mounted.unmount();
     }
@@ -793,6 +3745,475 @@ describe("P1/P2 public components", () => {
       expect(lines[1]).toContain("Value");
       expect(lines[2]).toContain("Second");
       expect(lines.join("\n")).not.toContain("Help");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not submit TForm when autocomplete consumes Enter for a suggestion", async () => {
+    const value = ref("ap");
+    const onSelect = vi.fn();
+    const onSubmit = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            model: { query: value.value },
+            submitOnEnter: true,
+            onSubmit,
+          },
+          () =>
+            h(TAutocompleteInput, {
+              x: 0,
+              y: 0,
+              w: 20,
+              h: 3,
+              modelValue: value.value,
+              "onUpdate:modelValue": (next: string) => (value.value = next),
+              suggestions: ["apple", "apricot"],
+              onSelect,
+            }),
+        ),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(value.value).toBe("apple");
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ value: "apple", index: 0, query: "ap" }),
+      );
+      expect(onSubmit).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not submit TForm when autocomplete active suggestion is disabled", async () => {
+    const value = ref("ap");
+    const changes: string[] = [];
+    const onSelect = vi.fn();
+    const onSubmit = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            model: { query: value.value },
+            submitOnEnter: true,
+            onSubmit,
+          },
+          () =>
+            h(TAutocompleteInput, {
+              x: 0,
+              y: 0,
+              w: 20,
+              h: 3,
+              modelValue: value.value,
+              "onUpdate:modelValue": (next: string) => (value.value = next),
+              suggestions: [{ label: "apple", disabled: true }],
+              highlightedIndex: 0,
+              onChange: (next: string) => changes.push(next),
+              onSelect,
+            }),
+        ),
+      24,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(value.value).toBe("ap");
+      expect(changes).toEqual([]);
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(onSubmit).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("submits TForm on Enter when submitOnEnter is enabled", async () => {
+    const onSubmit = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 2,
+            model: { name: "Ada" },
+            submitOnEnter: true,
+            onSubmit,
+          },
+          () => h(TView, { x: 0, y: 0, w: 20, h: 1, focusable: true, autoFocus: true }),
+        ),
+      24,
+      4,
+    );
+
+    try {
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ model: { name: "Ada" }, valid: true, errors: {} }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not submit TForm when disabled or readOnly", async () => {
+    const value = ref("");
+    const disabledSubmit = vi.fn();
+    const readOnlySubmit = vi.fn();
+
+    const mounted = await mountTerminal(
+      () => [
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 30,
+            h: 2,
+            model: { value: value.value },
+            submitOnEnter: true,
+            disabled: true,
+            onSubmit: disabledSubmit,
+          },
+          () =>
+            h(TInput, {
+              x: 0,
+              y: 0,
+              w: 12,
+              modelValue: value.value,
+              autoFocus: true,
+              "onUpdate:modelValue": (next: string) => (value.value = next),
+            }),
+        ),
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 3,
+            w: 30,
+            h: 2,
+            model: { value: value.value },
+            submitOnEnter: true,
+            readOnly: true,
+            onSubmit: readOnlySubmit,
+          },
+          () =>
+            h(TInput, {
+              x: 0,
+              y: 0,
+              w: 12,
+              modelValue: value.value,
+            }),
+        ),
+      ],
+      40,
+      8,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 3, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(disabledSubmit).not.toHaveBeenCalled();
+      expect(readOnlySubmit).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("applies TForm disabled to built-in form controls", async () => {
+    const disabled = ref(false);
+    const checkboxChange = vi.fn();
+    const switchChange = vi.fn();
+    const radioChange = vi.fn();
+    const sliderChange = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 24,
+            h: 6,
+            model: {},
+            disabled: disabled.value,
+          },
+          () => [
+            h(TCheckbox, {
+              x: 0,
+              y: 0,
+              w: 20,
+              modelValue: false,
+              label: "Check",
+              onChange: checkboxChange,
+            }),
+            h(TSwitch, {
+              x: 0,
+              y: 1,
+              w: 20,
+              modelValue: false,
+              label: "Live",
+              onChange: switchChange,
+            }),
+            h(TRadioGroup, {
+              x: 0,
+              y: 2,
+              w: 20,
+              h: 2,
+              modelValue: "a",
+              options: [
+                { label: "Alpha", value: "a" },
+                { label: "Beta", value: "b" },
+              ],
+              onChange: radioChange,
+            }),
+            h(TSlider, {
+              x: 0,
+              y: 4,
+              w: 20,
+              modelValue: 10,
+              onChange: sliderChange,
+            }),
+          ],
+        ),
+      30,
+      7,
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }),
+      );
+      disabled.value = true;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          code: "Space",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      disabled.value = false;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 1, bubbles: true }),
+      );
+      disabled.value = true;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 1, bubbles: true }));
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          code: "Space",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      disabled.value = false;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 3, bubbles: true }),
+      );
+      disabled.value = true;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 3, bubbles: true }));
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          code: "Space",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      disabled.value = false;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 4, bubbles: true }),
+      );
+      disabled.value = true;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      expect(checkboxChange).not.toHaveBeenCalled();
+      expect(switchChange).not.toHaveBeenCalled();
+      expect(radioChange).not.toHaveBeenCalled();
+      expect(sliderChange).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("submits TForm on Enter from a focused child input and renders field errors", async () => {
+    const onSubmit = vi.fn();
+    const model = { name: "" };
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TForm,
+          {
+            x: 0,
+            y: 0,
+            w: 24,
+            h: 3,
+            model,
+            rules: {
+              name: (value: unknown) => (value ? null : "Name required"),
+            },
+            submitOnEnter: true,
+            onSubmit,
+          },
+          () =>
+            h(TFormField, { x: 0, y: 0, w: 24, h: 3, name: "name", label: "Name" }, () =>
+              h(TInput, { x: 0, y: 0, w: 20, modelValue: "", autoFocus: true }),
+            ),
+        ),
+      28,
+      5,
+    );
+
+    try {
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model,
+          valid: false,
+          errors: { name: "Name required" },
+        }),
+      );
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Name required");
     } finally {
       mounted.unmount();
     }
@@ -1312,7 +4733,44 @@ describe("P1/P2 public components", () => {
       );
       await nextTick();
 
-      expect(onSelect).toHaveBeenCalledWith(items[3]);
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ item: items[3], index: 3, source: "keyboard" }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps command palette selected row visible when maxVisibleItems changes", async () => {
+    const open = ref(true);
+    const maxVisibleItems = ref(2);
+    const selectedIndex = ref(4);
+    const items = Array.from({ length: 6 }, (_, index) => ({ label: `Command ${index}` }));
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          items,
+          selectedIndex: selectedIndex.value,
+          maxVisibleItems: maxVisibleItems.value,
+          w: 40,
+          h: 10,
+        }),
+      50,
+      12,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      maxVisibleItems.value = 1;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const snapshot = mounted.terminal.snapshot().lines.join("\n");
+      expect(snapshot).toContain("› Command 4");
     } finally {
       mounted.unmount();
     }
@@ -1356,7 +4814,446 @@ describe("P1/P2 public components", () => {
       );
       await nextTick();
 
-      expect(onSelect).toHaveBeenCalledWith(items[1]);
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ item: items[1], index: 1, source: "keyboard" }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("resets controlled command palette selection without reading stale filtered entries", async () => {
+    const query = ref("old");
+    const selectedIndex = ref(1);
+    const selectedUpdates: number[] = [];
+    const items = [
+      { label: "old unavailable", disabled: true },
+      { label: "old command" },
+      { label: "other command" },
+    ];
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 32,
+          h: 10,
+          items,
+          query: query.value,
+          selectedIndex: selectedIndex.value,
+          "onUpdate:query": (value: string) => {
+            query.value = value;
+          },
+          "onUpdate:selectedIndex": (index: number) => {
+            selectedUpdates.push(index);
+            selectedIndex.value = index;
+          },
+        }),
+      50,
+      14,
+    );
+
+    try {
+      await nextTick();
+      mounted.container()!.dispatchEvent(new KeyboardEvent("keydown", { key: "n", bubbles: true }));
+      await nextTick();
+
+      expect(query.value).toBe("nold");
+      expect(selectedUpdates).toEqual([0]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("includes sourceIndex in command palette select payloads", async () => {
+    const items = [
+      { label: "Group", kind: "group" as const },
+      { label: "Open" },
+      { label: "Copy" },
+    ];
+    const onSelect = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 32,
+          h: 10,
+          initialQuery: "copy",
+          items,
+          onSelect,
+        }),
+      50,
+      14,
+    );
+
+    try {
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          item: items[2],
+          index: 0,
+          sourceIndex: 2,
+          source: "keyboard",
+        }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("clears stale command palette items during debounced query changes", async () => {
+    const query = ref("old");
+    const debounce = ref(0);
+    const provider = vi.fn((q: string) => {
+      if (q === "old") return Promise.resolve([{ label: "Old command" }]);
+      return new Promise<readonly { label: string }[]>(() => {});
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 32,
+          h: 10,
+          items: [],
+          itemsProvider: provider,
+          query: query.value,
+          debounce: debounce.value,
+        }),
+      50,
+      14,
+    );
+
+    try {
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Old command");
+
+      query.value = "new";
+      debounce.value = 50;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      const loadingFrame = mounted.terminal.snapshot().lines.join("\n");
+
+      expect(provider.mock.calls.map(([q]) => q)).not.toContain("new");
+      expect(loadingFrame).toContain("Loading...");
+      expect(loadingFrame).not.toContain("Old command");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits command palette provider loadError", async () => {
+    const onLoadError = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 32,
+          h: 10,
+          itemsProvider: async () => {
+            throw new Error("palette network down");
+          },
+          onLoadError,
+        }),
+      50,
+      14,
+    );
+
+    try {
+      await waitFor(() => {
+        mounted.scheduler()?.flushNow();
+        return onLoadError.mock.calls.length ? true : null;
+      });
+
+      expect(onLoadError).toHaveBeenCalledWith({
+        query: "",
+        error: expect.any(Error),
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits TCommandPalette loadError when itemsProvider throws synchronously", async () => {
+    const onLoadError = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 40,
+          h: 8,
+          itemsProvider: () => {
+            throw new Error("sync command failure");
+          },
+          errorText: "Failed commands",
+          onLoadError,
+        }),
+      60,
+      12,
+    );
+
+    try {
+      await waitFor(() => (onLoadError.mock.calls.length ? true : null));
+      mounted.scheduler()?.flushNow();
+
+      expect(onLoadError).toHaveBeenCalledWith({
+        query: "",
+        error: expect.any(Error),
+      });
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Failed commands");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits one command palette query reset when closing", async () => {
+    const open = ref(true);
+    const query = ref("copy");
+    const queryUpdates: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (value: boolean) => (open.value = value),
+          query: query.value,
+          "onUpdate:query": (value: string) => {
+            queryUpdates.push(value);
+            query.value = value;
+          },
+          resetQueryOnClose: true,
+          w: 32,
+          h: 10,
+          items: [{ label: "Open" }, { label: "Copy" }],
+        }),
+      50,
+      14,
+    );
+
+    try {
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      await nextTick();
+
+      expect(open.value).toBe(false);
+      expect(queryUpdates).toEqual([""]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits TCommandPalette close only once when Escape closes the palette", async () => {
+    const open = ref(true);
+    const onClose = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (next: boolean) => {
+            open.value = next;
+          },
+          items: [{ label: "Open file" }],
+          onClose,
+        }),
+      80,
+      24,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(open.value).toBe(false);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits TCommandPalette close only once when closeOnSelect closes the palette", async () => {
+    const open = ref(true);
+    const onClose = vi.fn();
+    const onSelect = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (next: boolean) => {
+            open.value = next;
+          },
+          items: [{ label: "Open file" }],
+          closeOnSelect: true,
+          onClose,
+          onSelect,
+        }),
+      80,
+      24,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(open.value).toBe(false);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not leak command palette close suppression when parent vetoes close", async () => {
+    const open = ref(true);
+    let allowClose = false;
+    const onClose = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (next: boolean) => {
+            if (allowClose) open.value = next;
+          },
+          items: [{ label: "Open file" }],
+          closeOnSelect: true,
+          w: 32,
+          h: 10,
+          onClose,
+        }),
+      80,
+      24,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      await Promise.resolve();
+
+      expect(open.value).toBe(true);
+      expect(onClose).toHaveBeenCalledTimes(1);
+
+      allowClose = true;
+      const dialogNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.focusable && node.rect.w === 32 && node.rect.h === 10);
+
+      expect(dialogNode).toBeTruthy();
+      mounted.events()!.focus(dialogNode!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(open.value).toBe(false);
+      expect(onClose).toHaveBeenCalledTimes(2);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not duplicate command palette model updates from inner dialog close", async () => {
+    const open = ref(true);
+    const onUpdate = vi.fn((value: boolean) => {
+      open.value = value;
+    });
+    const onClose = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          "onUpdate:modelValue": onUpdate,
+          onClose,
+          w: 32,
+          h: 10,
+          items: [{ label: "Open" }],
+        }),
+      50,
+      14,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const dialogNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.focusable && node.rect.w === 32 && node.rect.h === 10);
+      expect(dialogNode).toBeTruthy();
+      mounted.events()!.focus(dialogNode!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(onUpdate.mock.calls.filter(([value]) => value === false)).toHaveLength(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
     } finally {
       mounted.unmount();
     }
@@ -1442,7 +5339,9 @@ describe("P1/P2 public components", () => {
       await nextTick();
 
       expect(selectedIndex.value).toBe(1);
-      expect(onSelect).toHaveBeenCalledWith(items[1]);
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ item: items[1], index: 1, source: "pointer" }),
+      );
     } finally {
       app.dispose();
     }
@@ -1503,7 +5402,9 @@ describe("P1/P2 public components", () => {
       );
       await nextTick();
 
-      expect(onSelect).toHaveBeenCalledWith(items[3]);
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ item: items[3], index: 3, source: "keyboard" }),
+      );
     } finally {
       mounted.unmount();
     }
@@ -1545,7 +5446,9 @@ describe("P1/P2 public components", () => {
       await nextTick();
       app.scheduler.flushNow();
 
-      expect(onSelect).toHaveBeenCalledWith(items[0]);
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ item: items[0], index: 0, source: "keyboard" }),
+      );
       expect(open.value).toBe(true);
       expect(onClose).not.toHaveBeenCalled();
       expect(app.terminal.snapshot().lines.join("\n")).toContain("Open");
@@ -1700,6 +5603,7 @@ describe("P1/P2 public components", () => {
       expect(onRowSelect).toHaveBeenCalledWith({
         row: rows[1],
         index: 0,
+        dataIndex: 0,
         originalIndex: 1,
         key: 1,
       });
@@ -1738,6 +5642,35 @@ describe("P1/P2 public components", () => {
 
       expect(onRowSelect).not.toHaveBeenCalled();
       expect(onUpdateSelectedRowKey).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not render selected row style when TDataTable selectionMode is none", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 3,
+          columns: [{ key: "id", label: "ID", width: 4 }],
+          rows: [{ id: "a" }],
+          rowKey: "id",
+          selectedRowKey: "a",
+          selectedStyle: { inverse: true },
+          selectionMode: "none",
+        }),
+      16,
+      4,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.getCell(0, 2).style.inverse).not.toBe(true);
     } finally {
       mounted.unmount();
     }

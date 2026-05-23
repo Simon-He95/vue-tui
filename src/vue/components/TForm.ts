@@ -1,7 +1,8 @@
-import type { PropType } from "vue";
+import type { PropType, Ref } from "vue";
 import type { Style } from "../../core/types.js";
-import { computed, defineComponent, h, inject, ref } from "vue";
+import { computed, defineComponent, h, inject, onBeforeUnmount, provide, ref, watch } from "vue";
 import { useTerminal } from "../composables/use-terminal.js";
+import { injectionKey } from "../injection-key.js";
 import { TuiThemeContextKey, tuiDefaultTheme } from "../theme.js";
 import { TInput } from "./TInput.js";
 import { TText } from "./TText.js";
@@ -17,7 +18,70 @@ export type TRadioOption = Readonly<{
 export type TAutocompleteSelectPayload = Readonly<{
   value: string;
   index: number;
+  sourceIndex: number;
+  option: TAutocompleteOption;
+  query: string;
+  source: "keyboard" | "pointer";
 }>;
+
+export type TAutocompleteOption =
+  | string
+  | Readonly<{
+      label: string;
+      value?: string;
+      detail?: string;
+      disabled?: boolean;
+    }>;
+
+export type TAutocompleteSuggestionProvider = (
+  query: string,
+  ctx: { signal: AbortSignal },
+) => Promise<readonly TAutocompleteOption[]>;
+
+export type TAutocompleteLoadErrorPayload = Readonly<{
+  query: string;
+  error: unknown;
+}>;
+
+type TAutocompleteEntry = Readonly<{
+  option: TAutocompleteOption;
+  sourceIndex: number;
+}>;
+
+export type TFormModel = Record<string, unknown>;
+export type TFormRule = (value: unknown, model: TFormModel) => string | null | undefined;
+export type TFormSubmitPayload = Readonly<{
+  model: TFormModel;
+  valid: boolean;
+  errors: Record<string, string>;
+}>;
+
+export type TFormHandle = Readonly<{
+  validate: () => boolean;
+  submit: () => void;
+  clearValidation: () => void;
+  setFieldError: (name: string, message: string | null | undefined) => void;
+}>;
+
+export type TFormContext = Readonly<{
+  model: Readonly<Ref<TFormModel>>;
+  rules: Readonly<Ref<Record<string, TFormRule>>>;
+  errors: Ref<Record<string, string>>;
+  disabled: Readonly<Ref<boolean>>;
+  readOnly: Readonly<Ref<boolean>>;
+  validate: () => boolean;
+}>;
+
+export const TFormContextKey = injectionKey<TFormContext>("TFormContext");
+
+export function useTForm(): TFormContext | null {
+  return inject(TFormContextKey, null);
+}
+
+function useFormDisabled(props?: Readonly<{ disabled?: boolean }>) {
+  const form = useTForm();
+  return computed(() => Boolean(props?.disabled || form?.disabled.value));
+}
 
 export const TCheckbox = defineComponent({
   name: "TCheckbox",
@@ -39,10 +103,11 @@ export const TCheckbox = defineComponent({
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
+    const disabled = useFormDisabled(props);
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
 
     function toggle(): void {
-      if (props.disabled) return;
+      if (disabled.value) return;
       const next = !props.modelValue;
       emit("update:modelValue", next);
       emit("change", next);
@@ -57,7 +122,7 @@ export const TCheckbox = defineComponent({
           w: props.w,
           h: 1,
           zIndex: props.zIndex,
-          focusable: !props.disabled,
+          focusable: !disabled.value,
           onClick: toggle,
           onKeydown: (event: any) => {
             if (event.key !== " " && event.key !== "Enter") return;
@@ -71,7 +136,7 @@ export const TCheckbox = defineComponent({
             y: 0,
             w: props.w,
             value: fitCellText(`[${props.modelValue ? "x" : " "}] ${props.label}`, props.w),
-            style: props.disabled
+            style: disabled.value
               ? mergeStyle(baseStyle.value, props.disabledStyle)
               : props.modelValue
                 ? mergeStyle(baseStyle.value, props.checkedStyle)
@@ -101,10 +166,11 @@ export const TSwitch = defineComponent({
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
+    const disabled = useFormDisabled(props);
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
 
     function toggle(): void {
-      if (props.disabled) return;
+      if (disabled.value) return;
       const next = !props.modelValue;
       emit("update:modelValue", next);
       emit("change", next);
@@ -119,7 +185,7 @@ export const TSwitch = defineComponent({
           w: props.w,
           h: 1,
           zIndex: props.zIndex,
-          focusable: !props.disabled,
+          focusable: !disabled.value,
           onClick: toggle,
           onKeydown: (event: any) => {
             if (event.key !== " " && event.key !== "Enter") return;
@@ -133,7 +199,7 @@ export const TSwitch = defineComponent({
             y: 0,
             w: props.w,
             value: fitCellText(`[${props.modelValue ? "on " : "off"}] ${props.label}`, props.w),
-            style: props.disabled
+            style: disabled.value
               ? mergeStyle(baseStyle.value, props.disabledStyle)
               : props.modelValue
                 ? mergeStyle(baseStyle.value, props.activeStyle)
@@ -166,10 +232,11 @@ export const TRadioGroup = defineComponent({
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
+    const disabled = useFormDisabled();
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
 
     function choose(option: TRadioOption): void {
-      if (option.disabled) return;
+      if (disabled.value || option.disabled) return;
       emit("update:modelValue", option.value);
       emit("change", option.value);
     }
@@ -181,6 +248,7 @@ export const TRadioGroup = defineComponent({
         () =>
           props.options.slice(0, props.h).map((option, index) => {
             const active = option.value === props.modelValue;
+            const optionDisabled = disabled.value || Boolean(option.disabled);
             return h(
               TView as any,
               {
@@ -189,7 +257,7 @@ export const TRadioGroup = defineComponent({
                 y: index,
                 w: props.w,
                 h: 1,
-                focusable: !option.disabled,
+                focusable: !optionDisabled,
                 onClick: () => choose(option),
                 onKeydown: (event: any) => {
                   if (event.key !== " " && event.key !== "Enter") return;
@@ -203,7 +271,7 @@ export const TRadioGroup = defineComponent({
                   y: 0,
                   w: props.w,
                   value: fitCellText(`(${active ? "x" : " "}) ${option.label}`, props.w),
-                  style: option.disabled
+                  style: optionDisabled
                     ? mergeStyle(baseStyle.value, props.disabledStyle)
                     : active
                       ? mergeStyle(baseStyle.value, props.activeStyle)
@@ -237,6 +305,7 @@ export const TSlider = defineComponent({
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
+    const disabled = useFormDisabled(props);
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
     const value = computed(() => clamp(props.modelValue, props.min, props.max));
     const ratio = computed(() => {
@@ -245,7 +314,7 @@ export const TSlider = defineComponent({
     });
 
     function setValue(next: number): void {
-      if (props.disabled) return;
+      if (disabled.value) return;
       const step = Math.max(0.000001, Math.abs(props.step));
       const rounded = Math.round((next - props.min) / step) * step + props.min;
       const clamped = clamp(rounded, props.min, props.max);
@@ -265,7 +334,7 @@ export const TSlider = defineComponent({
           w: props.w,
           h: 1,
           zIndex: props.zIndex,
-          focusable: !props.disabled,
+          focusable: !disabled.value,
           onKeydown: (event: any) => {
             if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
             event.preventDefault?.();
@@ -278,7 +347,7 @@ export const TSlider = defineComponent({
             y: 0,
             w: props.w,
             value: fitCellText(`[${label}] ${value.value}`, props.w),
-            style: props.disabled
+            style: disabled.value
               ? mergeStyle(baseStyle.value, props.disabledStyle)
               : mergeStyle(baseStyle.value, props.activeStyle),
           }),
@@ -295,6 +364,7 @@ export const TFormField = defineComponent({
     w: { type: Number, required: true },
     h: { type: Number, required: true },
     zIndex: { type: Number, default: 0 },
+    name: { type: String, default: "" },
     label: { type: String, default: "" },
     help: { type: String, default: "" },
     error: { type: String, default: "" },
@@ -308,6 +378,11 @@ export const TFormField = defineComponent({
   setup(props, { slots }) {
     const { defaultStyle } = useTerminal();
     const theme = inject(TuiThemeContextKey, ref(tuiDefaultTheme));
+    const form = useTForm();
+    const fieldError = computed(
+      () => props.error || (props.name ? form?.errors.value[props.name] : "") || "",
+    );
+    const fieldDisabled = computed(() => props.disabled || Boolean(form?.disabled.value));
     const labelStyle = computed(() =>
       mergeStyle(
         defaultStyle.value,
@@ -334,8 +409,8 @@ export const TFormField = defineComponent({
     );
 
     return () => {
-      const message = props.error || props.help;
-      const messageStyle = props.error ? errorStyle.value : helpStyle.value;
+      const message = fieldError.value || props.help;
+      const messageStyle = fieldError.value ? errorStyle.value : helpStyle.value;
       const label = props.required && props.label ? `${props.label} *` : props.label;
       const labelRows = props.label ? 1 : 0;
       const messageRows = message && props.h - labelRows > 1 ? 1 : 0;
@@ -351,7 +426,7 @@ export const TFormField = defineComponent({
                 y: 0,
                 w: props.w,
                 value: label,
-                style: props.disabled
+                style: fieldDisabled.value
                   ? mergeStyle(labelStyle.value, { dim: true })
                   : labelStyle.value,
               })
@@ -369,6 +444,110 @@ export const TFormField = defineComponent({
         ],
       );
     };
+  },
+});
+
+export const TForm = defineComponent({
+  name: "TForm",
+  props: {
+    x: { type: Number, required: true },
+    y: { type: Number, required: true },
+    w: { type: Number, required: true },
+    h: { type: Number, required: true },
+    zIndex: { type: Number, default: 0 },
+    model: {
+      type: Object as PropType<TFormModel>,
+      required: true,
+    },
+    rules: {
+      type: Object as PropType<Record<string, TFormRule>>,
+      default: () => ({}),
+    },
+    disabled: { type: Boolean, default: false },
+    /** Provides a read-only hint to custom form field consumers; built-in controls do not automatically consume it. */
+    readOnly: { type: Boolean, default: false },
+    submitOnEnter: { type: Boolean, default: false },
+  },
+  emits: {
+    submit: (_payload: TFormSubmitPayload) => true,
+    validation: (_errors: Record<string, string>) => true,
+  },
+  setup(props, { emit, expose, slots }) {
+    const errors = ref<Record<string, string>>({});
+    const disabled = computed(() => props.disabled);
+    const readOnly = computed(() => props.readOnly);
+
+    function validate(): boolean {
+      const next: Record<string, string> = {};
+      for (const [name, rule] of Object.entries(props.rules)) {
+        const message = rule(props.model[name], props.model);
+        if (message) next[name] = message;
+      }
+      errors.value = next;
+      emit("validation", next);
+      return Object.keys(next).length === 0;
+    }
+
+    function submit(): void {
+      if (props.disabled || props.readOnly) return;
+      const valid = validate();
+      emit("submit", { model: props.model, valid, errors: errors.value });
+    }
+
+    function clearValidation(): void {
+      errors.value = {};
+      emit("validation", {});
+    }
+
+    function setFieldError(name: string, message: string | null | undefined): void {
+      const next = { ...errors.value };
+      if (message) next[name] = message;
+      else delete next[name];
+      errors.value = next;
+      emit("validation", next);
+    }
+
+    expose({
+      validate,
+      submit,
+      clearValidation,
+      setFieldError,
+    } satisfies TFormHandle);
+
+    provide(TFormContextKey, {
+      model: computed(() => props.model),
+      rules: computed(() => props.rules),
+      errors,
+      disabled,
+      readOnly,
+      validate,
+    });
+
+    return () =>
+      h(
+        TView as any,
+        {
+          x: props.x,
+          y: props.y,
+          w: props.w,
+          h: props.h,
+          zIndex: props.zIndex,
+          onKeydown: (event: any) => {
+            const allowDefaultPreventedEnter =
+              event?.key === "Enter" && event?.__tuiFormSubmit === true;
+            if (event?.defaultPrevented && !allowDefaultPreventedEnter) return;
+            if (!props.submitOnEnter) return;
+            if (event.key !== "Enter") return;
+            if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+            if (props.disabled || props.readOnly) return;
+            event.preventDefault?.();
+            event.stopPropagation?.();
+            event.__tuiDialogConfirm = false;
+            submit();
+          },
+        },
+        slots.default,
+      );
   },
 });
 
@@ -423,42 +602,192 @@ export const TAutocompleteInput = defineComponent({
     zIndex: { type: Number, default: 0 },
     modelValue: { type: String, required: true },
     suggestions: {
-      type: Array as PropType<readonly string[]>,
+      type: Array as PropType<readonly TAutocompleteOption[]>,
       default: () => [],
     },
+    suggestionProvider: {
+      type: Function as PropType<TAutocompleteSuggestionProvider>,
+      default: undefined,
+    },
+    open: { type: Boolean, default: undefined },
     highlightedIndex: { type: Number, default: 0 },
     placeholder: { type: String, default: "" },
+    debounce: { type: Number, default: 0 },
+    minChars: { type: Number, default: 0 },
+    filterLocal: { type: Boolean, default: false },
+    closeOnSelect: { type: Boolean, default: true },
+    loadingText: { type: String, default: "Loading..." },
+    emptyText: { type: String, default: "" },
+    errorText: { type: String, default: "Unable to load suggestions" },
     style: { type: Object as PropType<Style>, default: undefined },
     suggestionStyle: { type: Object as PropType<Style>, default: undefined },
     activeSuggestionStyle: { type: Object as PropType<Style>, default: () => ({ inverse: true }) },
   },
   emits: {
     "update:modelValue": (_value: string) => true,
+    "update:open": (_value: boolean) => true,
     "update:highlightedIndex": (_index: number) => true,
     input: (_value: string) => true,
     change: (_value: string) => true,
     select: (_payload: TAutocompleteSelectPayload) => true,
+    loadError: (_payload: TAutocompleteLoadErrorPayload) => true,
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
+    const providerSuggestions = ref<readonly TAutocompleteOption[] | null>(null);
+    const providerLoading = ref(false);
+    const providerError = ref<string | null>(null);
+    const innerOpen = ref(true);
+    let providerAbort: AbortController | null = null;
+    let providerTimer: ReturnType<typeof setTimeout> | null = null;
     const inputStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
     const suggestionStyle = computed(() => mergeStyle(defaultStyle.value, props.suggestionStyle));
     const activeSuggestionStyle = computed(() =>
       mergeStyle(suggestionStyle.value, props.activeSuggestionStyle),
     );
-    const visibleSuggestions = computed(() => props.suggestions.slice(0, Math.max(0, props.h - 1)));
-    const activeIndex = computed(() => {
-      const count = visibleSuggestions.value.length;
-      return count > 0 ? clamp(props.highlightedIndex, 0, count - 1) : 0;
+    const isOpen = computed(() => props.open ?? innerOpen.value);
+
+    function optionLabel(option: TAutocompleteOption): string {
+      return typeof option === "string" ? option : option.label;
+    }
+
+    function optionValue(option: TAutocompleteOption): string {
+      return typeof option === "string" ? option : (option.value ?? option.label);
+    }
+
+    function optionDisabled(option: TAutocompleteOption): boolean {
+      return typeof option !== "string" && Boolean(option.disabled);
+    }
+
+    function setOpen(value: boolean): void {
+      innerOpen.value = value;
+      emit("update:open", value);
+    }
+
+    const suggestionSource = computed(() => providerSuggestions.value ?? props.suggestions);
+    const suggestionEntries = computed<TAutocompleteEntry[]>(() =>
+      suggestionSource.value.map((option, sourceIndex) => ({ option, sourceIndex })),
+    );
+    const filteredSuggestionEntries = computed(() => {
+      if (props.modelValue.length < Math.max(0, props.minChars)) return [];
+      if (!props.filterLocal) return suggestionEntries.value;
+      const query = props.modelValue.toLowerCase();
+      return suggestionEntries.value.filter((entry) =>
+        optionLabel(entry.option).toLowerCase().includes(query),
+      );
     });
-    function select(index: number): boolean {
-      const value = visibleSuggestions.value[index];
-      if (value == null) return false;
+    const visibleSuggestionEntries = computed(() =>
+      isOpen.value ? filteredSuggestionEntries.value.slice(0, Math.max(0, props.h - 1)) : [],
+    );
+    const visibleSuggestions = computed(() =>
+      visibleSuggestionEntries.value.map((entry) => entry.option),
+    );
+
+    function enabledSuggestionIndexFrom(index: number, direction: 1 | -1): number {
+      const count = visibleSuggestions.value.length;
+      if (count === 0) return 0;
+
+      const start = clamp(index, 0, count - 1);
+      if (!optionDisabled(visibleSuggestions.value[start]!)) return start;
+
+      for (let step = 1; step < count; step++) {
+        const next = (start + step * direction + count) % count;
+        if (!optionDisabled(visibleSuggestions.value[next]!)) return next;
+      }
+
+      return start;
+    }
+
+    const activeIndex = computed(() => enabledSuggestionIndexFrom(props.highlightedIndex, 1));
+
+    function select(index: number, source: "keyboard" | "pointer"): boolean {
+      const entry = visibleSuggestionEntries.value[index];
+      const option = entry?.option;
+      if (option == null || optionDisabled(option)) return false;
+      const value = optionValue(option);
       emit("update:modelValue", value);
       emit("change", value);
-      emit("select", { value, index });
+      emit("select", {
+        value,
+        index,
+        sourceIndex: entry.sourceIndex,
+        option,
+        query: props.modelValue,
+        source,
+      });
+      if (props.closeOnSelect) setOpen(false);
       return true;
     }
+
+    watch(
+      () =>
+        [
+          props.suggestionProvider,
+          props.modelValue,
+          props.debounce,
+          props.minChars,
+          isOpen.value,
+        ] as const,
+      ([provider, query, _debounce, _minChars, open]) => {
+        if (providerTimer) {
+          clearTimeout(providerTimer);
+          providerTimer = null;
+        }
+        providerAbort?.abort();
+        providerAbort = null;
+        providerError.value = null;
+        if (!provider) {
+          providerSuggestions.value = null;
+          providerLoading.value = false;
+          return;
+        }
+        if (!open) {
+          providerLoading.value = false;
+          return;
+        }
+        if (query.length < Math.max(0, props.minChars)) {
+          providerSuggestions.value = [];
+          providerLoading.value = false;
+          return;
+        }
+        providerSuggestions.value = [];
+        providerLoading.value = true;
+        const run = () => {
+          const controller = new AbortController();
+          providerAbort = controller;
+          let request: Promise<readonly TAutocompleteOption[]>;
+          try {
+            request = provider(query, { signal: controller.signal });
+          } catch (error) {
+            request = Promise.reject(error);
+          }
+          void request
+            .then((suggestions) => {
+              if (controller.signal.aborted) return;
+              providerSuggestions.value = suggestions;
+              providerError.value = null;
+            })
+            .catch((error: unknown) => {
+              if (controller.signal.aborted) return;
+              providerSuggestions.value = [];
+              providerError.value = error instanceof Error ? error.message : String(error);
+              emit("loadError", { query, error });
+            })
+            .finally(() => {
+              if (!controller.signal.aborted) providerLoading.value = false;
+            });
+        };
+        const delay = Math.max(0, Math.floor(props.debounce));
+        if (delay > 0) providerTimer = setTimeout(run, delay);
+        else run();
+      },
+      { immediate: true },
+    );
+
+    onBeforeUnmount(() => {
+      if (providerTimer) clearTimeout(providerTimer);
+      providerAbort?.abort();
+    });
 
     return () =>
       h(
@@ -472,8 +801,15 @@ export const TAutocompleteInput = defineComponent({
             modelValue: props.modelValue,
             placeholder: props.placeholder,
             style: inputStyle.value,
-            "onUpdate:modelValue": (value: string) => emit("update:modelValue", value),
-            onInput: (value: string) => emit("input", value),
+            "onUpdate:modelValue": (value: string) => {
+              emit("update:modelValue", value);
+              emit("update:highlightedIndex", 0);
+              setOpen(true);
+            },
+            onInput: (value: string) => {
+              emit("input", value);
+              setOpen(true);
+            },
             onChange: (value: string) => emit("change", value),
             onKeydown: (event: any) => {
               const suggestionCount = visibleSuggestions.value.length;
@@ -482,54 +818,88 @@ export const TAutocompleteInput = defineComponent({
                 event.preventDefault?.();
                 emit(
                   "update:highlightedIndex",
-                  clamp(props.highlightedIndex + 1, 0, suggestionCount - 1),
+                  enabledSuggestionIndexFrom(activeIndex.value + 1, 1),
                 );
               } else if (event.key === "ArrowUp") {
                 if (suggestionCount === 0) return;
                 event.preventDefault?.();
                 emit(
                   "update:highlightedIndex",
-                  clamp(props.highlightedIndex - 1, 0, suggestionCount - 1),
+                  enabledSuggestionIndexFrom(activeIndex.value - 1, -1),
                 );
-              } else if (
-                event.key === "Enter" &&
-                suggestionCount > 0 &&
-                select(activeIndex.value)
-              ) {
+              } else if (event.key === "Enter" && suggestionCount > 0) {
                 event.preventDefault?.();
+                select(activeIndex.value, "keyboard");
+              } else if (event.key === "Escape") {
+                if (isOpen.value) {
+                  event.preventDefault?.();
+                  event.stopPropagation?.();
+                  setOpen(false);
+                }
               }
             },
           }),
-          ...visibleSuggestions.value.map((suggestion, index) =>
-            h(
-              TView as any,
-              {
-                key: `${index}:${suggestion}`,
+          providerLoading.value && isOpen.value
+            ? h(TText as any, {
+                key: "loading",
                 x: 0,
-                y: index + 1,
+                y: 1,
                 w: props.w,
-                h: 1,
-                focusable: true,
-                onClick: () => select(index),
-                onKeydown: (event: any) => {
-                  if (event.key !== "Enter" && event.key !== " ") return;
-                  event.preventDefault?.();
-                  select(index);
-                },
-              },
-              () =>
-                h(TText as any, {
+                value: props.loadingText,
+                style: suggestionStyle.value,
+              })
+            : providerError.value && isOpen.value
+              ? h(TText as any, {
+                  key: "error",
                   x: 0,
-                  y: 0,
+                  y: 1,
                   w: props.w,
-                  value: suggestion,
-                  style:
-                    index === activeIndex.value
-                      ? activeSuggestionStyle.value
-                      : suggestionStyle.value,
-                }),
-            ),
-          ),
+                  value: props.errorText,
+                  style: suggestionStyle.value,
+                })
+              : visibleSuggestions.value.length === 0 && props.emptyText && isOpen.value
+                ? h(TText as any, {
+                    key: "empty",
+                    x: 0,
+                    y: 1,
+                    w: props.w,
+                    value: props.emptyText,
+                    style: suggestionStyle.value,
+                  })
+                : null,
+          ...(!providerLoading.value && !providerError.value
+            ? visibleSuggestionEntries.value.map((entry, index) => {
+                const suggestion = entry.option;
+                return h(
+                  TView as any,
+                  {
+                    key: `${entry.sourceIndex}:${optionLabel(suggestion)}`,
+                    x: 0,
+                    y: index + 1,
+                    w: props.w,
+                    h: 1,
+                    focusable: !optionDisabled(suggestion),
+                    onClick: () => select(index, "pointer"),
+                    onKeydown: (event: any) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault?.();
+                      select(index, "keyboard");
+                    },
+                  },
+                  () =>
+                    h(TText as any, {
+                      x: 0,
+                      y: 0,
+                      w: props.w,
+                      value: optionLabel(suggestion),
+                      style:
+                        index === activeIndex.value
+                          ? activeSuggestionStyle.value
+                          : suggestionStyle.value,
+                    }),
+                );
+              })
+            : []),
         ],
       );
   },

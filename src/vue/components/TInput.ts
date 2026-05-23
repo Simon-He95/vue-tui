@@ -1942,6 +1942,9 @@ export const TInput = defineComponent({
           // Behave like textarea: insert newline.
           insertText("\n");
         } else {
+          if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            (e as any).__tuiFormSubmit = true;
+          }
           // Some container components (e.g. dialogs) treat Enter as "confirm".
           // TInput prevents default to manage its own editing semantics, but we still
           // want a plain Enter (no modifiers) to be eligible for dialog confirmation.

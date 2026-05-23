@@ -1,5 +1,86 @@
 # Migration to 1.0.0-rc.0
 
+<!-- vue-tui-api-diff-reviewed -->
+
+This release establishes the first generated API manifest baseline. `api:diff` will skip when the latest tag does not contain `docs/generated/api-manifest.json`; it becomes an effective tagged-release diff gate after the next tagged release includes that manifest.
+
+## `/vue` text and wheel utilities removed
+
+`@simon_he/vue-tui/vue` no longer exports low-level text and wheel helper utilities:
+
+- `clearTextCaches`
+- `formatInlineCellLine`
+- `padEndByCells`
+- `sanitizeInlineText`
+- `sanitizeTextBlock`
+- `sliceByCells`
+- `sliceByCellsRange`
+- `spaces`
+- `textCellWidth`
+- `wrapByCells`
+- `applyWheelScroll`
+- `createWheelScrollState`
+
+These helpers are implementation utilities, not component-level API contracts. Keep equivalent helpers in application or test code, or wait for an explicit documented helper entrypoint before importing them from the package.
+
+Before:
+
+```ts
+import { padEndByCells, sliceByCells, textCellWidth, wrapByCells } from "@simon_he/vue-tui/vue";
+```
+
+After:
+
+```ts
+import { padEndByCells, sliceByCells, textCellWidth, wrapByCells } from "./text-utils";
+```
+
+## Component Event Payloads
+
+`TCommandPalette` now emits a structured `select` payload:
+
+```ts
+type TCommandPaletteSelectPayload = {
+  item: TCommandPaletteItem;
+  index: number;
+  sourceIndex: number;
+  query: string;
+  source: "keyboard" | "pointer";
+};
+```
+
+`index` is the filtered/rendered command row index; `sourceIndex` is the original `items` or provider result index.
+
+Before:
+
+```vue
+<TCommandPalette @select="runCommand" />
+```
+
+```ts
+function runCommand(item: TCommandPaletteItem) {
+  // ...
+}
+```
+
+After:
+
+```vue
+<TCommandPalette @select="({ item }) => runCommand(item)" />
+```
+
+```ts
+function runCommand(item: TCommandPaletteItem) {
+  // ...
+}
+```
+
+`TAutocompleteInput` `select` payload now also includes `sourceIndex`, `option`, `query`, and `source` so static and async suggestions can share one handler shape.
+
+`TAutocompleteInput` now closes suggestions after selection by default. Set `closeOnSelect=false` to preserve the previous always-visible suggestions behavior.
+
+`TSelect multipleEmit="value"` now emits option values, matching `valueMode`, instead of acting as a label alias. The default emitted payload remains selected option labels via `multipleEmit="label"`. `multipleEmit="both"` emits `{ indices, labels, values }`.
+
 ## Root Entrypoint Narrowed
 
 `@simon_he/vue-tui` now keeps only stable browser-safe API at the root. Move imports that depend on Vue internals, runtime wiring, observability, core sanitizers, or Node-aware CLI helpers to the explicit subpath entrypoints below.

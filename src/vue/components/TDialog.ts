@@ -16,21 +16,11 @@ import {
 import { useLayout } from "../composables/use-layout.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { DialogContextKey } from "../context.js";
+import { resolveOverlayPlacement, type TOverlayPlacement as Placement } from "../overlay.js";
 import { textCellWidth } from "../utils/text.js";
 import { TBox } from "./TBox.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
-
-type Placement =
-  | "center"
-  | "top"
-  | "bottom"
-  | "left"
-  | "right"
-  | "top-left"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-right";
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -45,65 +35,13 @@ function computePosition(opts: {
   offsetX: number;
   offsetY: number;
 }): { x: number; y: number } {
-  const cols = Math.max(0, Math.floor(opts.cols));
-  const rows = Math.max(0, Math.floor(opts.rows));
-  const w = Math.max(0, Math.floor(opts.w));
-  const h = Math.max(0, Math.floor(opts.h));
-  const dx = Math.floor(opts.offsetX);
-  const dy = Math.floor(opts.offsetY);
-
-  const maxX = Math.max(0, cols - w);
-  const maxY = Math.max(0, rows - h);
-
-  const centerX = Math.floor((cols - w) / 2);
-  const centerY = Math.floor((rows - h) / 2);
-
-  let x = 0;
-  let y = 0;
-
-  switch (opts.placement) {
-    case "top":
-      x = centerX;
-      y = 0;
-      break;
-    case "bottom":
-      x = centerX;
-      y = maxY;
-      break;
-    case "left":
-      x = 0;
-      y = centerY;
-      break;
-    case "right":
-      x = maxX;
-      y = centerY;
-      break;
-    case "top-left":
-      x = 0;
-      y = 0;
-      break;
-    case "top-right":
-      x = maxX;
-      y = 0;
-      break;
-    case "bottom-left":
-      x = 0;
-      y = maxY;
-      break;
-    case "bottom-right":
-      x = maxX;
-      y = maxY;
-      break;
-    case "center":
-    default:
-      x = centerX;
-      y = centerY;
-      break;
-  }
-
-  x = clamp(x + dx, 0, maxX);
-  y = clamp(y + dy, 0, maxY);
-  return { x, y };
+  return resolveOverlayPlacement({
+    viewport: { w: opts.cols, h: opts.rows },
+    size: { w: opts.w, h: opts.h },
+    placement: opts.placement,
+    offsetX: opts.offsetX,
+    offsetY: opts.offsetY,
+  });
 }
 
 function rectsIntersect(
@@ -266,6 +204,10 @@ const DialogSurface = defineComponent({
     const layout = useLayout();
     const cols = computed(() => layout.clipRect?.w ?? 0);
     const rows = computed(() => layout.clipRect?.h ?? 0);
+    const dialogLayerZ = computed(() => props.zIndex + (props.backdrop ? 1 : 0));
+    const dialogEventZ = computed(() =>
+      props.backdrop ? props.zIndex + dialogLayerZ.value : dialogLayerZ.value,
+    );
 
     let pendingBlur = false;
     let focusedWithin = false;
@@ -302,7 +244,7 @@ const DialogSurface = defineComponent({
         const { x, y } = pos.value;
         const boxW = Math.max(0, Math.floor(props.w));
         const boxH = Math.max(0, Math.floor(props.h));
-        const dialogZIndex = props.zIndex + (props.backdrop ? 1 : 0);
+        const dialogZIndex = dialogEventZ.value;
         const dialogBounds = { x, y, w: boxW, h: boxH };
 
         const debugNodes = manager.debugNodes();
@@ -400,7 +342,7 @@ const DialogSurface = defineComponent({
                 scheduler.invalidate();
                 return true;
               } catch (err) {
-                console.warn(`[TDialog] Failed to focus node ${nextId}:`, err);
+                void err;
               }
             }
           }
@@ -458,15 +400,14 @@ const DialogSurface = defineComponent({
                 scheduler.invalidate();
                 return true;
               } catch (err) {
-                // If focus fails, fall through to default tab behavior
-                console.warn(`[TDialog] Failed to focus node ${nextId}:`, err);
+                void err;
               }
             }
           }
           // If we can't focus anything, let default tab behavior proceed
         }
       } catch (err) {
-        console.error("[TDialog] Error in Tab handling:", err);
+        void err;
       } finally {
         // Reset on the next microtask so sequential async Tabs can proceed.
         queueMicrotask(() => {
@@ -517,9 +458,6 @@ const DialogSurface = defineComponent({
     }
 
     const dialogNodeId = ref<string | null>(null);
-    let isSettingInitialFocus = false;
-    // Prevent TypeScript "unused" error - this is used in the watch callback below
-    void isSettingInitialFocus;
 
     // When dialog opens, ensure something within it is focused.
     // If no inner element has autoFocus, focus the dialog container itself.
@@ -546,7 +484,7 @@ const DialogSurface = defineComponent({
             const { x, y } = pos.value;
             const boxW = Math.max(0, Math.floor(props.w));
             const boxH = Math.max(0, Math.floor(props.h));
-            const dialogZIndex = props.zIndex + (props.backdrop ? 1 : 0);
+            const dialogZIndex = dialogEventZ.value;
 
             // Find all focusable nodes within the dialog bounds
             const dialogBounds = { x, y, w: boxW, h: boxH };
@@ -616,25 +554,15 @@ const DialogSurface = defineComponent({
                   }
                 }
               }
-              isSettingInitialFocus = true;
-              try {
-                manager.focus(innerFocusable[0]!.id);
-                scheduler.invalidate();
-              } finally {
-                isSettingInitialFocus = false;
-              }
+              manager.focus(innerFocusable[0]!.id);
+              scheduler.invalidate();
               return;
             }
 
             // Fallback: focus the dialog container itself
             if (dialogNodeId.value) {
-              isSettingInitialFocus = true;
-              try {
-                manager.focus(dialogNodeId.value);
-                scheduler.invalidate();
-              } finally {
-                isSettingInitialFocus = false;
-              }
+              manager.focus(dialogNodeId.value);
+              scheduler.invalidate();
             }
           });
         });
@@ -663,7 +591,7 @@ const DialogSurface = defineComponent({
           y,
           w: boxW,
           h: boxH,
-          zIndex: props.zIndex + (props.backdrop ? 1 : 0),
+          zIndex: dialogLayerZ.value,
           focusable: true,
           // Delay autoFocus to let inner elements (e.g. TInput with autoFocus) claim it first
           autoFocus: false,
@@ -810,12 +738,17 @@ export const TDialog = defineComponent({
       };
     }
 
+    function getDialogEventZIndex(): number {
+      const surfaceZ = props.zIndex + (props.backdrop ? 1 : 0);
+      return props.backdrop ? props.zIndex + surfaceZ : surfaceZ;
+    }
+
     function getButtonNodes(manager: NonNullable<typeof events.value>) {
       if (!props.buttons.length) return [] as Array<{ id: string } | null>;
 
       const debugNodes = manager.debugNodes();
       const dialogBounds = getDialogBounds();
-      const dialogZIndex = props.zIndex + (props.backdrop ? 1 : 0);
+      const dialogZIndex = getDialogEventZIndex();
       const content = contentLayout({
         w: props.w,
         h: props.h,
@@ -1033,9 +966,7 @@ export const TDialog = defineComponent({
                 y: layout.y,
                 w: layout.w,
                 h: 1,
-                // Keep button hitboxes at the same interaction layer as dialog inputs.
-                // Otherwise modal focus lock can refuse mousedown focus changes to buttons.
-                zIndex: 1002,
+                zIndex: 0,
                 focusable: true,
                 onFocus: () => {
                   selectedButtonIndex.value = i;
@@ -1094,7 +1025,9 @@ export const TDialog = defineComponent({
       skipNextCloseEmit.value = true;
       emit("update:modelValue", false);
       emit("close");
-      restoreFocus();
+      queueMicrotask(() => {
+        if (props.modelValue) skipNextCloseEmit.value = false;
+      });
     }
 
     function onDialogFocus(): void {
@@ -1155,11 +1088,10 @@ export const TDialog = defineComponent({
           );
         }
         if (!prev || next) return;
-        if (skipNextCloseEmit.value) {
-          skipNextCloseEmit.value = false;
-          return;
-        }
-        emit("close");
+        const closeAlreadyEmitted = skipNextCloseEmit.value;
+        skipNextCloseEmit.value = false;
+
+        if (!closeAlreadyEmitted) emit("close");
         restoreFocus();
       },
       { immediate: true },

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createCliEventManager,
   createEventManager,
@@ -719,6 +719,159 @@ describe("ui regressions portal select and text", () => {
     mounted.unmount();
   });
 
+  it("TSelect maxVisible limits rendered option rows", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 8,
+          maxVisible: 3,
+          options: ["a", "b", "c", "d", "e"],
+        }),
+      12,
+      8,
+    );
+
+    await nextTick();
+    mounted.scheduler()!.flushNow();
+
+    const snapshot = mounted.terminal.snapshot().lines.join("\n");
+    expect(snapshot).toContain("a");
+    expect(snapshot).toContain("c");
+    expect(snapshot).not.toContain("d");
+
+    mounted.unmount();
+  });
+
+  it("TSelect optionProvider rejects without an unhandled rejection", async () => {
+    const provider = vi.fn().mockRejectedValue(new Error("load failed"));
+    const unhandled: unknown[] = [];
+    const loadErrors: unknown[] = [];
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+
+    const mounted = await mountTerminal(() =>
+      h(TSelect, {
+        x: 0,
+        y: 0,
+        w: 16,
+        h: 3,
+        options: [],
+        optionProvider: provider,
+        query: "",
+        errorText: "Load failed",
+        onLoadError: (payload: unknown) => loadErrors.push(payload),
+      }),
+    );
+
+    try {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await nextTick();
+      mounted.scheduler()!.flushNow();
+
+      expect(provider).toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+      expect(loadErrors).toHaveLength(1);
+      expect(loadErrors[0]).toMatchObject({ query: "", error: expect.any(Error) });
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Load failed");
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+      mounted.unmount();
+    }
+  });
+
+  it('TSelect valueMode="value" ignores stale multi-select values', async () => {
+    const mounted = await mountTerminal(() =>
+      h(TSelect, {
+        x: 0,
+        y: 0,
+        w: 14,
+        h: 2,
+        multiple: true,
+        valueMode: "value",
+        modelValue: ["missing"],
+        options: [
+          { label: "Alpha", value: "a" },
+          { label: "Beta", value: "b" },
+        ],
+      }),
+    );
+
+    await nextTick();
+    mounted.scheduler()!.flushNow();
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe("[");
+    expect(mounted.terminal.getCell(1, 0).ch).toBe(" ");
+    expect(mounted.terminal.getCell(2, 0).ch).toBe("]");
+
+    mounted.unmount();
+  });
+
+  it("dims disabled TSelect options", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: [{ label: "Disabled", disabled: true }, { label: "Enabled" }],
+        }),
+      24,
+      5,
+    );
+
+    await nextTick();
+    mounted.scheduler()!.flushNow();
+
+    expect(mounted.terminal.getCell(0, 0).style.dim).toBe(true);
+    expect(mounted.terminal.getCell(0, 1).style.dim).not.toBe(true);
+
+    mounted.unmount();
+  });
+
+  it('TSelect valueMode="option" emits option arrays in multi-select mode', async () => {
+    const alpha = { label: "Alpha", value: { id: "a" } };
+    const beta = { label: "Beta", value: { id: "b" } };
+    const selected = ref<unknown[]>([]);
+    const changes: unknown[] = [];
+
+    const mounted = await mountTerminal(() =>
+      h(TSelect, {
+        x: 0,
+        y: 0,
+        w: 14,
+        h: 2,
+        multiple: true,
+        valueMode: "option",
+        modelValue: selected.value,
+        options: [alpha, beta],
+        "onUpdate:modelValue": (value: unknown) => {
+          selected.value = Array.isArray(value) ? value : [value];
+        },
+        onChange: (value: unknown) => changes.push(value),
+        autoFocus: true,
+      }),
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: " ", code: "Space", bubbles: true }),
+    );
+    await nextTick();
+
+    expect(selected.value).toEqual([alpha]);
+    expect(changes).toEqual([["Alpha"]]);
+    mounted.unmount();
+  });
+
   it("TSelect multiple toggles selection with Space and confirms with Enter", async () => {
     const selected = ref<number[]>([]);
     const confirmed = ref<string>("");
@@ -827,6 +980,147 @@ describe("ui regressions portal select and text", () => {
     await nextTick();
 
     expect(confirmed.value).toEqual([1, 2]);
+    mounted.unmount();
+  });
+
+  it('TSelect multipleEmit="both" emits labels and values in the structured payload', async () => {
+    const selected = ref<string[]>(["alpha", "gamma"]);
+    const confirmed = ref<any>(null);
+
+    const mounted = await mountTerminal(() =>
+      h(TSelect, {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 3,
+        options: [
+          { label: "Alpha", value: "alpha" },
+          { label: "Beta", value: "beta" },
+          { label: "Gamma", value: "gamma" },
+        ],
+        valueMode: "value",
+        multiple: true,
+        multipleEmit: "both",
+        modelValue: selected.value,
+        onConfirm: (v: any) => {
+          confirmed.value = v;
+        },
+        autoFocus: true,
+      } as any),
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    expect(confirmed.value).toEqual({
+      indices: [0, 2],
+      labels: ["Alpha", "Gamma"],
+      values: ["alpha", "gamma"],
+    });
+    mounted.unmount();
+  });
+
+  it('TSelect multipleEmit="value" emits option values', async () => {
+    const selected = ref<string[]>(["alpha", "gamma"]);
+    const confirmed = ref<any>(null);
+
+    const mounted = await mountTerminal(() =>
+      h(TSelect, {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 3,
+        options: [
+          { label: "Alpha", value: "alpha" },
+          { label: "Beta", value: "beta" },
+          { label: "Gamma", value: "gamma" },
+        ],
+        valueMode: "value",
+        multiple: true,
+        multipleEmit: "value",
+        modelValue: selected.value,
+        onConfirm: (v: any) => {
+          confirmed.value = v;
+        },
+        autoFocus: true,
+      }),
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    expect(confirmed.value).toEqual(["alpha", "gamma"]);
+    mounted.unmount();
+  });
+
+  it("emits TSelect multiple option values on change when multipleEmit is value", async () => {
+    const selected = ref<string[]>(["a"]);
+    const updates: unknown[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          multiple: true,
+          valueMode: "value",
+          multipleEmit: "value",
+          options: [
+            { label: "Alpha", value: "a" },
+            { label: "Beta", value: "b" },
+          ],
+          modelValue: selected.value,
+          "onUpdate:modelValue": (value: unknown) => {
+            selected.value = Array.isArray(value) ? (value as string[]) : [];
+          },
+          onChange: (payload: unknown) => updates.push(payload),
+          autoFocus: true,
+        }),
+      24,
+      5,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        code: "ArrowDown",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: " ",
+        code: "Space",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    await nextTick();
+
+    expect(updates.at(-1)).toEqual(["a", "b"]);
     mounted.unmount();
   });
 

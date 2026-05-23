@@ -15,7 +15,7 @@ const theme = createTheme({
   },
   components: {
     TLink: { underline: true, hoverUnderline: true },
-    TTable: { selectedStyle: { inverse: true } },
+    TTable: { selectedStyle: { inverse: true }, activeStyle: { underline: true } },
     TFormField: { errorStyle: { fg: "redBright" } },
   },
 });

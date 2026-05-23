@@ -17,16 +17,25 @@ export { TBox } from "./components/TBox.js";
 export { computeCommandPaletteMatchRanges, TCommandPalette } from "./components/TCommandPalette.js";
 export type {
   TCommandPaletteItem,
+  TCommandPaletteItemsProvider,
+  TCommandPaletteLoadErrorPayload,
+  TCommandPaletteMatcher,
+  TCommandPaletteMatcherResult,
   TCommandPaletteMatchRange,
+  TCommandPaletteSelectPayload,
 } from "./components/TCommandPalette.js";
 export { TDataTable } from "./components/TDataTable.js";
 export type {
+  TDataTableFilterPredicate,
   TDataTableRowSelectPayload,
   TDataTableSortChangePayload,
   TDataTableSortDirection,
+  TDataTableSelectionMode,
+  TDataTableSorter,
 } from "./components/TDataTable.js";
 export { TDebugOverlay } from "./components/TDebugOverlay.js";
 export { TDialog } from "./components/TDialog.js";
+export type { DialogButton } from "./components/TDialog.js";
 export type {
   TerminalProviderSelectionConfig,
   TerminalProviderSelectionOptions,
@@ -36,13 +45,39 @@ export { TFlow } from "./components/TFlow.js";
 export {
   TAutocompleteInput,
   TCheckbox,
+  TForm,
+  TFormContextKey,
   TFormField,
   TPasswordInput,
   TRadioGroup,
   TSlider,
   TSwitch,
+  useTForm,
 } from "./components/TForm.js";
-export type { TAutocompleteSelectPayload, TRadioOption } from "./components/TForm.js";
+export type {
+  TAutocompleteLoadErrorPayload,
+  TAutocompleteOption,
+  TAutocompleteSelectPayload,
+  TAutocompleteSuggestionProvider,
+  TFormContext,
+  TFormHandle,
+  TFormModel,
+  TFormRule,
+  TFormSubmitPayload,
+  TRadioOption,
+} from "./components/TForm.js";
+export {
+  TBadge,
+  TCode,
+  TDivider,
+  TProgress,
+  TSpinner,
+  TTag,
+  TToastViewport,
+} from "./components/TFeedback.js";
+export type { TFeedbackTone, TToastItem } from "./components/TFeedback.js";
+export { TSplitPane, TTabs } from "./components/TPanels.js";
+export type { TSplitPaneDirection, TSplitPaneRect, TTabsItem } from "./components/TPanels.js";
 export { TInput } from "./components/TInput.js";
 export { TInputBox } from "./components/TInputBox.js";
 export { lintJsonText, TJsonEditor } from "./components/TJsonEditor.js";
@@ -76,8 +111,12 @@ export { TRenderPlane } from "./components/TRenderPlane.js";
 export { TSelect } from "./components/TSelect.js";
 export type {
   SelectOption,
+  SelectOptionWithStyle,
   TSelectMultipleChangePayload,
   TSelectMultipleEmitMode,
+  TSelectModelValue,
+  TSelectOptionProvider,
+  TSelectValueMode,
 } from "./components/TSelect.js";
 export { TTable } from "./components/TTable.js";
 export type {
@@ -85,6 +124,7 @@ export type {
   TTableHeaderClickPayload,
   TTableRow,
   TTableRowClickPayload,
+  TTableRowKeydownPayload,
 } from "./components/TTable.js";
 export { TText } from "./components/TText.js";
 export { TTransition } from "./components/TTransition.js";
@@ -100,6 +140,13 @@ export { useTerminal } from "./composables/use-terminal.js";
 export { useVisibility } from "./composables/use-visibility.js";
 export type { TuiMarkdownTheme, TuiMarkdownThemeOverrides } from "./markdown/theme.js";
 export { createTheme, tuiDefaultTheme } from "./theme.js";
+export { createOverlayFocusStack, resolveOverlayPlacement } from "./overlay.js";
+export type {
+  TOverlayFocusStack,
+  TOverlayPlacement,
+  TOverlayPlacementOptions,
+  TOverlayRect,
+} from "./overlay.js";
 export type {
   TuiTheme,
   TuiThemeColorTokens,

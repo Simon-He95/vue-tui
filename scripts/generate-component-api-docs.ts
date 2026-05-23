@@ -1,7 +1,30 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import {
+  ambiguousPublicPropNames,
+  componentExposedDocs,
+  componentEventPayloads,
+  componentPublicEventDescriptions,
+  componentPublicPropDescriptions,
+  componentSlotDocs,
+  publicEventDescriptions,
+  publicEventPayloads,
+  sharedPublicPropDescriptions,
+} from "./api-doc-metadata.js";
+
+const execFileAsync = promisify(execFile);
+
+type DescriptionSource = "jsdoc" | "component-default" | "shared-default" | "missing";
+type PayloadSource =
+  | "emits-signature"
+  | "component-default"
+  | "shared-default"
+  | "update-prop"
+  | "missing";
 
 type PropMeta = {
   name: string;
@@ -9,15 +32,20 @@ type PropMeta = {
   required: boolean;
   defaultValue: string | null;
   description: string | null;
+  descriptionSource: DescriptionSource;
+  deprecated: string | null;
 };
 
 type EventMeta = {
   name: string;
   payload: string | null;
+  payloadSource: PayloadSource;
   description: string | null;
+  descriptionSource: DescriptionSource;
 };
 
 type ApiMaturity = "public" | "advanced" | "experimental";
+type EntrypointRuntime = "browser-safe" | "node-only" | "mixed";
 
 type ComponentMeta = {
   name: string;
@@ -26,6 +54,46 @@ type ComponentMeta = {
   entrypoint: string;
   props: PropMeta[];
   events: EventMeta[];
+  slots: Array<{ name: string; props?: string; description: string }>;
+  exposed: Array<{ name: string; type: string; description: string }>;
+};
+
+type ApiManifest = {
+  packageVersion: string;
+  entrypoints: Record<
+    string,
+    {
+      maturity: ApiMaturity;
+      runtime: EntrypointRuntime;
+      valueExports: string[];
+      typeExports: string[];
+    }
+  >;
+  components: Record<
+    string,
+    {
+      entrypoint: string;
+      maturity: ApiMaturity;
+      props: Array<{
+        name: string;
+        type: string;
+        required: boolean;
+        defaultValue?: string;
+        description?: string;
+        descriptionSource?: DescriptionSource;
+        deprecated?: string;
+      }>;
+      events: Array<{
+        name: string;
+        payload?: string;
+        payloadSource?: PayloadSource;
+        description?: string;
+        descriptionSource?: DescriptionSource;
+      }>;
+      slots?: Array<{ name: string; props?: string; description?: string }>;
+      exposed?: Array<{ name: string; type: string; description?: string }>;
+    }
+  >;
 };
 
 function unwrapExpression(expr: ts.Expression): ts.Expression {
@@ -69,10 +137,7 @@ function formatMaybeCode(text: string | null): string {
   if (!text) return "—";
   // Markdown tables split columns by `|` even inside inline code spans.
   // Use HTML <code> + entity to keep union types/payloads (A | B) intact.
-  const escaped = escapeHtml(text)
-    .replaceAll("\n", "<br>")
-    .replaceAll("|", "&#124;")
-    .replaceAll("(_", "(\\_");
+  const escaped = escapeHtml(text).replaceAll("\n", "<br>").replaceAll("|", "&#124;");
   return `<code>${escaped}</code>`;
 }
 
@@ -190,6 +255,26 @@ function getJsDocDescription(node: ts.Node): string | null {
   return text.trim() || null;
 }
 
+function getJsDocTag(node: ts.Node, name: string): string | null {
+  const jsDocs = (node as any).jsDoc as ts.JSDoc[] | undefined;
+  if (!jsDocs?.length) return null;
+  for (let i = jsDocs.length - 1; i >= 0; i--) {
+    const doc = jsDocs[i]!;
+    const tag = doc.tags?.find((candidate) => candidate.tagName.getText() === name);
+    if (!tag) continue;
+    const comment = tag.comment;
+    if (typeof comment === "string") return comment.trim() || "";
+    if (Array.isArray(comment)) {
+      return comment
+        .map((part: any) => (typeof part.text === "string" ? part.text : ""))
+        .join("")
+        .trim();
+    }
+    return "";
+  }
+  return null;
+}
+
 function getTopLevelInitializerByName(
   sourceFile: ts.SourceFile,
   name: string,
@@ -234,18 +319,31 @@ function resolveToArrayLiteral(
   return null;
 }
 
+function propertyNameText(name: ts.PropertyName): string | null {
+  return ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)
+    ? name.text
+    : null;
+}
+
 function getObjectPropertyValue(
   obj: ts.ObjectLiteralExpression,
   key: string,
 ): ts.Expression | null {
   for (const prop of obj.properties) {
     if (!ts.isPropertyAssignment(prop)) continue;
-    const name = prop.name;
-    const text = ts.isIdentifier(name) ? name.text : ts.isStringLiteral(name) ? name.text : null;
+    const text = propertyNameText(prop.name);
     if (text !== key) continue;
     return prop.initializer;
   }
   return null;
+}
+
+function stringLiteralValue(expr: ts.Expression | null): string | null {
+  if (!expr) return null;
+  const unwrapped = unwrapExpression(expr);
+  return ts.isStringLiteral(unwrapped) || ts.isNoSubstitutionTemplateLiteral(unwrapped)
+    ? unwrapped.text
+    : null;
 }
 
 function extractProps(
@@ -269,7 +367,7 @@ function extractProps(
     if (!propName) continue;
 
     const description = getJsDocDescription(prop);
-
+    const deprecated = getJsDocTag(prop, "deprecated");
     const init = unwrapExpression(prop.initializer);
     if (ts.isObjectLiteralExpression(init)) {
       const typeExpr = getObjectPropertyValue(init, "type");
@@ -277,14 +375,18 @@ function extractProps(
       const defaultExpr = getObjectPropertyValue(init, "default");
 
       const type = typeExpr ? formatPropType(typeExpr, printer) : "unknown";
-      const required = !!(
-        requiredExpr &&
-        ts.isBooleanLiteral(requiredExpr) &&
-        requiredExpr.kind === ts.SyntaxKind.TrueKeyword
-      );
+      const required = !!(requiredExpr && requiredExpr.kind === ts.SyntaxKind.TrueKeyword);
       const defaultValue = defaultExpr ? formatDefaultValue(defaultExpr, printer) : null;
 
-      out.push({ name: propName, type, required, defaultValue, description });
+      out.push({
+        name: propName,
+        type,
+        required,
+        defaultValue,
+        description,
+        descriptionSource: description ? "jsdoc" : "missing",
+        deprecated,
+      });
       continue;
     }
 
@@ -296,9 +398,66 @@ function extractProps(
       required: false,
       defaultValue: null,
       description,
+      descriptionSource: description ? "jsdoc" : "missing",
+      deprecated,
     });
   }
 
+  return out;
+}
+
+function formatEventPayload(init: ts.Expression, printer: ts.Printer): string | null {
+  const expr = unwrapExpression(init);
+  if (!ts.isArrowFunction(expr) && !ts.isFunctionExpression(expr)) return null;
+  if (!expr.parameters.length) return null;
+  if (expr.parameters.length === 1) {
+    const param = expr.parameters[0]!;
+    if (param.type) {
+      return printer.printNode(ts.EmitHint.Unspecified, param.type, param.type.getSourceFile());
+    }
+    return "unknown";
+  }
+  return `(${expr.parameters
+    .map((param) => {
+      const name = param.name.getText();
+      const type = param.type
+        ? printer.printNode(ts.EmitHint.Unspecified, param.type, param.type.getSourceFile())
+        : "unknown";
+      return `${name}: ${type}`;
+    })
+    .join(", ")})`;
+}
+
+function extractEventDocs(
+  sourceFile: ts.SourceFile,
+  componentName: string,
+): Map<string, Pick<EventMeta, "payload" | "payloadSource" | "description" | "descriptionSource">> {
+  const out = new Map<
+    string,
+    Pick<EventMeta, "payload" | "payloadSource" | "description" | "descriptionSource">
+  >();
+  for (const docsName of [`${componentName}Events`, `${componentName}EventDocs`]) {
+    const init = getTopLevelInitializerByName(sourceFile, docsName);
+    if (!init) continue;
+    const obj = resolveToObjectLiteral(sourceFile, init);
+    if (!obj) continue;
+    for (const prop of obj.properties) {
+      if (!ts.isPropertyAssignment(prop)) continue;
+      const eventName = propertyNameText(prop.name);
+      if (!eventName) continue;
+      const meta = resolveToObjectLiteral(sourceFile, prop.initializer);
+      const payload = meta ? stringLiteralValue(getObjectPropertyValue(meta, "payload")) : null;
+      const description =
+        (meta ? stringLiteralValue(getObjectPropertyValue(meta, "description")) : null) ??
+        getJsDocDescription(prop);
+      out.set(eventName, {
+        payload,
+        payloadSource: payload ? "component-default" : "missing",
+        description,
+        descriptionSource: description ? "component-default" : "missing",
+      });
+    }
+  }
   return out;
 }
 
@@ -306,6 +465,10 @@ function extractEvents(
   sourceFile: ts.SourceFile,
   emitsExpr: ts.Expression,
   printer: ts.Printer,
+  docs: Map<
+    string,
+    Pick<EventMeta, "payload" | "payloadSource" | "description" | "descriptionSource">
+  >,
 ): EventMeta[] {
   const arr = resolveToArrayLiteral(sourceFile, emitsExpr);
   if (arr) {
@@ -313,7 +476,14 @@ function extractEvents(
     for (const el of arr.elements) {
       const expr = ts.isExpression(el) ? unwrapExpression(el) : null;
       if (expr && ts.isStringLiteral(expr)) {
-        names.push({ name: expr.text, payload: null, description: null });
+        const meta = docs.get(expr.text);
+        names.push({
+          name: expr.text,
+          payload: meta?.payload ?? null,
+          payloadSource: meta?.payloadSource ?? "missing",
+          description: meta?.description ?? null,
+          descriptionSource: meta?.descriptionSource ?? "missing",
+        });
       }
     }
     return names;
@@ -324,24 +494,30 @@ function extractEvents(
     const events: EventMeta[] = [];
     for (const prop of obj.properties) {
       if (!ts.isPropertyAssignment(prop)) continue;
-      const nameNode = prop.name;
-      const eventName = ts.isIdentifier(nameNode)
-        ? nameNode.text
-        : ts.isStringLiteral(nameNode)
-          ? nameNode.text
-          : null;
+      const eventName = propertyNameText(prop.name);
       if (!eventName) continue;
 
       const init = unwrapExpression(prop.initializer);
-      const payload =
-        ts.isArrowFunction(init) || ts.isFunctionExpression(init)
-          ? printer.printNode(ts.EmitHint.Expression, init, init.getSourceFile())
-          : null;
+      const meta = docs.get(eventName);
+      const signaturePayload = formatEventPayload(init, printer);
+      const payload = meta?.payload ?? signaturePayload;
+      const jsDocDescription = getJsDocDescription(prop);
+      const description = meta?.description ?? jsDocDescription;
 
       events.push({
         name: eventName,
         payload,
-        description: getJsDocDescription(prop),
+        payloadSource: meta?.payload
+          ? meta.payloadSource
+          : signaturePayload
+            ? "emits-signature"
+            : "missing",
+        description,
+        descriptionSource: meta?.description
+          ? meta.descriptionSource
+          : jsDocDescription
+            ? "jsdoc"
+            : "missing",
       });
     }
     return events;
@@ -352,7 +528,9 @@ function extractEvents(
     {
       name: printer.printNode(ts.EmitHint.Expression, emitsExpr, emitsExpr.getSourceFile()),
       payload: null,
+      payloadSource: "missing",
       description: null,
+      descriptionSource: "missing",
     },
   ];
 }
@@ -408,22 +586,138 @@ function extractComponentMeta(
   const rel = path.relative(packageRoot, absPath).split(path.sep).join("/");
 
   if (!componentOptions) {
-    return { name: componentName, sourceRelPath: rel, maturity, entrypoint, props: [], events: [] };
+    return {
+      name: componentName,
+      sourceRelPath: rel,
+      maturity,
+      entrypoint,
+      props: [],
+      events: [],
+      slots: [...(componentSlotDocs[componentName] ?? [])],
+      exposed: [...(componentExposedDocs[componentName] ?? [])],
+    };
   }
 
   const propsExpr = getObjectPropertyValue(componentOptions, "props");
   const emitsExpr = getObjectPropertyValue(componentOptions, "emits");
 
   const props = propsExpr ? extractProps(sourceFile, propsExpr, printer) : [];
-  const events = emitsExpr ? extractEvents(sourceFile, emitsExpr, printer) : [];
+  const eventDocs = extractEventDocs(sourceFile, componentName);
+  const events = emitsExpr ? extractEvents(sourceFile, emitsExpr, printer, eventDocs) : [];
 
-  return { name: componentName, sourceRelPath: rel, maturity, entrypoint, props, events };
+  return {
+    name: componentName,
+    sourceRelPath: rel,
+    maturity,
+    entrypoint,
+    props,
+    events,
+    slots: [...(componentSlotDocs[componentName] ?? [])],
+    exposed: [...(componentExposedDocs[componentName] ?? [])],
+  };
 }
 
 function maturityLabel(maturity: ApiMaturity): string {
   if (maturity === "public") return "Public";
   if (maturity === "advanced") return "Advanced";
   return "Experimental";
+}
+
+function eventBaseName(name: string): string {
+  return name.endsWith("Capture") ? name.slice(0, -"Capture".length) : name;
+}
+
+type DescriptionResult = { description: string | null; source: DescriptionSource };
+type PayloadResult = { payload: string | null; source: PayloadSource };
+
+const UPDATE_EVENT_PREFIX = "update:";
+
+function updateEventPropName(eventName: string): string | null {
+  return eventName.startsWith(UPDATE_EVENT_PREFIX)
+    ? eventName.slice(UPDATE_EVENT_PREFIX.length)
+    : null;
+}
+
+function inferEventPayload(component: ComponentMeta, event: EventMeta): PayloadResult {
+  if (event.payload) return { payload: event.payload, source: event.payloadSource };
+  const byComponent = `${component.name}.${event.name}`;
+  if (componentEventPayloads[byComponent]) {
+    return { payload: componentEventPayloads[byComponent], source: "component-default" };
+  }
+  const updatePropName = updateEventPropName(event.name);
+  if (updatePropName) {
+    return {
+      payload: component.props.find((prop) => prop.name === updatePropName)?.type ?? "unknown",
+      source: "update-prop",
+    };
+  }
+  if (event.name === "change" || event.name === "input") {
+    return {
+      payload: component.props.find((prop) => prop.name === "modelValue")?.type ?? "unknown",
+      source: "update-prop",
+    };
+  }
+  return {
+    payload: publicEventPayloads[eventBaseName(event.name)] ?? "void",
+    source: "shared-default",
+  };
+}
+
+function describeEvent(component: ComponentMeta, event: EventMeta): DescriptionResult {
+  if (event.description) {
+    return { description: event.description, source: event.descriptionSource };
+  }
+  const componentDescription = componentPublicEventDescriptions[`${component.name}.${event.name}`];
+  if (componentDescription) {
+    return { description: componentDescription, source: "component-default" };
+  }
+  const baseName = eventBaseName(event.name);
+  if (event.name.endsWith("Capture")) {
+    const baseDescription = publicEventDescriptions[baseName];
+    return baseDescription
+      ? { description: `${baseDescription} Runs during capture.`, source: "shared-default" }
+      : { description: null, source: "missing" };
+  }
+  const description = publicEventDescriptions[baseName] ?? null;
+  return { description, source: description ? "shared-default" : "missing" };
+}
+
+function describePublicProp(componentName: string, prop: PropMeta): DescriptionResult {
+  if (prop.description) {
+    return { description: prop.description, source: prop.descriptionSource };
+  }
+  const componentDescription = componentPublicPropDescriptions[componentName]?.[prop.name];
+  if (componentDescription) {
+    return { description: componentDescription, source: "component-default" };
+  }
+  if (ambiguousPublicPropNames.has(prop.name)) return { description: null, source: "missing" };
+  const sharedDescription = sharedPublicPropDescriptions[prop.name] ?? null;
+  return {
+    description: sharedDescription,
+    source: sharedDescription ? "shared-default" : "missing",
+  };
+}
+
+function fillPublicDocDefaults(component: ComponentMeta): ComponentMeta {
+  if (component.maturity !== "public") return component;
+  return {
+    ...component,
+    props: component.props.map((prop) => {
+      const { description, source } = describePublicProp(component.name, prop);
+      return { ...prop, description, descriptionSource: source };
+    }),
+    events: component.events.map((event) => {
+      const payload = inferEventPayload(component, event);
+      const description = describeEvent(component, event);
+      return {
+        ...event,
+        payload: payload.payload,
+        payloadSource: payload.source,
+        description: description.description,
+        descriptionSource: description.source,
+      };
+    }),
+  };
 }
 
 async function listExportedComponents(
@@ -441,7 +735,12 @@ async function listExportedComponents(
   const text = await fs.readFile(vueIndexAbsPath, "utf8");
   const sourceFile = ts.createSourceFile(vueIndexAbsPath, text, ts.ScriptTarget.Latest, true);
 
-  const out: Array<{ name: string; absPath: string }> = [];
+  const out: Array<{
+    name: string;
+    absPath: string;
+    maturity: ApiMaturity;
+    entrypoint: string;
+  }> = [];
   const vueDir = path.dirname(vueIndexAbsPath);
 
   for (const stmt of sourceFile.statements) {
@@ -456,8 +755,10 @@ async function listExportedComponents(
     if (!isComponentModule) continue;
 
     for (const el of stmt.exportClause.elements) {
+      if (el.isTypeOnly) continue;
       const name = el.name.text;
-      const isComponentName = name.startsWith("T") || name === "TerminalProvider";
+      const isComponentName =
+        (name.startsWith("T") || name === "TerminalProvider") && !name.endsWith("ContextKey");
       if (!isComponentName) continue;
       const tsPath = spec.replace(/\.js$/u, ".ts");
       const absPath = path.resolve(vueDir, tsPath);
@@ -473,6 +774,177 @@ async function listExportedComponents(
 async function listRootComponentExports(rootIndexAbsPath: string): Promise<Set<string>> {
   const components = await listExportedComponents(rootIndexAbsPath, "public", "@simon_he/vue-tui");
   return new Set(components.map((c) => c.name));
+}
+
+function resolveSourceSpecifier(from: string, specifier: string): string | null {
+  if (!specifier.startsWith(".")) return null;
+  const base = path.resolve(path.dirname(from), specifier);
+  const candidates = [base.replace(/\.js$/u, ".ts"), `${base}.ts`, path.join(base, "index.ts")];
+  return candidates.find((candidate) => ts.sys.fileExists(candidate)) ?? null;
+}
+
+type SourceExports = {
+  valueExports: Set<string>;
+  typeExports: Set<string>;
+};
+
+function emptySourceExports(): SourceExports {
+  return { valueExports: new Set(), typeExports: new Set() };
+}
+
+function mergeSourceExports(target: SourceExports, source: SourceExports): void {
+  for (const name of source.valueExports) target.valueExports.add(name);
+  for (const name of source.typeExports) target.typeExports.add(name);
+}
+
+async function collectSourceExports(
+  absPath: string,
+  seen = new Set<string>(),
+): Promise<SourceExports> {
+  const resolved = path.resolve(absPath);
+  if (seen.has(resolved)) return emptySourceExports();
+  seen.add(resolved);
+
+  const text = await fs.readFile(resolved, "utf8");
+  const sourceFile = ts.createSourceFile(resolved, text, ts.ScriptTarget.Latest, true);
+  const out = emptySourceExports();
+
+  for (const stmt of sourceFile.statements) {
+    if (ts.isExportDeclaration(stmt)) {
+      if (stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
+        const declarationTypeOnly = stmt.isTypeOnly;
+        const child =
+          stmt.moduleSpecifier && ts.isStringLiteral(stmt.moduleSpecifier)
+            ? resolveSourceSpecifier(resolved, stmt.moduleSpecifier.text)
+            : null;
+
+        // Use a cloned seen set for named re-export classification so resolving
+        // `export { Foo } from "./x.js"` does not poison later `export * from "./x.js"`.
+        const childExports = child ? await collectSourceExports(child, new Set(seen)) : null;
+
+        for (const el of stmt.exportClause.elements) {
+          const exportedName = el.name.text;
+          const importedName = (el.propertyName ?? el.name).text;
+
+          if (declarationTypeOnly || el.isTypeOnly) {
+            out.typeExports.add(exportedName);
+            continue;
+          }
+
+          if (!childExports) {
+            out.valueExports.add(exportedName);
+            continue;
+          }
+
+          const hasValue = childExports.valueExports.has(importedName);
+          const hasType = childExports.typeExports.has(importedName);
+
+          if (hasValue) out.valueExports.add(exportedName);
+          if (hasType) out.typeExports.add(exportedName);
+
+          // Unknown external/local shape: keep the previous conservative behavior.
+          if (!hasValue && !hasType) out.valueExports.add(exportedName);
+        }
+        continue;
+      }
+      if (!stmt.exportClause && stmt.moduleSpecifier && ts.isStringLiteral(stmt.moduleSpecifier)) {
+        const child = resolveSourceSpecifier(resolved, stmt.moduleSpecifier.text);
+        if (!child) continue;
+        const childExports = await collectSourceExports(child, seen);
+        if (stmt.isTypeOnly) {
+          for (const name of childExports.typeExports) out.typeExports.add(name);
+        } else {
+          mergeSourceExports(out, childExports);
+        }
+      }
+      continue;
+    }
+
+    if (ts.isTypeAliasDeclaration(stmt) || ts.isInterfaceDeclaration(stmt)) {
+      if (!stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
+      out.typeExports.add(stmt.name.text);
+      continue;
+    }
+
+    if (ts.isEnumDeclaration(stmt)) {
+      if (!stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
+      out.valueExports.add(stmt.name.text);
+      out.typeExports.add(stmt.name.text);
+      continue;
+    }
+
+    if (
+      ts.isVariableStatement(stmt) ||
+      ts.isFunctionDeclaration(stmt) ||
+      ts.isClassDeclaration(stmt)
+    ) {
+      if (!stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
+      if (ts.isVariableStatement(stmt)) {
+        for (const decl of stmt.declarationList.declarations) {
+          if (ts.isIdentifier(decl.name)) out.valueExports.add(decl.name.text);
+        }
+      } else if (ts.isClassDeclaration(stmt) && stmt.name) {
+        out.valueExports.add(stmt.name.text);
+        out.typeExports.add(stmt.name.text);
+      } else if (stmt.name) {
+        out.valueExports.add(stmt.name.text);
+      }
+    }
+  }
+
+  return out;
+}
+
+function entrypointMeta(specifier: string): {
+  maturity: ApiMaturity;
+  runtime: EntrypointRuntime;
+  sourceRelPath: string;
+} {
+  const sourceRelPath =
+    specifier === "@simon_he/vue-tui"
+      ? "src/index.ts"
+      : specifier === "@simon_he/vue-tui/renderer/dom"
+        ? "src/renderer-dom.ts"
+        : `src/${specifier.slice("@simon_he/vue-tui/".length)}.ts`;
+  const maturity: ApiMaturity =
+    specifier === "@simon_he/vue-tui/vue" ||
+    specifier === "@simon_he/vue-tui/runtime" ||
+    specifier === "@simon_he/vue-tui/observability"
+      ? "advanced"
+      : specifier === "@simon_he/vue-tui/experimental" || specifier === "@simon_he/vue-tui/agent"
+        ? "experimental"
+        : "public";
+  const runtime: EntrypointRuntime =
+    specifier === "@simon_he/vue-tui/cli"
+      ? "node-only"
+      : specifier === "@simon_he/vue-tui/runtime"
+        ? "mixed"
+        : "browser-safe";
+  return { maturity, runtime, sourceRelPath };
+}
+
+async function collectManifestEntrypoints(
+  packageRoot: string,
+): Promise<ApiManifest["entrypoints"]> {
+  const packageJson = JSON.parse(
+    await fs.readFile(path.join(packageRoot, "package.json"), "utf8"),
+  ) as {
+    exports: Record<string, unknown>;
+  };
+  const out: ApiManifest["entrypoints"] = {};
+  for (const raw of Object.keys(packageJson.exports)) {
+    if (raw === "./package.json") continue;
+    const specifier = raw === "." ? "@simon_he/vue-tui" : `@simon_he/vue-tui/${raw.slice(2)}`;
+    const meta = entrypointMeta(specifier);
+    const sourceExports = await collectSourceExports(path.join(packageRoot, meta.sourceRelPath));
+    out[specifier] = {
+      maturity: meta.maturity,
+      runtime: meta.runtime,
+      valueExports: [...sourceExports.valueExports].sort(),
+      typeExports: [...sourceExports.typeExports].sort(),
+    };
+  }
+  return Object.fromEntries(Object.entries(out).sort(([a], [b]) => a.localeCompare(b)));
 }
 
 function renderMarkdown(components: ComponentMeta[]): string {
@@ -543,12 +1015,72 @@ function renderMarkdown(components: ComponentMeta[]): string {
   return `${lines.join("\n")}\n`;
 }
 
+function renderManifest(
+  packageVersion: string,
+  entrypoints: ApiManifest["entrypoints"],
+  components: ComponentMeta[],
+): ApiManifest {
+  return {
+    packageVersion,
+    entrypoints,
+    components: Object.fromEntries(
+      components.map((component) => [
+        component.name,
+        {
+          entrypoint: component.entrypoint,
+          maturity: component.maturity,
+          props: component.props.map((prop) => ({
+            name: prop.name,
+            type: prop.type,
+            required: prop.required,
+            ...(prop.defaultValue ? { defaultValue: prop.defaultValue } : {}),
+            ...(prop.description ? { description: prop.description } : {}),
+            ...(component.maturity === "public"
+              ? { descriptionSource: prop.descriptionSource }
+              : {}),
+            ...(prop.deprecated ? { deprecated: prop.deprecated } : {}),
+          })),
+          events: component.events.map((event) => ({
+            name: event.name,
+            ...(event.payload ? { payload: event.payload } : {}),
+            ...(component.maturity === "public" ? { payloadSource: event.payloadSource } : {}),
+            ...(event.description ? { description: event.description } : {}),
+            ...(component.maturity === "public"
+              ? { descriptionSource: event.descriptionSource }
+              : {}),
+          })),
+          ...(component.slots.length
+            ? {
+                slots: component.slots.map((slot) => ({
+                  name: slot.name,
+                  ...(slot.props ? { props: slot.props } : {}),
+                  description: slot.description,
+                })),
+              }
+            : {}),
+          ...(component.exposed.length
+            ? {
+                exposed: component.exposed.map((item) => ({
+                  name: item.name,
+                  type: item.type,
+                  description: item.description,
+                })),
+              }
+            : {}),
+        },
+      ]),
+    ),
+  };
+}
+
 async function main(): Promise<void> {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const packageRoot = path.resolve(here, "..");
   const rootIndex = path.join(packageRoot, "src/index.ts");
   const vueIndex = path.join(packageRoot, "src/vue/index.ts");
+  const markdownIndex = path.join(packageRoot, "src/markdown.ts");
   const experimentalIndex = path.join(packageRoot, "src/experimental.ts");
+  const agentIndex = path.join(packageRoot, "src/agent.ts");
 
   const rootComponentExports = await listRootComponentExports(rootIndex);
   const vueComponents = await listExportedComponents(vueIndex, "advanced", "@simon_he/vue-tui/vue");
@@ -559,21 +1091,49 @@ async function main(): Promise<void> {
     }
   }
 
-  const components = [
+  const baseComponents = [
     ...vueComponents,
+    ...(await listExportedComponents(markdownIndex, "public", "@simon_he/vue-tui/markdown")),
     ...(await listExportedComponents(
       experimentalIndex,
       "experimental",
       "@simon_he/vue-tui/experimental",
     )),
-  ].sort((a, b) => a.name.localeCompare(b.name));
-  const metas = components.map((c) =>
-    extractComponentMeta(c.name, c.absPath, packageRoot, c.maturity, c.entrypoint),
+  ];
+  const seenComponentNames = new Set(baseComponents.map((component) => component.name));
+  const agentComponents = (
+    await listExportedComponents(agentIndex, "experimental", "@simon_he/vue-tui/agent")
+  ).filter((component) => {
+    if (seenComponentNames.has(component.name)) return false;
+    seenComponentNames.add(component.name);
+    return true;
+  });
+
+  const components = [...baseComponents, ...agentComponents].sort((a, b) =>
+    a.name.localeCompare(b.name),
   );
+  const metas = components
+    .map((c) => extractComponentMeta(c.name, c.absPath, packageRoot, c.maturity, c.entrypoint))
+    .map(fillPublicDocDefaults);
+  const packageJson = JSON.parse(
+    await fs.readFile(path.join(packageRoot, "package.json"), "utf8"),
+  ) as {
+    version: string;
+  };
+  const entrypoints = await collectManifestEntrypoints(packageRoot);
 
   const outPath = path.join(packageRoot, "docs/generated/components-api.md");
   await fs.mkdir(path.dirname(outPath), { recursive: true });
   await fs.writeFile(outPath, renderMarkdown(metas), "utf8");
+  const manifestPath = path.join(packageRoot, "docs/generated/api-manifest.json");
+  await fs.writeFile(
+    manifestPath,
+    `${JSON.stringify(renderManifest(packageJson.version, entrypoints, metas), null, 2)}\n`,
+    "utf8",
+  );
+  await execFileAsync("pnpm", ["exec", "oxfmt", "--write", outPath, manifestPath], {
+    cwd: packageRoot,
+  });
 }
 
 await main();

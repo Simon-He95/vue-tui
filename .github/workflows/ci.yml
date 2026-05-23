@@ -21,6 +21,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: pnpm/action-setup@v4
 
@@ -50,7 +53,19 @@ jobs:
 
       - run: pnpm run docs:build
 
-      - run: git diff --exit-code docs/generated/components-api.md
+      - run: git diff --exit-code -- docs/generated
+
+      - name: Fetch API diff base branch
+        if: ${{ github.event_name == 'pull_request' }}
+        run: git fetch origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+
+      - name: Diff API manifest against PR base
+        if: ${{ github.event_name == 'pull_request' }}
+        run: pnpm run api:diff -- --base-ref "refs/remotes/origin/${{ github.base_ref }}"
+
+      - name: Diff API manifest against latest release tag
+        if: ${{ github.event_name != 'pull_request' }}
+        run: pnpm run api:diff
 
       - run: pnpm run build:checked
 
@@ -74,6 +89,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: pnpm/action-setup@v4
 

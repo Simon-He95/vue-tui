@@ -10,7 +10,7 @@ import type {
   TLogViewVisibleLink,
 } from "../src/experimental.js";
 import { describe, expect, it, vi } from "vitest";
-import { textCellWidth } from "../src/vue.js";
+import { textCellWidth } from "../src/vue/utils/text.js";
 import { createTerminalApp } from "../src/cli.js";
 import { createAppendOnlyLogStore, TLogScrollbar, TLogView } from "../src/experimental.js";
 import {

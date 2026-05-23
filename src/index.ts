@@ -24,15 +24,26 @@ export {
 } from "./vue/components/TCommandPalette.js";
 export type {
   TCommandPaletteItem,
+  TCommandPaletteItemsProvider,
+  TCommandPaletteLoadErrorPayload,
+  TCommandPaletteMatcher,
+  TCommandPaletteMatcherResult,
   TCommandPaletteMatchRange,
+  TCommandPaletteSelectPayload,
 } from "./vue/components/TCommandPalette.js";
 export { TDataTable } from "./vue/components/TDataTable.js";
 export type {
+  TDataTableFilterPredicate,
   TDataTableSortChangePayload,
   TDataTableSortDirection,
   TDataTableRowSelectPayload,
+  TDataTableSelectionMode,
+  TDataTableSorter,
 } from "./vue/components/TDataTable.js";
 export { TDialog } from "./vue/components/TDialog.js";
+export type { DialogButton } from "./vue/components/TDialog.js";
+export { TBadge, TCode, TDivider, TTag } from "./vue/components/TFeedback.js";
+export type { TFeedbackTone } from "./vue/components/TFeedback.js";
 export {
   TAutocompleteInput,
   TCheckbox,
@@ -42,7 +53,13 @@ export {
   TSlider,
   TSwitch,
 } from "./vue/components/TForm.js";
-export type { TAutocompleteSelectPayload, TRadioOption } from "./vue/components/TForm.js";
+export type {
+  TAutocompleteLoadErrorPayload,
+  TAutocompleteOption,
+  TAutocompleteSelectPayload,
+  TAutocompleteSuggestionProvider,
+  TRadioOption,
+} from "./vue/components/TForm.js";
 export { TInput } from "./vue/components/TInput.js";
 export type { TInputHostAdapter } from "./vue/components/input/host.js";
 export { createTInputHostPlugin } from "./vue/components/input/plugins/hostPlugin.js";
@@ -66,12 +83,22 @@ export type {
 export { linkifyTextSegments } from "./vue/linkify.js";
 export type { TLinkifyOptions, TLinkifyProtocol, TLinkifySegment } from "./vue/linkify.js";
 export { TSelect } from "./vue/components/TSelect.js";
+export type {
+  SelectOption,
+  SelectOptionWithStyle,
+  TSelectMultipleChangePayload,
+  TSelectMultipleEmitMode,
+  TSelectModelValue,
+  TSelectOptionProvider,
+  TSelectValueMode,
+} from "./vue/components/TSelect.js";
 export { TTable } from "./vue/components/TTable.js";
 export type {
   TTableColumn,
   TTableHeaderClickPayload,
   TTableRow,
   TTableRowClickPayload,
+  TTableRowKeydownPayload,
 } from "./vue/components/TTable.js";
 export { TText } from "./vue/components/TText.js";
 export { TTree } from "./vue/components/TTree.js";
