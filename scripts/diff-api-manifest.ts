@@ -163,9 +163,7 @@ for (const [specifier, previous] of Object.entries(base.entrypoints)) {
 for (const [specifier, next] of Object.entries(current.entrypoints)) {
   const previous = base.entrypoints[specifier];
   if (!previous) {
-    addNote(`${specifier} entrypoint was added`, {
-      reviewRequired: next.maturity !== "public",
-    });
+    addNote(`${specifier} entrypoint was added`);
     continue;
   }
 
@@ -251,9 +249,7 @@ for (const [name, previous] of Object.entries(base.components)) {
 for (const [name, next] of Object.entries(current.components)) {
   const previous = base.components[name];
   if (!previous) {
-    addNote(`${name} component was added at ${next.entrypoint}`, {
-      reviewRequired: next.maturity !== "public",
-    });
+    addNote(`${name} component was added at ${next.entrypoint}`);
     continue;
   }
 

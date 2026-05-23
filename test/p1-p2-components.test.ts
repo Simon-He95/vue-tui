@@ -451,6 +451,90 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps TDataTable keyboard scrolling usable when scrollTop is uncontrolled", async () => {
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+      { id: "c", name: "Gamma" },
+    ];
+    const selectedRowKey = ref<unknown>(undefined);
+    const onRowSelect = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          selectedRowKey: selectedRowKey.value,
+          "onUpdate:selectedRowKey": (key: unknown) => (selectedRowKey.value = key),
+          onRowSelect,
+        }),
+      16,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const snapshot = mounted.terminal.snapshot().lines.join("\n");
+      expect(snapshot).toContain("Beta");
+      expect(snapshot).toContain("Gamma");
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          code: "Space",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(selectedRowKey.value).toBe("c");
+      expect(onRowSelect).toHaveBeenCalledWith({
+        row: rows[2],
+        index: 1,
+        dataIndex: 2,
+        originalIndex: 2,
+        key: "c",
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("passes original row indices to TDataTable column format after scrollTop", async () => {
     const format = vi.fn((value: unknown, _row: unknown, index: number) => `${index}:${value}`);
     const mounted = await mountTerminal(

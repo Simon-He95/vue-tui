@@ -79,9 +79,9 @@ export const TDataTable = defineComponent({
       required: true,
     },
     /**
-     * TDataTable owns a controlled viewport offset through scrollTop. It is still
-     * non-virtual: rows are sorted/filtered in memory and only the visible slice is
-     * passed to TTable.
+     * TDataTable can accept a controlled viewport offset through scrollTop. It is
+     * still non-virtual: rows are sorted/filtered in memory and only the visible
+     * slice is passed to TTable.
      */
     rows: {
       type: Array as PropType<readonly TTableRow[]>,
@@ -96,7 +96,7 @@ export const TDataTable = defineComponent({
       type: Array as PropType<readonly unknown[]>,
       default: undefined,
     },
-    scrollTop: { type: Number, default: 0 },
+    scrollTop: { type: Number, default: undefined },
     /** Sorts by the raw row value at this key; column format only affects display and filtering. */
     sortBy: { type: String, default: "" },
     sortDirection: {
@@ -139,6 +139,8 @@ export const TDataTable = defineComponent({
     rowSelect: (_payload: TDataTableRowSelectPayload) => true,
   },
   setup(props, { emit }) {
+    const innerScrollTop = ref(0);
+
     const indexedRows = computed<readonly DataRow[]>(() =>
       props.rows.map((row, originalIndex) => ({ row, originalIndex })),
     );
@@ -177,15 +179,25 @@ export const TDataTable = defineComponent({
     }
 
     const visibleRowCapacity = computed(() => Math.max(0, nonNegativeInteger(props.h) - 2));
-    const requestedScrollTop = computed(() => nonNegativeInteger(props.scrollTop));
+    const requestedScrollTop = computed(() =>
+      nonNegativeInteger(props.scrollTop ?? innerScrollTop.value),
+    );
     const normalizedScrollTop = computed(() => {
       const max = Math.max(0, sortedRows.value.length - visibleRowCapacity.value);
       return Math.min(max, requestedScrollTop.value);
     });
+
+    function setScrollTop(next: number): void {
+      const max = Math.max(0, sortedRows.value.length - visibleRowCapacity.value);
+      const clamped = Math.min(max, nonNegativeInteger(next));
+      if (props.scrollTop == null) innerScrollTop.value = clamped;
+      emit("update:scrollTop", clamped);
+    }
+
     watch(
       () => [normalizedScrollTop.value, requestedScrollTop.value] as const,
       ([next, requested]) => {
-        if (next !== requested) emit("update:scrollTop", next);
+        if (next !== requested) setScrollTop(next);
       },
       { immediate: true },
     );
@@ -243,9 +255,9 @@ export const TDataTable = defineComponent({
       if (!entry) return null;
       activeAbsoluteIndex.value = clamped;
       const visibleIndex = clamped - normalizedScrollTop.value;
-      if (visibleIndex < 0) emit("update:scrollTop", clamped);
+      if (visibleIndex < 0) setScrollTop(clamped);
       else if (visibleIndex >= visibleRowCapacity.value) {
-        emit("update:scrollTop", Math.max(0, clamped - visibleRowCapacity.value + 1));
+        setScrollTop(Math.max(0, clamped - visibleRowCapacity.value + 1));
       }
       return clamped;
     }
