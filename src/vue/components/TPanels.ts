@@ -40,6 +40,7 @@ export const TTabs = defineComponent({
 
     function activate(item: TTabsItem): void {
       if (item.disabled) return;
+      if (item.key === props.activeKey) return;
       emit("update:activeKey", item.key);
       emit("change", item);
     }

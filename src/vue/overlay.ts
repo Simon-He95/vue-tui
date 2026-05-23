@@ -46,13 +46,44 @@ export function resolveOverlayPlacement(opts: TOverlayPlacementOptions): { x: nu
   let y = Math.floor((rows - h) / 2);
 
   if (anchor) {
-    if (placement.includes("right")) x = anchor.x + anchor.w;
-    else if (placement.includes("left")) x = anchor.x - w;
-    else x = anchor.x;
-
-    if (placement.includes("bottom")) y = anchor.y + anchor.h;
-    else if (placement.includes("top")) y = anchor.y - h;
-    else y = anchor.y;
+    switch (placement) {
+      case "top":
+        x = anchor.x + Math.floor((anchor.w - w) / 2);
+        y = anchor.y - h;
+        break;
+      case "bottom":
+        x = anchor.x + Math.floor((anchor.w - w) / 2);
+        y = anchor.y + anchor.h;
+        break;
+      case "left":
+        x = anchor.x - w;
+        y = anchor.y + Math.floor((anchor.h - h) / 2);
+        break;
+      case "right":
+        x = anchor.x + anchor.w;
+        y = anchor.y + Math.floor((anchor.h - h) / 2);
+        break;
+      case "top-left":
+        x = anchor.x;
+        y = anchor.y - h;
+        break;
+      case "top-right":
+        x = anchor.x + anchor.w - w;
+        y = anchor.y - h;
+        break;
+      case "bottom-left":
+        x = anchor.x;
+        y = anchor.y + anchor.h;
+        break;
+      case "bottom-right":
+        x = anchor.x + anchor.w - w;
+        y = anchor.y + anchor.h;
+        break;
+      case "center":
+        x = anchor.x + Math.floor((anchor.w - w) / 2);
+        y = anchor.y + Math.floor((anchor.h - h) / 2);
+        break;
+    }
   } else {
     switch (placement) {
       case "top":

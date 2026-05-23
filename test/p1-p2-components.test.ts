@@ -35,6 +35,7 @@ import {
   TTabs,
   TToastViewport,
   TTooltip,
+  resolveOverlayPlacement,
 } from "../src/vue.js";
 import {
   createTerminalApp,
@@ -1305,6 +1306,45 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not emit TTabs change when activating the current tab", async () => {
+    const activeKey = ref("logs");
+    const onChange = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TTabs, {
+          x: 0,
+          y: 0,
+          w: 24,
+          activeKey: activeKey.value,
+          "onUpdate:activeKey": (key: string) => (activeKey.value = key),
+          onChange,
+          items: [
+            { key: "chat", label: "Chat" },
+            { key: "logs", label: "Logs" },
+          ],
+        }),
+      30,
+      4,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 7, clientY: 0, bubbles: true }));
+
+      await nextTick();
+
+      expect(activeKey.value).toBe("logs");
+      expect(onChange).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("uses cell widths for wide feedback labels and tab hit areas", async () => {
     const mounted = await mountTerminal(
       () => [
@@ -2287,6 +2327,66 @@ describe("P1/P2 public components", () => {
     } finally {
       mounted.unmount();
     }
+  });
+
+  it("does not render a toast dismiss hitbox when the viewport is too narrow", async () => {
+    const onDismiss = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TToastViewport, {
+          w: 3,
+          offsetX: 0,
+          offsetY: 0,
+          items: [{ id: "a", message: "Saved", closable: true }],
+          onDismiss,
+        }),
+      10,
+      3,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const focusable = mounted
+        .events()!
+        .debugNodes()
+        .filter((node) => node.visible && node.focusable);
+
+      expect(focusable).toHaveLength(0);
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 1, clientY: 0, bubbles: true }));
+
+      await nextTick();
+      expect(onDismiss).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("aligns anchored bottom-right overlays to the anchor right edge", () => {
+    expect(
+      resolveOverlayPlacement({
+        viewport: { w: 80, h: 24 },
+        size: { w: 10, h: 4 },
+        anchor: { x: 20, y: 5, w: 8, h: 2 },
+        placement: "bottom-right",
+      }),
+    ).toEqual({ x: 18, y: 7 });
+  });
+
+  it("aligns anchored top-left overlays to the anchor left edge", () => {
+    expect(
+      resolveOverlayPlacement({
+        viewport: { w: 80, h: 24 },
+        size: { w: 10, h: 4 },
+        anchor: { x: 20, y: 5, w: 8, h: 2 },
+        placement: "top-left",
+      }),
+    ).toEqual({ x: 20, y: 1 });
   });
 
   it("keeps autocomplete suggestions open when closeOnSelect is false", async () => {
