@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { provide } from "vue";
 import {
   createTheme,
   TAutocompleteInput,
@@ -46,6 +47,7 @@ import {
   ref,
   waitFor,
 } from "./ui-regressions-support.js";
+import { LayoutContextKey } from "../src/vue/context.js";
 
 describe("P1/P2 public components", () => {
   it("lets TForm consume Enter without also confirming the parent dialog", async () => {
@@ -580,6 +582,91 @@ describe("P1/P2 public components", () => {
 
       await nextTick();
 
+      expect(selectedRowKey.value).toBe("c");
+      expect(onRowSelect).toHaveBeenCalledWith({
+        row: rows[2],
+        index: 1,
+        dataIndex: 2,
+        originalIndex: 2,
+        key: "c",
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits correct viewport index when controlled TDataTable scrolls from keyboard before commit", async () => {
+    const rows = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+      { id: "c", name: "Gamma" },
+    ];
+    const scrollTop = ref(0);
+    const selectedRowKey = ref<unknown>(undefined);
+    const onRowSelect = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows,
+          rowKey: "id",
+          selectable: true,
+          scrollTop: scrollTop.value,
+          selectedRowKey: selectedRowKey.value,
+          "onUpdate:scrollTop": (next: number) => {
+            scrollTop.value = next;
+          },
+          "onUpdate:selectedRowKey": (key: unknown) => {
+            selectedRowKey.value = key;
+          },
+          onRowSelect,
+        }),
+      16,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(scrollTop.value).toBe(1);
       expect(selectedRowKey.value).toBe("c");
       expect(onRowSelect).toHaveBeenCalledWith({
         row: rows[2],
@@ -2428,6 +2515,40 @@ describe("P1/P2 public components", () => {
       const lines = mounted.terminal.snapshot().lines;
       expect(lines[0]?.indexOf("Left")).toBe(3);
       expect(lines[3]?.indexOf("Right")).toBe(16);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("places TToastViewport against an explicit viewport width without a parent clip rect", async () => {
+    const NoClipLayout = defineComponent({
+      setup(_, { slots }) {
+        provide(LayoutContextKey, { originX: 0, originY: 0, clipRect: null });
+        return () => slots.default?.();
+      },
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(NoClipLayout, () =>
+          h(TToastViewport, {
+            w: 10,
+            viewportW: 30,
+            viewportH: 4,
+            placement: "top-right",
+            items: [{ id: "saved", title: "Saved", message: "OK" }],
+          }),
+        ),
+      30,
+      4,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]?.indexOf("Saved")).toBe(21);
     } finally {
       mounted.unmount();
     }

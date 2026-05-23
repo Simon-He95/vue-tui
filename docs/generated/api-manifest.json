@@ -7170,6 +7170,20 @@
       "maturity": "advanced",
       "props": [
         {
+          "name": "x",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Fallback placement viewport x when no parent clip rect is available."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Fallback placement viewport y when no parent clip rect is available."
+        },
+        {
           "name": "offsetX",
           "type": "number",
           "required": false,
@@ -7184,7 +7198,22 @@
         {
           "name": "w",
           "type": "number",
-          "required": true
+          "required": true,
+          "description": "Toast item width in terminal cells."
+        },
+        {
+          "name": "viewportW",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Placement viewport width when no parent clip rect is available."
+        },
+        {
+          "name": "viewportH",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Placement viewport height when no parent clip rect is available."
         },
         {
           "name": "zIndex",

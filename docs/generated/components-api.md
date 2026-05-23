@@ -1986,16 +1986,20 @@ Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
-| 名称                   | 类型                                                                                                                          | 默认值                             | 必填 | 说明 |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ---- | ---- |
-| <code>offsetX</code>   | <code>number</code>                                                                                                           | <code>0</code>                     | 否   | —    |
-| <code>offsetY</code>   | <code>number</code>                                                                                                           | <code>0</code>                     | 否   | —    |
-| <code>w</code>         | <code>number</code>                                                                                                           | —                                  | 是   | —    |
-| <code>zIndex</code>    | <code>number</code>                                                                                                           | <code>40</code>                    | 否   | —    |
-| <code>max</code>       | <code>number</code>                                                                                                           | <code>3</code>                     | 否   | —    |
-| <code>placement</code> | <code>&quot;top-right&quot; &#124; &quot;top-left&quot; &#124; &quot;bottom-right&quot; &#124; &quot;bottom-left&quot;</code> | <code>&quot;top-right&quot;</code> | 否   | —    |
-| <code>items</code>     | <code>readonly TToastItem[]</code>                                                                                            | —                                  | 是   | —    |
-| <code>style</code>     | <code>Style</code>                                                                                                            | <code>undefined</code>             | 否   | —    |
+| 名称                   | 类型                                                                                                                          | 默认值                             | 必填 | 说明                                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ---- | -------------------------------------------------------------------- |
+| <code>x</code>         | <code>number</code>                                                                                                           | <code>0</code>                     | 否   | Fallback placement viewport x when no parent clip rect is available. |
+| <code>y</code>         | <code>number</code>                                                                                                           | <code>0</code>                     | 否   | Fallback placement viewport y when no parent clip rect is available. |
+| <code>offsetX</code>   | <code>number</code>                                                                                                           | <code>0</code>                     | 否   | —                                                                    |
+| <code>offsetY</code>   | <code>number</code>                                                                                                           | <code>0</code>                     | 否   | —                                                                    |
+| <code>w</code>         | <code>number</code>                                                                                                           | —                                  | 是   | Toast item width in terminal cells.                                  |
+| <code>viewportW</code> | <code>number</code>                                                                                                           | <code>undefined</code>             | 否   | Placement viewport width when no parent clip rect is available.      |
+| <code>viewportH</code> | <code>number</code>                                                                                                           | <code>undefined</code>             | 否   | Placement viewport height when no parent clip rect is available.     |
+| <code>zIndex</code>    | <code>number</code>                                                                                                           | <code>40</code>                    | 否   | —                                                                    |
+| <code>max</code>       | <code>number</code>                                                                                                           | <code>3</code>                     | 否   | —                                                                    |
+| <code>placement</code> | <code>&quot;top-right&quot; &#124; &quot;top-left&quot; &#124; &quot;bottom-right&quot; &#124; &quot;bottom-left&quot;</code> | <code>&quot;top-right&quot;</code> | 否   | —                                                                    |
+| <code>items</code>     | <code>readonly TToastItem[]</code>                                                                                            | —                                  | 是   | —                                                                    |
+| <code>style</code>     | <code>Style</code>                                                                                                            | <code>undefined</code>             | 否   | —                                                                    |
 
 ### Events
 

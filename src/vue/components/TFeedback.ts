@@ -65,9 +65,18 @@ function progressLineText(
 export const TToastViewport = defineComponent({
   name: "TToastViewport",
   props: {
+    /** Fallback placement viewport x when no parent clip rect is available. */
+    x: { type: Number, default: 0 },
+    /** Fallback placement viewport y when no parent clip rect is available. */
+    y: { type: Number, default: 0 },
     offsetX: { type: Number, default: 0 },
     offsetY: { type: Number, default: 0 },
+    /** Toast item width in terminal cells. */
     w: { type: Number, required: true },
+    /** Placement viewport width when no parent clip rect is available. */
+    viewportW: { type: Number, default: undefined },
+    /** Placement viewport height when no parent clip rect is available. */
+    viewportH: { type: Number, default: undefined },
     zIndex: { type: Number, default: 40 },
     max: { type: Number, default: 3 },
     placement: {
@@ -102,7 +111,12 @@ export const TToastViewport = defineComponent({
             w: Math.max(0, clip.w),
             h: Math.max(0, clip.h),
           }
-        : { x: 0, y: 0, w: Math.max(0, props.w), h: Math.max(0, stackHeight) };
+        : {
+            x: normalizeCellCount(props.x),
+            y: normalizeCellCount(props.y),
+            w: normalizeCellCount(props.viewportW ?? props.w),
+            h: normalizeCellCount(props.viewportH ?? stackHeight),
+          };
       const placed = resolveOverlayPlacement({
         viewport,
         size: { w: props.w, h: stackHeight },

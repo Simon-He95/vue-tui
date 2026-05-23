@@ -179,19 +179,25 @@ export const TDataTable = defineComponent({
     }
 
     const visibleRowCapacity = computed(() => Math.max(0, nonNegativeInteger(props.h) - 2));
+
+    function maxScrollTop(): number {
+      return Math.max(0, sortedRows.value.length - visibleRowCapacity.value);
+    }
+
+    function clampScrollTop(value: unknown): number {
+      return Math.min(maxScrollTop(), nonNegativeInteger(value));
+    }
+
     const requestedScrollTop = computed(() =>
       nonNegativeInteger(props.scrollTop ?? innerScrollTop.value),
     );
-    const normalizedScrollTop = computed(() => {
-      const max = Math.max(0, sortedRows.value.length - visibleRowCapacity.value);
-      return Math.min(max, requestedScrollTop.value);
-    });
+    const normalizedScrollTop = computed(() => clampScrollTop(requestedScrollTop.value));
 
-    function setScrollTop(next: number): void {
-      const max = Math.max(0, sortedRows.value.length - visibleRowCapacity.value);
-      const clamped = Math.min(max, nonNegativeInteger(next));
+    function setScrollTop(next: number): number {
+      const clamped = clampScrollTop(next);
       if (props.scrollTop == null) innerScrollTop.value = clamped;
       emit("update:scrollTop", clamped);
+      return clamped;
     }
 
     watch(
@@ -249,17 +255,20 @@ export const TDataTable = defineComponent({
       return entry ? rowKey(entry.row, entry.originalIndex, props.rowKey as any) : undefined;
     });
 
-    function setActiveAbsoluteIndex(absoluteIndex: number): number | null {
+    function setActiveAbsoluteIndex(
+      absoluteIndex: number,
+    ): { dataIndex: number; scrollTop: number } | null {
       const clamped = Math.max(0, Math.min(sortedRows.value.length - 1, absoluteIndex));
       const entry = sortedRows.value[clamped];
       if (!entry) return null;
       activeAbsoluteIndex.value = clamped;
-      const visibleIndex = clamped - normalizedScrollTop.value;
-      if (visibleIndex < 0) setScrollTop(clamped);
+      let nextScrollTop = normalizedScrollTop.value;
+      const visibleIndex = clamped - nextScrollTop;
+      if (visibleIndex < 0) nextScrollTop = setScrollTop(clamped);
       else if (visibleIndex >= visibleRowCapacity.value) {
-        setScrollTop(Math.max(0, clamped - visibleRowCapacity.value + 1));
+        nextScrollTop = setScrollTop(Math.max(0, clamped - visibleRowCapacity.value + 1));
       }
-      return clamped;
+      return { dataIndex: clamped, scrollTop: nextScrollTop };
     }
 
     function commitSelection(entry: DataRow, index: number, dataIndex: number): void {
@@ -286,8 +295,13 @@ export const TDataTable = defineComponent({
       keyboardActive.value = false;
       const dataIndex = normalizedScrollTop.value + index;
       const originalIndex = originalIndexAt(index);
-      setActiveAbsoluteIndex(dataIndex);
-      commitSelection({ row, originalIndex }, index, dataIndex);
+      const active = setActiveAbsoluteIndex(dataIndex);
+      if (!active) return;
+      const visibleIndex = Math.max(
+        0,
+        Math.min(Math.max(0, visibleRowCapacity.value - 1), dataIndex - active.scrollTop),
+      );
+      commitSelection({ row, originalIndex }, visibleIndex, dataIndex);
     }
 
     function sort(column: TTableColumn): void {
@@ -316,15 +330,15 @@ export const TDataTable = defineComponent({
       keyboardActive.value = true;
       const current = activeAbsoluteIndex.value ?? fallbackAbsoluteIndex;
       if (event.key === "Enter" || event.key === " ") {
-        const clamped = setActiveAbsoluteIndex(current);
-        if (clamped == null) return;
-        const entry = sortedRows.value[clamped];
+        const active = setActiveAbsoluteIndex(current);
+        if (!active) return;
+        const entry = sortedRows.value[active.dataIndex];
         if (!entry) return;
-        const visibleIndex = clamped - normalizedScrollTop.value;
+        const visibleIndex = active.dataIndex - active.scrollTop;
         commitSelection(
           entry,
           Math.max(0, Math.min(Math.max(0, visibleRowCapacity.value - 1), visibleIndex)),
-          clamped,
+          active.dataIndex,
         );
         return;
       }
