@@ -325,6 +325,41 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("matches NaN TSelect option values when valueMode is value", async () => {
+    const selected = ref<unknown>(Number.NaN);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          valueMode: "value",
+          modelValue: selected.value,
+          "onUpdate:modelValue": (value: unknown) => {
+            selected.value = value;
+          },
+          options: [
+            { label: "Other", value: "other" },
+            { label: "NaN", value: Number.NaN },
+          ],
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.getCell(0, 0).style.inverse).not.toBe(true);
+      expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("emits close when clicking an empty TSelect viewport", async () => {
     const onClose = vi.fn();
 
@@ -1806,6 +1841,68 @@ describe("P1/P2 public components", () => {
       await press("ArrowLeft");
       expect(activeKey.value).toBe("one");
       expect(changes).toEqual(["three", "one", "three", "one"]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("navigates TTabs from the active tab, not the stale focused tab", async () => {
+    const activeKey = ref("one");
+    const changes: string[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TTabs, {
+          x: 0,
+          y: 0,
+          w: 32,
+          items: [
+            { key: "one", label: "One" },
+            { key: "two", label: "Two" },
+            { key: "three", label: "Three" },
+          ],
+          activeKey: activeKey.value,
+          "onUpdate:activeKey": (key: string) => {
+            activeKey.value = key;
+          },
+          onChange: (item: { key: string }) => {
+            changes.push(item.key);
+          },
+        }),
+      40,
+      4,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 1, clientY: 0, bubbles: true }),
+      );
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(activeKey.value).toBe("three");
+      expect(changes).toEqual(["two", "three"]);
     } finally {
       mounted.unmount();
     }

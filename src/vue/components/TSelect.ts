@@ -372,7 +372,7 @@ export const TSelect = defineComponent({
     }
 
     function valuesEqual(a: unknown, b: unknown): boolean {
-      return a === b;
+      return Object.is(a, b);
     }
 
     function modelIndex(value: unknown): number {

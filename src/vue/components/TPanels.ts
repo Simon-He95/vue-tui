@@ -86,6 +86,13 @@ export const TTabs = defineComponent({
       activate(item);
     }
 
+    function navigationBaseIndex(fallbackIndex: number): number {
+      const activeIndex = props.items.findIndex(
+        (item) => item.key === props.activeKey && !item.disabled,
+      );
+      return activeIndex >= 0 ? activeIndex : fallbackIndex;
+    }
+
     function onTabKeydown(event: any, index: number): void {
       const key = event?.key;
       if (key === "Enter" || key === " ") {
@@ -94,11 +101,12 @@ export const TTabs = defineComponent({
         return;
       }
 
+      const baseIndex = navigationBaseIndex(index);
       const next =
         key === "ArrowRight"
-          ? findEnabledTabIndex(props.items, index, 1)
+          ? findEnabledTabIndex(props.items, baseIndex, 1)
           : key === "ArrowLeft"
-            ? findEnabledTabIndex(props.items, index, -1)
+            ? findEnabledTabIndex(props.items, baseIndex, -1)
             : key === "Home"
               ? edgeEnabledTabIndex(props.items, "first")
               : key === "End"
