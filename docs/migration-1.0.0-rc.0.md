@@ -2,6 +2,37 @@
 
 This release establishes the first generated API manifest baseline. `api:diff` will skip when the latest tag does not contain `docs/generated/api-manifest.json`; it becomes an effective tagged-release diff gate after the next tagged release includes that manifest.
 
+## `/vue` text and wheel utilities removed
+
+`@simon_he/vue-tui/vue` no longer exports low-level text and wheel helper utilities:
+
+- `clearTextCaches`
+- `formatInlineCellLine`
+- `padEndByCells`
+- `sanitizeInlineText`
+- `sanitizeTextBlock`
+- `sliceByCells`
+- `sliceByCellsRange`
+- `spaces`
+- `textCellWidth`
+- `wrapByCells`
+- `applyWheelScroll`
+- `createWheelScrollState`
+
+These helpers are implementation utilities, not component-level API contracts. Keep equivalent helpers in application or test code, or wait for an explicit documented helper entrypoint before importing them from the package.
+
+Before:
+
+```ts
+import { padEndByCells, sliceByCells, textCellWidth, wrapByCells } from "@simon_he/vue-tui/vue";
+```
+
+After:
+
+```ts
+import { padEndByCells, sliceByCells, textCellWidth, wrapByCells } from "./text-utils";
+```
+
 ## Component Event Payloads
 
 `TCommandPalette` now emits a structured `select` payload:

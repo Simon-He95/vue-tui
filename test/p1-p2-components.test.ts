@@ -1536,6 +1536,81 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("lets TTabs navigate enabled tabs with arrow/home/end keys", async () => {
+    const activeKey = ref("one");
+    const changes: string[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TTabs, {
+          x: 0,
+          y: 0,
+          w: 30,
+          items: [
+            { key: "one", label: "One" },
+            { key: "two", label: "Two", disabled: true },
+            { key: "three", label: "Three" },
+          ],
+          activeKey: activeKey.value,
+          "onUpdate:activeKey": (key: string) => (activeKey.value = key),
+          onChange: (item: { key: string }) => changes.push(item.key),
+        }),
+      40,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const tabNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.y === 0 && node.rect.x === 0);
+
+      expect(tabNode).toBeTruthy();
+      mounted.events()!.focus(tabNode!.id);
+
+      const press = async (key: string): Promise<void> => {
+        mounted.container()!.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key,
+            code: key,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        await nextTick();
+      };
+
+      await press("ArrowRight");
+      expect(activeKey.value).toBe("three");
+      expect(changes).toEqual(["three"]);
+
+      await press("Home");
+      expect(activeKey.value).toBe("one");
+      expect(changes).toEqual(["three", "one"]);
+
+      await press("End");
+      expect(activeKey.value).toBe("three");
+      expect(changes).toEqual(["three", "one", "three"]);
+
+      const thirdTabNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.y === 0 && node.rect.x > 0);
+
+      expect(thirdTabNode).toBeTruthy();
+      mounted.events()!.focus(thirdTabNode!.id);
+
+      await press("ArrowLeft");
+      expect(activeKey.value).toBe("one");
+      expect(changes).toEqual(["three", "one", "three", "one"]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("uses cell widths for wide feedback labels and tab hit areas", async () => {
     const mounted = await mountTerminal(
       () => [

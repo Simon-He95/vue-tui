@@ -19,6 +19,36 @@ export type TTabsItem = Readonly<{
   disabled?: boolean;
 }>;
 
+function findEnabledTabIndex(
+  items: readonly TTabsItem[],
+  start: number,
+  delta: 1 | -1,
+): number | null {
+  const total = items.length;
+  if (total <= 0) return null;
+
+  for (let step = 1; step <= total; step++) {
+    const index = (start + step * delta + total) % total;
+    if (!items[index]?.disabled) return index;
+  }
+
+  return null;
+}
+
+function edgeEnabledTabIndex(items: readonly TTabsItem[], edge: "first" | "last"): number | null {
+  if (edge === "first") {
+    for (let index = 0; index < items.length; index++) {
+      if (!items[index]?.disabled) return index;
+    }
+    return null;
+  }
+
+  for (let index = items.length - 1; index >= 0; index--) {
+    if (!items[index]?.disabled) return index;
+  }
+  return null;
+}
+
 export const TTabs = defineComponent({
   name: "TTabs",
   props: {
@@ -50,6 +80,35 @@ export const TTabs = defineComponent({
       emit("change", item);
     }
 
+    function activateIndex(index: number): void {
+      const item = props.items[index];
+      if (!item) return;
+      activate(item);
+    }
+
+    function onTabKeydown(event: any, index: number): void {
+      const key = event?.key;
+      if (key === "Enter" || key === " ") {
+        event.preventDefault?.();
+        activateIndex(index);
+        return;
+      }
+
+      const next =
+        key === "ArrowRight"
+          ? findEnabledTabIndex(props.items, index, 1)
+          : key === "ArrowLeft"
+            ? findEnabledTabIndex(props.items, index, -1)
+            : key === "Home"
+              ? edgeEnabledTabIndex(props.items, "first")
+              : key === "End"
+                ? edgeEnabledTabIndex(props.items, "last")
+                : null;
+      if (next == null) return;
+      event.preventDefault?.();
+      activateIndex(next);
+    }
+
     return () => {
       const width = normalizeCellCount(props.w);
       let x = 0;
@@ -62,7 +121,8 @@ export const TTabs = defineComponent({
           style: baseStyle.value,
         }),
       ];
-      for (const item of props.items) {
+      for (let index = 0; index < props.items.length; index++) {
+        const item = props.items[index]!;
         const label = item.badge == null ? item.label : `${item.label} ${item.badge}`;
         const text = ` ${label} `;
         const itemWidth = Math.min(width - x, textCellWidth(text));
@@ -89,11 +149,7 @@ export const TTabs = defineComponent({
             h: 1,
             focusable: !item.disabled,
             onClick: () => activate(item),
-            onKeydown: (event: any) => {
-              if (event.key !== "Enter" && event.key !== " ") return;
-              event.preventDefault?.();
-              activate(item);
-            },
+            onKeydown: (event: any) => onTabKeydown(event, index),
           }),
         );
         x += itemWidth;
