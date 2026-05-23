@@ -340,6 +340,18 @@ export const TDataTable = defineComponent({
       handleKeydown(event, normalizedScrollTop.value + index);
     }
 
+    function tableSelectedRowKey(): unknown {
+      return props.selectionMode === "single" ? props.selectedRowKey : undefined;
+    }
+
+    function tableSelectedRowKeys(): readonly unknown[] | undefined {
+      if (props.selectionMode === "multiple") return props.selectedRowKeys;
+      if (props.selectionMode === "single" && props.selectedRowKey !== undefined) {
+        return [props.selectedRowKey];
+      }
+      return undefined;
+    }
+
     return () =>
       h(
         TView as any,
@@ -363,13 +375,8 @@ export const TDataTable = defineComponent({
             rows: tableRows.value,
             rowKey: dataTableRowKey,
             activeRowKey: keyboardActive.value ? activeRowKey.value : undefined,
-            selectedRowKey: props.selectionMode === "multiple" ? undefined : props.selectedRowKey,
-            selectedRowKeys:
-              props.selectionMode === "multiple"
-                ? props.selectedRowKeys
-                : props.selectedRowKey === undefined
-                  ? undefined
-                  : [props.selectedRowKey],
+            selectedRowKey: tableSelectedRowKey(),
+            selectedRowKeys: tableSelectedRowKeys(),
             border: props.border,
             style: props.style,
             headerStyle: props.headerStyle,

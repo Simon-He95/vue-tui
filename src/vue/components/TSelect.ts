@@ -569,15 +569,22 @@ export const TSelect = defineComponent({
       return true;
     }
 
+    function hasNonTextModifier(e: TerminalKeyboardEvent): boolean {
+      return Boolean(e.ctrlKey || e.metaKey || e.altKey);
+    }
+
     function handleSearchEditingKey(e: TerminalKeyboardEvent): boolean {
       if (!props.searchable) return false;
+      if (hasNonTextModifier(e)) return false;
       if (e.key !== "Backspace") return false;
       setQuery(query.value.slice(0, -1));
       return true;
     }
 
-    function handlePrintableKey(char: string): boolean {
+    function handlePrintableKey(e: TerminalKeyboardEvent): boolean {
       if (!props.searchable && !props.typeahead) return false;
+      if (hasNonTextModifier(e)) return false;
+      const char = e.key ?? "";
       if (char.length !== 1 || char < " ") return false;
 
       if (props.searchable) {
@@ -644,7 +651,7 @@ export const TSelect = defineComponent({
         e.preventDefault();
         return;
       }
-      if (handlePrintableKey(e.key ?? "")) {
+      if (handlePrintableKey(e)) {
         e.preventDefault();
       }
     }

@@ -1443,6 +1443,50 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not treat modified printable shortcuts as TSelect search/typeahead input", async () => {
+    const queryUpdates: string[] = [];
+    const modelUpdates: unknown[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: ["apple", "banana"],
+          searchable: true,
+          typeahead: true,
+          autoFocus: true,
+          "onUpdate:query": (value: string) => queryUpdates.push(value),
+          "onUpdate:modelValue": (value: unknown) => modelUpdates.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await nextTick();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "b",
+          code: "KeyB",
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+
+      expect(queryUpdates).toEqual([]);
+      expect(modelUpdates).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("accepts unknown TSelect model values in value mode", async () => {
     const values = [null, undefined, Symbol("key"), () => "value"];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -4141,6 +4185,35 @@ describe("P1/P2 public components", () => {
 
       expect(onRowSelect).not.toHaveBeenCalled();
       expect(onUpdateSelectedRowKey).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not render selected row style when TDataTable selectionMode is none", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 3,
+          columns: [{ key: "id", label: "ID", width: 4 }],
+          rows: [{ id: "a" }],
+          rowKey: "id",
+          selectedRowKey: "a",
+          selectedStyle: { inverse: true },
+          selectionMode: "none",
+        }),
+      16,
+      4,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.getCell(0, 2).style.inverse).not.toBe(true);
     } finally {
       mounted.unmount();
     }
