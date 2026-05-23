@@ -92,10 +92,7 @@ export const TTabs = defineComponent({
       return props.items.findIndex((item) => item.key === key && !item.disabled);
     }
 
-    function activateIndex(
-      index: number,
-      opts: Readonly<{ trackFocus?: boolean }> = {},
-    ): void {
+    function activateIndex(index: number, opts: Readonly<{ trackFocus?: boolean }> = {}): void {
       const item = props.items[index];
       if (!item) return;
       if (opts.trackFocus && !item.disabled) focusedKey.value = item.key;
