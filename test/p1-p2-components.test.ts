@@ -1811,6 +1811,74 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps hidden TSelect loading options inert on keyboard", async () => {
+    const selected = ref<unknown[]>([]);
+    const activeUpdates: number[] = [];
+    const changes: unknown[] = [];
+    const confirms: unknown[] = [];
+    const updates: unknown[] = [];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          options: [
+            { label: "Alpha", value: "alpha" },
+            { label: "Beta", value: "beta" },
+          ],
+          modelValue: selected.value,
+          valueMode: "value",
+          multiple: true,
+          loading: true,
+          autoFocus: true,
+          "onUpdate:activeIndex": (value: number) => activeUpdates.push(value),
+          "onUpdate:modelValue": (value: unknown) => {
+            updates.push(value);
+            selected.value = value as unknown[];
+          },
+          onChange: (value: unknown) => changes.push(value),
+          onConfirm: (value: unknown) => confirms.push(value),
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      const frame = mounted.terminal.snapshot().lines.join("\n");
+      expect(frame).toContain("Loading...");
+      expect(frame).not.toContain("Alpha");
+
+      const container = mounted.container()!;
+      for (const [key, code] of [
+        ["ArrowDown", "ArrowDown"],
+        [" ", "Space"],
+        ["Enter", "Enter"],
+      ] as const) {
+        container.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key,
+            code,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        await nextTick();
+      }
+
+      expect(activeUpdates).toEqual([]);
+      expect(updates).toEqual([]);
+      expect(changes).toEqual([]);
+      expect(confirms).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("clears stale TSelect provider options during debounced query changes", async () => {
     const query = ref("old");
     const debounce = ref(0);

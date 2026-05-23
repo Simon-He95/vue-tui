@@ -393,6 +393,10 @@ export const TSelect = defineComponent({
       return kind !== "separator" && kind !== "group" && !(isOptionObject(opt) && opt.disabled);
     }
 
+    function isOptionInteractionBlocked(): boolean {
+      return Boolean(props.loading || providerLoading.value || providerError.value);
+    }
+
     function findNextInteractiveIndex(start: number, delta: number): number | null {
       const total = Math.max(0, options.value.length);
       if (total <= 0) return null;
@@ -453,6 +457,7 @@ export const TSelect = defineComponent({
     }
 
     function commitSingle(index: number): void {
+      if (isOptionInteractionBlocked()) return;
       const next = clamp(index, 0, Math.max(0, options.value.length - 1));
       const opt = options.value[next];
       if (!isOptionInteractive(opt)) return;
@@ -511,6 +516,7 @@ export const TSelect = defineComponent({
     }
 
     function toggleMultiple(index: number): void {
+      if (isOptionInteractionBlocked()) return;
       const nextIndex = clamp(index, 0, Math.max(0, options.value.length - 1));
       if (!isOptionInteractive(options.value[nextIndex])) return;
       setActive(nextIndex);
@@ -531,6 +537,7 @@ export const TSelect = defineComponent({
     }
 
     function confirmMultiple(): void {
+      if (isOptionInteractionBlocked()) return;
       const indices = getSelectedIndices();
       emitMultiple("confirm", indices);
     }
@@ -549,6 +556,7 @@ export const TSelect = defineComponent({
     }
 
     function moveToTypeaheadMatch(rawPrefix: string, commitModel: boolean): boolean {
+      if (isOptionInteractionBlocked()) return true;
       const prefix = rawPrefix.toLowerCase();
       const total = options.value.length;
       if (!prefix || total <= 0) return true;
@@ -604,6 +612,7 @@ export const TSelect = defineComponent({
       if (e.defaultPrevented) return;
       if (e.key === "ArrowUp" || e.code === "ArrowUp") {
         e.preventDefault();
+        if (isOptionInteractionBlocked()) return;
         if (options.value.length === 0) return;
         const next = findNextInteractiveIndex(active.value, -1) ?? active.value;
         const opt = options.value[next];
@@ -615,6 +624,7 @@ export const TSelect = defineComponent({
       }
       if (e.key === "ArrowDown" || e.code === "ArrowDown") {
         e.preventDefault();
+        if (isOptionInteractionBlocked()) return;
         if (options.value.length === 0) return;
         const next = findNextInteractiveIndex(active.value, 1) ?? active.value;
         const opt = options.value[next];
@@ -626,10 +636,15 @@ export const TSelect = defineComponent({
       }
       if (props.multiple && (e.code === "Space" || e.key === " " || e.key === "Spacebar")) {
         e.preventDefault();
+        if (isOptionInteractionBlocked()) return;
         toggleMultiple(active.value);
         return;
       }
       if (e.key === "Enter") {
+        if (isOptionInteractionBlocked()) {
+          e.preventDefault();
+          return;
+        }
         if (props.multiple) {
           if (inDialog && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
             (e as any).__tuiDialogConfirm = true;
@@ -666,12 +681,7 @@ export const TSelect = defineComponent({
           const r = visibleRect.value;
           const offset = getScrollOffset(r);
           const idx = offset + (e.cellY - r.y);
-          if (
-            props.loading ||
-            providerLoading.value ||
-            providerError.value ||
-            options.value.length === 0
-          ) {
+          if (isOptionInteractionBlocked() || options.value.length === 0) {
             return;
           }
           if (idx >= 0 && idx < options.value.length) commit(idx);

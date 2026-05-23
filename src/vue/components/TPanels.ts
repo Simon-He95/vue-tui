@@ -215,59 +215,58 @@ export const TSplitPane = defineComponent({
     }
 
     return () => {
-      const children = [
-        slots.default?.({ panes: panes.value }) ?? null,
-        ...panes.value.slice(0, -1).map((pane, index) => {
-          const separator =
-            props.direction === "horizontal"
-              ? { x: pane.x + pane.w, y: 0, w: 1, h: props.h, text: "|" }
-              : { x: 0, y: pane.y + pane.h, w: props.w, h: 1, text: "-".repeat(props.w) };
-          return h(
-            TView as any,
-            {
-              key: `separator:${index}`,
-              x: separator.x,
-              y: separator.y,
-              w: separator.w,
-              h: separator.h,
-              focusable: true,
-              onKeydown: (event: any) => {
-                const forward =
-                  props.direction === "horizontal"
-                    ? event.key === "ArrowRight"
-                    : event.key === "ArrowDown";
-                const backward =
-                  props.direction === "horizontal"
-                    ? event.key === "ArrowLeft"
-                    : event.key === "ArrowUp";
-                if (!forward && !backward) return;
-                event.preventDefault?.();
-                resizeAt(index, forward ? 1 : -1);
-              },
+      const paneChildren = slots.default?.({ panes: panes.value }) ?? [];
+      const separatorChildren = panes.value.slice(0, -1).map((pane, index) => {
+        const separator =
+          props.direction === "horizontal"
+            ? { x: pane.x + pane.w, y: 0, w: 1, h: props.h, text: "|" }
+            : { x: 0, y: pane.y + pane.h, w: props.w, h: 1, text: "-".repeat(props.w) };
+        return h(
+          TView as any,
+          {
+            key: `separator:${index}`,
+            x: separator.x,
+            y: separator.y,
+            w: separator.w,
+            h: separator.h,
+            focusable: true,
+            onKeydown: (event: any) => {
+              const forward =
+                props.direction === "horizontal"
+                  ? event.key === "ArrowRight"
+                  : event.key === "ArrowDown";
+              const backward =
+                props.direction === "horizontal"
+                  ? event.key === "ArrowLeft"
+                  : event.key === "ArrowUp";
+              if (!forward && !backward) return;
+              event.preventDefault?.();
+              resizeAt(index, forward ? 1 : -1);
             },
-            () =>
-              props.direction === "horizontal"
-                ? Array.from({ length: separator.h }, (_, row) =>
-                    h(TText as any, {
-                      key: `separator-line:${row}`,
-                      x: 0,
-                      y: row,
-                      w: 1,
-                      value: separator.text,
-                      style: mergeStyle(defaultStyle.value, props.separatorStyle),
-                    }),
-                  )
-                : h(TText as any, {
+          },
+          () =>
+            props.direction === "horizontal"
+              ? Array.from({ length: separator.h }, (_, row) =>
+                  h(TText as any, {
+                    key: `separator-line:${row}`,
                     x: 0,
-                    y: 0,
-                    w: separator.w,
-                    h: separator.h,
+                    y: row,
+                    w: 1,
                     value: separator.text,
                     style: mergeStyle(defaultStyle.value, props.separatorStyle),
                   }),
-          );
-        }),
-      ];
+                )
+              : h(TText as any, {
+                  x: 0,
+                  y: 0,
+                  w: separator.w,
+                  h: separator.h,
+                  value: separator.text,
+                  style: mergeStyle(defaultStyle.value, props.separatorStyle),
+                }),
+        );
+      });
+      const children = [...paneChildren, ...separatorChildren];
       return h(
         TView as any,
         { x: props.x, y: props.y, w: props.w, h: props.h, zIndex: props.zIndex },
