@@ -107,18 +107,27 @@ function changedFilesSince(ref: string): string[] {
   return [];
 }
 
+function isApiReviewNoteFile(file: string): boolean {
+  return (
+    file === "CHANGELOG.md" ||
+    file === "docs/release-candidate.md" ||
+    file === "docs/api-maturity.md" ||
+    /^docs\/migration-[^/]+\.md$/u.test(file)
+  );
+}
+
+function hasApiReviewMarker(file: string): boolean {
+  if (!existsSync(file)) return false;
+  const text = readFileSync(file, "utf8");
+  return /<!--\s*vue-tui-api-diff-reviewed\s*-->|API diff reviewed|API change note/u.test(text);
+}
+
 function hasNonPublicApiReviewNote(ref: string | null): boolean {
   if (process.env.VUE_TUI_API_DIFF_ALLOW_NOTES === "1") return true;
   if (!ref) return false;
 
   const files = changedFilesSince(ref);
-  return files.some(
-    (file) =>
-      file === "CHANGELOG.md" ||
-      file === "docs/release-candidate.md" ||
-      file === "docs/api-maturity.md" ||
-      /^docs\/migration-[^/]+\.md$/u.test(file),
-  );
+  return files.some((file) => isApiReviewNoteFile(file) && hasApiReviewMarker(file));
 }
 
 function tagHasManifest(tag: string): boolean {
@@ -358,12 +367,12 @@ if (notes.length) {
 if (breaking.length) process.exit(1);
 if (reviewRequiredNotes.length && failOnNonPublicNotes && !nonPublicApiReviewNotePresent) {
   console.error(
-    "Non-public API changes require a release note, migration note, API maturity note, or explicit CI override.",
+    "Non-public API changes require a release note, migration note, API maturity note with an API review marker, or explicit CI override.",
   );
   for (const item of reviewRequiredNotes) console.error(`- ${item}`);
   console.error(
     [
-      "Add or update one of:",
+      'Add or update one of these files with <!-- vue-tui-api-diff-reviewed -->, "API diff reviewed", or "API change note":',
       "- CHANGELOG.md",
       "- docs/release-candidate.md",
       "- docs/api-maturity.md",
@@ -376,7 +385,7 @@ if (reviewRequiredNotes.length && failOnNonPublicNotes && !nonPublicApiReviewNot
 }
 if (reviewRequiredNotes.length && nonPublicApiReviewNotePresent) {
   console.log(
-    "Non-public API changes were accepted because a release/migration/API maturity note changed.",
+    "Non-public API changes were accepted because a release/migration/API maturity note includes an API review marker.",
   );
 }
 if (!notes.length) console.log("No API drift detected.");

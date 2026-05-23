@@ -1,5 +1,7 @@
 # Migration to 1.0.0-rc.0
 
+<!-- vue-tui-api-diff-reviewed -->
+
 This release establishes the first generated API manifest baseline. `api:diff` will skip when the latest tag does not contain `docs/generated/api-manifest.json`; it becomes an effective tagged-release diff gate after the next tagged release includes that manifest.
 
 ## `/vue` text and wheel utilities removed

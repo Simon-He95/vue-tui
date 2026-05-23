@@ -195,6 +195,10 @@ function rowKey(
   return index;
 }
 
+function sameRowKey(a: unknown, b: unknown): boolean {
+  return Object.is(a, b);
+}
+
 export const TTable = defineComponent({
   name: "TTable",
   props: {
@@ -350,9 +354,9 @@ export const TTable = defineComponent({
         const y = (props.header ? 2 : 0) + index;
         const key = rowKey(row, index, props.rowKey as any);
         const selected =
-          (props.selectedRowKey !== undefined && key === props.selectedRowKey) ||
-          Boolean(props.selectedRowKeys?.some((candidate) => candidate === key));
-        const active = props.activeRowKey !== undefined && key === props.activeRowKey;
+          (props.selectedRowKey !== undefined && sameRowKey(key, props.selectedRowKey)) ||
+          Boolean(props.selectedRowKeys?.some((candidate) => sameRowKey(candidate, key)));
+        const active = props.activeRowKey !== undefined && sameRowKey(key, props.activeRowKey);
         children.push(
           h(
             TView as any,

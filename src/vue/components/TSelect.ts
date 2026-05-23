@@ -344,11 +344,6 @@ export const TSelect = defineComponent({
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
-    const visibleRect = computed<Rect>(() => {
-      const r = absRect.value;
-      return { ...r, h: visibleRowCount(r) };
-    });
-
     watchEffect(() => {
       const max = Math.max(0, options.value.length - 1);
       if (!props.multiple) {
@@ -674,16 +669,25 @@ export const TSelect = defineComponent({
     }
 
     const { id } = useTerminalNode(() => ({
-      rect: visibleRect.value,
+      rect: absRect.value,
       zIndex: eventZ.value,
       visible: visible.value,
       focusable: true,
       handlers: {
         click: (e: TerminalPointerEvent) => {
-          const r = visibleRect.value;
+          const r = absRect.value;
+          const localY = e.cellY - r.y;
+          if (localY >= visibleRowCount(r)) {
+            emit("close");
+            return;
+          }
           const offset = getScrollOffset(r);
-          const idx = offset + (e.cellY - r.y);
-          if (isOptionInteractionBlocked() || options.value.length === 0) {
+          const idx = offset + localY;
+          if (isOptionInteractionBlocked()) {
+            return;
+          }
+          if (options.value.length === 0) {
+            emit("close");
             return;
           }
           if (idx >= 0 && idx < options.value.length) commit(idx);
@@ -716,7 +720,7 @@ export const TSelect = defineComponent({
 
     useRenderNode(() => ({
       zIndex: props.zIndex,
-      rect: visible.value ? visibleRect.value : { x: 0, y: 0, w: 0, h: 0 },
+      rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
       deps: [
         visible.value,
         absRect.value,
@@ -745,9 +749,10 @@ export const TSelect = defineComponent({
       ],
       paint: (dirtyRows) => {
         if (!visible.value) return;
-        const r = visibleRect.value;
+        const r = absRect.value;
         if (r.w <= 0 || r.h <= 0) return;
         const offset = getScrollOffset(r);
+        const visibleH = visibleRowCount(r);
         const base = props.style ?? defaultStyle.value;
         const highlightBase = props.highlightStyle ?? {
           ...base,
@@ -756,6 +761,11 @@ export const TSelect = defineComponent({
         const selectedSet = props.multiple ? new Set(getSelectedIndices()) : null;
 
         const paintRow = (i: number): void => {
+          if (i >= visibleH) {
+            terminal.write(spaces(r.w), { x: r.x, y: r.y + i, style: base });
+            return;
+          }
+
           const optIndex = offset + i;
           const opt = options.value[optIndex];
           if (props.loading || providerLoading.value) {

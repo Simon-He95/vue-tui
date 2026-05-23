@@ -281,6 +281,39 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("emits close when clicking an empty TSelect viewport", async () => {
+    const onClose = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          options: [],
+          onClose,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
+
+      await nextTick();
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("repaints TSelect active row after typeahead without a model update", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -333,6 +366,40 @@ describe("P1/P2 public components", () => {
 
       expect(mounted.terminal.getCell(0, 1).style.inverse).toBe(true);
       expect(mounted.terminal.getCell(0, 0).style.inverse).not.toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("clears stale TSelect rows when maxVisible shrinks", async () => {
+    const maxVisible = ref(3);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 3,
+          maxVisible: maxVisible.value,
+          options: ["Alpha", "Beta", "Gamma"],
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+      expect(mounted.terminal.snapshot().lines[2]).toContain("Gamma");
+
+      maxVisible.value = 1;
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.snapshot().lines[0]).toContain("Alpha");
+      expect(mounted.terminal.snapshot().lines[1].trim()).toBe("");
+      expect(mounted.terminal.snapshot().lines[2].trim()).toBe("");
     } finally {
       mounted.unmount();
     }
@@ -415,6 +482,36 @@ describe("P1/P2 public components", () => {
 
       expect(lines[0]).toContain("AAAAA BBBB");
       expect(lines[2]).toContain("aaaaa bbbb");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("matches NaN row keys for selected and active TTable rows", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 3,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: [{ id: Number.NaN, name: "Alpha" }],
+          rowKey: "id",
+          selectedRowKey: Number.NaN,
+          activeRowKey: Number.NaN,
+          activeStyle: { underline: true },
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.getCell(0, 2).style.inverse).toBe(true);
+      expect(mounted.terminal.getCell(0, 2).style.underline).toBe(true);
     } finally {
       mounted.unmount();
     }
@@ -2315,7 +2412,7 @@ describe("P1/P2 public components", () => {
     }
   });
 
-  it("keeps TSelect loading, error, and empty rows inert on click", async () => {
+  it("keeps TSelect loading and error rows inert on click", async () => {
     const onLoadingClose = vi.fn();
     const loading = await mountTerminal(
       () =>
@@ -2375,33 +2472,6 @@ describe("P1/P2 public components", () => {
       expect(onErrorClose).not.toHaveBeenCalled();
     } finally {
       error.unmount();
-    }
-
-    const onEmptyClose = vi.fn();
-    const empty = await mountTerminal(
-      () =>
-        h(TSelect, {
-          x: 0,
-          y: 0,
-          w: 24,
-          h: 3,
-          options: [],
-          emptyText: "No options",
-          onClose: onEmptyClose,
-        }),
-      30,
-      5,
-    );
-
-    try {
-      empty.scheduler()?.flushNow();
-      empty
-        .container()!
-        .dispatchEvent(new MouseEvent("click", { clientX: 0, clientY: 0, bubbles: true }));
-      await nextTick();
-      expect(onEmptyClose).not.toHaveBeenCalled();
-    } finally {
-      empty.unmount();
     }
   });
 

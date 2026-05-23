@@ -407,7 +407,7 @@ describe("docs: components coverage", () => {
 
       expect(ciFailed.status).toBe(1);
       expect(ciFailed.stderr).toContain(
-        "Non-public API changes require a release note, migration note, API maturity note, or explicit CI override.",
+        "Non-public API changes require a release note, migration note, API maturity note with an API review marker, or explicit CI override.",
       );
 
       const allowed = spawnSync(tsx, args, {
@@ -426,7 +426,7 @@ describe("docs: components coverage", () => {
     }
   });
 
-  it("accepts non-public API notes in CI when a release or migration note changed", () => {
+  it("accepts non-public API notes in CI when a release or migration note has a review marker", () => {
     const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
@@ -477,7 +477,7 @@ describe("docs: components coverage", () => {
 
       expect(failed.status).toBe(1);
       expect(failed.stderr).toContain(
-        "Non-public API changes require a release note, migration note, API maturity note, or explicit CI override.",
+        "Non-public API changes require a release note, migration note, API maturity note with an API review marker, or explicit CI override.",
       );
 
       mkdirSync(resolve(repo, "docs"), { recursive: true });
@@ -511,6 +511,43 @@ describe("docs: components coverage", () => {
         ).status,
       ).toBe(0);
 
+      const stillFailed = spawnSync(tsx, [script, "--base-ref", "base"], {
+        cwd: repo,
+        encoding: "utf8",
+        env: apiDiffEnv({ CI: "true" }),
+      });
+
+      expect(stillFailed.status).toBe(1);
+      expect(stillFailed.stderr).toContain(
+        "Non-public API changes require a release note, migration note, API maturity note with an API review marker, or explicit CI override.",
+      );
+
+      writeFileSync(
+        resolve(repo, "docs/migration-non-public.md"),
+        "# Non-public API migration note\n\n<!-- vue-tui-api-diff-reviewed -->\n",
+      );
+      expect(
+        spawnSync("git", ["add", "docs/migration-non-public.md"], {
+          cwd: repo,
+          encoding: "utf8",
+        }).status,
+      ).toBe(0);
+      expect(
+        spawnSync(
+          "git",
+          [
+            "-c",
+            "user.name=vue-tui-test",
+            "-c",
+            "user.email=vue-tui-test@example.com",
+            "commit",
+            "-m",
+            "api review marker",
+          ],
+          { cwd: repo, encoding: "utf8" },
+        ).status,
+      ).toBe(0);
+
       const passed = spawnSync(tsx, [script, "--base-ref", "base"], {
         cwd: repo,
         encoding: "utf8",
@@ -519,7 +556,7 @@ describe("docs: components coverage", () => {
 
       expect(passed.status).toBe(0);
       expect(passed.stdout).toContain(
-        "Non-public API changes were accepted because a release/migration/API maturity note changed.",
+        "Non-public API changes were accepted because a release/migration/API maturity note includes an API review marker.",
       );
     } finally {
       rmSync(tmp, { force: true, recursive: true });
