@@ -201,7 +201,7 @@ function writeHighlightedText(
 export type TSelectMultipleChangePayload = Readonly<{
   indices: number[];
   labels: string[];
-  values: string[];
+  values: unknown[];
 }>;
 export type TSelectMultipleEmitMode = "label" | "value" | "index" | "both";
 export type TSelectModelValue = unknown;
@@ -481,17 +481,26 @@ export const TSelect = defineComponent({
     }
 
     function makeMultiplePayload(indices: number[]): TSelectMultipleChangePayload {
-      const labels = indices
-        .map((i) => options.value[i])
-        .filter(Boolean)
-        .map((opt) => getOptionLabel(opt!));
-      return { indices, labels, values: labels };
+      const selected = indices.flatMap((index) => {
+        const option = options.value[index];
+        return option == null ? [] : [{ index, option }];
+      });
+
+      return {
+        indices: selected.map((entry) => entry.index),
+        labels: selected.map((entry) => getOptionLabel(entry.option)),
+        values: selected.map((entry) => getOptionValue(entry.option, entry.index)),
+      };
     }
 
     function emitMultiple(name: "change" | "confirm", indices: number[]): void {
       const payload = makeMultiplePayload(indices);
       if (props.multipleEmit === "index") {
         emit(name, payload.indices);
+        return;
+      }
+      if (props.multipleEmit === "value") {
+        emit(name, payload.values);
         return;
       }
       if (props.multipleEmit === "both") {
@@ -759,8 +768,11 @@ export const TSelect = defineComponent({
           }
 
           const isActiveRow = optIndex === active.value;
+          const interactive = isOptionInteractive(opt);
+          const disabledOption = isOptionObject(opt) && Boolean(opt.disabled);
           const isChecked = props.multiple ? selectedSet!.has(optIndex) : isActiveRow;
-          const isHighlighted = props.multiple ? focused.value && isActiveRow : isActiveRow;
+          const isHighlighted =
+            interactive && (props.multiple ? focused.value && isActiveRow : isActiveRow);
           const prefix = props.multiple ? (isChecked ? "[x] " : "[ ] ") : "";
           const label = sanitizeInlineText(getOptionLabel(opt));
           const detail = getOptionDetail(opt);
@@ -773,7 +785,8 @@ export const TSelect = defineComponent({
           const detailAccentSegments = getOptionDetailAccentSegments(opt);
 
           const optStyle = getOptionStyle(opt);
-          const rowBase: Style = optStyle ? { ...base, ...optStyle } : base;
+          const rawRowBase: Style = optStyle ? { ...base, ...optStyle } : base;
+          const rowBase: Style = disabledOption ? { ...rawRowBase, dim: true } : rawRowBase;
           const optHighlightStyle = getOptionHighlightStyle(opt);
           const rowHighlightBase: Style = optHighlightStyle
             ? { ...highlightBase, ...optHighlightStyle }

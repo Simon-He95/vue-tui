@@ -2162,6 +2162,37 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("emits autocomplete provider loadError", async () => {
+    const onLoadError = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          modelValue: "a",
+          suggestionProvider: async () => {
+            throw new Error("autocomplete network down");
+          },
+          onLoadError,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await waitFor(() => (onLoadError.mock.calls.length ? true : null));
+
+      expect(onLoadError).toHaveBeenCalledWith({
+        query: "a",
+        error: expect.any(Error),
+      });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("forwards autocomplete input and change events from the inner input", async () => {
     const value = ref("");
     const inputs: string[] = [];
@@ -3292,6 +3323,38 @@ describe("P1/P2 public components", () => {
       expect(provider.mock.calls.map(([q]) => q)).not.toContain("new");
       expect(loadingFrame).toContain("Loading...");
       expect(loadingFrame).not.toContain("Old command");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits command palette provider loadError", async () => {
+    const onLoadError = vi.fn();
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 32,
+          h: 10,
+          itemsProvider: async () => {
+            throw new Error("palette network down");
+          },
+          onLoadError,
+        }),
+      50,
+      14,
+    );
+
+    try {
+      await waitFor(() => {
+        mounted.scheduler()?.flushNow();
+        return onLoadError.mock.calls.length ? true : null;
+      });
+
+      expect(onLoadError).toHaveBeenCalledWith({
+        query: "",
+        error: expect.any(Error),
+      });
     } finally {
       mounted.unmount();
     }

@@ -2,7 +2,9 @@ import type {
   DialogButton,
   SelectOptionWithStyle,
   Style,
+  TAutocompleteLoadErrorPayload,
   TCommandPaletteItem,
+  TCommandPaletteLoadErrorPayload,
   TCommandPaletteSelectPayload,
   TSelectMultipleChangePayload,
   TSelectMultipleEmitMode,
@@ -48,7 +50,7 @@ type _TSelectMultipleChangePayloadShape = Assert<
     Readonly<{
       indices: number[];
       labels: string[];
-      values: string[];
+      values: unknown[];
     }>
   >
 >;
@@ -70,4 +72,12 @@ type _TCommandPaletteSelectPayloadShape = Assert<
       source: "keyboard" | "pointer";
     }>
   >
+>;
+
+type _TCommandPaletteLoadErrorPayloadShape = Assert<
+  Equal<TCommandPaletteLoadErrorPayload, Readonly<{ query: string; error: unknown }>>
+>;
+
+type _TAutocompleteLoadErrorPayloadShape = Assert<
+  Equal<TAutocompleteLoadErrorPayload, Readonly<{ query: string; error: unknown }>>
 >;

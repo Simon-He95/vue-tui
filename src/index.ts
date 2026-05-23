@@ -25,6 +25,7 @@ export {
 export type {
   TCommandPaletteItem,
   TCommandPaletteItemsProvider,
+  TCommandPaletteLoadErrorPayload,
   TCommandPaletteMatcher,
   TCommandPaletteMatcherResult,
   TCommandPaletteMatchRange,
@@ -53,6 +54,7 @@ export {
   TSwitch,
 } from "./vue/components/TForm.js";
 export type {
+  TAutocompleteLoadErrorPayload,
   TAutocompleteOption,
   TAutocompleteSelectPayload,
   TAutocompleteSuggestionProvider,

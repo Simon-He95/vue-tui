@@ -101,7 +101,7 @@ export const sharedPublicPropDescriptions: Record<string, string> = {
   itemVersion: "External version key for item changes that keep array identity stable.",
   multiple: "Enables multi-select mode.",
   multipleEmit:
-    'Payload shape used by multi-select change and confirm events; "value" is a deprecated alias for "label".',
+    'Payload shape used by multi-select change and confirm events: "label" emits labels, "value" emits option values, "index" emits indices, and "both" emits an object payload.',
   closeOnBlur: "Emits close when focus leaves the component.",
   initialQuery: "Query used when the command palette opens.",
   showRowDetails: "Shows command detail text next to labels.",
@@ -502,6 +502,10 @@ export const publicEventDescriptions: Record<string, string> = {
 };
 
 export const componentPublicEventDescriptions: Record<string, string> = {
+  "TAutocompleteInput.loadError":
+    "Emitted when the async suggestion provider rejects; aborted stale requests do not emit.",
+  "TCommandPalette.loadError":
+    "Emitted when the async command provider rejects; aborted stale requests do not emit.",
   "TDataTable.rowSelect":
     "Emitted when a data table row is selected; index is viewport-local, dataIndex is filtered/sorted, and originalIndex is the input row index.",
   "TSelect.change":
@@ -528,7 +532,9 @@ export const publicEventPayloads: Record<string, string> = {
 };
 
 export const componentEventPayloads: Record<string, string> = {
+  "TAutocompleteInput.loadError": "TAutocompleteLoadErrorPayload",
   "TAutocompleteInput.select": "TAutocompleteSelectPayload",
+  "TCommandPalette.loadError": "TCommandPaletteLoadErrorPayload",
   "TCommandPalette.select": "TCommandPaletteSelectPayload",
   "TDataTable.rowSelect": "TDataTableRowSelectPayload",
   "TDataTable.sortChange": "TDataTableSortChangePayload",
@@ -543,8 +549,9 @@ export const componentEventPayloads: Record<string, string> = {
   "TList.scroll": "number",
   "TPasswordInput.change": "string",
   "TPasswordInput.input": "string",
-  "TSelect.change": "string | string[] | number[] | TSelectMultipleChangePayload | null",
-  "TSelect.confirm": "string[] | number[] | TSelectMultipleChangePayload",
+  "TSelect.change":
+    "string | string[] | unknown[] | number[] | TSelectMultipleChangePayload | null",
+  "TSelect.confirm": "string[] | unknown[] | number[] | TSelectMultipleChangePayload",
   "TSelect.loadError": "{ query: string; error: unknown }",
   "TTable.headerClick": "TTableHeaderClickPayload",
   "TTable.rowClick": "TTableRowClickPayload",

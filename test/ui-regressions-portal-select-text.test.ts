@@ -812,6 +812,29 @@ describe("ui regressions portal select and text", () => {
     mounted.unmount();
   });
 
+  it("dims disabled TSelect options", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: [{ label: "Disabled", disabled: true }, { label: "Enabled" }],
+        }),
+      24,
+      5,
+    );
+
+    await nextTick();
+    mounted.scheduler()!.flushNow();
+
+    expect(mounted.terminal.getCell(0, 0).style.dim).toBe(true);
+    expect(mounted.terminal.getCell(0, 1).style.dim).not.toBe(true);
+
+    mounted.unmount();
+  });
+
   it('TSelect valueMode="option" emits option arrays in multi-select mode', async () => {
     const alpha = { label: "Alpha", value: { id: "a" } };
     const beta = { label: "Beta", value: { id: "b" } };
@@ -960,7 +983,7 @@ describe("ui regressions portal select and text", () => {
     mounted.unmount();
   });
 
-  it('TSelect multipleEmit="both" emits labels in the structured payload', async () => {
+  it('TSelect multipleEmit="both" emits labels and values in the structured payload', async () => {
     const selected = ref<string[]>(["alpha", "gamma"]);
     const confirmed = ref<any>(null);
 
@@ -1001,12 +1024,12 @@ describe("ui regressions portal select and text", () => {
     expect(confirmed.value).toEqual({
       indices: [0, 2],
       labels: ["Alpha", "Gamma"],
-      values: ["Alpha", "Gamma"],
+      values: ["alpha", "gamma"],
     });
     mounted.unmount();
   });
 
-  it('TSelect multipleEmit="value" remains a label alias', async () => {
+  it('TSelect multipleEmit="value" emits option values', async () => {
     const selected = ref<string[]>(["alpha", "gamma"]);
     const confirmed = ref<any>(null);
 
@@ -1044,7 +1067,60 @@ describe("ui regressions portal select and text", () => {
     );
     await nextTick();
 
-    expect(confirmed.value).toEqual(["Alpha", "Gamma"]);
+    expect(confirmed.value).toEqual(["alpha", "gamma"]);
+    mounted.unmount();
+  });
+
+  it("emits TSelect multiple option values on change when multipleEmit is value", async () => {
+    const selected = ref<string[]>(["a"]);
+    const updates: unknown[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          multiple: true,
+          valueMode: "value",
+          multipleEmit: "value",
+          options: [
+            { label: "Alpha", value: "a" },
+            { label: "Beta", value: "b" },
+          ],
+          modelValue: selected.value,
+          "onUpdate:modelValue": (value: unknown) => {
+            selected.value = Array.isArray(value) ? (value as string[]) : [];
+          },
+          onChange: (payload: unknown) => updates.push(payload),
+          autoFocus: true,
+        }),
+      24,
+      5,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        code: "ArrowDown",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: " ",
+        code: "Space",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    await nextTick();
+
+    expect(updates.at(-1)).toEqual(["a", "b"]);
     mounted.unmount();
   });
 

@@ -49,6 +49,11 @@ export type TCommandPaletteItemsProvider = (
   ctx: { signal: AbortSignal },
 ) => Promise<readonly TCommandPaletteItem[]>;
 
+export type TCommandPaletteLoadErrorPayload = Readonly<{
+  query: string;
+  error: unknown;
+}>;
+
 export type TCommandPaletteSelectPayload = Readonly<{
   item: TCommandPaletteItem;
   index: number;
@@ -316,6 +321,7 @@ export const TCommandPalette = defineComponent({
     "update:query": (_value: string) => true,
     "update:selectedIndex": (_index: number) => true,
     select: (_payload: TCommandPaletteSelectPayload) => true,
+    loadError: (_payload: TCommandPaletteLoadErrorPayload) => true,
     close: () => true,
   },
   setup(props, { emit }) {
@@ -516,6 +522,7 @@ export const TCommandPalette = defineComponent({
               if (controller.signal.aborted) return;
               providerItems.value = [];
               providerError.value = error instanceof Error ? error.message : String(error);
+              emit("loadError", { query: q, error });
             })
             .finally(() => {
               if (!controller.signal.aborted) providerLoading.value = false;

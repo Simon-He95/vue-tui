@@ -37,6 +37,11 @@ export type TAutocompleteSuggestionProvider = (
   ctx: { signal: AbortSignal },
 ) => Promise<readonly TAutocompleteOption[]>;
 
+export type TAutocompleteLoadErrorPayload = Readonly<{
+  query: string;
+  error: unknown;
+}>;
+
 export type TFormModel = Record<string, unknown>;
 export type TFormRule = (value: unknown, model: TFormModel) => string | null | undefined;
 export type TFormSubmitPayload = Readonly<{
@@ -580,6 +585,7 @@ export const TAutocompleteInput = defineComponent({
     input: (_value: string) => true,
     change: (_value: string) => true,
     select: (_payload: TAutocompleteSelectPayload) => true,
+    loadError: (_payload: TAutocompleteLoadErrorPayload) => true,
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
@@ -681,12 +687,15 @@ export const TAutocompleteInput = defineComponent({
           providerAbort = controller;
           void provider(query, { signal: controller.signal })
             .then((suggestions) => {
-              if (!controller.signal.aborted) providerSuggestions.value = suggestions;
+              if (controller.signal.aborted) return;
+              providerSuggestions.value = suggestions;
+              providerError.value = null;
             })
             .catch((error: unknown) => {
               if (controller.signal.aborted) return;
               providerSuggestions.value = [];
               providerError.value = error instanceof Error ? error.message : String(error);
+              emit("loadError", { query, error });
             })
             .finally(() => {
               if (!controller.signal.aborted) providerLoading.value = false;

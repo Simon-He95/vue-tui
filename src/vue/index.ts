@@ -18,6 +18,7 @@ export { computeCommandPaletteMatchRanges, TCommandPalette } from "./components/
 export type {
   TCommandPaletteItem,
   TCommandPaletteItemsProvider,
+  TCommandPaletteLoadErrorPayload,
   TCommandPaletteMatcher,
   TCommandPaletteMatcherResult,
   TCommandPaletteMatchRange,
@@ -54,6 +55,7 @@ export {
   useTForm,
 } from "./components/TForm.js";
 export type {
+  TAutocompleteLoadErrorPayload,
   TAutocompleteOption,
   TAutocompleteSelectPayload,
   TAutocompleteSuggestionProvider,
