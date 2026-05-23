@@ -1576,6 +1576,42 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("normalizes non-finite feedback component widths", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TProgress, { x: 0, y: 0, w: Number.POSITIVE_INFINITY, value: 50 }),
+        h(TBadge, { x: 0, y: 1, w: Number.POSITIVE_INFINITY, value: "long" }),
+        h(TTag, { x: 0, y: 2, w: Number.POSITIVE_INFINITY, label: "alpha" }),
+        h(TSpinner, {
+          x: 0,
+          y: 3,
+          w: Number.POSITIVE_INFINITY,
+          label: "Thinking",
+        }),
+        h(TCode, {
+          x: 0,
+          y: 4,
+          w: Number.POSITIVE_INFINITY,
+          value: "pnpm test",
+        }),
+        h(TToastViewport, {
+          offsetY: 5,
+          w: Number.POSITIVE_INFINITY,
+          items: [{ id: "saved", message: "Saved" }],
+        }),
+      ],
+      30,
+      8,
+    );
+
+    try {
+      await nextTick();
+      expect(() => mounted.scheduler()?.flushNow()).not.toThrow();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("keeps narrow progress, badge, and tag text inside their cell widths", async () => {
     const mounted = await mountTerminal(
       () => [

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { TBox, TDialog, TInput, TSelect, TText, TView } from "@simon_he/vue-tui";
-import { useLayout, wrapByCells } from "@simon_he/vue-tui/vue";
+import { useLayout } from "@simon_he/vue-tui/vue";
+import { wrapByCells } from "../../../src/vue/utils/text.js";
 
 const layout = useLayout();
 const cols = computed(() => layout.clipRect?.w ?? 0);

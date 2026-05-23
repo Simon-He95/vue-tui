@@ -836,6 +836,13 @@ async function collectSourceExports(
       continue;
     }
 
+    if (ts.isEnumDeclaration(stmt)) {
+      if (!stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
+      out.valueExports.add(stmt.name.text);
+      out.typeExports.add(stmt.name.text);
+      continue;
+    }
+
     if (
       ts.isVariableStatement(stmt) ||
       ts.isFunctionDeclaration(stmt) ||
@@ -846,6 +853,9 @@ async function collectSourceExports(
         for (const decl of stmt.declarationList.declarations) {
           if (ts.isIdentifier(decl.name)) out.valueExports.add(decl.name.text);
         }
+      } else if (ts.isClassDeclaration(stmt) && stmt.name) {
+        out.valueExports.add(stmt.name.text);
+        out.typeExports.add(stmt.name.text);
       } else if (stmt.name) {
         out.valueExports.add(stmt.name.text);
       }

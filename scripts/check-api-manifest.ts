@@ -88,6 +88,31 @@ if (root) {
   }
 }
 
+const vue = manifest.entrypoints["@simon_he/vue-tui/vue"];
+if (vue) {
+  for (const forbidden of [
+    "applyWheelScroll",
+    "clearTextCaches",
+    "createWheelScrollState",
+    "formatInlineCellLine",
+    "padEndByCells",
+    "sanitizeInlineText",
+    "sanitizeTextBlock",
+    "sliceByCells",
+    "sliceByCellsRange",
+    "spaces",
+    "textCellWidth",
+    "wrapByCells",
+  ]) {
+    if (vue.valueExports.includes(forbidden)) {
+      errors.push(
+        `@simon_he/vue-tui/vue must not export internal utility ${forbidden}; ` +
+          "keep it internal or graduate it through an explicit documented helper entrypoint",
+      );
+    }
+  }
+}
+
 for (const [name, component] of Object.entries(manifest.components)) {
   const entry = manifest.entrypoints[component.entrypoint];
   if (!entry) {

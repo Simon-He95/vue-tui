@@ -2,14 +2,12 @@ import { createApp, defineComponent, h, nextTick } from "vue";
 import { describe, expect, it } from "vitest";
 import { charCellWidth, createTerminal } from "../src/core.js";
 import {
-  TerminalProvider,
-  TText,
   clearTextCaches,
   sliceByCells,
   textCellWidth,
-  useTerminal,
   wrapByCells,
-} from "../src/vue.js";
+} from "../src/vue/utils/text.js";
+import { TerminalProvider, TText, useTerminal } from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 import type { Terminal, WidthProvider } from "../src/core.js";
 

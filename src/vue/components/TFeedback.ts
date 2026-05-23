@@ -33,6 +33,10 @@ function normalizeCellCount(value: number): number {
   return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
+function optionalCellCount(value: number | undefined): number | undefined {
+  return value == null ? undefined : normalizeCellCount(value);
+}
+
 function progressLineText(
   opts: Readonly<{
     width: number;
@@ -41,7 +45,7 @@ function progressLineText(
     ratio: number;
   }>,
 ): string {
-  const width = Math.max(0, Math.floor(opts.width));
+  const width = normalizeCellCount(opts.width);
   if (width <= 0) return "";
 
   const percent = `${Math.round(opts.ratio * 100)}%`;
@@ -132,10 +136,10 @@ export const TToastViewport = defineComponent({
         cursorY += bottom ? -hgt : hgt;
         const level = item.level ?? "info";
         const levelStyle = mergeStyle(baseStyle.value, toneStyle(level));
-        const toastW = Math.max(0, Math.floor(props.w));
+        const toastW = normalizeCellCount(props.w);
         const canDismiss = Boolean(item.closable && toastW >= 5);
         const closeX = Math.max(0, toastW - 2);
-        const textW = Math.max(1, toastW - (canDismiss ? 4 : 2));
+        const textW = Math.max(0, toastW - (canDismiss ? 4 : 2));
         return h(
           TBox as any,
           {
@@ -217,8 +221,9 @@ export const TProgress = defineComponent({
     return () => {
       const max = Math.max(0.000001, props.max);
       const ratio = Math.max(0, Math.min(1, props.value / max));
+      const width = normalizeCellCount(props.w);
       const text = progressLineText({
-        width: props.w,
+        width,
         label: props.label,
         showPercent: props.showPercent,
         ratio,
@@ -226,9 +231,9 @@ export const TProgress = defineComponent({
       return h(TText as any, {
         x: props.x,
         y: props.y,
-        w: props.w,
+        w: width,
         zIndex: props.zIndex,
-        value: fitCellText(text, props.w),
+        value: fitCellText(text, width),
         style: mergeStyle(baseStyle.value, props.barStyle),
       });
     };
@@ -257,12 +262,13 @@ export const TSpinner = defineComponent({
         ? frames[Math.abs(Math.floor(props.frameIndex)) % frames.length]
         : frames[0];
       const text = props.label ? `${frame} ${props.label}` : frame;
+      const width = optionalCellCount(props.w);
       return h(TText as any, {
         x: props.x,
         y: props.y,
-        w: props.w,
+        w: width,
         zIndex: props.zIndex,
-        value: props.w == null ? text : fitCellText(text, props.w),
+        value: width == null ? text : fitCellText(text, width),
         style: baseStyle.value,
       });
     };
@@ -284,12 +290,13 @@ export const TBadge = defineComponent({
     const { defaultStyle } = useTerminal();
     return () => {
       const text = `[${props.value}]`;
+      const width = optionalCellCount(props.w);
       return h(TText as any, {
         x: props.x,
         y: props.y,
-        w: props.w,
+        w: width,
         zIndex: props.zIndex,
-        value: props.w == null ? text : fitCellText(text, props.w),
+        value: width == null ? text : fitCellText(text, width),
         style: mergeStyle(defaultStyle.value, toneStyle(props.tone), props.style),
       });
     };
@@ -311,12 +318,13 @@ export const TTag = defineComponent({
     const { defaultStyle } = useTerminal();
     return () => {
       const text = `<${props.label}>`;
+      const width = optionalCellCount(props.w);
       return h(TText as any, {
         x: props.x,
         y: props.y,
-        w: props.w,
+        w: width,
         zIndex: props.zIndex,
-        value: props.w == null ? text : fitCellText(text, props.w),
+        value: width == null ? text : fitCellText(text, width),
         style: mergeStyle(defaultStyle.value, toneStyle(props.tone), props.style),
       });
     };
@@ -366,14 +374,16 @@ export const TCode = defineComponent({
   },
   setup(props) {
     const { defaultStyle } = useTerminal();
-    return () =>
-      h(TText as any, {
+    return () => {
+      const width = optionalCellCount(props.w);
+      return h(TText as any, {
         x: props.x,
         y: props.y,
-        w: props.w,
+        w: width,
         zIndex: props.zIndex,
-        value: props.w == null ? props.value : fitCellText(props.value, props.w),
+        value: width == null ? props.value : fitCellText(props.value, width),
         style: mergeStyle(defaultStyle.value, props.style),
       });
+    };
   },
 });
