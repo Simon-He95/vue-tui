@@ -410,8 +410,13 @@ export const TCommandPalette = defineComponent({
     watch(
       () => [props.modelValue, props.initialQuery] as const,
       ([open, initial]) => {
-        if (open && props.query == null) innerQuery.value = initial;
-        if (!open && props.resetQueryOnClose && query.value !== "") setQuery("");
+        if (open) {
+          suppressNextDialogClose = false;
+          if (props.query == null) innerQuery.value = initial;
+          return;
+        }
+
+        if (props.resetQueryOnClose && query.value !== "") setQuery("");
       },
       { immediate: true },
     );

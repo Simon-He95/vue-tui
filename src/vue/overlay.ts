@@ -30,17 +30,34 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
+function cellCount(value: unknown): number {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function cellOffset(value: unknown): number {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function resolveOverlayPlacement(opts: TOverlayPlacementOptions): { x: number; y: number } {
-  const cols = Math.max(0, Math.floor(opts.viewport.w));
-  const rows = Math.max(0, Math.floor(opts.viewport.h));
-  const w = Math.max(0, Math.floor(opts.size.w));
-  const h = Math.max(0, Math.floor(opts.size.h));
+  const cols = cellCount(opts.viewport.w);
+  const rows = cellCount(opts.viewport.h);
+  const w = cellCount(opts.size.w);
+  const h = cellCount(opts.size.h);
   const placement = opts.placement ?? "center";
-  const dx = Math.floor(opts.offsetX ?? 0);
-  const dy = Math.floor(opts.offsetY ?? 0);
+  const dx = cellOffset(opts.offsetX ?? 0);
+  const dy = cellOffset(opts.offsetY ?? 0);
   const maxX = Math.max(0, cols - w);
   const maxY = Math.max(0, rows - h);
-  const anchor = opts.anchor;
+  const anchor = opts.anchor
+    ? {
+        x: cellOffset(opts.anchor.x),
+        y: cellOffset(opts.anchor.y),
+        w: cellCount(opts.anchor.w),
+        h: cellCount(opts.anchor.h),
+      }
+    : null;
 
   let x = Math.floor((cols - w) / 2);
   let y = Math.floor((rows - h) / 2);

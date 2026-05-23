@@ -1,6 +1,6 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import { computed, defineComponent, h } from "vue";
+import { computed, defineComponent, h, ref } from "vue";
 import { useTerminal } from "../composables/use-terminal.js";
 import { textCellWidth } from "../utils/text.js";
 import { fitCellText, mergeStyle } from "./simple-utils.js";
@@ -10,6 +10,12 @@ import { TView } from "./TView.js";
 function normalizeCellCount(value: number): number {
   const n = Math.floor(Number(value));
   return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function normalizePaneSize(value: unknown, fallback = 0): number {
+  const n = Math.floor(Number(value));
+  if (Number.isFinite(n)) return Math.max(0, n);
+  return normalizeCellCount(fallback);
 }
 
 export type TTabsItem = Readonly<{
@@ -71,6 +77,7 @@ export const TTabs = defineComponent({
   },
   setup(props, { emit }) {
     const { defaultStyle } = useTerminal();
+    const focusedKey = ref<string | null>(null);
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
 
     function activate(item: TTabsItem): void {
@@ -80,24 +87,33 @@ export const TTabs = defineComponent({
       emit("change", item);
     }
 
-    function activateIndex(index: number): void {
+    function enabledTabIndexByKey(key: string | null | undefined): number {
+      if (!key) return -1;
+      return props.items.findIndex((item) => item.key === key && !item.disabled);
+    }
+
+    function activateIndex(index: number, opts: Readonly<{ trackFocus?: boolean }> = {}): void {
       const item = props.items[index];
       if (!item) return;
+      if (opts.trackFocus && !item.disabled) focusedKey.value = item.key;
       activate(item);
     }
 
     function navigationBaseIndex(fallbackIndex: number): number {
-      const activeIndex = props.items.findIndex(
-        (item) => item.key === props.activeKey && !item.disabled,
-      );
+      const activeIndex = enabledTabIndexByKey(props.activeKey);
       return activeIndex >= 0 ? activeIndex : fallbackIndex;
+    }
+
+    function activationBaseIndex(fallbackIndex: number): number {
+      const focusedIndex = enabledTabIndexByKey(focusedKey.value);
+      return focusedIndex >= 0 ? focusedIndex : fallbackIndex;
     }
 
     function onTabKeydown(event: any, index: number): void {
       const key = event?.key;
       if (key === "Enter" || key === " ") {
         event.preventDefault?.();
-        activateIndex(index);
+        activateIndex(activationBaseIndex(index));
         return;
       }
 
@@ -114,7 +130,7 @@ export const TTabs = defineComponent({
                 : null;
       if (next == null) return;
       event.preventDefault?.();
-      activateIndex(next);
+      activateIndex(next, { trackFocus: true });
     }
 
     return () => {
@@ -156,7 +172,13 @@ export const TTabs = defineComponent({
             w: itemWidth,
             h: 1,
             focusable: !item.disabled,
-            onClick: () => activate(item),
+            onClick: () => {
+              if (!item.disabled) focusedKey.value = item.key;
+              activate(item);
+            },
+            onFocus: () => {
+              if (!item.disabled) focusedKey.value = item.key;
+            },
             onKeydown: (event: any) => onTabKeydown(event, index),
           }),
         );
@@ -182,7 +204,7 @@ function resolvePaneSizes(
   const count = sizes.length;
   if (count === 0) return [];
   if (available <= 0) return sizes.map(() => 0);
-  const mins = sizes.map((_, index) => Math.max(0, Math.floor(minSizes[index] ?? 1)));
+  const mins = sizes.map((_, index) => normalizePaneSize(minSizes[index], 1));
   const minTotal = mins.reduce((sum, min) => sum + min, 0);
 
   if (minTotal >= available) {
@@ -201,7 +223,9 @@ function resolvePaneSizes(
     return out;
   }
 
-  const out = sizes.map((size, index) => Math.max(mins[index]!, Math.floor(size)));
+  const out = sizes.map((size, index) =>
+    Math.max(mins[index]!, normalizePaneSize(size, mins[index]!)),
+  );
   const used = out.reduce((sum, size) => sum + size, 0);
 
   if (used > available) {
@@ -281,8 +305,8 @@ export const TSplitPane = defineComponent({
       if (index < 0 || index >= next.length - 1) return;
       const left0 = next[index]!;
       const right0 = next[index + 1]!;
-      const leftMin = Math.max(0, Math.floor(props.minSizes[index] ?? 1));
-      const rightMin = Math.max(0, Math.floor(props.minSizes[index + 1] ?? 1));
+      const leftMin = normalizePaneSize(props.minSizes[index], 1);
+      const rightMin = normalizePaneSize(props.minSizes[index + 1], 1);
       const applied = Math.max(leftMin - left0, Math.min(right0 - rightMin, delta));
       next[index] = left0 + applied;
       next[index + 1] = right0 - applied;
