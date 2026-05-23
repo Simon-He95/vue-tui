@@ -2148,6 +2148,45 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("reserves a dismiss column for closable toast text", async () => {
+    const dismissed: string[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TToastViewport, {
+          w: 12,
+          items: [
+            {
+              id: "long",
+              level: "success",
+              title: "Very long title",
+              message: "Very long message",
+              closable: true,
+            },
+          ],
+          onDismiss: (id: string) => dismissed.push(id),
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]![18]).toBe("x");
+      expect(lines[0]![17]).toBe(" ");
+
+      mounted
+        .container()!
+        .dispatchEvent(new MouseEvent("click", { clientX: 18, clientY: 0, bubbles: true }));
+      await nextTick();
+      expect(dismissed).toEqual(["long"]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("keeps autocomplete suggestions open when closeOnSelect is false", async () => {
     const value = ref("ap");
     const mounted = await mountTerminal(

@@ -113,6 +113,8 @@ export const TToastViewport = defineComponent({
         cursorY += bottom ? -hgt : hgt;
         const level = item.level ?? "info";
         const levelStyle = mergeStyle(baseStyle.value, toneStyle(level));
+        const closeX = Math.max(0, props.w - 2);
+        const textW = Math.max(1, props.w - (item.closable ? 4 : 2));
         return h(
           TBox as any,
           {
@@ -131,21 +133,21 @@ export const TToastViewport = defineComponent({
               ? h(TText as any, {
                   x: 1,
                   y: 0,
-                  w: Math.max(1, props.w - 2),
-                  value: fitCellText(item.title, Math.max(1, props.w - 2)),
+                  w: textW,
+                  value: fitCellText(item.title, textW),
                   style: mergeStyle(levelStyle, { bold: true }),
                 })
               : null,
             h(TText as any, {
               x: 1,
               y: item.title ? 1 : 0,
-              w: Math.max(1, props.w - 2),
-              value: fitCellText(item.message, Math.max(1, props.w - 2)),
+              w: textW,
+              value: fitCellText(item.message, textW),
               style: levelStyle,
             }),
             item.closable
               ? h(TView as any, {
-                  x: Math.max(0, props.w - 3),
+                  x: closeX,
                   y: 0,
                   w: 1,
                   h: 1,
@@ -160,7 +162,7 @@ export const TToastViewport = defineComponent({
               : null,
             item.closable
               ? h(TText as any, {
-                  x: Math.max(0, props.w - 3),
+                  x: closeX,
                   y: 0,
                   w: 1,
                   value: "x",
