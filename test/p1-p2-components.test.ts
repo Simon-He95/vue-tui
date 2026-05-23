@@ -1721,6 +1721,40 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("emits TSelect loadError when optionProvider throws synchronously", async () => {
+    const onLoadError = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          optionProvider: () => {
+            throw new Error("sync option failure");
+          },
+          errorText: "Failed options",
+          onLoadError,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await waitFor(() => (onLoadError.mock.calls.length ? true : null));
+      mounted.scheduler()?.flushNow();
+
+      expect(onLoadError).toHaveBeenCalledWith({
+        query: "",
+        error: expect.any(Error),
+      });
+      expect(mounted.terminal.snapshot().lines[0]).toContain("Failed options");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("keeps TSelect loading, error, and empty rows inert on click", async () => {
     const onLoadingClose = vi.fn();
     const loading = await mountTerminal(
@@ -2403,6 +2437,41 @@ describe("P1/P2 public components", () => {
         query: "a",
         error: expect.any(Error),
       });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits autocomplete loadError when suggestionProvider throws synchronously", async () => {
+    const onLoadError = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TAutocompleteInput, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          modelValue: "a",
+          suggestionProvider: () => {
+            throw new Error("sync autocomplete failure");
+          },
+          errorText: "Failed suggestions",
+          onLoadError,
+        }),
+      30,
+      5,
+    );
+
+    try {
+      await waitFor(() => (onLoadError.mock.calls.length ? true : null));
+      mounted.scheduler()?.flushNow();
+
+      expect(onLoadError).toHaveBeenCalledWith({
+        query: "a",
+        error: expect.any(Error),
+      });
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Failed suggestions");
     } finally {
       mounted.unmount();
     }
@@ -3862,6 +3931,39 @@ describe("P1/P2 public components", () => {
         query: "",
         error: expect.any(Error),
       });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("emits TCommandPalette loadError when itemsProvider throws synchronously", async () => {
+    const onLoadError = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 40,
+          h: 8,
+          itemsProvider: () => {
+            throw new Error("sync command failure");
+          },
+          errorText: "Failed commands",
+          onLoadError,
+        }),
+      60,
+      12,
+    );
+
+    try {
+      await waitFor(() => (onLoadError.mock.calls.length ? true : null));
+      mounted.scheduler()?.flushNow();
+
+      expect(onLoadError).toHaveBeenCalledWith({
+        query: "",
+        error: expect.any(Error),
+      });
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Failed commands");
     } finally {
       mounted.unmount();
     }

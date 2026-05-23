@@ -999,7 +999,13 @@ export const TSelect = defineComponent({
         const run = () => {
           const controller = new AbortController();
           providerAbort = controller;
-          void provider(query, { signal: controller.signal })
+          let request: Promise<readonly SelectOption[]>;
+          try {
+            request = provider(query, { signal: controller.signal });
+          } catch (error) {
+            request = Promise.reject(error);
+          }
+          void request
             .then((items) => {
               if (controller.signal.aborted) return;
               providerOptions.value = items;

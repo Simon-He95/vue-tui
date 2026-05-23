@@ -708,7 +708,13 @@ export const TAutocompleteInput = defineComponent({
         const run = () => {
           const controller = new AbortController();
           providerAbort = controller;
-          void provider(query, { signal: controller.signal })
+          let request: Promise<readonly TAutocompleteOption[]>;
+          try {
+            request = provider(query, { signal: controller.signal });
+          } catch (error) {
+            request = Promise.reject(error);
+          }
+          void request
             .then((suggestions) => {
               if (controller.signal.aborted) return;
               providerSuggestions.value = suggestions;
