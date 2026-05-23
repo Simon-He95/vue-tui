@@ -31,13 +31,47 @@ function readCurrent(): ApiManifest {
   return JSON.parse(readFileSync("docs/generated/api-manifest.json", "utf8")) as ApiManifest;
 }
 
+function readArg(name: string): string | null {
+  const index = process.argv.indexOf(name);
+  if (index < 0) return null;
+  const value = process.argv[index + 1];
+  if (!value) throw new Error(`${name} requires a value`);
+  return value;
+}
+
 function readBaseFromArg(): ApiManifest | null {
-  const baseIndex = process.argv.indexOf("--base");
-  if (baseIndex < 0) return null;
-  const file = process.argv[baseIndex + 1];
-  if (!file) throw new Error("--base requires a manifest path");
+  const file = readArg("--base");
+  if (!file) return null;
   if (!existsSync(file)) throw new Error(`${file} does not exist`);
   return JSON.parse(readFileSync(file, "utf8")) as ApiManifest;
+}
+
+function readBaseRefFromArgOrEnv(): string | null {
+  const explicit = readArg("--base-ref") ?? process.env.VUE_TUI_API_DIFF_BASE_REF ?? null;
+  if (explicit?.trim()) return explicit.trim();
+  if (process.env.GITHUB_BASE_REF?.trim()) {
+    return `refs/remotes/origin/${process.env.GITHUB_BASE_REF.trim()}`;
+  }
+  return null;
+}
+
+function refHasManifest(ref: string): boolean {
+  try {
+    execFileSync("git", ["cat-file", "-e", `${ref}:docs/generated/api-manifest.json`], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readBaseFromRef(ref: string): ApiManifest {
+  const text = execFileSync("git", ["show", `${ref}:docs/generated/api-manifest.json`], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  return JSON.parse(text) as ApiManifest;
 }
 
 function latestTag(): string | null {
@@ -73,11 +107,18 @@ function readBaseFromTag(tag: string): ApiManifest {
 
 const current = readCurrent();
 const argBase = readBaseFromArg();
-const tag = argBase ? null : latestTag();
+const baseRef = argBase ? null : readBaseRefFromArgOrEnv();
+const baseRefIncludesManifest = baseRef ? refHasManifest(baseRef) : false;
+const refBase = baseRef && baseRefIncludesManifest ? readBaseFromRef(baseRef) : null;
+const tag = argBase || baseRef ? null : latestTag();
 const tagIncludesManifest = tag ? tagHasManifest(tag) : false;
-const base = argBase ?? (tag && tagIncludesManifest ? readBaseFromTag(tag) : null);
+const base = argBase ?? refBase ?? (tag && tagIncludesManifest ? readBaseFromTag(tag) : null);
 if (!base) {
   const message = "api:diff missing base manifest";
+  if (baseRef && !baseRefIncludesManifest) {
+    console.log(`${message}; skipped for first manifest baseline against ${baseRef}`);
+    process.exit(0);
+  }
   if (!argBase && tag && !tagIncludesManifest) {
     console.log(`${message}; skipped for first manifest baseline after ${tag}`);
     process.exit(0);

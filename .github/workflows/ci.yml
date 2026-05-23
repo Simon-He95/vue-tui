@@ -55,7 +55,17 @@ jobs:
 
       - run: git diff --exit-code -- docs/generated
 
-      - run: pnpm run api:diff
+      - name: Fetch API diff base branch
+        if: ${{ github.event_name == 'pull_request' }}
+        run: git fetch origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+
+      - name: Diff API manifest against PR base
+        if: ${{ github.event_name == 'pull_request' }}
+        run: pnpm run api:diff -- --base-ref "refs/remotes/origin/${{ github.base_ref }}"
+
+      - name: Diff API manifest against latest release tag
+        if: ${{ github.event_name != 'pull_request' }}
+        run: pnpm run api:diff
 
       - run: pnpm run build:checked
 

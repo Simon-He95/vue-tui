@@ -496,6 +496,112 @@ describe("docs: components coverage", () => {
     }
   });
 
+  it("reads the API diff base manifest from an explicit ref", () => {
+    const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
+
+    try {
+      const repo = resolve(tmp, "repo");
+      mkdirSync(resolve(repo, "docs/generated"), { recursive: true });
+      expect(spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+
+      const base = JSON.parse(JSON.stringify(manifest));
+      base.components.TBadge.props = base.components.TBadge.props.filter(
+        (prop: { name: string }) => prop.name !== "value",
+      );
+      writeFileSync(resolve(repo, "docs/generated/api-manifest.json"), `${JSON.stringify(base)}\n`);
+      expect(
+        spawnSync("git", ["add", "docs/generated/api-manifest.json"], {
+          cwd: repo,
+          encoding: "utf8",
+        }).status,
+      ).toBe(0);
+      expect(
+        spawnSync(
+          "git",
+          [
+            "-c",
+            "user.name=vue-tui-test",
+            "-c",
+            "user.email=vue-tui-test@example.com",
+            "commit",
+            "-m",
+            "base",
+          ],
+          { cwd: repo, encoding: "utf8" },
+        ).status,
+      ).toBe(0);
+      expect(spawnSync("git", ["branch", "base"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+
+      writeFileSync(
+        resolve(repo, "docs/generated/api-manifest.json"),
+        `${JSON.stringify(manifest)}\n`,
+      );
+
+      const result = spawnSync(
+        resolve(process.cwd(), "node_modules/.bin/tsx"),
+        [resolve(process.cwd(), "scripts/diff-api-manifest.ts"), "--base-ref", "base"],
+        { cwd: repo, encoding: "utf8" },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("TBadge.value required prop was added");
+    } finally {
+      rmSync(tmp, { force: true, recursive: true });
+    }
+  });
+
+  it("skips API diff when an explicit ref has no manifest", () => {
+    const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
+
+    try {
+      const repo = resolve(tmp, "repo");
+      mkdirSync(resolve(repo, "docs/generated"), { recursive: true });
+      expect(spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+      writeFileSync(resolve(repo, "README.md"), "baseline\n");
+      expect(spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" }).status).toBe(
+        0,
+      );
+      expect(
+        spawnSync(
+          "git",
+          [
+            "-c",
+            "user.name=vue-tui-test",
+            "-c",
+            "user.email=vue-tui-test@example.com",
+            "commit",
+            "-m",
+            "base",
+          ],
+          { cwd: repo, encoding: "utf8" },
+        ).status,
+      ).toBe(0);
+      expect(spawnSync("git", ["branch", "base"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+
+      writeFileSync(
+        resolve(repo, "docs/generated/api-manifest.json"),
+        `${JSON.stringify(manifest)}\n`,
+      );
+
+      const result = spawnSync(
+        resolve(process.cwd(), "node_modules/.bin/tsx"),
+        [resolve(process.cwd(), "scripts/diff-api-manifest.ts"), "--base-ref", "base"],
+        { cwd: repo, encoding: "utf8" },
+      );
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain(
+        "api:diff missing base manifest; skipped for first manifest baseline against base",
+      );
+    } finally {
+      rmSync(tmp, { force: true, recursive: true });
+    }
+  });
+
   it("flags public component entrypoint and maturity drift", () => {
     const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
