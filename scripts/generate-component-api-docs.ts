@@ -6,9 +6,11 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import {
   ambiguousPublicPropNames,
+  componentExposedDocs,
   componentEventPayloads,
   componentPublicEventDescriptions,
   componentPublicPropDescriptions,
+  componentSlotDocs,
   publicEventDescriptions,
   publicEventPayloads,
   sharedPublicPropDescriptions,
@@ -52,6 +54,8 @@ type ComponentMeta = {
   entrypoint: string;
   props: PropMeta[];
   events: EventMeta[];
+  slots: Array<{ name: string; props?: string; description: string }>;
+  exposed: Array<{ name: string; type: string; description: string }>;
 };
 
 type ApiManifest = {
@@ -582,7 +586,16 @@ function extractComponentMeta(
   const rel = path.relative(packageRoot, absPath).split(path.sep).join("/");
 
   if (!componentOptions) {
-    return { name: componentName, sourceRelPath: rel, maturity, entrypoint, props: [], events: [] };
+    return {
+      name: componentName,
+      sourceRelPath: rel,
+      maturity,
+      entrypoint,
+      props: [],
+      events: [],
+      slots: [...(componentSlotDocs[componentName] ?? [])],
+      exposed: [...(componentExposedDocs[componentName] ?? [])],
+    };
   }
 
   const propsExpr = getObjectPropertyValue(componentOptions, "props");
@@ -592,7 +605,16 @@ function extractComponentMeta(
   const eventDocs = extractEventDocs(sourceFile, componentName);
   const events = emitsExpr ? extractEvents(sourceFile, emitsExpr, printer, eventDocs) : [];
 
-  return { name: componentName, sourceRelPath: rel, maturity, entrypoint, props, events };
+  return {
+    name: componentName,
+    sourceRelPath: rel,
+    maturity,
+    entrypoint,
+    props,
+    events,
+    slots: [...(componentSlotDocs[componentName] ?? [])],
+    exposed: [...(componentExposedDocs[componentName] ?? [])],
+  };
 }
 
 function maturityLabel(maturity: ApiMaturity): string {
@@ -618,16 +640,16 @@ function updateEventPropName(eventName: string): string | null {
 
 function inferEventPayload(component: ComponentMeta, event: EventMeta): PayloadResult {
   if (event.payload) return { payload: event.payload, source: event.payloadSource };
+  const byComponent = `${component.name}.${event.name}`;
+  if (componentEventPayloads[byComponent]) {
+    return { payload: componentEventPayloads[byComponent], source: "component-default" };
+  }
   const updatePropName = updateEventPropName(event.name);
   if (updatePropName) {
     return {
       payload: component.props.find((prop) => prop.name === updatePropName)?.type ?? "unknown",
       source: "update-prop",
     };
-  }
-  const byComponent = `${component.name}.${event.name}`;
-  if (componentEventPayloads[byComponent]) {
-    return { payload: componentEventPayloads[byComponent], source: "component-default" };
   }
   if (event.name === "change" || event.name === "input") {
     return {
@@ -1027,6 +1049,24 @@ function renderManifest(
               ? { descriptionSource: event.descriptionSource }
               : {}),
           })),
+          ...(component.slots.length
+            ? {
+                slots: component.slots.map((slot) => ({
+                  name: slot.name,
+                  ...(slot.props ? { props: slot.props } : {}),
+                  description: slot.description,
+                })),
+              }
+            : {}),
+          ...(component.exposed.length
+            ? {
+                exposed: component.exposed.map((item) => ({
+                  name: item.name,
+                  type: item.type,
+                  description: item.description,
+                })),
+              }
+            : {}),
         },
       ]),
     ),

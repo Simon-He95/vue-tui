@@ -450,6 +450,9 @@ export const TCommandPalette = defineComponent({
       suppressNextDialogClose = true;
       emit("update:modelValue", false);
       emit("close");
+      queueMicrotask(() => {
+        if (props.modelValue) suppressNextDialogClose = false;
+      });
     }
 
     function handleDialogClose(): void {

@@ -623,6 +623,28 @@ describe("docs: components coverage", () => {
         resolve(repo, "docs/generated/api-manifest.json"),
         `${JSON.stringify(manifest)}\n`,
       );
+      expect(
+        spawnSync("git", ["add", "docs/generated/api-manifest.json"], {
+          cwd: repo,
+          encoding: "utf8",
+        }).status,
+      ).toBe(0);
+      expect(
+        spawnSync(
+          "git",
+          [
+            "-c",
+            "user.name=vue-tui-test",
+            "-c",
+            "user.email=vue-tui-test@example.com",
+            "commit",
+            "-m",
+            "current manifest",
+          ],
+          { cwd: repo, encoding: "utf8" },
+        ).status,
+      ).toBe(0);
+      expect(spawnSync("git", ["tag", "v0.0.1"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
 
       const skippedFirstBaseline = spawnSync(tsx, [script], {
         cwd: repo,

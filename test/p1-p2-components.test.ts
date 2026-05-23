@@ -232,6 +232,50 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not leak TDialog close suppression when parent vetoes close", async () => {
+    const open = ref(true);
+    const onClose = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDialog, {
+          modelValue: open.value,
+          "onUpdate:modelValue": () => {},
+          w: 20,
+          h: 5,
+          onClose,
+        }),
+      30,
+      8,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      await Promise.resolve();
+
+      expect(open.value).toBe(true);
+      expect(onClose).toHaveBeenCalledTimes(1);
+
+      open.value = false;
+      await nextTick();
+
+      expect(onClose).toHaveBeenCalledTimes(2);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("drops stale multiple TSelect model indices instead of remapping them", async () => {
     const onConfirm = vi.fn();
 
@@ -4998,6 +5042,72 @@ describe("P1/P2 public components", () => {
       expect(onSelect).toHaveBeenCalledTimes(1);
       expect(open.value).toBe(false);
       expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not leak command palette close suppression when parent vetoes close", async () => {
+    const open = ref(true);
+    let allowClose = false;
+    const onClose = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: open.value,
+          "onUpdate:modelValue": (next: boolean) => {
+            if (allowClose) open.value = next;
+          },
+          items: [{ label: "Open file" }],
+          closeOnSelect: true,
+          w: 32,
+          h: 10,
+          onClose,
+        }),
+      80,
+      24,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      await Promise.resolve();
+
+      expect(open.value).toBe(true);
+      expect(onClose).toHaveBeenCalledTimes(1);
+
+      allowClose = true;
+      const dialogNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.focusable && node.rect.w === 32 && node.rect.h === 10);
+
+      expect(dialogNode).toBeTruthy();
+      mounted.events()!.focus(dialogNode!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(open.value).toBe(false);
+      expect(onClose).toHaveBeenCalledTimes(2);
     } finally {
       mounted.unmount();
     }

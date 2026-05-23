@@ -14,6 +14,8 @@ type Component = {
     deprecated?: string;
   }>;
   events: Array<{ name: string; payload?: string }>;
+  slots?: Array<{ name: string; props?: string }>;
+  exposed?: Array<{ name: string; type: string }>;
 };
 type Entrypoint = {
   maturity: Maturity;
@@ -71,9 +73,25 @@ function readBaseFromRef(ref: string): ApiManifest {
   return JSON.parse(text) as ApiManifest;
 }
 
-function latestTag(): string | null {
+function headTags(): string[] {
   try {
-    const tag = execFileSync("git", ["describe", "--tags", "--abbrev=0"], {
+    return execFileSync("git", ["tag", "--points-at", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function latestComparableTag(): string | null {
+  try {
+    const args = ["describe", "--tags", "--abbrev=0"];
+    for (const tag of headTags()) args.push("--exclude", tag);
+    const tag = execFileSync("git", args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
@@ -154,7 +172,7 @@ const argBase = readBaseFromArg();
 const baseRef = argBase ? null : readBaseRefFromArgOrEnv();
 const baseRefIncludesManifest = baseRef ? refHasManifest(baseRef) : false;
 const refBase = baseRef && baseRefIncludesManifest ? readBaseFromRef(baseRef) : null;
-const tag = argBase || baseRef ? null : latestTag();
+const tag = argBase || baseRef ? null : latestComparableTag();
 const nonPublicReviewBaseRef = argBase ? null : (baseRef ?? tag ?? null);
 const nonPublicApiReviewNotePresent = hasNonPublicApiReviewNote(nonPublicReviewBaseRef);
 const tagIncludesManifest = tag ? tagHasManifest(tag) : false;
@@ -331,6 +349,36 @@ for (const [name, previous] of Object.entries(base.components)) {
       report(previous.maturity, line);
     }
   }
+
+  const nextSlots = new Map((next.slots ?? []).map((slot) => [slot.name, slot]));
+  for (const slot of previous.slots ?? []) {
+    const nextSlot = nextSlots.get(slot.name);
+    if (!nextSlot) {
+      report(previous.maturity, `${name}.${slot.name} slot was removed`);
+      continue;
+    }
+    if ((slot.props ?? "") !== (nextSlot.props ?? "")) {
+      report(
+        previous.maturity,
+        `${name}.${slot.name} slot props changed ${slot.props ?? "-"} -> ${nextSlot.props ?? "-"}`,
+      );
+    }
+  }
+
+  const nextExposed = new Map((next.exposed ?? []).map((item) => [item.name, item]));
+  for (const item of previous.exposed ?? []) {
+    const nextItem = nextExposed.get(item.name);
+    if (!nextItem) {
+      report(previous.maturity, `${name}.${item.name} exposed method was removed`);
+      continue;
+    }
+    if (item.type !== nextItem.type) {
+      report(
+        previous.maturity,
+        `${name}.${item.name} exposed method type changed ${item.type} -> ${nextItem.type}`,
+      );
+    }
+  }
 }
 
 for (const [name, next] of Object.entries(current.components)) {
@@ -351,6 +399,18 @@ for (const [name, next] of Object.entries(current.components)) {
   for (const event of next.events) {
     if (previousEvents.has(event.name)) continue;
     addNote(`${name}.${event.name} event was added`);
+  }
+
+  const previousSlots = new Set((previous.slots ?? []).map((slot) => slot.name));
+  for (const slot of next.slots ?? []) {
+    if (!previousSlots.has(slot.name)) addNote(`${name}.${slot.name} slot was added`);
+  }
+
+  const previousExposed = new Set((previous.exposed ?? []).map((item) => item.name));
+  for (const item of next.exposed ?? []) {
+    if (!previousExposed.has(item.name)) {
+      addNote(`${name}.${item.name} exposed method was added`);
+    }
   }
 }
 

@@ -1025,6 +1025,9 @@ export const TDialog = defineComponent({
       skipNextCloseEmit.value = true;
       emit("update:modelValue", false);
       emit("close");
+      queueMicrotask(() => {
+        if (props.modelValue) skipNextCloseEmit.value = false;
+      });
     }
 
     function onDialogFocus(): void {

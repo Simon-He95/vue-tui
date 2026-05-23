@@ -1507,6 +1507,12 @@
           "description": "Emitted when the pointer leaves the component.",
           "descriptionSource": "shared-default"
         }
+      ],
+      "slots": [
+        {
+          "name": "default",
+          "description": "Content rendered inside the box content area with origin, clipping, and scroll offsets applied."
+        }
       ]
     },
     "TBreadcrumb": {
@@ -2649,6 +2655,12 @@
           "description": "Emitted when a focused action is confirmed.",
           "descriptionSource": "shared-default"
         }
+      ],
+      "slots": [
+        {
+          "name": "default",
+          "description": "Dialog body content rendered inside the content rect before optional footer buttons."
+        }
       ]
     },
     "TDivider": {
@@ -2850,6 +2862,12 @@
           "description": "Emitted after terminal selection copy.",
           "descriptionSource": "shared-default"
         }
+      ],
+      "slots": [
+        {
+          "name": "default",
+          "description": "Terminal component tree rendered inside the provider runtime context."
+        }
       ]
     },
     "TFlow": {
@@ -2978,6 +2996,34 @@
           "name": "validation",
           "payload": "Record<string, string>"
         }
+      ],
+      "slots": [
+        {
+          "name": "default",
+          "description": "Form field subtree rendered with TForm context provided to descendants."
+        }
+      ],
+      "exposed": [
+        {
+          "name": "validate",
+          "type": "() => boolean",
+          "description": "Runs synchronous rules, updates errors, emits validation, and returns whether the form is valid."
+        },
+        {
+          "name": "submit",
+          "type": "() => void",
+          "description": "Runs validation and emits submit unless the form is disabled or read-only."
+        },
+        {
+          "name": "clearValidation",
+          "type": "() => void",
+          "description": "Clears all validation errors and emits validation with an empty error object."
+        },
+        {
+          "name": "setFieldError",
+          "type": "(name: string, message: string | null | undefined) => void",
+          "description": "Sets or clears one field error and emits validation with the updated errors."
+        }
       ]
     },
     "TFormField": {
@@ -3101,7 +3147,13 @@
           "descriptionSource": "shared-default"
         }
       ],
-      "events": []
+      "events": [],
+      "slots": [
+        {
+          "name": "default",
+          "description": "Field control content rendered between the label and help/error row."
+        }
+      ]
     },
     "TInput": {
       "entrypoint": "@simon_he/vue-tui",
@@ -6187,8 +6239,8 @@
       "events": [
         {
           "name": "update:modelValue",
-          "payload": "TSelectModelValue",
-          "payloadSource": "update-prop",
+          "payload": "number | number[] | string | string[] | unknown | unknown[] | SelectOption | SelectOption[]",
+          "payloadSource": "component-default",
           "description": "Emitted when the controlled model value changes.",
           "descriptionSource": "shared-default"
         },
@@ -6493,6 +6545,13 @@
         {
           "name": "resize",
           "payload": "number[]"
+        }
+      ],
+      "slots": [
+        {
+          "name": "default",
+          "props": "{ panes: readonly TSplitPaneRect[] }",
+          "description": "Pane content renderer. The host renders pane children from the resolved pane rectangles."
         }
       ]
     },
@@ -8404,6 +8463,12 @@
           "payloadSource": "shared-default",
           "description": "Emitted when the component loses focus.",
           "descriptionSource": "shared-default"
+        }
+      ],
+      "slots": [
+        {
+          "name": "default",
+          "description": "Children rendered with this view's layout origin, clip rect, render stack, and event z-index context."
         }
       ]
     },

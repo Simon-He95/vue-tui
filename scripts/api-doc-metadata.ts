@@ -6,6 +6,18 @@ export const ambiguousPublicPropNames = new Set([
   "value",
 ]);
 
+export type ComponentSlotDoc = Readonly<{
+  name: string;
+  props?: string;
+  description: string;
+}>;
+
+export type ComponentExposedDoc = Readonly<{
+  name: string;
+  type: string;
+  description: string;
+}>;
+
 export const sharedPublicPropDescriptions: Record<string, string> = {
   x: "Left position in terminal cells.",
   y: "Top position in terminal cells.",
@@ -452,6 +464,82 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
   },
 };
 
+export const componentSlotDocs: Record<string, readonly ComponentSlotDoc[]> = {
+  TerminalProvider: [
+    {
+      name: "default",
+      description: "Terminal component tree rendered inside the provider runtime context.",
+    },
+  ],
+  TBox: [
+    {
+      name: "default",
+      description:
+        "Content rendered inside the box content area with origin, clipping, and scroll offsets applied.",
+    },
+  ],
+  TView: [
+    {
+      name: "default",
+      description:
+        "Children rendered with this view's layout origin, clip rect, render stack, and event z-index context.",
+    },
+  ],
+  TDialog: [
+    {
+      name: "default",
+      description:
+        "Dialog body content rendered inside the content rect before optional footer buttons.",
+    },
+  ],
+  TFormField: [
+    {
+      name: "default",
+      description: "Field control content rendered between the label and help/error row.",
+    },
+  ],
+  TForm: [
+    {
+      name: "default",
+      description: "Form field subtree rendered with TForm context provided to descendants.",
+    },
+  ],
+  TSplitPane: [
+    {
+      name: "default",
+      props: "{ panes: readonly TSplitPaneRect[] }",
+      description:
+        "Pane content renderer. The host renders pane children from the resolved pane rectangles.",
+    },
+  ],
+};
+
+export const componentExposedDocs: Record<string, readonly ComponentExposedDoc[]> = {
+  TForm: [
+    {
+      name: "validate",
+      type: "() => boolean",
+      description:
+        "Runs synchronous rules, updates errors, emits validation, and returns whether the form is valid.",
+    },
+    {
+      name: "submit",
+      type: "() => void",
+      description: "Runs validation and emits submit unless the form is disabled or read-only.",
+    },
+    {
+      name: "clearValidation",
+      type: "() => void",
+      description: "Clears all validation errors and emits validation with an empty error object.",
+    },
+    {
+      name: "setFieldError",
+      type: "(name: string, message: string | null | undefined) => void",
+      description: "Sets or clears one field error and emits validation with the updated errors.",
+    },
+  ],
+};
+
 export const publicEventDescriptions: Record<string, string> = {
   "update:modelValue": "Emitted when the controlled model value changes.",
   "update:selectedIndex": "Emitted when the controlled active index changes.",
@@ -532,6 +620,8 @@ export const publicEventPayloads: Record<string, string> = {
 };
 
 export const componentEventPayloads: Record<string, string> = {
+  "TSelect.update:modelValue":
+    "number | number[] | string | string[] | unknown | unknown[] | SelectOption | SelectOption[]",
   "TAutocompleteInput.loadError": "TAutocompleteLoadErrorPayload",
   "TAutocompleteInput.select": "TAutocompleteSelectPayload",
   "TCommandPalette.loadError": "TCommandPaletteLoadErrorPayload",

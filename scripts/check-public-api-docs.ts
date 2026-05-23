@@ -12,6 +12,7 @@ type ApiManifest = {
   components: Record<
     string,
     {
+      entrypoint: string;
       maturity: "public" | "advanced" | "experimental";
       props: Array<{ name: string; description?: string; descriptionSource?: DescriptionSource }>;
       events: Array<{
@@ -21,6 +22,8 @@ type ApiManifest = {
         description?: string;
         descriptionSource?: DescriptionSource;
       }>;
+      slots?: Array<{ name: string; props?: string; description?: string }>;
+      exposed?: Array<{ name: string; type?: string; description?: string }>;
     }
   >;
 };
@@ -104,6 +107,13 @@ const allowedSharedPayloadEvents = new Set([
   "keydown",
   "keyup",
 ]);
+const publicComponentsRequiringSlotDocs = new Set([
+  "TerminalProvider",
+  "TBox",
+  "TView",
+  "TDialog",
+  "TFormField",
+]);
 
 function baseEventName(name: string): string {
   return name.endsWith("Capture") ? name.slice(0, -"Capture".length) : name;
@@ -117,11 +127,27 @@ function hasDocsSection(markdown: string, componentName: string): boolean {
   return new RegExp(`^##\\s+${escapeRegExp(componentName)}\\s*$`, "m").test(markdown);
 }
 
+function markdownMentions(markdown: string, symbol: string): boolean {
+  return new RegExp(`\`${escapeRegExp(symbol)}\``, "u").test(markdown);
+}
+
 for (const [name, component] of Object.entries(manifest.components)) {
   if (component.maturity !== "public") continue;
 
   if (!hasDocsSection(componentsDocs, name)) {
     errors.push(`${name} is Public but has no docs/components.md section`);
+  }
+
+  if (component.entrypoint === "@simon_he/vue-tui") {
+    const inReadme = markdownMentions(readme, name);
+    const inComponents =
+      markdownMentions(componentsDocs, name) || hasDocsSection(componentsDocs, name);
+
+    if (!inReadme && !inComponents) {
+      errors.push(
+        `${name} is Public root API but is not mentioned in README.md or docs/components.md`,
+      );
+    }
   }
 
   for (const prop of component.props) {
@@ -159,6 +185,23 @@ for (const [name, component] of Object.entries(manifest.components)) {
     if (!event.description) errors.push(`${name}.${event.name} event is missing description`);
     if (!event.descriptionSource || event.descriptionSource === "missing") {
       errors.push(`${name}.${event.name} event is missing description source`);
+    }
+  }
+
+  if (publicComponentsRequiringSlotDocs.has(name) && !component.slots?.length) {
+    errors.push(`${name} is Public and must document its default slot contract`);
+  }
+
+  for (const slot of component.slots ?? []) {
+    if (!slot.name) errors.push(`${name} has a slot without a name`);
+    if (!slot.description) errors.push(`${name}.${slot.name} slot is missing description`);
+  }
+
+  for (const exposed of component.exposed ?? []) {
+    if (!exposed.name) errors.push(`${name} has an exposed method without a name`);
+    if (!exposed.type) errors.push(`${name}.${exposed.name} exposed method is missing type`);
+    if (!exposed.description) {
+      errors.push(`${name}.${exposed.name} exposed method is missing description`);
     }
   }
 }
