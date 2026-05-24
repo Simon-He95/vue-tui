@@ -1842,7 +1842,9 @@ export function createStdoutRenderer(
     markAccumulatedDirtyRange(op.startY, op.endY, rowCount);
   }
 
-  function mergeScrollOperations(next: readonly TerminalScrollOperation[] | null | undefined): void {
+  function mergeScrollOperations(
+    next: readonly TerminalScrollOperation[] | null | undefined,
+  ): void {
     if (!next?.length || accumulatedAllRows) return;
 
     const rowCount = terminal.size().rows;

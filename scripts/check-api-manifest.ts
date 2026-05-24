@@ -111,14 +111,8 @@ if (vue) {
     "clearTextCaches",
     "createWheelScrollState",
     "formatInlineCellLine",
-    "padEndByCells",
     "sanitizeInlineText",
     "sanitizeTextBlock",
-    "sliceByCells",
-    "sliceByCellsRange",
-    "spaces",
-    "textCellWidth",
-    "wrapByCells",
   ]) {
     if (vue.valueExports.includes(forbidden)) {
       errors.push(

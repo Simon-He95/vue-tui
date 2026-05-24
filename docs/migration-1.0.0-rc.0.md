@@ -4,36 +4,33 @@
 
 This release establishes the first generated API manifest baseline. `api:diff` will skip when the latest tag does not contain `docs/generated/api-manifest.json`; it becomes an effective tagged-release diff gate after the next tagged release includes that manifest.
 
-## `/vue` text and wheel utilities removed
+## `/vue` low-level utilities
 
-`@simon_he/vue-tui/vue` no longer exports low-level text and wheel helper utilities:
+`@simon_he/vue-tui/vue` keeps the cell-aware text helpers exported for applications
+that need terminal-width measurement, slicing, padding, and wrapping alongside Vue
+components:
 
-- `clearTextCaches`
-- `formatInlineCellLine`
 - `padEndByCells`
-- `sanitizeInlineText`
-- `sanitizeTextBlock`
 - `sliceByCells`
 - `sliceByCellsRange`
 - `spaces`
 - `textCellWidth`
 - `wrapByCells`
-- `applyWheelScroll`
-- `createWheelScrollState`
 
-These helpers are implementation utilities, not component-level API contracts. Keep equivalent helpers in application or test code, or wait for an explicit documented helper entrypoint before importing them from the package.
-
-Before:
+This import remains valid:
 
 ```ts
 import { padEndByCells, sliceByCells, textCellWidth, wrapByCells } from "@simon_he/vue-tui/vue";
 ```
 
-After:
+Other low-level implementation helpers are still internal and are no longer exported from `/vue`:
 
-```ts
-import { padEndByCells, sliceByCells, textCellWidth, wrapByCells } from "./text-utils";
-```
+- `applyWheelScroll`
+- `clearTextCaches`
+- `createWheelScrollState`
+- `formatInlineCellLine`
+- `sanitizeInlineText`
+- `sanitizeTextBlock`
 
 ## Component Event Payloads
 
