@@ -5774,6 +5774,38 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps TCommandPalette default matcher matching item detail", async () => {
+    const app = createTerminalApp({
+      cols: 50,
+      rows: 14,
+      component: TCommandPalette,
+      props: {
+        modelValue: true,
+        w: 36,
+        h: 10,
+        items: [
+          { label: "Open File", detail: "src/app.ts", value: "open" },
+          { label: "Settings", detail: "preferences", value: "settings" },
+        ],
+        query: "app.ts",
+        showRowDetails: true,
+      },
+    });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const snapshot = app.terminal.snapshot().lines.join("\n");
+      expect(snapshot).toContain("Open File");
+      expect(snapshot).toContain("src/app.ts");
+      expect(snapshot).not.toContain("Settings");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("renders command palette match and detail accent styles", async () => {
     const items = [
       {

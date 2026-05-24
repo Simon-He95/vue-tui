@@ -712,12 +712,7 @@
         "createTheme",
         "linkifyTextSegments",
         "lintJsonText",
-        "padEndByCells",
         "resolveOverlayPlacement",
-        "sliceByCells",
-        "sliceByCellsRange",
-        "spaces",
-        "textCellWidth",
         "tuiDefaultTheme",
         "useLayout",
         "useRenderNode",
@@ -727,8 +722,7 @@
         "useTerminal",
         "useTerminalNode",
         "useTerminalRuntime",
-        "useVisibility",
-        "wrapByCells"
+        "useVisibility"
       ],
       "typeExports": [
         "DialogButton",

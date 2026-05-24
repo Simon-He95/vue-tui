@@ -300,12 +300,7 @@ describe("package exports", () => {
       "createTheme",
       "linkifyTextSegments",
       "lintJsonText",
-      "padEndByCells",
       "resolveOverlayPlacement",
-      "sliceByCells",
-      "sliceByCellsRange",
-      "spaces",
-      "textCellWidth",
       "tuiDefaultTheme",
       "useLayout",
       "useRenderNode",
@@ -316,7 +311,6 @@ describe("package exports", () => {
       "useTerminalNode",
       "useTerminalRuntime",
       "useVisibility",
-      "wrapByCells",
     ]);
     expect(Object.keys(markdown).sort()).toEqual([
       "TMarkdownText",
