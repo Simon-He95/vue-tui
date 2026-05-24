@@ -171,6 +171,7 @@ export const TPathPicker = defineComponent({
     autoFocus: { type: Boolean, default: false },
     showHidden: { type: Boolean, default: false },
     maxSuggestions: { type: Number, default: 50 },
+    preferActiveSuggestionOnCommit: { type: Boolean, default: false },
     provider: {
       type: Object as PropType<PathPickerProvider>,
       default: undefined,
@@ -357,6 +358,17 @@ export const TPathPicker = defineComponent({
         error.value = "Path provider unavailable";
         emit("invalid", { reason: "provider_missing", absPath: typedAbs });
         scheduler.invalidate();
+        return;
+      }
+      const activeSuggestion = suggestions.value[active.value];
+      if (props.preferActiveSuggestionOnCommit && activeSuggestion) {
+        if (props.mode === "file" && activeSuggestion.kind === "directory") {
+          setValue(activeSuggestion.completion);
+          error.value = null;
+          scheduler.invalidate();
+          return;
+        }
+        await trySelect(activeSuggestion.absPath);
         return;
       }
       const typedStat = await currentProvider.stat(typedAbs);

@@ -73,4 +73,83 @@ describe("TPathPicker provider context", () => {
     expect(value.value).toBe("../adaptive-image/");
     app.dispose();
   });
+
+  it("can prefer the active suggestion over an existing typed path on commit", async () => {
+    const value = ref("typed");
+    const selected: string[] = [];
+
+    const App = defineComponent({
+      name: "TPathPickerActiveSuggestionCommitApp",
+      setup() {
+        return () =>
+          h(TPathPicker as any, {
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 6,
+            workspace: "/ws",
+            mode: "file",
+            modelValue: value.value,
+            "onUpdate:modelValue": (v: string) => (value.value = v),
+            preferActiveSuggestionOnCommit: true,
+            autoFocus: true,
+            onSelect: (absPath: string) => selected.push(absPath),
+          });
+      },
+    });
+
+    const app = createTerminalApp({
+      cols: 40,
+      rows: 6,
+      component: App as any,
+      pathPickerProvider: {
+        async listDir() {
+          return [];
+        },
+        async stat(absPath: string) {
+          if (absPath === "/ws/typed" || absPath === "/ws/suggested.ts") {
+            return { exists: true, kind: "file" as const };
+          }
+          return { exists: false, kind: "other" as const };
+        },
+        async resolvePath(_workspaceAbs: string, input: string) {
+          return `/ws/${input}`;
+        },
+        async suggest() {
+          return {
+            baseDirAbs: "/ws",
+            dirPrefix: "",
+            query: "typed",
+            suggestions: [
+              {
+                kind: "file" as const,
+                display: "suggested.ts",
+                completion: "suggested.ts",
+                absPath: "/ws/suggested.ts",
+              },
+            ],
+          };
+        },
+      },
+    });
+
+    app.mount();
+    await nextTick();
+    await nextTick();
+    app.scheduler.flush();
+
+    await waitFor(() => {
+      app.scheduler.flush();
+      const text = app.terminal.snapshot().lines.join("\n");
+      return text.includes("suggested.ts") ? true : null;
+    });
+
+    app.events.dispatch({ type: "keydown", key: "Enter", code: "Enter" } as any);
+    await nextTick();
+    await nextTick();
+    app.scheduler.flush();
+
+    expect(selected).toEqual(["/ws/suggested.ts"]);
+    app.dispose();
+  });
 });
