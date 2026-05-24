@@ -43,7 +43,7 @@ import {
   createWheelScrollState,
   resetWheelScrollState,
 } from "../utils/wheel-scroll.js";
-import { tryUnsafeFullRowScroll } from "../utils/row-scroll.js";
+import { prepareUnsafeFullRowScroll } from "../utils/row-scroll.js";
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -728,7 +728,10 @@ export const TVirtualList = defineComponent({
     function markRowsDirty(nextRows: readonly number[]): boolean {
       if (!hasPaintableViewport()) return false;
       dirtyRowsHint = unionDirtyRows(nextRows);
-      if (!renderNodeId) return false;
+      if (!renderNodeId) {
+        dirtyRowsHint = undefined;
+        return false;
+      }
       if (render.markDirtyRows(renderNodeId, dirtyRowsHint)) return true;
       dirtyRowsHint = undefined;
       return false;
@@ -765,7 +768,7 @@ export const TVirtualList = defineComponent({
       }
       scrollTop.value = clampedTop;
       if (options?.emitUpdate) emit("update:scrollTop", clampedTop);
-      const exposedRows = tryUnsafeFullRowScroll({
+      const scrollPlan = prepareUnsafeFullRowScroll({
         render,
         plane: plane.value,
         rect: r,
@@ -777,7 +780,13 @@ export const TVirtualList = defineComponent({
         hasPendingDirtyRows: Boolean(dirtyRowsHint?.length),
         strategy: options?.strategy ?? "viewport-repaint",
       });
-      const dirty = exposedRows ? markRowsDirty(exposedRows) : markViewportDirty();
+      let dirty = false;
+      if (scrollPlan && markRowsDirty(scrollPlan.exposedRows)) {
+        scrollPlan.apply();
+        dirty = true;
+      } else {
+        dirty = markViewportDirty();
+      }
       if (options?.emitScroll) emit("scroll", clampedTop);
       if (options?.priority && dirty) invalidateSelf(options.priority, options.reason ?? "scroll");
       return { changed: true, dirty, top: clampedTop, controlled };

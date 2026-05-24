@@ -62,7 +62,7 @@ import {
   createWheelScrollState,
   resetWheelScrollState,
 } from "../utils/wheel-scroll.js";
-import { tryUnsafeFullRowScroll } from "../utils/row-scroll.js";
+import { prepareUnsafeFullRowScroll } from "../utils/row-scroll.js";
 
 type ScrollStrategy = "auto" | "viewport-repaint";
 type RowScrollMode = "off" | "unsafe-full-row";
@@ -2907,7 +2907,10 @@ export const TLogView = defineComponent({
     function markRowsDirty(nextRows: readonly number[]): boolean {
       if (!hasPaintableViewport()) return false;
       dirtyRowsHint = unionDirtyRows(nextRows);
-      if (!renderNodeId) return false;
+      if (!renderNodeId) {
+        dirtyRowsHint = undefined;
+        return false;
+      }
       if (render.markDirtyRows(renderNodeId, dirtyRowsHint)) return true;
       dirtyRowsHint = undefined;
       return false;
@@ -3055,8 +3058,8 @@ export const TLogView = defineComponent({
         return true;
       }
 
-      const exposedRows = !props.wrap
-        ? tryUnsafeFullRowScroll({
+      const scrollPlan = !props.wrap
+        ? prepareUnsafeFullRowScroll({
             render,
             plane: plane.value,
             rect: r,
@@ -3070,15 +3073,17 @@ export const TLogView = defineComponent({
           })
         : null;
 
-      if (exposedRows) {
-        shiftVisibleLinksForScrollRegion(r.y, r.y + h, delta);
-        markRowsDirty(
-          options?.extraDirtyRows?.length
-            ? [...exposedRows, ...options.extraDirtyRows]
-            : exposedRows,
-        );
-        if (options?.emitScroll) emitScroll(clampedTop);
-        return true;
+      if (scrollPlan) {
+        const rows = options?.extraDirtyRows?.length
+          ? [...scrollPlan.exposedRows, ...options.extraDirtyRows]
+          : scrollPlan.exposedRows;
+
+        if (markRowsDirty(rows)) {
+          scrollPlan.apply();
+          shiftVisibleLinksForScrollRegion(r.y, r.y + h, delta);
+          if (options?.emitScroll) emitScroll(clampedTop);
+          return true;
+        }
       }
 
       markViewportDirty();

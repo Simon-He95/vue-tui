@@ -5,6 +5,11 @@ import type { RenderManager } from "../render/render-manager.js";
 
 export type UnsafeFullRowScrollMode = "off" | "unsafe-full-row";
 
+export type UnsafeFullRowScrollPlan = Readonly<{
+  exposedRows: readonly number[];
+  apply: () => void;
+}>;
+
 export function exposedRowsForDelta(y0: number, h: number, delta: number): number[] {
   const startY = Math.floor(y0);
   const height = Math.max(0, Math.floor(h));
@@ -22,7 +27,7 @@ export function exposedRowsForDelta(y0: number, h: number, delta: number): numbe
   return rows;
 }
 
-export function tryUnsafeFullRowScroll(
+export function prepareUnsafeFullRowScroll(
   options: Readonly<{
     render: Pick<RenderManager, "unsafeScrollPlaneRows">;
     plane: TerminalRenderPlane;
@@ -35,7 +40,7 @@ export function tryUnsafeFullRowScroll(
     hasPendingDirtyRows: boolean;
     strategy?: "auto" | "viewport-repaint";
   }>,
-): readonly number[] | null {
+): UnsafeFullRowScrollPlan | null {
   const r = options.rect;
   const x = Math.floor(r.x);
   const y = Math.floor(r.y);
@@ -61,6 +66,13 @@ export function tryUnsafeFullRowScroll(
 
   if (!canUseScrollPlane) return null;
 
-  options.render.unsafeScrollPlaneRows(options.plane, y, y + h, delta);
-  return exposedRowsForDelta(y, h, delta);
+  const exposedRows = exposedRowsForDelta(y, h, delta);
+  if (!exposedRows.length) return null;
+
+  return {
+    exposedRows,
+    apply: () => {
+      options.render.unsafeScrollPlaneRows(options.plane, y, y + h, delta);
+    },
+  };
 }
