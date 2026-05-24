@@ -525,29 +525,30 @@ Import: `@simon_he/vue-tui`
 
 ### Props
 
-| 名称                         | 类型                                                              | 默认值                          | 必填 | 说明                                                |
-| ---------------------------- | ----------------------------------------------------------------- | ------------------------------- | ---- | --------------------------------------------------- |
-| <code>modelValue</code>      | <code>boolean</code>                                              | —                               | 是   | Controlled component value.                         |
-| <code>w</code>               | <code>number</code>                                               | —                               | 是   | Width in terminal cells.                            |
-| <code>h</code>               | <code>number</code>                                               | —                               | 是   | Height in terminal cells.                           |
-| <code>title</code>           | <code>string</code>                                               | <code>&quot;&quot;</code>       | 否   | Optional title text.                                |
-| <code>padding</code>         | <code>number</code>                                               | <code>1</code>                  | 否   | Inner padding in terminal cells.                    |
-| <code>zIndex</code>          | <code>number</code>                                               | <code>1000</code>               | 否   | Render and event ordering within the current plane. |
-| <code>style</code>           | <code>Style</code>                                                | <code>undefined</code>          | 否   | Base terminal cell style override.                  |
-| <code>titleStyle</code>      | <code>Style</code>                                                | <code>undefined</code>          | 否   | Style override for title text.                      |
-| <code>contentStyle</code>    | <code>Style</code>                                                | <code>undefined</code>          | 否   | Style override for dialog or popover content cells. |
-| <code>backdropStyle</code>   | <code>Style</code>                                                | <code>undefined</code>          | 否   | Style override for backdrop cells.                  |
-| <code>placement</code>       | <code>Placement</code>                                            | <code>&quot;center&quot;</code> | 否   | Dialog placement within the current layout.         |
-| <code>offsetX</code>         | <code>number</code>                                               | <code>0</code>                  | 否   | Horizontal placement offset in cells.               |
-| <code>offsetY</code>         | <code>number</code>                                               | <code>0</code>                  | 否   | Vertical placement offset in cells.                 |
-| <code>backdrop</code>        | <code>boolean</code>                                              | <code>true</code>               | 否   | Renders a backdrop behind the dialog.               |
-| <code>closeOnBackdrop</code> | <code>boolean</code>                                              | <code>true</code>               | 否   | Closes the dialog when the backdrop is clicked.     |
-| <code>closeOnEsc</code>      | <code>boolean</code>                                              | <code>true</code>               | 否   | Closes the dialog on Escape.                        |
-| <code>closeOnBlur</code>     | <code>boolean</code>                                              | <code>false</code>              | 否   | Emits close when focus leaves the component.        |
-| <code>teleport</code>        | <code>boolean</code>                                              | <code>false</code>              | 否   | Mounts the dialog into the overlay runtime plane.   |
-| <code>tabMode</code>         | <code>&quot;cycle&quot; &#124; &quot;wrapFromButtons&quot;</code> | <code>&quot;cycle&quot;</code>  | 否   | Keyboard Tab behavior inside the dialog.            |
-| <code>buttons</code>         | <code>DialogButton[]</code>                                       | <code>() =&gt; []</code>        | 否   | Dialog footer buttons.                              |
-| <code>closeOnConfirm</code>  | <code>boolean</code>                                              | <code>true</code>               | 否   | Closes the dialog after a footer button confirms.   |
+| 名称                            | 类型                                                              | 默认值                          | 必填 | 说明                                                                  |
+| ------------------------------- | ----------------------------------------------------------------- | ------------------------------- | ---- | --------------------------------------------------------------------- |
+| <code>modelValue</code>         | <code>boolean</code>                                              | —                               | 是   | Controlled component value.                                           |
+| <code>w</code>                  | <code>number</code>                                               | —                               | 是   | Width in terminal cells.                                              |
+| <code>h</code>                  | <code>number</code>                                               | —                               | 是   | Height in terminal cells.                                             |
+| <code>title</code>              | <code>string</code>                                               | <code>&quot;&quot;</code>       | 否   | Optional title text.                                                  |
+| <code>padding</code>            | <code>number</code>                                               | <code>1</code>                  | 否   | Inner padding in terminal cells.                                      |
+| <code>zIndex</code>             | <code>number</code>                                               | <code>1000</code>               | 否   | Render and event ordering within the current plane.                   |
+| <code>style</code>              | <code>Style</code>                                                | <code>undefined</code>          | 否   | Base terminal cell style override.                                    |
+| <code>titleStyle</code>         | <code>Style</code>                                                | <code>undefined</code>          | 否   | Style override for title text.                                        |
+| <code>contentStyle</code>       | <code>Style</code>                                                | <code>undefined</code>          | 否   | Style override for dialog or popover content cells.                   |
+| <code>backdropStyle</code>      | <code>Style</code>                                                | <code>undefined</code>          | 否   | Style override for backdrop cells.                                    |
+| <code>placement</code>          | <code>Placement</code>                                            | <code>&quot;center&quot;</code> | 否   | Dialog placement within the current layout.                           |
+| <code>offsetX</code>            | <code>number</code>                                               | <code>0</code>                  | 否   | Horizontal placement offset in cells.                                 |
+| <code>offsetY</code>            | <code>number</code>                                               | <code>0</code>                  | 否   | Vertical placement offset in cells.                                   |
+| <code>backdrop</code>           | <code>boolean</code>                                              | <code>true</code>               | 否   | Renders a backdrop behind the dialog.                                 |
+| <code>closeOnBackdrop</code>    | <code>boolean</code>                                              | <code>true</code>               | 否   | Closes the dialog when the backdrop is clicked.                       |
+| <code>closeOnEsc</code>         | <code>boolean</code>                                              | <code>true</code>               | 否   | Closes the dialog on Escape.                                          |
+| <code>closeOnBlur</code>        | <code>boolean</code>                                              | <code>false</code>              | 否   | Emits close when focus leaves the component.                          |
+| <code>teleport</code>           | <code>boolean</code>                                              | <code>false</code>              | 否   | Mounts the dialog into the overlay runtime plane.                     |
+| <code>tabMode</code>            | <code>&quot;cycle&quot; &#124; &quot;wrapFromButtons&quot;</code> | <code>&quot;cycle&quot;</code>  | 否   | Keyboard Tab behavior inside the dialog.                              |
+| <code>buttons</code>            | <code>DialogButton[]</code>                                       | <code>() =&gt; []</code>        | 否   | Dialog footer buttons.                                                |
+| <code>closeOnConfirm</code>     | <code>boolean</code>                                              | <code>true</code>               | 否   | Closes the dialog after a footer button confirms.                     |
+| <code>blockPrintableKeys</code> | <code>boolean</code>                                              | <code>false</code>              | 否   | Prevents printable key events from bubbling while the dialog is open. |
 
 ### Events
 
@@ -1451,25 +1452,26 @@ Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
-| 名称                        | 类型                            | 默认值                       | 必填 | 说明 |
-| --------------------------- | ------------------------------- | ---------------------------- | ---- | ---- |
-| <code>x</code>              | <code>number</code>             | —                            | 是   | —    |
-| <code>y</code>              | <code>number</code>             | —                            | 是   | —    |
-| <code>w</code>              | <code>number</code>             | —                            | 是   | —    |
-| <code>h</code>              | <code>number</code>             | —                            | 是   | —    |
-| <code>zIndex</code>         | <code>number</code>             | <code>0</code>               | 否   | —    |
-| <code>workspace</code>      | <code>string</code>             | —                            | 是   | —    |
-| <code>mode</code>           | <code>PathPickMode</code>       | <code>&quot;any&quot;</code> | 否   | —    |
-| <code>modelValue</code>     | <code>string</code>             | —                            | 是   | —    |
-| <code>placeholder</code>    | <code>string</code>             | <code>&quot;&quot;</code>    | 否   | —    |
-| <code>style</code>          | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
-| <code>inputStyle</code>     | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
-| <code>activeStyle</code>    | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
-| <code>matchStyle</code>     | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
-| <code>autoFocus</code>      | <code>boolean</code>            | <code>false</code>           | 否   | —    |
-| <code>showHidden</code>     | <code>boolean</code>            | <code>false</code>           | 否   | —    |
-| <code>maxSuggestions</code> | <code>number</code>             | <code>50</code>              | 否   | —    |
-| <code>provider</code>       | <code>PathPickerProvider</code> | <code>undefined</code>       | 否   | —    |
+| 名称                                        | 类型                            | 默认值                       | 必填 | 说明 |
+| ------------------------------------------- | ------------------------------- | ---------------------------- | ---- | ---- |
+| <code>x</code>                              | <code>number</code>             | —                            | 是   | —    |
+| <code>y</code>                              | <code>number</code>             | —                            | 是   | —    |
+| <code>w</code>                              | <code>number</code>             | —                            | 是   | —    |
+| <code>h</code>                              | <code>number</code>             | —                            | 是   | —    |
+| <code>zIndex</code>                         | <code>number</code>             | <code>0</code>               | 否   | —    |
+| <code>workspace</code>                      | <code>string</code>             | —                            | 是   | —    |
+| <code>mode</code>                           | <code>PathPickMode</code>       | <code>&quot;any&quot;</code> | 否   | —    |
+| <code>modelValue</code>                     | <code>string</code>             | —                            | 是   | —    |
+| <code>placeholder</code>                    | <code>string</code>             | <code>&quot;&quot;</code>    | 否   | —    |
+| <code>style</code>                          | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
+| <code>inputStyle</code>                     | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
+| <code>activeStyle</code>                    | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
+| <code>matchStyle</code>                     | <code>Style</code>              | <code>undefined</code>       | 否   | —    |
+| <code>autoFocus</code>                      | <code>boolean</code>            | <code>false</code>           | 否   | —    |
+| <code>showHidden</code>                     | <code>boolean</code>            | <code>false</code>           | 否   | —    |
+| <code>maxSuggestions</code>                 | <code>number</code>             | <code>50</code>              | 否   | —    |
+| <code>preferActiveSuggestionOnCommit</code> | <code>boolean</code>            | <code>false</code>           | 否   | —    |
+| <code>provider</code>                       | <code>PathPickerProvider</code> | <code>undefined</code>       | 否   | —    |
 
 ### Events
 
@@ -1654,6 +1656,7 @@ Import: `@simon_he/vue-tui`
 | <code>closeOnBlur</code>         | <code>boolean</code>                 | <code>false</code>                              | 否   | Emits close when focus leaves the component.                                                                                                                                |
 | <code>searchable</code>          | <code>boolean</code>                 | <code>false</code>                              | 否   | Emits query updates from typed characters; local options are not filtered automatically.                                                                                    |
 | <code>typeahead</code>           | <code>boolean</code>                 | <code>true</code>                               | 否   | Enables keyboard typeahead navigation.                                                                                                                                      |
+| <code>commitOnEnter</code>       | <code>boolean</code>                 | <code>true</code>                               | 否   | Commits the active option when Enter is pressed.                                                                                                                            |
 | <code>debounce</code>            | <code>number</code>                  | <code>0</code>                                  | 否   | Delay before calling an async provider, in milliseconds.                                                                                                                    |
 | <code>emptyText</code>           | <code>string</code>                  | <code>&quot;No options&quot;</code>             | 否   | Text rendered when there are no rows or items.                                                                                                                              |
 | <code>loading</code>             | <code>boolean</code>                 | <code>false</code>                              | 否   | Shows the loading row; true also covers pending async option providers.                                                                                                     |

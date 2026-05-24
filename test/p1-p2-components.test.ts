@@ -2476,6 +2476,43 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("lets Enter bubble when TSelect commitOnEnter is disabled", async () => {
+    const changes: unknown[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 3,
+          options: ["apple", "banana"],
+          commitOnEnter: false,
+          autoFocus: true,
+          onChange: (value: unknown) => changes.push(value),
+        }),
+      24,
+      5,
+    );
+
+    try {
+      await nextTick();
+
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+        cancelable: true,
+      });
+      mounted.container()!.dispatchEvent(event);
+      await nextTick();
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(changes).toEqual([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("accepts unknown TSelect model values in value mode", async () => {
     const values = [null, undefined, Symbol("key"), () => "value"];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
