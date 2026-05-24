@@ -5740,10 +5740,11 @@ describe("P1/P2 public components", () => {
   it("renders command palette match and detail accent styles", async () => {
     const items = [
       {
-        label: "Open File",
+        label: "Open File [think]",
         detail: "src/app.ts",
         accentStyle: { fg: "cyan" },
         highlightAccentStyle: { fg: "yellowBright" },
+        labelAccentRanges: [{ start: 10, end: 17 }],
         detailAccentRanges: [{ start: 0, end: 3 }],
         detailAccentSegments: [
           { start: 4, end: 10, style: { fg: "blue" }, highlightStyle: { fg: "magenta" } },
@@ -5782,11 +5783,15 @@ describe("P1/P2 public components", () => {
       expect(rowY).toBeGreaterThanOrEqual(0);
       const row = lines[rowY] ?? "";
       const labelX = row.indexOf("Open File");
+      const tagX = row.indexOf("[think]");
       const detailX = row.indexOf("src/app.ts");
       expect(labelX).toBeGreaterThanOrEqual(0);
-      expect(detailX).toBeGreaterThan(labelX + "Open File".length + 2);
+      expect(tagX).toBeGreaterThan(labelX);
+      expect(detailX).toBeGreaterThan(labelX + "Open File [think]".length + 2);
 
       expect(app.terminal.getCell(labelX, rowY).style.fg).toBe("red");
+      expect(app.terminal.getCell(tagX, rowY).style.fg).toBe("yellowBright");
+      expect(app.terminal.getCell(tagX, rowY).style.bg).toBe("blue");
       expect(app.terminal.getCell(detailX, rowY).style.fg).toBe("yellowBright");
       expect(app.terminal.getCell(detailX, rowY).style.bg).toBe("blue");
       expect(app.terminal.getCell(detailX + 4, rowY).style.fg).toBe("magenta");
