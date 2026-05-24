@@ -106,7 +106,12 @@ describe("public API surface", () => {
         "createTheme",
         "linkifyTextSegments",
         "lintJsonText",
+        "padEndByCells",
         "resolveOverlayPlacement",
+        "sliceByCells",
+        "sliceByCellsRange",
+        "spaces",
+        "textCellWidth",
         "tuiDefaultTheme",
         "useLayout",
         "useRenderNode",
@@ -117,6 +122,7 @@ describe("public API surface", () => {
         "useTerminalNode",
         "useTerminalRuntime",
         "useVisibility",
+        "wrapByCells",
       ]
     `);
   });

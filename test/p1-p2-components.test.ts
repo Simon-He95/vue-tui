@@ -5774,7 +5774,7 @@ describe("P1/P2 public components", () => {
     }
   });
 
-  it("keeps TCommandPalette default matcher matching item detail", async () => {
+  it("keeps command palette default matching scoped to label and keywords", async () => {
     const app = createTerminalApp({
       cols: 50,
       rows: 14,
@@ -5798,9 +5798,9 @@ describe("P1/P2 public components", () => {
       app.scheduler.flushNow();
 
       const snapshot = app.terminal.snapshot().lines.join("\n");
-      expect(snapshot).toContain("Open File");
-      expect(snapshot).toContain("src/app.ts");
-      expect(snapshot).not.toContain("Settings");
+      expect(snapshot).not.toContain("Open File");
+      expect(snapshot).not.toContain("src/app.ts");
+      expect(snapshot).toContain("No matches");
     } finally {
       app.dispose();
     }

@@ -132,17 +132,15 @@ function substringMatcher(
   const q = query.trim().toLowerCase();
   if (!q) return { score: 0 };
   const labelRanges = computeCommandPaletteMatchRanges(item.label, q);
-  const detailRanges = item.detail ? computeCommandPaletteMatchRanges(item.detail, q) : [];
   const keywordMatch = (item.keywords ?? []).some((keyword) =>
     String(keyword ?? "")
       .toLowerCase()
       .includes(q),
   );
-  if (!labelRanges.length && !detailRanges.length && !keywordMatch) return null;
+  if (!labelRanges.length && !keywordMatch) return null;
   return {
-    score: labelRanges.length ? 100 : detailRanges.length ? 50 : 10,
+    score: labelRanges.length ? 100 : 10,
     labelRanges,
-    detailRanges,
   };
 }
 
@@ -152,8 +150,7 @@ function fuzzyMatcher(
 ): TCommandPaletteMatcherResult | null {
   const q = query.trim().toLowerCase();
   if (!q) return { score: 0 };
-  const source =
-    `${item.label} ${item.detail ?? ""} ${(item.keywords ?? []).join(" ")}`.toLowerCase();
+  const source = `${item.label} ${(item.keywords ?? []).join(" ")}`.toLowerCase();
   let pos = 0;
   for (const ch of q) {
     const next = source.indexOf(ch, pos);
@@ -163,7 +160,6 @@ function fuzzyMatcher(
   return {
     score: Math.max(1, 100 - pos),
     labelRanges: computeCommandPaletteMatchRanges(item.label, query),
-    detailRanges: item.detail ? computeCommandPaletteMatchRanges(item.detail, query) : [],
   };
 }
 
