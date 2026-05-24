@@ -728,7 +728,7 @@ request repaint; repaint only happens when active rows or `scrollTop` change.
 - `scrollTop` `(number?)` + `update:scrollTop`：受控 viewport scrollTop；省略时由组件内部维护
 - `style` / `activeStyle` `(Style?)`
 - `autoFocus` `(boolean)`
-- `rowScrollMode` `("off" | "unsafe-full-row")`：实验性 unsafe wheel 优化；仅在组件占满整行、未被裁剪、renderer 支持 `scrollOperations`、且调用方确认组件独占这些 plane rows 时使用 exposed-row row-scroll，否则保持默认 `"off"`
+- `rowScrollMode` `("off" | "unsafe-full-row")`：实验性 unsafe wheel 优化；当前 `TVirtualList` 仅在 terminal/headless（非 DOM rows）路径、组件占满整行、未被裁剪、renderer 支持 `scrollOperations`、且调用方确认组件独占这些 plane rows 时使用 exposed-row row-scroll；DOM 路径仍保持 viewport repaint，否则保持默认 `"off"`
 
 ### Data source
 

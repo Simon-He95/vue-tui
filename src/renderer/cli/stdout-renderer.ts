@@ -1778,6 +1778,56 @@ export function createStdoutRenderer(
       for (let y = start; y < end; y++) markAccumulatedDirtyRow(y, rowCount);
     };
 
+    const shiftAccumulatedDirtyRowsForScrollOperation = (
+      op: TerminalScrollOperation,
+      rowCount: number,
+    ): void => {
+      if (accumulatedAllRows) return;
+      if (!accumulatedDirtyBits || accumulatedDirtyCount === 0) return;
+
+      const bits = accumulatedDirtyBits;
+      const nextBits = new Uint8Array(rowCount);
+      let nextCount = 0;
+      let nextMin = Number.POSITIVE_INFINITY;
+      let nextMax = -1;
+
+      const markNext = (y: number): void => {
+        if (y < 0 || y >= rowCount) return;
+        if (nextBits[y]) return;
+        nextBits[y] = 1;
+        nextCount++;
+        if (y < nextMin) nextMin = y;
+        if (y > nextMax) nextMax = y;
+      };
+
+      const minY = Math.max(0, accumulatedDirtyMin);
+      const maxY = Math.min(rowCount - 1, accumulatedDirtyMax);
+      const delta = Math.trunc(op.delta);
+
+      for (let y = minY; y <= maxY; y++) {
+        if (!bits[y]) continue;
+
+        let nextY = y;
+        if (y >= op.startY && y < op.endY) {
+          if (delta > 0) {
+            if (y < op.startY + delta) continue;
+            nextY = y - delta;
+          } else {
+            const absDelta = -delta;
+            if (y >= op.endY - absDelta) continue;
+            nextY = y + absDelta;
+          }
+        }
+
+        markNext(nextY);
+      }
+
+      accumulatedDirtyBits = nextBits;
+      accumulatedDirtyCount = nextCount;
+      accumulatedDirtyMin = nextMin;
+      accumulatedDirtyMax = nextMax;
+    };
+
     const canMergeScrollOperations = (
       prev: TerminalScrollOperation,
       next: TerminalScrollOperation,
@@ -1802,6 +1852,7 @@ export function createStdoutRenderer(
       if (!next?.length || accumulatedAllRows) return;
 
       const rowCount = terminal.size().rows;
+      ensureDirtyBits(rowCount);
       const merged = accumulatedScrollOperations ? accumulatedScrollOperations.slice() : [];
 
       for (const raw of next) {
@@ -1818,6 +1869,7 @@ export function createStdoutRenderer(
           );
 
           if (combined) {
+            shiftAccumulatedDirtyRowsForScrollOperation(op, rowCount);
             merged[merged.length - 1] = combined;
             continue;
           }
@@ -1839,6 +1891,7 @@ export function createStdoutRenderer(
           continue;
         }
 
+        shiftAccumulatedDirtyRowsForScrollOperation(op, rowCount);
         merged.push(op);
       }
 
@@ -1855,6 +1908,8 @@ export function createStdoutRenderer(
       accumulatedScrollOperations = null;
     } else if (!accumulatedAllRows) {
       const rowCount = terminal.size().rows;
+      mergeScrollOperations(scrollOperations);
+
       const bits = ensureDirtyBits(rowCount);
       for (let i = 0; i < dirtyRows.length; i++) {
         const y = Math.floor(dirtyRows[i] ?? -1);
@@ -1866,7 +1921,6 @@ export function createStdoutRenderer(
           if (y > accumulatedDirtyMax) accumulatedDirtyMax = y;
         }
       }
-      mergeScrollOperations(scrollOperations);
     }
 
     const now = Date.now();
