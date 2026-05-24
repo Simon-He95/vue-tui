@@ -694,6 +694,7 @@ export const TDialog = defineComponent({
     },
     buttons: { type: Array as PropType<DialogButton[]>, default: () => [] },
     closeOnConfirm: { type: Boolean, default: true },
+    blockPrintableKeys: { type: Boolean, default: false },
   },
   emits: ["update:modelValue", "close", "focus", "blur", "keydown", "confirm"],
   setup(props, { emit, slots }) {
@@ -1045,6 +1046,18 @@ export const TDialog = defineComponent({
     function onDialogKeydown(e: any): void {
       emit("keydown", e);
       if (!props.modelValue) return;
+      if (
+        props.blockPrintableKeys &&
+        typeof e?.key === "string" &&
+        e.key.length === 1 &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        e.preventDefault?.();
+        e.stopPropagation?.();
+        return;
+      }
       if (!props.buttons.length) return;
 
       const allowDefaultPreventedEnter =

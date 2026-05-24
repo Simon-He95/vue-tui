@@ -604,6 +604,62 @@ describe("ui regressions dialog", () => {
     mounted.unmount();
   });
 
+  it("TDialog can block printable keys without blocking button shortcuts", async () => {
+    const open = ref(true);
+    const confirmed = ref("");
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 26,
+            h: 7,
+            title: "Confirm",
+            placement: "center",
+            closeOnConfirm: false,
+            blockPrintableKeys: true,
+            buttons: [{ label: "OK", value: "ok", default: true }],
+            onConfirm: (b: any) => {
+              confirmed.value = String(b?.value ?? "");
+            },
+          },
+          () => h(TText, { x: 0, y: 0, w: 22, value: "Hi" }),
+        ),
+      44,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    const printable = new KeyboardEvent("keydown", {
+      key: "x",
+      code: "KeyX",
+      bubbles: true,
+      cancelable: true,
+    });
+    container.dispatchEvent(printable);
+    await nextTick();
+    expect(printable.defaultPrevented).toBe(true);
+    expect(confirmed.value).toBe("");
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    await nextTick();
+    expect(confirmed.value).toBe("ok");
+
+    mounted.unmount();
+  });
+
   it("TDialog only underlines the selected footer button", async () => {
     const open = ref(true);
     const mounted = await mountTerminal(
