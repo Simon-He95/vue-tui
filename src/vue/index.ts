@@ -131,6 +131,14 @@ export { TTransition } from "./components/TTransition.js";
 export { TTree } from "./components/TTree.js";
 export type { TTreeNode, TTreeSelectPayload, TTreeTogglePayload } from "./components/TTree.js";
 export { TView } from "./components/TView.js";
+export {
+  padEndByCells,
+  sliceByCells,
+  sliceByCellsRange,
+  spaces,
+  textCellWidth,
+  wrapByCells,
+} from "./utils/text.js";
 
 export { useLayout } from "./composables/use-layout.js";
 export { useRenderNode } from "./composables/use-render-node.js";
