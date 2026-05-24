@@ -1789,12 +1789,21 @@ export function createStdoutRenderer(
       );
     };
 
+    const rangesOverlap = (a: TerminalScrollOperation, b: TerminalScrollOperation): boolean =>
+      a.startY < b.endY && b.startY < a.endY;
+
+    const markScrollOperationDirty = (op: TerminalScrollOperation, rowCount: number): void => {
+      markAccumulatedDirtyRange(op.startY, op.endY, rowCount);
+    };
+
     const mergeScrollOperations = (
       next: readonly TerminalScrollOperation[] | null | undefined,
     ): void => {
       if (!next?.length || accumulatedAllRows) return;
+
       const rowCount = terminal.size().rows;
       const merged = accumulatedScrollOperations ? accumulatedScrollOperations.slice() : [];
+
       for (const raw of next) {
         const op = normalizeAccumulatedScrollOperation(raw.startY, raw.endY, raw.delta, rowCount);
         if (!op) continue;
@@ -1813,16 +1822,26 @@ export function createStdoutRenderer(
             continue;
           }
 
-          // Once accumulated scroll distance covers the whole region, terminal
-          // scroll-region output can no longer represent the final frame safely.
-          // Drop the pending scroll hint and repaint the whole affected region.
+          // Once accumulated scroll distance covers the whole region, repaint is safer.
           merged.pop();
-          markAccumulatedDirtyRange(op.startY, op.endY, rowCount);
+          markScrollOperationDirty(last, rowCount);
+          markScrollOperationDirty(op, rowCount);
+          continue;
+        }
+
+        const firstOverlappingIndex = merged.findIndex((prev) => rangesOverlap(prev, op));
+        if (firstOverlappingIndex >= 0) {
+          // Overlapping non-mergeable scrolls are order-sensitive; repaint keeps
+          // the fingerprint buffer aligned with the live terminal.
+          const dropped = merged.splice(firstOverlappingIndex);
+          for (const prev of dropped) markScrollOperationDirty(prev, rowCount);
+          markScrollOperationDirty(op, rowCount);
           continue;
         }
 
         merged.push(op);
       }
+
       accumulatedScrollOperations = merged.length ? merged : null;
     };
 
