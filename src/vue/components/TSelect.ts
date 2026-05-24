@@ -30,6 +30,10 @@ function normalizeInteger(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function normalizeNonNegativeInteger(value: unknown, fallback = 0): number {
+  return Math.max(0, normalizeInteger(value, fallback));
+}
+
 function clamp(n: number, min: number, max: number): number {
   const lo = normalizeInteger(min, 0);
   const hi = Math.max(lo, normalizeInteger(max, lo));
@@ -1049,7 +1053,7 @@ export const TSelect = defineComponent({
               if (!controller.signal.aborted) providerLoading.value = false;
             });
         };
-        const delay = Math.max(0, Math.floor(props.debounce));
+        const delay = normalizeNonNegativeInteger(props.debounce, 0);
         if (delay > 0) providerTimer = setTimeout(run, delay);
         else run();
       },

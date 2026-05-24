@@ -561,6 +561,36 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("normalizes non-finite TSelect async debounce", async () => {
+    const provider = vi.fn<
+      (query: string, ctx: { signal: AbortSignal }) => Promise<readonly string[]>
+    >(async () => ["Alpha"]);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          debounce: Number.POSITIVE_INFINITY,
+          optionProvider: provider,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+
+      expect(provider).toHaveBeenCalledTimes(1);
+      const [, ctx] = provider.mock.calls[0]!;
+      expect(ctx.signal).toBeInstanceOf(AbortSignal);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders table, data table, and tree primitives", async () => {
     const rows = [
       { id: "2", name: "build", status: "fail" },
