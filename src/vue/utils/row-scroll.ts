@@ -6,12 +6,19 @@ import type { RenderManager } from "../render/render-manager.js";
 export type UnsafeFullRowScrollMode = "off" | "unsafe-full-row";
 
 export function exposedRowsForDelta(y0: number, h: number, delta: number): number[] {
+  const startY = Math.floor(y0);
+  const height = Math.max(0, Math.floor(h));
+  const lines = Math.trunc(delta);
   const rows: number[] = [];
-  if (delta > 0) {
-    for (let i = h - delta; i < h; i++) rows.push(y0 + i);
+
+  if (height <= 0 || lines === 0 || Math.abs(lines) >= height) return rows;
+
+  if (lines > 0) {
+    for (let i = height - lines; i < height; i++) rows.push(startY + i);
   } else {
-    for (let i = 0; i < -delta; i++) rows.push(y0 + i);
+    for (let i = 0; i < -lines; i++) rows.push(startY + i);
   }
+
   return rows;
 }
 
@@ -30,9 +37,18 @@ export function tryUnsafeFullRowScroll(
   }>,
 ): readonly number[] | null {
   const r = options.rect;
-  const h = r.h;
-  const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= options.terminalSize.cols;
-  const withinTerminalRows = r.y >= 0 && r.y + h <= options.terminalSize.rows;
+  const x = Math.floor(r.x);
+  const y = Math.floor(r.y);
+  const w = Math.floor(r.w);
+  const h = Math.floor(r.h);
+  const rows = Math.floor(options.terminalSize.rows);
+  const cols = Math.floor(options.terminalSize.cols);
+  const delta = Math.trunc(options.delta);
+
+  if (delta === 0 || h <= 0 || cols <= 0 || rows <= 0) return null;
+
+  const ownsFullRows = x === 0 && w >= cols;
+  const withinTerminalRows = y >= 0 && y + h <= rows;
   const canUseScrollPlane =
     (options.strategy ?? "auto") === "auto" &&
     options.rowScrollMode === "unsafe-full-row" &&
@@ -40,11 +56,11 @@ export function tryUnsafeFullRowScroll(
     ownsFullRows &&
     withinTerminalRows &&
     !options.isClipped &&
-    Math.abs(options.delta) < h &&
+    Math.abs(delta) < h &&
     !options.hasPendingDirtyRows;
 
   if (!canUseScrollPlane) return null;
 
-  options.render.unsafeScrollPlaneRows(options.plane, r.y, r.y + h, options.delta);
-  return exposedRowsForDelta(r.y, h, options.delta);
+  options.render.unsafeScrollPlaneRows(options.plane, y, y + h, delta);
+  return exposedRowsForDelta(y, h, delta);
 }

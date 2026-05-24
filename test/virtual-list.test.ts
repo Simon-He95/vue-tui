@@ -55,6 +55,28 @@ function dispatchDomWheel(
   container.dispatchEvent(wheel);
 }
 
+const stdoutScrollRegionEnvKeys = [
+  "VUE_TUI_SCROLL_REGIONS",
+  "DIMCODE_TUI_SCROLL_REGIONS",
+  "GHOSTTY_RESOURCES_DIR",
+  "TERM_PROGRAM",
+  "VSCODE_PID",
+  "VSCODE_IPC_HOOK_CLI",
+] as const;
+
+function snapshotEnv(keys: readonly string[]): Map<string, string | undefined> {
+  const snapshot = new Map<string, string | undefined>();
+  for (const key of keys) snapshot.set(key, process.env[key]);
+  return snapshot;
+}
+
+function restoreEnv(snapshot: ReadonlyMap<string, string | undefined>): void {
+  for (const [key, value] of snapshot) {
+    if (value == null) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
+
 describe("TVirtualList", () => {
   it("repaints the full viewport in DOM so slow wheel scroll updates visible rows", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
@@ -593,11 +615,63 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
+  it("uses top exposed rows when unsafe full-row wheel scrolls upward", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: items.length,
+        itemVersion: 1,
+        getItem: (index: number) => items[index],
+        autoFocus: true,
+        rowScrollMode: "unsafe-full-row",
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 300, time: 1_000 });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_100 });
+      await nextTick();
+      app.scheduler.flushNow();
+      off();
+
+      expect(commits).toEqual([
+        { dirtyRows: [0], scrollOperations: [{ startY: 0, endY: 4, delta: -1 }] },
+      ]);
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-2");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("stdout renderer uses a scroll region for unsafe full-row wheel scroll", async () => {
-    const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
-    const prevGhostty = process.env.GHOSTTY_RESOURCES_DIR;
+    const envSnapshot = snapshotEnv(stdoutScrollRegionEnvKeys);
+    process.env.VUE_TUI_SCROLL_REGIONS = "1";
     process.env.DIMCODE_TUI_SCROLL_REGIONS = "1";
     delete process.env.GHOSTTY_RESOURCES_DIR;
+    delete process.env.TERM_PROGRAM;
+    delete process.env.VSCODE_PID;
+    delete process.env.VSCODE_IPC_HOOK_CLI;
 
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
@@ -656,10 +730,7 @@ describe("TVirtualList", () => {
     } finally {
       renderer.dispose();
       app.dispose();
-      if (prevScrollRegions == null) delete process.env.DIMCODE_TUI_SCROLL_REGIONS;
-      else process.env.DIMCODE_TUI_SCROLL_REGIONS = prevScrollRegions;
-      if (prevGhostty == null) delete process.env.GHOSTTY_RESOURCES_DIR;
-      else process.env.GHOSTTY_RESOURCES_DIR = prevGhostty;
+      restoreEnv(envSnapshot);
     }
   });
 
