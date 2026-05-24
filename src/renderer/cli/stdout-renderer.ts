@@ -1698,6 +1698,206 @@ export function createStdoutRenderer(
     }
   }
 
+  function ensureAccumulatedDirtyBits(rowCount: number): Uint8Array {
+    if (!accumulatedDirtyBits || accumulatedDirtyBits.length !== rowCount) {
+      accumulatedDirtyBits = new Uint8Array(rowCount);
+      accumulatedDirtyCount = 0;
+      accumulatedDirtyMin = Number.POSITIVE_INFINITY;
+      accumulatedDirtyMax = -1;
+    }
+    return accumulatedDirtyBits;
+  }
+
+  function buildAccumulatedRows(
+    fallbackDirtyRows?: readonly number[] | null,
+  ): readonly number[] | null {
+    if (accumulatedAllRows) return null;
+    if (!accumulatedDirtyBits || accumulatedDirtyCount === 0) return fallbackDirtyRows ?? null;
+
+    const out: number[] = [];
+    out.length = accumulatedDirtyCount;
+    let outLen = 0;
+
+    const minY = Math.max(0, accumulatedDirtyMin);
+    const maxY = Math.min(accumulatedDirtyBits.length - 1, accumulatedDirtyMax);
+
+    for (let y = minY; y <= maxY; y++) {
+      if (accumulatedDirtyBits[y]) out[outLen++] = y;
+    }
+
+    out.length = outLen;
+    return outLen ? out : null;
+  }
+
+  function buildAccumulatedScrollOperations(): readonly TerminalScrollOperation[] | null {
+    return accumulatedScrollOperations?.length ? accumulatedScrollOperations : null;
+  }
+
+  function normalizeAccumulatedScrollOperation(
+    startY: number,
+    endY: number,
+    delta: number,
+    rowCount: number,
+  ): TerminalScrollOperation | null {
+    const start = Math.max(0, Math.min(rowCount, Math.floor(startY)));
+    const end = Math.max(0, Math.min(rowCount, Math.floor(endY)));
+    const lines = Math.trunc(delta);
+    const height = end - start;
+
+    if (height <= 0 || lines === 0 || Math.abs(lines) >= height) return null;
+    return { startY: start, endY: end, delta: lines };
+  }
+
+  function markAccumulatedDirtyRow(y: number, rowCount: number): void {
+    if (accumulatedAllRows) return;
+    if (y < 0 || y >= rowCount) return;
+
+    const bits = ensureAccumulatedDirtyBits(rowCount);
+    if (bits[y]) return;
+
+    bits[y] = 1;
+    accumulatedDirtyCount++;
+
+    if (y < accumulatedDirtyMin) accumulatedDirtyMin = y;
+    if (y > accumulatedDirtyMax) accumulatedDirtyMax = y;
+  }
+
+  function markAccumulatedDirtyRange(startY: number, endY: number, rowCount: number): void {
+    const start = Math.max(0, Math.min(rowCount, Math.floor(startY)));
+    const end = Math.max(0, Math.min(rowCount, Math.floor(endY)));
+
+    for (let y = start; y < end; y++) markAccumulatedDirtyRow(y, rowCount);
+  }
+
+  function shiftAccumulatedDirtyRowsForScrollOperation(
+    op: TerminalScrollOperation,
+    rowCount: number,
+  ): void {
+    if (accumulatedAllRows) return;
+    if (!accumulatedDirtyBits || accumulatedDirtyCount === 0) return;
+
+    const bits = accumulatedDirtyBits;
+    const nextBits = new Uint8Array(rowCount);
+
+    let nextCount = 0;
+    let nextMin = Number.POSITIVE_INFINITY;
+    let nextMax = -1;
+
+    const markNext = (y: number): void => {
+      if (y < 0 || y >= rowCount) return;
+      if (nextBits[y]) return;
+
+      nextBits[y] = 1;
+      nextCount++;
+
+      if (y < nextMin) nextMin = y;
+      if (y > nextMax) nextMax = y;
+    };
+
+    const minY = Math.max(0, accumulatedDirtyMin);
+    const maxY = Math.min(rowCount - 1, accumulatedDirtyMax);
+    const delta = Math.trunc(op.delta);
+
+    for (let y = minY; y <= maxY; y++) {
+      if (!bits[y]) continue;
+
+      let nextY = y;
+
+      if (y >= op.startY && y < op.endY) {
+        if (delta > 0) {
+          if (y < op.startY + delta) continue;
+          nextY = y - delta;
+        } else {
+          const absDelta = -delta;
+          if (y >= op.endY - absDelta) continue;
+          nextY = y + absDelta;
+        }
+      }
+
+      markNext(nextY);
+    }
+
+    accumulatedDirtyBits = nextBits;
+    accumulatedDirtyCount = nextCount;
+    accumulatedDirtyMin = nextMin;
+    accumulatedDirtyMax = nextMax;
+  }
+
+  function canMergeScrollOperations(
+    prev: TerminalScrollOperation,
+    next: TerminalScrollOperation,
+  ): boolean {
+    return (
+      prev.startY === next.startY &&
+      prev.endY === next.endY &&
+      Math.sign(prev.delta) === Math.sign(next.delta)
+    );
+  }
+
+  function rangesOverlap(a: TerminalScrollOperation, b: TerminalScrollOperation): boolean {
+    return a.startY < b.endY && b.startY < a.endY;
+  }
+
+  function markScrollOperationDirty(op: TerminalScrollOperation, rowCount: number): void {
+    markAccumulatedDirtyRange(op.startY, op.endY, rowCount);
+  }
+
+  function mergeScrollOperations(
+    next: readonly TerminalScrollOperation[] | null | undefined,
+  ): void {
+    if (!next?.length || accumulatedAllRows) return;
+
+    const rowCount = terminal.size().rows;
+    ensureAccumulatedDirtyBits(rowCount);
+
+    const merged = accumulatedScrollOperations ? accumulatedScrollOperations.slice() : [];
+
+    for (const raw of next) {
+      const op = normalizeAccumulatedScrollOperation(raw.startY, raw.endY, raw.delta, rowCount);
+      if (!op) continue;
+
+      const last = merged[merged.length - 1];
+
+      if (last && canMergeScrollOperations(last, op)) {
+        const combined = normalizeAccumulatedScrollOperation(
+          last.startY,
+          last.endY,
+          last.delta + op.delta,
+          rowCount,
+        );
+
+        if (combined) {
+          shiftAccumulatedDirtyRowsForScrollOperation(op, rowCount);
+          merged[merged.length - 1] = combined;
+          continue;
+        }
+
+        // Once accumulated scroll distance covers the whole region, repaint is safer.
+        merged.pop();
+        markScrollOperationDirty(last, rowCount);
+        markScrollOperationDirty(op, rowCount);
+        continue;
+      }
+
+      const firstOverlappingIndex = merged.findIndex((prev) => rangesOverlap(prev, op));
+
+      if (firstOverlappingIndex >= 0) {
+        // Overlapping non-mergeable scrolls are order-sensitive; repaint keeps
+        // the fingerprint buffer aligned with the live terminal.
+        const dropped = merged.splice(firstOverlappingIndex);
+
+        for (const prev of dropped) markScrollOperationDirty(prev, rowCount);
+        markScrollOperationDirty(op, rowCount);
+        continue;
+      }
+
+      shiftAccumulatedDirtyRowsForScrollOperation(op, rowCount);
+      merged.push(op);
+    }
+
+    accumulatedScrollOperations = merged.length ? merged : null;
+  }
+
   /**
    * Public render function with frame rate limiting.
    * Prevents excessive renders that cause flickering in Bun binaries.
@@ -1716,52 +1916,6 @@ export function createStdoutRenderer(
       );
     }
 
-    const ensureDirtyBits = (rowCount: number): Uint8Array => {
-      if (!accumulatedDirtyBits || accumulatedDirtyBits.length !== rowCount) {
-        accumulatedDirtyBits = new Uint8Array(rowCount);
-        accumulatedDirtyCount = 0;
-        accumulatedDirtyMin = Number.POSITIVE_INFINITY;
-        accumulatedDirtyMax = -1;
-      }
-      return accumulatedDirtyBits;
-    };
-
-    const buildAccumulatedRows = (): readonly number[] | null => {
-      if (accumulatedAllRows) return null;
-      if (!accumulatedDirtyBits || accumulatedDirtyCount === 0) return dirtyRows ?? null;
-      const out: number[] = [];
-      out.length = accumulatedDirtyCount;
-      let outLen = 0;
-      const minY = Math.max(0, accumulatedDirtyMin);
-      const maxY = Math.min(accumulatedDirtyBits.length - 1, accumulatedDirtyMax);
-      for (let y = minY; y <= maxY; y++) {
-        if (accumulatedDirtyBits[y]) {
-          out[outLen++] = y;
-        }
-      }
-      out.length = outLen;
-      return outLen ? out : null;
-    };
-
-    const buildAccumulatedScrollOperations = (): readonly TerminalScrollOperation[] | null => {
-      return accumulatedScrollOperations?.length ? accumulatedScrollOperations : null;
-    };
-
-    const mergeScrollOperations = (
-      next: readonly TerminalScrollOperation[] | null | undefined,
-    ): void => {
-      if (!next?.length || accumulatedAllRows) return;
-      const merged = accumulatedScrollOperations ? accumulatedScrollOperations.slice() : [];
-      for (const op of next) {
-        const startY = Math.floor(op.startY);
-        const endY = Math.floor(op.endY);
-        const delta = Math.trunc(op.delta);
-        if (endY <= startY || delta === 0) continue;
-        merged.push({ startY, endY, delta });
-      }
-      accumulatedScrollOperations = merged.length ? merged : null;
-    };
-
     // Accumulate dirty rows for pending renders. `null/undefined/[]` means full repaint.
     if (!dirtyRows || dirtyRows.length === 0) {
       accumulatedAllRows = true;
@@ -1772,7 +1926,9 @@ export function createStdoutRenderer(
       accumulatedScrollOperations = null;
     } else if (!accumulatedAllRows) {
       const rowCount = terminal.size().rows;
-      const bits = ensureDirtyBits(rowCount);
+      mergeScrollOperations(scrollOperations);
+
+      const bits = ensureAccumulatedDirtyBits(rowCount);
       for (let i = 0; i < dirtyRows.length; i++) {
         const y = Math.floor(dirtyRows[i] ?? -1);
         if (y < 0 || y >= rowCount) continue;
@@ -1783,7 +1939,6 @@ export function createStdoutRenderer(
           if (y > accumulatedDirtyMax) accumulatedDirtyMax = y;
         }
       }
-      mergeScrollOperations(scrollOperations);
     }
 
     const now = Date.now();
@@ -1805,7 +1960,7 @@ export function createStdoutRenderer(
           renderTimer = null;
         }
       }
-      const rows = buildAccumulatedRows();
+      const rows = buildAccumulatedRows(dirtyRows);
       const pendingScrolls = buildAccumulatedScrollOperations();
       cliLatency?.recordStdoutQueued(0);
       doRender(rows, pendingScrolls);
@@ -1814,7 +1969,7 @@ export function createStdoutRenderer(
 
     if (elapsed >= MIN_FRAME_MS) {
       // Enough time has passed, render immediately
-      const rows = buildAccumulatedRows();
+      const rows = buildAccumulatedRows(dirtyRows);
       const pendingScrolls = buildAccumulatedScrollOperations();
       cliLatency?.recordStdoutQueued(0);
       doRender(rows, pendingScrolls);
@@ -1825,7 +1980,7 @@ export function createStdoutRenderer(
       renderTimer = setTimeout(() => {
         renderTimer = null;
         if (!disposed) {
-          const rows = buildAccumulatedRows();
+          const rows = buildAccumulatedRows(dirtyRows);
           const pendingScrolls = buildAccumulatedScrollOperations();
           doRender(rows, pendingScrolls);
         }

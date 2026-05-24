@@ -62,6 +62,7 @@ import {
   createWheelScrollState,
   resetWheelScrollState,
 } from "../utils/wheel-scroll.js";
+import { prepareUnsafeFullRowScroll } from "../utils/row-scroll.js";
 
 type ScrollStrategy = "auto" | "viewport-repaint";
 type RowScrollMode = "off" | "unsafe-full-row";
@@ -2857,16 +2858,6 @@ export const TLogView = defineComponent({
       resetWheelScrollState(wheelState);
     }
 
-    function exposedRowsForDelta(y0: number, h: number, delta: number): number[] {
-      const rows: number[] = [];
-      if (delta > 0) {
-        for (let i = h - delta; i < h; i++) rows.push(y0 + i);
-      } else {
-        for (let i = 0; i < -delta; i++) rows.push(y0 + i);
-      }
-      return rows;
-    }
-
     function shiftVisibleLinksForScrollRegion(y0: number, y1: number, delta: number): void {
       if (!visibleLinksByRow.size || delta === 0) return;
 
@@ -2916,7 +2907,10 @@ export const TLogView = defineComponent({
     function markRowsDirty(nextRows: readonly number[]): boolean {
       if (!hasPaintableViewport()) return false;
       dirtyRowsHint = unionDirtyRows(nextRows);
-      if (!renderNodeId) return false;
+      if (!renderNodeId) {
+        dirtyRowsHint = undefined;
+        return false;
+      }
       if (render.markDirtyRows(renderNodeId, dirtyRowsHint)) return true;
       dirtyRowsHint = undefined;
       return false;
@@ -3064,30 +3058,32 @@ export const TLogView = defineComponent({
         return true;
       }
 
-      const size = terminal.size();
-      const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= size.cols;
-      const withinTerminalRows = r.y >= 0 && r.y + h <= size.rows;
-      const canUseScrollPlane =
-        strategy === "auto" &&
-        props.rowScrollMode === "unsafe-full-row" &&
-        rendererCapabilities.value.scrollOperations &&
-        !props.wrap &&
-        ownsFullRows &&
-        withinTerminalRows &&
-        !isClipped() &&
-        Math.abs(delta) < h &&
-        !dirtyRowsHint?.length;
+      const scrollPlan = !props.wrap
+        ? prepareUnsafeFullRowScroll({
+            render,
+            plane: plane.value,
+            rect: r,
+            terminalSize: terminal.size(),
+            delta,
+            rowScrollMode: props.rowScrollMode,
+            rendererCapabilities: rendererCapabilities.value,
+            isClipped: isClipped(),
+            hasPendingDirtyRows: Boolean(dirtyRowsHint?.length),
+            strategy,
+          })
+        : null;
 
-      if (canUseScrollPlane) {
-        render.unsafeScrollPlaneRows(plane.value, r.y, r.y + h, delta);
-        shiftVisibleLinksForScrollRegion(r.y, r.y + h, delta);
-        markRowsDirty(
-          options?.extraDirtyRows?.length
-            ? [...exposedRowsForDelta(r.y, h, delta), ...options.extraDirtyRows]
-            : exposedRowsForDelta(r.y, h, delta),
-        );
-        if (options?.emitScroll) emitScroll(clampedTop);
-        return true;
+      if (scrollPlan) {
+        const rows = options?.extraDirtyRows?.length
+          ? [...scrollPlan.exposedRows, ...options.extraDirtyRows]
+          : scrollPlan.exposedRows;
+
+        if (markRowsDirty(rows)) {
+          scrollPlan.apply();
+          shiftVisibleLinksForScrollRegion(r.y, r.y + h, delta);
+          if (options?.emitScroll) emitScroll(clampedTop);
+          return true;
+        }
       }
 
       markViewportDirty();

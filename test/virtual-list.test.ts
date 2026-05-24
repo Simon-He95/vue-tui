@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTerminal } from "../src/index.js";
-import { createTerminalApp } from "../src/cli.js";
+import { createStdoutRenderer, createTerminalApp } from "../src/cli.js";
 import { createRenderManager } from "../src/vue/render/render-manager.js";
 import { createFramePerfProbe, expectScrollMailboxFrame } from "./helpers/frame-perf.js";
 import { installManualRaf } from "./helpers/manual-raf.js";
@@ -53,6 +53,28 @@ function dispatchDomWheel(
     deltaMode: { value: init.deltaMode },
   });
   container.dispatchEvent(wheel);
+}
+
+const stdoutScrollRegionEnvKeys = [
+  "VUE_TUI_SCROLL_REGIONS",
+  "DIMCODE_TUI_SCROLL_REGIONS",
+  "GHOSTTY_RESOURCES_DIR",
+  "TERM_PROGRAM",
+  "VSCODE_PID",
+  "VSCODE_IPC_HOOK_CLI",
+] as const;
+
+function snapshotEnv(keys: readonly string[]): Map<string, string | undefined> {
+  const snapshot = new Map<string, string | undefined>();
+  for (const key of keys) snapshot.set(key, process.env[key]);
+  return snapshot;
+}
+
+function restoreEnv(snapshot: ReadonlyMap<string, string | undefined>): void {
+  for (const [key, value] of snapshot) {
+    if (value == null) delete process.env[key];
+    else process.env[key] = value;
+  }
 }
 
 describe("TVirtualList", () => {
@@ -545,7 +567,7 @@ describe("TVirtualList", () => {
     expect(terminal.getCell(5, 3).ch).toBe("4");
   });
 
-  it("mounted headless wheel scroll repaints the viewport", async () => {
+  it("mounted headless wheel scroll uses exposed rows", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
       cols: 12,
@@ -578,7 +600,9 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
+    expect(commits).toEqual([
+      { dirtyRows: [3], scrollOperations: [{ startY: 0, endY: 4, delta: 1 }] },
+    ]);
     expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
       "item-1",
       "item-2",
@@ -588,7 +612,129 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it('does not warn for rowScrollMode="unsafe-full-row" while using viewport repaint', async () => {
+  it("uses top exposed rows when unsafe full-row wheel scrolls upward", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 8,
+      component: TVirtualList,
+      props: {
+        x: 0,
+        y: 0,
+        w: 12,
+        h: 4,
+        itemCount: items.length,
+        itemVersion: 1,
+        getItem: (index: number) => items[index],
+        autoFocus: true,
+        rowScrollMode: "unsafe-full-row",
+      },
+    });
+
+    try {
+      app.mount();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 300, time: 1_000 });
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: -100, time: 1_100 });
+      await nextTick();
+      app.scheduler.flushNow();
+      off();
+
+      expect(commits).toEqual([
+        { dirtyRows: [0], scrollOperations: [{ startY: 0, endY: 4, delta: -1 }] },
+      ]);
+      expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-2");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("stdout renderer uses a scroll region for unsafe full-row wheel scroll", async () => {
+    const envSnapshot = snapshotEnv(stdoutScrollRegionEnvKeys);
+    let app: ReturnType<typeof createTerminalApp> | null = null;
+    let renderer: ReturnType<typeof createStdoutRenderer> | null = null;
+
+    try {
+      process.env.VUE_TUI_SCROLL_REGIONS = "1";
+      process.env.DIMCODE_TUI_SCROLL_REGIONS = "1";
+      delete process.env.GHOSTTY_RESOURCES_DIR;
+      delete process.env.TERM_PROGRAM;
+      delete process.env.VSCODE_PID;
+      delete process.env.VSCODE_IPC_HOOK_CLI;
+
+      const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+      app = createTerminalApp({
+        cols: 12,
+        rows: 8,
+        component: TVirtualList,
+        props: {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          itemCount: items.length,
+          itemVersion: 1,
+          getItem: (index: number) => items[index],
+          autoFocus: true,
+          rowScrollMode: "unsafe-full-row",
+        },
+      });
+      let out = "";
+      renderer = createStdoutRenderer(app.terminal, {
+        output: {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+          },
+        },
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+      });
+
+      app.mount();
+      app.scheduler.flushNow();
+      out = "";
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+      await nextTick();
+      app.scheduler.flushNow();
+      off();
+
+      expect(commits).toEqual([
+        { dirtyRows: [3], scrollOperations: [{ startY: 0, endY: 4, delta: 1 }] },
+      ]);
+      expect(out).toContain("\u001B[1;4r");
+      expect(out).toContain("\u001B[1S");
+      expect(out).toContain("\u001B[4;1Hitem-4");
+      expect(out).not.toContain("item-1");
+    } finally {
+      renderer?.dispose();
+      app?.dispose();
+      restoreEnv(envSnapshot);
+    }
+  });
+
+  it('does not warn for rowScrollMode="unsafe-full-row"', async () => {
     const previousDebugPerf = (globalThis as any).__VT_DEBUG_PERF__;
     (globalThis as any).__VT_DEBUG_PERF__ = true;
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -670,7 +816,9 @@ describe("TVirtualList", () => {
       await nextTick();
 
       off();
-      expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
+      expect(commits).toEqual([
+        { dirtyRows: [2, 3], scrollOperations: [{ startY: 0, endY: 4, delta: 2 }] },
+      ]);
       expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
         "item-2",
         "item-3",
@@ -1591,7 +1739,7 @@ describe("TVirtualList", () => {
     }
   });
 
-  it("keeps headless viewport repaint correct across consecutive wheel ticks", async () => {
+  it("keeps headless exposed-row scroll correct across consecutive wheel ticks", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const app = createTerminalApp({
       cols: 12,
@@ -1629,10 +1777,7 @@ describe("TVirtualList", () => {
       off();
     }
 
-    expect(commits).toEqual([
-      [0, 1, 2, 3],
-      [0, 1, 2, 3],
-    ]);
+    expect(commits).toEqual([[3], [3]]);
     expect([0, 1, 2, 3].map((y) => rowText({ terminal: app.terminal } as any, y))).toEqual([
       "item-2",
       "item-3",
@@ -2209,7 +2354,7 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    expect(commits).toEqual([[0, 1, 2, 3, 4]]);
+    expect(commits).toEqual([[4]]);
     expect(rowText({ terminal: app.terminal } as any, 4)).toBe("item-5");
     app.dispose();
   });
@@ -2337,7 +2482,7 @@ describe("TVirtualList", () => {
     app.dispose();
   });
 
-  it('does not shift same-plane full-row overlay content when rowScrollMode="unsafe-full-row"', async () => {
+  it('documents same-plane row ownership required by rowScrollMode="unsafe-full-row"', async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "VirtualListWithUnsafeOverlay",
@@ -2366,12 +2511,12 @@ describe("TVirtualList", () => {
     await nextTick();
     await nextTick();
 
-    expect(rowText({ terminal: app.terminal } as any, 0)).not.toContain("BADGE");
-    expect(rowText({ terminal: app.terminal } as any, 1)).toContain("BADGE");
+    expect(rowText({ terminal: app.terminal } as any, 0)).toContain("BADGE");
+    expect(rowText({ terminal: app.terminal } as any, 1)).not.toContain("BADGE");
     app.dispose();
   });
 
-  it("keeps higher-plane overlay stable during viewport wheel repaint", async () => {
+  it("keeps higher-plane overlay stable during unsafe wheel scroll", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const App = defineComponent({
       name: "VirtualListWithHigherPlaneOverlay",
@@ -2411,7 +2556,9 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
+    expect(commits).toEqual([
+      { dirtyRows: [0, 1, 3], scrollOperations: [{ startY: 2, endY: 4, delta: 1 }] },
+    ]);
     expect(rowText({ terminal: app.terminal } as any, 1)).toMatch(/^BADGE/);
     expect(rowText({ terminal: app.terminal } as any, 0)).toBe("item-1");
     expect(rowText({ terminal: app.terminal } as any, 3)).toBe("item-4");
