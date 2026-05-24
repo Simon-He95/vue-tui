@@ -1747,17 +1747,81 @@ export function createStdoutRenderer(
       return accumulatedScrollOperations?.length ? accumulatedScrollOperations : null;
     };
 
+    const normalizeAccumulatedScrollOperation = (
+      startY: number,
+      endY: number,
+      delta: number,
+      rowCount: number,
+    ): TerminalScrollOperation | null => {
+      const start = Math.max(0, Math.min(rowCount, Math.floor(startY)));
+      const end = Math.max(0, Math.min(rowCount, Math.floor(endY)));
+      const lines = Math.trunc(delta);
+      const height = end - start;
+      if (height <= 0 || lines === 0 || Math.abs(lines) >= height) return null;
+      return { startY: start, endY: end, delta: lines };
+    };
+
+    const markAccumulatedDirtyRow = (y: number, rowCount: number): void => {
+      if (accumulatedAllRows) return;
+      if (y < 0 || y >= rowCount) return;
+      const bits = ensureDirtyBits(rowCount);
+      if (bits[y]) return;
+      bits[y] = 1;
+      accumulatedDirtyCount++;
+      if (y < accumulatedDirtyMin) accumulatedDirtyMin = y;
+      if (y > accumulatedDirtyMax) accumulatedDirtyMax = y;
+    };
+
+    const markAccumulatedDirtyRange = (startY: number, endY: number, rowCount: number): void => {
+      const start = Math.max(0, Math.min(rowCount, Math.floor(startY)));
+      const end = Math.max(0, Math.min(rowCount, Math.floor(endY)));
+      for (let y = start; y < end; y++) markAccumulatedDirtyRow(y, rowCount);
+    };
+
+    const canMergeScrollOperations = (
+      prev: TerminalScrollOperation,
+      next: TerminalScrollOperation,
+    ): boolean => {
+      return (
+        prev.startY === next.startY &&
+        prev.endY === next.endY &&
+        Math.sign(prev.delta) === Math.sign(next.delta)
+      );
+    };
+
     const mergeScrollOperations = (
       next: readonly TerminalScrollOperation[] | null | undefined,
     ): void => {
       if (!next?.length || accumulatedAllRows) return;
+      const rowCount = terminal.size().rows;
       const merged = accumulatedScrollOperations ? accumulatedScrollOperations.slice() : [];
-      for (const op of next) {
-        const startY = Math.floor(op.startY);
-        const endY = Math.floor(op.endY);
-        const delta = Math.trunc(op.delta);
-        if (endY <= startY || delta === 0) continue;
-        merged.push({ startY, endY, delta });
+      for (const raw of next) {
+        const op = normalizeAccumulatedScrollOperation(raw.startY, raw.endY, raw.delta, rowCount);
+        if (!op) continue;
+
+        const last = merged[merged.length - 1];
+        if (last && canMergeScrollOperations(last, op)) {
+          const combined = normalizeAccumulatedScrollOperation(
+            last.startY,
+            last.endY,
+            last.delta + op.delta,
+            rowCount,
+          );
+
+          if (combined) {
+            merged[merged.length - 1] = combined;
+            continue;
+          }
+
+          // Once accumulated scroll distance covers the whole region, terminal
+          // scroll-region output can no longer represent the final frame safely.
+          // Drop the pending scroll hint and repaint the whole affected region.
+          merged.pop();
+          markAccumulatedDirtyRange(op.startY, op.endY, rowCount);
+          continue;
+        }
+
+        merged.push(op);
       }
       accumulatedScrollOperations = merged.length ? merged : null;
     };

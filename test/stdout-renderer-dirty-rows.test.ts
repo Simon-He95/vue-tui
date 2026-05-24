@@ -1045,6 +1045,79 @@ describe("stdout renderer", () => {
     });
   });
 
+  it("coalesces pending explicit scroll operations before stdout flush", () => {
+    const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
+
+    withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
+      vi.useFakeTimers();
+      const nowRef = { t: 0 };
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowRef.t);
+
+      try {
+        process.env.DIMCODE_TUI_SCROLL_REGIONS = "1";
+
+        const terminal = createTerminal({ cols: 8, rows: 4 });
+        const transcript = getPlaneTerminal(terminal, "transcript");
+        let out = "";
+        let transcriptOut = "";
+
+        const output = {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+            transcriptOut += chunk;
+          },
+        };
+
+        const renderer = createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+        });
+
+        const frameDelayMs = getFrameDelayMs();
+
+        const writeRow = (y: number, text: string) => {
+          transcript.fill(0, y, 8, 1, " ");
+          transcript.write(text.padEnd(8, " "), { x: 0, y });
+        };
+
+        writeRow(0, "row0");
+        writeRow(1, "row1");
+        writeRow(2, "row2");
+        writeRow(3, "row3");
+        terminal.commit({ planes: ["transcript"], sync: true });
+
+        out = "";
+
+        scrollPlaneRows(terminal, "transcript", 0, 4, 1);
+        writeRow(3, "row4");
+        terminal.commit({ planes: ["transcript"] });
+
+        scrollPlaneRows(terminal, "transcript", 0, 4, 1);
+        writeRow(3, "row5");
+        terminal.commit({ planes: ["transcript"] });
+
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        expect(out).toContain("\u001B[1;4r");
+        expect(out).toContain("\u001B[2S");
+        expect(out).toContain("row4");
+        expect(out).toContain("row5");
+        expect(applyAnsiToScreen(transcriptOut, 8, 4)).toEqual(terminal.snapshot().lines);
+
+        renderer.dispose();
+      } finally {
+        nowSpy.mockRestore();
+        vi.useRealTimers();
+        if (prevScrollRegions == null) delete process.env.DIMCODE_TUI_SCROLL_REGIONS;
+        else process.env.DIMCODE_TUI_SCROLL_REGIONS = prevScrollRegions;
+      }
+    });
+  });
+
   it("renders inserted explicit-scroll rows against blank rows instead of repainting the full line", () => {
     const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
 
