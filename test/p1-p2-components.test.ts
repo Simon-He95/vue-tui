@@ -325,6 +325,54 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("drops non-finite TSelect index model values instead of spreading NaN into selection", async () => {
+    const onConfirm = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          multiple: true,
+          multipleEmit: "index",
+          modelValue: [Number.NaN],
+          options: ["Alpha", "Beta"],
+          onConfirm,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const selectNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.x === 0 && node.rect.y === 0);
+
+      expect(selectNode).toBeTruthy();
+      mounted.events()!.focus(selectNode!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+      expect(onConfirm).toHaveBeenCalledWith([]);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("matches NaN TSelect option values when valueMode is value", async () => {
     const selected = ref<unknown>(Number.NaN);
 
@@ -479,6 +527,65 @@ describe("P1/P2 public components", () => {
       expect(mounted.terminal.snapshot().lines[0]).toContain("Alpha");
       expect(mounted.terminal.snapshot().lines[1].trim()).toBe("");
       expect(mounted.terminal.snapshot().lines[2].trim()).toBe("");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("normalizes non-finite TSelect active and viewport numeric props", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          activeIndex: Number.NaN,
+          maxVisible: Number.NaN,
+          options: ["Alpha", "Beta"],
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]).toContain("Alpha");
+      expect(lines[1]).toContain("Beta");
+      expect(mounted.terminal.getCell(0, 0).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("normalizes non-finite TSelect async debounce", async () => {
+    const provider = vi.fn<
+      (query: string, ctx: { signal: AbortSignal }) => Promise<readonly string[]>
+    >(async () => ["Alpha"]);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 2,
+          debounce: Number.POSITIVE_INFINITY,
+          optionProvider: provider,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+
+      expect(provider).toHaveBeenCalledTimes(1);
+      const [, ctx] = provider.mock.calls[0]!;
+      expect(ctx.signal).toBeInstanceOf(AbortSignal);
     } finally {
       mounted.unmount();
     }
@@ -5045,6 +5152,54 @@ describe("P1/P2 public components", () => {
           index: 0,
           sourceIndex: 2,
           source: "keyboard",
+        }),
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("normalizes non-finite TCommandPalette numeric props before rendering and selecting", async () => {
+    const onSelect = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          items: [{ label: "Open file" }],
+          selectedIndex: Number.NaN,
+          maxVisibleItems: Number.NaN,
+          minQueryLength: Number.NaN,
+          debounce: Number.NaN,
+          w: Number.NaN,
+          h: Number.NaN,
+          onSelect,
+        }),
+      80,
+      24,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.snapshot().lines.join("\n")).toContain("Open file");
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await nextTick();
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          item: { label: "Open file" },
+          index: 0,
+          sourceIndex: 0,
         }),
       );
     } finally {

@@ -98,6 +98,22 @@ type TCommandPaletteVisualSegment = Readonly<{
 
 const DEFAULT_MATCH_STYLE: Style = { bold: true, dim: false, underline: true };
 
+function normalizeInteger(value: unknown, fallback = 0): number {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeNonNegativeInteger(value: unknown, fallback = 0): number {
+  return Math.max(0, normalizeInteger(value, fallback));
+}
+
+function normalizeVisibleLimit(value: unknown): number {
+  if (value == null) return Number.POSITIVE_INFINITY;
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return Number.POSITIVE_INFINITY;
+  return Math.max(1, n);
+}
+
 function isCommandPaletteRowSelectable(item: TCommandPaletteItem | undefined): boolean {
   return Boolean(item && item.kind !== "separator" && item.kind !== "group" && !item.disabled);
 }
@@ -360,18 +376,16 @@ export const TCommandPalette = defineComponent({
     }
 
     function listHeight(): number {
-      const dialogH = Math.max(8, Math.floor(props.h));
+      const dialogH = Math.max(8, normalizeInteger(props.h, 18));
       const innerH = Math.max(1, dialogH - 4);
-      const maxVisible =
-        props.maxVisibleItems == null
-          ? Number.POSITIVE_INFINITY
-          : Math.max(1, props.maxVisibleItems);
+      const maxVisible = normalizeVisibleLimit(props.maxVisibleItems);
       return Math.max(1, Math.min(innerH - 3, maxVisible));
     }
 
     function normalizedIndex(index: number): number {
       const len = filteredEntries.value.length;
-      return len > 0 ? ((index % len) + len) % len : 0;
+      const value = normalizeInteger(index, 0);
+      return len > 0 ? ((value % len) + len) % len : 0;
     }
 
     function enabledIndexFrom(index: number, direction: 1 | -1): number {
@@ -532,7 +546,8 @@ export const TCommandPalette = defineComponent({
           providerLoading.value = false;
           return;
         }
-        if (q.trim().length < Math.max(0, props.minQueryLength)) {
+        const minQueryLength = normalizeNonNegativeInteger(props.minQueryLength, 0);
+        if (q.trim().length < minQueryLength) {
           providerItems.value = [];
           providerLoading.value = false;
           return;
@@ -566,7 +581,7 @@ export const TCommandPalette = defineComponent({
             });
         };
 
-        const delay = Math.max(0, Math.floor(props.debounce));
+        const delay = normalizeNonNegativeInteger(props.debounce, 0);
         if (delay > 0) providerTimer = setTimeout(run, delay);
         else run();
       },
@@ -580,8 +595,8 @@ export const TCommandPalette = defineComponent({
 
     return () => {
       if (!props.modelValue) return null;
-      const dialogW = Math.max(30, Math.floor(props.w));
-      const dialogH = Math.max(8, Math.floor(props.h));
+      const dialogW = Math.max(30, normalizeInteger(props.w, 72));
+      const dialogH = Math.max(8, normalizeInteger(props.h, 18));
       const innerW = Math.max(1, dialogW - 4);
       const innerH = Math.max(1, dialogH - 4);
       const listY = 2;

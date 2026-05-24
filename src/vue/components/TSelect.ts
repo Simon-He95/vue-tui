@@ -25,8 +25,31 @@ import { DialogContextKey, EventZIndexContextKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
 import { sanitizeInlineText, sliceByCells, spaces, textCellWidth } from "../utils/text.js";
 
+function normalizeInteger(value: unknown, fallback = 0): number {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeNonNegativeInteger(value: unknown, fallback = 0): number {
+  return Math.max(0, normalizeInteger(value, fallback));
+}
+
 function clamp(n: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, n));
+  const lo = normalizeInteger(min, 0);
+  const hi = Math.max(lo, normalizeInteger(max, lo));
+  const value = normalizeInteger(n, lo);
+  return Math.max(lo, Math.min(hi, value));
+}
+
+function normalizeVisibleLimit(value: unknown): number {
+  if (value == null) return Number.POSITIVE_INFINITY;
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return Number.POSITIVE_INFINITY;
+  return Math.max(1, n);
+}
+
+function normalizeModelIndex(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : -1;
 }
 
 type TextHighlightRange = Readonly<{ start: number; end: number }>;
@@ -320,10 +343,7 @@ export const TSelect = defineComponent({
     function visibleRowCount(r: Rect): number {
       return Math.max(
         0,
-        Math.min(
-          Math.floor(r.h),
-          props.maxVisible == null ? Number.POSITIVE_INFINITY : Math.max(1, props.maxVisible),
-        ),
+        Math.min(normalizeInteger(r.h, 0), normalizeVisibleLimit(props.maxVisible)),
       );
     }
 
@@ -376,7 +396,7 @@ export const TSelect = defineComponent({
     }
 
     function modelIndex(value: unknown): number {
-      if (props.valueMode === "index") return typeof value === "number" ? value : -1;
+      if (props.valueMode === "index") return normalizeModelIndex(value);
       return options.value.findIndex((opt, optIndex) =>
         valuesEqual(getOptionValue(opt, optIndex), value),
       );
@@ -1033,7 +1053,7 @@ export const TSelect = defineComponent({
               if (!controller.signal.aborted) providerLoading.value = false;
             });
         };
-        const delay = Math.max(0, Math.floor(props.debounce));
+        const delay = normalizeNonNegativeInteger(props.debounce, 0);
         if (delay > 0) providerTimer = setTimeout(run, delay);
         else run();
       },
