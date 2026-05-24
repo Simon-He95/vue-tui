@@ -444,6 +444,9 @@ const DialogSurface = defineComponent({
     }
 
     function onKeydownCapture(e: any): void {
+      if (props.closeOnEsc && e?.key === "Escape") {
+        (e as any).__tuiDialogClose = true;
+      }
       handleTabKey(e);
     }
 

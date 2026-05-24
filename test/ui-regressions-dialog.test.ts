@@ -420,6 +420,69 @@ describe("ui regressions dialog", () => {
     mounted.unmount();
   });
 
+  it("TDialog closes on Escape from a focused TInput without bubbling", async () => {
+    const open = ref(true);
+    const value = ref("token");
+    let parentEscCount = 0;
+
+    const App = defineComponent({
+      name: "TDialogFocusedInputEscapeApp",
+      setup() {
+        return () =>
+          h(
+            TView,
+            {
+              x: 0,
+              y: 0,
+              w: 50,
+              h: 14,
+              onKeydown: (e: any) => {
+                if (e?.key === "Escape") parentEscCount += 1;
+              },
+            },
+            () =>
+              h(
+                TDialog,
+                {
+                  modelValue: open.value,
+                  "onUpdate:modelValue": (v: boolean) => (open.value = v),
+                  w: 24,
+                  h: 8,
+                  title: "Auth",
+                  placement: "center",
+                },
+                () =>
+                  h(TInput, {
+                    x: 0,
+                    y: 0,
+                    w: 16,
+                    modelValue: value.value,
+                    "onUpdate:modelValue": (v: string) => (value.value = v),
+                    autoFocus: true,
+                  }),
+              ),
+          );
+      },
+    });
+
+    const app = createTerminalApp({ cols: 50, rows: 14, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "keydown", key: "Escape", code: "Escape" } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(open.value).toBe(false);
+      expect(parentEscCount).toBe(0);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("TDialog border stays closed even if a child overdraws it", async () => {
     const cols = 40;
     const rows = 10;
