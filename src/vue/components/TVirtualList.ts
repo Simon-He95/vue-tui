@@ -43,6 +43,7 @@ import {
   createWheelScrollState,
   resetWheelScrollState,
 } from "../utils/wheel-scroll.js";
+import { tryUnsafeFullRowScroll } from "../utils/row-scroll.js";
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -76,6 +77,7 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
 }
 
 export type RowScrollMode = "off" | "unsafe-full-row";
+type ScrollStrategy = "auto" | "viewport-repaint";
 
 type ScrollApplyResult = Readonly<{
   changed: boolean;
@@ -127,7 +129,8 @@ export const TVirtualList = defineComponent({
     "keydown",
   ],
   setup(props, { emit }) {
-    const { terminal, scheduler, render, defaultStyle, events, selection } = useTerminal();
+    const { terminal, scheduler, render, rendererCapabilities, defaultStyle, events, selection } =
+      useTerminal();
     const instance = getCurrentInstance();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
@@ -187,6 +190,12 @@ export const TVirtualList = defineComponent({
         x: Math.max(0, clip.x - full.x),
         y: Math.max(0, clip.y - full.y),
       };
+    }
+
+    function isClipped(): boolean {
+      const full = normalizedFullRect();
+      const clip = normalizedRect();
+      return full.x !== clip.x || full.y !== clip.y || full.w !== clip.w || full.h !== clip.h;
     }
 
     function maxScrollTop(): number {
@@ -280,6 +289,7 @@ export const TVirtualList = defineComponent({
         const changed = applyScrollTop(nextTop, {
           emitScroll: true,
           emitUpdate: true,
+          strategy: "auto",
         });
         if (!changed.changed) {
           resetWheelScrollState(wheelState);
@@ -735,6 +745,7 @@ export const TVirtualList = defineComponent({
         emitUpdate?: boolean;
         priority?: "low" | "normal" | "high";
         reason?: FramePerfReason;
+        strategy?: ScrollStrategy;
       }>,
     ): ScrollApplyResult {
       const controlled = isScrollControlled();
@@ -754,7 +765,19 @@ export const TVirtualList = defineComponent({
       }
       scrollTop.value = clampedTop;
       if (options?.emitUpdate) emit("update:scrollTop", clampedTop);
-      const dirty = markViewportDirty();
+      const exposedRows = tryUnsafeFullRowScroll({
+        render,
+        plane: plane.value,
+        rect: r,
+        terminalSize: terminal.size(),
+        delta,
+        rowScrollMode: props.rowScrollMode,
+        rendererCapabilities: rendererCapabilities.value,
+        isClipped: isClipped(),
+        hasPendingDirtyRows: Boolean(dirtyRowsHint?.length),
+        strategy: options?.strategy ?? "viewport-repaint",
+      });
+      const dirty = exposedRows ? markRowsDirty(exposedRows) : markViewportDirty();
       if (options?.emitScroll) emit("scroll", clampedTop);
       if (options?.priority && dirty) invalidateSelf(options.priority, options.reason ?? "scroll");
       return { changed: true, dirty, top: clampedTop, controlled };
