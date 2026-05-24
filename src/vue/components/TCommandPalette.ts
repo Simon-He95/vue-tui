@@ -790,7 +790,10 @@ export const TCommandPalette = defineComponent({
                 maxCells: detailMaxCells,
                 baseStyle: detailBaseStyle,
                 detailStyle: detailBaseStyle,
-                matchRanges: normalizeRanges(entry.match.detailRanges),
+                matchRanges: normalizeRanges(
+                  entry.match.detailRanges ??
+                    computeCommandPaletteMatchRanges(detail, query.value),
+                ),
                 labelMatchStyle,
                 detailMatchStyle,
                 labelAccentRanges: [],

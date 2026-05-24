@@ -657,7 +657,10 @@ export const TSelect = defineComponent({
         return;
       }
       if (e.key === "Enter") {
-        if (!props.commitOnEnter) return;
+        if (!props.commitOnEnter) {
+          e.preventDefault();
+          return;
+        }
         if (isOptionInteractionBlocked()) {
           e.preventDefault();
           return;

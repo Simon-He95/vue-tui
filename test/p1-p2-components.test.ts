@@ -2476,7 +2476,7 @@ describe("P1/P2 public components", () => {
     }
   });
 
-  it("lets Enter bubble when TSelect commitOnEnter is disabled", async () => {
+  it("prevents default without changing value when TSelect commitOnEnter is disabled", async () => {
     const changes: unknown[] = [];
     const mounted = await mountTerminal(
       () =>
@@ -2506,7 +2506,7 @@ describe("P1/P2 public components", () => {
       mounted.container()!.dispatchEvent(event);
       await nextTick();
 
-      expect(event.defaultPrevented).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
       expect(changes).toEqual([]);
     } finally {
       mounted.unmount();
@@ -5866,6 +5866,43 @@ describe("P1/P2 public components", () => {
       expect(app.terminal.getCell(detailX + 4, rowY).style.fg).toBe("magenta");
       expect(app.terminal.getCell(detailX + 3, rowY).style.dim).toBe(true);
       expect(app.terminal.getCell(detailX + 3, rowY).style.bg).toBe("blue");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("highlights command palette detail matches when matcher omits detail ranges", async () => {
+    const app = createTerminalApp({
+      cols: 50,
+      rows: 14,
+      component: TCommandPalette,
+      props: {
+        modelValue: true,
+        w: 36,
+        h: 10,
+        initialQuery: "app",
+        items: [{ label: "Open File", detail: "src/app.ts" }],
+        matcher: () => ({ score: 1 }),
+        selectedIndex: 0,
+        showRowDetails: true,
+        highlightStyle: { bg: "blue" },
+        highlightMatchStyle: { fg: "red" },
+        matchStyle: { fg: "green" },
+        detailStyle: { dim: true },
+      },
+    });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const lines = app.terminal.snapshot().lines;
+      const rowY = lines.findIndex((line) => line.includes("src/app.ts"));
+      expect(rowY).toBeGreaterThanOrEqual(0);
+      const detailX = (lines[rowY] ?? "").indexOf("src/app.ts");
+      expect(detailX).toBeGreaterThanOrEqual(0);
+      expect(app.terminal.getCell(detailX + 4, rowY).style.fg).toBe("red");
     } finally {
       app.dispose();
     }
