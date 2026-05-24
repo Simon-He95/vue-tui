@@ -863,61 +863,6 @@ export const TInput = defineComponent({
       });
     }
 
-    function inputKeyState(): {
-      cursor: number;
-      line: number;
-      col: number;
-      lineCount: number;
-      atFirstLine: boolean;
-      atLastLine: boolean;
-      wrap: boolean;
-      scrollY: number;
-      viewportHeight: number;
-    } {
-      return withInputWidth(() => {
-        const value = getValue();
-        const { hAll, w: contentW } = measureContent(absRect.value);
-        const width = Math.max(1, contentW);
-        const composed = getComposedTextAndCursor(value);
-        const wrap = wrapMode.value;
-        const pos = wrap
-          ? indexToWrappedCellColFirstWidthInline(
-              composed.text,
-              props.multilineTexts,
-              props.mentions,
-              composed.cursor,
-              width,
-              width,
-            )
-          : indexToLineCellColInline(
-              composed.text,
-              props.multilineTexts,
-              props.mentions,
-              composed.cursor,
-            );
-        const lineCount = Math.max(1, pos.lines.length);
-        return {
-          cursor: composed.cursor,
-          line: clamp(pos.line, 0, lineCount - 1),
-          col: pos.col,
-          lineCount,
-          atFirstLine: pos.line <= 0,
-          atLastLine: pos.line >= lineCount - 1,
-          wrap,
-          scrollY: scrollY.value,
-          viewportHeight: Math.max(1, hAll),
-        };
-      });
-    }
-
-    function annotateInputKeydown(e: TerminalKeyboardEvent): void {
-      try {
-        (e as any).__tuiInput = inputKeyState();
-      } catch {
-        // Key events are normally extensible; ignore unusual host events.
-      }
-    }
-
     watch([() => absRect.value.w, () => absRect.value.h, () => wrapMode.value], () => {
       ensureCursorVisible();
       syncImeAnchorNow();
@@ -1586,7 +1531,6 @@ export const TInput = defineComponent({
           return;
         }
       }
-      annotateInputKeydown(e);
       if (composing.value) {
         emit("keydown", e);
         return;

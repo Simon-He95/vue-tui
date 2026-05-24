@@ -173,15 +173,6 @@ export { createTerminalRouter } from "./router/router.js";
 
 export { TRouterView } from "./router/RouterView.js";
 
-export {
-  padEndByCells,
-  sliceByCells,
-  sliceByCellsRange,
-  spaces,
-  textCellWidth,
-  wrapByCells,
-} from "./utils/text.js";
-
 export type {
   TerminalRoute,
   TerminalRouteLocationRaw,

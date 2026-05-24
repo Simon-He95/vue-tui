@@ -444,23 +444,16 @@ const DialogSurface = defineComponent({
     }
 
     function onKeydownCapture(e: any): void {
-      if (props.closeOnEsc && e?.key === "Escape") {
-        (e as any).__tuiDialogClose = true;
-      }
       handleTabKey(e);
     }
 
     function onKeydown(e: any): void {
       props.onDialogKeydown?.(e);
       if (!props.closeOnEsc) return;
+      const allowDefaultPreventedEsc = e?.key === "Escape" && (e as any)?.__tuiDialogClose === true;
+      if (e?.defaultPrevented && !allowDefaultPreventedEsc) return;
       if (e?.key !== "Escape") return;
-      const allowDefaultPreventedEsc = (e as any)?.__tuiDialogClose === true;
-      if (e?.defaultPrevented && !allowDefaultPreventedEsc) {
-        e.stopPropagation?.();
-        return;
-      }
       e.preventDefault?.();
-      e.stopPropagation?.();
       props.onRequestClose();
     }
 
@@ -697,7 +690,6 @@ export const TDialog = defineComponent({
     },
     buttons: { type: Array as PropType<DialogButton[]>, default: () => [] },
     closeOnConfirm: { type: Boolean, default: true },
-    blockPrintableKeys: { type: Boolean, default: false },
   },
   emits: ["update:modelValue", "close", "focus", "blur", "keydown", "confirm"],
   setup(props, { emit, slots }) {
@@ -1049,18 +1041,6 @@ export const TDialog = defineComponent({
     function onDialogKeydown(e: any): void {
       emit("keydown", e);
       if (!props.modelValue) return;
-      if (
-        props.blockPrintableKeys &&
-        typeof e?.key === "string" &&
-        e.key.length === 1 &&
-        !e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey
-      ) {
-        e.preventDefault?.();
-        e.stopPropagation?.();
-        return;
-      }
       if (!props.buttons.length) return;
 
       const allowDefaultPreventedEnter =

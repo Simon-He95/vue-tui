@@ -420,69 +420,6 @@ describe("ui regressions dialog", () => {
     mounted.unmount();
   });
 
-  it("TDialog closes on Escape from a focused TInput without bubbling", async () => {
-    const open = ref(true);
-    const value = ref("token");
-    let parentEscCount = 0;
-
-    const App = defineComponent({
-      name: "TDialogFocusedInputEscapeApp",
-      setup() {
-        return () =>
-          h(
-            TView,
-            {
-              x: 0,
-              y: 0,
-              w: 50,
-              h: 14,
-              onKeydown: (e: any) => {
-                if (e?.key === "Escape") parentEscCount += 1;
-              },
-            },
-            () =>
-              h(
-                TDialog,
-                {
-                  modelValue: open.value,
-                  "onUpdate:modelValue": (v: boolean) => (open.value = v),
-                  w: 24,
-                  h: 8,
-                  title: "Auth",
-                  placement: "center",
-                },
-                () =>
-                  h(TInput, {
-                    x: 0,
-                    y: 0,
-                    w: 16,
-                    modelValue: value.value,
-                    "onUpdate:modelValue": (v: string) => (value.value = v),
-                    autoFocus: true,
-                  }),
-              ),
-          );
-      },
-    });
-
-    const app = createTerminalApp({ cols: 50, rows: 14, component: App });
-    try {
-      app.mount();
-      await nextTick();
-      await nextTick();
-      app.scheduler.flushNow();
-
-      app.events.dispatch({ type: "keydown", key: "Escape", code: "Escape" } as any);
-      await nextTick();
-      app.scheduler.flushNow();
-
-      expect(open.value).toBe(false);
-      expect(parentEscCount).toBe(0);
-    } finally {
-      app.dispose();
-    }
-  });
-
   it("TDialog border stays closed even if a child overdraws it", async () => {
     const cols = 40;
     const rows = 10;
@@ -664,62 +601,6 @@ describe("ui regressions dialog", () => {
     );
     await nextTick();
     expect(confirmed.value).toBe("yes");
-    mounted.unmount();
-  });
-
-  it("TDialog can block printable keys without blocking button shortcuts", async () => {
-    const open = ref(true);
-    const confirmed = ref("");
-    const mounted = await mountTerminal(
-      () =>
-        h(
-          TDialog as any,
-          {
-            modelValue: open.value,
-            "onUpdate:modelValue": (v: boolean) => (open.value = v),
-            w: 26,
-            h: 7,
-            title: "Confirm",
-            placement: "center",
-            closeOnConfirm: false,
-            blockPrintableKeys: true,
-            buttons: [{ label: "OK", value: "ok", default: true }],
-            onConfirm: (b: any) => {
-              confirmed.value = String(b?.value ?? "");
-            },
-          },
-          () => h(TText, { x: 0, y: 0, w: 22, value: "Hi" }),
-        ),
-      44,
-      12,
-    );
-
-    const container = mounted.container()!;
-    await nextTick();
-    await nextTick();
-
-    const printable = new KeyboardEvent("keydown", {
-      key: "x",
-      code: "KeyX",
-      bubbles: true,
-      cancelable: true,
-    });
-    container.dispatchEvent(printable);
-    await nextTick();
-    expect(printable.defaultPrevented).toBe(true);
-    expect(confirmed.value).toBe("");
-
-    container.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "Enter",
-        code: "Enter",
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
-    await nextTick();
-    expect(confirmed.value).toBe("ok");
-
     mounted.unmount();
   });
 

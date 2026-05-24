@@ -276,7 +276,6 @@ export const TSelect = defineComponent({
     closeOnBlur: { type: Boolean, default: false },
     searchable: { type: Boolean, default: false },
     typeahead: { type: Boolean, default: true },
-    commitOnEnter: { type: Boolean, default: true },
     debounce: { type: Number, default: 0 },
     emptyText: { type: String, default: "No options" },
     loading: { type: Boolean, default: false },
@@ -657,10 +656,6 @@ export const TSelect = defineComponent({
         return;
       }
       if (e.key === "Enter") {
-        if (!props.commitOnEnter) {
-          e.preventDefault();
-          return;
-        }
         if (isOptionInteractionBlocked()) {
           e.preventDefault();
           return;

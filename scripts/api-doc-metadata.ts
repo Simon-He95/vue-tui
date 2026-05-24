@@ -145,7 +145,6 @@ export const sharedPublicPropDescriptions: Record<string, string> = {
   teleport: "Mounts the dialog into the overlay runtime plane.",
   tabMode: "Keyboard Tab behavior inside the dialog.",
   buttons: "Dialog footer buttons.",
-  blockPrintableKeys: "Prevents printable key events from bubbling while the dialog is open.",
   checkedStyle: "Style used when the checkbox is checked.",
   options: "Options rendered by the control.",
   optionProvider:
@@ -155,7 +154,6 @@ export const sharedPublicPropDescriptions: Record<string, string> = {
   searchable:
     "Emits query updates from typed characters; local options are not filtered automatically.",
   typeahead: "Enables keyboard typeahead navigation.",
-  commitOnEnter: "Commits the active option when Enter is pressed.",
   loading: "Shows the loading row; true also covers pending async option providers.",
   maxVisible: "Maximum number of option rows rendered at once.",
   min: "Minimum numeric value.",
@@ -299,7 +297,6 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
       "tabMode",
       "buttons",
       "closeOnConfirm",
-      "blockPrintableKeys",
     ),
   },
   TFormField: {
@@ -389,7 +386,6 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
       "multipleEmit",
       "searchable",
       "typeahead",
-      "commitOnEnter",
       "debounce",
       "loading",
       "loadingText",

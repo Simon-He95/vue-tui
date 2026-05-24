@@ -1081,59 +1081,6 @@ describe("ui regressions input editing", () => {
     mounted.unmount();
   });
 
-  it("TInput annotates keydown events with cursor line boundaries", async () => {
-    const value = ref("");
-    const states: Array<{ key: string; line: number; atFirstLine: boolean; atLastLine: boolean }> =
-      [];
-    const mounted = await mountTerminal(() =>
-      h(TInput, {
-        x: 0,
-        y: 0,
-        w: 12,
-        h: 3,
-        modelValue: value.value,
-        "onUpdate:modelValue": (v: string) => (value.value = v),
-        onKeydown: (e: any) => {
-          if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-          states.push({
-            key: e.key,
-            line: Number(e.__tuiInput?.line ?? -1),
-            atFirstLine: Boolean(e.__tuiInput?.atFirstLine),
-            atLastLine: Boolean(e.__tuiInput?.atLastLine),
-          });
-        },
-      }),
-    );
-
-    const container = mounted.container()!;
-    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
-    await nextTick();
-    for (const event of [
-      new KeyboardEvent("keydown", { key: "a", code: "KeyA", bubbles: true }),
-      new KeyboardEvent("keydown", {
-        key: "Enter",
-        code: "Enter",
-        shiftKey: true,
-        bubbles: true,
-      }),
-      new KeyboardEvent("keydown", { key: "b", code: "KeyB", bubbles: true }),
-      new KeyboardEvent("keydown", { key: "ArrowUp", code: "ArrowUp", bubbles: true }),
-      new KeyboardEvent("keydown", { key: "ArrowUp", code: "ArrowUp", bubbles: true }),
-      new KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", bubbles: true }),
-    ]) {
-      container.dispatchEvent(event);
-      await nextTick();
-    }
-
-    expect(states).toEqual([
-      { key: "ArrowUp", line: 1, atFirstLine: false, atLastLine: true },
-      { key: "ArrowUp", line: 0, atFirstLine: true, atLastLine: false },
-      { key: "ArrowDown", line: 0, atFirstLine: true, atLastLine: false },
-    ]);
-
-    mounted.unmount();
-  });
-
   it("TInput inserts newline on Ctrl+J (Kitty protocol compatibility)", async () => {
     const value = ref("");
     const changes: string[] = [];

@@ -712,12 +712,7 @@
         "createTheme",
         "linkifyTextSegments",
         "lintJsonText",
-        "padEndByCells",
         "resolveOverlayPlacement",
-        "sliceByCells",
-        "sliceByCellsRange",
-        "spaces",
-        "textCellWidth",
         "tuiDefaultTheme",
         "useLayout",
         "useRenderNode",
@@ -727,8 +722,7 @@
         "useTerminal",
         "useTerminalNode",
         "useTerminalRuntime",
-        "useVisibility",
-        "wrapByCells"
+        "useVisibility"
       ],
       "typeExports": [
         "DialogButton",
@@ -2615,14 +2609,6 @@
           "required": false,
           "defaultValue": "true",
           "description": "Closes the dialog after a footer button confirms.",
-          "descriptionSource": "component-default"
-        },
-        {
-          "name": "blockPrintableKeys",
-          "type": "boolean",
-          "required": false,
-          "defaultValue": "false",
-          "description": "Prevents printable key events from bubbling while the dialog is open.",
           "descriptionSource": "component-default"
         }
       ],
@@ -5738,12 +5724,6 @@
           "defaultValue": "50"
         },
         {
-          "name": "preferActiveSuggestionOnCommit",
-          "type": "boolean",
-          "required": false,
-          "defaultValue": "false"
-        },
-        {
           "name": "provider",
           "type": "PathPickerProvider",
           "required": false,
@@ -6205,14 +6185,6 @@
           "required": false,
           "defaultValue": "true",
           "description": "Enables keyboard typeahead navigation.",
-          "descriptionSource": "component-default"
-        },
-        {
-          "name": "commitOnEnter",
-          "type": "boolean",
-          "required": false,
-          "defaultValue": "true",
-          "description": "Commits the active option when Enter is pressed.",
           "descriptionSource": "component-default"
         },
         {

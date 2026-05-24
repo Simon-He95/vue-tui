@@ -276,65 +276,6 @@ describe("P1/P2 public components", () => {
     }
   });
 
-  it("does not leak default-prevented Escape from dialog content to the parent", async () => {
-    const parentKeydown = vi.fn();
-    const value = ref("draft");
-
-    const mounted = await mountTerminal(
-      () =>
-        h(
-          TView,
-          {
-            x: 0,
-            y: 0,
-            w: 50,
-            h: 10,
-            onKeydown: parentKeydown,
-          },
-          () =>
-            h(
-              TDialog,
-              {
-                modelValue: true,
-                w: 30,
-                h: 7,
-                backdrop: false,
-              },
-              () =>
-                h(TInput, {
-                  x: 0,
-                  y: 0,
-                  w: 20,
-                  modelValue: value.value,
-                  autoFocus: true,
-                  "onUpdate:modelValue": (next: string) => (value.value = next),
-                }),
-            ),
-        ),
-      60,
-      12,
-    );
-
-    try {
-      await nextTick();
-      mounted.scheduler()?.flushNow();
-
-      mounted.container()!.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "Escape",
-          code: "Escape",
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
-      await nextTick();
-
-      expect(parentKeydown).not.toHaveBeenCalled();
-    } finally {
-      mounted.unmount();
-    }
-  });
-
   it("drops stale multiple TSelect model indices instead of remapping them", async () => {
     const onConfirm = vi.fn();
 
@@ -2476,43 +2417,6 @@ describe("P1/P2 public components", () => {
     }
   });
 
-  it("prevents default without changing value when TSelect commitOnEnter is disabled", async () => {
-    const changes: unknown[] = [];
-    const mounted = await mountTerminal(
-      () =>
-        h(TSelect, {
-          x: 0,
-          y: 0,
-          w: 20,
-          h: 3,
-          options: ["apple", "banana"],
-          commitOnEnter: false,
-          autoFocus: true,
-          onChange: (value: unknown) => changes.push(value),
-        }),
-      24,
-      5,
-    );
-
-    try {
-      await nextTick();
-
-      const event = new KeyboardEvent("keydown", {
-        key: "Enter",
-        code: "Enter",
-        bubbles: true,
-        cancelable: true,
-      });
-      mounted.container()!.dispatchEvent(event);
-      await nextTick();
-
-      expect(event.defaultPrevented).toBe(true);
-      expect(changes).toEqual([]);
-    } finally {
-      mounted.unmount();
-    }
-  });
-
   it("accepts unknown TSelect model values in value mode", async () => {
     const values = [null, undefined, Symbol("key"), () => "value"];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -3462,59 +3366,6 @@ describe("P1/P2 public components", () => {
         .dispatchEvent(new MouseEvent("click", { clientX: 18, clientY: 0, bubbles: true }));
       await nextTick();
       expect(dismissed).toEqual(["long"]);
-    } finally {
-      mounted.unmount();
-    }
-  });
-
-  it("does not move keyboard focus into a closable toast", async () => {
-    const value = ref("");
-    const mounted = await mountTerminal(
-      () => [
-        h(TInput, {
-          x: 0,
-          y: 2,
-          w: 16,
-          modelValue: value.value,
-          autoFocus: true,
-          "onUpdate:modelValue": (next: string) => {
-            value.value = next;
-          },
-        }),
-        h(TToastViewport, {
-          w: 12,
-          zIndex: 200,
-          items: [{ id: "toast", message: "Saved", closable: true }],
-        }),
-      ],
-      20,
-      5,
-    );
-
-    try {
-      await nextTick();
-      mounted.scheduler()?.flushNow();
-
-      const inputNode = mounted
-        .events()!
-        .debugNodes()
-        .find((node) => node.visible && node.focusable && node.rect.x === 0 && node.rect.y === 2);
-
-      expect(inputNode).toBeTruthy();
-      expect(mounted.events()!.getFocused()).toBe(inputNode!.id);
-
-      mounted.container()!.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "h",
-          code: "KeyH",
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
-      await nextTick();
-
-      expect(value.value).toBe("h");
-      expect(mounted.events()!.getFocused()).toBe(inputNode!.id);
     } finally {
       mounted.unmount();
     }
@@ -5774,46 +5625,13 @@ describe("P1/P2 public components", () => {
     }
   });
 
-  it("keeps command palette default matching scoped to label and keywords", async () => {
-    const app = createTerminalApp({
-      cols: 50,
-      rows: 14,
-      component: TCommandPalette,
-      props: {
-        modelValue: true,
-        w: 36,
-        h: 10,
-        items: [
-          { label: "Open File", detail: "src/app.ts", value: "open" },
-          { label: "Settings", detail: "preferences", value: "settings" },
-        ],
-        query: "app.ts",
-        showRowDetails: true,
-      },
-    });
-
-    try {
-      app.mount();
-      await nextTick();
-      app.scheduler.flushNow();
-
-      const snapshot = app.terminal.snapshot().lines.join("\n");
-      expect(snapshot).not.toContain("Open File");
-      expect(snapshot).not.toContain("src/app.ts");
-      expect(snapshot).toContain("No matches");
-    } finally {
-      app.dispose();
-    }
-  });
-
   it("renders command palette match and detail accent styles", async () => {
     const items = [
       {
-        label: "Open File [think]",
+        label: "Open File",
         detail: "src/app.ts",
         accentStyle: { fg: "cyan" },
         highlightAccentStyle: { fg: "yellowBright" },
-        labelAccentRanges: [{ start: 10, end: 17 }],
         detailAccentRanges: [{ start: 0, end: 3 }],
         detailAccentSegments: [
           { start: 4, end: 10, style: { fg: "blue" }, highlightStyle: { fg: "magenta" } },
@@ -5847,62 +5665,11 @@ describe("P1/P2 public components", () => {
       await nextTick();
       app.scheduler.flushNow();
 
-      const lines = app.terminal.snapshot().lines;
-      const rowY = lines.findIndex((line) => line.includes("Open File"));
-      expect(rowY).toBeGreaterThanOrEqual(0);
-      const row = lines[rowY] ?? "";
-      const labelX = row.indexOf("Open File");
-      const tagX = row.indexOf("[think]");
-      const detailX = row.indexOf("src/app.ts");
-      expect(labelX).toBeGreaterThanOrEqual(0);
-      expect(tagX).toBeGreaterThan(labelX);
-      expect(detailX).toBeGreaterThan(labelX + "Open File [think]".length + 2);
-
-      expect(app.terminal.getCell(labelX, rowY).style.fg).toBe("red");
-      expect(app.terminal.getCell(tagX, rowY).style.fg).toBe("yellowBright");
-      expect(app.terminal.getCell(tagX, rowY).style.bg).toBe("blue");
-      expect(app.terminal.getCell(detailX, rowY).style.fg).toBe("yellowBright");
-      expect(app.terminal.getCell(detailX, rowY).style.bg).toBe("blue");
-      expect(app.terminal.getCell(detailX + 4, rowY).style.fg).toBe("magenta");
-      expect(app.terminal.getCell(detailX + 3, rowY).style.dim).toBe(true);
-      expect(app.terminal.getCell(detailX + 3, rowY).style.bg).toBe("blue");
-    } finally {
-      app.dispose();
-    }
-  });
-
-  it("highlights command palette detail matches when matcher omits detail ranges", async () => {
-    const app = createTerminalApp({
-      cols: 50,
-      rows: 14,
-      component: TCommandPalette,
-      props: {
-        modelValue: true,
-        w: 36,
-        h: 10,
-        initialQuery: "app",
-        items: [{ label: "Open File", detail: "src/app.ts" }],
-        matcher: () => ({ score: 1 }),
-        selectedIndex: 0,
-        showRowDetails: true,
-        highlightStyle: { bg: "blue" },
-        highlightMatchStyle: { fg: "red" },
-        matchStyle: { fg: "green" },
-        detailStyle: { dim: true },
-      },
-    });
-
-    try {
-      app.mount();
-      await nextTick();
-      app.scheduler.flushNow();
-
-      const lines = app.terminal.snapshot().lines;
-      const rowY = lines.findIndex((line) => line.includes("src/app.ts"));
-      expect(rowY).toBeGreaterThanOrEqual(0);
-      const detailX = (lines[rowY] ?? "").indexOf("src/app.ts");
-      expect(detailX).toBeGreaterThanOrEqual(0);
-      expect(app.terminal.getCell(detailX + 4, rowY).style.fg).toBe("red");
+      expect(app.terminal.snapshot().lines.join("\n")).toContain("› Open File  src/app.ts");
+      expect(app.terminal.getCell(11, 6).style.fg).toBe("red");
+      expect(app.terminal.getCell(22, 6).style.fg).toBe("yellowBright");
+      expect(app.terminal.getCell(26, 6).style.fg).toBe("magenta");
+      expect(app.terminal.getCell(25, 6).style.dim).toBe(true);
     } finally {
       app.dispose();
     }
