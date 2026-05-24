@@ -6,7 +6,13 @@ import { TInput } from "./TInput.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
 import { mergeStyle } from "./simple-utils.js";
-import { forEachTextCellSegment, sanitizeInlineText, sliceByCells, spaces } from "../utils/text.js";
+import {
+  forEachTextCellSegment,
+  sanitizeInlineText,
+  sliceByCells,
+  spaces,
+  textCellWidth,
+} from "../utils/text.js";
 
 export type TCommandPaletteMatchRange = Readonly<{
   start: number;
@@ -125,17 +131,15 @@ function substringMatcher(
   const q = query.trim().toLowerCase();
   if (!q) return { score: 0 };
   const labelRanges = computeCommandPaletteMatchRanges(item.label, q);
-  const detailRanges = item.detail ? computeCommandPaletteMatchRanges(item.detail, q) : [];
   const keywordMatch = (item.keywords ?? []).some((keyword) =>
     String(keyword ?? "")
       .toLowerCase()
       .includes(q),
   );
-  if (!labelRanges.length && !detailRanges.length && !keywordMatch) return null;
+  if (!labelRanges.length && !keywordMatch) return null;
   return {
-    score: labelRanges.length ? 100 : detailRanges.length ? 50 : 10,
+    score: labelRanges.length ? 100 : 10,
     labelRanges,
-    detailRanges,
   };
 }
 
@@ -145,8 +149,7 @@ function fuzzyMatcher(
 ): TCommandPaletteMatcherResult | null {
   const q = query.trim().toLowerCase();
   if (!q) return { score: 0 };
-  const source =
-    `${item.label} ${item.detail ?? ""} ${(item.keywords ?? []).join(" ")}`.toLowerCase();
+  const source = `${item.label} ${(item.keywords ?? []).join(" ")}`.toLowerCase();
   let pos = 0;
   for (const ch of q) {
     const next = source.indexOf(ch, pos);
@@ -156,7 +159,6 @@ function fuzzyMatcher(
   return {
     score: Math.max(1, 100 - pos),
     labelRanges: computeCommandPaletteMatchRanges(item.label, query),
-    detailRanges: item.detail ? computeCommandPaletteMatchRanges(item.detail, query) : [],
   };
 }
 
@@ -235,6 +237,20 @@ function pushVisualSegment(
     return;
   }
   out.push({ text, cells, style });
+}
+
+function visualSegmentsCellWidth(segments: readonly TCommandPaletteVisualSegment[]): number {
+  return segments.reduce((sum, segment) => sum + segment.cells, 0);
+}
+
+function detailStyleForRow(
+  baseStyle: Style | undefined,
+  detailStyle: Style | undefined,
+  selected: boolean,
+): Style | undefined {
+  const merged = mergeStyle(baseStyle, detailStyle);
+  if (!selected || baseStyle?.bg == null) return merged;
+  return mergeStyle(merged, { bg: baseStyle.bg });
 }
 
 function commandPaletteSegments(
@@ -707,17 +723,17 @@ export const TCommandPalette = defineComponent({
           const detail =
             props.showRowDetails && detailSource ? sanitizeInlineText(detailSource) : "";
           const prefix = selected ? "› " : "  ";
-          const detailPrefix = detail ? "  " : "";
-          const text = `${prefix}${label}${detailPrefix}${detail}`;
+          const labelText = `${prefix}${label}`;
           const labelOffset = prefix.length;
-          const detailOffset = labelOffset + label.length + detailPrefix.length;
           const matchStyle = props.matchStyle ?? DEFAULT_MATCH_STYLE;
           const highlightMatchStyle = props.highlightMatchStyle ?? matchStyle;
           const labelMatchStyle = mergeStyle(
             baseStyle,
             selected ? highlightMatchStyle : matchStyle,
           );
-          const detailBaseStyle = detail ? mergeStyle(baseStyle, props.detailStyle) : baseStyle;
+          const detailBaseStyle = detail
+            ? detailStyleForRow(baseStyle, props.detailStyle, selected)
+            : baseStyle;
           const detailMatchStyle = mergeStyle(
             detailBaseStyle,
             selected ? highlightMatchStyle : matchStyle,
@@ -733,43 +749,57 @@ export const TCommandPalette = defineComponent({
               ),
               labelOffset,
             ),
-            ...shiftRanges(
-              detail
-                ? normalizeRanges(
-                    entry.match.detailRanges ??
-                      computeCommandPaletteMatchRanges(detail, query.value),
-                  )
-                : [],
-              detailOffset,
-            ),
           ];
-          const detailAccentRanges = shiftRanges(
-            normalizeRanges(detail ? item.detailAccentRanges : undefined),
-            detailOffset,
-          );
+          const detailAccentRanges = normalizeRanges(detail ? item.detailAccentRanges : undefined);
           const detailAccentSegments = normalizeAccentSegments(
             detail ? item.detailAccentSegments : undefined,
-          ).map((segment) => ({
-            ...segment,
-            start: segment.start + detailOffset,
-            end: segment.end + detailOffset,
-            resolvedStyle: mergeStyle(
+          ).map((segment) => {
+            const merged = mergeStyle(
               detailBaseStyle,
               selected ? (segment.highlightStyle ?? segment.style) : segment.style,
-            ),
-          }));
-          const rowSegments = commandPaletteSegments({
-            text,
-            detailOffset: detail ? detailOffset : text.length + 1,
-            maxCells: innerW,
+            );
+            return {
+              ...segment,
+              resolvedStyle:
+                selected && detailBaseStyle?.bg != null
+                  ? mergeStyle(merged, { bg: detailBaseStyle.bg })
+                  : merged,
+            };
+          });
+          const labelTextCells = textCellWidth(labelText);
+          const detailMaxCells = detail
+            ? Math.max(0, innerW - Math.min(labelTextCells, innerW) - 1)
+            : 0;
+          const detailSegments = detail
+            ? commandPaletteSegments({
+                text: detail,
+                detailOffset: 0,
+                maxCells: detailMaxCells,
+                baseStyle: detailBaseStyle,
+                detailStyle: detailBaseStyle,
+                matchRanges: normalizeRanges(entry.match.detailRanges),
+                labelMatchStyle,
+                detailMatchStyle,
+                detailAccentRanges,
+                detailAccentStyle,
+                detailAccentSegments,
+              })
+            : [];
+          const detailCells = visualSegmentsCellWidth(detailSegments);
+          const detailX = detailCells > 0 ? innerW - detailCells : innerW;
+          const labelMaxCells = detailCells > 0 ? Math.max(0, detailX - 1) : innerW;
+          const labelSegments = commandPaletteSegments({
+            text: labelText,
+            detailOffset: labelText.length + 1,
+            maxCells: labelMaxCells,
             baseStyle,
-            detailStyle: detailBaseStyle,
+            detailStyle: baseStyle,
             matchRanges,
             labelMatchStyle,
-            detailMatchStyle,
-            detailAccentRanges,
-            detailAccentStyle,
-            detailAccentSegments,
+            detailMatchStyle: labelMatchStyle,
+            detailAccentRanges: [],
+            detailAccentStyle: baseStyle ?? {},
+            detailAccentSegments: [],
           });
           const rowChildren: any[] = [
             h(TText as any, {
@@ -782,11 +812,11 @@ export const TCommandPalette = defineComponent({
             }),
           ];
           let x = 0;
-          for (let segmentIndex = 0; segmentIndex < rowSegments.length; segmentIndex++) {
-            const segment = rowSegments[segmentIndex]!;
+          for (let segmentIndex = 0; segmentIndex < labelSegments.length; segmentIndex++) {
+            const segment = labelSegments[segmentIndex]!;
             rowChildren.push(
               h(TText as any, {
-                key: `segment:${segmentIndex}`,
+                key: `label-segment:${segmentIndex}`,
                 x,
                 y: 0,
                 w: segment.cells,
@@ -795,6 +825,24 @@ export const TCommandPalette = defineComponent({
               }),
             );
             x += segment.cells;
+          }
+          for (
+            let segmentIndex = 0, detailSegmentX = detailX;
+            segmentIndex < detailSegments.length;
+            segmentIndex++
+          ) {
+            const segment = detailSegments[segmentIndex]!;
+            rowChildren.push(
+              h(TText as any, {
+                key: `detail-segment:${segmentIndex}`,
+                x: detailSegmentX,
+                y: 0,
+                w: segment.cells,
+                value: segment.text,
+                style: segment.style,
+              }),
+            );
+            detailSegmentX += segment.cells;
           }
           children.push(
             h(

@@ -195,7 +195,7 @@ export const TToastViewport = defineComponent({
                   y: 0,
                   w: 1,
                   h: 1,
-                  focusable: true,
+                  focusable: false,
                   onClick: () => emit("dismiss", item.id),
                   onKeydown: (event: any) => {
                     if (event.key !== "Enter" && event.key !== " ") return;

@@ -276,6 +276,65 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not leak default-prevented Escape from dialog content to the parent", async () => {
+    const parentKeydown = vi.fn();
+    const value = ref("draft");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TView,
+          {
+            x: 0,
+            y: 0,
+            w: 50,
+            h: 10,
+            onKeydown: parentKeydown,
+          },
+          () =>
+            h(
+              TDialog,
+              {
+                modelValue: true,
+                w: 30,
+                h: 7,
+                backdrop: false,
+              },
+              () =>
+                h(TInput, {
+                  x: 0,
+                  y: 0,
+                  w: 20,
+                  modelValue: value.value,
+                  autoFocus: true,
+                  "onUpdate:modelValue": (next: string) => (value.value = next),
+                }),
+            ),
+        ),
+      60,
+      12,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(parentKeydown).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("drops stale multiple TSelect model indices instead of remapping them", async () => {
     const onConfirm = vi.fn();
 
@@ -3371,6 +3430,59 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("does not move keyboard focus into a closable toast", async () => {
+    const value = ref("");
+    const mounted = await mountTerminal(
+      () => [
+        h(TInput, {
+          x: 0,
+          y: 2,
+          w: 16,
+          modelValue: value.value,
+          autoFocus: true,
+          "onUpdate:modelValue": (next: string) => {
+            value.value = next;
+          },
+        }),
+        h(TToastViewport, {
+          w: 12,
+          zIndex: 200,
+          items: [{ id: "toast", message: "Saved", closable: true }],
+        }),
+      ],
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const inputNode = mounted
+        .events()!
+        .debugNodes()
+        .find((node) => node.visible && node.focusable && node.rect.x === 0 && node.rect.y === 2);
+
+      expect(inputNode).toBeTruthy();
+      expect(mounted.events()!.getFocused()).toBe(inputNode!.id);
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "h",
+          code: "KeyH",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(value.value).toBe("h");
+      expect(mounted.events()!.getFocused()).toBe(inputNode!.id);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("does not render a toast dismiss hitbox when the viewport is too narrow", async () => {
     const onDismiss = vi.fn();
 
@@ -5665,11 +5777,21 @@ describe("P1/P2 public components", () => {
       await nextTick();
       app.scheduler.flushNow();
 
-      expect(app.terminal.snapshot().lines.join("\n")).toContain("› Open File  src/app.ts");
-      expect(app.terminal.getCell(11, 6).style.fg).toBe("red");
-      expect(app.terminal.getCell(22, 6).style.fg).toBe("yellowBright");
-      expect(app.terminal.getCell(26, 6).style.fg).toBe("magenta");
-      expect(app.terminal.getCell(25, 6).style.dim).toBe(true);
+      const lines = app.terminal.snapshot().lines;
+      const rowY = lines.findIndex((line) => line.includes("Open File"));
+      expect(rowY).toBeGreaterThanOrEqual(0);
+      const row = lines[rowY] ?? "";
+      const labelX = row.indexOf("Open File");
+      const detailX = row.indexOf("src/app.ts");
+      expect(labelX).toBeGreaterThanOrEqual(0);
+      expect(detailX).toBeGreaterThan(labelX + "Open File".length + 2);
+
+      expect(app.terminal.getCell(labelX, rowY).style.fg).toBe("red");
+      expect(app.terminal.getCell(detailX, rowY).style.fg).toBe("yellowBright");
+      expect(app.terminal.getCell(detailX, rowY).style.bg).toBe("blue");
+      expect(app.terminal.getCell(detailX + 4, rowY).style.fg).toBe("magenta");
+      expect(app.terminal.getCell(detailX + 3, rowY).style.dim).toBe(true);
+      expect(app.terminal.getCell(detailX + 3, rowY).style.bg).toBe("blue");
     } finally {
       app.dispose();
     }
