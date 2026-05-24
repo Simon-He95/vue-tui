@@ -56,12 +56,17 @@ function parseMouseSgr(sequence: string): ParseResult {
   const ctrlKey = Boolean(b & 16);
 
   if ((b & 64) === 64) {
-    // SGR mouse wheel encoding (64/65) isn't consistent across all terminals.
-    // Keep a sane default, but allow users to invert via env.
-    let deltaY = b & 1 ? 1 : -1;
+    const wheelButton = b & 3;
+    if (wheelButton >= 2) {
+      debug(
+        `[${Date.now()}] [MOUSE] horizontal-wheel b=${b} wheelButton=${wheelButton} x=${cellX} y=${cellY}`,
+      );
+      return { handled: true, event: null };
+    }
+    let deltaY = wheelButton === 1 ? 1 : -1;
     if (invertWheel) deltaY = -deltaY;
     debug(
-      `[${Date.now()}] [MOUSE] wheel b=${b} bit1=${b & 1} deltaY=${deltaY} x=${cellX} y=${cellY}`,
+      `[${Date.now()}] [MOUSE] wheel b=${b} wheelButton=${wheelButton} deltaY=${deltaY} x=${cellX} y=${cellY}`,
     );
     return {
       handled: true,

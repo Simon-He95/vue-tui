@@ -1662,5 +1662,26 @@ describe("cli input", () => {
         ctrlKey: false,
       });
     });
+
+    it("ignores horizontal wheel reports", () => {
+      const events: any[] = [];
+      const stdin = new FakeStdin() as any;
+      const stdout = new FakeStdout() as any;
+
+      const driver = createStdinDriver({
+        stdin,
+        stdout,
+        dispatch: (e) => {
+          events.push(e);
+        },
+        enableMouse: false,
+      });
+
+      stdin.emit("data", "\u001B[<66;10;5M");
+      stdin.emit("data", "\u001B[<67;10;5M");
+      driver.dispose();
+
+      expect(events).toEqual([]);
+    });
   });
 });
