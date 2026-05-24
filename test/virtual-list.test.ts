@@ -119,7 +119,7 @@ describe("TVirtualList", () => {
     mounted.unmount();
   });
 
-  it("uses exposed rows in DOM when rowScrollMode requests unsafe wheel scroll", async () => {
+  it("repaints the DOM viewport when rowScrollMode requests unsafe wheel scroll", async () => {
     const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
     const mounted = await mountTerminal(
       () =>
@@ -151,10 +151,7 @@ describe("TVirtualList", () => {
     await nextTick();
 
     off();
-    expect(commits).toContainEqual({
-      dirtyRows: [3],
-      scrollOperations: [{ startY: 0, endY: 4, delta: 1 }],
-    });
+    expect(commits).toContainEqual({ dirtyRows: [0, 1, 2, 3], scrollOperations: null });
     expect([0, 1, 2, 3].map((y) => rowText(mounted, y))).toEqual([
       "item-1",
       "item-2",
@@ -666,44 +663,47 @@ describe("TVirtualList", () => {
 
   it("stdout renderer uses a scroll region for unsafe full-row wheel scroll", async () => {
     const envSnapshot = snapshotEnv(stdoutScrollRegionEnvKeys);
-    process.env.VUE_TUI_SCROLL_REGIONS = "1";
-    process.env.DIMCODE_TUI_SCROLL_REGIONS = "1";
-    delete process.env.GHOSTTY_RESOURCES_DIR;
-    delete process.env.TERM_PROGRAM;
-    delete process.env.VSCODE_PID;
-    delete process.env.VSCODE_IPC_HOOK_CLI;
-
-    const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
-    const app = createTerminalApp({
-      cols: 12,
-      rows: 8,
-      component: TVirtualList,
-      props: {
-        x: 0,
-        y: 0,
-        w: 12,
-        h: 4,
-        itemCount: items.length,
-        itemVersion: 1,
-        getItem: (index: number) => items[index],
-        autoFocus: true,
-        rowScrollMode: "unsafe-full-row",
-      },
-    });
-    let out = "";
-    const renderer = createStdoutRenderer(app.terminal, {
-      output: {
-        isTTY: true,
-        write(chunk: string) {
-          out += chunk;
-        },
-      },
-      clear: false,
-      hideCursor: false,
-      altScreen: false,
-    });
+    let app: ReturnType<typeof createTerminalApp> | null = null;
+    let renderer: ReturnType<typeof createStdoutRenderer> | null = null;
 
     try {
+      process.env.VUE_TUI_SCROLL_REGIONS = "1";
+      process.env.DIMCODE_TUI_SCROLL_REGIONS = "1";
+      delete process.env.GHOSTTY_RESOURCES_DIR;
+      delete process.env.TERM_PROGRAM;
+      delete process.env.VSCODE_PID;
+      delete process.env.VSCODE_IPC_HOOK_CLI;
+
+      const items = Array.from({ length: 20 }, (_, index) => `item-${index}`);
+      app = createTerminalApp({
+        cols: 12,
+        rows: 8,
+        component: TVirtualList,
+        props: {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          itemCount: items.length,
+          itemVersion: 1,
+          getItem: (index: number) => items[index],
+          autoFocus: true,
+          rowScrollMode: "unsafe-full-row",
+        },
+      });
+      let out = "";
+      renderer = createStdoutRenderer(app.terminal, {
+        output: {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+          },
+        },
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+      });
+
       app.mount();
       app.scheduler.flushNow();
       out = "";
@@ -728,8 +728,8 @@ describe("TVirtualList", () => {
       expect(out).toContain("\u001B[4;1Hitem-4");
       expect(out).not.toContain("item-1");
     } finally {
-      renderer.dispose();
-      app.dispose();
+      renderer?.dispose();
+      app?.dispose();
       restoreEnv(envSnapshot);
     }
   });

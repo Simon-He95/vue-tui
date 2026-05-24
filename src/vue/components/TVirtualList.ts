@@ -768,6 +768,8 @@ export const TVirtualList = defineComponent({
       }
       scrollTop.value = clampedTop;
       if (options?.emitUpdate) emit("update:scrollTop", clampedTop);
+      const canUseTerminalRowScroll =
+        rendererCapabilities.value.scrollOperations && rendererCapabilities.value.domRows !== true;
       const scrollPlan = prepareUnsafeFullRowScroll({
         render,
         plane: plane.value,
@@ -775,7 +777,9 @@ export const TVirtualList = defineComponent({
         terminalSize: terminal.size(),
         delta,
         rowScrollMode: props.rowScrollMode,
-        rendererCapabilities: rendererCapabilities.value,
+        rendererCapabilities: {
+          scrollOperations: canUseTerminalRowScroll,
+        },
         isClipped: isClipped(),
         hasPendingDirtyRows: Boolean(dirtyRowsHint?.length),
         strategy: options?.strategy ?? "viewport-repaint",
