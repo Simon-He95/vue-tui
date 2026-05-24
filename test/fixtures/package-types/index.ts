@@ -120,6 +120,7 @@ const commandPaletteItem: RootTCommandPaletteItem = {
 const vueCommandPaletteItem: VueTCommandPaletteItem = {
   label: "Open",
   detail: "workspace",
+  labelAccentRanges: [{ start: 0, end: 4 }],
 };
 const rootCommandPaletteRange: RootTCommandPaletteMatchRange = { start: 0, end: 4 };
 const vueCommandPaletteRange: VueTCommandPaletteMatchRange = { start: 0, end: 4 };

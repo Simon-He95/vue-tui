@@ -5632,6 +5632,7 @@ describe("P1/P2 public components", () => {
         detail: "src/app.ts",
         accentStyle: { fg: "cyan" },
         highlightAccentStyle: { fg: "yellowBright" },
+        labelAccentRanges: [{ start: 5, end: 9 }],
         detailAccentRanges: [{ start: 0, end: 3 }],
         detailAccentSegments: [
           { start: 4, end: 10, style: { fg: "blue" }, highlightStyle: { fg: "magenta" } },
@@ -5665,11 +5666,14 @@ describe("P1/P2 public components", () => {
       await nextTick();
       app.scheduler.flushNow();
 
-      expect(app.terminal.snapshot().lines.join("\n")).toContain("› Open File  src/app.ts");
+      expect(app.terminal.snapshot().lines.join("\n")).toContain(
+        "› Open File           src/app.ts",
+      );
       expect(app.terminal.getCell(11, 6).style.fg).toBe("red");
-      expect(app.terminal.getCell(22, 6).style.fg).toBe("yellowBright");
-      expect(app.terminal.getCell(26, 6).style.fg).toBe("magenta");
-      expect(app.terminal.getCell(25, 6).style.dim).toBe(true);
+      expect(app.terminal.getCell(16, 6).style.fg).toBe("yellowBright");
+      expect(app.terminal.getCell(31, 6).style.fg).toBe("yellowBright");
+      expect(app.terminal.getCell(35, 6).style.fg).toBe("magenta");
+      expect(app.terminal.getCell(31, 6).style.dim).toBe(true);
     } finally {
       app.dispose();
     }

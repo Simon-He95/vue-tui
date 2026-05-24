@@ -6,7 +6,13 @@ import { TInput } from "./TInput.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
 import { mergeStyle } from "./simple-utils.js";
-import { forEachTextCellSegment, sanitizeInlineText, sliceByCells, spaces } from "../utils/text.js";
+import {
+  forEachTextCellSegment,
+  sanitizeInlineText,
+  sliceByCells,
+  spaces,
+  textCellWidth,
+} from "../utils/text.js";
 
 export type TCommandPaletteMatchRange = Readonly<{
   start: number;
@@ -23,6 +29,13 @@ export type TCommandPaletteItem = Readonly<{
   value?: unknown;
   accentStyle?: Style;
   highlightAccentStyle?: Style;
+  labelAccentRanges?: readonly TCommandPaletteMatchRange[];
+  labelAccentSegments?: readonly Readonly<{
+    start: number;
+    end: number;
+    style?: Style;
+    highlightStyle?: Style;
+  }>[];
   detailAccentRanges?: readonly TCommandPaletteMatchRange[];
   detailAccentSegments?: readonly Readonly<{
     start: number;
@@ -247,6 +260,9 @@ function commandPaletteSegments(
     matchRanges: readonly TCommandPaletteMatchRange[];
     labelMatchStyle: Style;
     detailMatchStyle: Style;
+    labelAccentRanges: readonly TCommandPaletteMatchRange[];
+    labelAccentStyle: Style;
+    labelAccentSegments: readonly (TCommandPaletteAccentSegment & { resolvedStyle: Style })[];
     detailAccentRanges: readonly TCommandPaletteMatchRange[];
     detailAccentStyle: Style;
     detailAccentSegments: readonly (TCommandPaletteAccentSegment & { resolvedStyle: Style })[];
@@ -264,14 +280,16 @@ function commandPaletteSegments(
     const inDetail = part.start >= opts.detailOffset;
     const accentSegmentStyle = inDetail
       ? findAccentSegment(opts.detailAccentSegments, part.start, part.end)
-      : undefined;
+      : findAccentSegment(opts.labelAccentSegments, part.start, part.end);
+    const accentRanges = inDetail ? opts.detailAccentRanges : opts.labelAccentRanges;
+    const accentStyle = inDetail ? opts.detailAccentStyle : opts.labelAccentStyle;
     const style = intersects(opts.matchRanges, part.start, part.end)
       ? inDetail
         ? opts.detailMatchStyle
         : opts.labelMatchStyle
       : (accentSegmentStyle ??
-        (inDetail && intersects(opts.detailAccentRanges, part.start, part.end)
-          ? opts.detailAccentStyle
+        (intersects(accentRanges, part.start, part.end)
+          ? accentStyle
           : inDetail
             ? opts.detailStyle
             : opts.baseStyle));
@@ -707,10 +725,13 @@ export const TCommandPalette = defineComponent({
           const detail =
             props.showRowDetails && detailSource ? sanitizeInlineText(detailSource) : "";
           const prefix = selected ? "› " : "  ";
-          const detailPrefix = detail ? "  " : "";
-          const text = `${prefix}${label}${detailPrefix}${detail}`;
+          const labelText = `${prefix}${label}`;
+          const detailPrefix = detail
+            ? spaces(Math.max(2, innerW - textCellWidth(labelText) - textCellWidth(detail)))
+            : "";
+          const text = `${labelText}${detailPrefix}${detail}`;
           const labelOffset = prefix.length;
-          const detailOffset = labelOffset + label.length + detailPrefix.length;
+          const detailOffset = labelText.length + detailPrefix.length;
           const matchStyle = props.matchStyle ?? DEFAULT_MATCH_STYLE;
           const highlightMatchStyle = props.highlightMatchStyle ?? matchStyle;
           const labelMatchStyle = mergeStyle(
@@ -724,6 +745,10 @@ export const TCommandPalette = defineComponent({
           );
           const detailAccentStyle = mergeStyle(
             detailBaseStyle,
+            selected ? (item.highlightAccentStyle ?? item.accentStyle) : item.accentStyle,
+          );
+          const labelAccentStyle = mergeStyle(
+            baseStyle,
             selected ? (item.highlightAccentStyle ?? item.accentStyle) : item.accentStyle,
           );
           const matchRanges = [
@@ -743,6 +768,26 @@ export const TCommandPalette = defineComponent({
               detailOffset,
             ),
           ];
+          const labelAccentRanges = shiftRanges(
+            normalizeRanges(item.labelAccentRanges),
+            labelOffset,
+          );
+          const labelAccentSegments = normalizeAccentSegments(item.labelAccentSegments).map(
+            (segment) => ({
+              ...segment,
+              start: segment.start + labelOffset,
+              end: segment.end + labelOffset,
+              resolvedStyle: mergeStyle(
+                baseStyle,
+                selected
+                  ? (segment.highlightStyle ??
+                      item.highlightAccentStyle ??
+                      segment.style ??
+                      item.accentStyle)
+                  : (segment.style ?? item.accentStyle),
+              ),
+            }),
+          );
           const detailAccentRanges = shiftRanges(
             normalizeRanges(detail ? item.detailAccentRanges : undefined),
             detailOffset,
@@ -755,7 +800,12 @@ export const TCommandPalette = defineComponent({
             end: segment.end + detailOffset,
             resolvedStyle: mergeStyle(
               detailBaseStyle,
-              selected ? (segment.highlightStyle ?? segment.style) : segment.style,
+              selected
+                ? (segment.highlightStyle ??
+                    item.highlightAccentStyle ??
+                    segment.style ??
+                    item.accentStyle)
+                : (segment.style ?? item.accentStyle),
             ),
           }));
           const rowSegments = commandPaletteSegments({
@@ -767,6 +817,9 @@ export const TCommandPalette = defineComponent({
             matchRanges,
             labelMatchStyle,
             detailMatchStyle,
+            labelAccentRanges,
+            labelAccentStyle,
+            labelAccentSegments,
             detailAccentRanges,
             detailAccentStyle,
             detailAccentSegments,
