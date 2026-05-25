@@ -1,4 +1,4 @@
-# 1.0.0 Release Notes Draft
+# 1.0.0 Release Notes Draft (Internal Checklist)
 
 This draft is the public release note shape for `1.0.0`. Do not publish it with placeholders. Fill the validation records, tarball digest, workflow links, and manual terminal evidence before cutting the stable release.
 

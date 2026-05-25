@@ -21,12 +21,12 @@ Not allowed without a completed comparison report:
 
 These facts are useful for positioning, not for performance conclusions:
 
-| Source                                                                  | Fact used in comparison                                                                                   |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [OpenTUI Getting Started](https://opentui.com/docs/getting-started/)    | OpenTUI describes itself as a native Zig terminal UI core with TypeScript bindings and Bun-first install. |
-| [OpenTUI Renderer](https://opentui.com/docs/core-concepts/renderer/)    | `createCliRenderer()` initializes the OpenTUI CLI renderer and loads the native Zig rendering library.    |
-| [`@opentui/solid` on npm](https://www.npmjs.com/package/@opentui/solid) | The package is Solid.js support for OpenTUI and documents Bun + Solid JSX setup.                          |
-| [OpenTUI Solid plugin docs](https://opentui.com/docs/plugins/solid/)    | The Solid integration includes slot registry and runtime plugin support for Solid JSX UI.                 |
+| Source                                                                  | Fact used in comparison                                                                                   | Verified   |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------- |
+| [OpenTUI Getting Started](https://opentui.com/docs/getting-started/)    | OpenTUI describes itself as a native Zig terminal UI core with TypeScript bindings and Bun-first install. | 2026-05-25 |
+| [OpenTUI Renderer](https://opentui.com/docs/core-concepts/renderer/)    | `createCliRenderer()` initializes the OpenTUI CLI renderer and loads the native Zig rendering library.    | 2026-05-25 |
+| [`@opentui/solid` on npm](https://www.npmjs.com/package/@opentui/solid) | The package is Solid.js support for OpenTUI and documents Bun + Solid JSX setup.                          | 2026-05-25 |
+| [OpenTUI Solid plugin docs](https://opentui.com/docs/plugins/solid/)    | The Solid integration includes slot registry and runtime plugin support for Solid JSX UI.                 | 2026-05-25 |
 
 ## Product Fit
 
