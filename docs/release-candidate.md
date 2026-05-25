@@ -6,6 +6,24 @@
 下一候选版本：`1.0.0-rc.1`
 npm prerelease dist-tag：`rc`
 
+## 1.0 Definition
+
+`1.0.0` 定义为 stable contract release，而不是继续扩大功能范围或对外打 raw performance 对比的版本。
+
+稳定承诺：
+
+- 基础 terminal UI 能力、包入口、browser/CLI/headless 运行边界。
+- 核心组件行为、renderer capability、安全默认值和发布验证流程。
+- Public entrypoint 的文档化 API 在 1.x patch/minor 中不做 breaking change。
+
+不承诺：
+
+- `TVirtualList`、`TLogView`、agent console 聚合入口的全部 API 细节。
+- 与 OpenTUI、`@opentui/solid` 或其他 renderer 的性能优势，除非有同机器、同 terminal、同场景的公开 benchmark 报告。
+- experimental API 在 1.x 内的 SemVer 稳定性。
+
+对外表述应聚焦：Vue 生态、browser DOM / CLI stdout / headless 三目标、明确 package contract、安全默认值，以及 logs / markdown / agent console 场景的高吞吐基础设施。不要写“比 OpenTUI 更快”“性能优于 Solid”“native 级性能”这类没有同场景数据支撑的结论。
+
 ## Scope
 
 - 从最新 `main` 准备 release candidate；未合并 feature PR 不写进 release notes。
@@ -101,6 +119,8 @@ import { TBox } from "@simon_he/vue-tui/dist/index.js";
 
 ## GitHub Release Template
 
+Stable `1.0.0` 的对外 release notes 草稿见 [1.0.0 Release Notes Draft](/release-notes-1.0.0)。RC release 使用下面模板；stable 发布时不要保留 `rc` dist-tag、RC wording 或未填写的 validation placeholders。
+
 Title:
 
 ```txt
@@ -132,6 +152,7 @@ Body:
 - Tarball SHA256: `<sha256>  <tarball>`
 - Node/Vue runtime matrix: `<pass/fail>` (Node 16.17.1 / 18 / 20 / 22 / 24 with Vue 3.3.0 / 3.5.33)
 - Packed smoke: `<pass/fail>` (package contract, pnpm/npm consumer smoke, packed type smoke, browser Vite smoke)
+- Benchmark report: `<pass/fail>` ([Benchmarks](/benchmarks), run date, Node version, behavior gate result, timing-review result if run)
 - Post-publish dist-tag verification: `<pass/fail>` (`npm view @simon_he/vue-tui@rc version`, `npm dist-tag ls @simon_he/vue-tui`)
 - npm new-project install: `<pass/fail>` (`npm install @simon_he/vue-tui@rc vue`)
 
@@ -198,6 +219,7 @@ Benchmark gate 策略：
 
 - `release:bench` 跑行为稳定的 baseline 检查，是 release gate。
 - timing budget 只通过 `bench:baseline:timing` 手动确认，不作为默认 release gate，避免 CI timing 波动阻断行为正确的 RC。
+- 公开 benchmark 口径见 [Benchmarks](/benchmarks)。release notes 必须说明测试日期、Node 版本、机器/OS、tarball digest、行为 gate 是否通过，以及 timing 是否手动复核。没有同场景横向报告时，不写竞品性能结论。
 
 示例 smoke：
 
