@@ -3506,14 +3506,6 @@
           "descriptionSource": "component-default"
         },
         {
-          "name": "clearOnEscape",
-          "type": "boolean",
-          "required": false,
-          "defaultValue": "false",
-          "description": "Clears the input on Escape.",
-          "descriptionSource": "component-default"
-        },
-        {
           "name": "plugins",
           "type": "readonly TInputPlugin[]",
           "required": false,

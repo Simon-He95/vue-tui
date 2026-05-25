@@ -37,6 +37,56 @@ import {
 import type { PropType } from "vue";
 
 describe("ui regressions dialog", () => {
+  it("closes dialog on Escape from an empty focused input", async () => {
+    const open = ref(true);
+    const value = ref("");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (next: boolean) => (open.value = next),
+            w: 24,
+            h: 6,
+            closeOnEsc: true,
+          },
+          () =>
+            h(TInput, {
+              x: 0,
+              y: 0,
+              w: 16,
+              modelValue: value.value,
+              "onUpdate:modelValue": (next: string) => (value.value = next),
+              autoFocus: true,
+            }),
+        ),
+      32,
+      10,
+    );
+
+    try {
+      await nextTick();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      mounted.container()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+
+      expect(open.value).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("keeps dialog footer buttons on the dialog focus layer with custom zIndex", async () => {
     const open = ref(true);
     const value = ref("");

@@ -231,7 +231,6 @@ export const TInput = defineComponent({
     secret: { type: Boolean, default: false },
     maskChar: { type: String, default: "•" },
     submitOnEnter: { type: Boolean, default: true },
-    clearOnEscape: { type: Boolean, default: false },
     plugins: {
       type: Array as PropType<readonly TInputPlugin[]>,
       default: () => [],
@@ -1953,21 +1952,6 @@ export const TInput = defineComponent({
           }
           emit("change", value);
         }
-        return;
-      }
-
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (props.clearOnEscape) {
-          clearAll();
-          return;
-        }
-        const manager = events.value;
-        if (manager && manager.getFocused()) {
-          manager.focus(null);
-          return;
-        }
-        applyBlur();
         return;
       }
 

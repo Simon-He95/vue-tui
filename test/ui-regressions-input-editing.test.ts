@@ -234,60 +234,6 @@ describe("ui regressions input editing", () => {
     mounted.unmount();
   });
 
-  it("TInput clearOnEscape clears content and remains undoable", async () => {
-    const value = ref("");
-    const mounted = await mountTerminal(() =>
-      h(TInput, {
-        x: 0,
-        y: 0,
-        w: 20,
-        modelValue: value.value,
-        "onUpdate:modelValue": (v: string) => (value.value = v),
-        clearOnEscape: true,
-        cursorBlink: false,
-      }),
-    );
-
-    const container = mounted.container()!;
-    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
-    await nextTick();
-
-    for (const [k, code] of [
-      ["h", "KeyH"],
-      ["e", "KeyE"],
-      ["l", "KeyL"],
-      ["l", "KeyL"],
-      ["o", "KeyO"],
-    ] as const) {
-      container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
-      await nextTick();
-    }
-    expect(value.value).toBe("hello");
-
-    container.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "Escape",
-        code: "Escape",
-        bubbles: true,
-      }),
-    );
-    await nextTick();
-    expect(value.value).toBe("");
-
-    container.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "z",
-        code: "KeyZ",
-        metaKey: true,
-        bubbles: true,
-      }),
-    );
-    await nextTick();
-    expect(value.value).toBe("hello");
-
-    mounted.unmount();
-  });
-
   it("TInput supports Ctrl+Delete to clear content", async () => {
     const value = ref("");
     const mounted = await mountTerminal(() =>

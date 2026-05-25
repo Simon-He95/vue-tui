@@ -450,8 +450,7 @@ const DialogSurface = defineComponent({
     function onKeydown(e: any): void {
       props.onDialogKeydown?.(e);
       if (!props.closeOnEsc) return;
-      const allowDefaultPreventedEsc = e?.key === "Escape" && (e as any)?.__tuiDialogClose === true;
-      if (e?.defaultPrevented && !allowDefaultPreventedEsc) return;
+      if (e?.defaultPrevented) return;
       if (e?.key !== "Escape") return;
       e.preventDefault?.();
       props.onRequestClose();
