@@ -144,8 +144,26 @@ Fallback path only when workflow token/provenance is unavailable:
 
 ```bash
 pnpm run release:dry-run
-VUE_TUI_ALLOW_DIRECT_PUBLISH=1 npm publish .release/*.tgz --access public --dry-run --tag latest
-VUE_TUI_ALLOW_DIRECT_PUBLISH=1 npm publish .release/*.tgz --access public --tag latest
+
+cd .release
+sha256sum *.tgz | tee SHA256SUMS
+cd ..
+
+TARBALL=$(ls .release/*.tgz | head -n 1)
+VERSION=$(tar -xOf "$TARBALL" package/package.json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+case "$VERSION" in
+  *-*)
+    echo "Stable fallback must not publish prerelease $VERSION with latest"
+    exit 1
+    ;;
+esac
+if npm view "@simon_he/vue-tui@$VERSION" version >/dev/null 2>&1; then
+  echo "@simon_he/vue-tui@$VERSION already exists on npm"
+  exit 1
+fi
+
+VUE_TUI_ALLOW_DIRECT_PUBLISH=1 npm publish "$TARBALL" --access public --dry-run --tag latest
+VUE_TUI_ALLOW_DIRECT_PUBLISH=1 npm publish "$TARBALL" --access public --tag latest
 ```
 
 ## Post-Publish Checks

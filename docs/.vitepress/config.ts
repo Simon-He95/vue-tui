@@ -110,7 +110,6 @@ export default defineConfig({
           { text: "高吞吐渲染", link: "/high-throughput-rendering" },
           { text: "Observability", link: "/observability" },
           { text: "1.0 Release Candidate", link: "/release-candidate" },
-          { text: "1.0.0 Release Notes Draft Checklist", link: "/release-notes-1.0.0" },
           { text: "TLogView Release Readiness", link: "/tlog-view-release-readiness" },
         ],
       },

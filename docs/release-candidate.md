@@ -119,7 +119,7 @@ import { TBox } from "@simon_he/vue-tui/dist/index.js";
 
 ## GitHub Release Template
 
-Stable `1.0.0` 的对外 release notes 草稿见 [1.0.0 Release Notes Draft Checklist](/release-notes-1.0.0)。RC release 使用下面模板；stable 发布时不要保留 `rc` dist-tag、RC wording 或未填写的 validation placeholders。
+Stable `1.0.0` 的 release handoff 草稿见 [1.0.0 Release Notes Draft Checklist](/release-notes-1.0.0)。RC release 使用下面模板；stable 发布时不要保留 `rc` dist-tag、RC wording 或未填写的 validation placeholders。
 
 Title:
 
