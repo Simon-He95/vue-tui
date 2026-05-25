@@ -94,11 +94,11 @@ Fill every row before publishing. Blank evidence means the release is not ready.
 | GitHub workflow dry-run     | pass / fail | workflow run URL, `dry_run=true`, `npm_tag=latest`                        |
 | Authenticated npm dry-run   | pass / fail | `npm publish --dry-run --provenance --tag latest`, run log                |
 | Tarball SHA256              | pass / fail | `<sha256>  <tarball>`                                                     |
-| Node/Vue matrix             | pass / fail | Node 16.17.1 / 18 / 20 / 22 / 24 with Vue 3.3.0 / current Vue 3           |
+| Node/Vue matrix             | pass / fail | Node 16.17.1 / 18 / 20 / 22 / 24 with Vue 3.3.0 / 3.5.33                  |
 | Packed package smoke        | pass / fail | package contract, pnpm/npm consumer smoke, type smoke, browser smoke      |
 | SSR import smoke            | pass / fail | root/core/runtime/renderer/dom/observability/vue/markdown/experimental    |
 | Benchmark behavior gate     | pass / fail | `pnpm run bench:baseline`, date, Node version                             |
-| Benchmark timing review     | pass / fail | `BENCH_TIMING=1 pnpm run bench:baseline` or explicit not-run explanation  |
+| Benchmark timing review     | pass / fail | `pnpm run bench:baseline:timing` or explicit not-run explanation          |
 | Docs build                  | pass / fail | `pnpm run docs:build`                                                     |
 | New project npm install     | pass / fail | `npm install @simon_he/vue-tui@latest vue`                                |
 | Post-publish dist-tag check | pass / fail | `npm view @simon_he/vue-tui version`, `npm dist-tag ls @simon_he/vue-tui` |
@@ -130,7 +130,7 @@ pnpm run run:agent-console:terminal
 Use [Benchmarks](/benchmarks) for the detailed report. For release notes, keep the summary short:
 
 - Behavior gate: `<pass/fail>` (`pnpm run bench:baseline`, date, Node version)
-- Timing review: `<pass/fail/not run>` (`BENCH_TIMING=1 pnpm run bench:baseline`, date, Node version)
+- Timing review: `<pass/fail/not run>` (`pnpm run bench:baseline:timing`, date, Node version)
 - Current coverage: dirty rows, scanned nodes, painted nodes, mailbox coalescing, DOM flush behavior, retained logs, search, exact index, agent/log lab smoke.
 - Not yet covered: real terminal input-to-paint, long streaming heap, stdout bytes/frame, same-scenario `@opentui/solid` comparison.
 
@@ -143,7 +143,8 @@ Preferred path: GitHub Release workflow with `npm_tag=latest`.
 Fallback path only when workflow token/provenance is unavailable:
 
 ```bash
-pnpm run release:local:dry-run
+pnpm run release:dry-run
+VUE_TUI_ALLOW_DIRECT_PUBLISH=1 npm publish .release/*.tgz --access public --dry-run --tag latest
 VUE_TUI_ALLOW_DIRECT_PUBLISH=1 npm publish .release/*.tgz --access public --tag latest
 ```
 

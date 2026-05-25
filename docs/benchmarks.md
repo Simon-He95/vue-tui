@@ -28,25 +28,25 @@ pnpm run bench:dom-renderer
 pnpm run bench:scroll-mailbox
 pnpm run bench:phase2
 pnpm run bench:baseline
-BENCH_TIMING=1 pnpm run bench:baseline
+pnpm run bench:baseline:timing
 ```
 
-`bench:baseline` 是 release gate，默认只检查行为预算。`BENCH_TIMING=1 pnpm run bench:baseline` 会额外检查 timing budget，适合本地 release review 或 nightly，不作为默认 CI blocker。
+`bench:baseline` 是 release gate，默认只检查行为预算。`bench:baseline:timing` 会额外检查 timing budget，适合本地 release review 或 nightly，不作为默认 CI blocker。
 
 ## Environment
 
 Latest recorded local run:
 
-| Field   | Value                                                                                                                                   |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Date    | 2026-05-25                                                                                                                              |
-| Package | `@simon_he/vue-tui@1.0.0-rc.0`                                                                                                          |
-| Host    | Darwin arm64, `Darwin Kernel Version 23.5.0`                                                                                            |
-| Node    | `v23.11.0`                                                                                                                              |
-| pnpm    | `10.33.4`                                                                                                                               |
-| Bun     | `1.3.13`                                                                                                                                |
-| DOM env | `happy-dom` synthetic benchmark                                                                                                         |
-| Note    | This is a local regression baseline. Release notes should record the exact release machine, Node version, tarball digest, and run URLs. |
+| Field   | Value                                                                                                                                                                                                     |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date    | 2026-05-25                                                                                                                                                                                                |
+| Package | `@simon_he/vue-tui@1.0.0-rc.0`                                                                                                                                                                            |
+| Host    | Darwin arm64, `Darwin Kernel Version 23.5.0`                                                                                                                                                              |
+| Node    | `v23.11.0`                                                                                                                                                                                                |
+| pnpm    | `10.33.4`                                                                                                                                                                                                 |
+| Bun     | `1.3.13`                                                                                                                                                                                                  |
+| DOM env | `happy-dom` synthetic benchmark                                                                                                                                                                           |
+| Note    | This sample was collected outside the release matrix. Stable release notes should use Node 20 or another runtime-matrix Node version, and record the exact release machine, tarball digest, and run URLs. |
 
 ## Release Gate Budgets
 
