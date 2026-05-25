@@ -217,20 +217,19 @@ This table is a category overview. The generated API reference for root, `/vue`,
 
 ## Documentation
 
-| Page                                                                 | Purpose                                                              |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| [Docs home](./docs/index.md)                                         | Product overview and reading path                                    |
-| [Examples index](./docs/examples.md)                                 | Browser, terminal, and smoke example commands                        |
-| [Core API](./docs/api.md)                                            | Terminal, renderer, events, runtime, planes, and scheduler contracts |
-| [Performance](./docs/performance.md)                                 | Practical performance guidance                                       |
-| [Benchmarks](./docs/benchmarks.md)                                   | Release benchmark budgets, sample results, and comparison boundaries |
-| [OpenTUI Solid comparison](./docs/compare-opentui-solid.md)          | Same-scenario comparison protocol and public claim boundaries        |
-| [High-throughput rendering](./docs/high-throughput-rendering.md)     | Scheduler, dirty rows, mailbox, log, and renderer architecture       |
-| [Component acceptance](./docs/components-acceptance.md)              | Release readiness checks for component API and behavior              |
-| [Agent Console](./docs/agent-console.md)                             | Streaming transcript example stack                                   |
-| [Release candidate](./docs/release-candidate.md)                     | 1.0 RC validation, package export checks, and migration notes        |
-| [1.0.0 release notes draft checklist](./docs/release-notes-1.0.0.md) | Internal stable release copy, validation table, benchmark summary    |
-| [Security policy](./SECURITY.md)                                     | Vulnerability reporting and terminal permission boundaries           |
+| Page                                                             | Purpose                                                              |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [Docs home](./docs/index.md)                                     | Product overview and reading path                                    |
+| [Examples index](./docs/examples.md)                             | Browser, terminal, and smoke example commands                        |
+| [Core API](./docs/api.md)                                        | Terminal, renderer, events, runtime, planes, and scheduler contracts |
+| [Performance](./docs/performance.md)                             | Practical performance guidance                                       |
+| [Benchmarks](./docs/benchmarks.md)                               | Release benchmark budgets, sample results, and comparison boundaries |
+| [OpenTUI Solid comparison](./docs/compare-opentui-solid.md)      | Same-scenario comparison protocol and public claim boundaries        |
+| [High-throughput rendering](./docs/high-throughput-rendering.md) | Scheduler, dirty rows, mailbox, log, and renderer architecture       |
+| [Component acceptance](./docs/components-acceptance.md)          | Release readiness checks for component API and behavior              |
+| [Agent Console](./docs/agent-console.md)                         | Streaming transcript example stack                                   |
+| [Release candidate](./docs/release-candidate.md)                 | 1.0 RC validation, package export checks, and migration notes        |
+| [Security policy](./SECURITY.md)                                 | Vulnerability reporting and terminal permission boundaries           |
 
 Run the docs locally:
 

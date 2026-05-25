@@ -2,16 +2,16 @@
 
 This is a non-release local sample collected outside the release matrix. It is kept to make the sample values in `docs/benchmarks.md` traceable, not to define the 1.0.0 release benchmark record.
 
-| Field   | Value                                                                                                                                      |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Date    | 2026-05-25                                                                                                                                 |
-| Git SHA | `1b36fb4a3b80b8165aa09443f008604440e854f9`                                                                                                 |
-| Package | `@simon_he/vue-tui@1.0.0-rc.0`                                                                                                             |
-| Host    | `Darwin 23.5.0 arm64`                                                                                                                      |
-| Node    | `v23.11.0`                                                                                                                                 |
-| pnpm    | `10.33.4`                                                                                                                                  |
-| Bun     | `1.3.13`                                                                                                                                   |
-| DOM env | `happy-dom` synthetic benchmark                                                                                                            |
+| Field   | Value                                      |
+| ------- | ------------------------------------------ |
+| Date    | 2026-05-25                                 |
+| Git SHA | `1b36fb4a3b80b8165aa09443f008604440e854f9` |
+| Package | `@simon_he/vue-tui@1.0.0-rc.0`             |
+| Host    | `Darwin 23.5.0 arm64`                      |
+| Node    | `v23.11.0`                                 |
+| pnpm    | `10.33.4`                                  |
+| Bun     | `1.3.13`                                   |
+| DOM env | `happy-dom` synthetic benchmark            |
 
 ## Validation
 
