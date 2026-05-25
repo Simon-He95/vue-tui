@@ -7,7 +7,7 @@ This is a non-release local sample collected outside the release matrix. It is k
 | Date    | 2026-05-25                                                                                                                                 |
 | Git SHA | `1b36fb4a3b80b8165aa09443f008604440e854f9`                                                                                                 |
 | Package | `@simon_he/vue-tui@1.0.0-rc.0`                                                                                                             |
-| Host    | `Darwin Simon-2.local 23.5.0 Darwin Kernel Version 23.5.0: Wed May  1 20:12:58 PDT 2024; root:xnu-10063.121.3~5/RELEASE_ARM64_T6000 arm64` |
+| Host    | `Darwin 23.5.0 arm64`                                                                                                                      |
 | Node    | `v23.11.0`                                                                                                                                 |
 | pnpm    | `10.33.4`                                                                                                                                  |
 | Bun     | `1.3.13`                                                                                                                                   |

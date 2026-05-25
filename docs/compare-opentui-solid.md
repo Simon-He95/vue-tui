@@ -13,7 +13,7 @@ Allowed public claim:
 Not allowed without a completed comparison report:
 
 - vue-tui is faster than OpenTUI.
-- vue-tui is faster than Solid.
+- vue-tui is faster than `@opentui/solid`.
 - vue-tui has native-level rendering performance.
 - vue-tui is more production-proven than OpenTUI.
 

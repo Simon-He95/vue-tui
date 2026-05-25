@@ -1,4 +1,4 @@
-# 1.0.0 Release Notes Draft (Internal Checklist)
+# 1.0.0 Release Notes Draft Checklist
 
 This draft is the public release note shape for `1.0.0`. Do not publish it with placeholders. Fill the validation records, tarball digest, workflow links, and manual terminal evidence before cutting the stable release.
 
@@ -23,7 +23,7 @@ Safe public copy:
 Do not claim:
 
 - Faster than OpenTUI.
-- Faster than Solid.
+- Faster than `@opentui/solid`.
 - Native-level performance.
 - Production-proven compared with OpenTUI.
 
