@@ -1,6 +1,6 @@
 # 1.0.0 Release Notes Draft Checklist
 
-This draft is the public release note shape for `1.0.0`. Do not publish it with placeholders. Fill the validation records, tarball digest, workflow links, and manual terminal evidence before cutting the stable release.
+This draft is the public release note shape for `1.0.0`. Do not copy this draft into the GitHub Release body with placeholders. Fill the validation records, tarball digest, workflow links, and manual terminal evidence before cutting the stable release.
 
 ## Title
 

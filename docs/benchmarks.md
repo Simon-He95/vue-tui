@@ -60,6 +60,11 @@ These budgets come from `scripts/bench-baselines.json`.
 
 | Scenario                                    | Budget                                                                                 | Release gate     |
 | ------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------- |
+| DOM cache-hit plain rows                    | `cacheHits = 100`                                                                      | yes              |
+| DOM single styled row reuse                 | `spansReused = 100`                                                                    | yes              |
+| DOM changed multi-segment row reuse         | `segmentReuseRows = 100`                                                               | yes              |
+| DOM mixed row-key prepass                   | `rowKeyPrepassChecks = 100`                                                            | yes              |
+| DOM renderer second flush timing            | `secondFlushDurationMs <= 20/30/50` depending scenario                                 | manual / nightly |
 | 1000 render nodes, dirty 1 row              | `dirtyRows = 1`, `scannedNodes = 1`, `paintedNodes = 1`                                | yes              |
 | 1000 render nodes, dirty 1 row timing       | `durationMs <= 10`                                                                     | manual / nightly |
 | `TVirtualList` 100k rows, wheel burst 100   | `frames = 1`, `coalescingRatio >= 100`, `avgScannedNodes <= 1`, `avgPaintedNodes <= 1` | yes              |
@@ -71,7 +76,7 @@ These budgets come from `scripts/bench-baselines.json`.
 | `TLogView` retention 100k, max 1000         | `retainedLineCount = 1000`, `getLineCalls <= 30`                                       | yes              |
 | `TLogView` retention timing                 | `maxFrameMs <= 10`                                                                     | manual / nightly |
 | `TLogView` retained search, wrapped lines   | `matchCount = 2000`, `getLineCalls <= 25000`                                           | yes              |
-| `TLogView` retained search timing           | `maxFrameMs <= 10`                                                                     | manual / nightly |
+| `TLogView` search wrap long lines timing    | `maxFrameMs <= 10`                                                                     | manual / nightly |
 | `TLogView` exact index retention append     | `measuredLineCount = 1000`                                                             | yes              |
 | `TList` / `TLogView` / `TVirtualList` burst | `frameTaskCount = 1`, `droppedUpdates >= 999`, `dirtyRows <= 20`, `commits = 1`        | yes              |
 
