@@ -87,6 +87,8 @@ pnpm run bench:baseline
 `bench:baseline` 会运行现有 benchmark，并用 `scripts/bench-baselines.json` 里的预算检查 dirty rows、scanned nodes 和 coalescing 等行为指标。
 需要检查耗时预算时运行 `pnpm run bench:baseline:timing`。
 
+公开 benchmark 口径、当前样例结果和横向对比边界见 [Benchmarks](/benchmarks)。
+
 脚本输出 JSON，覆盖：
 
 - 1000 render nodes / dirty 1 row

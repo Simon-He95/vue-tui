@@ -105,6 +105,8 @@ export default defineConfig({
           { text: "Planes 与 Compositor", link: "/planes-and-compositor" },
           { text: "Terminal Compatibility", link: "/terminal-compatibility" },
           { text: "Performance", link: "/performance" },
+          { text: "Benchmarks", link: "/benchmarks" },
+          { text: "OpenTUI Solid 对比", link: "/compare-opentui-solid" },
           { text: "高吞吐渲染", link: "/high-throughput-rendering" },
           { text: "Observability", link: "/observability" },
           { text: "1.0 Release Candidate", link: "/release-candidate" },
