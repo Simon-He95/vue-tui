@@ -601,7 +601,7 @@ describe("TLogView", () => {
     }
   });
 
-  it("repaints the viewport for full-row unsafe wrapped wheel scroll", async () => {
+  it("uses exposed dirty rows for full-row unsafe wrapped wheel scroll", async () => {
     const source: TLogDataSource = {
       lineCount: () => 100,
       getLine: (index) => `line-${index}-xxxxxxxxxxxxxxxxxxxxxxxx`,
@@ -644,7 +644,12 @@ describe("TLogView", () => {
       app.scheduler.flushNow();
 
       off();
-      expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3], scrollOperations: null }]);
+      expect(commits).toEqual([
+        {
+          dirtyRows: [0],
+          scrollOperations: [{ startY: 0, endY: 4, delta: -1 }],
+        },
+      ]);
       expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
         "xxxxxxxxxxxx",
         "line-98-xxxxxxxxxxxx",
@@ -1147,6 +1152,60 @@ describe("TLogView", () => {
       expect(rowText(app, 0)).toBe("abcd");
     } finally {
       app.dispose();
+    }
+  });
+
+  it("counts non-ANSI wrapped wide graphemes like rendered rows", async () => {
+    const raf = installManualRaf();
+    const source: TLogDataSource = {
+      lineCount: () => 2,
+      getLine: (index) => (index === 0 ? "界" : "A"),
+      getLineKey: (index) => index,
+    };
+    const logView = ref<TLogViewHandle | null>(null);
+
+    const App = defineComponent({
+      name: "TLogViewPlainWideWrapCountApp",
+      setup() {
+        return () =>
+          h(TLogView, {
+            ref: logView,
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+            source,
+            version: 1,
+            wrap: true,
+            ansi: false,
+            defaultScrollTop: 0,
+            autoStickToBottom: false,
+            visualIndexMode: "exact",
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 2, rows: 2, component: App });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      await flushVisualIndex(logView.value!, raf);
+      app.scheduler.flushNow();
+
+      expect(logView.value!.getScrollMetrics()).toMatchObject({
+        visualIndexStatus: "exact",
+        visualRowCount: 2,
+        maxScrollTop: 1,
+      });
+
+      logView.value!.scrollToBottom();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("A");
+    } finally {
+      app.dispose();
+      raf.restore();
     }
   });
 
@@ -6114,7 +6173,7 @@ describe("TLogView", () => {
     mounted.unmount();
   });
 
-  it("repaints wrapped visual rows when appending at bottom in full-row unsafe mode", async () => {
+  it("uses exposed dirty rows for wrapped append at bottom in full-row unsafe mode", async () => {
     const log = createAppendOnlyLogStore();
     log.appendLines(["line-0", "line-1", "line-2", "line-3"]);
 
@@ -6154,7 +6213,10 @@ describe("TLogView", () => {
       await nextTick();
 
       off();
-      expect(commits).toContainEqual({ dirtyRows: [0, 1, 2, 3], scrollOperations: null });
+      expect(commits).toContainEqual({
+        dirtyRows: [2, 3],
+        scrollOperations: [{ startY: 0, endY: 4, delta: 2 }],
+      });
       expect([0, 1, 2, 3].map((y) => rowText(app, y))).toEqual([
         "line-2",
         "line-3",

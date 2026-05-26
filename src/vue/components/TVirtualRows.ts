@@ -55,6 +55,16 @@ function normalizeInt(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function normalizeChangedRange(
+  range: { start: number; end: number } | null | undefined,
+  count: number,
+): { start: number; end: number } | null {
+  if (!range) return null;
+  const start = clamp(normalizeInt(range.start), 0, count);
+  const end = clamp(normalizeInt(range.end), start, count);
+  return { start, end };
+}
+
 function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
   deltaY: number;
   mode: "auto" | "line" | "pixel";
@@ -144,6 +154,10 @@ export const TVirtualRows = defineComponent({
     zIndex: { type: Number, default: 0 },
     itemCount: { type: Number, required: true },
     itemVersion: { type: Number, required: true },
+    itemChangedRange: {
+      type: Function as PropType<() => { start: number; end: number } | null | undefined>,
+      default: undefined,
+    },
     getItem: { type: Function as PropType<(index: number) => unknown>, required: true },
     paintItem: {
       type: Function as PropType<(ctx: TVirtualRowsPaintContext) => void>,
@@ -358,6 +372,37 @@ export const TVirtualRows = defineComponent({
       scheduler.invalidate({ priority, plane: plane.value, reason: "scroll" });
     }
 
+    function markScrollDamage(
+      prevTop: number,
+      nextTop: number,
+      strategy: "auto" | "viewport-repaint" = "auto",
+    ): void {
+      const r = normalizedRect();
+      const h = r.h;
+      const delta = nextTop - prevTop;
+      if (h <= 0 || !delta) return;
+
+      const size = terminal.size();
+      const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= size.cols;
+      const withinTerminalRows = r.y >= 0 && r.y + h <= size.rows;
+      const canUseScrollPlane =
+        strategy === "auto" &&
+        props.rowScrollMode === "unsafe-full-row" &&
+        rendererCapabilities.value.scrollOperations &&
+        ownsFullRows &&
+        withinTerminalRows &&
+        !isClipped() &&
+        Math.abs(delta) < h &&
+        !dirtyRowsHint?.length;
+
+      if (canUseScrollPlane) {
+        render.unsafeScrollPlaneRows(plane.value, r.y, r.y + h, delta);
+        markRowsDirty(exposedRowsForDelta(r.y, h, delta));
+      } else {
+        markViewportDirty();
+      }
+    }
+
     function applyScrollTop(
       nextTop: number,
       options?: Readonly<{
@@ -383,25 +428,7 @@ export const TVirtualRows = defineComponent({
       setCurrentScrollTop(clampedTop);
       if (options?.emitUpdate !== false) emit("update:scrollTop", clampedTop);
 
-      const size = terminal.size();
-      const ownsFullRows = Math.floor(r.x) === 0 && Math.floor(r.w) >= size.cols;
-      const withinTerminalRows = r.y >= 0 && r.y + h <= size.rows;
-      const canUseScrollPlane =
-        (options?.strategy ?? "auto") === "auto" &&
-        props.rowScrollMode === "unsafe-full-row" &&
-        rendererCapabilities.value.scrollOperations &&
-        ownsFullRows &&
-        withinTerminalRows &&
-        !isClipped() &&
-        Math.abs(delta) < h &&
-        !dirtyRowsHint?.length;
-
-      if (canUseScrollPlane) {
-        render.unsafeScrollPlaneRows(plane.value, r.y, r.y + h, delta);
-        markRowsDirty(exposedRowsForDelta(r.y, h, delta));
-      } else {
-        markViewportDirty();
-      }
+      markScrollDamage(prevTop, clampedTop, options?.strategy);
 
       if (options?.emitScroll) emitScroll(clampedTop);
       return true;
@@ -473,7 +500,11 @@ export const TVirtualRows = defineComponent({
     }
 
     function invalidateRange(start: number, end: number): void {
-      if (!hasPaintableViewport()) return;
+      markItemRangeDirty(start, end);
+    }
+
+    function markItemRangeDirty(start: number, end: number): boolean {
+      if (!hasPaintableViewport()) return false;
       const r = normalizedRect();
       const { y: clipY } = clipOffsets();
       const top = currentScrollTop() + clipY;
@@ -484,9 +515,10 @@ export const TVirtualRows = defineComponent({
         const y = r.y + (index - top);
         if (y >= r.y && y < r.y + r.h) rows.push(y);
       }
-      if (!rows.length) return;
+      if (!rows.length) return true;
       markRowsDirty(rows);
       invalidateSelf("normal");
+      return true;
     }
 
     function invalidateIndex(index: number): void {
@@ -737,8 +769,9 @@ export const TVirtualRows = defineComponent({
           return;
         }
         cancelWheelScrollFrame();
+        const prevTop = controlledScrollTop.value;
         controlledScrollTop.value = nextTop;
-        markViewportDirty();
+        markScrollDamage(prevTop, nextTop);
         selection.refresh(pendingSelectionScrollFocusRemap ? { remapFocus: true } : undefined);
         pendingSelectionScrollFocusRemap = false;
         invalidateSelf("high");
@@ -763,7 +796,7 @@ export const TVirtualRows = defineComponent({
         () => absRect.value.w,
         () => absRect.value.h,
       ],
-      () => {
+      (next, prev) => {
         resetWheelScrollState(wheelState);
         const nextTop = clampScrollTop(currentScrollTop());
         if (isScrollControlled()) {
@@ -774,6 +807,28 @@ export const TVirtualRows = defineComponent({
         } else {
           setCurrentScrollTop(nextTop);
         }
+
+        const onlyItemVersionChanged = Boolean(
+          prev &&
+          next[0] === prev[0] &&
+          next[1] !== prev[1] &&
+          next[2] === prev[2] &&
+          next[3] === prev[3] &&
+          next[4] === prev[4] &&
+          next[5] === prev[5] &&
+          next[6] === prev[6] &&
+          next[7] === prev[7] &&
+          next[8] === prev[8] &&
+          next[9] === prev[9],
+        );
+        if (onlyItemVersionChanged) {
+          const changedRange = normalizeChangedRange(props.itemChangedRange?.(), itemCount.value);
+          if (changedRange) {
+            markItemRangeDirty(changedRange.start, changedRange.end);
+            return;
+          }
+        }
+
         markViewportDirty();
         invalidateSelf("normal");
       },
@@ -803,7 +858,6 @@ export const TVirtualRows = defineComponent({
         absRect.value,
         fullRect.value,
         itemCount.value,
-        props.itemVersion,
         props.getItem,
         props.paintItem,
         props.selectionSpanText,

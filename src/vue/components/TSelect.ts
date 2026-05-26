@@ -314,6 +314,49 @@ export const TSelect = defineComponent({
     const typeaheadQuery = ref("");
     const query = computed(() => props.query ?? innerQuery.value);
     const options = computed(() => providerOptions.value ?? props.options);
+
+    function getOptionLabel(opt: SelectOption): string {
+      return isOptionObject(opt) ? opt.label : opt;
+    }
+
+    function getOptionKind(opt: SelectOption): SelectOptionWithStyle["kind"] | undefined {
+      return isOptionObject(opt) ? opt.kind : undefined;
+    }
+
+    function getOptionValue(opt: SelectOption, index: number): unknown {
+      if (props.valueMode === "index") return index;
+      if (props.valueMode === "option") return opt;
+      return isOptionObject(opt) && "value" in opt ? opt.value : getOptionLabel(opt);
+    }
+
+    const optionValueIndex = computed(() => {
+      if (props.valueMode === "index") return null;
+      const indexed = new Map<unknown, number>();
+      const opts = options.value;
+      for (let index = 0; index < opts.length; index++) {
+        const value = getOptionValue(opts[index]!, index);
+        if (typeof value === "number" && value === 0) continue;
+        if (!indexed.has(value)) indexed.set(value, index);
+      }
+      return indexed;
+    });
+
+    function valuesEqual(a: unknown, b: unknown): boolean {
+      return Object.is(a, b);
+    }
+
+    function modelIndex(value: unknown, useValueIndex = props.multiple): number {
+      if (props.valueMode === "index") return normalizeModelIndex(value);
+      if (useValueIndex) {
+        const indexed = optionValueIndex.value;
+        const cached = indexed?.get(value);
+        if (cached != null) return cached;
+      }
+      return options.value.findIndex((opt, optIndex) =>
+        valuesEqual(getOptionValue(opt, optIndex), value),
+      );
+    }
+
     const initialActive = (() => {
       const max = Math.max(0, options.value.length - 1);
       if (!props.multiple) {
@@ -376,31 +419,6 @@ export const TSelect = defineComponent({
       }
       innerActive.value = clamp(active.value, 0, max);
     });
-
-    function getOptionLabel(opt: SelectOption): string {
-      return isOptionObject(opt) ? opt.label : opt;
-    }
-
-    function getOptionKind(opt: SelectOption): SelectOptionWithStyle["kind"] | undefined {
-      return isOptionObject(opt) ? opt.kind : undefined;
-    }
-
-    function getOptionValue(opt: SelectOption, index: number): unknown {
-      if (props.valueMode === "index") return index;
-      if (props.valueMode === "option") return opt;
-      return isOptionObject(opt) && "value" in opt ? opt.value : getOptionLabel(opt);
-    }
-
-    function valuesEqual(a: unknown, b: unknown): boolean {
-      return Object.is(a, b);
-    }
-
-    function modelIndex(value: unknown): number {
-      if (props.valueMode === "index") return normalizeModelIndex(value);
-      return options.value.findIndex((opt, optIndex) =>
-        valuesEqual(getOptionValue(opt, optIndex), value),
-      );
-    }
 
     function isOptionInteractive(opt: SelectOption | undefined): opt is SelectOption {
       if (!opt) return false;

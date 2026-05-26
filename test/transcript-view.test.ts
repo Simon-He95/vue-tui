@@ -248,6 +248,71 @@ describe("TTranscriptView", () => {
     }
   });
 
+  it("uses row scroll operations for parent-controlled full-row scroll", async () => {
+    const raf = installManualRaf();
+    const scrollTop = ref(0);
+    const rows = Array.from(
+      { length: 20 },
+      (_, index): TTranscriptRow => ({
+        kind: "message",
+        key: index,
+        segments: [{ text: `row-${index}` }],
+      }),
+    );
+    const App = defineComponent({
+      name: "TranscriptControlledScrollOperationApp",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 3,
+            source: createSource(rows),
+            version: 1,
+            scrollTop: scrollTop.value,
+            autoFocus: true,
+            rowScrollMode: "unsafe-full-row",
+            "onUpdate:scrollTop": (value: number) => {
+              scrollTop.value = value;
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 10, rows: 5, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("row-0");
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      expect(raf.pending()).toBe(1);
+      raf.runNext();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      off();
+      expect(rowText(app, 0)).toBe("row-1");
+      expect(rowText(app, 2)).toBe("row-3");
+      expect(commits).toEqual([
+        { dirtyRows: [2], scrollOperations: [{ startY: 0, endY: 3, delta: 1 }] },
+      ]);
+    } finally {
+      app.dispose();
+      raf.restore();
+    }
+  });
+
   it("does not focus or click disabled actions", async () => {
     const actionClick = vi.fn();
     const viewRef = ref<TTranscriptViewHandle | null>(null);
@@ -626,6 +691,7 @@ describe("TTranscriptView", () => {
             h: 1,
             source: createSource(rows),
             version: 1,
+            wrap: true,
           });
       },
     });
@@ -774,12 +840,466 @@ describe("TTranscriptView", () => {
         .slice()
         .reverse()
         .find((sample) => sample.name === "TTranscriptView" && sample.phase === "layout");
-      expect(rowBuilds).toBe(lines.length);
+      expect(rowBuilds).toBe(0);
       expect(transcriptSample).toMatchObject({
         itemCount: lines.length,
         cacheHit: lines.length,
         cacheMiss: 0,
         width: 44,
+      });
+
+      componentSamples.length = 0;
+      rowBuilds = 0;
+      lines[1]!.text = "Assistant: streamed update";
+      lines[1]!.version++;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const updatedTranscriptSample = componentSamples
+        .slice()
+        .reverse()
+        .find((sample) => sample.name === "TTranscriptView" && sample.phase === "layout");
+      expect(rowText(app, 2)).toContain("Assistant: streamed update");
+      expect(rowBuilds).toBe(1);
+      expect(updatedTranscriptSample).toMatchObject({
+        itemCount: lines.length,
+        cacheHit: lines.length - 1,
+        cacheMiss: 1,
+        width: 44,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("only reads visible fixed-height transcript rows after version updates", async () => {
+    const lines = Array.from({ length: 1000 }, (_, index) => ({
+      key: `line-${index}`,
+      version: 1,
+      text: `row-${index}`,
+    }));
+    const transcriptVersion = ref(1);
+    let rowBuilds = 0;
+    let rowVersionRequests = 0;
+
+    const source: TTranscriptDataSource = {
+      rowCount: () => lines.length,
+      getRow: (index) => {
+        rowBuilds++;
+        const line = lines[index]!;
+        return {
+          kind: "message",
+          key: line.key,
+          segments: [{ text: line.text }],
+          selectableText: line.text,
+        };
+      },
+      getRowKey: (index) => lines[index]!.key,
+      getRowVersion: (index) => {
+        rowVersionRequests++;
+        return lines[index]!.version;
+      },
+    };
+
+    const App = defineComponent({
+      name: "TranscriptFixedHeightWindowProbe",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 16,
+            h: 4,
+            source,
+            version: transcriptVersion.value,
+            scrollTop: 500,
+            wrap: false,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 16, rows: 6, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("row-500");
+
+      rowBuilds = 0;
+      rowVersionRequests = 0;
+      lines[20]!.text = "offscreen update";
+      lines[20]!.version++;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("row-500");
+      expect(rowBuilds).toBe(0);
+      expect(rowVersionRequests).toBeLessThanOrEqual(4);
+
+      rowBuilds = 0;
+      rowVersionRequests = 0;
+      lines[502]!.text = "visible update";
+      lines[502]!.version++;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 2)).toBe("visible update");
+      expect(rowBuilds).toBe(1);
+      expect(rowVersionRequests).toBeLessThanOrEqual(4);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("uses changed ranges to limit fixed-height transcript repaints", async () => {
+    const lines = Array.from({ length: 1000 }, (_, index) => ({
+      key: `line-${index}`,
+      version: 1,
+      text: `row-${index}`,
+    }));
+    const transcriptVersion = ref(1);
+    let changedRange: { start: number; end: number } | null = null;
+
+    const source: TTranscriptDataSource = {
+      rowCount: () => lines.length,
+      getRow: (index) => {
+        const line = lines[index]!;
+        return {
+          kind: "message",
+          key: line.key,
+          segments: [{ text: line.text }],
+          selectableText: line.text,
+        };
+      },
+      getRowKey: (index) => lines[index]!.key,
+      getRowVersion: (index) => lines[index]!.version,
+      getChangedRange: () => changedRange,
+    };
+
+    const App = defineComponent({
+      name: "TranscriptFixedHeightChangedRangePaintProbe",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 16,
+            h: 4,
+            source,
+            version: transcriptVersion.value,
+            scrollTop: 500,
+            wrap: false,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 16, rows: 6, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("row-500");
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      changedRange = { start: 20, end: 21 };
+      lines[20]!.text = "offscreen update";
+      lines[20]!.version++;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(commits).toEqual([]);
+
+      changedRange = { start: 502, end: 503 };
+      lines[502]!.text = "visible update";
+      lines[502]!.version++;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      off();
+      expect(rowText(app, 2)).toBe("visible update");
+      expect(commits).toEqual([{ dirtyRows: [2], scrollOperations: null }]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("uses changed ranges to avoid scanning unchanged wrapped transcript rows", async () => {
+    const lines = Array.from({ length: 1000 }, (_, index) => ({
+      key: `line-${index}`,
+      version: 1,
+      text: `row-${index}`,
+    }));
+    const transcriptVersion = ref(1);
+    let changedRange: { start: number; end: number } | null = null;
+    let rowBuilds = 0;
+    let rowVersionRequests = 0;
+
+    const source: TTranscriptDataSource = {
+      rowCount: () => lines.length,
+      getRow: (index) => {
+        rowBuilds++;
+        const line = lines[index]!;
+        return {
+          kind: "message",
+          key: line.key,
+          segments: [{ text: line.text }],
+          selectableText: line.text,
+        };
+      },
+      getRowKey: (index) => lines[index]!.key,
+      getRowVersion: (index) => {
+        rowVersionRequests++;
+        return lines[index]!.version;
+      },
+      getChangedRange: () => changedRange,
+    };
+
+    const App = defineComponent({
+      name: "TranscriptWrappedChangedRangeProbe",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 16,
+            h: 4,
+            source,
+            version: transcriptVersion.value,
+            scrollTop: 0,
+            wrap: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 16, rows: 6, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("row-0");
+
+      rowBuilds = 0;
+      rowVersionRequests = 0;
+      changedRange = { start: 20, end: 21 };
+      lines[20]!.text = "offscreen update";
+      lines[20]!.version++;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 0)).toBe("row-0");
+      expect(rowBuilds).toBe(1);
+      expect(rowVersionRequests).toBe(1);
+
+      rowBuilds = 0;
+      rowVersionRequests = 0;
+      changedRange = { start: 2, end: 3 };
+      lines[2]!.text = "visible update";
+      lines[2]!.version++;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(rowText(app, 2)).toBe("visible update");
+      expect(rowBuilds).toBe(1);
+      expect(rowVersionRequests).toBe(1);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("repaints wrapped transcript viewport when a changed range changes visual height", async () => {
+    const lines = [
+      { key: "line-0", version: 1, text: "aaaa" },
+      { key: "line-1", version: 1, text: "b" },
+      { key: "line-2", version: 1, text: "c" },
+      { key: "line-3", version: 1, text: "d" },
+      { key: "line-4", version: 1, text: "e" },
+    ];
+    const transcriptVersion = ref(1);
+    let changedRange: { start: number; end: number } | null = null;
+
+    const source: TTranscriptDataSource = {
+      rowCount: () => lines.length,
+      getRow: (index) => {
+        const line = lines[index]!;
+        return {
+          kind: "message",
+          key: line.key,
+          segments: [{ text: line.text }],
+          selectableText: line.text,
+        };
+      },
+      getRowKey: (index) => lines[index]!.key,
+      getRowVersion: (index) => lines[index]!.version,
+      getChangedRange: () => changedRange,
+    };
+
+    const App = defineComponent({
+      name: "TranscriptWrappedChangedRangeHeightChangeProbe",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 5,
+            source,
+            version: transcriptVersion.value,
+            scrollTop: 0,
+            wrap: true,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 4, rows: 6, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect([0, 1, 2, 3, 4].map((y) => rowText(app, y))).toEqual(["aaaa", "b", "c", "d", "e"]);
+
+      const commits: Array<{
+        dirtyRows: readonly number[] | null;
+        scrollOperations: unknown;
+      }> = [];
+      const off = app.terminal.on("commit", ({ dirtyRows, scrollOperations }) => {
+        commits.push({ dirtyRows, scrollOperations: scrollOperations ?? null });
+      });
+
+      changedRange = { start: 1, end: 2 };
+      lines[1]!.text = "bbbbccccdddd";
+      lines[1]!.version++;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      off();
+      expect([0, 1, 2, 3, 4].map((y) => rowText(app, y))).toEqual([
+        "aaaa",
+        "bbbb",
+        "cccc",
+        "dddd",
+        "c",
+      ]);
+      expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3, 4], scrollOperations: null }]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("reuses keyed stable rows when a transcript source window shifts", async () => {
+    const lines = Array.from({ length: 4 }, (_, index) => ({
+      key: `line-${index}`,
+      version: 1,
+      text: `row-${index}`,
+    }));
+    const offset = ref(0);
+    const transcriptVersion = ref(1);
+    const componentSamples: any[] = [];
+    let rowBuilds = 0;
+
+    function rowAt(index: number): TTranscriptRow {
+      rowBuilds++;
+      const line = lines[offset.value + index];
+      return {
+        kind: "message",
+        key: line?.key ?? `empty-${offset.value + index}`,
+        segments: [{ text: line?.text ?? "" }],
+        selectableText: line?.text ?? "",
+      };
+    }
+
+    const source: TTranscriptDataSource = {
+      rowCount: () => 3,
+      getRow: rowAt,
+      getRowKey: (index) => lines[offset.value + index]?.key ?? `empty-${offset.value + index}`,
+      getRowVersion: (index) => lines[offset.value + index]?.version ?? 0,
+      firstRowIndex: () => offset.value,
+    };
+
+    const App = defineComponent({
+      name: "TranscriptShiftedWindowProbe",
+      setup() {
+        const { observability } = useTerminal();
+        observability.framePerf.enabled.value = true;
+        observability.framePerf.addSink({
+          onFramePerf: () => {},
+          onComponentPerf: (sample) => componentSamples.push(sample),
+        });
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 16,
+            h: 3,
+            source,
+            version: transcriptVersion.value,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 16, rows: 4, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("row-0");
+      expect(rowBuilds).toBe(3);
+
+      componentSamples.length = 0;
+      rowBuilds = 0;
+      offset.value = 1;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const shiftedSample = componentSamples
+        .slice()
+        .reverse()
+        .find((sample) => sample.name === "TTranscriptView" && sample.phase === "layout");
+      expect(rowText(app, 0)).toBe("row-1");
+      expect(rowText(app, 1)).toBe("row-2");
+      expect(rowText(app, 2)).toBe("row-3");
+      expect(rowBuilds).toBe(1);
+      expect(shiftedSample).toMatchObject({
+        itemCount: 3,
+        cacheHit: 2,
+        cacheMiss: 1,
+        width: 16,
+      });
+
+      componentSamples.length = 0;
+      rowBuilds = 0;
+      offset.value = 0;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const restoredSample = componentSamples
+        .slice()
+        .reverse()
+        .find((sample) => sample.name === "TTranscriptView" && sample.phase === "layout");
+      expect(rowText(app, 0)).toBe("row-0");
+      expect(rowText(app, 1)).toBe("row-1");
+      expect(rowText(app, 2)).toBe("row-2");
+      expect(rowBuilds).toBe(0);
+      expect(restoredSample).toMatchObject({
+        itemCount: 3,
+        cacheHit: 3,
+        cacheMiss: 0,
+        width: 16,
       });
     } finally {
       app.dispose();

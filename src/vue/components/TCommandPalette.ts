@@ -109,6 +109,12 @@ type TCommandPaletteVisualSegment = Readonly<{
   style: Style | undefined;
 }>;
 
+type TCommandPaletteFilteredEntry = Readonly<{
+  item: TCommandPaletteItem;
+  sourceIndex: number;
+  match: TCommandPaletteMatcherResult;
+}>;
+
 const DEFAULT_MATCH_STYLE: Style = { bold: true, dim: false, underline: true };
 
 function normalizeInteger(value: unknown, fallback = 0): number {
@@ -131,25 +137,47 @@ function isCommandPaletteRowSelectable(item: TCommandPaletteItem | undefined): b
   return Boolean(item && item.kind !== "separator" && item.kind !== "group" && !item.disabled);
 }
 
-function substringMatcher(
-  item: TCommandPaletteItem,
+function defaultSubstringEntries(
+  sourceItems: readonly TCommandPaletteItem[],
   query: string,
-): TCommandPaletteMatcherResult | null {
-  const q = query.trim().toLowerCase();
-  if (!q) return { score: 0 };
-  const labelRanges = computeCommandPaletteMatchRanges(item.label, q);
-  const detailRanges = item.detail ? computeCommandPaletteMatchRanges(item.detail, q) : [];
-  const keywordMatch = (item.keywords ?? []).some((keyword) =>
-    String(keyword ?? "")
-      .toLowerCase()
-      .includes(q),
-  );
-  if (!labelRanges.length && !detailRanges.length && !keywordMatch) return null;
-  return {
-    score: labelRanges.length ? 100 : detailRanges.length ? 50 : 10,
-    labelRanges,
-    detailRanges,
-  };
+): TCommandPaletteFilteredEntry[] {
+  const q = query.trim();
+  if (!q) {
+    return sourceItems.map((item, sourceIndex) => ({
+      item,
+      sourceIndex,
+      match: { score: 0 },
+    }));
+  }
+
+  const needle = q.toLowerCase();
+  const labelMatches: TCommandPaletteFilteredEntry[] = [];
+  const detailMatches: TCommandPaletteFilteredEntry[] = [];
+  const keywordMatches: TCommandPaletteFilteredEntry[] = [];
+  for (let sourceIndex = 0; sourceIndex < sourceItems.length; sourceIndex++) {
+    const item = sourceItems[sourceIndex]!;
+    if (item.kind === "separator" || item.kind === "group") continue;
+    const label = String(item.label ?? "");
+    const detail = item.detail == null ? "" : String(item.detail);
+    if (label.toLowerCase().includes(needle)) {
+      labelMatches.push({ item, sourceIndex, match: { score: 100 } });
+      continue;
+    }
+    if (detail.toLowerCase().includes(needle)) {
+      detailMatches.push({ item, sourceIndex, match: { score: 50 } });
+      continue;
+    }
+    if (
+      (item.keywords ?? []).some((keyword) =>
+        String(keyword ?? "")
+          .toLowerCase()
+          .includes(needle),
+      )
+    ) {
+      keywordMatches.push({ item, sourceIndex, match: { score: 10 } });
+    }
+  }
+  return labelMatches.concat(detailMatches, keywordMatches);
 }
 
 function fuzzyMatcher(
@@ -373,17 +401,21 @@ export const TCommandPalette = defineComponent({
     const filteredEntries = computed(() => {
       const q = query.value.trim();
       const sourceItems = props.itemsProvider ? (providerItems.value ?? []) : props.items;
-      const matcher =
-        props.matcher ?? (props.filterStrategy === "fuzzy" ? fuzzyMatcher : substringMatcher);
-      const entries = sourceItems.flatMap((item, sourceIndex) => {
+      if (!props.matcher && props.filterStrategy === "substring") {
+        return defaultSubstringEntries(sourceItems, q);
+      }
+
+      const matcher = props.matcher ?? fuzzyMatcher;
+      const entries: TCommandPaletteFilteredEntry[] = [];
+      for (let sourceIndex = 0; sourceIndex < sourceItems.length; sourceIndex++) {
+        const item = sourceItems[sourceIndex]!;
         if (item.kind === "separator" || item.kind === "group") {
-          return q
-            ? []
-            : [{ item, sourceIndex, match: { score: 0 } as TCommandPaletteMatcherResult }];
+          if (!q) entries.push({ item, sourceIndex, match: { score: 0 } });
+          continue;
         }
         const match = matcher(item, q);
-        return match ? [{ item, sourceIndex, match }] : [];
-      });
+        if (match) entries.push({ item, sourceIndex, match });
+      }
       entries.sort((a, b) => b.match.score - a.match.score || a.sourceIndex - b.sourceIndex);
       return entries;
     });

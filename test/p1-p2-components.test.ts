@@ -703,6 +703,129 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps signed zero row keys distinct for TTable multi-selection", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: [
+            { id: -0, name: "Minus" },
+            { id: 0, name: "Zero" },
+          ],
+          rowKey: "id",
+          selectedRowKeys: [0],
+        }),
+      20,
+      6,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.getCell(0, 2).style.inverse).not.toBe(true);
+      expect(mounted.terminal.getCell(0, 3).style.inverse).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("indexes TTable selected row keys once for visible rows", async () => {
+    let selectedKeyReads = 0;
+    const selectedRowKeys: any[] = [];
+    selectedRowKeys.length = 20;
+    Object.defineProperty(selectedRowKeys, 10, {
+      get: () => {
+        selectedKeyReads++;
+        return "missing";
+      },
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 5,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: [
+            { id: "a", name: "Alpha" },
+            { id: "b", name: "Beta" },
+            { id: "c", name: "Gamma" },
+          ],
+          rowKey: "id",
+          selectedRowKeys,
+        }),
+      20,
+      7,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(selectedKeyReads).toBe(1);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("skips sparse TTable selected row key holes without dropping explicit undefined", async () => {
+    const sparseSelectedRowKeys: unknown[] = [];
+    sparseSelectedRowKeys.length = 2;
+    const sparse = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 3,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: [{ id: undefined, name: "Unset" }],
+          rowKey: "id",
+          selectedRowKeys: sparseSelectedRowKeys,
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      sparse.scheduler()?.flushNow();
+      expect(sparse.terminal.getCell(0, 2).style.inverse).not.toBe(true);
+    } finally {
+      sparse.unmount();
+    }
+
+    const explicit = await mountTerminal(
+      () =>
+        h(TTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 3,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: [{ id: undefined, name: "Unset" }],
+          rowKey: "id",
+          selectedRowKeys: [undefined],
+        }),
+      20,
+      5,
+    );
+
+    try {
+      await nextTick();
+      explicit.scheduler()?.flushNow();
+      expect(explicit.terminal.getCell(0, 2).style.inverse).toBe(true);
+    } finally {
+      explicit.unmount();
+    }
+  });
+
   it("keeps TDataTable rowSelect indices correct with scrollTop", async () => {
     const onRowSelect = vi.fn();
     const mounted = await mountTerminal(
@@ -1223,6 +1346,59 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps keyboard-active TDataTable row active after in-place key mutation", async () => {
+    const rows = ref([
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+    ]);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 16,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 8 }],
+          rows: rows.value,
+          rowKey: "id",
+          selectable: true,
+          activeStyle: { underline: true },
+        }),
+      20,
+      5,
+    );
+
+    try {
+      const container = mounted.container()!;
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 0, clientY: 2, bubbles: true }),
+      );
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          code: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.snapshot().lines[3]).toContain("Beta");
+      expect(mounted.terminal.getCell(0, 3).style.underline).toBe(true);
+
+      rows.value[1]!.id = "z";
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      expect(mounted.terminal.snapshot().lines[3]).toContain("Beta");
+      expect(mounted.terminal.getCell(0, 3).style.underline).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("redistributes TTable auto width after maxWidth clamps a column", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -1364,6 +1540,47 @@ describe("P1/P2 public components", () => {
           .debugNodes()
           .some((node) => node.visible && node.focusable && node.rect.x === 0 && node.rect.y === 0),
       ).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not traverse tree nodes below the visible height", async () => {
+    let hiddenChildrenReads = 0;
+    const visibleRoot: any = { id: "visible", label: "Visible" };
+    Object.defineProperty(visibleRoot, "children", {
+      get: () => [{ id: "visible-child", label: "Visible child" }],
+    });
+    const hiddenRoots = Array.from({ length: 50 }, (_, index) => {
+      const node: any = { id: `hidden-${index}`, label: `Hidden ${index}` };
+      Object.defineProperty(node, "children", {
+        get: () => {
+          hiddenChildrenReads++;
+          return [{ id: `hidden-${index}-child`, label: `Hidden child ${index}` }];
+        },
+      });
+      return node;
+    });
+    const nodes = [visibleRoot, ...hiddenRoots];
+    const mounted = await mountTerminal(
+      () =>
+        h(TTree, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 2,
+          expandedIds: nodes.map((node) => node.id),
+          nodes,
+        }),
+      30,
+      4,
+    );
+
+    try {
+      const lines = mounted.terminal.snapshot().lines;
+      expect(lines[0]).toContain("Visible");
+      expect(lines[1]).toContain("Visible child");
+      expect(hiddenChildrenReads).toBe(0);
     } finally {
       mounted.unmount();
     }
@@ -5159,6 +5376,79 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps default command palette substring matches in score buckets", async () => {
+    const items = [
+      { label: "keyword match A", keywords: ["target"] },
+      { label: "detail match A", detail: "target" },
+      { label: "label target A" },
+      { label: "Hidden group", kind: "group" as const },
+      { label: "label target B" },
+      { label: "detail match B", detail: "target" },
+    ];
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 40,
+          h: 12,
+          initialQuery: "target",
+          maxVisibleItems: 5,
+          items,
+        }),
+      50,
+      14,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const snapshot = mounted.terminal.snapshot().lines.join("\n");
+      const labelA = snapshot.indexOf("label target A");
+      const labelB = snapshot.indexOf("label target B");
+      const detailA = snapshot.indexOf("detail match A");
+      const detailB = snapshot.indexOf("detail match B");
+      const keywordA = snapshot.indexOf("keyword match A");
+
+      expect(labelA).toBeGreaterThanOrEqual(0);
+      expect(labelA).toBeLessThan(labelB);
+      expect(labelB).toBeLessThan(detailA);
+      expect(detailA).toBeLessThan(detailB);
+      expect(detailB).toBeLessThan(keywordA);
+      expect(snapshot).not.toContain("Hidden group");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("keeps default command palette substring matching tolerant of non-string item text", async () => {
+    const items = [{ label: 42 }, { label: "By detail", detail: 42 }, { label: "Miss" }] as any;
+    const mounted = await mountTerminal(
+      () =>
+        h(TCommandPalette, {
+          modelValue: true,
+          w: 40,
+          h: 12,
+          initialQuery: "42",
+          items,
+        }),
+      50,
+      14,
+    );
+
+    try {
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+
+      const snapshot = mounted.terminal.snapshot().lines.join("\n");
+      expect(snapshot).toContain("42");
+      expect(snapshot).toContain("By detail");
+      expect(snapshot).not.toContain("Miss");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("normalizes non-finite TCommandPalette numeric props before rendering and selecting", async () => {
     const onSelect = vi.fn();
 
@@ -6012,6 +6302,43 @@ describe("P1/P2 public components", () => {
 
       expect(onRowSelect).not.toHaveBeenCalled();
       expect(onUpdateSelectedRowKey).not.toHaveBeenCalled();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("does not read hidden rows for unfiltered data tables", async () => {
+    let hiddenReads = 0;
+    const rows: any[] = [
+      { id: "0", name: "Alpha" },
+      { id: "1", name: "Beta" },
+    ];
+    rows.length = 50;
+    Object.defineProperty(rows, 25, {
+      get: () => {
+        hiddenReads++;
+        return { id: "25", name: "Hidden" };
+      },
+    });
+    const mounted = await mountTerminal(
+      () =>
+        h(TDataTable, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          columns: [{ key: "name", label: "Name", width: 6 }],
+          rows,
+          rowKey: "id",
+        }),
+      16,
+      5,
+    );
+
+    try {
+      expect(mounted.terminal.snapshot().lines[2]).toContain("Alpha");
+      expect(mounted.terminal.snapshot().lines[3]).toContain("Beta");
+      expect(hiddenReads).toBe(0);
     } finally {
       mounted.unmount();
     }
