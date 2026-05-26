@@ -709,6 +709,19 @@ function wrapStyledSegmentsByCells(
   };
 
   for (const seg of segments) {
+    const cells = textCellWidth(seg.text);
+    if (cells === seg.text.length) {
+      for (let i = 0; i < seg.text.length; ) {
+        if (rowCells >= width) openRow();
+        const take = Math.min(width - rowCells, seg.text.length - i);
+        if (take <= 0) break;
+        row.push({ text: seg.text.slice(i, i + take), cells: take, style: seg.style });
+        rowCells += take;
+        i += take;
+      }
+      continue;
+    }
+
     forEachTextCellSegment(seg.text, (piece) => {
       if (!piece.text || piece.cells <= 0) return;
       pushWrappedPiece(piece.text, piece.cells, seg.style);
@@ -716,6 +729,123 @@ function wrapStyledSegmentsByCells(
   }
 
   return rows;
+}
+
+function countWrappedTextRows(text: string, width: number): number {
+  width = Math.max(1, Math.floor(width));
+  if (!text) return 1;
+
+  const cells = textCellWidth(text);
+  if (cells <= 0) return 1;
+  if (cells === text.length) return Math.max(1, Math.ceil(cells / width));
+
+  let rows = 1;
+  let rowCells = 0;
+
+  forEachTextCellSegment(text, (piece) => {
+    if (!piece.text || piece.cells <= 0) return;
+    const pieceCells = piece.cells;
+    if (rowCells > 0 && rowCells + pieceCells > width) {
+      rows++;
+      rowCells = 0;
+    }
+    if (pieceCells > width) {
+      let remaining = pieceCells;
+      while (remaining > 0) {
+        if (rowCells >= width) {
+          rows++;
+          rowCells = 0;
+        }
+        const take = Math.min(width - rowCells, remaining);
+        rowCells += take;
+        remaining -= take;
+      }
+      return;
+    }
+
+    if (rowCells >= width) {
+      rows++;
+      rowCells = 0;
+    }
+    rowCells += pieceCells;
+  });
+
+  return rows;
+}
+
+function countWrappedPlainTextRows(text: string, width: number): number {
+  width = Math.max(1, Math.floor(width));
+  if (!text) return 1;
+
+  let rows = 0;
+  let rowCells = 0;
+  let sawText = false;
+
+  forEachTextCellSegment(text, (piece) => {
+    if (!piece.text || piece.cells <= 0) return;
+    sawText = true;
+
+    const cells = piece.cells;
+    if (rowCells > 0 && rowCells + cells > width) {
+      rows++;
+      rowCells = 0;
+    }
+
+    rowCells += cells;
+    if (rowCells >= width) {
+      rows++;
+      rowCells = 0;
+    }
+  });
+
+  return Math.max(1, rows + (rowCells > 0 || !sawText ? 1 : 0));
+}
+
+function countAsciiAnsiTextCells(text: string): number | null {
+  let cells = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code > 0x7f) return null;
+
+    if (code === 0x1b) {
+      const next = text[i + 1];
+      if (next === "[") {
+        let j = i + 2;
+        while (j < text.length) {
+          const c = text.charCodeAt(j);
+          if (c >= 0x40 && c <= 0x7e) break;
+          j++;
+        }
+        if (j >= text.length) return null;
+        i = j;
+        continue;
+      }
+
+      if (next === "]") {
+        let j = i + 2;
+        while (j < text.length) {
+          const c = text.charCodeAt(j);
+          if (c === 0x07) break;
+          if (c === 0x1b && text[j + 1] === "\\") {
+            j++;
+            break;
+          }
+          j++;
+        }
+        if (j >= text.length) return null;
+        i = j;
+        continue;
+      }
+
+      return null;
+    }
+
+    if (code <= 0x1f || code === 0x7f) return null;
+    cells++;
+  }
+
+  return cells;
 }
 
 export const TLogView = defineComponent({
@@ -866,6 +996,7 @@ export const TLogView = defineComponent({
     const renderLineCache = new Map<TLogRenderCacheKey, TLogRenderCacheEntry>();
     const wrapLineCache = new Map<TLogRenderCacheKey, TLogWrapCacheEntry>();
     const ansiLineCache = new Map<TLogRenderCacheKey, TLogAnsiLineCacheEntry>();
+    const ansiTextCache = new Map<TLogRenderCacheKey, TLogRenderCacheEntry>();
     const ansiWrapCache = new Map<TLogRenderCacheKey, TLogAnsiWrapCacheEntry>();
     const ansiRowCache = new Map<TLogRenderCacheKey, TLogAnsiRowCacheEntry>();
     const linkifyLineCache = new Map<TLogRenderCacheKey, TLogAnsiLineCacheEntry>();
@@ -1020,6 +1151,10 @@ export const TLogView = defineComponent({
       return JSON.stringify(["ansi-line", key, baseStyleKey, linksEnabled() ? 1 : 0, linkKey]);
     }
 
+    function ansiTextCacheKey(key: TLogLineKey): TLogRenderCacheKey {
+      return JSON.stringify(["ansi-text", key]);
+    }
+
     function linkifyLineCacheKey(
       key: TLogLineKey,
       baseStyleKey: string,
@@ -1115,6 +1250,16 @@ export const TLogView = defineComponent({
       }
     }
 
+    function trimAnsiTextCache(): void {
+      const max = DEFAULT_LOG_RENDER_CACHE_SIZE;
+      if (ansiTextCache.size <= max) return;
+
+      const entries = Array.from(ansiTextCache.values()).sort((a, b) => a.touchedAt - b.touchedAt);
+      for (const entry of entries.slice(0, ansiTextCache.size - max)) {
+        ansiTextCache.delete(entry.key);
+      }
+    }
+
     function trimAnsiWrapCache(): void {
       const max = DEFAULT_LOG_WRAP_CACHE_SIZE;
       if (ansiWrapCache.size <= max) return;
@@ -1175,6 +1320,7 @@ export const TLogView = defineComponent({
       renderLineCache.clear();
       wrapLineCache.clear();
       ansiLineCache.clear();
+      ansiTextCache.clear();
       ansiWrapCache.clear();
       ansiRowCache.clear();
       linkifyLineCache.clear();
@@ -1285,6 +1431,26 @@ export const TLogView = defineComponent({
         touchedAt: ++cacheClock,
       });
       return segments;
+    }
+
+    function ansiPlainTextForLine(index: number, count: number): string {
+      if (index < 0 || index >= count) return "";
+
+      const rawKey = lineKey(index);
+      const key = ansiTextCacheKey(rawKey);
+      const cached = ansiTextCache.get(key);
+      if (cached) {
+        cached.touchedAt = ++cacheClock;
+        return cached.value;
+      }
+
+      const text = sanitizeAnsiInlineText(props.source.getLine(index));
+      ansiTextCache.set(key, {
+        key,
+        value: text,
+        touchedAt: ++cacheClock,
+      });
+      return text;
     }
 
     function ansiWrappedRowsForLine(
@@ -1766,17 +1932,8 @@ export const TLogView = defineComponent({
       invalidateSearchMarkers();
     }
 
-    function searchableTextForLine(
-      index: number,
-      count: number,
-      baseStyle: Style,
-      baseStyleKey: string,
-    ): string {
-      if (props.ansi) {
-        return ansiSegmentsForLine(index, count, baseStyle, baseStyleKey)
-          .map((seg) => seg.text)
-          .join("");
-      }
+    function searchableTextForLine(index: number, count: number): string {
+      if (props.ansi) return ansiPlainTextForLine(index, count);
       return sanitizeInlineText(props.source.getLine(index));
     }
 
@@ -1795,14 +1952,12 @@ export const TLogView = defineComponent({
     function previewForMatch(
       match: TLogViewSearchMatch,
       count: number,
-      baseStyle: Style,
-      baseStyleKey: string,
       options: Readonly<{
         previewWidth: number;
         contextCells: number;
       }>,
     ): TLogViewSearchResultPreview {
-      const text = searchableTextForLine(match.index, count, baseStyle, baseStyleKey);
+      const text = searchableTextForLine(match.index, count);
       const totalCells = textCellWidth(text);
       const matchCells = Math.max(1, match.endCell - match.startCell);
       const previewWidth = Math.max(options.previewWidth, matchCells);
@@ -1846,8 +2001,6 @@ export const TLogView = defineComponent({
       index: number,
       count: number,
       search: CompiledSearch,
-      baseStyle: Style,
-      baseStyleKey: string,
     ): readonly TLogSearchLineMatch[] {
       const rawKey = lineKey(index);
       const key = searchLineCacheKey(rawKey, search.key);
@@ -1857,9 +2010,7 @@ export const TLogView = defineComponent({
         return cached.matches;
       }
 
-      const matches = search.findLineMatches(
-        searchableTextForLine(index, count, baseStyle, baseStyleKey),
-      );
+      const matches = search.findLineMatches(searchableTextForLine(index, count));
       searchLineCache.set(key, {
         key,
         matches,
@@ -1872,13 +2023,11 @@ export const TLogView = defineComponent({
       index: number,
       count: number,
       search: CompiledSearch,
-      baseStyle: Style,
-      baseStyleKey: string,
       maxMatches: number,
       absoluteBase: number,
     ): void {
       if (searchMatches.length >= maxMatches) return;
-      const lineMatches = cachedLineSearchMatches(index, count, search, baseStyle, baseStyleKey);
+      const lineMatches = cachedLineSearchMatches(index, count, search);
       for (const match of lineMatches) {
         if (searchMatches.length >= maxMatches) return;
         addSearchMatch({
@@ -1909,8 +2058,6 @@ export const TLogView = defineComponent({
       const count = lineCount();
       const maxMatches = maxSearchMatches();
       const absoluteBase = firstLineIndex();
-      const base = props.style ?? defaultStyle.value;
-      const baseStyleKey = styleCacheKey(base);
       let scanned = 0;
 
       while (
@@ -1918,15 +2065,7 @@ export const TLogView = defineComponent({
         searchMatches.length < maxMatches &&
         (scanned === 0 || ctx.now() - started < budget)
       ) {
-        scanSearchLine(
-          searchCursor,
-          count,
-          compiledSearch,
-          base,
-          baseStyleKey,
-          maxMatches,
-          absoluteBase,
-        );
+        scanSearchLine(searchCursor, count, compiledSearch, maxMatches, absoluteBase);
         searchCursor++;
         scanned++;
       }
@@ -1949,6 +2088,7 @@ export const TLogView = defineComponent({
       emitSearchMarkers(true);
       markViewportDirty();
       ctx.invalidate({ priority: "low", plane: plane.value, reason: "data" });
+      trimAnsiTextCache();
       trimSearchLineCache();
     }
 
@@ -2244,24 +2384,49 @@ export const TLogView = defineComponent({
       if (count > visualIndexLineCount) appendEstimatedVisualLines(visualIndexLineCount, count);
     }
 
-    function measureVisualLine(index: number): number {
+    function measureVisualLine(
+      index: number,
+      options?: Readonly<{
+        countOnly?: boolean;
+      }>,
+    ): number {
       ensureVisualIndex();
       if (index < 0 || index >= visualIndexLineCount) return 0;
 
       const key = lineKey(index);
       if (visualKeys[index] === key) return 0;
 
-      const base = props.style ?? defaultStyle.value;
-      const rows = props.ansi
-        ? ansiWrappedRowsForLine(
-            index,
-            visualIndexLineCount,
+      let nextCount: number;
+      if (options?.countOnly === true) {
+        if (props.ansi) {
+          const raw = props.source.getLine(index);
+          const asciiCells = countAsciiAnsiTextCells(raw);
+          nextCount =
+            asciiCells == null
+              ? countWrappedTextRows(
+                  ansiPlainTextForLine(index, visualIndexLineCount),
+                  visualIndexWidth,
+                )
+              : Math.max(1, Math.ceil(asciiCells / visualIndexWidth));
+        } else {
+          nextCount = countWrappedPlainTextRows(
+            sanitizeInlineText(props.source.getLine(index)),
             visualIndexWidth,
-            base,
-            styleCacheKey(base),
-          )
-        : wrappedRowsForLine(index, visualIndexLineCount, visualIndexWidth);
-      const nextCount = Math.max(1, rows.length);
+          );
+        }
+      } else {
+        const base = props.style ?? defaultStyle.value;
+        const rows = props.ansi
+          ? ansiWrappedRowsForLine(
+              index,
+              visualIndexLineCount,
+              visualIndexWidth,
+              base,
+              styleCacheKey(base),
+            )
+          : wrappedRowsForLine(index, visualIndexLineCount, visualIndexWidth);
+        nextCount = Math.max(1, rows.length);
+      }
       const prevCount = visualCounts[index] ?? 1;
       if (nextCount !== prevCount) {
         visualCounts[index] = nextCount;
@@ -2310,6 +2475,7 @@ export const TLogView = defineComponent({
       if (visualMeasureCursor >= target) {
         syncVisualIndexStatus();
         emitVisualIndex();
+        trimAnsiTextCache();
         return;
       }
 
@@ -2323,7 +2489,7 @@ export const TLogView = defineComponent({
         const effectiveTop = currentScrollTop() + topAdjustment;
         const start = visualStartForLine(index);
         const prevCount = visualCounts[index] ?? 1;
-        const delta = measureVisualLine(index);
+        const delta = measureVisualLine(index, { countOnly: true });
         if (delta !== 0 && effectiveTop >= start + prevCount) topAdjustment += delta;
         visualMeasureCursor++;
         measuredLineCount = visualMeasureCursor;
@@ -2361,6 +2527,7 @@ export const TLogView = defineComponent({
 
       syncVisualIndexStatus();
       emitVisualIndex();
+      trimAnsiTextCache();
     }
 
     function requestVisualIndexMeasurement(restartFrom = measuredLineCount): void {
@@ -2376,6 +2543,7 @@ export const TLogView = defineComponent({
       if (measuredLineCount >= target) {
         syncVisualIndexStatus();
         emitVisualIndex();
+        trimAnsiTextCache();
         return;
       }
 
@@ -3058,20 +3226,18 @@ export const TLogView = defineComponent({
         return true;
       }
 
-      const scrollPlan = !props.wrap
-        ? prepareUnsafeFullRowScroll({
-            render,
-            plane: plane.value,
-            rect: r,
-            terminalSize: terminal.size(),
-            delta,
-            rowScrollMode: props.rowScrollMode,
-            rendererCapabilities: rendererCapabilities.value,
-            isClipped: isClipped(),
-            hasPendingDirtyRows: Boolean(dirtyRowsHint?.length),
-            strategy,
-          })
-        : null;
+      const scrollPlan = prepareUnsafeFullRowScroll({
+        render,
+        plane: plane.value,
+        rect: r,
+        terminalSize: terminal.size(),
+        delta,
+        rowScrollMode: props.rowScrollMode,
+        rendererCapabilities: rendererCapabilities.value,
+        isClipped: isClipped(),
+        hasPendingDirtyRows: Boolean(dirtyRowsHint?.length),
+        strategy,
+      });
 
       if (scrollPlan) {
         const rows = options?.extraDirtyRows?.length
@@ -3696,15 +3862,13 @@ export const TLogView = defineComponent({
       }
 
       const count = lineCount();
-      const base = props.style ?? defaultStyle.value;
-      const baseStyleKey = styleCacheKey(base);
       const previewWidth = normalizeSearchResultPreviewWidth(options?.previewWidth);
       const contextCells = normalizeSearchResultContextCells(options?.contextCells);
 
       return searchMatches.slice(offset, offset + limit).map((match, index) => ({
         matchIndex: offset + index,
         match: copySearchMatch(match),
-        preview: previewForMatch(match, count, base, baseStyleKey, {
+        preview: previewForMatch(match, count, {
           previewWidth,
           contextCells,
         }),

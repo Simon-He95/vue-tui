@@ -143,37 +143,47 @@ export const TDataTable = defineComponent({
   setup(props, { emit }) {
     const innerScrollTop = ref(0);
 
-    const indexedRows = computed<readonly DataRow[]>(() =>
-      props.rows.map((row, originalIndex) => ({ row, originalIndex })),
+    const hasLocalFilter = computed(
+      () => !props.manualFilter && props.filterable && Boolean(props.filter.trim()),
     );
-    const filteredRows = computed(() => {
-      if (props.manualFilter) return indexedRows.value;
-      if (!props.filterable || !props.filter.trim()) return indexedRows.value;
+    const hasLocalSort = computed(
+      () => !props.manualSort && props.sortable && Boolean(props.sortBy),
+    );
+    const indexedRows = computed<readonly DataRow[] | null>(() => {
+      if (!hasLocalFilter.value && !hasLocalSort.value) return null;
+      return props.rows.map((row, originalIndex) => ({ row, originalIndex }));
+    });
+    const filteredRows = computed<readonly DataRow[] | null>(() => {
+      const rows = indexedRows.value;
+      if (!rows) return null;
+      if (!hasLocalFilter.value) return rows;
       const query = props.filter.trim().toLowerCase();
       if (props.filterPredicate) {
-        return indexedRows.value.filter(({ row, originalIndex }) =>
+        return rows.filter(({ row, originalIndex }) =>
           props.filterPredicate!(row, query, props.columns, originalIndex),
         );
       }
-      return indexedRows.value.filter(({ row, originalIndex }) =>
+      return rows.filter(({ row, originalIndex }) =>
         props.columns.some((column) =>
           displayValue(column, row, originalIndex).toLowerCase().includes(query),
         ),
       );
     });
 
-    const sortedRows = computed(() => {
-      const rows = [...filteredRows.value];
-      if (props.manualSort || !props.sortable || !props.sortBy) return rows;
+    const sortedRows = computed<readonly DataRow[] | null>(() => {
+      const rows = filteredRows.value;
+      if (!rows) return null;
+      if (!hasLocalSort.value) return rows;
+      const sorted = [...rows];
       const column = props.columns.find((candidate) => candidate.key === props.sortBy);
-      rows.sort((a, b) => {
+      sorted.sort((a, b) => {
         const result =
           props.sorter && column
             ? props.sorter(a.row, b.row, column)
             : compareValues(a.row[props.sortBy], b.row[props.sortBy]);
         return props.sortDirection === "desc" ? -result : result;
       });
-      return rows;
+      return sorted;
     });
     function nonNegativeInteger(value: unknown): number {
       const n = Math.floor(Number(value));
@@ -182,8 +192,12 @@ export const TDataTable = defineComponent({
 
     const visibleRowCapacity = computed(() => Math.max(0, nonNegativeInteger(props.h) - 2));
 
+    function processedRowCount(): number {
+      return sortedRows.value?.length ?? props.rows.length;
+    }
+
     function maxScrollTop(): number {
-      return Math.max(0, sortedRows.value.length - visibleRowCapacity.value);
+      return Math.max(0, processedRowCount() - visibleRowCapacity.value);
     }
 
     function clampScrollTop(value: unknown): number {
@@ -209,12 +223,27 @@ export const TDataTable = defineComponent({
       },
       { immediate: true },
     );
-    const visibleRows = computed(() =>
-      sortedRows.value.slice(
-        normalizedScrollTop.value,
-        normalizedScrollTop.value + visibleRowCapacity.value,
-      ),
-    );
+    function dataEntryAt(absoluteIndex: number): DataRow | undefined {
+      const rows = sortedRows.value;
+      if (rows) return rows[absoluteIndex];
+      const row = props.rows[absoluteIndex];
+      return row ? { row, originalIndex: absoluteIndex } : undefined;
+    }
+
+    function originalIndexForAbsoluteIndex(absoluteIndex: number): number {
+      return dataEntryAt(absoluteIndex)?.originalIndex ?? absoluteIndex;
+    }
+
+    const visibleRows = computed<readonly DataRow[]>(() => {
+      const top = normalizedScrollTop.value;
+      const bottom = top + visibleRowCapacity.value;
+      const rows = sortedRows.value;
+      if (rows) return rows.slice(top, bottom);
+      return props.rows.slice(top, bottom).map((row, index) => ({
+        row,
+        originalIndex: top + index,
+      }));
+    });
     const tableRows = computed(() => visibleRows.value.map(({ row }) => row));
     const activeAbsoluteIndex = ref<number | null>(null);
     const activeRowIdentity = ref<unknown>(NO_ACTIVE_ROW);
@@ -225,7 +254,7 @@ export const TDataTable = defineComponent({
         const format = column.format
           ? (value: unknown, row: TTableRow, visibleIndex: number) => {
               const absoluteIndex = normalizedScrollTop.value + visibleIndex;
-              const originalIndex = sortedRows.value[absoluteIndex]?.originalIndex ?? absoluteIndex;
+              const originalIndex = originalIndexForAbsoluteIndex(absoluteIndex);
               return column.format!(value, row, originalIndex);
             }
           : undefined;
@@ -239,7 +268,7 @@ export const TDataTable = defineComponent({
 
     function originalIndexAt(index: number): number {
       const absoluteIndex = normalizedScrollTop.value + index;
-      return sortedRows.value[absoluteIndex]?.originalIndex ?? absoluteIndex;
+      return originalIndexForAbsoluteIndex(absoluteIndex);
     }
 
     function dataTableRowKey(row: TTableRow, index: number): unknown {
@@ -264,15 +293,29 @@ export const TDataTable = defineComponent({
     const activeRowKey = computed(() =>
       activeRowIdentity.value === NO_ACTIVE_ROW ? undefined : activeRowIdentity.value,
     );
+    const activeRawRowKey = computed(() => {
+      if (activeAbsoluteIndex.value == null || sortedRows.value) return NO_ACTIVE_ROW;
+      const index = activeAbsoluteIndex.value;
+      const row = props.rows[index];
+      return row ? rowKey(row, index, props.rowKey as any) : NO_ACTIVE_ROW;
+    });
+
+    function findDataIndexByKey(key: unknown): number {
+      const rows = sortedRows.value;
+      if (rows) {
+        return rows.findIndex((entry) => Object.is(dataRowKey(entry), key));
+      }
+      return props.rows.findIndex((row, index) =>
+        Object.is(rowKey(row, index, props.rowKey as any), key),
+      );
+    }
 
     watch(
-      () => [props.rowKey, ...sortedRows.value.map((entry) => dataRowKey(entry))] as const,
+      () => [props.rowKey, props.rows, sortedRows.value, activeRowIdentity.value] as const,
       () => {
         if (activeRowIdentity.value === NO_ACTIVE_ROW) return;
 
-        const nextIndex = sortedRows.value.findIndex((entry) =>
-          Object.is(dataRowKey(entry), activeRowIdentity.value),
-        );
+        const nextIndex = findDataIndexByKey(activeRowIdentity.value);
 
         if (nextIndex < 0) {
           clearActiveRow();
@@ -282,12 +325,23 @@ export const TDataTable = defineComponent({
         activeAbsoluteIndex.value = nextIndex;
       },
     );
+    watch(
+      () => [props.rowKey, activeRawRowKey.value] as const,
+      ([, key]) => {
+        if (activeRowIdentity.value === NO_ACTIVE_ROW) return;
+        if (key === NO_ACTIVE_ROW) {
+          clearActiveRow();
+          return;
+        }
+        if (!Object.is(activeRowIdentity.value, key)) activeRowIdentity.value = key;
+      },
+    );
 
     function setActiveAbsoluteIndex(
       absoluteIndex: number,
     ): { dataIndex: number; scrollTop: number } | null {
-      const clamped = Math.max(0, Math.min(sortedRows.value.length - 1, absoluteIndex));
-      const entry = sortedRows.value[clamped];
+      const clamped = Math.max(0, Math.min(processedRowCount() - 1, absoluteIndex));
+      const entry = dataEntryAt(clamped);
       if (!entry) {
         clearActiveRow();
         return null;
@@ -364,7 +418,7 @@ export const TDataTable = defineComponent({
       if (event.key === "Enter" || event.key === " ") {
         const active = setActiveAbsoluteIndex(current);
         if (!active) return;
-        const entry = sortedRows.value[active.dataIndex];
+        const entry = dataEntryAt(active.dataIndex);
         if (!entry) return;
         const visibleIndex = active.dataIndex - active.scrollTop;
         commitSelection(

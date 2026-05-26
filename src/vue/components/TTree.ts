@@ -36,16 +36,24 @@ type FlatTreeNode = Readonly<{
 function flattenTree(
   nodes: readonly TTreeNode[],
   expanded: Set<string>,
+  limit: number,
   depth = 0,
   out: FlatTreeNode[] = [],
 ): FlatTreeNode[] {
+  if (out.length >= limit) return out;
   for (const node of nodes) {
+    if (out.length >= limit) break;
     const expandable = Boolean(node.children?.length);
     const isExpanded = expanded.has(node.id);
     out.push({ node, depth, expandable, expanded: isExpanded });
-    if (expandable && isExpanded) flattenTree(node.children!, expanded, depth + 1, out);
+    if (expandable && isExpanded) flattenTree(node.children!, expanded, limit, depth + 1, out);
   }
   return out;
+}
+
+function visibleRowLimit(height: number): number {
+  const limit = Math.floor(height);
+  return Number.isFinite(limit) ? Math.max(0, limit) : 0;
 }
 
 export const TTree = defineComponent({
@@ -81,7 +89,9 @@ export const TTree = defineComponent({
     const { defaultStyle } = useTerminal();
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
     const expandedSet = computed(() => new Set(props.expandedIds));
-    const rows = computed(() => flattenTree(props.nodes, expandedSet.value).slice(0, props.h));
+    const rows = computed(() =>
+      flattenTree(props.nodes, expandedSet.value, visibleRowLimit(props.h)),
+    );
 
     function toggle(item: FlatTreeNode): void {
       if (item.node.disabled || !item.expandable) return;

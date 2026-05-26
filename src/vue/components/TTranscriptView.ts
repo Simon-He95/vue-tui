@@ -40,6 +40,17 @@ type LayoutState = Readonly<{
   rowStarts: ReadonlyMap<number, number>;
   rowEnds: ReadonlyMap<number, number>;
   regions: readonly TTranscriptHitRegion[];
+  fixedRows: boolean;
+  rowCount: number;
+}>;
+
+type WrappedLayoutDeps = Readonly<{
+  width: number;
+  baseStyle: Style;
+  hoverStyle?: Style;
+  focusStyle?: Style;
+  hoverRegionId: string | null;
+  focusedRegionId: string | null;
 }>;
 
 type RowLayoutCacheEntry = Readonly<{
@@ -64,7 +75,10 @@ const EMPTY_LAYOUT: LayoutState = Object.freeze({
   rowStarts: new Map(),
   rowEnds: new Map(),
   regions: Object.freeze([]),
+  fixedRows: false,
+  rowCount: 0,
 });
+const MAX_KEYED_ROW_LAYOUT_CACHE_ENTRIES = 2048;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -73,6 +87,16 @@ function clamp(n: number, min: number, max: number): number {
 function normalizeInt(value: unknown): number {
   const n = Math.floor(Number(value));
   return Number.isFinite(n) ? n : 0;
+}
+
+function normalizedChangedRange(
+  range: { start: number; end: number } | null | undefined,
+  count: number,
+): { start: number; end: number } | null {
+  if (!range) return null;
+  const start = clamp(normalizeInt(range.start), 0, count);
+  const end = clamp(normalizeInt(range.end), start, count);
+  return { start, end };
 }
 
 function sourceSegmentsForRegion(row: TTranscriptRow): readonly TTranscriptSegment[] {
@@ -113,9 +137,36 @@ function rowHasRegionId(row: TTranscriptRow, rowKey: string | number, id: string
   return false;
 }
 
+function cachedLayoutHasRegionId(
+  entry: RowLayoutCacheEntry | undefined,
+  id: string | null,
+): boolean {
+  if (!entry || !id) return false;
+  for (const visualRow of entry.visualRows) {
+    if (visualRow.hitRegions.some((region) => region.id === id)) return true;
+  }
+  return false;
+}
+
+function rowLayoutIdentityKey(rowKey: string | number, rowVersion: string | number): string {
+  return JSON.stringify([rowKey, rowVersion]);
+}
+
+function reindexVisualRows(
+  rows: readonly TTranscriptVisualRow[],
+  rowIndex: number,
+): readonly TTranscriptVisualRow[] {
+  return rows.map((visualRow) => ({
+    ...visualRow,
+    rowIndex,
+    hitRegions: visualRow.hitRegions.map((region) => ({ ...region, rowIndex })),
+  }));
+}
+
 function sameCachedLayout(
   entry: RowLayoutCacheEntry | undefined,
   next: Omit<RowLayoutCacheEntry, "visualRows">,
+  matchRowIndex = true,
 ): boolean {
   return (
     Boolean(entry) &&
@@ -123,7 +174,7 @@ function sameCachedLayout(
     entry!.rowVersion === next.rowVersion &&
     entry!.usesSourceRowVersion === next.usesSourceRowVersion &&
     (next.usesSourceRowVersion || entry!.row === next.row) &&
-    entry!.rowIndex === next.rowIndex &&
+    (!matchRowIndex || entry!.rowIndex === next.rowIndex) &&
     entry!.rowKey === next.rowKey &&
     entry!.width === next.width &&
     entry!.wrap === next.wrap &&
@@ -183,6 +234,10 @@ export const TTranscriptView = defineComponent({
     const hoveredRegion = ref<TTranscriptHitRegion | null>(null);
     const focusedRegion = ref<TTranscriptHitRegion | null>(null);
     const rowLayoutCache = new Map<number, RowLayoutCacheEntry>();
+    const keyedRowLayoutCache = new Map<string, RowLayoutCacheEntry>();
+    let previousWrappedLayout: LayoutState | null = null;
+    let previousWrappedDeps: WrappedLayoutDeps | null = null;
+    let canUseWrappedChangedRangeRepaint = false;
     let warnedLargeFlattenedRows = false;
 
     function isScrollControlled(): boolean {
@@ -193,14 +248,237 @@ export const TTranscriptView = defineComponent({
       return normalizeInt(isScrollControlled() ? props.scrollTop : innerScrollTop.value);
     }
 
+    function currentScrollTopForRowCount(count: number): number {
+      const viewportRows = Math.max(0, normalizeInt(props.h));
+      const maxTop = Math.max(0, count - viewportRows);
+      return clamp(currentScrollTop(), 0, maxTop);
+    }
+
+    function rememberKeyedRowLayout(entry: RowLayoutCacheEntry): void {
+      if (!entry.usesSourceRowVersion) return;
+      keyedRowLayoutCache.set(rowLayoutIdentityKey(entry.rowKey, entry.rowVersion), entry);
+      if (keyedRowLayoutCache.size <= MAX_KEYED_ROW_LAYOUT_CACHE_ENTRIES) return;
+      const first = keyedRowLayoutCache.keys().next().value;
+      if (first != null) keyedRowLayoutCache.delete(first);
+    }
+
+    function layoutSourceRow(
+      rowIndex: number,
+      options: Readonly<{
+        width: number;
+        baseStyle: Style;
+        hoverRegionId: string | null;
+        focusedRegionId: string | null;
+      }>,
+    ): { rows: readonly TTranscriptVisualRow[]; cacheHit: boolean } {
+      const sourceRowVersion = props.source.getRowVersion?.(rowIndex);
+      let cached = rowLayoutCache.get(rowIndex);
+      const usesSourceRowVersion = sourceRowVersion != null;
+      let row = cached?.row;
+      let rowKey = cached?.rowKey;
+      let canUseCachedRow = false;
+
+      if (
+        usesSourceRowVersion &&
+        cached?.usesSourceRowVersion &&
+        cached.rowVersion === sourceRowVersion
+      ) {
+        if (props.source.getRowKey) {
+          rowKey = props.source.getRowKey(rowIndex);
+          canUseCachedRow = rowKey === cached.rowKey;
+        } else {
+          rowKey = cached.rowKey;
+          canUseCachedRow = true;
+        }
+      }
+
+      if (!canUseCachedRow && usesSourceRowVersion && props.source.getRowKey) {
+        rowKey = props.source.getRowKey(rowIndex);
+        cached = keyedRowLayoutCache.get(rowLayoutIdentityKey(rowKey, sourceRowVersion));
+        if (cached) {
+          row = cached.row;
+          canUseCachedRow = true;
+        }
+      }
+
+      if (!canUseCachedRow || row == null || rowKey == null) {
+        row = props.source.getRow(rowIndex);
+        rowKey = props.source.getRowKey?.(rowIndex) ?? row.key;
+        canUseCachedRow = false;
+      }
+
+      const nextHoverRegionId = canUseCachedRow
+        ? cachedLayoutHasRegionId(cached, options.hoverRegionId)
+          ? options.hoverRegionId
+          : null
+        : rowHasRegionId(row, rowKey, options.hoverRegionId)
+          ? options.hoverRegionId
+          : null;
+      const nextFocusedRegionId = canUseCachedRow
+        ? cachedLayoutHasRegionId(cached, options.focusedRegionId)
+          ? options.focusedRegionId
+          : null
+        : rowHasRegionId(row, rowKey, options.focusedRegionId)
+          ? options.focusedRegionId
+          : null;
+      const cacheKey = {
+        version: props.version,
+        rowVersion: sourceRowVersion ?? props.version,
+        usesSourceRowVersion,
+        row,
+        rowIndex,
+        rowKey,
+        width: options.width,
+        wrap: props.wrap,
+        baseStyle: options.baseStyle,
+        hoverStyle: props.hoverStyle,
+        focusStyle: props.focusStyle,
+        hoverRegionId: nextHoverRegionId,
+        focusedRegionId: nextFocusedRegionId,
+      };
+      const cacheMatches = sameCachedLayout(cached, cacheKey);
+      const reindexableCacheMatches =
+        !cacheMatches && canUseCachedRow && sameCachedLayout(cached, cacheKey, false);
+      const rows = cacheMatches
+        ? cached!.visualRows
+        : reindexableCacheMatches
+          ? reindexVisualRows(cached!.visualRows, rowIndex)
+          : layoutTranscriptRow({
+              row,
+              rowIndex,
+              rowKey,
+              width: options.width,
+              baseStyle: options.baseStyle,
+              hoverRegionId: nextHoverRegionId,
+              focusedRegionId: nextFocusedRegionId,
+              hoverStyle: props.hoverStyle,
+              focusStyle: props.focusStyle,
+              wrap: props.wrap,
+            });
+      if (rows !== cached?.visualRows) {
+        const entry = { ...cacheKey, visualRows: rows };
+        rowLayoutCache.set(rowIndex, entry);
+        rememberKeyedRowLayout(entry);
+      }
+      return { rows, cacheHit: cacheMatches || reindexableCacheMatches };
+    }
+
+    function pruneRowLayoutCache(count: number): void {
+      for (const rowIndex of rowLayoutCache.keys()) {
+        if (rowIndex >= count) rowLayoutCache.delete(rowIndex);
+      }
+    }
+
+    function sameWrappedDeps(a: WrappedLayoutDeps | null, b: WrappedLayoutDeps): boolean {
+      return (
+        Boolean(a) &&
+        a!.width === b.width &&
+        a!.baseStyle === b.baseStyle &&
+        a!.hoverStyle === b.hoverStyle &&
+        a!.focusStyle === b.focusStyle &&
+        a!.hoverRegionId === b.hoverRegionId &&
+        a!.focusedRegionId === b.focusedRegionId
+      );
+    }
+
+    function visibleRegionsForVisualRows(
+      visualRows: readonly TTranscriptVisualRow[],
+    ): readonly TTranscriptHitRegion[] {
+      const top = clamp(currentScrollTop(), 0, visualRows.length);
+      const bottom = Math.min(visualRows.length, top + Math.max(0, normalizeInt(props.h)));
+      const regions: TTranscriptHitRegion[] = [];
+      for (let index = top; index < bottom; index++) {
+        regions.push(...(visualRows[index]?.hitRegions ?? []));
+      }
+      return regions;
+    }
+
+    function tryUpdateWrappedLayoutFromChangedRange(
+      count: number,
+      changedRange: { start: number; end: number } | null,
+      deps: WrappedLayoutDeps,
+    ): { state: LayoutState; cacheHit: number; cacheMiss: number } | null {
+      const previous = previousWrappedLayout;
+      if (!previous || previous.fixedRows || previous.rowCount !== count) return null;
+      if (!changedRange || !sameWrappedDeps(previousWrappedDeps, deps)) return null;
+
+      const changedCount = changedRange.end - changedRange.start;
+      if (changedCount <= 0) {
+        canUseWrappedChangedRangeRepaint = true;
+        return {
+          state: { ...previous, regions: visibleRegionsForVisualRows(previous.visualRows) },
+          cacheHit: count,
+          cacheMiss: 0,
+        };
+      }
+
+      const oldVisualStart = previous.rowStarts.get(changedRange.start);
+      const oldVisualEnd = previous.rowEnds.get(changedRange.end - 1);
+      if (oldVisualStart == null || oldVisualEnd == null) return null;
+
+      const nextRows: TTranscriptVisualRow[] = [];
+      const changedRowHeights: number[] = [];
+      let cacheHit = count - changedCount;
+      let cacheMiss = 0;
+      for (let rowIndex = changedRange.start; rowIndex < changedRange.end; rowIndex++) {
+        const result = layoutSourceRow(rowIndex, {
+          width: deps.width,
+          baseStyle: deps.baseStyle,
+          hoverRegionId: deps.hoverRegionId,
+          focusedRegionId: deps.focusedRegionId,
+        });
+        if (result.cacheHit) cacheHit++;
+        else cacheMiss++;
+        changedRowHeights.push(result.rows.length);
+        nextRows.push(...result.rows);
+      }
+
+      if (nextRows.length !== oldVisualEnd - oldVisualStart) return null;
+      canUseWrappedChangedRangeRepaint = true;
+
+      // Patch the previous wrapped layout in place; cloning the full layout would undo this path's cost saving.
+      const visualRows = previous.visualRows as TTranscriptVisualRow[];
+      for (let index = 0; index < nextRows.length; index++) {
+        visualRows[oldVisualStart + index] = nextRows[index]!;
+      }
+
+      const rowStarts = previous.rowStarts as Map<number, number>;
+      const rowEnds = previous.rowEnds as Map<number, number>;
+      let visualCursor = oldVisualStart;
+      for (
+        let rowIndex = changedRange.start, offset = 0;
+        rowIndex < changedRange.end;
+        rowIndex++, offset++
+      ) {
+        rowStarts.set(rowIndex, visualCursor);
+        visualCursor += changedRowHeights[offset] ?? 0;
+        rowEnds.set(rowIndex, visualCursor);
+      }
+
+      const state = {
+        visualRows,
+        rowStarts,
+        rowEnds,
+        regions: visibleRegionsForVisualRows(visualRows),
+        fixedRows: false,
+        rowCount: count,
+      };
+      previousWrappedLayout = state;
+      return { state, cacheHit, cacheMiss };
+    }
+
     const layoutState = computed<LayoutState>(() => {
       void props.version;
+      canUseWrappedChangedRangeRepaint = false;
       const perfEnabled = observability.framePerf.enabled.value;
       const perfStartedAt = perfEnabled ? framePerfNow() : 0;
       const width = Math.max(1, Math.floor(props.w));
       const count = Math.max(0, normalizeInt(props.source.rowCount()));
       if (!count) {
         rowLayoutCache.clear();
+        keyedRowLayoutCache.clear();
+        previousWrappedLayout = null;
+        previousWrappedDeps = null;
         if (perfEnabled) {
           observability.framePerf.recordComponent({
             name: "TTranscriptView",
@@ -218,7 +496,9 @@ export const TTranscriptView = defineComponent({
         return EMPTY_LAYOUT;
       }
 
+      const fixedRows = props.wrap === false;
       const visualRows: TTranscriptVisualRow[] = [];
+      if (fixedRows) visualRows.length = count;
       const rowStarts = new Map<number, number>();
       const rowEnds = new Map<number, number>();
       const regions: TTranscriptHitRegion[] = [];
@@ -227,63 +507,81 @@ export const TTranscriptView = defineComponent({
       const focusedRegionId = focusedRegion.value?.id ?? null;
       let cacheHit = 0;
       let cacheMiss = 0;
-      for (let rowIndex = 0; rowIndex < count; rowIndex++) {
-        const row = props.source.getRow(rowIndex);
-        const rowKey = props.source.getRowKey?.(rowIndex) ?? row.key;
-        const sourceRowVersion = props.source.getRowVersion?.(rowIndex);
-        const localHoverRegionId = rowHasRegionId(row, rowKey, hoverRegionId)
-          ? hoverRegionId
-          : null;
-        const localFocusedRegionId = rowHasRegionId(row, rowKey, focusedRegionId)
-          ? focusedRegionId
-          : null;
-        const cacheKey = {
-          version: props.version,
-          rowVersion: sourceRowVersion ?? props.version,
-          usesSourceRowVersion: sourceRowVersion != null,
-          row,
-          rowIndex,
-          rowKey,
-          width,
-          wrap: props.wrap,
-          baseStyle,
-          hoverStyle: props.hoverStyle,
-          focusStyle: props.focusStyle,
-          hoverRegionId: localHoverRegionId,
-          focusedRegionId: localFocusedRegionId,
-        };
-        rowStarts.set(rowIndex, visualRows.length);
-        const cached = rowLayoutCache.get(rowIndex);
-        const cacheMatches = sameCachedLayout(cached, cacheKey);
-        if (cacheMatches) cacheHit++;
-        else cacheMiss++;
-        const rows = cacheMatches
-          ? cached!.visualRows
-          : layoutTranscriptRow({
-              row,
-              rowIndex,
-              rowKey,
-              width,
-              baseStyle,
-              hoverRegionId: localHoverRegionId,
-              focusedRegionId: localFocusedRegionId,
-              hoverStyle: props.hoverStyle,
-              focusStyle: props.focusStyle,
-              wrap: props.wrap,
-            });
-        if (rows !== cached?.visualRows)
-          rowLayoutCache.set(rowIndex, { ...cacheKey, visualRows: rows });
-        for (const visualRow of rows) {
-          visualRows.push(visualRow);
-          regions.push(...visualRow.hitRegions);
+      const sourceChangedRange = normalizedChangedRange(props.source.getChangedRange?.(), count);
+      const wrappedDeps = {
+        width,
+        baseStyle,
+        hoverStyle: props.hoverStyle,
+        focusStyle: props.focusStyle,
+        hoverRegionId,
+        focusedRegionId,
+      };
+
+      if (fixedRows) {
+        previousWrappedLayout = null;
+        previousWrappedDeps = null;
+        const top = currentScrollTopForRowCount(count);
+        const bottom = Math.min(count, top + Math.max(0, normalizeInt(props.h)));
+        for (let rowIndex = top; rowIndex < bottom; rowIndex++) {
+          rowStarts.set(rowIndex, rowIndex);
+          rowEnds.set(rowIndex, rowIndex + 1);
+          const result = layoutSourceRow(rowIndex, {
+            width,
+            baseStyle,
+            hoverRegionId,
+            focusedRegionId,
+          });
+          if (result.cacheHit) cacheHit++;
+          else cacheMiss++;
+          const row = result.rows[0]!;
+          visualRows[rowIndex] = row;
+          regions.push(...row.hitRegions);
         }
-        rowEnds.set(rowIndex, visualRows.length);
+      } else {
+        const incremental = tryUpdateWrappedLayoutFromChangedRange(
+          count,
+          sourceChangedRange,
+          wrappedDeps,
+        );
+        if (incremental) {
+          if (perfEnabled) {
+            observability.framePerf.recordComponent({
+              name: "TTranscriptView",
+              id: instance?.uid == null ? undefined : String(instance.uid),
+              phase: "layout",
+              durationMs: framePerfNow() - perfStartedAt,
+              itemCount: count,
+              renderedCount: incremental.state.visualRows.length,
+              cacheHit: incremental.cacheHit,
+              cacheMiss: incremental.cacheMiss,
+              width,
+              version: props.version,
+            });
+          }
+          return incremental.state;
+        }
+
+        for (let rowIndex = 0; rowIndex < count; rowIndex++) {
+          rowStarts.set(rowIndex, visualRows.length);
+          const result = layoutSourceRow(rowIndex, {
+            width,
+            baseStyle,
+            hoverRegionId,
+            focusedRegionId,
+          });
+          if (result.cacheHit) cacheHit++;
+          else cacheMiss++;
+          for (const visualRow of result.rows) {
+            visualRows.push(visualRow);
+            regions.push(...visualRow.hitRegions);
+          }
+          rowEnds.set(rowIndex, visualRows.length);
+        }
       }
-      for (const rowIndex of rowLayoutCache.keys()) {
-        if (rowIndex >= count) rowLayoutCache.delete(rowIndex);
-      }
+      pruneRowLayoutCache(count);
       if (
         !warnedLargeFlattenedRows &&
+        !fixedRows &&
         (globalThis as any).__VT_DEBUG_PERF__ &&
         visualRows.length > 5000
       ) {
@@ -299,14 +597,22 @@ export const TTranscriptView = defineComponent({
           phase: "layout",
           durationMs: framePerfNow() - perfStartedAt,
           itemCount: count,
-          renderedCount: visualRows.length,
+          renderedCount: fixedRows ? cacheHit + cacheMiss : visualRows.length,
           cacheHit,
           cacheMiss,
           width,
           version: props.version,
         });
       }
-      return { visualRows, rowStarts, rowEnds, regions };
+      const state = { visualRows, rowStarts, rowEnds, regions, fixedRows, rowCount: count };
+      if (fixedRows) {
+        previousWrappedLayout = null;
+        previousWrappedDeps = null;
+      } else {
+        previousWrappedLayout = state;
+        previousWrappedDeps = wrappedDeps;
+      }
+      return state;
     });
 
     const maxScrollTop = computed(() =>
@@ -359,8 +665,13 @@ export const TTranscriptView = defineComponent({
       if (!region) return [];
       const rows = layoutState.value.visualRows;
       const indexes: number[] = [];
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i]!.hitRegions.some((candidate) => candidate.id === region.id)) indexes.push(i);
+      const top = layoutState.value.fixedRows ? clamp(currentScrollTop(), 0, rows.length) : 0;
+      const bottom = layoutState.value.fixedRows
+        ? Math.min(rows.length, top + Math.max(0, normalizeInt(props.h)))
+        : rows.length;
+      for (let i = top; i < bottom; i++) {
+        const row = getVisualRow(i);
+        if (row?.hitRegions.some((candidate) => candidate.id === region.id)) indexes.push(i);
       }
       return indexes;
     }
@@ -393,7 +704,7 @@ export const TTranscriptView = defineComponent({
       const seen = new Set<string>();
       const regions: TTranscriptHitRegion[] = [];
       for (let i = top; i < bottom; i++) {
-        for (const region of rows[i]?.hitRegions ?? []) {
+        for (const region of getVisualRow(i)?.hitRegions ?? []) {
           if (seen.has(region.id)) continue;
           seen.add(region.id);
           regions.push(region);
@@ -407,7 +718,7 @@ export const TTranscriptView = defineComponent({
       const top = clamp(currentScrollTop(), 0, rows.length);
       const bottom = Math.min(rows.length, top + Math.max(0, normalizeInt(props.h)));
       for (let i = top; i < bottom; i++) {
-        if (rows[i]?.hitRegions.some((region) => region.id === id)) return true;
+        if (getVisualRow(i)?.hitRegions.some((region) => region.id === id)) return true;
       }
       return false;
     }
@@ -476,8 +787,12 @@ export const TTranscriptView = defineComponent({
 
     function scrollToRow(index: number, options?: { align?: "start" | "center" | "end" }): void {
       const rowIndex = clamp(normalizeInt(index), 0, Math.max(0, props.source.rowCount() - 1));
-      const visualIndex = layoutState.value.rowStarts.get(rowIndex) ?? 0;
-      const rowEnd = layoutState.value.rowEnds.get(rowIndex) ?? visualIndex + 1;
+      const visualIndex = layoutState.value.fixedRows
+        ? rowIndex
+        : (layoutState.value.rowStarts.get(rowIndex) ?? 0);
+      const rowEnd = layoutState.value.fixedRows
+        ? rowIndex + 1
+        : (layoutState.value.rowEnds.get(rowIndex) ?? visualIndex + 1);
       const viewportRows = Math.max(1, normalizeInt(props.h));
       const rowHeight = Math.max(1, rowEnd - visualIndex);
       let top = visualIndex;
@@ -490,8 +805,8 @@ export const TTranscriptView = defineComponent({
     }
 
     function invalidateRow(index: number): void {
-      const start = layoutState.value.rowStarts.get(index);
-      const end = layoutState.value.rowEnds.get(index);
+      const start = layoutState.value.fixedRows ? index : layoutState.value.rowStarts.get(index);
+      const end = layoutState.value.fixedRows ? index + 1 : layoutState.value.rowEnds.get(index);
       if (start == null || end == null) return;
       rowsRef.value?.invalidateRange(start, end);
     }
@@ -499,10 +814,27 @@ export const TTranscriptView = defineComponent({
     function invalidateRange(start: number, end: number): void {
       const first = clamp(normalizeInt(start), 0, props.source.rowCount());
       const last = clamp(normalizeInt(end), first, props.source.rowCount());
-      const visualStart = layoutState.value.rowStarts.get(first);
-      const visualEnd = layoutState.value.rowEnds.get(last - 1);
+      const visualStart = layoutState.value.fixedRows
+        ? first
+        : layoutState.value.rowStarts.get(first);
+      const visualEnd = layoutState.value.fixedRows
+        ? last
+        : layoutState.value.rowEnds.get(last - 1);
       if (visualStart == null || visualEnd == null) return;
       rowsRef.value?.invalidateRange(visualStart, visualEnd);
+    }
+
+    function virtualRowsChangedRange(): { start: number; end: number } | null {
+      const state = layoutState.value;
+      const changedRange = normalizedChangedRange(props.source.getChangedRange?.(), state.rowCount);
+      if (!changedRange) return null;
+      if (state.fixedRows || changedRange.end <= changedRange.start) return changedRange;
+      if (!canUseWrappedChangedRangeRepaint) return null;
+
+      const visualStart = state.rowStarts.get(changedRange.start);
+      const visualEnd = state.rowEnds.get(changedRange.end - 1);
+      if (visualStart == null || visualEnd == null) return null;
+      return { start: visualStart, end: visualEnd };
     }
 
     expose({
@@ -613,7 +945,19 @@ export const TTranscriptView = defineComponent({
     }
 
     function getVisualRow(index: number): TTranscriptVisualRow | undefined {
-      return layoutState.value.visualRows[index];
+      const state = layoutState.value;
+      const cached = state.visualRows[index];
+      if (cached || !state.fixedRows) return cached;
+      if (index < 0 || index >= state.visualRows.length) return undefined;
+      const result = layoutSourceRow(index, {
+        width: Math.max(1, Math.floor(props.w)),
+        baseStyle: props.style ?? defaultStyle.value,
+        hoverRegionId: hoveredRegion.value?.id ?? null,
+        focusedRegionId: focusedRegion.value?.id ?? null,
+      });
+      const row = result.rows[0];
+      if (row) (state.visualRows as TTranscriptVisualRow[])[index] = row;
+      return row;
     }
 
     function selectionTextForVisualRow(visualRow: TTranscriptVisualRow | undefined): string {
@@ -644,6 +988,7 @@ export const TTranscriptView = defineComponent({
         zIndex: props.zIndex,
         itemCount: layoutState.value.visualRows.length,
         itemVersion: props.version,
+        itemChangedRange: virtualRowsChangedRange,
         getItem: getVisualRow,
         paintItem: paintVisualRow,
         renderItemNodes: renderVisualRowNodes,

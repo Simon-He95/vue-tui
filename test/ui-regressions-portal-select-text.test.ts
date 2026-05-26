@@ -812,6 +812,43 @@ describe("ui regressions portal select and text", () => {
     mounted.unmount();
   });
 
+  it('TSelect indexes valueMode="value" multi-select values for large option lists', async () => {
+    let valueReads = 0;
+    const options = Array.from({ length: 100 }, (_, index) => {
+      const option: { label: string; value?: number } = { label: `Item ${index}` };
+      Object.defineProperty(option, "value", {
+        enumerable: true,
+        get() {
+          valueReads++;
+          return index;
+        },
+      });
+      return option;
+    });
+    const selected = Array.from({ length: 30 }, (_, index) => 70 + index);
+
+    const mounted = await mountTerminal(() =>
+      h(TSelect, {
+        x: 0,
+        y: 0,
+        w: 18,
+        h: 8,
+        multiple: true,
+        valueMode: "value",
+        modelValue: selected,
+        options,
+      }),
+    );
+
+    await nextTick();
+    valueReads = 0;
+    mounted.scheduler()!.flushNow();
+
+    expect(valueReads).toBeLessThan(140);
+
+    mounted.unmount();
+  });
+
   it("dims disabled TSelect options", async () => {
     const mounted = await mountTerminal(
       () =>

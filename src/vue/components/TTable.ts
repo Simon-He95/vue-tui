@@ -199,6 +199,18 @@ function sameRowKey(a: unknown, b: unknown): boolean {
   return Object.is(a, b);
 }
 
+function selectedRowKeyIndex(keys: readonly unknown[] | undefined): Set<unknown> | null {
+  if (!keys?.length) return null;
+  const indexed = new Set<unknown>();
+  for (let index = 0; index < keys.length; index++) {
+    if (!(index in keys)) continue;
+    const key = keys[index];
+    if (typeof key === "number" && key === 0) return null;
+    indexed.add(key);
+  }
+  return indexed;
+}
+
 export const TTable = defineComponent({
   name: "TTable",
   props: {
@@ -270,10 +282,20 @@ export const TTable = defineComponent({
     const activeRowStyle = computed(() =>
       mergeStyle(theme.value.components.TTable?.activeStyle, props.activeStyle),
     );
+    const selectedRowKeysIndex = computed(() => selectedRowKeyIndex(props.selectedRowKeys));
     const bodyRows = computed(() => {
       const top = props.header ? 2 : 0;
       return props.rows.slice(0, Math.max(0, props.h - top));
     });
+
+    function isRowSelected(key: unknown): boolean {
+      if (props.selectedRowKey !== undefined && sameRowKey(key, props.selectedRowKey)) return true;
+      const selectedKeys = props.selectedRowKeys;
+      if (!selectedKeys?.length) return false;
+      const indexed = selectedRowKeysIndex.value;
+      if (indexed) return indexed.has(key);
+      return selectedKeys.some((candidate) => sameRowKey(candidate, key));
+    }
 
     return () => {
       const children: any[] = [];
@@ -353,9 +375,7 @@ export const TTable = defineComponent({
         const row = bodyRows.value[index]!;
         const y = (props.header ? 2 : 0) + index;
         const key = rowKey(row, index, props.rowKey as any);
-        const selected =
-          (props.selectedRowKey !== undefined && sameRowKey(key, props.selectedRowKey)) ||
-          Boolean(props.selectedRowKeys?.some((candidate) => sameRowKey(candidate, key)));
+        const selected = isRowSelected(key);
         const active = props.activeRowKey !== undefined && sameRowKey(key, props.activeRowKey);
         children.push(
           h(
