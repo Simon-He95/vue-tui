@@ -212,6 +212,7 @@
     "release": "pnpm run release:workflow-only",
     "release:verify": "pnpm run release:dry-run",
     "release:ci": "pnpm run release:verify",
+    "publish:npm:patch": "pnpm exec bumpp patch --yes --no-commit --no-tag --no-push && (npm whoami >/dev/null 2>&1 || npm login) && VUE_TUI_ALLOW_DIRECT_PUBLISH=1 pnpm publish --access public --no-git-checks",
     "release:local": "pnpm run release:dry-run && VUE_TUI_ALLOW_DIRECT_PUBLISH=1 npm publish .release/*.tgz --access public --tag rc",
     "release:local:dry-run": "pnpm run release:dry-run && VUE_TUI_ALLOW_DIRECT_PUBLISH=1 npm publish .release/*.tgz --access public --dry-run --tag rc",
     "release:bench": "pnpm run bench:baseline",
