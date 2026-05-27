@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vue TUI"
+  short_description: "Terminal UI patterns for vue-tui"
+  default_prompt: "Use $vue-tui to design, implement, or review terminal Vue components with vue-tui."

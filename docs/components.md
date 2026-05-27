@@ -34,6 +34,8 @@
 
 如果你更关心“哪些地方还应该继续做插件化”，建议配合阅读：[扩展性与插件化](./extensibility.md)。
 
+如果你在实现完整 CLI surface、dialog/input 交互、transcript 或高频渲染区域，建议先读：[Terminal UI Best Practices](./terminal-ui-best-practices.md)。
+
 ## 基础约定
 
 ### Style（样式）
