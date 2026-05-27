@@ -16,6 +16,14 @@ Use it when you want:
 - Shared UI code that can run against a DOM renderer, a stdout renderer, or headless tests.
 - Large terminal surfaces such as virtual lists, append-only logs, markdown transcripts, and agent console UIs.
 
+## Agent UI Showcase
+
+A real agent console built on `@simon_he/vue-tui` can stream agent output, markdown content, tool-call status, and input chrome in one terminal surface.
+
+[![Agent console rendering built with vue-tui](./docs/public/agent-console-rendering-poster.png)](./docs/public/agent-console-rendering.mp4)
+
+[Watch the rendering demo](./docs/public/agent-console-rendering.mp4)
+
 ## Install
 
 ```bash
