@@ -7,6 +7,14 @@ description: Vue 3 terminal UI components and renderers for browser DOM, CLI std
 import DocsLandingTerminal from './.vitepress/components/DocsLandingTerminal.vue'
 </script>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/brand/vue-tui-logo-on-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/brand/vue-tui-logo-on-light.svg">
+    <img src="/brand/vue-tui-logo-on-light.svg" alt="Vue TUI" width="360">
+  </picture>
+</p>
+
 # Vue TUI
 
 Vue TUI 是面向 Vue 3 的 terminal UI component library 和 renderer toolkit。你可以用同一套组件模型渲染到浏览器 DOM，也可以渲染到真实终端 stdout；适合构建 CLI、terminal-style dashboard、日志视图、markdown transcript 和 agent console。

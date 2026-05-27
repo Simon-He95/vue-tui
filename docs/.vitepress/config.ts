@@ -8,6 +8,7 @@ function shim(path: string): string {
 const siteUrl = "https://vue-tui.pages.dev";
 const siteDescription =
   "Vue 3 terminal UI components and renderers for browser DOM, CLI stdout, logs, markdown transcripts, and agent consoles.";
+const siteImage = new URL("/brand/vue-tui-logo-board-vector.png", siteUrl).href;
 
 function pageUrl(page: string): string {
   const path = page.replace(/(^|\/)index\.md$/, "$1").replace(/\.md$/, "");
@@ -24,6 +25,7 @@ export default defineConfig({
     hostname: siteUrl,
   },
   head: [
+    ["link", { rel: "icon", href: "/brand/vue-tui-favicon.ico", sizes: "any" }],
     [
       "meta",
       {
@@ -42,9 +44,13 @@ export default defineConfig({
     ],
     ["meta", { property: "og:site_name", content: "Vue TUI" }],
     ["meta", { property: "og:type", content: "website" }],
-    ["meta", { name: "twitter:card", content: "summary" }],
+    ["meta", { property: "og:image", content: siteImage }],
+    ["meta", { property: "og:image:alt", content: "Vue TUI logo" }],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
     ["meta", { name: "twitter:title", content: "Vue TUI - Vue 3 terminal UI components" }],
     ["meta", { name: "twitter:description", content: siteDescription }],
+    ["meta", { name: "twitter:image", content: siteImage }],
+    ["meta", { name: "twitter:image:alt", content: "Vue TUI logo" }],
   ],
   transformHead({ page }) {
     const url = pageUrl(page);
@@ -76,6 +82,11 @@ export default defineConfig({
     },
   },
   themeConfig: {
+    logo: {
+      light: "/brand/vue-tui-app-icon-light.svg",
+      dark: "/brand/vue-tui-app-icon-dark.svg",
+      alt: "Vue TUI",
+    },
     nav: [
       { text: "概览", link: "/" },
       { text: "Live Showcase", link: "/showcase" },

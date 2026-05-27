@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 160" role="img" aria-label="vue-tui icon on-dark">
+    <title>vue-tui icon on-dark</title>
+
+<g id="vue-tui-icon">
+  <path d="M50 42 Q50 28 64 28 H202 Q216 28 216 42 V120 Q216 134 202 134 H176" fill="none" stroke="#9AA5B3" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M54 68 L88 100 L54 132" fill="none" stroke="#24C985" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M112 132 H152" fill="none" stroke="#24C985" stroke-width="12" stroke-linecap="round"/>
+</g>
+  </svg>

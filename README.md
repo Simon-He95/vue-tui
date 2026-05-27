@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/public/brand/vue-tui-logo-on-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./docs/public/brand/vue-tui-logo-on-light.svg">
+    <img alt="Vue TUI" src="./docs/public/brand/vue-tui-logo-on-light.svg" width="360">
+  </picture>
+</p>
+
 # @simon_he/vue-tui
 
 [![npm version](https://img.shields.io/npm/v/@simon_he/vue-tui)](https://www.npmjs.com/package/@simon_he/vue-tui)

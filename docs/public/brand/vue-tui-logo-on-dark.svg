@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 180" role="img" aria-label="vue-tui logo on-dark">
+    <title>vue-tui logo on-dark</title>
+    <g transform="translate(0 18) scale(0.92)">
+
+<g id="vue-tui-icon">
+  <path d="M50 42 Q50 28 64 28 H202 Q216 28 216 42 V120 Q216 134 202 134 H176" fill="none" stroke="#9AA5B3" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M54 68 L88 100 L54 132" fill="none" stroke="#24C985" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M112 132 H152" fill="none" stroke="#24C985" stroke-width="12" stroke-linecap="round"/>
+</g>
+    </g>
+    <text x="250" y="118" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'DejaVu Sans Mono', monospace" font-size="78" font-weight="500" letter-spacing="0" dominant-baseline="middle">
+      <tspan fill="#F3F6FA">vue</tspan><tspan fill="#24C985">-</tspan><tspan fill="#F3F6FA">tui</tspan>
+    </text>
+  </svg>
