@@ -11,6 +11,7 @@ These practices are based on `vue-tui` package internals plus CLI consumer examp
 - When a component accepts a width provider or uses render-manager text passes, preserve provider threading through `withTextRenderPass` or existing local utilities.
 
 Useful package files:
+
 - `src/vue/utils/text.ts`
 - `src/core/buffer/width.ts`
 - `src/vue/components/TText.ts`
@@ -26,6 +27,7 @@ Useful package files:
 - Use stable node keys and stable style object identities where cache behavior matters.
 
 Useful package files:
+
 - `src/vue/render/render-manager.ts`
 - `src/vue/components/terminal-provider/scheduler.ts`
 - `src/vue/components/TRenderPlane.ts`
@@ -42,11 +44,13 @@ Useful package files:
 - Use `TTranscriptView`, `TVirtualRows`, `TLogView`, or related log components for large scrollable content.
 
 Consumer patterns worth preserving:
+
 - `best-agent` draws chat chrome with `TText` fills and border rows.
 - It uses `TView` as a large hitbox around a smaller `TInput`.
 - It uses `TTranscriptView` with a data source, row key/version functions, changed ranges, and row metadata caches for large chat transcripts.
 
 Useful package files:
+
 - `src/vue/components/TDialog.ts`
 - `src/vue/components/TInput.ts`
 - `src/vue/components/TCommandPalette.ts`
@@ -63,6 +67,7 @@ Useful package files:
 - Preserve selection suppression behavior around modal overlays and pointer events.
 
 Useful package files:
+
 - `src/events/manager/event-manager.ts`
 - `src/events/manager/types.ts`
 - `src/events/manager/selection-suppression.ts`
@@ -79,6 +84,7 @@ Useful package files:
 - Suppress or coalesce purely decorative animation during scroll if it causes frame churn.
 
 Useful package files:
+
 - `src/vue/components/TTranscriptView.ts`
 - `src/vue/transcript/layout.ts`
 - `src/vue/transcript/types.ts`
@@ -94,6 +100,7 @@ Useful package files:
 - Keep style object identity stable on hot render paths when equality or cache checks depend on identity.
 
 Useful package files:
+
 - `src/core/types.ts`
 - `src/ansi-styles.ts`
 - `src/vue/theme.ts`
@@ -110,6 +117,7 @@ Useful package files:
 - Keep tests deterministic by controlling animation, time, and environment flags when nearby tests already do so.
 
 Useful package files:
+
 - `test/ui-regressions-support.ts`
 - `test/p1-p2-components.test.ts`
 - `test/tinput-restrict-text.test.ts`
