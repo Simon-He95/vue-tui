@@ -5,32 +5,54 @@ function shim(path: string): string {
   return fileURLToPath(new URL(path, import.meta.url));
 }
 
+const siteUrl = "https://vue-tui.pages.dev";
+const siteDescription =
+  "Vue 3 terminal UI components and renderers for browser DOM, CLI stdout, logs, markdown transcripts, and agent consoles.";
+
+function pageUrl(page: string): string {
+  const path = page.replace(/(^|\/)index\.md$/, "$1").replace(/\.md$/, "");
+  return new URL(path ? `/${path}` : "/", `${siteUrl}/`).href;
+}
+
 export default defineConfig({
   lang: "zh-CN",
   title: "Vue TUI",
-  description: "Vue 3 terminal UI toolkit for browser DOM and CLI stdout renderers",
+  description: siteDescription,
   cleanUrls: true,
   lastUpdated: true,
+  sitemap: {
+    hostname: siteUrl,
+  },
   head: [
     [
       "meta",
       {
         name: "keywords",
         content:
-          "Vue, Vue 3, terminal UI, TUI, CLI, stdout renderer, DOM renderer, ANSI, markdown, virtual list, log viewer",
+          "Vue, Vue 3, vue-tui, Vue terminal UI, Vue TUI, terminal UI components, TUI, CLI UI, stdout renderer, DOM terminal renderer, ANSI renderer, markdown transcript, virtual list, log viewer, agent console",
       },
     ],
-    ["meta", { property: "og:title", content: "Vue TUI" }],
+    ["meta", { property: "og:title", content: "Vue TUI - Vue 3 terminal UI components" }],
     [
       "meta",
       {
         property: "og:description",
-        content: "Vue 3 terminal UI toolkit for browser DOM and CLI stdout renderers.",
+        content: siteDescription,
       },
     ],
+    ["meta", { property: "og:site_name", content: "Vue TUI" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { name: "twitter:card", content: "summary" }],
+    ["meta", { name: "twitter:title", content: "Vue TUI - Vue 3 terminal UI components" }],
+    ["meta", { name: "twitter:description", content: siteDescription }],
   ],
+  transformHead({ page }) {
+    const url = pageUrl(page);
+    return [
+      ["link", { rel: "canonical", href: url }],
+      ["meta", { property: "og:url", content: url }],
+    ];
+  },
   vite: {
     resolve: {
       alias: [

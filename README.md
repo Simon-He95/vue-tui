@@ -1,6 +1,13 @@
 # @simon_he/vue-tui
 
-Vue TUI is a Vue 3 terminal UI toolkit for building terminal-style interfaces that can render in a browser or in a real CLI. It gives you Vue components, terminal cell rendering, event dispatch, markdown rendering, and high-throughput primitives for lists, logs, and streaming transcripts.
+[![npm version](https://img.shields.io/npm/v/@simon_he/vue-tui)](https://www.npmjs.com/package/@simon_he/vue-tui)
+[![npm downloads](https://img.shields.io/npm/dm/@simon_he/vue-tui)](https://www.npmjs.com/package/@simon_he/vue-tui)
+[![CI](https://github.com/Simon-He95/vue-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/Simon-He95/vue-tui/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./license)
+
+[Docs](https://vue-tui.pages.dev/) | [npm](https://www.npmjs.com/package/@simon_he/vue-tui) | [GitHub](https://github.com/Simon-He95/vue-tui) | [Issues](https://github.com/Simon-He95/vue-tui/issues)
+
+Vue TUI is a Vue 3 terminal UI component library and renderer toolkit for browser-hosted terminal surfaces and real CLI stdout apps. It gives you Vue components, terminal cell rendering, event dispatch, markdown rendering, and high-throughput primitives for lists, logs, and streaming transcripts.
 
 Use it when you want:
 
@@ -12,7 +19,7 @@ Use it when you want:
 ## Install
 
 ```bash
-pnpm add @simon_he/vue-tui@rc vue
+pnpm add @simon_he/vue-tui vue
 ```
 
 Vue is a peer dependency. The current package supports Vue `>=3.3.0 <4`.

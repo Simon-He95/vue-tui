@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://vue-tui.pages.dev/sitemap.xml

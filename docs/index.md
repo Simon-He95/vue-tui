@@ -1,6 +1,6 @@
 ---
 title: Vue TUI
-description: Vue 3 terminal UI toolkit for browser DOM and CLI stdout renderers.
+description: Vue 3 terminal UI components and renderers for browser DOM, CLI stdout, logs, markdown transcripts, and agent consoles.
 ---
 
 <script setup lang="ts">
@@ -9,7 +9,7 @@ import DocsLandingTerminal from './.vitepress/components/DocsLandingTerminal.vue
 
 # Vue TUI
 
-Vue TUI 是面向 Vue 3 的 terminal UI toolkit。你可以用同一套组件模型渲染到浏览器 DOM，也可以渲染到真实终端 stdout；适合构建 CLI、terminal-style dashboard、日志视图、markdown transcript 和 agent console。
+Vue TUI 是面向 Vue 3 的 terminal UI component library 和 renderer toolkit。你可以用同一套组件模型渲染到浏览器 DOM，也可以渲染到真实终端 stdout；适合构建 CLI、terminal-style dashboard、日志视图、markdown transcript 和 agent console。
 
 <ClientOnly>
   <DocsLandingTerminal />
@@ -25,7 +25,7 @@ Vue TUI 是面向 Vue 3 的 terminal UI toolkit。你可以用同一套组件模
 ## 安装
 
 ```bash
-pnpm add @simon_he/vue-tui@rc vue
+pnpm add @simon_he/vue-tui vue
 ```
 
 Vue 是 peer dependency。当前发布包支持 Vue `>=3.3.0 <4`。
