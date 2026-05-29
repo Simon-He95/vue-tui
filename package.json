@@ -267,7 +267,7 @@
     "@types/node": "^18.19.130",
     "@vitest/coverage-v8": "^4.1.7",
     "bumpp": "^8.2.1",
-    "esbuild": "^0.20.2",
+    "esbuild": "^0.28.0",
     "happy-dom": "^17.6.3",
     "lint-staged": "^13.3.0",
     "oxfmt": "^0.47.0",
