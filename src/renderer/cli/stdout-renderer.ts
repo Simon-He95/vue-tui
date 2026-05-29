@@ -204,11 +204,31 @@ export function createStdoutRenderer(
   const chunkThresholdBytes = 64 * 1024;
   const syncMaxBytes = 128 * 1024;
   const dirtyFullThreshold = 0.6;
+  // Row-internal diff tuning.
+  // A few narrow spans are cheaper than repainting a whole dirty row.
+  // Too many spans become cursor-move heavy, so fall back to full-row repaint.
+  const dirtySpanMergeGapCells = 2;
+  const dirtySpanMaxPerRow = 8;
+  const dirtySpanFullRowThreshold = 0.6;
 
   const disableCursorPos = false;
   const termProgram = String(env.TERM_PROGRAM ?? "")
     .trim()
     .toLowerCase();
+  const term = String(env.TERM ?? "")
+    .trim()
+    .toLowerCase();
+  const isKitty = "KITTY_WINDOW_ID" in env || termProgram.includes("kitty");
+  const isAlacritty =
+    "ALACRITTY_WINDOW_ID" in env ||
+    "ALACRITTY_LOG" in env ||
+    termProgram.includes("alacritty") ||
+    term.includes("alacritty");
+  const isWezTerm =
+    "WEZTERM_PANE" in env || "WEZTERM_EXECUTABLE" in env || termProgram.includes("wezterm");
+  const useConservativeDirtyRows = Boolean(
+    out.isTTY && (isGhostty || isKitty || isAlacritty || isWezTerm),
+  );
   const isVscodeTerminal =
     termProgram === "vscode" || "VSCODE_PID" in env || "VSCODE_IPC_HOOK_CLI" in env;
   const enableOsc8Links = out.isTTY !== false && !isVscodeTerminal;
@@ -500,6 +520,243 @@ export function createStdoutRenderer(
       currentHrefIds[base + x] = hrefId(normalizeHref(cell.style.href));
     }
   }
+
+  type DirtySpan = Readonly<{
+    startX: number;
+    endXExclusive: number;
+  }>;
+
+  const expandSpanStart = (row: readonly Cell[], startX: number): number => {
+    let x = Math.max(0, Math.min(row.length, Math.floor(startX)));
+    while (x > 0 && row[x]?.continuation) x--;
+    return x;
+  };
+
+  const expandSpanEnd = (row: readonly Cell[], endXExclusive: number): number => {
+    let x = Math.max(0, Math.min(row.length, Math.floor(endXExclusive)));
+    while (x > 0 && x < row.length && row[x]?.continuation) x++;
+    const previous = row[x - 1];
+    if (previous && !previous.continuation && previous.width === 2) {
+      x = Math.min(row.length, x + 1);
+    }
+    return x;
+  };
+
+  const isPercentTokenCell = (cell: Cell | undefined): boolean => {
+    if (!cell || cell.continuation) return false;
+    return /^[0-9.%]$/.test(cell.ch);
+  };
+
+  const expandPercentTokenSpan = (
+    row: readonly Cell[],
+    startX: number,
+    endXExclusive: number,
+  ): DirtySpan => {
+    let tokenStart = startX;
+    let tokenEnd = endXExclusive;
+
+    while (tokenStart > 0 && isPercentTokenCell(row[tokenStart - 1])) tokenStart--;
+    while (tokenEnd < row.length && isPercentTokenCell(row[tokenEnd])) tokenEnd++;
+
+    let hasPercent = false;
+    for (let x = tokenStart; x < tokenEnd; x++) {
+      if (row[x]?.ch === "%") {
+        hasPercent = true;
+        break;
+      }
+    }
+
+    return hasPercent ? { startX: tokenStart, endXExclusive: tokenEnd } : { startX, endXExclusive };
+  };
+
+  const pushDirtySpan = (
+    spans: DirtySpan[],
+    row: readonly Cell[],
+    startX: number,
+    endXExclusive: number,
+  ): void => {
+    let expandedStart = expandSpanStart(row, startX);
+    let expandedEnd = expandSpanEnd(row, endXExclusive);
+    const percentTokenSpan = expandPercentTokenSpan(row, expandedStart, expandedEnd);
+    expandedStart = percentTokenSpan.startX;
+    expandedEnd = percentTokenSpan.endXExclusive;
+
+    if (expandedEnd <= expandedStart) return;
+
+    const prev = spans[spans.length - 1];
+
+    // Merge overlapping or very-close spans. For tiny gaps, one write is usually
+    // cheaper than another cursor move + style transition.
+    if (prev && expandedStart <= prev.endXExclusive + dirtySpanMergeGapCells) {
+      spans[spans.length - 1] = {
+        startX: prev.startX,
+        endXExclusive: Math.max(prev.endXExclusive, expandedEnd),
+      };
+      return;
+    }
+
+    spans.push({
+      startX: expandedStart,
+      endXExclusive: expandedEnd,
+    });
+  };
+
+  const collectChangedSpans = (
+    row: readonly Cell[],
+    cols: number,
+    changedAt: (x: number) => boolean,
+  ): readonly DirtySpan[] => {
+    const limit = Math.min(cols, row.length, fpCols || cols);
+    if (limit <= 0) return [];
+
+    const spans: DirtySpan[] = [];
+    let startX = -1;
+
+    for (let x = 0; x < limit; x++) {
+      if (changedAt(x)) {
+        if (startX < 0) startX = x;
+        continue;
+      }
+
+      if (startX >= 0) {
+        pushDirtySpan(spans, row, startX, x);
+        startX = -1;
+      }
+    }
+
+    if (startX >= 0) {
+      pushDirtySpan(spans, row, startX, limit);
+    }
+
+    return spans;
+  };
+
+  const dirtySpanCoverage = (spans: readonly DirtySpan[]): number => {
+    let total = 0;
+    for (const span of spans) {
+      total += Math.max(0, span.endXExclusive - span.startX);
+    }
+    return total;
+  };
+
+  const shouldFallbackDirtySpansToFullRow = (
+    spans: readonly DirtySpan[],
+    cols: number,
+  ): boolean => {
+    if (!spans.length) return false;
+    if (spans.length > dirtySpanMaxPerRow) return true;
+
+    const coverage = dirtySpanCoverage(spans);
+    return coverage >= Math.max(1, Math.floor(cols * dirtySpanFullRowThreshold));
+  };
+
+  const resolveChangedSpans = (
+    row: readonly Cell[],
+    y: number,
+    cols: number,
+    nextFP: Uint32Array = currentFP,
+    nextHrefIds: Uint32Array = currentHrefIds,
+  ): readonly DirtySpan[] => {
+    if (!fpCols || y >= fpRows || !fpPrevValid) {
+      return row.length ? [{ startX: 0, endXExclusive: row.length }] : [];
+    }
+
+    const base = y * fpCols;
+
+    return collectChangedSpans(row, cols, (x) => {
+      return (
+        nextFP[base + x] !== prevFP[base + x] || nextHrefIds[base + x] !== prevHrefIds[base + x]
+      );
+    });
+  };
+
+  const _resolveChangedSpansAgainstFill = (
+    row: readonly Cell[],
+    y: number,
+    cols: number,
+    fillFingerprint: number,
+  ): readonly DirtySpan[] => {
+    if (!fpCols || y >= fpRows) {
+      return row.length ? [{ startX: 0, endXExclusive: row.length }] : [];
+    }
+
+    const base = y * fpCols;
+
+    return collectChangedSpans(row, cols, (x) => {
+      return currentFP[base + x] !== fillFingerprint || currentHrefIds[base + x] !== 0;
+    });
+  };
+
+  const resolveChangedSpansAgainstReference = (
+    row: readonly Cell[],
+    y: number,
+    cols: number,
+    referenceFP: Uint32Array,
+    referenceHrefIds: Uint32Array,
+  ): readonly DirtySpan[] => {
+    if (!fpCols || y >= fpRows) {
+      return row.length ? [{ startX: 0, endXExclusive: row.length }] : [];
+    }
+
+    const rowFP = terminal.getRowFingerprints(y);
+    const base = y * fpCols;
+
+    return collectChangedSpans(row, cols, (x) => {
+      const cell = row[x]!;
+      const rowHrefId = hrefId(normalizeHref(cell.style.href));
+      const fingerprint =
+        rowFP && rowFP.length >= cols ? rowFP[x]! : cellFingerprint(cell.ch, cell.style);
+
+      return fingerprint !== referenceFP[base + x] || rowHrefId !== referenceHrefIds[base + x];
+    });
+  };
+
+  const lastOccupiedColumnInRow = (row: readonly Cell[], cols: number): number => {
+    const limit = Math.min(cols, row.length);
+    for (let x = limit - 1; x >= 0; x--) {
+      const cell = row[x];
+      if (!cell) continue;
+      if (cell.continuation) {
+        if (x > 0) {
+          const previous = row[x - 1];
+          if (previous && !previous.continuation && previous.width === 2 && previous.ch !== " ") {
+            return x;
+          }
+        }
+        continue;
+      }
+      if (cell.ch !== " " || Object.keys(cell.style).length > 0) {
+        return Math.min(limit - 1, x + (cell.width ?? 1) - 1);
+      }
+    }
+    return -1;
+  };
+
+  const shouldRewriteRowTail = (
+    row: readonly Cell[],
+    y: number,
+    cols: number,
+    referenceFP: Uint32Array,
+    referenceHrefIds: Uint32Array,
+  ): boolean => {
+    if (!fpCols || y >= fpRows) return true;
+
+    const currentTailStart = Math.max(
+      0,
+      Math.min(cols, row.length, lastOccupiedColumnInRow(row, cols) + 1),
+    );
+    if (currentTailStart >= cols) return false;
+
+    const blankFP = cellFingerprint(" ", { bg: defaultBg });
+    const base = y * fpCols;
+    const limit = Math.min(cols, fpCols);
+
+    for (let x = currentTailStart; x < limit; x++) {
+      if (referenceFP[base + x] !== blankFP || referenceHrefIds[base + x] !== 0) return true;
+    }
+
+    return false;
+  };
   const rowCursorToCol1: string[] = [];
   const rowClearToEol: string[] = [];
   const rowTextPartsScratch: string[] = [];
@@ -982,6 +1239,29 @@ export function createStdoutRenderer(
       if (!sorted) outRows.sort((a, b) => a - b);
       return outRows;
     })();
+    const dirtyFP = fpPrevValid && rowsToRender ? new Uint32Array(currentFP) : null;
+    const dirtyHrefIds = fpPrevValid && rowsToRender ? new Uint32Array(currentHrefIds) : null;
+    const snapshotDirtyRowFingerprints = () => {
+      if (!dirtyFP || !dirtyHrefIds || !rowsToRender) return;
+      for (const y of rowsToRender) {
+        const row = terminal.getRow(y) as Cell[];
+        const rowFP = terminal.getRowFingerprints(y);
+        const base = y * fpCols;
+        if (rowFP && rowFP.length >= size.cols) {
+          dirtyFP.set(rowFP.subarray(0, size.cols), base);
+        } else {
+          for (let x = 0; x < size.cols; x++) {
+            const cell = row[x]!;
+            dirtyFP[base + x] = cellFingerprint(cell.ch, cell.style);
+          }
+        }
+        for (let x = 0; x < size.cols; x++) {
+          const cell = row[x]!;
+          dirtyHrefIds[base + x] = hrefId(normalizeHref(cell.style.href));
+        }
+      }
+    };
+    snapshotDirtyRowFingerprints();
     if (fpPrevValid && rowsToRender) {
       // Preserve untouched rows so the next frame still compares against the
       // full previous screen, not just the rows repainted in this frame.
@@ -1166,6 +1446,50 @@ export function createStdoutRenderer(
       lastRenderWasFullRow = spanStart === 0 && clearToEol;
     };
 
+    const renderDirtySpans = (
+      y: number,
+      row: readonly Cell[],
+      spans: readonly DirtySpan[],
+      rewriteTail: boolean,
+    ): void => {
+      if (!spans.length) return;
+
+      // Dense or highly fragmented row: repaint whole row. This prevents pathological
+      // cases where many cursor movements are slower than one contiguous rewrite.
+      if (shouldFallbackDirtySpansToFullRow(spans, size.cols)) {
+        renderRow(y, row);
+        return;
+      }
+
+      const clearStartX = rewriteTail
+        ? Math.max(0, Math.min(row.length, lastOccupiedColumnInRow(row, size.cols) + 1))
+        : null;
+
+      const lastSpan = spans[spans.length - 1];
+
+      for (const span of spans) {
+        if (clearStartX != null && span.startX >= clearStartX) {
+          continue;
+        }
+
+        const endXExclusive =
+          clearStartX == null ? span.endXExclusive : Math.min(span.endXExclusive, clearStartX);
+
+        if (endXExclusive <= span.startX) continue;
+
+        const clearToEol =
+          clearStartX == null && span === lastSpan && span.endXExclusive >= row.length;
+
+        renderRow(y, row, span.startX, endXExclusive, clearToEol);
+      }
+
+      // Text became shorter. Clear from the new logical tail without rewriting the
+      // unchanged middle of the row.
+      if (clearStartX != null) {
+        renderRow(y, row, clearStartX, clearStartX, true);
+      }
+    };
+
     // Detect scroll pattern: if dirty rows represent a pure vertical shift,
     // use DECSTBM scroll regions to let the terminal shift content natively,
     // then only render the newly revealed rows. This reduces ANSI output from
@@ -1246,7 +1570,7 @@ export function createStdoutRenderer(
       }
     }
     const denseDirtyRows = Boolean(
-      rowsToRender && rowsToRender.length >= size.rows * dirtyFullThreshold,
+      rowsToRender && size.rows > 1 && rowsToRender.length >= size.rows * dirtyFullThreshold,
     );
     if (denseDirtyRows) {
       rowsToRender = null;
@@ -1426,8 +1750,28 @@ export function createStdoutRenderer(
         // (e.g., scrollbar column changes)
         for (const y of extraDirtyRows) {
           const row = terminal.getRow(y) as Cell[];
+          if (useConservativeDirtyRows) {
+            fingerprintRow(row, y, size.cols);
+            renderRow(y, row);
+            continue;
+          }
+
+          const spans = resolveChangedSpansAgainstReference(
+            row,
+            y,
+            size.cols,
+            currentFP,
+            currentHrefIds,
+          );
+          if (!spans.length) {
+            fingerprintRow(row, y, size.cols);
+            renderRow(y, row);
+            continue;
+          }
+
+          const rewriteTail = shouldRewriteRowTail(row, y, size.cols, currentFP, currentHrefIds);
+          renderDirtySpans(y, row, spans, rewriteTail);
           fingerprintRow(row, y, size.cols);
-          renderRow(y, row);
         }
         for (let y = shift.newRowStart; y < shift.newRowEnd; y++) {
           fingerprintRow(terminal.getRow(y) as Cell[], y, size.cols);
@@ -1473,7 +1817,25 @@ export function createStdoutRenderer(
       for (const y of rowsToRender) {
         const row = terminal.getRow(y) as Cell[];
         fingerprintRow(row, y, size.cols);
-        renderRow(y, row);
+        if (useConservativeDirtyRows) {
+          renderRow(y, row);
+          continue;
+        }
+
+        const spans = resolveChangedSpans(
+          row,
+          y,
+          size.cols,
+          dirtyFP ?? currentFP,
+          dirtyHrefIds ?? currentHrefIds,
+        );
+        if (!spans.length) {
+          renderRow(y, row);
+          continue;
+        }
+
+        const rewriteTail = shouldRewriteRowTail(row, y, size.cols, prevFP, prevHrefIds);
+        renderDirtySpans(y, row, spans, rewriteTail);
       }
     }
 

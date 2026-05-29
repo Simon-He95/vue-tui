@@ -290,7 +290,7 @@ describe("stdout renderer", () => {
     }
   });
 
-  it("rewrites the dirty row when only the row prefix changes", () => {
+  it("patches only the changed row prefix when no conservative fallback is active", () => {
     const terminal = createTerminal({ cols: 24, rows: 4 });
     let out = "";
     const output = {
@@ -315,7 +315,8 @@ describe("stdout renderer", () => {
     terminal.commit();
 
     expect(out.includes("\u001B[2;1H")).toBe(true);
-    expect(out.includes("[ Exit ]")).toBe(true);
+    expect(out.includes("B")).toBe(true);
+    expect(out.includes("[ Exit ]")).toBe(false);
 
     renderer.dispose();
   });
@@ -421,7 +422,7 @@ describe("stdout renderer", () => {
     renderer.dispose();
   });
 
-  it("rewrites the dirty row when overlay is on another row", () => {
+  it("patches only the dirty row column when overlay is on another row", () => {
     const terminal = createTerminal({ cols: 24, rows: 4 });
     const overlay = getPlaneTerminal(terminal, "overlay");
     let out = "";
@@ -448,7 +449,8 @@ describe("stdout renderer", () => {
     terminal.commit({ planes: ["default"] });
 
     expect(out.includes("\u001B[2;1H")).toBe(true);
-    expect(out.includes("[ Exit ]")).toBe(true);
+    expect(out.includes("B")).toBe(true);
+    expect(out.includes("[ Exit ]")).toBe(false);
     expect(out.includes("[Dialog]")).toBe(false);
 
     renderer.dispose();
