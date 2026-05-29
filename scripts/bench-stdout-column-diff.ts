@@ -7,11 +7,53 @@ type BufferedOutput = CliOutput & {
   take: () => string;
 };
 
-function createBufferedOutput(isTTY: boolean): BufferedOutput {
+type EnvSnapshot = Partial<Record<string, string>>;
+
+const TERMINAL_ENV_KEYS = [
+  "TERM",
+  "TERM_PROGRAM",
+  "KITTY_WINDOW_ID",
+  "ALACRITTY_WINDOW_ID",
+  "ALACRITTY_LOG",
+  "WEZTERM_PANE",
+  "WEZTERM_EXECUTABLE",
+  "GHOSTTY_RESOURCES_DIR",
+  "VSCODE_PID",
+  "VSCODE_IPC_HOOK_CLI",
+] as const;
+
+function snapshotEnv(): EnvSnapshot {
+  const snapshot: EnvSnapshot = {};
+  for (const key of TERMINAL_ENV_KEYS) {
+    snapshot[key] = process.env[key];
+  }
+  return snapshot;
+}
+
+function restoreEnv(snapshot: EnvSnapshot): void {
+  for (const key of TERMINAL_ENV_KEYS) {
+    const value = snapshot[key];
+    if (value == null) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+}
+
+function clearTerminalEnv(): void {
+  for (const key of TERMINAL_ENV_KEYS) {
+    delete process.env[key];
+  }
+}
+
+function createBufferedOutput(): BufferedOutput {
   const chunks: string[] = [];
 
   return {
-    isTTY,
+    // Keep both benchmark arms on the TTY code path. The only intended
+    // difference is conservative full-row rendering vs column diff.
+    isTTY: true,
     write(chunk: string) {
       chunks.push(String(chunk));
     },
@@ -30,16 +72,22 @@ function runCase(
     conservative: boolean;
   }>,
 ) {
-  const frames = options.frames;
-  const oldWezTermPane = process.env.WEZTERM_PANE;
-
-  if (options.conservative) {
-    process.env.WEZTERM_PANE = "bench";
-  } else {
-    delete process.env.WEZTERM_PANE;
-  }
+  const envSnapshot = snapshotEnv();
 
   try {
+    clearTerminalEnv();
+
+    if (options.conservative) {
+      process.env.WEZTERM_PANE = "bench";
+      process.env.TERM_PROGRAM = "WezTerm";
+    } else {
+      // A deterministic non-conservative TTY. Avoid inheriting CI/local terminal
+      // variables that accidentally force full-row rendering.
+      process.env.TERM = "xterm-256color";
+      process.env.TERM_PROGRAM = "iTerm.app";
+    }
+
+    const frames = options.frames;
     const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
     const middle =
       " building package with a deliberately very very long unchanged middle segment ".repeat(2);
@@ -47,7 +95,9 @@ function runCase(
     const cols = percentX + 8;
 
     const terminal = createTerminal({ cols, rows: 1 });
-    const output = createBufferedOutput(options.conservative);
+    terminal.write(`⠋ ${middle}000%`, { x: 0, y: 0 });
+
+    const output = createBufferedOutput();
     const renderer = createStdoutRenderer(terminal, {
       output,
       clear: false,
@@ -56,10 +106,6 @@ function runCase(
       useSyncOutput: false,
     });
 
-    terminal.write(`⠋ ${middle}000%`, { x: 0, y: 0 });
-    terminal.commit({ sync: true });
-
-    // Drop initial full paint.
     output.take();
 
     let totalBytes = 0;
@@ -77,7 +123,7 @@ function runCase(
       const frame = output.take();
       const bytes = Buffer.byteLength(frame, "utf8");
       totalBytes += bytes;
-      if (bytes > maxFrameBytes) maxFrameBytes = bytes;
+      maxFrameBytes = Math.max(maxFrameBytes, bytes);
     }
 
     const durationMs = performance.now() - startedAt;
@@ -94,11 +140,7 @@ function runCase(
       framesPerSecond: frames / (durationMs / 1000),
     };
   } finally {
-    if (oldWezTermPane == null) {
-      delete process.env.WEZTERM_PANE;
-    } else {
-      process.env.WEZTERM_PANE = oldWezTermPane;
-    }
+    restoreEnv(envSnapshot);
   }
 }
 

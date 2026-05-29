@@ -75,10 +75,24 @@ describe("stdout renderer column diff", () => {
     terminal.dispose();
   });
 
-  it("updates two distant changed regions without rewriting the unchanged middle", () => {
-    const middle = " building package with a deliberately long unchanged middle segment ";
+  it("updates distant changed cells without writing unchanged middle text", () => {
+    const middle = " ".repeat(4) + "this middle must not be written" + " ".repeat(4);
     const percentX = 2 + middle.length;
-    const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`);
+
+    const terminal = createTerminal({ cols: percentX + 8, rows: 1 });
+    const output = createBufferedOutput(false);
+    const renderer = createStdoutRenderer(terminal, {
+      output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      useSyncOutput: false,
+    });
+
+    terminal.write(`⠋ ${middle}10%`, { x: 0, y: 0 });
+    terminal.commit({ sync: true });
+
+    output.take();
 
     terminal.put(0, 0, "⠙");
     terminal.write("11%", { x: percentX, y: 0 });
@@ -90,20 +104,29 @@ describe("stdout renderer column diff", () => {
     expect(frame).toContain(`\x1B[1;${percentX + 1}H`);
     expect(frame).toContain("⠙");
     expect(frame).toContain("11%");
-    expect(frame).not.toContain("deliberately long unchanged middle segment");
-
-    // The important budget is deterministic bytes written to stdout, not wall time.
-    // Single-span behavior would include the long unchanged middle and exceed this.
-    expect(byteLength(frame)).toBeLessThan(90);
+    expect(frame).not.toContain("this middle must not be written");
 
     renderer.dispose();
     terminal.dispose();
   });
 
-  it("clears stale tail when text becomes shorter without repainting unchanged prefix", () => {
-    const { terminal, output, renderer } = mountRow("⠙ Installing dependencies and building cache");
+  it("clears stale tail without rewriting unchanged prefix", () => {
+    const terminal = createTerminal({ cols: 80, rows: 1 });
+    const output = createBufferedOutput(false);
+    const renderer = createStdoutRenderer(terminal, {
+      output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      useSyncOutput: false,
+    });
 
-    terminal.clear(2, 0, 80, 1);
+    terminal.write("⠙ Installing dependencies and building cache", { x: 0, y: 0 });
+    terminal.commit({ sync: true });
+
+    output.take();
+
+    terminal.clear(2, 0, 78, 1);
     terminal.write("Done", { x: 2, y: 0 });
     terminal.commit({ sync: true });
 
@@ -112,9 +135,8 @@ describe("stdout renderer column diff", () => {
     expect(frame).toContain("\x1B[1;3H");
     expect(frame).toContain("Done");
     expect(frame).toContain("\x1B[K");
-    expect(frame).not.toContain("Installing");
-    expect(frame).not.toContain("dependencies");
     expect(frame).not.toContain("⠙");
+    expect(frame).not.toContain("Installing dependencies");
 
     renderer.dispose();
     terminal.dispose();

@@ -207,9 +207,9 @@ export function createStdoutRenderer(
   // Row-internal diff tuning.
   // A few narrow spans are cheaper than repainting a whole dirty row.
   // Too many spans become cursor-move heavy, so fall back to full-row repaint.
-  const dirtySpanMergeGapCells = 2;
-  const dirtySpanMaxPerRow = 8;
-  const dirtySpanFullRowThreshold = 0.6;
+  const DIRTY_SPAN_MERGE_GAP_CELLS = 2;
+  const DIRTY_SPAN_MAX_PER_ROW = 8;
+  const DIRTY_SPAN_FULL_ROW_THRESHOLD = 0.6;
 
   const disableCursorPos = false;
   const termProgram = String(env.TERM_PROGRAM ?? "")
@@ -524,7 +524,28 @@ export function createStdoutRenderer(
   type DirtySpan = Readonly<{
     startX: number;
     endXExclusive: number;
+    clearToEol?: boolean;
   }>;
+
+  const dirtySpanWidth = (span: DirtySpan): number => Math.max(0, span.endXExclusive - span.startX);
+
+  const dirtySpanCoverage = (spans: readonly DirtySpan[]): number => {
+    let total = 0;
+    for (const span of spans) total += dirtySpanWidth(span);
+    return total;
+  };
+
+  const shouldFallbackDirtySpansToFullRow = (
+    spans: readonly DirtySpan[],
+    cols: number,
+  ): boolean => {
+    if (!spans.length) return false;
+    if (spans.some((span) => span.clearToEol)) return false;
+    if (spans.length > DIRTY_SPAN_MAX_PER_ROW) return true;
+    return (
+      dirtySpanCoverage(spans) >= Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD))
+    );
+  };
 
   const expandSpanStart = (row: readonly Cell[], startX: number): number => {
     let x = Math.max(0, Math.min(row.length, Math.floor(startX)));
@@ -587,7 +608,11 @@ export function createStdoutRenderer(
 
     // Merge overlapping or very-close spans. For tiny gaps, one write is usually
     // cheaper than another cursor move + style transition.
-    if (prev && expandedStart <= prev.endXExclusive + dirtySpanMergeGapCells) {
+    if (
+      prev &&
+      !prev.clearToEol &&
+      expandedStart <= prev.endXExclusive + DIRTY_SPAN_MERGE_GAP_CELLS
+    ) {
       spans[spans.length - 1] = {
         startX: prev.startX,
         endXExclusive: Math.max(prev.endXExclusive, expandedEnd),
@@ -629,25 +654,6 @@ export function createStdoutRenderer(
     }
 
     return spans;
-  };
-
-  const dirtySpanCoverage = (spans: readonly DirtySpan[]): number => {
-    let total = 0;
-    for (const span of spans) {
-      total += Math.max(0, span.endXExclusive - span.startX);
-    }
-    return total;
-  };
-
-  const shouldFallbackDirtySpansToFullRow = (
-    spans: readonly DirtySpan[],
-    cols: number,
-  ): boolean => {
-    if (!spans.length) return false;
-    if (spans.length > dirtySpanMaxPerRow) return true;
-
-    const coverage = dirtySpanCoverage(spans);
-    return coverage >= Math.max(1, Math.floor(cols * dirtySpanFullRowThreshold));
   };
 
   const resolveChangedSpans = (
@@ -1446,47 +1452,60 @@ export function createStdoutRenderer(
       lastRenderWasFullRow = spanStart === 0 && clearToEol;
     };
 
+    const withTailClearSpan = (
+      spans: readonly DirtySpan[],
+      row: readonly Cell[],
+      cols: number,
+      rewriteTail: boolean,
+    ): readonly DirtySpan[] => {
+      if (!rewriteTail) return spans;
+
+      const clearStartX = Math.max(0, Math.min(cols, lastOccupiedColumnInRow(row, cols) + 1));
+      const next: DirtySpan[] = [];
+
+      for (const span of spans) {
+        if (span.clearToEol) continue;
+        if (span.startX >= clearStartX) continue;
+
+        next.push({
+          startX: span.startX,
+          endXExclusive: Math.min(span.endXExclusive, clearStartX),
+        });
+      }
+
+      next.push({
+        startX: clearStartX,
+        endXExclusive: clearStartX,
+        clearToEol: true,
+      });
+
+      return next;
+    };
+
     const renderDirtySpans = (
       y: number,
       row: readonly Cell[],
       spans: readonly DirtySpan[],
       rewriteTail: boolean,
     ): void => {
-      if (!spans.length) return;
+      const renderSpans = withTailClearSpan(spans, row, size.cols, rewriteTail);
+      if (!renderSpans.length) return;
 
       // Dense or highly fragmented row: repaint whole row. This prevents pathological
       // cases where many cursor movements are slower than one contiguous rewrite.
-      if (shouldFallbackDirtySpansToFullRow(spans, size.cols)) {
+      if (shouldFallbackDirtySpansToFullRow(renderSpans, size.cols)) {
         renderRow(y, row);
         return;
       }
 
-      const clearStartX = rewriteTail
-        ? Math.max(0, Math.min(row.length, lastOccupiedColumnInRow(row, size.cols) + 1))
-        : null;
-
-      const lastSpan = spans[spans.length - 1];
-
-      for (const span of spans) {
-        if (clearStartX != null && span.startX >= clearStartX) {
+      for (const span of renderSpans) {
+        if (span.clearToEol) {
+          renderRow(y, row, span.startX, span.endXExclusive, true);
           continue;
         }
 
-        const endXExclusive =
-          clearStartX == null ? span.endXExclusive : Math.min(span.endXExclusive, clearStartX);
-
-        if (endXExclusive <= span.startX) continue;
-
-        const clearToEol =
-          clearStartX == null && span === lastSpan && span.endXExclusive >= row.length;
-
-        renderRow(y, row, span.startX, endXExclusive, clearToEol);
-      }
-
-      // Text became shorter. Clear from the new logical tail without rewriting the
-      // unchanged middle of the row.
-      if (clearStartX != null) {
-        renderRow(y, row, clearStartX, clearStartX, true);
+        if (span.endXExclusive <= span.startX) continue;
+        renderRow(y, row, span.startX, span.endXExclusive, false);
       }
     };
 
