@@ -32,7 +32,7 @@ jobs:
       NPM_TAG: ${{ inputs.npm_tag }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -134,7 +134,7 @@ jobs:
         vue: ["3.3.0", "3.5.33"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
