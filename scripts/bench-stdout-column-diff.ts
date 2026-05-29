@@ -7,53 +7,49 @@ type BufferedOutput = CliOutput & {
   take: () => string;
 };
 
-type EnvSnapshot = Partial<Record<string, string>>;
-
 const TERMINAL_ENV_KEYS = [
-  "TERM",
-  "TERM_PROGRAM",
+  "GHOSTTY_RESOURCES_DIR",
   "KITTY_WINDOW_ID",
   "ALACRITTY_WINDOW_ID",
   "ALACRITTY_LOG",
   "WEZTERM_PANE",
   "WEZTERM_EXECUTABLE",
-  "GHOSTTY_RESOURCES_DIR",
-  "VSCODE_PID",
-  "VSCODE_IPC_HOOK_CLI",
+  "TERM_PROGRAM",
+  "TERM",
 ] as const;
 
-function snapshotEnv(): EnvSnapshot {
-  const snapshot: EnvSnapshot = {};
-  for (const key of TERMINAL_ENV_KEYS) {
-    snapshot[key] = process.env[key];
-  }
-  return snapshot;
-}
+function withTerminalEnv<T>(
+  next: Partial<Record<(typeof TERMINAL_ENV_KEYS)[number], string | undefined>>,
+  fn: () => T,
+): T {
+  const prev: Partial<Record<(typeof TERMINAL_ENV_KEYS)[number], string | undefined>> = {};
 
-function restoreEnv(snapshot: EnvSnapshot): void {
   for (const key of TERMINAL_ENV_KEYS) {
-    const value = snapshot[key];
-    if (value == null) {
-      delete process.env[key];
-    } else {
-      process.env[key] = value;
+    prev[key] = process.env[key];
+    delete process.env[key];
+  }
+
+  for (const [key, value] of Object.entries(next)) {
+    if (value == null) delete process.env[key];
+    else process.env[key] = value;
+  }
+
+  try {
+    return fn();
+  } finally {
+    for (const key of TERMINAL_ENV_KEYS) {
+      const value = prev[key];
+      if (value == null) delete process.env[key];
+      else process.env[key] = value;
     }
   }
 }
 
-function clearTerminalEnv(): void {
-  for (const key of TERMINAL_ENV_KEYS) {
-    delete process.env[key];
-  }
-}
-
-function createBufferedOutput(): BufferedOutput {
+function createBufferedOutput(isTTY: boolean): BufferedOutput {
   const chunks: string[] = [];
 
   return {
-    // Keep both benchmark arms on the TTY code path. The only intended
-    // difference is conservative full-row rendering vs column diff.
-    isTTY: true,
+    isTTY,
     write(chunk: string) {
       chunks.push(String(chunk));
     },
@@ -69,92 +65,89 @@ function runCase(
   name: string,
   options: Readonly<{
     frames: number;
-    conservative: boolean;
+    isTTY: boolean;
   }>,
 ) {
-  const envSnapshot = snapshotEnv();
+  const frames = options.frames;
+  const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  const middle =
+    " building package with a deliberately very very long unchanged middle segment ".repeat(2);
+  const percentX = 2 + middle.length;
+  const cols = percentX + 8;
 
-  try {
-    clearTerminalEnv();
+  const terminal = createTerminal({ cols, rows: 1 });
+  terminal.write(`⠋ ${middle}000%`, { x: 0, y: 0 });
 
-    if (options.conservative) {
-      process.env.WEZTERM_PANE = "bench";
-      process.env.TERM_PROGRAM = "WezTerm";
-    } else {
-      // A deterministic non-conservative TTY. Avoid inheriting CI/local terminal
-      // variables that accidentally force full-row rendering.
-      process.env.TERM = "xterm-256color";
-      process.env.TERM_PROGRAM = "iTerm.app";
-    }
+  const output = createBufferedOutput(options.isTTY);
+  const renderer = createStdoutRenderer(terminal, {
+    output,
+    clear: false,
+    hideCursor: false,
+    altScreen: false,
+    useSyncOutput: false,
+  });
 
-    const frames = options.frames;
-    const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-    const middle =
-      " building package with a deliberately very very long unchanged middle segment ".repeat(2);
-    const percentX = 2 + middle.length;
-    const cols = percentX + 8;
+  output.take();
 
-    const terminal = createTerminal({ cols, rows: 1 });
-    terminal.write(`⠋ ${middle}000%`, { x: 0, y: 0 });
+  let totalBytes = 0;
+  let maxFrameBytes = 0;
+  const startedAt = performance.now();
 
-    const output = createBufferedOutput();
-    const renderer = createStdoutRenderer(terminal, {
-      output,
-      clear: false,
-      hideCursor: false,
-      altScreen: false,
-      useSyncOutput: false,
+  for (let i = 0; i < frames; i++) {
+    terminal.put(0, 0, spinnerFrames[i % spinnerFrames.length]!);
+    terminal.write(`${String(i % 1000).padStart(3, "0")}%`, {
+      x: percentX,
+      y: 0,
     });
+    terminal.commit({ sync: true });
 
-    output.take();
-
-    let totalBytes = 0;
-    let maxFrameBytes = 0;
-    const startedAt = performance.now();
-
-    for (let i = 0; i < frames; i++) {
-      terminal.put(0, 0, spinnerFrames[i % spinnerFrames.length]!);
-      terminal.write(`${String(i % 1000).padStart(3, "0")}%`, {
-        x: percentX,
-        y: 0,
-      });
-      terminal.commit({ sync: true });
-
-      const frame = output.take();
-      const bytes = Buffer.byteLength(frame, "utf8");
-      totalBytes += bytes;
-      maxFrameBytes = Math.max(maxFrameBytes, bytes);
-    }
-
-    const durationMs = performance.now() - startedAt;
-    renderer.dispose();
-    terminal.dispose();
-
-    return {
-      name,
-      frames,
-      totalBytes,
-      meanBytes: totalBytes / frames,
-      maxFrameBytes,
-      durationMs,
-      framesPerSecond: frames / (durationMs / 1000),
-    };
-  } finally {
-    restoreEnv(envSnapshot);
+    const frame = output.take();
+    const bytes = Buffer.byteLength(frame, "utf8");
+    totalBytes += bytes;
+    maxFrameBytes = Math.max(maxFrameBytes, bytes);
   }
+
+  const durationMs = performance.now() - startedAt;
+  renderer.dispose();
+  terminal.dispose();
+
+  return {
+    name,
+    frames,
+    totalBytes,
+    meanBytes: totalBytes / frames,
+    maxFrameBytes,
+    durationMs,
+    framesPerSecond: frames / (durationMs / 1000),
+  };
 }
 
 const frames = Number(process.env.FRAMES ?? 5000);
 
-const conservative = runCase("full dirty row / conservative", {
-  frames,
-  conservative: true,
-});
+const conservative = withTerminalEnv(
+  {
+    WEZTERM_PANE: "bench",
+    TERM_PROGRAM: "WezTerm",
+    TERM: "xterm-256color",
+  },
+  () =>
+    runCase("full dirty row / conservative", {
+      frames,
+      isTTY: true,
+    }),
+);
 
-const optimized = runCase("multi-span column diff", {
-  frames,
-  conservative: false,
-});
+const optimized = withTerminalEnv(
+  {
+    TERM_PROGRAM: "iTerm.app",
+    TERM: "xterm-256color",
+  },
+  () =>
+    runCase("multi-span column diff", {
+      frames,
+      isTTY: false,
+    }),
+);
 
 console.table([conservative, optimized]);
 
