@@ -264,7 +264,7 @@
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.2",
     "@playwright/test": "^1.60.0",
-    "@types/node": "^18.19.130",
+    "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^4.1.7",
     "bumpp": "^8.2.1",
     "esbuild": "^0.20.2",
