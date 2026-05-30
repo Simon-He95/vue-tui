@@ -69,7 +69,14 @@ function byteLength(value: string): number {
   return Buffer.byteLength(value, "utf8");
 }
 
-function mountRow(text: string, options: Readonly<{ cols?: number; isTTY?: boolean }> = {}) {
+function mountRow(
+  text: string,
+  options: Readonly<{
+    cols?: number;
+    isTTY?: boolean;
+    columnDiff?: boolean | "auto";
+  }> = {},
+) {
   const cols = options.cols ?? 120;
   const terminal = createTerminal({ cols, rows: 1 });
   const output = createBufferedOutput(options.isTTY ?? false);
@@ -79,6 +86,7 @@ function mountRow(text: string, options: Readonly<{ cols?: number; isTTY?: boole
     hideCursor: false,
     altScreen: false,
     useSyncOutput: false,
+    ...(options.columnDiff !== undefined ? { columnDiff: options.columnDiff } : {}),
   });
 
   terminal.write(text, { x: 0, y: 0 });
@@ -98,7 +106,9 @@ describe("stdout renderer column diff", () => {
   it("updates only spinner cell when the text is unchanged", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const staticText = " Installing dependencies from cache";
-      const { terminal, output, renderer, initialFrame } = mountRow(`⠋${staticText}`);
+      const { terminal, output, renderer, initialFrame } = mountRow(`⠋${staticText}`, {
+        columnDiff: true,
+      });
 
       terminal.put(0, 0, "⠙");
       terminal.commit({ sync: true });
@@ -128,6 +138,7 @@ describe("stdout renderer column diff", () => {
         hideCursor: false,
         altScreen: false,
         useSyncOutput: false,
+        columnDiff: true,
       });
 
       terminal.write(`⠋ ${middle}10%`, { x: 0, y: 0 });
@@ -170,6 +181,7 @@ describe("stdout renderer column diff", () => {
         hideCursor: false,
         altScreen: false,
         useSyncOutput: false,
+        columnDiff: true,
       });
 
       output.take();
@@ -197,6 +209,7 @@ describe("stdout renderer column diff", () => {
         hideCursor: false,
         altScreen: false,
         useSyncOutput: false,
+        columnDiff: true,
       });
 
       terminal.write("⠙ Installing dependencies and building cache", { x: 0, y: 0 });
@@ -224,7 +237,10 @@ describe("stdout renderer column diff", () => {
   it("does not fall back to a full row when long text becomes short", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const longText = "Installing dependencies and building cache from remote registry";
-      const { terminal, output, renderer } = mountRow(`⠙ ${longText}`, { cols: 100 });
+      const { terminal, output, renderer } = mountRow(`⠙ ${longText}`, {
+        cols: 100,
+        columnDiff: true,
+      });
 
       terminal.clear(2, 0, longText.length, 1);
       terminal.write("Done", { x: 2, y: 0 });
@@ -258,6 +274,7 @@ describe("stdout renderer column diff", () => {
       const rightX = prefix.length + oldMiddle.length;
       const { terminal, output, renderer } = mountRow(`${prefix}${oldMiddle}${right}`, {
         cols: 80,
+        columnDiff: true,
       });
 
       terminal.clear(prefix.length, 0, oldMiddle.length, 1);
@@ -283,7 +300,9 @@ describe("stdout renderer column diff", () => {
 
   it("expands changed spans to whole wide glyphs", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
-      const { terminal, output, renderer } = mountRow("界 static text");
+      const { terminal, output, renderer } = mountRow("界 static text", {
+        columnDiff: true,
+      });
 
       terminal.put(0, 0, "語");
       terminal.commit({ sync: true });
@@ -315,6 +334,7 @@ describe("stdout renderer column diff", () => {
         hideCursor: false,
         altScreen: false,
         useSyncOutput: false,
+        columnDiff: true,
       });
 
       output.take();
@@ -342,6 +362,94 @@ describe("stdout renderer column diff", () => {
       // immediately after "Done". ANSI column 5 would mean "clear right after Done",
       // which would erase the styled blank span at col 21.
       expect(frame).not.toContain("\x1B[1;5H\x1B[K");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("can force full dirty-row rendering with columnDiff: false", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const middle = " unchanged middle should be repainted by explicit opt-out ";
+      const percentX = 2 + middle.length;
+      const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+        columnDiff: false,
+      });
+
+      terminal.put(0, 0, "⠙");
+      terminal.write("11%", { x: percentX, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("⠙");
+      expect(frame).toContain("11%");
+      expect(frame).toContain("unchanged middle should be repainted");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("can force column diffs in conservative TTY mode with columnDiff: true", () => {
+    withTerminalEnv(
+      {
+        KITTY_WINDOW_ID: "test",
+        TERM_PROGRAM: "kitty",
+        TERM: "xterm-kitty",
+      },
+      () => {
+        const middle = " unchanged middle should not be written when forced ";
+        const percentX = 2 + middle.length;
+        const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+          isTTY: true,
+          columnDiff: true,
+        });
+
+        terminal.put(0, 0, "⠙");
+        terminal.write("11%", { x: percentX, y: 0 });
+        terminal.commit({ sync: true });
+
+        const frame = output.take();
+
+        expect(frame).toContain("\x1B[1;1H");
+        expect(frame).toContain(`\x1B[1;${percentX + 1}H`);
+        expect(frame).toContain("⠙");
+        expect(frame).toContain("11%");
+        expect(frame).not.toContain("unchanged middle should not be written");
+
+        renderer.dispose();
+        terminal.dispose();
+      },
+    );
+  });
+
+  it("falls back to full row when changed spans are too fragmented", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const unchangedMiddle = " full row fallback keeps unchanged words visible ";
+      const indices = [0, 60, 64, 68, 72, 76, 80, 84, 88];
+      const chars = Array.from("a".repeat(120));
+      for (let i = 0; i < unchangedMiddle.length; i++) {
+        chars[4 + i] = unchangedMiddle[i]!;
+      }
+      for (const [index, x] of indices.entries()) {
+        chars[x] = String.fromCharCode("b".charCodeAt(0) + index);
+      }
+      const initial = chars.join("");
+      const { terminal, output, renderer } = mountRow(initial, {
+        cols: 120,
+        columnDiff: true,
+      });
+
+      for (const [index, x] of indices.entries()) {
+        terminal.put(x, 0, String.fromCharCode("K".charCodeAt(0) + index));
+      }
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("K");
+      expect(frame).toContain(unchangedMiddle.trim());
 
       renderer.dispose();
       terminal.dispose();

@@ -111,6 +111,13 @@ export function createStdoutRenderer(
     getImeAnchor?: () => { cellX: number; cellY: number } | null;
     /** Use DEC 2026 synchronized output mode (default: false for compatibility) */
     useSyncOutput?: boolean;
+    /**
+     * Controls row-internal column diffing.
+     * - true: force narrow column/span patches
+     * - false: repaint whole dirty rows
+     * - "auto": disable on terminals known to be sensitive to narrow patches
+     */
+    columnDiff?: boolean | "auto";
     allowFileUrls?: boolean;
     profileFileWriter?: { appendFileSync?: (path: string, data: string) => void };
   }>,
@@ -218,7 +225,8 @@ export function createStdoutRenderer(
   const term = String(env.TERM ?? "")
     .trim()
     .toLowerCase();
-  const isKitty = "KITTY_WINDOW_ID" in env || termProgram.includes("kitty");
+  const isKitty =
+    "KITTY_WINDOW_ID" in env || termProgram.includes("kitty") || term.includes("kitty");
   const isAlacritty =
     "ALACRITTY_WINDOW_ID" in env ||
     "ALACRITTY_LOG" in env ||
@@ -226,11 +234,19 @@ export function createStdoutRenderer(
     term.includes("alacritty");
   const isWezTerm =
     "WEZTERM_PANE" in env || "WEZTERM_EXECUTABLE" in env || termProgram.includes("wezterm");
-  const useConservativeDirtyRows = Boolean(
-    out.isTTY && (isGhostty || isKitty || isAlacritty || isWezTerm),
-  );
   const isVscodeTerminal =
     termProgram === "vscode" || "VSCODE_PID" in env || "VSCODE_IPC_HOOK_CLI" in env;
+  const useConservativeDirtyRows = Boolean(
+    out.isTTY !== false && (isGhostty || isKitty || isAlacritty || isWezTerm),
+  );
+  function resolveColumnDiffEnabled(): boolean {
+    const opt = options?.columnDiff ?? "auto";
+    if (opt === true) return true;
+    if (opt === false) return false;
+    if (!out.isTTY) return true;
+    return !useConservativeDirtyRows;
+  }
+  const enableColumnDiff = resolveColumnDiffEnabled();
   const enableOsc8Links = out.isTTY !== false && !isVscodeTerminal;
 
   let disposed = false;
@@ -1896,36 +1912,32 @@ export function createStdoutRenderer(
         // (e.g., scrollbar column changes)
         for (const y of extraDirtyRows) {
           const row = terminal.getRow(y) as Cell[];
-          if (useConservativeDirtyRows) {
-            fingerprintRow(row, y, size.cols);
-            renderRow(y, row);
-            continue;
+          if (enableColumnDiff) {
+            const spans = resolveChangedSpansAgainstReference(
+              row,
+              y,
+              size.cols,
+              currentFP,
+              currentHrefIds,
+              currentCharHashes,
+            );
+            if (spans.length) {
+              const rewriteTail = shouldRewriteRowTail(
+                row,
+                y,
+                size.cols,
+                currentFP,
+                currentHrefIds,
+                currentCharHashes,
+              );
+              renderDirtySpans(y, row, spans, rewriteTail);
+              fingerprintRow(row, y, size.cols);
+              continue;
+            }
           }
 
-          const spans = resolveChangedSpansAgainstReference(
-            row,
-            y,
-            size.cols,
-            currentFP,
-            currentHrefIds,
-            currentCharHashes,
-          );
-          if (!spans.length) {
-            fingerprintRow(row, y, size.cols);
-            renderRow(y, row);
-            continue;
-          }
-
-          const rewriteTail = shouldRewriteRowTail(
-            row,
-            y,
-            size.cols,
-            currentFP,
-            currentHrefIds,
-            currentCharHashes,
-          );
-          renderDirtySpans(y, row, spans, rewriteTail);
           fingerprintRow(row, y, size.cols);
+          renderRow(y, row);
         }
         for (let y = shift.newRowStart; y < shift.newRowEnd; y++) {
           fingerprintRow(terminal.getRow(y) as Cell[], y, size.cols);
@@ -1971,7 +1983,7 @@ export function createStdoutRenderer(
       for (const y of rowsToRender) {
         const row = terminal.getRow(y) as Cell[];
         fingerprintRow(row, y, size.cols);
-        if (useConservativeDirtyRows) {
+        if (!enableColumnDiff) {
           renderRow(y, row);
           continue;
         }
