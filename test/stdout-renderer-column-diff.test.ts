@@ -199,6 +199,46 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("re-emits OSC8 when only href identity changes", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 80, rows: 1 });
+      const output = createBufferedOutput(true);
+
+      terminal.write("link", {
+        x: 0,
+        y: 0,
+        style: { href: "https://a.example" },
+      });
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        columnDiff: true,
+      });
+
+      output.take();
+
+      terminal.write("link", {
+        x: 0,
+        y: 0,
+        style: { href: "https://b.example" },
+      });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B]8;;https://b.example\x07");
+      expect(frame).not.toContain("https://a.example");
+      expect(frame).toContain("link");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("clears stale tail without rewriting unchanged prefix", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const terminal = createTerminal({ cols: 80, rows: 1 });
@@ -227,6 +267,44 @@ describe("stdout renderer column diff", () => {
       expect(frame).toContain("Done");
       expect(frame).toContain("\x1B[K");
       expect(frame).not.toContain("⠙");
+      expect(frame).not.toContain("Installing dependencies");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("clears stale tail without rewriting unchanged middle text", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const middle = " unchanged middle that must not be rewritten after the patch ";
+      const terminal = createTerminal({ cols: 120, rows: 1 });
+      const output = createBufferedOutput(false);
+
+      terminal.write(`⠙ ${middle}Installing dependencies`, { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        columnDiff: true,
+      });
+
+      output.take();
+
+      const suffixX = 2 + middle.length;
+      terminal.clear(suffixX, 0, 80, 1);
+      terminal.write("Done", { x: suffixX, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain(`\x1B[1;${suffixX + 1}H`);
+      expect(frame).toContain("Done");
+      expect(frame).toContain("\x1B[K");
+      expect(frame).not.toContain("unchanged middle that must not be rewritten");
       expect(frame).not.toContain("Installing dependencies");
 
       renderer.dispose();
