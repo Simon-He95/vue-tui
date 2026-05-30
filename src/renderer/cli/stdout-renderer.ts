@@ -813,6 +813,39 @@ export function createStdoutRenderer(
     return -1;
   };
 
+  const isDefaultBlankCell = (y: number, x: number, defaultBlankFP: number): boolean => {
+    if (!fpCols || y < 0 || y >= fpRows || x < 0 || x >= fpCols) return false;
+
+    const index = y * fpCols + x;
+
+    return currentFP[index] === defaultBlankFP && currentHrefIds[index] === 0;
+  };
+
+  const lastMeaningfulColumnInRow = (
+    row: readonly Cell[],
+    y: number,
+    cols: number,
+    defaultBlankFP: number,
+  ): number => {
+    const limit = Math.min(cols, row.length, fpCols || cols);
+
+    for (let x = limit - 1; x >= 0; x--) {
+      const cell = row[x];
+      if (!cell) continue;
+
+      // A cell is meaningful if its rendered fingerprint differs from the
+      // renderer's default blank cell, or if it carries a hyperlink id.
+      //
+      // This intentionally treats styled blanks as meaningful:
+      //   " " + bg/href/inverse/etc. must be rendered, not skipped and cleared by ESC[K.
+      if (!isDefaultBlankCell(y, x, defaultBlankFP)) {
+        return x;
+      }
+    }
+
+    return -1;
+  };
+
   const shouldRewriteRowTail = (
     row: readonly Cell[],
     y: number,
@@ -1533,60 +1566,61 @@ export function createStdoutRenderer(
       lastRenderWasFullRow = spanStart === 0 && clearToEol;
     };
 
-    const withTailClearSpan = (
-      spans: readonly DirtySpan[],
-      row: readonly Cell[],
-      cols: number,
-      rewriteTail: boolean,
-    ): readonly DirtySpan[] => {
-      if (!rewriteTail) return spans;
-
-      const clearStartX = Math.max(0, Math.min(cols, lastOccupiedColumnInRow(row, cols) + 1));
-      const next: DirtySpan[] = [];
-
-      for (const span of spans) {
-        if (span.clearToEol) continue;
-        if (span.startX >= clearStartX) continue;
-
-        next.push({
-          startX: span.startX,
-          endXExclusive: Math.min(span.endXExclusive, clearStartX),
-        });
-      }
-
-      next.push({
-        startX: clearStartX,
-        endXExclusive: clearStartX,
-        clearToEol: true,
-      });
-
-      return next;
-    };
-
     const renderDirtySpans = (
       y: number,
       row: readonly Cell[],
       spans: readonly DirtySpan[],
       rewriteTail: boolean,
     ): void => {
-      const renderSpans = withTailClearSpan(spans, row, size.cols, rewriteTail);
-      if (!renderSpans.length) return;
+      if (!spans.length) return;
 
-      // Dense or highly fragmented row: repaint whole row. This prevents pathological
-      // cases where many cursor movements are slower than one contiguous rewrite.
-      if (shouldFallbackDirtySpansToFullRow(renderSpans, size.cols)) {
+      // Dense or highly fragmented row: repaint the whole row. This prevents
+      // pathological cases where many cursor movements are slower than one
+      // contiguous rewrite.
+      if (shouldFallbackDirtySpansToFullRow(spans, size.cols)) {
         renderRow(y, row);
         return;
       }
 
-      for (const span of renderSpans) {
-        if (span.clearToEol) {
-          renderRow(y, row, span.startX, span.endXExclusive, true);
+      const tailClearStart = (() => {
+        if (!rewriteTail) return null;
+
+        const start = lastMeaningfulColumnInRow(row, y, size.cols, blankFP) + 1;
+
+        // Nothing meaningful remains on this row, so clear from col 0.
+        if (start <= 0) return 0;
+
+        // The row is meaningful through the viewport end. There is no safe/useful
+        // EOL clear to emit.
+        if (start >= size.cols) return null;
+
+        return start;
+      })();
+
+      const lastSpan = spans[spans.length - 1];
+
+      for (const span of spans) {
+        if (tailClearStart != null && span.startX >= tailClearStart) {
           continue;
         }
 
-        if (span.endXExclusive <= span.startX) continue;
-        renderRow(y, row, span.startX, span.endXExclusive, false);
+        const endXExclusive =
+          tailClearStart == null
+            ? span.endXExclusive
+            : Math.min(span.endXExclusive, tailClearStart);
+
+        if (endXExclusive <= span.startX) continue;
+
+        const clearToEol =
+          tailClearStart == null && span === lastSpan && span.endXExclusive >= row.length;
+
+        renderRow(y, row, span.startX, endXExclusive, clearToEol);
+      }
+
+      if (tailClearStart != null) {
+        // Text became shorter and the rest of the row is default blank. Clear only
+        // after the last meaningful current cell. This must not erase styled blanks.
+        renderRow(y, row, tailClearStart, tailClearStart, true);
       }
     };
 

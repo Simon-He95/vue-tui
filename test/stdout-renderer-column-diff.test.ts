@@ -239,6 +239,55 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("does not clear styled blank cells when a shorter text leaves a meaningful styled tail", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 48;
+      const terminal = createTerminal({ cols, rows: 2 });
+      const output = createBufferedOutput(false);
+
+      terminal.write("Wait", { x: 0, y: 0 });
+      terminal.write("stale", { x: 26, y: 0 });
+      terminal.commit({ sync: true });
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+      });
+
+      output.take();
+
+      terminal.batch(() => {
+        terminal.clear(0, 0, cols, 1);
+        terminal.write("Done", { x: 0, y: 0 });
+
+        // These cells are visually meaningful even though the character is " ".
+        // A character-only tail detector would skip this span and then ESC[K it away.
+        terminal.fill(20, 0, 6, 1, " ", { bg: "red" });
+      });
+
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("Done");
+
+      // The styled blank region must be rendered as its own span.
+      // x=20 is ANSI column 21.
+      expect(frame).toContain("\x1B[1;21H");
+
+      // The renderer may still clear after the styled region, but it must not clear
+      // immediately after "Done". ANSI column 5 would mean "clear right after Done",
+      // which would erase the styled blank span at col 21.
+      expect(frame).not.toContain("\x1B[1;5H\x1B[K");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("falls back to full dirty-row rendering in conservative TTY mode", () => {
     withTerminalEnv(
       {
