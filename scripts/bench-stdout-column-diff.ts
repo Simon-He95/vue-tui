@@ -25,8 +25,9 @@ function createBufferedOutput(): BufferedOutput {
 
 function runCase(name: string, columnDiff: boolean, frames: number) {
   const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-  const middle =
-    " building package with a deliberately very long unchanged middle segment ".repeat(2);
+  const middle = " building package with a deliberately very long unchanged middle segment ".repeat(
+    2,
+  );
   const percentX = 2 + middle.length;
   const cols = percentX + 8;
 
@@ -82,6 +83,7 @@ function runCase(name: string, columnDiff: boolean, frames: number) {
 }
 
 const frames = Number(process.env.FRAMES ?? 5000);
+const meanBytesLimit = Number(process.env.MEAN_BYTES_LIMIT ?? 80);
 
 const fullRow = runCase("full dirty row", false, frames);
 const columnDiff = runCase("column diff", true, frames);
@@ -91,11 +93,16 @@ console.table([fullRow, columnDiff]);
 const byteRatio = columnDiff.totalBytes / fullRow.totalBytes;
 console.log(`byteRatio=${byteRatio.toFixed(4)}`);
 
+if (columnDiff.meanBytes > meanBytesLimit) {
+  console.error(
+    `Expected column diff meanBytes <= ${meanBytesLimit}, got ${columnDiff.meanBytes.toFixed(2)}`,
+  );
+  process.exit(1);
+}
+
 if (byteRatio > 0.35) {
   console.error(
-    `Expected column diff bytes <= 35% of full-row bytes, got ${(
-      byteRatio * 100
-    ).toFixed(2)}%`,
+    `Expected column diff bytes <= 35% of full-row bytes, got ${(byteRatio * 100).toFixed(2)}%`,
   );
   process.exit(1);
 }

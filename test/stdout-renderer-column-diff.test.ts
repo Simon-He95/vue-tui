@@ -318,6 +318,102 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("expands patches that start immediately after a previous wide glyph", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const { terminal, output, renderer } = mountRow("界X static text", {
+        columnDiff: true,
+      });
+
+      terminal.put(2, 0, "Y");
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;1H");
+      expect(frame).toContain("界");
+      expect(frame).toContain("Y");
+      expect(frame).not.toContain("static text");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("does not move the tail clear one column past the viewport", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 8;
+      const { terminal, output, renderer } = mountRow("ABCDEFGH", {
+        cols,
+        columnDiff: true,
+      });
+
+      terminal.write("abc", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("abc");
+      expect(frame).not.toContain(`\x1B[1;${cols + 1}H`);
+      expect(frame).not.toContain("\x1B[K");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("skips output for dirty rows whose cells still match the previous frame", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const { terminal, output, renderer } = mountRow("stable row", {
+        columnDiff: true,
+      });
+
+      (renderer as any).render([0], true);
+
+      expect(output.take()).toBe("");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("closes active OSC 8 links before clearing stale linked tails", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 32;
+      const href = "https://example.com/status";
+      const terminal = createTerminal({ cols, rows: 1 });
+      const output = createBufferedOutput(true);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        columnDiff: true,
+      });
+
+      terminal.write("Linked stale tail", { x: 0, y: 0, style: { href } });
+      terminal.commit({ sync: true });
+
+      output.take();
+
+      terminal.clear(0, 0, cols, 1);
+      terminal.write("Done", { x: 0, y: 0, style: { href } });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      const doneIndex = frame.indexOf("Done");
+      const closeIndex = frame.indexOf("\x1B]8;;\x07");
+      const clearIndex = frame.indexOf("\x1B[K");
+
+      expect(doneIndex).toBeGreaterThanOrEqual(0);
+      expect(closeIndex).toBeGreaterThan(doneIndex);
+      expect(clearIndex).toBeGreaterThan(closeIndex);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("does not clear styled blank cells when a shorter text leaves a meaningful styled tail", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const cols = 48;

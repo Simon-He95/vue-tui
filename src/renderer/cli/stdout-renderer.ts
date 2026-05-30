@@ -595,6 +595,8 @@ export function createStdoutRenderer(
     endXExclusive: number;
   }>;
 
+  const emptyCharHash = charHash32("");
+
   const dirtySpanWidth = (span: DirtySpan): number => Math.max(0, span.endXExclusive - span.startX);
 
   const dirtySpanCoverage = (spans: readonly DirtySpan[]): number => {
@@ -617,18 +619,122 @@ export function createStdoutRenderer(
 
   const expandSpanStart = (row: readonly Cell[], startX: number): number => {
     let x = Math.max(0, Math.min(row.length, Math.floor(startX)));
+
+    // If the span starts on the continuation half of a current wide glyph,
+    // include the base. This prevents rewriting only half of a width-2 glyph.
     while (x > 0 && row[x]?.continuation) x--;
-    return x;
+
+    // If the previous current cell is a width-2 base and this span starts
+    // immediately after it, include the base so the terminal never receives a
+    // patch that begins at the right edge of an existing wide glyph.
+    const prev = row[x - 1];
+    if (prev && prev.width === 2 && !prev.continuation) x--;
+
+    return Math.max(0, x);
   };
 
   const expandSpanEnd = (row: readonly Cell[], endXExclusive: number): number => {
     let x = Math.max(0, Math.min(row.length, Math.floor(endXExclusive)));
-    while (x > 0 && x < row.length && row[x]?.continuation) x++;
-    const previous = row[x - 1];
-    if (previous && !previous.continuation && previous.width === 2) {
-      x = Math.min(row.length, x + 1);
+
+    // If the span ends after a width-2 base but before its continuation,
+    // include that continuation cell.
+    const last = row[x - 1];
+    if (last && last.width === 2 && !last.continuation) x++;
+
+    // If the end points at a current continuation cell, include it.
+    while (x < row.length && row[x]?.continuation) x++;
+
+    return Math.min(row.length, x);
+  };
+
+  const previousCellLooksLikeWideContinuation = (
+    referenceFP: Uint32Array,
+    referenceCharHashes: Uint32Array,
+    base: number,
+    x: number,
+  ): boolean => {
+    if (x <= 0 || x >= fpCols) return false;
+    return (
+      referenceCharHashes[base + x] === emptyCharHash &&
+      referenceCharHashes[base + x - 1] !== emptyCharHash &&
+      referenceFP[base + x] !== referenceFP[base + x - 1]
+    );
+  };
+
+  const expandSpanForReferenceWideGlyphs = (
+    span: DirtySpan,
+    referenceFP: Uint32Array,
+    referenceCharHashes: Uint32Array,
+    base: number,
+    cols: number,
+  ): DirtySpan => {
+    let startX = span.startX;
+    let endXExclusive = span.endXExclusive;
+    const limit = Math.max(0, Math.min(cols, fpCols));
+
+    if (startX > 0) {
+      if (previousCellLooksLikeWideContinuation(referenceFP, referenceCharHashes, base, startX)) {
+        startX--;
+      } else if (
+        previousCellLooksLikeWideContinuation(referenceFP, referenceCharHashes, base, startX - 1)
+      ) {
+        startX = Math.max(0, startX - 2);
+      }
     }
-    return x;
+
+    while (endXExclusive < limit) {
+      if (
+        !previousCellLooksLikeWideContinuation(
+          referenceFP,
+          referenceCharHashes,
+          base,
+          endXExclusive,
+        )
+      ) {
+        break;
+      }
+      endXExclusive++;
+    }
+
+    return { startX, endXExclusive };
+  };
+
+  const widenSpanToCurrentGlyphBoundaries = (row: readonly Cell[], span: DirtySpan): DirtySpan => {
+    return {
+      startX: expandSpanStart(row, span.startX),
+      endXExclusive: expandSpanEnd(row, span.endXExclusive),
+    };
+  };
+
+  const expandSpansForReferenceWideGlyphs = (
+    spans: readonly DirtySpan[],
+    row: readonly Cell[],
+    y: number,
+    cols: number,
+    referenceFP: Uint32Array,
+    referenceCharHashes: Uint32Array,
+  ): readonly DirtySpan[] => {
+    if (!spans.length || !fpCols || y < 0 || y >= fpRows) return spans;
+
+    const base = y * fpCols;
+    const expanded: DirtySpan[] = [];
+    for (const span of spans) {
+      const next = widenSpanToCurrentGlyphBoundaries(
+        row,
+        expandSpanForReferenceWideGlyphs(span, referenceFP, referenceCharHashes, base, cols),
+      );
+      const prev = expanded[expanded.length - 1];
+      if (prev && next.startX <= prev.endXExclusive + DIRTY_SPAN_MERGE_GAP_CELLS) {
+        expanded[expanded.length - 1] = {
+          startX: prev.startX,
+          endXExclusive: Math.max(prev.endXExclusive, next.endXExclusive),
+        };
+        continue;
+      }
+      expanded.push(next);
+    }
+
+    return expanded;
   };
 
   const isPercentTokenCell = (cell: Cell | undefined): boolean => {
@@ -739,16 +845,30 @@ export function createStdoutRenderer(
       nextHrefIds === currentHrefIds &&
       nextCharHashes === currentCharHashes
     ) {
-      return collectChangedSpans(row, cols, (x) => !currentCellMatchesPrevious(base, x));
+      return expandSpansForReferenceWideGlyphs(
+        collectChangedSpans(row, cols, (x) => !currentCellMatchesPrevious(base, x)),
+        row,
+        y,
+        cols,
+        prevFP,
+        prevCharHashes,
+      );
     }
 
-    return collectChangedSpans(row, cols, (x) => {
-      return (
-        nextFP[base + x] !== prevFP[base + x] ||
-        nextCharHashes[base + x] !== prevCharHashes[base + x] ||
-        nextHrefIds[base + x] !== prevHrefIds[base + x]
-      );
-    });
+    return expandSpansForReferenceWideGlyphs(
+      collectChangedSpans(row, cols, (x) => {
+        return (
+          nextFP[base + x] !== prevFP[base + x] ||
+          nextCharHashes[base + x] !== prevCharHashes[base + x] ||
+          nextHrefIds[base + x] !== prevHrefIds[base + x]
+        );
+      }),
+      row,
+      y,
+      cols,
+      prevFP,
+      prevCharHashes,
+    );
   };
 
   const _resolveChangedSpansAgainstFill = (
@@ -789,18 +909,25 @@ export function createStdoutRenderer(
     const rowFP = terminal.getRowFingerprints(y);
     const base = y * fpCols;
 
-    return collectChangedSpans(row, cols, (x) => {
-      return !referenceCellMatchesCurrent(
-        row,
-        rowFP,
-        base,
-        x,
-        cols,
-        referenceFP,
-        referenceHrefIds,
-        referenceCharHashes,
-      );
-    });
+    return expandSpansForReferenceWideGlyphs(
+      collectChangedSpans(row, cols, (x) => {
+        return !referenceCellMatchesCurrent(
+          row,
+          rowFP,
+          base,
+          x,
+          cols,
+          referenceFP,
+          referenceHrefIds,
+          referenceCharHashes,
+        );
+      }),
+      row,
+      y,
+      cols,
+      referenceFP,
+      referenceCharHashes,
+    );
   };
 
   const lastOccupiedColumnInRow = (row: readonly Cell[], cols: number): number => {
@@ -1701,14 +1828,20 @@ export function createStdoutRenderer(
       }
     }
     const scrollRowsCandidate = rowsToRender;
-    if (explicitScrollOperations && rowsToRender && (!enableScrollRegions || !fpPrevValid)) {
-      const expandedRows = new Set<number>(rowsToRender);
-      for (const op of explicitScrollOperations) {
+    const expandedRows = new Set<number>(rowsToRender ?? []);
+    const includeRowsForPendingScrollOperations = (
+      operations: readonly TerminalScrollOperation[] | null | undefined,
+    ): void => {
+      if (!operations?.length) return;
+      for (const op of operations) {
         for (let y = op.startY; y < op.endY; y++) {
           if (hiddenExplicitDirtyRows?.has(y)) continue;
           expandedRows.add(y);
         }
       }
+    };
+    if (explicitScrollOperations && rowsToRender && (!enableScrollRegions || !fpPrevValid)) {
+      includeRowsForPendingScrollOperations(explicitScrollOperations);
       rowsToRender = Array.from(expandedRows).sort((a, b) => a - b);
       dirtySorted = true;
       explicitScrollOperations = null;
@@ -1921,19 +2054,21 @@ export function createStdoutRenderer(
               currentHrefIds,
               currentCharHashes,
             );
-            if (spans.length) {
-              const rewriteTail = shouldRewriteRowTail(
-                row,
-                y,
-                size.cols,
-                currentFP,
-                currentHrefIds,
-                currentCharHashes,
-              );
-              renderDirtySpans(y, row, spans, rewriteTail);
+            if (!spans.length) {
               fingerprintRow(row, y, size.cols);
               continue;
             }
+            const rewriteTail = shouldRewriteRowTail(
+              row,
+              y,
+              size.cols,
+              currentFP,
+              currentHrefIds,
+              currentCharHashes,
+            );
+            renderDirtySpans(y, row, spans, rewriteTail);
+            fingerprintRow(row, y, size.cols);
+            continue;
           }
 
           fingerprintRow(row, y, size.cols);
@@ -1997,7 +2132,6 @@ export function createStdoutRenderer(
           dirtyCharHashes ?? currentCharHashes,
         );
         if (!spans.length) {
-          renderRow(y, row);
           continue;
         }
 

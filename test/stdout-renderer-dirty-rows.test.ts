@@ -230,6 +230,8 @@ describe("stdout renderer", () => {
     terminal.commit();
 
     out = "";
+    terminal.put(0, 1, "E");
+    terminal.put(0, 2, "F");
     (renderer as any).render([2, 1, -1, 99]);
 
     const row2 = out.indexOf("\u001B[2;1H");
@@ -520,7 +522,7 @@ describe("stdout renderer", () => {
     });
   });
 
-  it("repaints dirty rows whose fingerprints are unchanged", () => {
+  it("skips dirty rows whose fingerprints are unchanged", () => {
     const terminal = createTerminal({ cols: 24, rows: 4 });
     let out = "";
     const output = {
@@ -545,8 +547,7 @@ describe("stdout renderer", () => {
     terminal.write("A task", { x: 0, y: 1 });
     terminal.commit({ planes: ["default"] });
 
-    expect(out.includes("\u001B[2;1H")).toBe(true);
-    expect(out.includes("A task")).toBe(true);
+    expect(out).toBe("");
 
     renderer.dispose();
   });
@@ -1194,7 +1195,7 @@ describe("stdout renderer", () => {
     });
   });
 
-  it("falls back to repaint for overlapping opposite-direction explicit scroll ops before stdout flush", () => {
+  it("skips output when overlapping opposite-direction explicit scroll ops cancel before stdout flush", () => {
     const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
 
     withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
@@ -1252,9 +1253,14 @@ describe("stdout renderer", () => {
         nowRef.t += frameDelayMs;
         vi.advanceTimersByTime(frameDelayMs);
 
-        expect(out).not.toContain("\u001B[1;4r");
-        expect(out).not.toMatch(/\u001B\[\d+[ST]/);
-        expect(applyAnsiToScreen(transcriptOut, 8, 4)).toEqual(terminal.snapshot().lines);
+        expect(out).toBe("");
+        expect(applyAnsiToScreen(transcriptOut, 8, 4)).toEqual([
+          "        ",
+          "        ",
+          "        ",
+          "        ",
+        ]);
+        expect(terminal.snapshot().lines).toEqual(["row0    ", "row1    ", "row2    ", "row3    "]);
 
         renderer.dispose();
         terminal.dispose();
