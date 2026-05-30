@@ -577,7 +577,6 @@ export function createStdoutRenderer(
   type DirtySpan = Readonly<{
     startX: number;
     endXExclusive: number;
-    clearToEol?: boolean;
   }>;
 
   const dirtySpanWidth = (span: DirtySpan): number => Math.max(0, span.endXExclusive - span.startX);
@@ -591,13 +590,13 @@ export function createStdoutRenderer(
   const shouldFallbackDirtySpansToFullRow = (
     spans: readonly DirtySpan[],
     cols: number,
+    clearableTailCells = 0,
   ): boolean => {
     if (!spans.length) return false;
-    if (spans.some((span) => span.clearToEol)) return false;
     if (spans.length > DIRTY_SPAN_MAX_PER_ROW) return true;
-    return (
-      dirtySpanCoverage(spans) >= Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD))
-    );
+
+    const effectiveCoverage = Math.max(0, dirtySpanCoverage(spans) - clearableTailCells);
+    return effectiveCoverage >= Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD));
   };
 
   const expandSpanStart = (row: readonly Cell[], startX: number): number => {
@@ -661,11 +660,7 @@ export function createStdoutRenderer(
 
     // Merge overlapping or very-close spans. For tiny gaps, one write is usually
     // cheaper than another cursor move + style transition.
-    if (
-      prev &&
-      !prev.clearToEol &&
-      expandedStart <= prev.endXExclusive + DIRTY_SPAN_MERGE_GAP_CELLS
-    ) {
+    if (prev && expandedStart <= prev.endXExclusive + DIRTY_SPAN_MERGE_GAP_CELLS) {
       spans[spans.length - 1] = {
         startX: prev.startX,
         endXExclusive: Math.max(prev.endXExclusive, expandedEnd),
@@ -1574,14 +1569,6 @@ export function createStdoutRenderer(
     ): void => {
       if (!spans.length) return;
 
-      // Dense or highly fragmented row: repaint the whole row. This prevents
-      // pathological cases where many cursor movements are slower than one
-      // contiguous rewrite.
-      if (shouldFallbackDirtySpansToFullRow(spans, size.cols)) {
-        renderRow(y, row);
-        return;
-      }
-
       const tailClearStart = (() => {
         if (!rewriteTail) return null;
 
@@ -1597,7 +1584,22 @@ export function createStdoutRenderer(
         return start;
       })();
 
-      const lastSpan = spans[spans.length - 1];
+      const lastSpan = spans[spans.length - 1]!;
+      const clearableTailCells =
+        tailClearStart != null &&
+        tailClearStart >= lastSpan.startX &&
+        tailClearStart <= lastSpan.endXExclusive
+          ? Math.max(0, lastSpan.endXExclusive - tailClearStart)
+          : 0;
+
+      // Dense or highly fragmented row: repaint the whole row. Deduct the
+      // default-blank tail that will be compacted into ESC[K first; otherwise
+      // "long text -> short text" updates cross the coverage threshold and lose
+      // the optimization that matters most for progress/status lines.
+      if (shouldFallbackDirtySpansToFullRow(spans, size.cols, clearableTailCells)) {
+        renderRow(y, row);
+        return;
+      }
 
       for (const span of spans) {
         if (tailClearStart != null && span.startX >= tailClearStart) {

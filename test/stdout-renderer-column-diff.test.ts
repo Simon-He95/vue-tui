@@ -221,6 +221,66 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("does not fall back to a full row when long text becomes short", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const longText = "Installing dependencies and building cache from remote registry";
+      const { terminal, output, renderer } = mountRow(`⠙ ${longText}`, { cols: 100 });
+
+      terminal.clear(2, 0, longText.length, 1);
+      terminal.write("Done", { x: 2, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;3H");
+      expect(frame).toContain("Done");
+      expect(frame).toContain("\x1B[K");
+
+      // The default-blank tail should be compacted into ESC[K before fallback
+      // coverage is evaluated. A full-row fallback would rewrite the unchanged
+      // spinner/prefix and emit many more bytes.
+      expect(frame).not.toContain("⠙");
+      expect(frame).not.toContain("Installing");
+      expect(frame).not.toContain("dependencies");
+      expect(frame).not.toContain("remote registry");
+      expect(byteLength(frame)).toBeLessThan(80);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("does not clear stable right-side content when middle text shortens", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const prefix = "⠙ ";
+      const oldMiddle = "Installing dependencies";
+      const right = "  10%";
+      const rightX = prefix.length + oldMiddle.length;
+      const { terminal, output, renderer } = mountRow(`${prefix}${oldMiddle}${right}`, {
+        cols: 80,
+      });
+
+      terminal.clear(prefix.length, 0, oldMiddle.length, 1);
+      terminal.write("Done", { x: prefix.length, y: 0 });
+      terminal.write(right, { x: rightX, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("Done");
+      expect(frame).not.toContain(oldMiddle);
+
+      // Right-side content is unchanged, so the diff may leave it untouched
+      // rather than rewriting "10%". It must not clear from after "Done",
+      // because that would erase the stable right-side status on a real terminal.
+      expect(frame).not.toContain("\x1B[K");
+      expect(frame).not.toContain("\x1B[1;7H\x1B[K");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("expands changed spans to whole wide glyphs", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const { terminal, output, renderer } = mountRow("界 static text");
