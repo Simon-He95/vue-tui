@@ -542,6 +542,66 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("preserves styled blank tails instead of replacing them with a default ESC[K clear", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const { terminal, output, renderer } = mountRow("loading something long", {
+        cols: 40,
+        columnDiff: true,
+      });
+
+      terminal.clear(0, 0, 40, 1);
+      terminal.fill(0, 0, 6, 1, " ", { bg: "blue" });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      // Regression: a naive tail clear would emit ESC[K without painting the six
+      // styled blanks, causing the blue background to disappear.
+      expect(frame).toContain("      ");
+      expect(frame).toContain("\x1B[K");
+      expect(frame).not.toContain("loading something");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("does not move the cursor past the right edge when the rewritten row fills the terminal", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 6;
+      const { terminal, output, renderer } = mountRow("abcdef", { cols, columnDiff: true });
+
+      terminal.clear(0, 0, cols, 1);
+      terminal.fill(0, 0, cols, 1, " ", { bg: "blue" });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("      ");
+      expect(frame).not.toContain(`\x1B[1;${cols + 1}H`);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("falls back to full-row span after resize fingerprint width changes", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const { terminal, output, renderer } = mountRow("abc", { cols: 3, columnDiff: true });
+
+      terminal.resize(8, 1);
+      terminal.write("abc def", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("abc def");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("can force full dirty-row rendering with columnDiff: false", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const middle = " unchanged middle should be repainted by explicit opt-out ";

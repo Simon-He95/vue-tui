@@ -595,6 +595,11 @@ export function createStdoutRenderer(
     endXExclusive: number;
   }>;
 
+  const fullRowDirtySpan = (row: readonly Cell[], cols: number): readonly DirtySpan[] => {
+    const endXExclusive = Math.max(0, Math.min(cols, row.length));
+    return endXExclusive > 0 ? [{ startX: 0, endXExclusive }] : [];
+  };
+
   const emptyCharHash = charHash32("");
 
   const dirtySpanWidth = (span: DirtySpan): number => Math.max(0, span.endXExclusive - span.startX);
@@ -801,7 +806,7 @@ export function createStdoutRenderer(
     cols: number,
     changedAt: (x: number) => boolean,
   ): readonly DirtySpan[] => {
-    const limit = Math.min(cols, row.length, fpCols || cols);
+    const limit = Math.max(0, Math.min(cols, row.length));
     if (limit <= 0) return [];
 
     const spans: DirtySpan[] = [];
@@ -834,8 +839,8 @@ export function createStdoutRenderer(
     nextHrefIds: Uint32Array = currentHrefIds,
     nextCharHashes: Uint32Array = currentCharHashes,
   ): readonly DirtySpan[] => {
-    if (!fpCols || y >= fpRows || !fpPrevValid) {
-      return row.length ? [{ startX: 0, endXExclusive: row.length }] : [];
+    if (!fpCols || cols !== fpCols || y >= fpRows || !fpPrevValid) {
+      return fullRowDirtySpan(row, cols);
     }
 
     const base = y * fpCols;
@@ -879,8 +884,8 @@ export function createStdoutRenderer(
     fillCharHash = charHash32(" "),
     fillHrefId = 0,
   ): readonly DirtySpan[] => {
-    if (!fpCols || y >= fpRows) {
-      return row.length ? [{ startX: 0, endXExclusive: row.length }] : [];
+    if (!fpCols || cols !== fpCols || y >= fpRows) {
+      return fullRowDirtySpan(row, cols);
     }
 
     const base = y * fpCols;
@@ -902,8 +907,8 @@ export function createStdoutRenderer(
     referenceHrefIds: Uint32Array,
     referenceCharHashes: Uint32Array,
   ): readonly DirtySpan[] => {
-    if (!fpCols || y >= fpRows) {
-      return row.length ? [{ startX: 0, endXExclusive: row.length }] : [];
+    if (!fpCols || cols !== fpCols || y >= fpRows) {
+      return fullRowDirtySpan(row, cols);
     }
 
     const rowFP = terminal.getRowFingerprints(y);
@@ -951,32 +956,32 @@ export function createStdoutRenderer(
     return -1;
   };
 
-  const isDefaultBlankCell = (y: number, x: number, defaultBlankFP: number): boolean => {
-    if (!fpCols || y < 0 || y >= fpRows || x < 0 || x >= fpCols) return false;
+  const isDefaultBlankCellForEolClear = (
+    cell: Cell | undefined,
+    defaultBlankStyleKey: number,
+  ): boolean => {
+    if (!cell) return true;
+    if (cell.continuation) return false;
+    if ((cell.ch || " ") !== " ") return false;
+    if (cell.width !== 1) return false;
+    if (normalizeHref(cell.style.href)) return false;
 
-    const index = y * fpCols + x;
-
-    return currentFP[index] === defaultBlankFP && currentHrefIds[index] === 0;
+    return styleKey(cell.style) === defaultBlankStyleKey;
   };
 
-  const lastMeaningfulColumnInRow = (
+  const lastNonDefaultBlankColumnInRow = (
     row: readonly Cell[],
-    y: number,
     cols: number,
-    defaultBlankFP: number,
+    defaultBlankStyleKey: number,
   ): number => {
-    const limit = Math.min(cols, row.length, fpCols || cols);
+    const limit = Math.max(0, Math.min(cols, row.length));
 
     for (let x = limit - 1; x >= 0; x--) {
       const cell = row[x];
-      if (!cell) continue;
-
-      // A cell is meaningful if its rendered fingerprint differs from the
-      // renderer's default blank cell, or if it carries a hyperlink id.
-      //
-      // This intentionally treats styled blanks as meaningful:
-      //   " " + bg/href/inverse/etc. must be rendered, not skipped and cleared by ESC[K.
-      if (!isDefaultBlankCell(y, x, defaultBlankFP)) {
+      if (!isDefaultBlankCellForEolClear(cell, defaultBlankStyleKey)) {
+        if (cell && !cell.continuation && cell.width === 2 && x + 1 < limit) {
+          return x + 1;
+        }
         return x;
       }
     }
@@ -1715,16 +1720,12 @@ export function createStdoutRenderer(
       const tailClearStart = (() => {
         if (!rewriteTail) return null;
 
-        const start = lastMeaningfulColumnInRow(row, y, size.cols, blankFP) + 1;
+        const start = Math.max(
+          0,
+          Math.min(size.cols, lastNonDefaultBlankColumnInRow(row, size.cols, bgKey) + 1),
+        );
 
-        // Nothing meaningful remains on this row, so clear from col 0.
-        if (start <= 0) return 0;
-
-        // The row is meaningful through the viewport end. There is no safe/useful
-        // EOL clear to emit.
-        if (start >= size.cols) return null;
-
-        return start;
+        return start < size.cols ? start : null;
       })();
 
       const lastSpan = spans[spans.length - 1]!;
@@ -1745,24 +1746,25 @@ export function createStdoutRenderer(
       }
 
       for (const span of spans) {
-        if (tailClearStart != null && span.startX >= tailClearStart) {
+        const startX = Math.max(0, Math.min(size.cols, span.startX));
+        const originalEndX = Math.max(startX, Math.min(size.cols, span.endXExclusive));
+
+        if (tailClearStart != null && startX >= tailClearStart) {
           continue;
         }
 
         const endXExclusive =
-          tailClearStart == null
-            ? span.endXExclusive
-            : Math.min(span.endXExclusive, tailClearStart);
+          tailClearStart == null ? originalEndX : Math.min(originalEndX, tailClearStart);
 
-        if (endXExclusive <= span.startX) continue;
+        if (endXExclusive <= startX) continue;
 
         const clearToEol =
-          tailClearStart == null && span === lastSpan && span.endXExclusive >= row.length;
+          tailClearStart == null && span === lastSpan && endXExclusive >= size.cols;
 
-        renderRow(y, row, span.startX, endXExclusive, clearToEol);
+        renderRow(y, row, startX, endXExclusive, clearToEol);
       }
 
-      if (tailClearStart != null) {
+      if (tailClearStart != null && tailClearStart < size.cols) {
         // Text became shorter and the rest of the row is default blank. Clear only
         // after the last meaningful current cell. This must not erase styled blanks.
         renderRow(y, row, tailClearStart, tailClearStart, true);
