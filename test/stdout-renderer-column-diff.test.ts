@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { charCellWidth } from "../src/core.js";
 import { createTerminal } from "../src/core/terminal/create-terminal.js";
 import { createStdoutRenderer } from "../src/renderer/cli/stdout-renderer.js";
 import type { CliOutput } from "../src/renderer/cli/stdout-renderer.js";
@@ -91,6 +92,38 @@ function screenLine(screen: TestScreen, y: number): string {
   return screen.cells[y]!.join("");
 }
 
+type TestGraphemeSegment = { segment: string };
+type TestGraphemeSegmenter = { segment(input: string): Iterable<TestGraphemeSegment> };
+type TestIntlWithSegmenter = typeof Intl & {
+  Segmenter?: new (
+    locales?: string | string[],
+    options?: Readonly<{ granularity?: "grapheme" }>,
+  ) => TestGraphemeSegmenter;
+};
+
+const graphemeSegmenter = (() => {
+  try {
+    const Segmenter =
+      typeof Intl !== "undefined" ? (Intl as TestIntlWithSegmenter).Segmenter : undefined;
+    return Segmenter ? new Segmenter(undefined, { granularity: "grapheme" }) : null;
+  } catch {
+    return null;
+  }
+})();
+
+function nextGrapheme(input: string, start: number): string {
+  if (graphemeSegmenter) {
+    const iterator = graphemeSegmenter.segment(input.slice(start))[Symbol.iterator]();
+    const next = iterator.next();
+
+    if (!next.done && next.value?.segment) {
+      return next.value.segment;
+    }
+  }
+
+  return Array.from(input.slice(start))[0] ?? input[start] ?? "";
+}
+
 function applyAnsiFrame(screen: TestScreen, frame: string): void {
   let i = 0;
 
@@ -166,14 +199,20 @@ function applyAnsiFrame(screen: TestScreen, frame: string): void {
       continue;
     }
 
-    const codePoint = Array.from(frame.slice(i))[0]!;
-    screen.cells[screen.y]![screen.x] = codePoint;
-    screen.x++;
+    const grapheme = nextGrapheme(frame, i);
+    const width = Math.max(1, charCellWidth(grapheme));
+
+    screen.cells[screen.y]![screen.x] = grapheme;
+    for (let fillX = screen.x + 1; fillX < Math.min(screen.cols, screen.x + width); fillX++) {
+      screen.cells[screen.y]![fillX] = " ";
+    }
+
+    screen.x += width;
     if (screen.x >= screen.cols) {
       screen.x = screen.cols - 1;
     }
 
-    i += codePoint.length;
+    i += grapheme.length;
   }
 }
 
@@ -302,6 +341,40 @@ describe("stdout renderer column diff", () => {
 
       expect(frame).toContain(newChar);
       expect(frame).not.toContain("static text");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("does not skip multi-codepoint grapheme changes with the same first code point", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const oldGrapheme = "👨‍👩‍👧‍👦";
+      const newGrapheme = "👨‍👨‍👧‍👦";
+
+      expect(oldGrapheme.codePointAt(0)).toBe(newGrapheme.codePointAt(0));
+      expect(oldGrapheme).not.toBe(newGrapheme);
+
+      const { terminal, output, renderer, initialFrame } = mountRow(
+        `${oldGrapheme} static text that must not be rewritten`,
+        {
+          cols: 80,
+          dirtyRowPatchMode: "span",
+        },
+      );
+
+      const screen = createTestScreen(80, 1);
+      applyAnsiFrame(screen, initialFrame);
+
+      terminal.put(0, 0, newGrapheme);
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      applyAnsiFrame(screen, frame);
+
+      expect(frame).toContain(newGrapheme);
+      expect(frame).not.toContain("static text that must not be rewritten");
+      expect(screenLine(screen, 0)).toContain(newGrapheme);
 
       renderer.dispose();
       terminal.dispose();

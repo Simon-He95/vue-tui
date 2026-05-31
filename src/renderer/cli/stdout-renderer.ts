@@ -475,7 +475,7 @@ export function createStdoutRenderer(
   let lastRenderedRows = 0;
   // Typed-array row fingerprints: double-buffered for frame-to-frame diffing.
   // Each cell is encoded as (numericStyleKey << 10) | charHash10.
-  // Full-width char hashes are tracked in parallel so the 10-bit encoding never
+  // Exact cell text ids are tracked in parallel so the 10-bit encoding never
   // acts as the sole correctness signal for cell equality.
   let fpCols = 0;
   let fpRows = 0;
@@ -483,9 +483,13 @@ export function createStdoutRenderer(
   let prevFP = new Uint32Array(0);
   let currentHrefIds = new Uint32Array(0);
   let prevHrefIds = new Uint32Array(0);
-  let currentCharHashes = new Uint32Array(0);
-  let prevCharHashes = new Uint32Array(0);
+  let currentTextIds = new Uint32Array(0);
+  let prevTextIds = new Uint32Array(0);
   let fpPrevValid = false;
+  let nextCellTextId = 1;
+  let blankTextId = 0;
+  let emptyTextId = 0;
+  const cellTextIdCache = new Map<string, number>();
   let prevOverlayBlockedRows: readonly number[] = [];
   let prevOverlayPartialRows: readonly number[] = [];
   const hrefIndex = new Map<string, number>();
@@ -507,8 +511,8 @@ export function createStdoutRenderer(
     prevFP = new Uint32Array(len);
     currentHrefIds = new Uint32Array(len);
     prevHrefIds = new Uint32Array(len);
-    currentCharHashes = new Uint32Array(len);
-    prevCharHashes = new Uint32Array(len);
+    currentTextIds = new Uint32Array(len);
+    prevTextIds = new Uint32Array(len);
     fpPrevValid = false;
     prevOverlayBlockedRows = [];
     prevOverlayPartialRows = [];
@@ -523,14 +527,34 @@ export function createStdoutRenderer(
     return h & 0x3ff;
   }
 
-  function charHash32(ch: string): number {
-    let h = 0x811c9dc5;
-    for (let i = 0; i < ch.length; i++) {
-      h ^= ch.charCodeAt(i);
-      h = Math.imul(h, 0x01000193) >>> 0;
-    }
-    return h >>> 0;
+  function allocateCellTextId(text: string): number {
+    const id = nextCellTextId++;
+    cellTextIdCache.set(text, id);
+    return id;
   }
+
+  function resetCellTextIdCache(): void {
+    cellTextIdCache.clear();
+    nextCellTextId = 1;
+    blankTextId = allocateCellTextId(" ");
+    emptyTextId = allocateCellTextId("");
+    fpPrevValid = false;
+  }
+
+  function cellTextId(text: string): number {
+    let cached = cellTextIdCache.get(text);
+    if (cached !== undefined) return cached;
+
+    if (nextCellTextId >= 0xffff_ffff) {
+      resetCellTextIdCache();
+      cached = cellTextIdCache.get(text);
+      if (cached !== undefined) return cached;
+    }
+
+    return allocateCellTextId(text);
+  }
+
+  resetCellTextIdCache();
 
   function hrefId(href: string | null): number {
     if (!href) return 0;
@@ -574,14 +598,14 @@ export function createStdoutRenderer(
     for (let x = 0; x < cols; x++) {
       const cell = cellAt(row, x);
       currentHrefIds[base + x] = hrefId(normalizeHref(cell.style.href));
-      currentCharHashes[base + x] = charHash32(cell.ch);
+      currentTextIds[base + x] = cellTextId(cell.ch);
     }
   }
 
   const currentCellMatchesPrevious = (base: number, x: number): boolean => {
     return (
       currentFP[base + x] === prevFP[base + x] &&
-      currentCharHashes[base + x] === prevCharHashes[base + x] &&
+      currentTextIds[base + x] === prevTextIds[base + x] &&
       currentHrefIds[base + x] === prevHrefIds[base + x]
     );
   };
@@ -589,7 +613,7 @@ export function createStdoutRenderer(
   const cellMatchesPreviousAt = (currentBase: number, previousBase: number, x: number): boolean => {
     return (
       currentFP[currentBase + x] === prevFP[previousBase + x] &&
-      currentCharHashes[currentBase + x] === prevCharHashes[previousBase + x] &&
+      currentTextIds[currentBase + x] === prevTextIds[previousBase + x] &&
       currentHrefIds[currentBase + x] === prevHrefIds[previousBase + x]
     );
   };
@@ -602,7 +626,7 @@ export function createStdoutRenderer(
     cols: number,
     referenceFP: Uint32Array,
     referenceHrefIds: Uint32Array,
-    referenceCharHashes: Uint32Array,
+    referenceTextIds: Uint32Array,
   ): boolean => {
     const cell = cellAt(row, x);
     const fingerprint =
@@ -612,7 +636,7 @@ export function createStdoutRenderer(
 
     return (
       fingerprint === referenceFP[base + x] &&
-      charHash32(cell.ch) === referenceCharHashes[base + x] &&
+      cellTextId(cell.ch) === referenceTextIds[base + x] &&
       hrefId(normalizeHref(cell.style.href)) === referenceHrefIds[base + x]
     );
   };
@@ -627,8 +651,6 @@ export function createStdoutRenderer(
   const fullRowDirtySpan = (cols: number): readonly DirtySpan[] => {
     return cols > 0 ? [{ startX: 0, endXExclusive: cols }] : [];
   };
-
-  const emptyCharHash = charHash32("");
 
   const dirtySpanWidth = (span: DirtySpan): number => Math.max(0, span.endXExclusive - span.startX);
 
@@ -740,14 +762,14 @@ export function createStdoutRenderer(
 
   const previousCellLooksLikeWideContinuation = (
     referenceFP: Uint32Array,
-    referenceCharHashes: Uint32Array,
+    referenceTextIds: Uint32Array,
     base: number,
     x: number,
   ): boolean => {
     if (x <= 0 || x >= fpCols) return false;
     return (
-      referenceCharHashes[base + x] === emptyCharHash &&
-      referenceCharHashes[base + x - 1] !== emptyCharHash &&
+      referenceTextIds[base + x] === emptyTextId &&
+      referenceTextIds[base + x - 1] !== emptyTextId &&
       referenceFP[base + x] !== referenceFP[base + x - 1]
     );
   };
@@ -755,7 +777,7 @@ export function createStdoutRenderer(
   const expandSpanForReferenceWideGlyphs = (
     span: DirtySpan,
     referenceFP: Uint32Array,
-    referenceCharHashes: Uint32Array,
+    referenceTextIds: Uint32Array,
     base: number,
     cols: number,
   ): DirtySpan => {
@@ -764,10 +786,10 @@ export function createStdoutRenderer(
     const limit = Math.max(0, Math.min(cols, fpCols));
 
     if (startX > 0) {
-      if (previousCellLooksLikeWideContinuation(referenceFP, referenceCharHashes, base, startX)) {
+      if (previousCellLooksLikeWideContinuation(referenceFP, referenceTextIds, base, startX)) {
         startX--;
       } else if (
-        previousCellLooksLikeWideContinuation(referenceFP, referenceCharHashes, base, startX - 1)
+        previousCellLooksLikeWideContinuation(referenceFP, referenceTextIds, base, startX - 1)
       ) {
         startX = Math.max(0, startX - 2);
       }
@@ -775,12 +797,7 @@ export function createStdoutRenderer(
 
     while (endXExclusive < limit) {
       if (
-        !previousCellLooksLikeWideContinuation(
-          referenceFP,
-          referenceCharHashes,
-          base,
-          endXExclusive,
-        )
+        !previousCellLooksLikeWideContinuation(referenceFP, referenceTextIds, base, endXExclusive)
       ) {
         break;
       }
@@ -807,7 +824,7 @@ export function createStdoutRenderer(
     y: number,
     cols: number,
     referenceFP: Uint32Array,
-    referenceCharHashes: Uint32Array,
+    referenceTextIds: Uint32Array,
   ): readonly DirtySpan[] => {
     if (!spans.length || !fpCols || y < 0 || y >= fpRows) return spans;
 
@@ -816,7 +833,7 @@ export function createStdoutRenderer(
     for (const span of spans) {
       const next = widenSpanToCurrentGlyphBoundaries(
         row,
-        expandSpanForReferenceWideGlyphs(span, referenceFP, referenceCharHashes, base, cols),
+        expandSpanForReferenceWideGlyphs(span, referenceFP, referenceTextIds, base, cols),
         cols,
       );
       const prev = expanded[expanded.length - 1];
@@ -937,7 +954,7 @@ export function createStdoutRenderer(
     cols: number,
     nextFP: Uint32Array = currentFP,
     nextHrefIds: Uint32Array = currentHrefIds,
-    nextCharHashes: Uint32Array = currentCharHashes,
+    nextTextIds: Uint32Array = currentTextIds,
   ): readonly DirtySpan[] => {
     if (!fpCols || cols !== fpCols || y >= fpRows || !fpPrevValid) {
       return fullRowDirtySpan(cols);
@@ -945,18 +962,14 @@ export function createStdoutRenderer(
 
     const base = y * fpCols;
 
-    if (
-      nextFP === currentFP &&
-      nextHrefIds === currentHrefIds &&
-      nextCharHashes === currentCharHashes
-    ) {
+    if (nextFP === currentFP && nextHrefIds === currentHrefIds && nextTextIds === currentTextIds) {
       return expandSpansForReferenceWideGlyphs(
         collectChangedSpans(row, cols, (x) => !currentCellMatchesPrevious(base, x)),
         row,
         y,
         cols,
         prevFP,
-        prevCharHashes,
+        prevTextIds,
       );
     }
 
@@ -964,7 +977,7 @@ export function createStdoutRenderer(
       collectChangedSpans(row, cols, (x) => {
         return (
           nextFP[base + x] !== prevFP[base + x] ||
-          nextCharHashes[base + x] !== prevCharHashes[base + x] ||
+          nextTextIds[base + x] !== prevTextIds[base + x] ||
           nextHrefIds[base + x] !== prevHrefIds[base + x]
         );
       }),
@@ -972,7 +985,7 @@ export function createStdoutRenderer(
       y,
       cols,
       prevFP,
-      prevCharHashes,
+      prevTextIds,
     );
   };
 
@@ -981,7 +994,7 @@ export function createStdoutRenderer(
     y: number,
     cols: number,
     fillFingerprint: number,
-    fillCharHash = charHash32(" "),
+    fillTextId = blankTextId,
     fillHrefId = 0,
   ): readonly DirtySpan[] => {
     if (!fpCols || cols !== fpCols || y >= fpRows) {
@@ -993,7 +1006,7 @@ export function createStdoutRenderer(
     return collectChangedSpans(row, cols, (x) => {
       return (
         currentFP[base + x] !== fillFingerprint ||
-        currentCharHashes[base + x] !== fillCharHash ||
+        currentTextIds[base + x] !== fillTextId ||
         currentHrefIds[base + x] !== fillHrefId
       );
     });
@@ -1005,7 +1018,7 @@ export function createStdoutRenderer(
     cols: number,
     referenceFP: Uint32Array,
     referenceHrefIds: Uint32Array,
-    referenceCharHashes: Uint32Array,
+    referenceTextIds: Uint32Array,
   ): readonly DirtySpan[] => {
     if (!fpCols || cols !== fpCols || y >= fpRows) {
       return fullRowDirtySpan(cols);
@@ -1024,14 +1037,14 @@ export function createStdoutRenderer(
           cols,
           referenceFP,
           referenceHrefIds,
-          referenceCharHashes,
+          referenceTextIds,
         );
       }),
       row,
       y,
       cols,
       referenceFP,
-      referenceCharHashes,
+      referenceTextIds,
     );
   };
 
@@ -1096,7 +1109,7 @@ export function createStdoutRenderer(
     cols: number,
     referenceFP: Uint32Array,
     referenceHrefIds: Uint32Array,
-    referenceCharHashes: Uint32Array,
+    referenceTextIds: Uint32Array,
     defaultBlankStyleKey = styleKeyFromParts({ bg: defaultBg }),
   ): boolean => {
     if (!fpCols || y >= fpRows) return true;
@@ -1108,14 +1121,13 @@ export function createStdoutRenderer(
     if (currentTailStart >= cols) return false;
 
     const blankFP = cellFingerprint(" ", { bg: defaultBg });
-    const blankCharHash = charHash32(" ");
     const base = y * fpCols;
     const limit = Math.min(cols, fpCols);
 
     for (let x = currentTailStart; x < limit; x++) {
       if (
         referenceFP[base + x] !== blankFP ||
-        referenceCharHashes[base + x] !== blankCharHash ||
+        referenceTextIds[base + x] !== blankTextId ||
         referenceHrefIds[base + x] !== 0
       ) {
         return true;
@@ -1212,13 +1224,18 @@ export function createStdoutRenderer(
 
   // ensureRenderedRowCache removed — replaced by typed-array fingerprints
 
-  const rowHasNonDefaultBlankCell = (source: Uint32Array, y: number, cols: number): boolean => {
+  const rowHasNonDefaultBlankCell = (
+    sourceFP: Uint32Array,
+    sourceTextIds: Uint32Array,
+    y: number,
+    cols: number,
+  ): boolean => {
     if (!fpCols || y < 0 || y >= fpRows) return false;
     const blankFP = (styleKeyFromParts({ bg: defaultBg }) << 10) | charHash10(" ");
     const base = y * fpCols;
     const limit = Math.min(cols, fpCols);
     for (let x = 0; x < limit; x++) {
-      if (source[base + x] !== blankFP) return true;
+      if (sourceFP[base + x] !== blankFP || sourceTextIds[base + x] !== blankTextId) return true;
     }
     return false;
   };
@@ -1424,8 +1441,8 @@ export function createStdoutRenderer(
         const srcY = y + delta; // where this row's content came from in prev frame
         if (srcY < band.start || srcY >= band.end) continue;
         const informative =
-          rowHasNonDefaultBlankCell(currentFP, y, cols) ||
-          rowHasNonDefaultBlankCell(prevFP, srcY, cols);
+          rowHasNonDefaultBlankCell(currentFP, currentTextIds, y, cols) ||
+          rowHasNonDefaultBlankCell(prevFP, prevTextIds, srcY, cols);
         if (!informative) continue;
         checked++;
 
@@ -1563,7 +1580,6 @@ export function createStdoutRenderer(
     const bgOnlyStyle: Style = { bg: defaultBg };
     const bgKey = styleKeyFromParts({ bg: defaultBg });
     const blankFP = (bgKey << 10) | charHash10(" ");
-    const blankCharHash = charHash32(" ");
     let dirtySorted = true;
     const forceFullRender = hrefIndexResetRequiresBaseline;
     if (forceFullRender) hrefIndexResetRequiresBaseline = false;
@@ -1603,9 +1619,9 @@ export function createStdoutRenderer(
     })();
     const dirtyFP = fpPrevValid && rowsToRender ? new Uint32Array(currentFP) : null;
     const dirtyHrefIds = fpPrevValid && rowsToRender ? new Uint32Array(currentHrefIds) : null;
-    const dirtyCharHashes = fpPrevValid && rowsToRender ? new Uint32Array(currentCharHashes) : null;
+    const dirtyTextIds = fpPrevValid && rowsToRender ? new Uint32Array(currentTextIds) : null;
     const snapshotDirtyRowFingerprints = () => {
-      if (!dirtyFP || !dirtyHrefIds || !dirtyCharHashes || !rowsToRender) return;
+      if (!dirtyFP || !dirtyHrefIds || !dirtyTextIds || !rowsToRender) return;
       for (const y of rowsToRender) {
         const row = terminal.getRow(y) as Cell[];
         const rowFP = terminal.getRowFingerprints(y);
@@ -1621,7 +1637,7 @@ export function createStdoutRenderer(
         for (let x = 0; x < size.cols; x++) {
           const cell = cellAt(row, x);
           dirtyHrefIds[base + x] = hrefId(normalizeHref(cell.style.href));
-          dirtyCharHashes[base + x] = charHash32(cell.ch);
+          dirtyTextIds[base + x] = cellTextId(cell.ch);
         }
       }
     };
@@ -1631,7 +1647,7 @@ export function createStdoutRenderer(
       // full previous screen, not just the rows repainted in this frame.
       currentFP.set(prevFP);
       currentHrefIds.set(prevHrefIds);
-      currentCharHashes.set(prevCharHashes);
+      currentTextIds.set(prevTextIds);
     }
     // Build entire frame as a single string - NO async, NO multiple writes.
     // Use synchronized output mode (DEC 2026) to prevent flickering (if enabled).
@@ -1993,7 +2009,7 @@ export function createStdoutRenderer(
       if (currentFP.length === prevFP.length) {
         currentFP.set(prevFP);
         currentHrefIds.set(prevHrefIds);
-        currentCharHashes.set(prevCharHashes);
+        currentTextIds.set(prevTextIds);
       }
 
       const explicitRowsToRender = new Set<number>();
@@ -2019,7 +2035,7 @@ export function createStdoutRenderer(
             for (let x = 0; x < size.cols; x++) {
               currentFP[dstBase + x] = prevFP[srcBase + x]!;
               currentHrefIds[dstBase + x] = prevHrefIds[srcBase + x]!;
-              currentCharHashes[dstBase + x] = prevCharHashes[srcBase + x]!;
+              currentTextIds[dstBase + x] = prevTextIds[srcBase + x]!;
             }
           }
           for (let y = op.endY - op.delta; y < op.endY; y++) {
@@ -2028,7 +2044,7 @@ export function createStdoutRenderer(
             for (let x = 0; x < size.cols; x++) {
               currentFP[base + x] = blankFP;
               currentHrefIds[base + x] = 0;
-              currentCharHashes[base + x] = blankCharHash;
+              currentTextIds[base + x] = blankTextId;
             }
           }
         } else {
@@ -2041,7 +2057,7 @@ export function createStdoutRenderer(
             for (let x = 0; x < size.cols; x++) {
               currentFP[dstBase + x] = prevFP[srcBase + x]!;
               currentHrefIds[dstBase + x] = prevHrefIds[srcBase + x]!;
-              currentCharHashes[dstBase + x] = prevCharHashes[srcBase + x]!;
+              currentTextIds[dstBase + x] = prevTextIds[srcBase + x]!;
             }
           }
           for (let y = op.startY; y < op.startY + absDelta; y++) {
@@ -2050,7 +2066,7 @@ export function createStdoutRenderer(
             for (let x = 0; x < size.cols; x++) {
               currentFP[base + x] = blankFP;
               currentHrefIds[base + x] = 0;
-              currentCharHashes[base + x] = blankCharHash;
+              currentTextIds[base + x] = blankTextId;
             }
           }
         }
@@ -2085,14 +2101,14 @@ export function createStdoutRenderer(
         const insertedRow = insertedRows.has(y);
         if (insertedRow) fingerprintRow(row, y, size.cols);
         const spans = insertedRow
-          ? resolveChangedSpansAgainstFill(row, y, size.cols, blankFP, blankCharHash, 0)
+          ? resolveChangedSpansAgainstFill(row, y, size.cols, blankFP, blankTextId, 0)
           : resolveChangedSpansAgainstReference(
               row,
               y,
               size.cols,
               currentFP,
               currentHrefIds,
-              currentCharHashes,
+              currentTextIds,
             );
 
         if (!spans.length) {
@@ -2101,15 +2117,7 @@ export function createStdoutRenderer(
 
         const rewriteTail =
           !insertedRow &&
-          shouldRewriteRowTail(
-            row,
-            y,
-            size.cols,
-            currentFP,
-            currentHrefIds,
-            currentCharHashes,
-            bgKey,
-          );
+          shouldRewriteRowTail(row, y, size.cols, currentFP, currentHrefIds, currentTextIds, bgKey);
         renderDirtySpans(y, row, spans, rewriteTail);
         if (!insertedRow) fingerprintRow(row, y, size.cols);
         paintedExplicitRows.push(y);
@@ -2132,7 +2140,7 @@ export function createStdoutRenderer(
         if (currentFP.length === prevFP.length) {
           currentFP.set(prevFP);
           currentHrefIds.set(prevHrefIds);
-          currentCharHashes.set(prevCharHashes);
+          currentTextIds.set(prevTextIds);
         }
 
         hasFrameOutput = true;
@@ -2162,7 +2170,7 @@ export function createStdoutRenderer(
             for (let x = 0; x < size.cols; x++) {
               currentFP[dstBase + x] = prevFP[srcBase + x]!;
               currentHrefIds[dstBase + x] = prevHrefIds[srcBase + x]!;
-              currentCharHashes[dstBase + x] = prevCharHashes[srcBase + x]!;
+              currentTextIds[dstBase + x] = prevTextIds[srcBase + x]!;
             }
           }
           for (let y = shift.regionEnd - shift.delta; y < shift.regionEnd; y++) {
@@ -2170,7 +2178,7 @@ export function createStdoutRenderer(
             for (let x = 0; x < size.cols; x++) {
               currentFP[base + x] = blankFP;
               currentHrefIds[base + x] = 0;
-              currentCharHashes[base + x] = blankCharHash;
+              currentTextIds[base + x] = blankTextId;
             }
           }
         } else {
@@ -2181,7 +2189,7 @@ export function createStdoutRenderer(
             for (let x = 0; x < size.cols; x++) {
               currentFP[dstBase + x] = prevFP[srcBase + x]!;
               currentHrefIds[dstBase + x] = prevHrefIds[srcBase + x]!;
-              currentCharHashes[dstBase + x] = prevCharHashes[srcBase + x]!;
+              currentTextIds[dstBase + x] = prevTextIds[srcBase + x]!;
             }
           }
           for (let y = shift.regionStart; y < shift.regionStart + absDelta; y++) {
@@ -2189,7 +2197,7 @@ export function createStdoutRenderer(
             for (let x = 0; x < size.cols; x++) {
               currentFP[base + x] = blankFP;
               currentHrefIds[base + x] = 0;
-              currentCharHashes[base + x] = blankCharHash;
+              currentTextIds[base + x] = blankTextId;
             }
           }
         }
@@ -2218,7 +2226,7 @@ export function createStdoutRenderer(
               size.cols,
               currentFP,
               currentHrefIds,
-              currentCharHashes,
+              currentTextIds,
             );
             if (!spans.length) {
               fingerprintRow(row, y, size.cols);
@@ -2230,7 +2238,7 @@ export function createStdoutRenderer(
               size.cols,
               currentFP,
               currentHrefIds,
-              currentCharHashes,
+              currentTextIds,
               bgKey,
             );
             renderDirtySpans(y, row, spans, rewriteTail);
@@ -2296,7 +2304,7 @@ export function createStdoutRenderer(
           size.cols,
           dirtyFP ?? currentFP,
           dirtyHrefIds ?? currentHrefIds,
-          dirtyCharHashes ?? currentCharHashes,
+          dirtyTextIds ?? currentTextIds,
         );
         if (!spans.length) {
           continue;
@@ -2308,7 +2316,7 @@ export function createStdoutRenderer(
           size.cols,
           prevFP,
           prevHrefIds,
-          prevCharHashes,
+          prevTextIds,
           bgKey,
         );
         renderDirtySpans(y, row, spans, rewriteTail);
@@ -2337,9 +2345,9 @@ export function createStdoutRenderer(
     const tmpHrefIds = prevHrefIds;
     prevHrefIds = currentHrefIds;
     currentHrefIds = tmpHrefIds;
-    const tmpCharHashes = prevCharHashes;
-    prevCharHashes = currentCharHashes;
-    currentCharHashes = tmpCharHashes;
+    const tmpTextIds = prevTextIds;
+    prevTextIds = currentTextIds;
+    currentTextIds = tmpTextIds;
     fpPrevValid = !hrefIndexResetRequiresBaseline;
     prevOverlayBlockedRows = overlayCoverage.blockedRows;
     prevOverlayPartialRows = overlayCoverage.partialRows;
