@@ -58,7 +58,10 @@ import {
   createDefaultTInputHostAdapter,
   defaultTInputHostPlugin,
   installTerminalCleanup,
+  type CliOutput,
+  type DirtyRowPatchMode,
   type StdinDriver,
+  type StdoutRendererOptions,
   type TerminalCleanupHandle,
   type TerminalCleanupSignalPolicy,
 } from "@simon_he/vue-tui/cli";
@@ -199,6 +202,13 @@ console.log(
 );
 
 const driver: StdinDriver | null = null;
+const stdoutOutput: CliOutput = { write: () => {} };
+const stdoutPatchMode: DirtyRowPatchMode = "span";
+const stdoutOptions: StdoutRendererOptions = {
+  dirtyRowPatchMode: stdoutPatchMode,
+  colorMode: "ansi16",
+  clear: false,
+};
 const cleanupHandle: TerminalCleanupHandle | null = null;
 const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
 const record: TerminalEventRecord = { type: "keydown", key: "Enter" };
@@ -210,6 +220,8 @@ const markdownRows = buildMarkdownVisualRows("| Ω |\n|---|", 20, markdownParser
 const markdownLayoutRows = layoutMarkdownBlocks([], 20, { widthProvider: "cjk" });
 console.log(
   driver,
+  stdoutOutput,
+  stdoutOptions,
   cleanupHandle,
   signalPolicy,
   record,

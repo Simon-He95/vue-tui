@@ -390,7 +390,7 @@ describe("stdout renderer column diff", () => {
     });
   });
 
-  it("does not skip a changed cell when the 10-bit char fingerprint collides", () => {
+  it("does not skip a changed cell that collided under the old 10-bit char fingerprint", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const oldChar = "A";
       const newChar = String.fromCharCode(oldChar.charCodeAt(0) + 1024);

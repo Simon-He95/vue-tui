@@ -30,9 +30,11 @@ export { createOsc52ClipboardProvider, type Osc52ClipboardOptions } from "./runt
 export type { StdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export { getStdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export type {
+  CliOutput,
   DirtyRowPatchMode,
   StdoutColorMode,
   StdoutRenderer,
+  StdoutRendererOptions,
   ThemePalette,
 } from "./renderer/cli/stdout-renderer.js";
 export { createStdoutRenderer } from "./renderer/cli/stdout-renderer.js";

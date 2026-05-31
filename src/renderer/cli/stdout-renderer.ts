@@ -93,43 +93,50 @@ export type StdoutColorMode = "auto" | "truecolor" | "ansi256" | "ansi16" | "ans
 export type DirtyRowPatchMode = "auto" | "row" | "span";
 export type { ThemePalette } from "../../core/ansi-palette.js";
 
+export type StdoutRendererOptions = Readonly<{
+  output?: CliOutput;
+  clear?: boolean;
+  hideCursor?: boolean;
+  altScreen?: boolean;
+  /** Fallback background color when a cell has no explicit bg. `null` = terminal default. */
+  defaultBg?: string | null;
+  /** Optional ANSI-name palette used when emitting ansi256/truecolor sequences. */
+  palette?: ThemePalette | null;
+  /** Track TTY resize events and call terminal.resize(). */
+  trackResize?: boolean;
+  /** Color mode for ANSI output. */
+  colorMode?: StdoutColorMode;
+  /**
+   * Dirty-row stdout patch strategy.
+   *
+   * - "auto": use terminal compatibility detection.
+   * - "row": repaint each dirty row.
+   * - "span": use row-internal multi-span diffing.
+   */
+  dirtyRowPatchMode?: DirtyRowPatchMode;
+  /**
+   * Alias for dirtyRowPatchMode.
+   *
+   * - true => "span"
+   * - false => "row"
+   * - "auto" => "auto"
+   *
+   * When both are provided, dirtyRowPatchMode wins.
+   */
+  columnDiff?: boolean | "auto";
+  /** Optional function to get IME cursor position, included in render output atomically. */
+  getImeAnchor?: () => { cellX: number; cellY: number } | null;
+  /** Use DEC 2026 synchronized output mode. */
+  useSyncOutput?: boolean;
+  allowFileUrls?: boolean;
+  profileFileWriter?: {
+    appendFileSync?: (path: string, data: string) => void;
+  };
+}>;
+
 export function createStdoutRenderer(
   terminal: Terminal,
-  options?: Readonly<{
-    output?: CliOutput;
-    clear?: boolean;
-    hideCursor?: boolean;
-    altScreen?: boolean;
-    /** Fallback background color when a cell has no explicit bg. `null` = transparent (terminal default). */
-    defaultBg?: string | null;
-    /** Optional ANSI-name palette used when emitting ansi256/truecolor sequences. */
-    palette?: ThemePalette | null;
-    /** Track TTY resize events (process.stdout 'resize') and call terminal.resize(). */
-    trackResize?: boolean;
-    /** Color mode for ANSI output (auto detects truecolor via env). */
-    colorMode?: StdoutColorMode;
-    /** Dirty-row stdout patch strategy.
-     * - auto: use terminal compatibility detection
-     * - row: repaint each dirty row
-     * - span: use row-internal multi-span diffing
-     */
-    dirtyRowPatchMode?: DirtyRowPatchMode;
-    /** Optional function to get IME cursor position, included in render output for atomic write */
-    getImeAnchor?: () => { cellX: number; cellY: number } | null;
-    /** Use DEC 2026 synchronized output mode (default: false for compatibility) */
-    useSyncOutput?: boolean;
-    /**
-     * Controls row-internal column diffing.
-     * Deprecated alias for dirtyRowPatchMode. When both are provided,
-     * dirtyRowPatchMode takes precedence.
-     * - true: force narrow column/span patches
-     * - false: repaint whole dirty rows
-     * - "auto": disable on terminals known to be sensitive to narrow patches
-     */
-    columnDiff?: boolean | "auto";
-    allowFileUrls?: boolean;
-    profileFileWriter?: { appendFileSync?: (path: string, data: string) => void };
-  }>,
+  options?: StdoutRendererOptions,
 ): StdoutRenderer {
   const env = (process?.env ?? {}) as Record<string, unknown>;
   if (shouldInstallFileWriters(env)) installNodeFileWriters();
@@ -315,11 +322,14 @@ export function createStdoutRenderer(
   const colorMode = resolveColorMode();
   const enableDim = colorMode === "truecolor";
 
-  // Numeric style key encoding (22 bits):
+  // Numeric style key encoding:
   // Bits 0-7: fg color index (0=none, 1-16=AnsiColorName, 17+=dynamic hex)
   // Bits 8-15: bg color index
   // Bit 16: bold, Bit 17: dim, Bit 18: italic, Bit 19: underline, Bit 20: inverse, Bit 21: hasHref
-  // 8 bits per color → max 255 distinct colors. Fingerprint = (styleKey << 10) | charHash10.
+  //
+  // Cell fingerprints use a 32-bit hash of the style key plus the full grapheme.
+  // Dirty-span diff treats equal fingerprints as unchanged, so the character
+  // must not be packed into a small fixed-width bit field.
   const COLOR_INDEX: Record<string, number> = {
     black: 1,
     red: 2,
@@ -478,9 +488,9 @@ export function createStdoutRenderer(
   // Track last known terminal size to detect shrinking
   let lastRenderedRows = 0;
   // Typed-array row fingerprints: double-buffered for frame-to-frame diffing.
-  // Each cell is encoded as (numericStyleKey << 10) | charHash10.
-  // Exact cell text ids are tracked in parallel so the 10-bit encoding never
-  // acts as the sole correctness signal for cell equality.
+  // Each cell fingerprint hashes the numeric style key and full grapheme.
+  // Exact cell text ids are tracked in parallel as an additional correctness
+  // signal for cell equality.
   let fpCols = 0;
   let fpRows = 0;
   let currentFP = new Uint32Array(0);
@@ -521,14 +531,36 @@ export function createStdoutRenderer(
     prevOverlayBlockedRows = [];
     prevOverlayPartialRows = [];
   }
-  function charHash10(ch: string): number {
-    if (ch.length <= 1) return (ch.charCodeAt(0) || 0) & 0x3ff;
-    let h = 0x811c;
-    for (let i = 0; i < ch.length; i++) {
-      h ^= ch.charCodeAt(i);
-      h = (h * 0x0101) & 0xffff;
+  function hashString32(input: string, seed = 0x811c9dc5): number {
+    let hash = seed >>> 0;
+
+    for (let i = 0; i < input.length; i++) {
+      hash ^= input.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
     }
-    return h & 0x3ff;
+
+    return hash >>> 0;
+  }
+
+  function hashNumber32(value: number, seed = 0x811c9dc5): number {
+    let hash = seed >>> 0;
+    let n = value >>> 0;
+
+    for (let i = 0; i < 4; i++) {
+      hash ^= n & 0xff;
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+      n >>>= 8;
+    }
+
+    return hash >>> 0;
+  }
+
+  function cellFingerprintFromStyleKey(ch: string, key: number): number {
+    return hashString32(ch || " ", hashNumber32(key));
+  }
+
+  function cellFingerprint(ch: string, style: Style): number {
+    return cellFingerprintFromStyleKey(ch, styleKey(style));
   }
 
   function allocateCellTextId(text: string): number {
@@ -570,10 +602,6 @@ export function createStdoutRenderer(
     const id = nextHrefId++;
     hrefIndex.set(href, id);
     return id;
-  }
-
-  function cellFingerprint(ch: string, style: Style): number {
-    return (styleKey(style) << 10) | charHash10(ch);
   }
 
   const BLANK_STYLE: Style = Object.freeze({});
@@ -1235,7 +1263,7 @@ export function createStdoutRenderer(
     cols: number,
   ): boolean => {
     if (!fpCols || y < 0 || y >= fpRows) return false;
-    const blankFP = (styleKeyFromParts({ bg: defaultBg }) << 10) | charHash10(" ");
+    const blankFP = cellFingerprintFromStyleKey(" ", styleKeyFromParts({ bg: defaultBg }));
     const base = y * fpCols;
     const limit = Math.min(cols, fpCols);
     for (let x = 0; x < limit; x++) {
@@ -1583,7 +1611,7 @@ export function createStdoutRenderer(
     const bgSeq = openBg(defaultBg);
     const bgOnlyStyle: Style = { bg: defaultBg };
     const bgKey = styleKeyFromParts({ bg: defaultBg });
-    const blankFP = (bgKey << 10) | charHash10(" ");
+    const blankFP = cellFingerprintFromStyleKey(" ", bgKey);
     let dirtySorted = true;
     const forceFullRender = hrefIndexResetRequiresBaseline;
     if (forceFullRender) hrefIndexResetRequiresBaseline = false;

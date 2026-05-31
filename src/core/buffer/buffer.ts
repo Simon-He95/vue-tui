@@ -97,7 +97,7 @@ export interface GridBuffer {
   scrollback: Cell[][];
   scrollbackLimit: number;
   rowPool: Cell[][];
-  // SoA fingerprint array: flat[physicalRow * cols + x] = (styleKey << 16) | charHash16
+  // SoA fingerprint array: flat[physicalRow * cols + x] = renderer-provided fingerprint
   // Pre-computed during cell writes when fingerprintFn is set.
   soaFingerprints: Uint32Array | null;
   fingerprintFn: CellFingerprintFn | null;
