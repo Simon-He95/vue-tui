@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { charCellWidth } from "../src/core.js";
-import { createTerminal } from "../src/core/terminal/create-terminal.js";
+import { createTerminal, scrollPlaneRows } from "../src/core/terminal/create-terminal.js";
 import { createStdoutRenderer } from "../src/renderer/cli/stdout-renderer.js";
 import type { CliOutput } from "../src/renderer/cli/stdout-renderer.js";
 
@@ -18,6 +18,8 @@ const TERMINAL_ENV_KEYS = [
   "WEZTERM_EXECUTABLE",
   "TERM_PROGRAM",
   "TERM",
+  "VSCODE_PID",
+  "VSCODE_IPC_HOOK_CLI",
 ] as const;
 
 function withTerminalEnv<T>(
@@ -494,6 +496,41 @@ describe("stdout renderer column diff", () => {
       expect(frame).toContain("\x1B]8;;https://b.example\x07");
       expect(frame).not.toContain("https://a.example");
       expect(frame).toContain("link");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("renders inserted rows after explicit scroll operations with column diff enabled", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 40, rows: 4 });
+      const output = createBufferedOutput(true);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      terminal.write("row 0", { x: 0, y: 0 });
+      terminal.write("row 1", { x: 0, y: 1 });
+      terminal.write("row 2", { x: 0, y: 2 });
+      terminal.write("row 3", { x: 0, y: 3 });
+      terminal.commit({ sync: true });
+      output.take();
+
+      scrollPlaneRows(terminal, "default", 0, 4, 1);
+      terminal.write("inserted", { x: 0, y: 3 });
+      terminal.commit({ planes: ["default"], sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;4r");
+      expect(frame).toContain("\x1B[1S");
+      expect(frame).toContain("inserted");
 
       renderer.dispose();
       terminal.dispose();
