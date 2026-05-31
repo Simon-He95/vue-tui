@@ -137,9 +137,10 @@ export function createStdoutRenderer(
   const output: CliOutput | undefined = options?.output ?? (process.stdout as any);
   if (!output) throw new Error("createStdoutRenderer requires a Node stdout-like output");
   const out = output;
+  const outputIsTTY = out.isTTY === true;
   const clear = options?.clear ?? true;
   const hideCursor = options?.hideCursor ?? true;
-  const altScreen = options?.altScreen ?? Boolean(out.isTTY);
+  const altScreen = options?.altScreen ?? outputIsTTY;
   let defaultBg: string | undefined =
     options?.defaultBg == null || options?.defaultBg === "transparent"
       ? undefined
@@ -246,7 +247,7 @@ export function createStdoutRenderer(
   const isVscodeTerminal =
     termProgram === "vscode" || "VSCODE_PID" in env || "VSCODE_IPC_HOOK_CLI" in env;
   const useConservativeDirtyRows = Boolean(
-    out.isTTY !== false && (isGhostty || isKitty || isAlacritty || isWezTerm),
+    outputIsTTY && (isGhostty || isKitty || isAlacritty || isWezTerm),
   );
   function resolveDirtyRowPatchMode(): DirtyRowPatchMode {
     if (options?.dirtyRowPatchMode) return options.dirtyRowPatchMode;
@@ -260,10 +261,10 @@ export function createStdoutRenderer(
   const shouldUseDirtySpans = (): boolean => {
     if (dirtyRowPatchMode === "span") return true;
     if (dirtyRowPatchMode === "row") return false;
-    if (!out.isTTY) return true;
+    if (!outputIsTTY) return true;
     return !useConservativeDirtyRows;
   };
-  const enableOsc8Links = out.isTTY !== false && !isVscodeTerminal;
+  const enableOsc8Links = outputIsTTY && !isVscodeTerminal;
 
   let disposed = false;
   let lastFrameTime = 0;
@@ -282,7 +283,7 @@ export function createStdoutRenderer(
   let accumulatedScrollOperations: TerminalScrollOperation[] | null = null;
   // Minimum frame interval for stdout rendering (16ms = ~60fps max).
   // For non-TTY outputs (tests/logs), render immediately for determinism.
-  const MIN_FRAME_MS = !out.isTTY ? 0 : 16;
+  const MIN_FRAME_MS = outputIsTTY ? 16 : 0;
 
   function clampCellToViewport(
     cell: Readonly<{ cellX: number; cellY: number }>,
@@ -303,7 +304,7 @@ export function createStdoutRenderer(
     const env = (process?.env ?? {}) as Record<string, unknown>;
     return detectTerminalColorCapability({
       env,
-      isTTY: Boolean(out.isTTY),
+      isTTY: outputIsTTY,
       platform: String((process as any)?.platform ?? ""),
     }).mode;
   }
@@ -1265,7 +1266,7 @@ export function createStdoutRenderer(
     if (raw === "0" || raw === "false") return false;
     // Ghostty has issues with DECSTBM in some versions; disable by default
     if (isGhostty || isVscodeTerminal) return false;
-    return out.isTTY !== false;
+    return outputIsTTY;
   })();
 
   interface ScrollShift {
@@ -2850,7 +2851,7 @@ export function createStdoutRenderer(
   installFingerprintFn();
 
   // Initial setup - these are one-time writes, not part of render loop
-  if (altScreen && out.isTTY) out.write("\u001B[?1049h");
+  if (altScreen && outputIsTTY) out.write("\u001B[?1049h");
   if (hideCursor) out.write("\u001B[?25l");
   if (clear) {
     out.write(`${SGR_RESET}${openBg(defaultBg)}\u001B[2J\u001B[H${SGR_RESET}`);
@@ -2867,7 +2868,7 @@ export function createStdoutRenderer(
 
   const resizeSource: any = (options?.output as any) ?? process.stdout;
   const canTrackResize = Boolean(
-    trackResize && out.isTTY && typeof resizeSource?.on === "function",
+    trackResize && outputIsTTY && typeof resizeSource?.on === "function",
   );
   const onResize = () => {
     const cols = Number(resizeSource?.columns);
@@ -2938,7 +2939,7 @@ export function createStdoutRenderer(
       }
     }
     if (hideCursor) out.write("\u001B[?25h");
-    if (altScreen && out.isTTY) out.write("\u001B[?1049l");
+    if (altScreen && outputIsTTY) out.write("\u001B[?1049l");
     profiler?.dispose();
   }
 

@@ -9,13 +9,11 @@ type BufferedOutput = CliOutput & {
 
 const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const middle =
-  " building package with a deliberately very very long unchanged middle segment ".repeat(
-    2,
-  );
+  " building package with a deliberately very very long unchanged middle segment ".repeat(2);
 const percentX = 2 + middle.length;
 const cols = percentX + 8;
 
-function createBufferedOutput(isTTY = true): BufferedOutput {
+function createBufferedOutput(isTTY: boolean): BufferedOutput {
   const chunks: string[] = [];
 
   return {
@@ -162,9 +160,7 @@ function parseFrameCount(value: string | undefined): number {
   const parsed = Number(value ?? 5000);
 
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(
-      `FRAMES must be a positive finite number, received ${JSON.stringify(value)}`,
-    );
+    throw new Error(`FRAMES must be a positive finite number, received ${JSON.stringify(value)}`);
   }
 
   return Math.floor(parsed);
@@ -185,15 +181,11 @@ const multiSpan = runCase("multi-span optimized", {
 console.table([fullRow, singleSpan, multiSpan]);
 
 if (fullRow.totalBytes <= 0) {
-  throw new Error(
-    `Invalid full-row benchmark: totalBytes=${fullRow.totalBytes}`,
-  );
+  throw new Error(`Invalid full-row benchmark: totalBytes=${fullRow.totalBytes}`);
 }
 
 if (singleSpan.totalBytes <= 0) {
-  throw new Error(
-    `Invalid single-span benchmark: totalBytes=${singleSpan.totalBytes}`,
-  );
+  throw new Error(`Invalid single-span benchmark: totalBytes=${singleSpan.totalBytes}`);
 }
 
 const fullRowByteRatio = multiSpan.totalBytes / fullRow.totalBytes;

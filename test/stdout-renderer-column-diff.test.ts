@@ -1203,4 +1203,50 @@ describe("stdout renderer column diff", () => {
       },
     );
   });
+
+  it("does not treat output without isTTY as a real terminal for conservative fallback", () => {
+    withTerminalEnv(
+      {
+        WEZTERM_PANE: "test",
+        TERM_PROGRAM: "WezTerm",
+        TERM: "xterm-256color",
+      },
+      () => {
+        const chunks: string[] = [];
+        const output = {
+          write(chunk: string) {
+            chunks.push(String(chunk));
+          },
+        };
+        const terminal = createTerminal({ cols: 120, rows: 1 });
+        const renderer = createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          useSyncOutput: false,
+        });
+        const middle = " unchanged middle should not be repainted ";
+        const percentX = 2 + middle.length;
+
+        terminal.write(`⠋ ${middle}10%`, { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+
+        chunks.length = 0;
+
+        terminal.put(0, 0, "⠙");
+        terminal.write("11%", { x: percentX, y: 0 });
+        terminal.commit({ sync: true });
+
+        const frame = chunks.join("");
+
+        expect(frame).toContain("⠙");
+        expect(frame).toContain("11%");
+        expect(frame).not.toContain("unchanged middle should not be repainted");
+
+        renderer.dispose();
+        terminal.dispose();
+      },
+    );
+  });
 });
