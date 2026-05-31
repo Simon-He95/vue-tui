@@ -7,6 +7,14 @@ type BufferedOutput = CliOutput & {
   take: () => string;
 };
 
+const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const middle =
+  " building package with a deliberately very very long unchanged middle segment ".repeat(
+    2,
+  );
+const percentX = 2 + middle.length;
+const cols = percentX + 8;
+
 function createBufferedOutput(isTTY = true): BufferedOutput {
   const chunks: string[] = [];
 
@@ -71,12 +79,6 @@ function runCase(
     },
     () => {
       const frames = options.frames;
-      const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-      const middle =
-        " building package with a deliberately very very long unchanged middle segment ".repeat(2);
-      const percentX = 2 + middle.length;
-      const cols = percentX + 8;
-
       const terminal = createTerminal({ cols, rows: 1 });
       terminal.write(`⠋ ${middle}000%`, { x: 0, y: 0 });
 
@@ -89,6 +91,7 @@ function runCase(
         clear: false,
         hideCursor: false,
         altScreen: false,
+        colorMode: "ansi16",
         useSyncOutput: false,
         dirtyRowPatchMode: options.dirtyRowPatchMode,
       });
@@ -130,11 +133,38 @@ function runCase(
   );
 }
 
+function runSingleSpanBaseline(frames: number) {
+  let totalBytes = 0;
+  let maxFrameBytes = 0;
+  const startedAt = performance.now();
+
+  for (let i = 0; i < frames; i++) {
+    const frame = `\x1B[?7l\x1B[0m\x1B[40m\x1B[1;1H${spinnerFrames[i % spinnerFrames.length]!} ${middle}${String(i % 1000).padStart(3, "0")}%\x1B[0m\x1B[?7h`;
+    const bytes = Buffer.byteLength(frame, "utf8");
+    totalBytes += bytes;
+    maxFrameBytes = Math.max(maxFrameBytes, bytes);
+  }
+
+  const durationMs = performance.now() - startedAt;
+
+  return {
+    name: "single-span baseline",
+    frames,
+    totalBytes,
+    meanBytes: totalBytes / frames,
+    maxFrameBytes,
+    durationMs,
+    framesPerSecond: frames / (durationMs / 1000),
+  };
+}
+
 function parseFrameCount(value: string | undefined): number {
   const parsed = Number(value ?? 5000);
 
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`FRAMES must be a positive finite number, received ${JSON.stringify(value)}`);
+    throw new Error(
+      `FRAMES must be a positive finite number, received ${JSON.stringify(value)}`,
+    );
   }
 
   return Math.floor(parsed);
@@ -142,42 +172,67 @@ function parseFrameCount(value: string | undefined): number {
 
 const frames = parseFrameCount(process.env.FRAMES);
 
-const conservative = runCase("full dirty row", {
+const fullRow = runCase("full-row baseline", {
   frames,
   dirtyRowPatchMode: "row",
 });
-const optimized = runCase("multi-span column diff", {
+const singleSpan = runSingleSpanBaseline(frames);
+const multiSpan = runCase("multi-span optimized", {
   frames,
   dirtyRowPatchMode: "span",
 });
 
-console.table([conservative, optimized]);
+console.table([fullRow, singleSpan, multiSpan]);
 
-if (conservative.totalBytes <= 0) {
-  throw new Error(`Invalid conservative benchmark: totalBytes=${conservative.totalBytes}`);
+if (fullRow.totalBytes <= 0) {
+  throw new Error(
+    `Invalid full-row benchmark: totalBytes=${fullRow.totalBytes}`,
+  );
 }
 
-const byteRatio = optimized.totalBytes / conservative.totalBytes;
-
-if (!Number.isFinite(byteRatio)) {
-  throw new Error(`Invalid byteRatio=${byteRatio}`);
+if (singleSpan.totalBytes <= 0) {
+  throw new Error(
+    `Invalid single-span benchmark: totalBytes=${singleSpan.totalBytes}`,
+  );
 }
 
-console.log(`byteRatio=${byteRatio.toFixed(4)}`);
+const fullRowByteRatio = multiSpan.totalBytes / fullRow.totalBytes;
+const singleSpanByteRatio = multiSpan.totalBytes / singleSpan.totalBytes;
 
-if (optimized.meanBytes >= conservative.meanBytes) {
+if (!Number.isFinite(fullRowByteRatio)) {
+  throw new Error(`Invalid fullRowByteRatio=${fullRowByteRatio}`);
+}
+
+if (!Number.isFinite(singleSpanByteRatio)) {
+  throw new Error(`Invalid singleSpanByteRatio=${singleSpanByteRatio}`);
+}
+
+console.log(`byteRatio=${fullRowByteRatio.toFixed(4)}`);
+console.log(`fullRowByteRatio=${fullRowByteRatio.toFixed(4)}`);
+console.log(`singleSpanByteRatio=${singleSpanByteRatio.toFixed(4)}`);
+
+if (multiSpan.meanBytes >= singleSpan.meanBytes) {
   console.error(
-    `Expected optimized meanBytes < conservative meanBytes, got ${optimized.meanBytes.toFixed(
+    `Expected multi-span meanBytes < single-span meanBytes, got ${multiSpan.meanBytes.toFixed(
       2,
-    )} >= ${conservative.meanBytes.toFixed(2)}`,
+    )} >= ${singleSpan.meanBytes.toFixed(2)}`,
   );
   process.exit(1);
 }
 
-if (byteRatio > 0.35) {
+if (singleSpanByteRatio >= 0.45) {
   console.error(
-    `Expected optimized total bytes <= 35% of conservative full-row bytes, got ${(
-      byteRatio * 100
+    `Expected multi-span total bytes < 45% of single-span bytes, got ${(
+      singleSpanByteRatio * 100
+    ).toFixed(2)}%`,
+  );
+  process.exit(1);
+}
+
+if (fullRowByteRatio >= 0.35) {
+  console.error(
+    `Expected multi-span total bytes < 35% of full-row bytes, got ${(
+      fullRowByteRatio * 100
     ).toFixed(2)}%`,
   );
   process.exit(1);
