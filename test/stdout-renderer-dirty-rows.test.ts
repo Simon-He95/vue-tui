@@ -274,7 +274,9 @@ describe("stdout renderer", () => {
       nowRef.t += frameDelayMs;
       vi.advanceTimersByTime(frameDelayMs);
       out = "";
+      terminal.put(0, 1, "A");
       (renderer as any).render([1]);
+      terminal.put(0, 3, "B");
       (renderer as any).render([3]);
 
       expect(out).toBe("");

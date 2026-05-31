@@ -224,8 +224,8 @@ export function createStdoutRenderer(
   // A few narrow spans are cheaper than repainting a whole dirty row.
   // Too many spans become cursor-move heavy, so fall back to full-row repaint.
   const DIRTY_SPAN_MERGE_GAP_CELLS = 2;
-  const DIRTY_SPAN_MAX_PER_ROW = 8;
-  const DIRTY_SPAN_FULL_ROW_THRESHOLD = 0.6;
+  const DIRTY_SPAN_MAX_PER_ROW = 12;
+  const DIRTY_SPAN_FULL_ROW_THRESHOLD = 0.7;
 
   const disableCursorPos = false;
   const termProgram = String(env.TERM_PROGRAM ?? "")
@@ -611,6 +611,8 @@ export function createStdoutRenderer(
     endXExclusive: number;
   }>;
 
+  type DirtySpanRenderMode = "spans" | "contiguous" | "row";
+
   const fullRowDirtySpan = (row: readonly Cell[], cols: number): readonly DirtySpan[] => {
     const endXExclusive = Math.max(0, Math.min(cols, row.length));
     return endXExclusive > 0 ? [{ startX: 0, endXExclusive }] : [];
@@ -657,27 +659,44 @@ export function createStdoutRenderer(
     );
   };
 
-  const shouldFallbackDirtySpansToContiguousSpan = (
+  const estimatedFullRowPatchBytes = (row: readonly Cell[], y: number, cols: number): number => {
+    return estimatedCursorMoveBytes(y, 0) + Math.max(0, Math.min(row.length, cols)) + 3;
+  };
+
+  const resolveDirtySpanRenderMode = (
     spans: readonly DirtySpan[],
     y: number,
+    row: readonly Cell[],
     cols: number,
-  ): boolean => {
-    if (spans.length <= 1) return false;
+  ): DirtySpanRenderMode => {
+    if (spans.length <= 0) return "spans";
+    if (spans.length > DIRTY_SPAN_MAX_PER_ROW) return "row";
 
     const coverage = dirtySpanCoverage(spans);
-    if (coverage >= Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD))) {
-      return true;
+    if (spans.length <= 2 && coverage < cols * DIRTY_SPAN_FULL_ROW_THRESHOLD) {
+      return "spans";
     }
 
-    if (spans.length <= 2) return false;
-    if (spans.length > DIRTY_SPAN_MAX_PER_ROW) return true;
+    const fullRowCost = estimatedFullRowPatchBytes(row, y, cols);
+    const sparseThreshold = fullRowCost * DIRTY_SPAN_FULL_ROW_THRESHOLD;
 
     const multiCost = estimatedSpanPatchBytes(spans, y);
-    const contiguousCost = estimatedContiguousPatchBytes(spans, y);
+    if (multiCost < sparseThreshold && coverage < cols * DIRTY_SPAN_FULL_ROW_THRESHOLD) {
+      return "spans";
+    }
 
-    // Keep a little margin so we don't choose multi-span when it is only
-    // theoretically equal but may lose because of SGR/OSC8/style transitions.
-    return multiCost >= contiguousCost * 0.9;
+    const contiguousCost = estimatedContiguousPatchBytes(spans, y);
+    const first = spans[0]!;
+    const last = spans[spans.length - 1]!;
+    const contiguousWidth = Math.max(0, last.endXExclusive - first.startX);
+    if (
+      contiguousCost < sparseThreshold &&
+      contiguousWidth < cols * DIRTY_SPAN_FULL_ROW_THRESHOLD
+    ) {
+      return "contiguous";
+    }
+
+    return "row";
   };
 
   const expandSpanStart = (row: readonly Cell[], startX: number): number => {
@@ -1821,28 +1840,22 @@ export function createStdoutRenderer(
 
       // Evaluate fallback after default-tail compaction. Otherwise a long default
       // blank tail can incorrectly force a broader repaint for text-shrink frames.
-      if (shouldFallbackDirtySpansToContiguousSpan(spansToPaint, y, size.cols)) {
+      const renderMode = resolveDirtySpanRenderMode(spansToPaint, y, row, size.cols);
+
+      if (renderMode === "row") {
+        renderRow(y, row);
+      } else if (renderMode === "contiguous") {
         const first = spansToPaint[0]!;
         const last = spansToPaint[spansToPaint.length - 1]!;
         const rewriteEnd =
           clearStartX == null ? last.endXExclusive : Math.min(last.endXExclusive, clearStartX);
 
         if (rewriteEnd > first.startX) {
-          const clearToEol =
-            clearStartX == null && last.endXExclusive >= rowCols && last.endXExclusive < size.cols;
-          renderRow(y, row, first.startX, rewriteEnd, clearToEol);
+          renderRow(y, row, first.startX, rewriteEnd, false);
         }
       } else {
-        const lastSpan = spansToPaint[spansToPaint.length - 1];
-
         for (const span of spansToPaint) {
-          const clearToEol =
-            clearStartX == null &&
-            span === lastSpan &&
-            span.endXExclusive >= rowCols &&
-            span.endXExclusive < size.cols;
-
-          renderRow(y, row, span.startX, span.endXExclusive, clearToEol);
+          renderRow(y, row, span.startX, span.endXExclusive, false);
         }
       }
 
