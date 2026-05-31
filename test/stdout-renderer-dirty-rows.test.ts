@@ -1322,7 +1322,76 @@ describe("stdout renderer", () => {
         nowRef.t += frameDelayMs;
         vi.advanceTimersByTime(frameDelayMs);
 
-        expect(out.includes("\u001B[6;1H   x")).toBe(true);
+        expect(out.includes("\u001B[6;4Hx")).toBe(true);
+        expect(out.includes("\u001B[6;1H   x")).toBe(false);
+        expect(applyAnsiToScreen(transcriptOut, 8, 8)).toEqual(terminal.snapshot().lines);
+
+        renderer.dispose();
+      } finally {
+        nowSpy.mockRestore();
+        vi.useRealTimers();
+        if (prevScrollRegions == null) delete process.env.DIMCODE_TUI_SCROLL_REGIONS;
+        else process.env.DIMCODE_TUI_SCROLL_REGIONS = prevScrollRegions;
+      }
+    });
+  });
+
+  it("renders OSC8 hrefs in inserted explicit-scroll rows even when the cell is blank", () => {
+    const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
+
+    withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
+      vi.useFakeTimers();
+      const nowRef = { t: 0 };
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowRef.t);
+      try {
+        process.env.DIMCODE_TUI_SCROLL_REGIONS = "1";
+
+        const terminal = createTerminal({ cols: 8, rows: 8 });
+        const transcript = getPlaneTerminal(terminal, "transcript");
+        let out = "";
+        let transcriptOut = "";
+        const output = {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+            transcriptOut += chunk;
+          },
+        };
+        const renderer = createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+        });
+
+        const writeRow = (y: number, text: string) => {
+          transcript.fill(0, y, 8, 1, " ");
+          transcript.write(text.padEnd(8, " "), { x: 0, y });
+        };
+
+        writeRow(2, "row0");
+        writeRow(3, "row1");
+        writeRow(4, "row2");
+        writeRow(5, "row3");
+        terminal.commit({ planes: ["transcript"], sync: true });
+        const frameDelayMs = getFrameDelayMs();
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        out = "";
+        scrollPlaneRows(terminal, "transcript", 2, 6, 1);
+        transcript.fill(0, 5, 8, 1, " ");
+        transcript.write(" ", {
+          x: 3,
+          y: 5,
+          style: { href: "https://example.com/blank" },
+        });
+        terminal.commit({ planes: ["transcript"], sync: true });
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        expect(out).toContain("\u001B[6;4H");
+        expect(out).toContain("\u001B]8;;https://example.com/blank\u0007");
         expect(applyAnsiToScreen(transcriptOut, 8, 8)).toEqual(terminal.snapshot().lines);
 
         renderer.dispose();

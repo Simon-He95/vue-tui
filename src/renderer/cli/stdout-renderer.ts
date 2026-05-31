@@ -806,7 +806,7 @@ export function createStdoutRenderer(
     cols: number,
     changedAt: (x: number) => boolean,
   ): readonly DirtySpan[] => {
-    const limit = Math.max(0, Math.min(cols, row.length));
+    const limit = Math.max(0, Math.min(cols, row.length, fpCols || cols));
     if (limit <= 0) return [];
 
     const spans: DirtySpan[] = [];
@@ -876,7 +876,7 @@ export function createStdoutRenderer(
     );
   };
 
-  const _resolveChangedSpansAgainstFill = (
+  const resolveChangedSpansAgainstFill = (
     row: readonly Cell[],
     y: number,
     cols: number,
@@ -1944,10 +1944,48 @@ export function createStdoutRenderer(
         ? explicitDirtyRows.filter((y) => overlayTouchedRowSet.has(y))
         : [];
       const paintedExplicitRows: number[] = [];
+      const insertedRows = new Set<number>();
+      for (const op of explicitScrollOperations) {
+        const absDelta = Math.abs(op.delta);
+        if (op.delta > 0) {
+          for (let y = op.endY - absDelta; y < op.endY; y++) insertedRows.add(y);
+        } else {
+          for (let y = op.startY; y < op.startY + absDelta; y++) insertedRows.add(y);
+        }
+      }
+
       for (const y of explicitDirtyRows) {
         const row = terminal.getRow(y) as Cell[];
-        fingerprintRow(row, y, size.cols);
-        renderRow(y, row);
+        const overlayRow = overlayTouchedRowSet?.has(y);
+        if (!enableColumnDiff || overlayRow) {
+          fingerprintRow(row, y, size.cols);
+          renderRow(y, row);
+          paintedExplicitRows.push(y);
+          continue;
+        }
+
+        const insertedRow = insertedRows.has(y);
+        if (insertedRow) fingerprintRow(row, y, size.cols);
+        const spans = insertedRow
+          ? resolveChangedSpansAgainstFill(row, y, size.cols, blankFP, blankCharHash, 0)
+          : resolveChangedSpansAgainstReference(
+              row,
+              y,
+              size.cols,
+              currentFP,
+              currentHrefIds,
+              currentCharHashes,
+            );
+
+        if (!spans.length) {
+          continue;
+        }
+
+        const rewriteTail =
+          !insertedRow &&
+          shouldRewriteRowTail(row, y, size.cols, currentFP, currentHrefIds, currentCharHashes);
+        renderDirtySpans(y, row, spans, rewriteTail);
+        if (!insertedRow) fingerprintRow(row, y, size.cols);
         paintedExplicitRows.push(y);
       }
 
