@@ -102,6 +102,8 @@ function mountRow(
   };
 }
 
+const inverseStyle = "\x1B[7m";
+
 describe("stdout renderer column diff", () => {
   it("updates only spinner cell when the text is unchanged", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
@@ -344,6 +346,30 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("does not compact styled blank tail into ESC[K", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const { terminal, output, renderer } = mountRow("prefixXXXXXXXX", {
+        cols: 24,
+        columnDiff: true,
+      });
+
+      output.take();
+
+      terminal.clear(6, 0, 18, 1);
+      terminal.fill(6, 0, 4, 1, " ", { inverse: true });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;7H");
+      expect(frame).toContain(inverseStyle);
+      expect(frame).not.toContain("\x1B[K");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("does not clear stable right-side content when middle text shortens", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const prefix = "⠙ ";
@@ -558,7 +584,7 @@ describe("stdout renderer column diff", () => {
       // Regression: a naive tail clear would emit ESC[K without painting the six
       // styled blanks, causing the blue background to disappear.
       expect(frame).toContain("      ");
-      expect(frame).toContain("\x1B[K");
+      expect(frame).not.toContain("\x1B[K");
       expect(frame).not.toContain("loading something");
 
       renderer.dispose();
@@ -602,11 +628,12 @@ describe("stdout renderer column diff", () => {
     });
   });
 
-  it("can force full dirty-row rendering with columnDiff: false", () => {
+  it("honors columnDiff=false by repainting the dirty row", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
-      const middle = " unchanged middle should be repainted by explicit opt-out ";
+      const middle = " unchanged middle should be repainted ";
       const percentX = 2 + middle.length;
       const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+        cols: percentX + 8,
         columnDiff: false,
       });
 
@@ -625,37 +652,54 @@ describe("stdout renderer column diff", () => {
     });
   });
 
-  it("can force column diffs in conservative TTY mode with columnDiff: true", () => {
-    withTerminalEnv(
-      {
-        KITTY_WINDOW_ID: "test",
-        TERM_PROGRAM: "kitty",
-        TERM: "xterm-kitty",
-      },
-      () => {
-        const middle = " unchanged middle should not be written when forced ";
-        const percentX = 2 + middle.length;
-        const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
-          isTTY: true,
-          columnDiff: true,
-        });
+  it("keeps auto columnDiff conservative on known-sensitive TTYs", () => {
+    withTerminalEnv({ WEZTERM_PANE: "1", TERM_PROGRAM: "WezTerm", TERM: "xterm-256color" }, () => {
+      const middle = " unchanged middle should be repainted in auto ";
+      const percentX = 2 + middle.length;
+      const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+        cols: percentX + 8,
+        isTTY: true,
+        columnDiff: "auto",
+      });
 
-        terminal.put(0, 0, "⠙");
-        terminal.write("11%", { x: percentX, y: 0 });
-        terminal.commit({ sync: true });
+      terminal.put(0, 0, "⠙");
+      terminal.write("11%", { x: percentX, y: 0 });
+      terminal.commit({ sync: true });
 
-        const frame = output.take();
+      const frame = output.take();
 
-        expect(frame).toContain("\x1B[1;1H");
-        expect(frame).toContain(`\x1B[1;${percentX + 1}H`);
-        expect(frame).toContain("⠙");
-        expect(frame).toContain("11%");
-        expect(frame).not.toContain("unchanged middle should not be written");
+      expect(frame).toContain("⠙");
+      expect(frame).toContain("11%");
+      expect(frame).toContain("unchanged middle should be repainted in auto");
 
-        renderer.dispose();
-        terminal.dispose();
-      },
-    );
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("allows columnDiff=true to override conservative TTY detection", () => {
+    withTerminalEnv({ WEZTERM_PANE: "1", TERM_PROGRAM: "WezTerm", TERM: "xterm-256color" }, () => {
+      const middle = " unchanged middle must not be written when forced ";
+      const percentX = 2 + middle.length;
+      const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+        cols: percentX + 8,
+        isTTY: true,
+        columnDiff: true,
+      });
+
+      terminal.put(0, 0, "⠙");
+      terminal.write("11%", { x: percentX, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("⠙");
+      expect(frame).toContain("11%");
+      expect(frame).not.toContain("unchanged middle must not be written when forced");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
   });
 
   it("falls back to full row when changed spans are too fragmented", () => {

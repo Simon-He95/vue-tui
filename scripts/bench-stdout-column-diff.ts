@@ -82,14 +82,33 @@ function runCase(name: string, columnDiff: boolean, frames: number) {
   };
 }
 
-const frames = Number(process.env.FRAMES ?? 5000);
+function parseFrameCount(value: string | undefined): number {
+  const parsed = Number(value ?? 5000);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`FRAMES must be a positive finite number, received ${JSON.stringify(value)}`);
+  }
+
+  return Math.floor(parsed);
+}
+
+const frames = parseFrameCount(process.env.FRAMES);
 
 const fullRow = runCase("full dirty row", false, frames);
 const columnDiff = runCase("column diff", true, frames);
 
 console.table([fullRow, columnDiff]);
 
+if (fullRow.totalBytes <= 0) {
+  throw new Error(`Invalid full-row benchmark: totalBytes=${fullRow.totalBytes}`);
+}
+
 const byteRatio = columnDiff.totalBytes / fullRow.totalBytes;
+
+if (!Number.isFinite(byteRatio)) {
+  throw new Error(`Invalid byteRatio=${byteRatio}`);
+}
+
 console.log(`byteRatio=${byteRatio.toFixed(4)}`);
 
 if (byteRatio > 0.35) {

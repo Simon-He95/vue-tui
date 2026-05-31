@@ -613,13 +613,13 @@ export function createStdoutRenderer(
   const shouldFallbackDirtySpansToFullRow = (
     spans: readonly DirtySpan[],
     cols: number,
-    clearableTailCells = 0,
   ): boolean => {
     if (!spans.length) return false;
     if (spans.length > DIRTY_SPAN_MAX_PER_ROW) return true;
 
-    const effectiveCoverage = Math.max(0, dirtySpanCoverage(spans) - clearableTailCells);
-    return effectiveCoverage >= Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD));
+    return (
+      dirtySpanCoverage(spans) >= Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD))
+    );
   };
 
   const expandSpanStart = (row: readonly Cell[], startX: number): number => {
@@ -935,41 +935,28 @@ export function createStdoutRenderer(
     );
   };
 
-  const lastOccupiedColumnInRow = (row: readonly Cell[], cols: number): number => {
-    const limit = Math.min(cols, row.length);
-    for (let x = limit - 1; x >= 0; x--) {
-      const cell = row[x];
-      if (!cell) continue;
-      if (cell.continuation) {
-        if (x > 0) {
-          const previous = row[x - 1];
-          if (previous && !previous.continuation && previous.width === 2 && previous.ch !== " ") {
-            return x;
-          }
-        }
-        continue;
-      }
-      if (cell.ch !== " " || Object.keys(cell.style).length > 0) {
-        return Math.min(limit - 1, x + (cell.width ?? 1) - 1);
-      }
-    }
-    return -1;
-  };
-
-  const isDefaultBlankCellForEolClear = (
+  const isEolClearEquivalentBlankCell = (
     cell: Cell | undefined,
     defaultBlankStyleKey: number,
   ): boolean => {
     if (!cell) return true;
     if (cell.continuation) return false;
-    if ((cell.ch || " ") !== " ") return false;
+
+    const ch = cell.ch || " ";
+    if (ch !== " ") return false;
     if (cell.width !== 1) return false;
+
+    // Do not use ESC[K for hyperlink blanks. Even if visually blank,
+    // they can still define a clickable region in supporting terminals.
     if (normalizeHref(cell.style.href)) return false;
 
+    // Conservative: only cells whose full visual style equals the renderer's
+    // EOL-clear style may be compacted into ESC[K. This intentionally treats
+    // fg-only/underline/inverse/bold blanks as explicit paint.
     return styleKey(cell.style) === defaultBlankStyleKey;
   };
 
-  const lastNonDefaultBlankColumnInRow = (
+  const lastExplicitPaintColumnInRow = (
     row: readonly Cell[],
     cols: number,
     defaultBlankStyleKey: number,
@@ -978,7 +965,7 @@ export function createStdoutRenderer(
 
     for (let x = limit - 1; x >= 0; x--) {
       const cell = row[x];
-      if (!isDefaultBlankCellForEolClear(cell, defaultBlankStyleKey)) {
+      if (!isEolClearEquivalentBlankCell(cell, defaultBlankStyleKey)) {
         if (cell && !cell.continuation && cell.width === 2 && x + 1 < limit) {
           return x + 1;
         }
@@ -989,6 +976,20 @@ export function createStdoutRenderer(
     return -1;
   };
 
+  const shouldCompactDefaultTailWithEolClear = (
+    row: readonly Cell[],
+    clearStartX: number,
+    defaultBlankStyleKey: number,
+  ): boolean => {
+    if (clearStartX <= 0) return true;
+
+    const previous = row[clearStartX - 1];
+    if (!previous || previous.continuation) return true;
+
+    const ch = previous.ch || " ";
+    return ch !== " " || isEolClearEquivalentBlankCell(previous, defaultBlankStyleKey);
+  };
+
   const shouldRewriteRowTail = (
     row: readonly Cell[],
     y: number,
@@ -996,12 +997,13 @@ export function createStdoutRenderer(
     referenceFP: Uint32Array,
     referenceHrefIds: Uint32Array,
     referenceCharHashes: Uint32Array,
+    defaultBlankStyleKey = styleKeyFromParts({ bg: defaultBg }),
   ): boolean => {
     if (!fpCols || y >= fpRows) return true;
 
     const currentTailStart = Math.max(
       0,
-      Math.min(cols, row.length, lastOccupiedColumnInRow(row, cols) + 1),
+      Math.min(cols, lastExplicitPaintColumnInRow(row, cols, defaultBlankStyleKey) + 1),
     );
     if (currentTailStart >= cols) return false;
 
@@ -1709,6 +1711,29 @@ export function createStdoutRenderer(
       lastRenderWasFullRow = spanStart === 0 && clearToEol;
     };
 
+    const clipSpansBeforeClear = (
+      spans: readonly DirtySpan[],
+      clearStartX: number | null,
+    ): readonly DirtySpan[] => {
+      if (clearStartX == null) return spans;
+
+      const clipped: DirtySpan[] = [];
+
+      for (const span of spans) {
+        if (span.startX >= clearStartX) continue;
+
+        const endXExclusive = Math.min(span.endXExclusive, clearStartX);
+        if (endXExclusive <= span.startX) continue;
+
+        clipped.push({
+          startX: span.startX,
+          endXExclusive,
+        });
+      }
+
+      return clipped;
+    };
+
     const renderDirtySpans = (
       y: number,
       row: readonly Cell[],
@@ -1717,57 +1742,37 @@ export function createStdoutRenderer(
     ): void => {
       if (!spans.length) return;
 
-      const tailClearStart = (() => {
-        if (!rewriteTail) return null;
+      const compactClearStartX = rewriteTail
+        ? Math.min(size.cols, lastExplicitPaintColumnInRow(row, size.cols, bgKey) + 1)
+        : null;
+      const clearStartX =
+        compactClearStartX != null &&
+        shouldCompactDefaultTailWithEolClear(row, compactClearStartX, bgKey)
+          ? compactClearStartX
+          : null;
 
-        const start = Math.max(
-          0,
-          Math.min(size.cols, lastNonDefaultBlankColumnInRow(row, size.cols, bgKey) + 1),
-        );
+      const spansToPaint = clipSpansBeforeClear(spans, clearStartX);
 
-        return start < size.cols ? start : null;
-      })();
-
-      const lastSpan = spans[spans.length - 1]!;
-      const clearableTailCells =
-        tailClearStart != null &&
-        tailClearStart >= lastSpan.startX &&
-        tailClearStart <= lastSpan.endXExclusive
-          ? Math.max(0, lastSpan.endXExclusive - tailClearStart)
-          : 0;
-
-      // Dense or highly fragmented row: repaint the whole row. Deduct the
-      // default-blank tail that will be compacted into ESC[K first; otherwise
-      // "long text -> short text" updates cross the coverage threshold and lose
-      // the optimization that matters most for progress/status lines.
-      if (shouldFallbackDirtySpansToFullRow(spans, size.cols, clearableTailCells)) {
+      // Evaluate fallback after default-tail compaction. Otherwise a long default
+      // blank tail can incorrectly force a full-row repaint for text-shrink frames.
+      if (shouldFallbackDirtySpansToFullRow(spansToPaint, size.cols)) {
         renderRow(y, row);
         return;
       }
 
-      for (const span of spans) {
-        const startX = Math.max(0, Math.min(size.cols, span.startX));
-        const originalEndX = Math.max(startX, Math.min(size.cols, span.endXExclusive));
+      const lastSpan = spansToPaint[spansToPaint.length - 1];
 
-        if (tailClearStart != null && startX >= tailClearStart) {
-          continue;
-        }
-
-        const endXExclusive =
-          tailClearStart == null ? originalEndX : Math.min(originalEndX, tailClearStart);
-
-        if (endXExclusive <= startX) continue;
-
+      for (const span of spansToPaint) {
         const clearToEol =
-          tailClearStart == null && span === lastSpan && endXExclusive >= size.cols;
+          clearStartX == null && span === lastSpan && span.endXExclusive >= row.length;
 
-        renderRow(y, row, startX, endXExclusive, clearToEol);
+        renderRow(y, row, span.startX, span.endXExclusive, clearToEol);
       }
 
-      if (tailClearStart != null && tailClearStart < size.cols) {
-        // Text became shorter and the rest of the row is default blank. Clear only
-        // after the last meaningful current cell. This must not erase styled blanks.
-        renderRow(y, row, tailClearStart, tailClearStart, true);
+      // Clear only if there is actually a valid cell position inside the viewport.
+      // Cursoring to cols + 1 is undefined-ish across terminals and can wrap.
+      if (clearStartX != null && clearStartX < size.cols) {
+        renderRow(y, row, clearStartX, clearStartX, true);
       }
     };
 
@@ -1983,7 +1988,15 @@ export function createStdoutRenderer(
 
         const rewriteTail =
           !insertedRow &&
-          shouldRewriteRowTail(row, y, size.cols, currentFP, currentHrefIds, currentCharHashes);
+          shouldRewriteRowTail(
+            row,
+            y,
+            size.cols,
+            currentFP,
+            currentHrefIds,
+            currentCharHashes,
+            bgKey,
+          );
         renderDirtySpans(y, row, spans, rewriteTail);
         if (!insertedRow) fingerprintRow(row, y, size.cols);
         paintedExplicitRows.push(y);
@@ -2105,6 +2118,7 @@ export function createStdoutRenderer(
               currentFP,
               currentHrefIds,
               currentCharHashes,
+              bgKey,
             );
             renderDirtySpans(y, row, spans, rewriteTail);
             fingerprintRow(row, y, size.cols);
@@ -2182,6 +2196,7 @@ export function createStdoutRenderer(
           prevFP,
           prevHrefIds,
           prevCharHashes,
+          bgKey,
         );
         renderDirtySpans(y, row, spans, rewriteTail);
       }
