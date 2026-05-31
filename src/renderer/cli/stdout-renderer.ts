@@ -1687,6 +1687,16 @@ export function createStdoutRenderer(
       href: null,
     };
 
+    const closeActiveHrefBeforeCursorMove = (): void => {
+      if (!enableOsc8Links || !activeStyle.href) return;
+
+      frameParts.push(OSC8_CLOSE);
+      activeStyle = {
+        ...activeStyle,
+        href: null,
+      };
+    };
+
     const normalizeStyle = (style: Style): typeof activeStyle => {
       return {
         fg: style.fg ?? null,
@@ -1756,6 +1766,8 @@ export function createStdoutRenderer(
 
       // Skip cursor positioning if disabled (ghostty workaround)
       if (!disableCursorPos) {
+        closeActiveHrefBeforeCursorMove();
+
         if (spanStart === 0 && lastRenderWasFullRow && y === lastRenderedY + 1) {
           frameParts.push("\r\n");
         } else {
@@ -2364,6 +2376,7 @@ export function createStdoutRenderer(
           hasFrameOutput = true;
           emittedCursorPos = { x, y };
           // ANSI cursor position is 1-based: ESC [ row ; col H
+          closeActiveHrefBeforeCursorMove();
           frameParts.push(`\u001B[${y + 1};${x + 1}H`);
         }
       }

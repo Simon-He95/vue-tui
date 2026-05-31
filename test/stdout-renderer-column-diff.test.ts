@@ -456,6 +456,49 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("closes OSC8 hyperlinks before cursor jumps between non-contiguous spans", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const linkA = "https://example.com/a";
+      const linkB = "https://example.com/b";
+      const styleA = { href: linkA };
+      const styleB = { href: linkB };
+      const terminal = createTerminal({ cols: 40, rows: 1 });
+      const output = createBufferedOutput(true);
+
+      terminal.put(0, 0, "a", styleA);
+      terminal.put(20, 0, "b", styleB);
+      terminal.commit({ sync: true });
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      output.clear();
+
+      terminal.put(0, 0, "A", styleA);
+      terminal.put(20, 0, "B", styleB);
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      const closeIndex = frame.indexOf("\x1B]8;;\x07");
+      const secondCursorIndex = frame.indexOf("\x1B[1;21H");
+
+      expect(frame).toContain("A");
+      expect(frame).toContain("B");
+      expect(secondCursorIndex).toBeGreaterThan(-1);
+      expect(closeIndex).toBeGreaterThan(-1);
+      expect(closeIndex).toBeLessThan(secondCursorIndex);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("clears stale tail without rewriting unchanged prefix", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const terminal = createTerminal({ cols: 80, rows: 1 });
