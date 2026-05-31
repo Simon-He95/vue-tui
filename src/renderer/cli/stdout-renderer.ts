@@ -137,7 +137,10 @@ export function createStdoutRenderer(
   const output: CliOutput | undefined = options?.output ?? (process.stdout as any);
   if (!output) throw new Error("createStdoutRenderer requires a Node stdout-like output");
   const out = output;
-  const outputIsTTY = out.isTTY === true;
+  const outputIsTTY = Boolean(out.isTTY);
+  // Custom stdout-like outputs that omit `isTTY` are treated as terminal-capable
+  // for OSC8 unless they explicitly opt out with `isTTY: false`.
+  const outputAllowsOsc8Links = out.isTTY !== false;
   const clear = options?.clear ?? true;
   const hideCursor = options?.hideCursor ?? true;
   const altScreen = options?.altScreen ?? outputIsTTY;
@@ -264,7 +267,7 @@ export function createStdoutRenderer(
     if (!outputIsTTY) return true;
     return !useConservativeDirtyRows;
   };
-  const enableOsc8Links = outputIsTTY && !isVscodeTerminal;
+  const enableOsc8Links = outputAllowsOsc8Links && !isVscodeTerminal;
 
   let disposed = false;
   let lastFrameTime = 0;

@@ -78,7 +78,6 @@ function runCase(
     () => {
       const frames = options.frames;
       const terminal = createTerminal({ cols, rows: 1 });
-      terminal.write(`⠋ ${middle}000%`, { x: 0, y: 0 });
 
       // Keep both benchmark cases as TTY. The only intended variable is the
       // explicit dirty-row patch mode passed to the renderer below.
@@ -94,6 +93,13 @@ function runCase(
         dirtyRowPatchMode: options.dirtyRowPatchMode,
       });
 
+      // Drop renderer's initial blank/full-frame setup.
+      output.take();
+
+      // Seed the baseline through the same commit path used by the measured
+      // update loop.
+      terminal.write(`⠋ ${middle}000%`, { x: 0, y: 0 });
+      terminal.commit({ sync: true });
       output.take();
 
       let totalBytes = 0;

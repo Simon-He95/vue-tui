@@ -256,6 +256,50 @@ function mountRow(
 const inverseStyle = "\x1B[7m";
 
 describe("stdout renderer column diff", () => {
+  it("keeps OSC8 links enabled for custom outputs that omit isTTY", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 80, rows: 1 });
+      const chunks: string[] = [];
+      const output: CliOutput & { take: () => string } = {
+        write(chunk: string) {
+          chunks.push(String(chunk));
+        },
+        take() {
+          const out = chunks.join("");
+          chunks.length = 0;
+          return out;
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      output.take();
+
+      terminal.write("link", {
+        x: 0,
+        y: 0,
+        style: { href: "https://example.com" },
+      });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B]8;;https://example.com\x07");
+      expect(frame).toContain("\x1B]8;;\x07");
+      expect(frame).toContain("link");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("updates only spinner cell when the text is unchanged", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const staticText = " Installing dependencies from cache";
