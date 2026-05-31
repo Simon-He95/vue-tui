@@ -12,6 +12,18 @@ const middle =
   " building package with a deliberately very very long unchanged middle segment ".repeat(2);
 const percentX = 2 + middle.length;
 const cols = percentX + 8;
+const cleanTerminalEnv: Record<string, string | undefined> = {
+  GHOSTTY_RESOURCES_DIR: undefined,
+  GHOSTTY_BIN_DIR: undefined,
+  GHOSTTY_SHELL_FEATURES: undefined,
+  WEZTERM_PANE: undefined,
+  WEZTERM_EXECUTABLE: undefined,
+  KITTY_WINDOW_ID: undefined,
+  ALACRITTY_WINDOW_ID: undefined,
+  ALACRITTY_LOG: undefined,
+  TERM_PROGRAM: undefined,
+  TERM: undefined,
+};
 
 function createBufferedOutput(isTTY: boolean): BufferedOutput {
   const chunks: string[] = [];
@@ -62,79 +74,65 @@ function runCase(
     dirtyRowPatchMode: "row" | "span";
   }>,
 ) {
-  return withEnv(
-    {
-      GHOSTTY_RESOURCES_DIR: undefined,
-      GHOSTTY_BIN_DIR: undefined,
-      GHOSTTY_SHELL_FEATURES: undefined,
-      WEZTERM_PANE: undefined,
-      WEZTERM_EXECUTABLE: undefined,
-      KITTY_WINDOW_ID: undefined,
-      ALACRITTY_WINDOW_ID: undefined,
-      ALACRITTY_LOG: undefined,
-      TERM_PROGRAM: undefined,
-      TERM: undefined,
-    },
-    () => {
-      const frames = options.frames;
-      const terminal = createTerminal({ cols, rows: 1 });
+  return withEnv(cleanTerminalEnv, () => {
+    const frames = options.frames;
+    const terminal = createTerminal({ cols, rows: 1 });
 
-      // Keep both benchmark cases as TTY. The only intended variable is the
-      // explicit dirty-row patch mode passed to the renderer below.
-      const output = createBufferedOutput(true);
+    // Keep both benchmark cases as TTY. The only intended variable is the
+    // explicit dirty-row patch mode passed to the renderer below.
+    const output = createBufferedOutput(true);
 
-      const renderer = createStdoutRenderer(terminal, {
-        output,
-        clear: false,
-        hideCursor: false,
-        altScreen: false,
-        colorMode: "ansi16",
-        useSyncOutput: false,
-        dirtyRowPatchMode: options.dirtyRowPatchMode,
+    const renderer = createStdoutRenderer(terminal, {
+      output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      colorMode: "ansi16",
+      useSyncOutput: false,
+      dirtyRowPatchMode: options.dirtyRowPatchMode,
+    });
+
+    // Drop renderer's initial blank/full-frame setup.
+    output.take();
+
+    // Seed the baseline through the same commit path used by the measured
+    // update loop.
+    terminal.write(`⠋ ${middle}000%`, { x: 0, y: 0 });
+    terminal.commit({ sync: true });
+    output.take();
+
+    let totalBytes = 0;
+    let maxFrameBytes = 0;
+    const startedAt = performance.now();
+
+    for (let i = 0; i < frames; i++) {
+      terminal.put(0, 0, spinnerFrames[i % spinnerFrames.length]!);
+      terminal.write(`${String(i % 1000).padStart(3, "0")}%`, {
+        x: percentX,
+        y: 0,
       });
-
-      // Drop renderer's initial blank/full-frame setup.
-      output.take();
-
-      // Seed the baseline through the same commit path used by the measured
-      // update loop.
-      terminal.write(`⠋ ${middle}000%`, { x: 0, y: 0 });
       terminal.commit({ sync: true });
-      output.take();
 
-      let totalBytes = 0;
-      let maxFrameBytes = 0;
-      const startedAt = performance.now();
+      const frame = output.take();
+      const bytes = Buffer.byteLength(frame, "utf8");
+      totalBytes += bytes;
+      maxFrameBytes = Math.max(maxFrameBytes, bytes);
+    }
 
-      for (let i = 0; i < frames; i++) {
-        terminal.put(0, 0, spinnerFrames[i % spinnerFrames.length]!);
-        terminal.write(`${String(i % 1000).padStart(3, "0")}%`, {
-          x: percentX,
-          y: 0,
-        });
-        terminal.commit({ sync: true });
+    const durationMs = performance.now() - startedAt;
+    renderer.dispose();
+    terminal.dispose();
 
-        const frame = output.take();
-        const bytes = Buffer.byteLength(frame, "utf8");
-        totalBytes += bytes;
-        maxFrameBytes = Math.max(maxFrameBytes, bytes);
-      }
-
-      const durationMs = performance.now() - startedAt;
-      renderer.dispose();
-      terminal.dispose();
-
-      return {
-        name,
-        frames,
-        totalBytes,
-        meanBytes: totalBytes / frames,
-        maxFrameBytes,
-        durationMs,
-        framesPerSecond: frames / (durationMs / 1000),
-      };
-    },
-  );
+    return {
+      name,
+      frames,
+      totalBytes,
+      meanBytes: totalBytes / frames,
+      maxFrameBytes,
+      durationMs,
+      framesPerSecond: frames / (durationMs / 1000),
+    };
+  });
 }
 
 function runSingleSpanBaseline(frames: number) {
@@ -162,6 +160,70 @@ function runSingleSpanBaseline(frames: number) {
   };
 }
 
+function runFragmentedShortRowCase(
+  name: string,
+  options: Readonly<{
+    frames: number;
+    dirtyRowPatchMode: "row" | "span";
+  }>,
+) {
+  return withEnv(cleanTerminalEnv, () => {
+    const frames = options.frames;
+    const fragmentedCols = 12;
+    const indices = [0, 2, 4, 6, 8, 10];
+    const terminal = createTerminal({ cols: fragmentedCols, rows: 1 });
+    const output = createBufferedOutput(true);
+
+    const renderer = createStdoutRenderer(terminal, {
+      output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      colorMode: "ansi16",
+      useSyncOutput: false,
+      dirtyRowPatchMode: options.dirtyRowPatchMode,
+    });
+
+    output.take();
+    terminal.write("a".repeat(fragmentedCols), { x: 0, y: 0 });
+    terminal.commit({ sync: true });
+    output.take();
+
+    let totalBytes = 0;
+    let maxFrameBytes = 0;
+    const startedAt = performance.now();
+
+    for (let i = 0; i < frames; i++) {
+      const charOffset = i % 2 === 0 ? 0 : 10;
+
+      for (const [index, x] of indices.entries()) {
+        terminal.put(x, 0, String.fromCharCode("A".charCodeAt(0) + charOffset + index));
+      }
+
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      const bytes = Buffer.byteLength(frame, "utf8");
+      totalBytes += bytes;
+      maxFrameBytes = Math.max(maxFrameBytes, bytes);
+    }
+
+    const durationMs = performance.now() - startedAt;
+    renderer.dispose();
+    terminal.dispose();
+
+    return {
+      name,
+      frames,
+      totalBytes,
+      meanBytes: totalBytes / frames,
+      maxFrameBytes,
+      durationMs,
+      framesPerSecond: frames / (durationMs / 1000),
+    };
+  });
+}
+
 function parseFrameCount(value: string | undefined): number {
   const parsed = Number(value ?? 5000);
 
@@ -183,8 +245,16 @@ const multiSpan = runCase("multi-span optimized", {
   frames,
   dirtyRowPatchMode: "span",
 });
+const fragmentedRow = runFragmentedShortRowCase("fragmented short-row baseline", {
+  frames,
+  dirtyRowPatchMode: "row",
+});
+const fragmentedSpan = runFragmentedShortRowCase("fragmented short-row optimized", {
+  frames,
+  dirtyRowPatchMode: "span",
+});
 
-console.table([fullRow, singleSpan, multiSpan]);
+console.table([fullRow, singleSpan, multiSpan, fragmentedRow, fragmentedSpan]);
 
 if (fullRow.totalBytes <= 0) {
   throw new Error(`Invalid full-row benchmark: totalBytes=${fullRow.totalBytes}`);
@@ -192,6 +262,14 @@ if (fullRow.totalBytes <= 0) {
 
 if (singleSpan.totalBytes <= 0) {
   throw new Error(`Invalid single-span benchmark: totalBytes=${singleSpan.totalBytes}`);
+}
+
+if (fragmentedRow.totalBytes <= 0) {
+  throw new Error(`Invalid fragmented row benchmark: totalBytes=${fragmentedRow.totalBytes}`);
+}
+
+if (fragmentedSpan.totalBytes <= 0) {
+  throw new Error(`Invalid fragmented span benchmark: totalBytes=${fragmentedSpan.totalBytes}`);
 }
 
 const fullRowByteRatio = multiSpan.totalBytes / fullRow.totalBytes;
@@ -214,6 +292,13 @@ if (multiSpan.meanBytes >= singleSpan.meanBytes) {
     `Expected multi-span meanBytes < single-span meanBytes, got ${multiSpan.meanBytes.toFixed(
       2,
     )} >= ${singleSpan.meanBytes.toFixed(2)}`,
+  );
+  process.exit(1);
+}
+
+if (fragmentedSpan.totalBytes > fragmentedRow.totalBytes) {
+  console.error(
+    `Expected fragmented short-row optimized bytes <= baseline bytes, got optimized=${fragmentedSpan.totalBytes} baseline=${fragmentedRow.totalBytes}`,
   );
   process.exit(1);
 }
