@@ -169,8 +169,8 @@ function runFragmentedShortRowCase(
 ) {
   return withEnv(cleanTerminalEnv, () => {
     const frames = options.frames;
-    const fragmentedCols = 12;
-    const indices = [0, 2, 4, 6, 8, 10];
+    const fragmentedCols = 24;
+    const indices = [0, 5, 10, 15, 20];
     const terminal = createTerminal({ cols: fragmentedCols, rows: 1 });
     const output = createBufferedOutput(true);
 

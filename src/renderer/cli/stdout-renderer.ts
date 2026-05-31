@@ -697,7 +697,11 @@ export function createStdoutRenderer(
     return 3 + String(y + 1).length + 1 + String(x + 1).length + 1;
   };
 
-  const estimatedSpanPatchBytes = (spans: readonly DirtySpan[], y: number): number => {
+  const estimatedSpanPatchBytes = (
+    spans: readonly DirtySpan[],
+    y: number,
+    clearToEol: boolean,
+  ): number => {
     let bytes = 0;
 
     for (const span of spans) {
@@ -709,46 +713,66 @@ export function createStdoutRenderer(
       bytes += 8;
     }
 
+    if (clearToEol) bytes += 3;
+
     return bytes;
   };
 
-  const estimatedContiguousPatchBytes = (spans: readonly DirtySpan[], y: number): number => {
+  const estimatedContiguousPatchBytes = (
+    spans: readonly DirtySpan[],
+    y: number,
+    clearToEol: boolean,
+  ): number => {
     if (!spans.length) return 0;
 
     const first = spans[0]!;
     const last = spans[spans.length - 1]!;
 
     return (
-      estimatedCursorMoveBytes(y, first.startX) + Math.max(0, last.endXExclusive - first.startX) + 8
+      estimatedCursorMoveBytes(y, first.startX) +
+      Math.max(0, last.endXExclusive - first.startX) +
+      8 +
+      (clearToEol ? 3 : 0)
     );
   };
 
-  const estimatedFullRowPatchBytes = (y: number, cols: number): number => {
-    return estimatedCursorMoveBytes(y, 0) + Math.max(0, cols) + 3;
+  const estimatedFullRowPatchBytes = (y: number, cols: number, clearToEol: boolean): number => {
+    return estimatedCursorMoveBytes(y, 0) + Math.max(0, cols) + (clearToEol ? 3 : 0);
   };
 
   const resolveDirtySpanRenderMode = (
     spans: readonly DirtySpan[],
     y: number,
     cols: number,
+    clearToEol: boolean,
   ): DirtySpanRenderMode => {
     if (spans.length <= 0) return "spans";
     if (spans.length > DIRTY_SPAN_MAX_PER_ROW) return "row";
 
     const coverage = dirtySpanCoverage(spans);
-    if (spans.length <= 2 && coverage < cols * DIRTY_SPAN_FULL_ROW_THRESHOLD) {
+    const fullRowCost = estimatedFullRowPatchBytes(y, cols, false);
+    const rowCostThreshold = fullRowCost * 0.9;
+    const multiCost = estimatedSpanPatchBytes(spans, y, clearToEol);
+
+    if (spans.length === 1 && coverage < cols * DIRTY_SPAN_FULL_ROW_THRESHOLD) {
       return "spans";
     }
 
-    const fullRowCost = estimatedFullRowPatchBytes(y, cols);
+    if (
+      spans.length === 2 &&
+      coverage < cols * DIRTY_SPAN_FULL_ROW_THRESHOLD &&
+      multiCost < rowCostThreshold
+    ) {
+      return "spans";
+    }
+
     const sparseThreshold = fullRowCost * DIRTY_SPAN_FULL_ROW_THRESHOLD;
 
-    const multiCost = estimatedSpanPatchBytes(spans, y);
     if (multiCost < sparseThreshold && coverage < cols * DIRTY_SPAN_FULL_ROW_THRESHOLD) {
       return "spans";
     }
 
-    const contiguousCost = estimatedContiguousPatchBytes(spans, y);
+    const contiguousCost = estimatedContiguousPatchBytes(spans, y, clearToEol);
     const first = spans[0]!;
     const last = spans[spans.length - 1]!;
     const contiguousWidth = Math.max(0, last.endXExclusive - first.startX);
@@ -1923,10 +1947,12 @@ export function createStdoutRenderer(
 
       // Evaluate fallback after default-tail compaction. Otherwise a long default
       // blank tail can incorrectly force a broader repaint for text-shrink frames.
-      const renderMode = resolveDirtySpanRenderMode(spansToPaint, y, size.cols);
+      const clearToEolForCost = clearStartX != null && clearStartX < size.cols;
+      const renderMode = resolveDirtySpanRenderMode(spansToPaint, y, size.cols, clearToEolForCost);
 
       if (renderMode === "row") {
-        renderRow(y, row);
+        renderRow(y, row, 0, size.cols, false);
+        return;
       } else if (renderMode === "contiguous") {
         const first = spansToPaint[0]!;
         const last = spansToPaint[spansToPaint.length - 1]!;
