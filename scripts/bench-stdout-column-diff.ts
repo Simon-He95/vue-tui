@@ -53,7 +53,7 @@ function runCase(
   name: string,
   options: Readonly<{
     frames: number;
-    conservative: boolean;
+    dirtyRowPatchMode: "row" | "span";
   }>,
 ) {
   return withEnv(
@@ -61,7 +61,7 @@ function runCase(
       GHOSTTY_RESOURCES_DIR: undefined,
       GHOSTTY_BIN_DIR: undefined,
       GHOSTTY_SHELL_FEATURES: undefined,
-      WEZTERM_PANE: options.conservative ? "bench" : undefined,
+      WEZTERM_PANE: undefined,
       WEZTERM_EXECUTABLE: undefined,
       KITTY_WINDOW_ID: undefined,
       ALACRITTY_WINDOW_ID: undefined,
@@ -80,8 +80,8 @@ function runCase(
       const terminal = createTerminal({ cols, rows: 1 });
       terminal.write(`⠋ ${middle}000%`, { x: 0, y: 0 });
 
-      // Keep both benchmark cases as TTY. The only intended variable is
-      // conservative row rendering, controlled by env above.
+      // Keep both benchmark cases as TTY. The only intended variable is the
+      // explicit dirty-row patch mode passed to the renderer below.
       const output = createBufferedOutput(true);
 
       const renderer = createStdoutRenderer(terminal, {
@@ -90,6 +90,7 @@ function runCase(
         hideCursor: false,
         altScreen: false,
         useSyncOutput: false,
+        dirtyRowPatchMode: options.dirtyRowPatchMode,
       });
 
       output.take();
@@ -141,13 +142,13 @@ function parseFrameCount(value: string | undefined): number {
 
 const frames = parseFrameCount(process.env.FRAMES);
 
-const conservative = runCase("conservative full row", {
+const conservative = runCase("full dirty row", {
   frames,
-  conservative: true,
+  dirtyRowPatchMode: "row",
 });
-const optimized = runCase("column diff", {
+const optimized = runCase("multi-span column diff", {
   frames,
-  conservative: false,
+  dirtyRowPatchMode: "span",
 });
 
 console.table([conservative, optimized]);

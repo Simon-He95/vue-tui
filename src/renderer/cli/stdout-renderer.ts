@@ -90,6 +90,7 @@ export type StdoutRenderer = Readonly<{
 }>;
 
 export type StdoutColorMode = "auto" | "truecolor" | "ansi256" | "ansi16" | "ansi8";
+export type DirtyRowPatchMode = "auto" | "row" | "span";
 export type { ThemePalette } from "../../core/ansi-palette.js";
 
 export function createStdoutRenderer(
@@ -107,12 +108,20 @@ export function createStdoutRenderer(
     trackResize?: boolean;
     /** Color mode for ANSI output (auto detects truecolor via env). */
     colorMode?: StdoutColorMode;
+    /** Dirty-row stdout patch strategy.
+     * - auto: use terminal compatibility detection
+     * - row: repaint each dirty row
+     * - span: use row-internal multi-span diffing
+     */
+    dirtyRowPatchMode?: DirtyRowPatchMode;
     /** Optional function to get IME cursor position, included in render output for atomic write */
     getImeAnchor?: () => { cellX: number; cellY: number } | null;
     /** Use DEC 2026 synchronized output mode (default: false for compatibility) */
     useSyncOutput?: boolean;
     /**
      * Controls row-internal column diffing.
+     * Deprecated alias for dirtyRowPatchMode. When both are provided,
+     * dirtyRowPatchMode takes precedence.
      * - true: force narrow column/span patches
      * - false: repaint whole dirty rows
      * - "auto": disable on terminals known to be sensitive to narrow patches
@@ -239,14 +248,21 @@ export function createStdoutRenderer(
   const useConservativeDirtyRows = Boolean(
     out.isTTY !== false && (isGhostty || isKitty || isAlacritty || isWezTerm),
   );
-  function resolveColumnDiffEnabled(): boolean {
-    const opt = options?.columnDiff ?? "auto";
-    if (opt === true) return true;
-    if (opt === false) return false;
+  function resolveDirtyRowPatchMode(): DirtyRowPatchMode {
+    if (options?.dirtyRowPatchMode) return options.dirtyRowPatchMode;
+
+    const legacy = options?.columnDiff ?? "auto";
+    if (legacy === true) return "span";
+    if (legacy === false) return "row";
+    return "auto";
+  }
+  const dirtyRowPatchMode = resolveDirtyRowPatchMode();
+  const shouldUseDirtySpans = (): boolean => {
+    if (dirtyRowPatchMode === "span") return true;
+    if (dirtyRowPatchMode === "row") return false;
     if (!out.isTTY) return true;
     return !useConservativeDirtyRows;
-  }
-  const enableColumnDiff = resolveColumnDiffEnabled();
+  };
   const enableOsc8Links = out.isTTY !== false && !isVscodeTerminal;
 
   let disposed = false;
@@ -2011,7 +2027,7 @@ export function createStdoutRenderer(
       for (const y of explicitDirtyRows) {
         const row = terminal.getRow(y) as Cell[];
         const overlayRow = overlayTouchedRowSet?.has(y);
-        if (!enableColumnDiff || overlayRow) {
+        if (!shouldUseDirtySpans() || overlayRow) {
           fingerprintRow(row, y, size.cols);
           renderRow(y, row);
           paintedExplicitRows.push(y);
@@ -2147,7 +2163,7 @@ export function createStdoutRenderer(
         // (e.g., scrollbar column changes)
         for (const y of extraDirtyRows) {
           const row = terminal.getRow(y) as Cell[];
-          if (enableColumnDiff) {
+          if (shouldUseDirtySpans()) {
             const spans = resolveChangedSpansAgainstReference(
               row,
               y,
@@ -2221,7 +2237,7 @@ export function createStdoutRenderer(
       for (const y of rowsToRender) {
         const row = terminal.getRow(y) as Cell[];
         fingerprintRow(row, y, size.cols);
-        if (!enableColumnDiff) {
+        if (!shouldUseDirtySpans()) {
           renderRow(y, row);
           continue;
         }

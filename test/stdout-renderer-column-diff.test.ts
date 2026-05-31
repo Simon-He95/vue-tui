@@ -69,12 +69,121 @@ function byteLength(value: string): number {
   return Buffer.byteLength(value, "utf8");
 }
 
+type TestScreen = {
+  cols: number;
+  rows: number;
+  cells: string[][];
+  x: number;
+  y: number;
+};
+
+function createTestScreen(cols: number, rows: number): TestScreen {
+  return {
+    cols,
+    rows,
+    cells: Array.from({ length: rows }, () => Array.from({ length: cols }, () => " ")),
+    x: 0,
+    y: 0,
+  };
+}
+
+function screenLine(screen: TestScreen, y: number): string {
+  return screen.cells[y]!.join("");
+}
+
+function applyAnsiFrame(screen: TestScreen, frame: string): void {
+  let i = 0;
+
+  const clampCursor = () => {
+    screen.x = Math.max(0, Math.min(screen.cols - 1, screen.x));
+    screen.y = Math.max(0, Math.min(screen.rows - 1, screen.y));
+  };
+
+  while (i < frame.length) {
+    const ch = frame[i]!;
+
+    if (ch === "\x1B") {
+      // CSI
+      if (frame[i + 1] === "[") {
+        let j = i + 2;
+        while (j < frame.length) {
+          const code = frame.charCodeAt(j);
+          if (code >= 0x40 && code <= 0x7e) break;
+          j++;
+        }
+
+        const final = frame[j];
+        const params = frame.slice(i + 2, j);
+
+        if (final === "H") {
+          const [rowRaw, colRaw] = params.split(";");
+          const row = Math.max(1, Number(rowRaw || 1));
+          const col = Math.max(1, Number(colRaw || 1));
+          screen.y = row - 1;
+          screen.x = col - 1;
+          clampCursor();
+        } else if (final === "K") {
+          for (let x = screen.x; x < screen.cols; x++) {
+            screen.cells[screen.y]![x] = " ";
+          }
+        } else if (final === "J") {
+          for (let y = screen.y; y < screen.rows; y++) {
+            const startX = y === screen.y ? screen.x : 0;
+            for (let x = startX; x < screen.cols; x++) {
+              screen.cells[y]![x] = " ";
+            }
+          }
+        }
+
+        i = j + 1;
+        continue;
+      }
+
+      // OSC 8 hyperlink or other OSC: skip until BEL/ST.
+      if (frame[i + 1] === "]") {
+        let j = i + 2;
+        while (j < frame.length && frame[j] !== "\x07") {
+          if (frame[j] === "\x1B" && frame[j + 1] === "\\") {
+            j += 2;
+            break;
+          }
+          j++;
+        }
+        i = j + 1;
+        continue;
+      }
+    }
+
+    if (ch === "\r") {
+      screen.x = 0;
+      i++;
+      continue;
+    }
+
+    // Skip common C0 controls.
+    if (ch < " ") {
+      i++;
+      continue;
+    }
+
+    const codePoint = Array.from(frame.slice(i))[0]!;
+    screen.cells[screen.y]![screen.x] = codePoint;
+    screen.x++;
+    if (screen.x >= screen.cols) {
+      screen.x = screen.cols - 1;
+    }
+
+    i += codePoint.length;
+  }
+}
+
 function mountRow(
   text: string,
   options: Readonly<{
     cols?: number;
     isTTY?: boolean;
     columnDiff?: boolean | "auto";
+    dirtyRowPatchMode?: "auto" | "row" | "span";
   }> = {},
 ) {
   const cols = options.cols ?? 120;
@@ -87,6 +196,9 @@ function mountRow(
     altScreen: false,
     useSyncOutput: false,
     ...(options.columnDiff !== undefined ? { columnDiff: options.columnDiff } : {}),
+    ...(options.dirtyRowPatchMode !== undefined
+      ? { dirtyRowPatchMode: options.dirtyRowPatchMode }
+      : {}),
   });
 
   terminal.write(text, { x: 0, y: 0 });
@@ -127,38 +239,34 @@ describe("stdout renderer column diff", () => {
     });
   });
 
-  it("updates distant changed cells without writing unchanged middle text", () => {
+  it("updates two distant changed regions without rewriting the unchanged middle", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
-      const middle = " ".repeat(4) + "this middle must not be written" + " ".repeat(4);
+      const middle =
+        " building package with a deliberately long unchanged middle segment ";
       const percentX = 2 + middle.length;
+      const cols = percentX + 8;
 
-      const terminal = createTerminal({ cols: percentX + 8, rows: 1 });
-      const output = createBufferedOutput(false);
-      const renderer = createStdoutRenderer(terminal, {
-        output,
-        clear: false,
-        hideCursor: false,
-        altScreen: false,
-        useSyncOutput: false,
-        columnDiff: true,
+      const { terminal, output, renderer, initialFrame } = mountRow(`⠋ ${middle}10%`, {
+        cols,
+        dirtyRowPatchMode: "span",
       });
-
-      terminal.write(`⠋ ${middle}10%`, { x: 0, y: 0 });
-      terminal.commit({ sync: true });
-
-      output.take();
+      const screen = createTestScreen(cols, 1);
+      applyAnsiFrame(screen, initialFrame);
 
       terminal.put(0, 0, "⠙");
       terminal.write("11%", { x: percentX, y: 0 });
       terminal.commit({ sync: true });
 
       const frame = output.take();
+      applyAnsiFrame(screen, frame);
 
+      expect(screenLine(screen, 0)).toBe(`⠙ ${middle}11%`.padEnd(cols));
       expect(frame).toContain("\x1B[1;1H");
       expect(frame).toContain(`\x1B[1;${percentX + 1}H`);
       expect(frame).toContain("⠙");
       expect(frame).toContain("11%");
-      expect(frame).not.toContain("this middle must not be written");
+      expect(frame).not.toContain("deliberately long unchanged middle segment");
+      expect(byteLength(frame)).toBeLessThan(90);
 
       renderer.dispose();
       terminal.dispose();
@@ -565,7 +673,9 @@ describe("stdout renderer column diff", () => {
         columnDiff: true,
       });
 
-      output.take();
+      const initialFrame = output.take();
+      const screen = createTestScreen(cols, 2);
+      applyAnsiFrame(screen, initialFrame);
 
       terminal.batch(() => {
         terminal.clear(0, 0, cols, 1);
@@ -579,7 +689,9 @@ describe("stdout renderer column diff", () => {
       terminal.commit({ sync: true });
 
       const frame = output.take();
+      applyAnsiFrame(screen, frame);
 
+      expect(screenLine(screen, 0)).toBe("Done".padEnd(cols));
       expect(frame).toContain("Done");
 
       // The styled blank region must be rendered as its own span.
@@ -590,6 +702,50 @@ describe("stdout renderer column diff", () => {
       // immediately after "Done". ANSI column 5 would mean "clear right after Done",
       // which would erase the styled blank span at col 21.
       expect(frame).not.toContain("\x1B[1;5H\x1B[K");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("does not clear styled trailing blanks with ESC[K", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 32;
+      const terminal = createTerminal({ cols, rows: 1 });
+
+      terminal.write("Loading", { x: 0, y: 0 });
+      terminal.fill(8, 0, 8, 1, " ", { bg: "green" });
+
+      const output = createBufferedOutput(false);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      const initialFrame = output.take();
+      const screen = createTestScreen(cols, 1);
+      applyAnsiFrame(screen, initialFrame);
+
+      terminal.clear(0, 0, 7, 1);
+      terminal.write("Done", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      applyAnsiFrame(screen, frame);
+
+      // The styled blank block must be rendered as cells, not erased with EOL clear.
+      // A raw ESC[K before/inside the styled blank area is suspicious here.
+      expect(screenLine(screen, 0)).toBe("Done".padEnd(cols));
+      expect(frame).toContain("Done");
+      const styledBlankStart = frame.search(/\x1B\[[0-9;:]*m {8}/);
+      const clearIndex = frame.indexOf("\x1B[K");
+      expect(styledBlankStart).toBeGreaterThanOrEqual(0);
+      expect(clearIndex === -1 || clearIndex > styledBlankStart).toBe(true);
+      expect(frame).not.toMatch(/\x1B\[[0-9;]*K$/);
 
       renderer.dispose();
       terminal.dispose();
@@ -656,6 +812,30 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("honors dirtyRowPatchMode=row by repainting the dirty row", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const middle = " unchanged middle should be repainted ";
+      const percentX = 2 + middle.length;
+      const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+        cols: percentX + 8,
+        dirtyRowPatchMode: "row",
+      });
+
+      terminal.put(0, 0, "⠙");
+      terminal.write("11%", { x: percentX, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("⠙");
+      expect(frame).toContain("11%");
+      expect(frame).toContain("unchanged middle should be repainted");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("honors columnDiff=false by repainting the dirty row", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const middle = " unchanged middle should be repainted ";
@@ -705,6 +885,31 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("allows dirtyRowPatchMode=span to override conservative TTY detection", () => {
+    withTerminalEnv({ WEZTERM_PANE: "1", TERM_PROGRAM: "WezTerm", TERM: "xterm-256color" }, () => {
+      const middle = " unchanged middle must not be written when span mode is forced ";
+      const percentX = 2 + middle.length;
+      const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+        cols: percentX + 8,
+        isTTY: true,
+        dirtyRowPatchMode: "span",
+      });
+
+      terminal.put(0, 0, "⠙");
+      terminal.write("11%", { x: percentX, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("⠙");
+      expect(frame).toContain("11%");
+      expect(frame).not.toContain("unchanged middle must not be written when span mode is forced");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("allows columnDiff=true to override conservative TTY detection", () => {
     withTerminalEnv({ WEZTERM_PANE: "1", TERM_PROGRAM: "WezTerm", TERM: "xterm-256color" }, () => {
       const middle = " unchanged middle must not be written when forced ";
@@ -730,9 +935,39 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("coalesces many clustered spans into one bounded patch instead of repainting the row", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 200;
+      const indices = [0, 4, 8, 12, 16, 20, 24, 28, 32];
+      const chars = Array.from("a".repeat(cols));
+      chars.fill("z", 40, 80);
+      const initial = chars.join("");
+      const { terminal, output, renderer } = mountRow(initial, {
+        cols,
+        dirtyRowPatchMode: "span",
+      });
+
+      for (const [index, x] of indices.entries()) {
+        terminal.put(x, 0, String.fromCharCode("A".charCodeAt(0) + index));
+      }
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      const cursorMoves = frame.match(/\x1B\[\d+;\d+H/g) ?? [];
+
+      expect(cursorMoves).toEqual(["\x1B[1;1H"]);
+      expect(frame).toContain("AaaaBaaaCaaaDaaaEaaaFaaaGaaaHaaaI");
+      expect(frame).not.toContain("z".repeat(40));
+      expect(byteLength(frame)).toBeLessThan(80);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("falls back to one contiguous span when changed spans are too fragmented", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
-      const unchangedMiddle = " full row fallback keeps unchanged words visible ";
+      const unchangedMiddle = " contiguous span fallback keeps unchanged words visible ";
       const indices = [0, 60, 64, 68, 72, 76, 80, 84, 88];
       const chars = Array.from("a".repeat(120));
       for (let i = 0; i < unchangedMiddle.length; i++) {
