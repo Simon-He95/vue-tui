@@ -89,7 +89,7 @@ function runCase(
       altScreen: false,
       colorMode: "ansi16",
       useSyncOutput: false,
-      columnDiffMode: options.columnDiffMode,
+      __columnDiffMode: options.columnDiffMode,
     });
 
     // Drop renderer's initial blank/full-frame setup.

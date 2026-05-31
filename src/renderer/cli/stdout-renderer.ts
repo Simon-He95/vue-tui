@@ -91,6 +91,8 @@ export type StdoutRenderer = Readonly<{
 
 export type StdoutColorMode = "auto" | "truecolor" | "ansi256" | "ansi16" | "ansi8";
 export type DirtyRowPatchMode = "auto" | "row" | "span";
+type InternalColumnDiffMode = "auto" | "single-span" | "multi-span" | "full-row";
+type EffectiveDirtyRowPatchMode = "row" | "single-span" | "multi-span";
 export type { ThemePalette } from "../../core/ansi-palette.js";
 
 export type StdoutRendererOptions = Readonly<{
@@ -115,11 +117,9 @@ export type StdoutRendererOptions = Readonly<{
    */
   dirtyRowPatchMode?: DirtyRowPatchMode;
   /**
-   * Benchmark/test override for row-internal span rendering.
-   *
-   * Normal callers should use dirtyRowPatchMode.
+   * @internal Benchmark/test override for row-internal span rendering.
    */
-  columnDiffMode?: "auto" | "single-span" | "multi-span" | "full-row";
+  __columnDiffMode?: InternalColumnDiffMode;
   /**
    * Alias for dirtyRowPatchMode.
    *
@@ -274,15 +274,19 @@ export function createStdoutRenderer(
     return "auto";
   }
   const dirtyRowPatchMode = resolveDirtyRowPatchMode();
-  const columnDiffMode = options?.columnDiffMode ?? "auto";
-  const shouldUseDirtySpans = (): boolean => {
-    if (columnDiffMode === "full-row") return false;
-    if (columnDiffMode === "single-span" || columnDiffMode === "multi-span") return true;
-    if (dirtyRowPatchMode === "span") return true;
-    if (dirtyRowPatchMode === "row") return false;
-    if (!outputIsTTY) return true;
-    return !useConservativeDirtyRows;
-  };
+  const columnDiffMode = options?.__columnDiffMode ?? "auto";
+  function resolveEffectiveDirtyRowPatchMode(): EffectiveDirtyRowPatchMode {
+    if (columnDiffMode === "full-row") return "row";
+    if (columnDiffMode === "single-span") return "single-span";
+    if (columnDiffMode === "multi-span") return "multi-span";
+    if (dirtyRowPatchMode === "span") return "multi-span";
+    if (dirtyRowPatchMode === "row") return "row";
+    if (!outputIsTTY) return "multi-span";
+    return useConservativeDirtyRows ? "row" : "multi-span";
+  }
+  const effectiveDirtyRowPatchMode = resolveEffectiveDirtyRowPatchMode();
+  const shouldUseDirtySpans = (): boolean => effectiveDirtyRowPatchMode !== "row";
+  const shouldUseMultiDirtySpans = (): boolean => effectiveDirtyRowPatchMode === "multi-span";
   const enableOsc8Links = outputAllowsOsc8Links && !isVscodeTerminal;
 
   let disposed = false;
@@ -1939,7 +1943,7 @@ export function createStdoutRenderer(
       // blank tail can incorrectly force a broader repaint for text-shrink frames.
       const clearToEolForCost = clearStartX != null && clearStartX < size.cols;
       const renderMode =
-        columnDiffMode === "single-span" && spansToPaint.length > 0
+        !shouldUseMultiDirtySpans() && spansToPaint.length > 0
           ? "contiguous"
           : resolveDirtySpanRenderMode(spansToPaint, y, size.cols, clearToEolForCost);
 
