@@ -1769,39 +1769,17 @@ export function createStdoutRenderer(
       lastRenderWasFullRow = spanStart === 0 && clearToEol;
     };
 
-    const clipSpansBeforeClear = (
-      spans: readonly DirtySpan[],
-      clearStartX: number | null,
-    ): readonly DirtySpan[] => {
-      if (clearStartX == null) return spans;
-
-      const clipped: DirtySpan[] = [];
-
-      for (const span of spans) {
-        if (span.startX >= clearStartX) continue;
-
-        const endXExclusive = Math.min(span.endXExclusive, clearStartX);
-        if (endXExclusive <= span.startX) continue;
-
-        clipped.push({
-          startX: span.startX,
-          endXExclusive,
-        });
-      }
-
-      return clipped;
-    };
-
     const renderDirtySpans = (
       y: number,
       row: readonly Cell[],
-      spans: readonly DirtySpan[],
+      rawSpans: readonly DirtySpan[],
       rewriteTail: boolean,
     ): void => {
-      if (!spans.length) return;
+      if (!rawSpans.length && !rewriteTail) return;
 
+      const rowCols = Math.min(size.cols, row.length);
       const compactClearStartX = rewriteTail
-        ? Math.min(size.cols, lastExplicitPaintColumnInRow(row, size.cols, bgKey) + 1)
+        ? Math.max(0, Math.min(size.cols, lastExplicitPaintColumnInRow(row, size.cols, bgKey) + 1))
         : null;
       const clearStartX =
         compactClearStartX != null &&
@@ -1809,7 +1787,37 @@ export function createStdoutRenderer(
           ? compactClearStartX
           : null;
 
-      const spansToPaint = clipSpansBeforeClear(spans, clearStartX);
+      // Compact trailing default-blank changes into one ESC[K before deciding
+      // whether the dirty spans are too dense. Otherwise short text replacing
+      // long text can look like a huge changed span and fall back to a broader
+      // repaint that rewrites unchanged prefixes.
+      const spansToPaint: DirtySpan[] = [];
+
+      for (const span of rawSpans) {
+        const startX = Math.max(0, Math.min(rowCols, span.startX));
+        const endXExclusive = Math.max(startX, Math.min(rowCols, span.endXExclusive));
+
+        if (endXExclusive <= startX) continue;
+
+        if (clearStartX != null) {
+          // Everything at/after clearStartX will be handled by ESC[K.
+          if (startX >= clearStartX) continue;
+
+          const clippedEnd = Math.min(endXExclusive, clearStartX);
+          if (clippedEnd > startX) {
+            spansToPaint.push({
+              startX,
+              endXExclusive: clippedEnd,
+            });
+          }
+          continue;
+        }
+
+        spansToPaint.push({
+          startX,
+          endXExclusive,
+        });
+      }
 
       // Evaluate fallback after default-tail compaction. Otherwise a long default
       // blank tail can incorrectly force a broader repaint for text-shrink frames.
@@ -1820,7 +1828,8 @@ export function createStdoutRenderer(
           clearStartX == null ? last.endXExclusive : Math.min(last.endXExclusive, clearStartX);
 
         if (rewriteEnd > first.startX) {
-          const clearToEol = clearStartX == null && last.endXExclusive >= row.length;
+          const clearToEol =
+            clearStartX == null && last.endXExclusive >= rowCols && last.endXExclusive < size.cols;
           renderRow(y, row, first.startX, rewriteEnd, clearToEol);
         }
       } else {
@@ -1828,7 +1837,10 @@ export function createStdoutRenderer(
 
         for (const span of spansToPaint) {
           const clearToEol =
-            clearStartX == null && span === lastSpan && span.endXExclusive >= row.length;
+            clearStartX == null &&
+            span === lastSpan &&
+            span.endXExclusive >= rowCols &&
+            span.endXExclusive < size.cols;
 
           renderRow(y, row, span.startX, span.endXExclusive, clearToEol);
         }

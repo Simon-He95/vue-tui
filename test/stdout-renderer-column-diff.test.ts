@@ -241,8 +241,7 @@ describe("stdout renderer column diff", () => {
 
   it("updates two distant changed regions without rewriting the unchanged middle", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
-      const middle =
-        " building package with a deliberately long unchanged middle segment ";
+      const middle = " building package with a deliberately long unchanged middle segment ";
       const percentX = 2 + middle.length;
       const cols = percentX + 8;
 
@@ -595,6 +594,37 @@ describe("stdout renderer column diff", () => {
       expect(frame).toContain("abc");
       expect(frame).not.toContain(`\x1B[1;${cols + 1}H`);
       expect(frame).not.toContain("\x1B[K");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("does not emit an out-of-bounds cursor move when clearing at row end", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 10;
+      const terminal = createTerminal({ cols, rows: 1 });
+      const output = createBufferedOutput(false);
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        columnDiff: true,
+      });
+
+      terminal.write("abcdefghi", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+      output.take();
+
+      terminal.write("abcdefghij", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).not.toContain("\x1B[1;11H");
 
       renderer.dispose();
       terminal.dispose();
