@@ -311,6 +311,41 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("keeps repeated distant same-row updates under the byte budget", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+      const middle = " building package with a deliberately long unchanged middle segment ".repeat(
+        2,
+      );
+      const percentX = 2 + middle.length;
+      const { terminal, output, renderer } = mountRow(`⠋ ${middle}000%`, {
+        cols: percentX + 8,
+        dirtyRowPatchMode: "span",
+      });
+
+      let totalBytes = 0;
+
+      for (let i = 0; i < 200; i++) {
+        terminal.put(0, 0, spinnerFrames[i % spinnerFrames.length]!);
+        terminal.write(`${String(i % 1000).padStart(3, "0")}%`, {
+          x: percentX,
+          y: 0,
+        });
+        terminal.commit({ sync: true });
+
+        const frame = output.take();
+        totalBytes += byteLength(frame);
+
+        expect(frame).not.toContain("deliberately long unchanged middle segment");
+      }
+
+      expect(totalBytes).toBeLessThan(18_000);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("does not skip a changed cell when the 10-bit char fingerprint collides", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const oldChar = "A";
