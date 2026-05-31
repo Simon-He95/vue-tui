@@ -548,22 +548,31 @@ export function createStdoutRenderer(
     return (styleKey(style) << 10) | charHash10(ch);
   }
 
+  const BLANK_STYLE: Style = Object.freeze({});
+  const BLANK_CELL: Cell = Object.freeze({
+    ch: " ",
+    width: 1,
+    style: BLANK_STYLE,
+  });
+
+  const cellAt = (row: readonly Cell[], x: number): Cell => row[x] ?? BLANK_CELL;
+
   function fingerprintRow(row: readonly Cell[], y: number, cols: number): void {
     // Fast path: use pre-computed SoA fingerprints from composite buffer.
     // This is a TypedArray.set() copy instead of per-cell property access + hash.
     const rowFP = terminal.getRowFingerprints(y);
     const base = y * fpCols;
-    if (rowFP && rowFP.length >= cols) {
+    if (rowFP && rowFP.length >= cols && row.length >= cols) {
       currentFP.set(rowFP.subarray(0, cols), base);
     } else {
       // Fallback: compute per-cell fingerprints
       for (let x = 0; x < cols; x++) {
-        const cell = row[x]!;
+        const cell = cellAt(row, x);
         currentFP[base + x] = cellFingerprint(cell.ch, cell.style);
       }
     }
     for (let x = 0; x < cols; x++) {
-      const cell = row[x]!;
+      const cell = cellAt(row, x);
       currentHrefIds[base + x] = hrefId(normalizeHref(cell.style.href));
       currentCharHashes[base + x] = charHash32(cell.ch);
     }
@@ -595,9 +604,11 @@ export function createStdoutRenderer(
     referenceHrefIds: Uint32Array,
     referenceCharHashes: Uint32Array,
   ): boolean => {
-    const cell = row[x]!;
+    const cell = cellAt(row, x);
     const fingerprint =
-      rowFP && rowFP.length >= cols ? rowFP[x]! : cellFingerprint(cell.ch, cell.style);
+      rowFP && rowFP.length >= cols && row.length >= cols
+        ? rowFP[x]!
+        : cellFingerprint(cell.ch, cell.style);
 
     return (
       fingerprint === referenceFP[base + x] &&
@@ -613,9 +624,8 @@ export function createStdoutRenderer(
 
   type DirtySpanRenderMode = "spans" | "contiguous" | "row";
 
-  const fullRowDirtySpan = (row: readonly Cell[], cols: number): readonly DirtySpan[] => {
-    const endXExclusive = Math.max(0, Math.min(cols, row.length));
-    return endXExclusive > 0 ? [{ startX: 0, endXExclusive }] : [];
+  const fullRowDirtySpan = (cols: number): readonly DirtySpan[] => {
+    return cols > 0 ? [{ startX: 0, endXExclusive: cols }] : [];
   };
 
   const emptyCharHash = charHash32("");
@@ -659,14 +669,13 @@ export function createStdoutRenderer(
     );
   };
 
-  const estimatedFullRowPatchBytes = (row: readonly Cell[], y: number, cols: number): number => {
-    return estimatedCursorMoveBytes(y, 0) + Math.max(0, Math.min(row.length, cols)) + 3;
+  const estimatedFullRowPatchBytes = (y: number, cols: number): number => {
+    return estimatedCursorMoveBytes(y, 0) + Math.max(0, cols) + 3;
   };
 
   const resolveDirtySpanRenderMode = (
     spans: readonly DirtySpan[],
     y: number,
-    row: readonly Cell[],
     cols: number,
   ): DirtySpanRenderMode => {
     if (spans.length <= 0) return "spans";
@@ -677,7 +686,7 @@ export function createStdoutRenderer(
       return "spans";
     }
 
-    const fullRowCost = estimatedFullRowPatchBytes(row, y, cols);
+    const fullRowCost = estimatedFullRowPatchBytes(y, cols);
     const sparseThreshold = fullRowCost * DIRTY_SPAN_FULL_ROW_THRESHOLD;
 
     const multiCost = estimatedSpanPatchBytes(spans, y);
@@ -699,8 +708,8 @@ export function createStdoutRenderer(
     return "row";
   };
 
-  const expandSpanStart = (row: readonly Cell[], startX: number): number => {
-    let x = Math.max(0, Math.min(row.length, Math.floor(startX)));
+  const expandSpanStart = (row: readonly Cell[], startX: number, cols: number): number => {
+    let x = Math.max(0, Math.min(cols, Math.floor(startX)));
 
     // If the span starts on the continuation half of a current wide glyph,
     // include the base. This prevents rewriting only half of a width-2 glyph.
@@ -715,8 +724,8 @@ export function createStdoutRenderer(
     return Math.max(0, x);
   };
 
-  const expandSpanEnd = (row: readonly Cell[], endXExclusive: number): number => {
-    let x = Math.max(0, Math.min(row.length, Math.floor(endXExclusive)));
+  const expandSpanEnd = (row: readonly Cell[], endXExclusive: number, cols: number): number => {
+    let x = Math.max(0, Math.min(cols, Math.floor(endXExclusive)));
 
     // If the span ends after a width-2 base but before its continuation,
     // include that continuation cell.
@@ -724,9 +733,9 @@ export function createStdoutRenderer(
     if (last && last.width === 2 && !last.continuation) x++;
 
     // If the end points at a current continuation cell, include it.
-    while (x < row.length && row[x]?.continuation) x++;
+    while (x < cols && row[x]?.continuation) x++;
 
-    return Math.min(row.length, x);
+    return Math.min(cols, x);
   };
 
   const previousCellLooksLikeWideContinuation = (
@@ -781,10 +790,14 @@ export function createStdoutRenderer(
     return { startX, endXExclusive };
   };
 
-  const widenSpanToCurrentGlyphBoundaries = (row: readonly Cell[], span: DirtySpan): DirtySpan => {
+  const widenSpanToCurrentGlyphBoundaries = (
+    row: readonly Cell[],
+    span: DirtySpan,
+    cols: number,
+  ): DirtySpan => {
     return {
-      startX: expandSpanStart(row, span.startX),
-      endXExclusive: expandSpanEnd(row, span.endXExclusive),
+      startX: expandSpanStart(row, span.startX, cols),
+      endXExclusive: expandSpanEnd(row, span.endXExclusive, cols),
     };
   };
 
@@ -804,6 +817,7 @@ export function createStdoutRenderer(
       const next = widenSpanToCurrentGlyphBoundaries(
         row,
         expandSpanForReferenceWideGlyphs(span, referenceFP, referenceCharHashes, base, cols),
+        cols,
       );
       const prev = expanded[expanded.length - 1];
       if (prev && next.startX <= prev.endXExclusive + DIRTY_SPAN_MERGE_GAP_CELLS) {
@@ -828,12 +842,13 @@ export function createStdoutRenderer(
     row: readonly Cell[],
     startX: number,
     endXExclusive: number,
+    cols: number,
   ): DirtySpan => {
     let tokenStart = startX;
     let tokenEnd = endXExclusive;
 
     while (tokenStart > 0 && isPercentTokenCell(row[tokenStart - 1])) tokenStart--;
-    while (tokenEnd < row.length && isPercentTokenCell(row[tokenEnd])) tokenEnd++;
+    while (tokenEnd < cols && isPercentTokenCell(row[tokenEnd])) tokenEnd++;
 
     let hasPercent = false;
     for (let x = tokenStart; x < tokenEnd; x++) {
@@ -851,12 +866,20 @@ export function createStdoutRenderer(
     row: readonly Cell[],
     startX: number,
     endXExclusive: number,
+    cols: number,
   ): void => {
-    let expandedStart = expandSpanStart(row, startX);
-    let expandedEnd = expandSpanEnd(row, endXExclusive);
-    const percentTokenSpan = expandPercentTokenSpan(row, expandedStart, expandedEnd);
+    let expandedStart = Math.max(0, Math.min(cols, startX));
+    let expandedEnd = Math.max(expandedStart, Math.min(cols, endXExclusive));
+
+    if (expandedEnd <= expandedStart) return;
+
+    expandedStart = expandSpanStart(row, expandedStart, cols);
+    expandedEnd = expandSpanEnd(row, expandedEnd, cols);
+    const percentTokenSpan = expandPercentTokenSpan(row, expandedStart, expandedEnd, cols);
     expandedStart = percentTokenSpan.startX;
     expandedEnd = percentTokenSpan.endXExclusive;
+    expandedStart = Math.max(0, Math.min(cols, expandedStart));
+    expandedEnd = Math.max(expandedStart, Math.min(cols, expandedEnd));
 
     if (expandedEnd <= expandedStart) return;
 
@@ -883,7 +906,7 @@ export function createStdoutRenderer(
     cols: number,
     changedAt: (x: number) => boolean,
   ): readonly DirtySpan[] => {
-    const limit = Math.max(0, Math.min(cols, row.length, fpCols || cols));
+    const limit = Math.max(0, cols);
     if (limit <= 0) return [];
 
     const spans: DirtySpan[] = [];
@@ -896,13 +919,13 @@ export function createStdoutRenderer(
       }
 
       if (startX >= 0) {
-        pushDirtySpan(spans, row, startX, x);
+        pushDirtySpan(spans, row, startX, x, cols);
         startX = -1;
       }
     }
 
     if (startX >= 0) {
-      pushDirtySpan(spans, row, startX, limit);
+      pushDirtySpan(spans, row, startX, limit, cols);
     }
 
     return spans;
@@ -917,7 +940,7 @@ export function createStdoutRenderer(
     nextCharHashes: Uint32Array = currentCharHashes,
   ): readonly DirtySpan[] => {
     if (!fpCols || cols !== fpCols || y >= fpRows || !fpPrevValid) {
-      return fullRowDirtySpan(row, cols);
+      return fullRowDirtySpan(cols);
     }
 
     const base = y * fpCols;
@@ -962,7 +985,7 @@ export function createStdoutRenderer(
     fillHrefId = 0,
   ): readonly DirtySpan[] => {
     if (!fpCols || cols !== fpCols || y >= fpRows) {
-      return fullRowDirtySpan(row, cols);
+      return fullRowDirtySpan(cols);
     }
 
     const base = y * fpCols;
@@ -985,7 +1008,7 @@ export function createStdoutRenderer(
     referenceCharHashes: Uint32Array,
   ): readonly DirtySpan[] => {
     if (!fpCols || cols !== fpCols || y >= fpRows) {
-      return fullRowDirtySpan(row, cols);
+      return fullRowDirtySpan(cols);
     }
 
     const rowFP = terminal.getRowFingerprints(y);
@@ -1038,10 +1061,10 @@ export function createStdoutRenderer(
     cols: number,
     defaultBlankStyleKey: number,
   ): number => {
-    const limit = Math.max(0, Math.min(cols, row.length));
+    const limit = Math.max(0, cols);
 
     for (let x = limit - 1; x >= 0; x--) {
-      const cell = row[x];
+      const cell = cellAt(row, x);
       if (!isEolClearEquivalentBlankCell(cell, defaultBlankStyleKey)) {
         if (cell && !cell.continuation && cell.width === 2 && x + 1 < limit) {
           return x + 1;
@@ -1587,16 +1610,16 @@ export function createStdoutRenderer(
         const row = terminal.getRow(y) as Cell[];
         const rowFP = terminal.getRowFingerprints(y);
         const base = y * fpCols;
-        if (rowFP && rowFP.length >= size.cols) {
+        if (rowFP && rowFP.length >= size.cols && row.length >= size.cols) {
           dirtyFP.set(rowFP.subarray(0, size.cols), base);
         } else {
           for (let x = 0; x < size.cols; x++) {
-            const cell = row[x]!;
+            const cell = cellAt(row, x);
             dirtyFP[base + x] = cellFingerprint(cell.ch, cell.style);
           }
         }
         for (let x = 0; x < size.cols; x++) {
-          const cell = row[x]!;
+          const cell = cellAt(row, x);
           dirtyHrefIds[base + x] = hrefId(normalizeHref(cell.style.href));
           dirtyCharHashes[base + x] = charHash32(cell.ch);
         }
@@ -1704,11 +1727,11 @@ export function createStdoutRenderer(
       y: number,
       row: readonly Cell[],
       startX = 0,
-      endXExclusive = row.length,
+      endXExclusive = size.cols,
       clearToEol = true,
     ) => {
-      const spanStart = Math.max(0, Math.min(row.length, Math.floor(startX)));
-      const spanEnd = Math.max(spanStart, Math.min(row.length, Math.floor(endXExclusive)));
+      const spanStart = Math.max(0, Math.min(size.cols, Math.floor(startX)));
+      const spanEnd = Math.max(spanStart, Math.min(size.cols, Math.floor(endXExclusive)));
       if (spanStart >= spanEnd && !clearToEol) {
         return;
       }
@@ -1730,7 +1753,7 @@ export function createStdoutRenderer(
       currentTextParts.length = 0;
 
       for (let x = spanStart; x < spanEnd; x++) {
-        const cell = row[x]!;
+        const cell = cellAt(row, x);
         if (cell.continuation) continue;
         const ch = cell.ch || " ";
         const nextStyle = cell.style;
@@ -1796,7 +1819,7 @@ export function createStdoutRenderer(
     ): void => {
       if (!rawSpans.length && !rewriteTail) return;
 
-      const rowCols = Math.min(size.cols, row.length);
+      const rowCols = size.cols;
       const compactClearStartX = rewriteTail
         ? Math.max(0, Math.min(size.cols, lastExplicitPaintColumnInRow(row, size.cols, bgKey) + 1))
         : null;
@@ -1840,7 +1863,7 @@ export function createStdoutRenderer(
 
       // Evaluate fallback after default-tail compaction. Otherwise a long default
       // blank tail can incorrectly force a broader repaint for text-shrink frames.
-      const renderMode = resolveDirtySpanRenderMode(spansToPaint, y, row, size.cols);
+      const renderMode = resolveDirtySpanRenderMode(spansToPaint, y, size.cols);
 
       if (renderMode === "row") {
         renderRow(y, row);

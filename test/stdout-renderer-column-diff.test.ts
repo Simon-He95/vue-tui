@@ -646,6 +646,45 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("treats missing cells in short renderer rows as viewport blanks", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 8;
+      const terminal = createTerminal({ cols, rows: 1 });
+      terminal.write("abcdefgh", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      const originalGetRow = terminal.getRow.bind(terminal);
+      const originalGetRowFingerprints = terminal.getRowFingerprints.bind(terminal);
+      const output = createBufferedOutput(false);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        columnDiff: true,
+      });
+
+      output.take();
+
+      (terminal as any).getRow = (y: number) => originalGetRow(y).slice(0, 3);
+      (terminal as any).getRowFingerprints = () => null;
+
+      terminal.clear(3, 0, cols - 3, 1);
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;4H\x1B[K");
+      expect(frame).not.toContain(`\x1B[1;${cols + 1}H`);
+
+      (terminal as any).getRow = originalGetRow;
+      (terminal as any).getRowFingerprints = originalGetRowFingerprints;
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("closes active OSC 8 links before clearing stale linked tails", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const cols = 32;
