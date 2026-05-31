@@ -115,6 +115,12 @@ export type StdoutRendererOptions = Readonly<{
    */
   dirtyRowPatchMode?: DirtyRowPatchMode;
   /**
+   * Benchmark/test override for row-internal span rendering.
+   *
+   * Normal callers should use dirtyRowPatchMode.
+   */
+  columnDiffMode?: "auto" | "single-span" | "multi-span" | "full-row";
+  /**
    * Alias for dirtyRowPatchMode.
    *
    * - true => "span"
@@ -268,7 +274,10 @@ export function createStdoutRenderer(
     return "auto";
   }
   const dirtyRowPatchMode = resolveDirtyRowPatchMode();
+  const columnDiffMode = options?.columnDiffMode ?? "auto";
   const shouldUseDirtySpans = (): boolean => {
+    if (columnDiffMode === "full-row") return false;
+    if (columnDiffMode === "single-span" || columnDiffMode === "multi-span") return true;
     if (dirtyRowPatchMode === "span") return true;
     if (dirtyRowPatchMode === "row") return false;
     if (!outputIsTTY) return true;
@@ -1145,20 +1154,6 @@ export function createStdoutRenderer(
     return -1;
   };
 
-  const shouldCompactDefaultTailWithEolClear = (
-    row: readonly Cell[],
-    clearStartX: number,
-    defaultBlankStyleKey: number,
-  ): boolean => {
-    if (clearStartX <= 0) return true;
-
-    const previous = row[clearStartX - 1];
-    if (!previous || previous.continuation) return true;
-
-    const ch = previous.ch || " ";
-    return ch !== " " || isEolClearEquivalentBlankCell(previous, defaultBlankStyleKey);
-  };
-
   const shouldRewriteRowTail = (
     row: readonly Cell[],
     y: number,
@@ -1904,14 +1899,9 @@ export function createStdoutRenderer(
       if (!rawSpans.length && !rewriteTail) return;
 
       const rowCols = size.cols;
-      const compactClearStartX = rewriteTail
+      const clearStartX = rewriteTail
         ? Math.max(0, Math.min(size.cols, lastExplicitPaintColumnInRow(row, size.cols, bgKey) + 1))
         : null;
-      const clearStartX =
-        compactClearStartX != null &&
-        shouldCompactDefaultTailWithEolClear(row, compactClearStartX, bgKey)
-          ? compactClearStartX
-          : null;
 
       // Compact trailing default-blank changes into one ESC[K before deciding
       // whether the dirty spans are too dense. Otherwise short text replacing
@@ -1948,7 +1938,10 @@ export function createStdoutRenderer(
       // Evaluate fallback after default-tail compaction. Otherwise a long default
       // blank tail can incorrectly force a broader repaint for text-shrink frames.
       const clearToEolForCost = clearStartX != null && clearStartX < size.cols;
-      const renderMode = resolveDirtySpanRenderMode(spansToPaint, y, size.cols, clearToEolForCost);
+      const renderMode =
+        columnDiffMode === "single-span" && spansToPaint.length > 0
+          ? "contiguous"
+          : resolveDirtySpanRenderMode(spansToPaint, y, size.cols, clearToEolForCost);
 
       if (renderMode === "row") {
         renderRow(y, row, 0, size.cols, false);

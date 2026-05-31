@@ -71,7 +71,7 @@ function runCase(
   name: string,
   options: Readonly<{
     frames: number;
-    dirtyRowPatchMode: "row" | "span";
+    columnDiffMode: "full-row" | "single-span" | "multi-span";
   }>,
 ) {
   return withEnv(cleanTerminalEnv, () => {
@@ -89,7 +89,7 @@ function runCase(
       altScreen: false,
       colorMode: "ansi16",
       useSyncOutput: false,
-      dirtyRowPatchMode: options.dirtyRowPatchMode,
+      columnDiffMode: options.columnDiffMode,
     });
 
     // Drop renderer's initial blank/full-frame setup.
@@ -133,31 +133,6 @@ function runCase(
       framesPerSecond: frames / (durationMs / 1000),
     };
   });
-}
-
-function runSingleSpanBaseline(frames: number) {
-  let totalBytes = 0;
-  let maxFrameBytes = 0;
-  const startedAt = performance.now();
-
-  for (let i = 0; i < frames; i++) {
-    const frame = `\x1B[?7l\x1B[0m\x1B[40m\x1B[1;1H${spinnerFrames[i % spinnerFrames.length]!} ${middle}${String(i % 1000).padStart(3, "0")}%\x1B[0m\x1B[?7h`;
-    const bytes = Buffer.byteLength(frame, "utf8");
-    totalBytes += bytes;
-    maxFrameBytes = Math.max(maxFrameBytes, bytes);
-  }
-
-  const durationMs = performance.now() - startedAt;
-
-  return {
-    name: "single-span baseline",
-    frames,
-    totalBytes,
-    meanBytes: totalBytes / frames,
-    maxFrameBytes,
-    durationMs,
-    framesPerSecond: frames / (durationMs / 1000),
-  };
 }
 
 function runFragmentedShortRowCase(
@@ -238,12 +213,15 @@ const frames = parseFrameCount(process.env.FRAMES);
 
 const fullRow = runCase("full-row baseline", {
   frames,
-  dirtyRowPatchMode: "row",
+  columnDiffMode: "full-row",
 });
-const singleSpan = runSingleSpanBaseline(frames);
+const singleSpan = runCase("single-span baseline", {
+  frames,
+  columnDiffMode: "single-span",
+});
 const multiSpan = runCase("multi-span optimized", {
   frames,
-  dirtyRowPatchMode: "span",
+  columnDiffMode: "multi-span",
 });
 const fragmentedRow = runFragmentedShortRowCase("fragmented short-row baseline", {
   frames,

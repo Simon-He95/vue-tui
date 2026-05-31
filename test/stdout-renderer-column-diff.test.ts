@@ -648,7 +648,44 @@ describe("stdout renderer column diff", () => {
     });
   });
 
-  it("does not compact styled blank tail into ESC[K", () => {
+  it("does not clear styled blank cells on the right when text shrinks", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 80, rows: 1 });
+      const output = createBufferedOutput(false);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      terminal.write("⠙ Installing dependencies", { x: 0, y: 0 });
+      terminal.fill(40, 0, 6, 1, " ", { bg: "cyan" });
+      terminal.write("old-tail", { x: 50, y: 0 });
+      terminal.commit({ sync: true });
+
+      output.take();
+
+      terminal.clear(2, 0, 28, 1);
+      terminal.write("Done", { x: 2, y: 0 });
+      terminal.clear(50, 0, 8, 1);
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("Done");
+      expect(frame).not.toContain("\x1B[1;7H\x1B[K");
+      expect(frame).toContain("\x1B[1;47H");
+      expect(frame).toContain("\x1B[K");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("clears only after a styled blank tail", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const { terminal, output, renderer } = mountRow("prefixXXXXXXXX", {
         cols: 24,
@@ -665,7 +702,9 @@ describe("stdout renderer column diff", () => {
 
       expect(frame).toContain("\x1B[1;7H");
       expect(frame).toContain(inverseStyle);
-      expect(frame).not.toContain("\x1B[K");
+      expect(frame).toContain("\x1B[1;11H");
+      expect(frame).toContain("\x1B[K");
+      expect(frame).not.toContain("\x1B[1;7H\x1B[K");
 
       renderer.dispose();
       terminal.dispose();
@@ -1032,7 +1071,8 @@ describe("stdout renderer column diff", () => {
       // Regression: a naive tail clear would emit ESC[K without painting the six
       // styled blanks, causing the blue background to disappear.
       expect(frame).toContain("      ");
-      expect(frame).not.toContain("\x1B[K");
+      expect(frame).toContain("\x1B[1;7H");
+      expect(frame).toContain("\x1B[K");
       expect(frame).not.toContain("loading something");
 
       renderer.dispose();
