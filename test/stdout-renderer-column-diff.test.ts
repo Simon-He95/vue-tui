@@ -402,6 +402,34 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("falls back to one contiguous patch when many tiny spans would be more expensive", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 120;
+      const base = Array.from({ length: cols }, (_, index) => (index % 2 === 0 ? "a" : " ")).join(
+        "",
+      );
+
+      const { terminal, output, renderer } = mountRow(base, { cols, isTTY: false });
+
+      // Create many tiny distant changes. Multi-span would require many cursor
+      // moves; contiguous span should win.
+      for (let x = 0; x < 40; x += 4) {
+        terminal.put(x, 0, "b");
+      }
+
+      terminal.commit({ sync: true });
+      const frame = output.take();
+
+      const cursorMoves = frame.match(/\x1B\[\d+;\d+H/g) ?? [];
+
+      expect(cursorMoves.length).toBeLessThanOrEqual(2);
+      expect(frame).toContain("b");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("expands changed spans to whole wide glyphs", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const { terminal, output, renderer } = mountRow("界 static text", {
@@ -702,7 +730,7 @@ describe("stdout renderer column diff", () => {
     });
   });
 
-  it("falls back to full row when changed spans are too fragmented", () => {
+  it("falls back to one contiguous span when changed spans are too fragmented", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const unchangedMiddle = " full row fallback keeps unchanged words visible ";
       const indices = [0, 60, 64, 68, 72, 76, 80, 84, 88];

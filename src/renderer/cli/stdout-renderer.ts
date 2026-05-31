@@ -610,16 +610,58 @@ export function createStdoutRenderer(
     return total;
   };
 
-  const shouldFallbackDirtySpansToFullRow = (
-    spans: readonly DirtySpan[],
-    cols: number,
-  ): boolean => {
-    if (!spans.length) return false;
-    if (spans.length > DIRTY_SPAN_MAX_PER_ROW) return true;
+  const estimatedCursorMoveBytes = (y: number, x: number): number => {
+    // ESC [ row ; col H
+    return 3 + String(y + 1).length + 1 + String(x + 1).length + 1;
+  };
+
+  const estimatedSpanPatchBytes = (spans: readonly DirtySpan[], y: number): number => {
+    let bytes = 0;
+
+    for (const span of spans) {
+      bytes += estimatedCursorMoveBytes(y, span.startX);
+      bytes += dirtySpanWidth(span);
+
+      // Approximate style/link overhead. Exact cost depends on SGR/OSC8, but this
+      // keeps fragmented rows from winning purely because cell coverage is small.
+      bytes += 8;
+    }
+
+    return bytes;
+  };
+
+  const estimatedContiguousPatchBytes = (spans: readonly DirtySpan[], y: number): number => {
+    if (!spans.length) return 0;
+
+    const first = spans[0]!;
+    const last = spans[spans.length - 1]!;
 
     return (
-      dirtySpanCoverage(spans) >= Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD))
+      estimatedCursorMoveBytes(y, first.startX) + Math.max(0, last.endXExclusive - first.startX) + 8
     );
+  };
+
+  const shouldFallbackDirtySpansToContiguousSpan = (
+    spans: readonly DirtySpan[],
+    y: number,
+    cols: number,
+  ): boolean => {
+    if (spans.length <= 1) return false;
+
+    const coverage = dirtySpanCoverage(spans);
+    if (coverage >= Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD))) {
+      return true;
+    }
+
+    if (spans.length <= 2) return false;
+    if (spans.length > DIRTY_SPAN_MAX_PER_ROW) return true;
+
+    const multiCost = estimatedSpanPatchBytes(spans, y);
+    const contiguousCost = estimatedContiguousPatchBytes(spans, y);
+
+    // Keep a little margin so we don't choose multi-span when it is only
+    // theoretically equal but may lose because of SGR/OSC8/style transitions.
+    return multiCost >= contiguousCost * 0.9;
   };
 
   const expandSpanStart = (row: readonly Cell[], startX: number): number => {
@@ -1754,19 +1796,26 @@ export function createStdoutRenderer(
       const spansToPaint = clipSpansBeforeClear(spans, clearStartX);
 
       // Evaluate fallback after default-tail compaction. Otherwise a long default
-      // blank tail can incorrectly force a full-row repaint for text-shrink frames.
-      if (shouldFallbackDirtySpansToFullRow(spansToPaint, size.cols)) {
-        renderRow(y, row);
-        return;
-      }
+      // blank tail can incorrectly force a broader repaint for text-shrink frames.
+      if (shouldFallbackDirtySpansToContiguousSpan(spansToPaint, y, size.cols)) {
+        const first = spansToPaint[0]!;
+        const last = spansToPaint[spansToPaint.length - 1]!;
+        const rewriteEnd =
+          clearStartX == null ? last.endXExclusive : Math.min(last.endXExclusive, clearStartX);
 
-      const lastSpan = spansToPaint[spansToPaint.length - 1];
+        if (rewriteEnd > first.startX) {
+          const clearToEol = clearStartX == null && last.endXExclusive >= row.length;
+          renderRow(y, row, first.startX, rewriteEnd, clearToEol);
+        }
+      } else {
+        const lastSpan = spansToPaint[spansToPaint.length - 1];
 
-      for (const span of spansToPaint) {
-        const clearToEol =
-          clearStartX == null && span === lastSpan && span.endXExclusive >= row.length;
+        for (const span of spansToPaint) {
+          const clearToEol =
+            clearStartX == null && span === lastSpan && span.endXExclusive >= row.length;
 
-        renderRow(y, row, span.startX, span.endXExclusive, clearToEol);
+          renderRow(y, row, span.startX, span.endXExclusive, clearToEol);
+        }
       }
 
       // Clear only if there is actually a valid cell position inside the viewport.
