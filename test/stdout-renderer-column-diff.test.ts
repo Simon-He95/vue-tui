@@ -288,6 +288,26 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("rejects invalid runtime dirtySpanConservativeMaxCells values", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 40, rows: 1 });
+      const output = createBufferedOutput(false);
+
+      expect(() =>
+        createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          useSyncOutput: false,
+          dirtySpanConservativeMaxCells: 0,
+        }),
+      ).toThrow(/Invalid dirtySpanConservativeMaxCells=.*positive finite number/);
+
+      terminal.dispose();
+    });
+  });
+
   it("releases renderer-owned fingerprint function on dispose", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const terminal = createTerminal({ cols: 20, rows: 1 });
@@ -1238,6 +1258,21 @@ describe("stdout renderer column diff", () => {
       });
 
       (renderer as any).render([], true);
+
+      expect(output.take()).toBe("");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("does not promote invalid dirty rows into a full repaint", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const { terminal, output, renderer } = mountRow("stable row", {
+        dirtyRowPatchMode: "span",
+      });
+
+      (renderer as any).render([-1, 999, Number.NaN], true);
 
       expect(output.take()).toBe("");
 

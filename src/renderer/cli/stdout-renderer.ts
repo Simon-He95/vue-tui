@@ -289,12 +289,15 @@ export function createStdoutRenderer(
     outputIsTTY && (isGhostty || isKitty || isAlacritty || isWezTerm),
   );
   const normalizeDirtyRowPatchMode = (value: unknown): DirtyRowPatchMode | null => {
-    return value === "auto" || value === "row" || value === "span" ? value : null;
+    const normalized = typeof value === "string" ? value.trim().toLowerCase() : value;
+    return normalized === "auto" || normalized === "row" || normalized === "span"
+      ? normalized
+      : null;
   };
   const normalizeColumnDiffMode = (value: unknown): DirtyRowPatchMode | null => {
     if (value === true) return "span";
     if (value === false) return "row";
-    if (value === "auto") return "auto";
+    if (typeof value === "string" && value.trim().toLowerCase() === "auto") return "auto";
     return null;
   };
   const firstValidDirtyRowPatchMode = (...values: readonly unknown[]): DirtyRowPatchMode | null => {
@@ -340,11 +343,25 @@ export function createStdoutRenderer(
   }
   const dirtyRowPatchMode = resolveDirtyRowPatchMode();
   const dirtySpanConservativeMaxCells = (() => {
-    const raw =
-      options?.dirtySpanConservativeMaxCells ??
-      firstNonEmptyEnv(env, "VUE_TUI_DIRTY_SPAN_MAX_CELLS", "DIMCODE_TUI_DIRTY_SPAN_MAX_CELLS");
-    const value = typeof raw === "number" ? raw : Number(raw);
+    if (options?.dirtySpanConservativeMaxCells !== undefined) {
+      const raw = options.dirtySpanConservativeMaxCells;
+      const value = typeof raw === "number" ? raw : Number(raw);
+      if (!Number.isFinite(value) || value <= 0) {
+        throw new Error(
+          `Invalid dirtySpanConservativeMaxCells=${JSON.stringify(
+            raw,
+          )}; expected a positive finite number.`,
+        );
+      }
+      return Math.floor(value);
+    }
 
+    const raw = firstNonEmptyEnv(
+      env,
+      "VUE_TUI_DIRTY_SPAN_MAX_CELLS",
+      "DIMCODE_TUI_DIRTY_SPAN_MAX_CELLS",
+    );
+    const value = Number(raw);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : 32;
   })();
   const columnDiffMode =
@@ -409,9 +426,9 @@ export function createStdoutRenderer(
   const colorMode = resolveColorMode();
   const enableDim = colorMode === "truecolor";
 
-  // Cell fingerprints use a 32-bit hash of the interned exact style signature plus the full grapheme.
-  // Dirty-span diff treats equal fingerprints as unchanged, so the character
-  // must not be packed into a small fixed-width bit field.
+  // Cell equality is split across SoA arrays:
+  // currentFP/prevFP store renderer-owned style fingerprints, while textIds and
+  // hrefIds carry exact grapheme/link identity for dirty-span diffing.
   let styleKeyCache = new WeakMap<Style, number>();
   const styleKeyIndex = new Map<string, number>();
   let nextStyleKey = 1;
@@ -1398,6 +1415,7 @@ export function createStdoutRenderer(
   const rowHasNonDefaultBlankCell = (
     sourceFP: Uint32Array,
     sourceTextIds: Uint32Array,
+    sourceHrefIds: Uint32Array,
     y: number,
     cols: number,
   ): boolean => {
@@ -1406,7 +1424,13 @@ export function createStdoutRenderer(
     const base = y * fpCols;
     const limit = Math.min(cols, fpCols);
     for (let x = 0; x < limit; x++) {
-      if (sourceFP[base + x] !== blankFP || sourceTextIds[base + x] !== blankTextId) return true;
+      if (
+        sourceFP[base + x] !== blankFP ||
+        sourceTextIds[base + x] !== blankTextId ||
+        sourceHrefIds[base + x] !== 0
+      ) {
+        return true;
+      }
     }
     return false;
   };
@@ -1612,8 +1636,8 @@ export function createStdoutRenderer(
         const srcY = y + delta; // where this row's content came from in prev frame
         if (srcY < band.start || srcY >= band.end) continue;
         const informative =
-          rowHasNonDefaultBlankCell(currentFP, currentTextIds, y, cols) ||
-          rowHasNonDefaultBlankCell(prevFP, prevTextIds, srcY, cols);
+          rowHasNonDefaultBlankCell(currentFP, currentTextIds, currentHrefIds, y, cols) ||
+          rowHasNonDefaultBlankCell(prevFP, prevTextIds, prevHrefIds, srcY, cols);
         if (!informative) continue;
         checked++;
 
@@ -1776,7 +1800,8 @@ export function createStdoutRenderer(
     })();
     let rowsToRender = (() => {
       if (forceFullRender || !fpPrevValid) return null;
-      if (!dirtyRows || dirtyRows.length === 0) return null;
+      if (!dirtyRows) return null;
+      if (dirtyRows.length === 0) return [];
       const outRows: number[] = [];
       outRows.length = dirtyRows.length;
       let outLen = 0;
@@ -1784,17 +1809,22 @@ export function createStdoutRenderer(
       let prev = -1;
       for (let i = 0; i < dirtyRows.length; i++) {
         const y = Math.floor(dirtyRows[i] ?? -1);
-        if (y < 0 || y >= size.rows) continue;
+        if (!Number.isFinite(y) || y < 0 || y >= size.rows) continue;
         if (y <= prev) sorted = false;
         prev = y;
         outRows[outLen++] = y;
       }
       outRows.length = outLen;
-      if (!outRows.length) return null;
+      if (!outRows.length) return [];
       dirtySorted = sorted;
       if (!sorted) outRows.sort((a, b) => a - b);
       return outRows;
     })();
+    if (rowsToRender?.length === 0 && !normalizedScrollOperations) {
+      if (isDebugEnabled()) getDebugLog().render(" No valid dirty rows; frame skipped");
+      cliLatency?.recordStdoutNoOutput();
+      return;
+    }
     const dirtyRowSnapshots =
       fpPrevValid && rowsToRender ? new Map<number, RowFingerprintSnapshot>() : null;
     const snapshotDirtyRowFingerprints = () => {
@@ -3022,7 +3052,7 @@ export function createStdoutRenderer(
       const bits = ensureAccumulatedDirtyBits(rowCount);
       for (let i = 0; i < dirtyRows.length; i++) {
         const y = Math.floor(dirtyRows[i] ?? -1);
-        if (y < 0 || y >= rowCount) continue;
+        if (!Number.isFinite(y) || y < 0 || y >= rowCount) continue;
         if (!bits[y]) {
           bits[y] = 1;
           accumulatedDirtyCount++;
