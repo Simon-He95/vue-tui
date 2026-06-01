@@ -1,0 +1,20 @@
+# Vue TUI
+
+> Vue 3 terminal UI components and renderers for browser DOM, CLI stdout, logs, markdown transcripts, and agent consoles.
+
+## Core pages
+
+- [Overview](/): What Vue TUI is and when to use it.
+- [Live Showcase](/showcase): Browser DOM examples rendered with real Vue TUI components.
+- [Components](/components): Vue terminal UI component reference.
+- [Agent Console](/agent-console): Streaming markdown, logs, tool calls, overlays, links, and agent transcript UI.
+- [Vue Terminal UI](/guide/vue-terminal-ui): Terminal-style Vue interfaces for browser DOM, CLI stdout, and tests.
+- [Vue CLI UI](/guide/vue-cli-ui): Real CLI interfaces with Vue component composition.
+- [CLI stdout renderer](/guide/cli-stdout-renderer): Render Vue component trees into terminal stdout.
+- [Terminal log viewer](/guide/terminal-log-viewer): Append-only logs, retained windows, search, links, wrapping, and virtual rows.
+- [Markdown transcripts](/guide/markdown-transcript): Streaming markdown transcript rendering for terminal-style UIs.
+
+## Package
+
+- npm: @simon_he/vue-tui
+- GitHub: https://github.com/Simon-He95/vue-tui

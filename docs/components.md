@@ -1,3 +1,8 @@
+---
+title: Vue Terminal UI Components
+description: Reference for Vue TUI components such as TerminalProvider, TBox, TInput, TList, TTable, TLogView, TVirtualMarkdown, and agent primitives.
+---
+
 # Components 使用文档
 
 本文档覆盖 `@simon_he/vue-tui` 当前内置的 Vue 组件，用于统一「渲染/参数/事件」的契约，便于实现一致的验收与测试。
