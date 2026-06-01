@@ -103,6 +103,9 @@ const formHandle: TFormHandle = {
 };
 void formHandle;
 const terminal: Terminal = createTerminal({ cols: 80, rows: 24 });
+const terminalWithoutFingerprintHooks: Omit<Terminal, "setFingerprintFn" | "getRowFingerprints"> =
+  terminal;
+const structuralTerminal: Terminal = terminalWithoutFingerprintHooks;
 const runtime = createRuntime();
 const plugin: TInputPlugin = { name: "test", install: () => {} };
 const hostAdapter: TInputHostAdapter = {
@@ -183,6 +186,7 @@ console.log(
   domOptions,
   linkConfig,
   terminal,
+  structuralTerminal,
   runtime,
   plugin,
   hostPlugin,

@@ -313,7 +313,7 @@ describe("stdout renderer column diff", () => {
       const terminal = createTerminal({ cols: 20, rows: 1 });
       const output = createBufferedOutput(false);
       const installed: unknown[] = [];
-      const originalSetFingerprintFn = terminal.setFingerprintFn.bind(terminal);
+      const originalSetFingerprintFn = terminal.setFingerprintFn!.bind(terminal);
 
       (terminal as any).setFingerprintFn = (fn: unknown) => {
         installed.push(fn);
@@ -345,7 +345,7 @@ describe("stdout renderer column diff", () => {
       const outputA = createBufferedOutput(false);
       const outputB = createBufferedOutput(false);
       const installed: unknown[] = [];
-      const originalSetFingerprintFn = terminal.setFingerprintFn.bind(terminal);
+      const originalSetFingerprintFn = terminal.setFingerprintFn!.bind(terminal);
 
       (terminal as any).setFingerprintFn = (fn: unknown) => {
         installed.push(fn);
@@ -377,6 +377,79 @@ describe("stdout renderer column diff", () => {
       rendererA.dispose();
       expect(installed[installed.length - 1]).toBe(null);
 
+      terminal.dispose();
+    });
+  });
+
+  it("falls back when a Terminal-like implementation does not expose fingerprint hooks", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 20, rows: 1 });
+      delete (terminal as any).setFingerprintFn;
+      delete (terminal as any).getRowFingerprints;
+
+      const output = createBufferedOutput(false);
+      const renderer = createStdoutRenderer(terminal as any, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      output.clear();
+      terminal.write("abc", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      expect(output.take()).toContain("abc");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("lets a secondary stdout renderer acquire fingerprints after the owner is disposed", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 20, rows: 1 });
+      const outputA = createBufferedOutput(false);
+      const outputB = createBufferedOutput(false);
+      const installed: unknown[] = [];
+      const originalSetFingerprintFn = terminal.setFingerprintFn!.bind(terminal);
+
+      (terminal as any).setFingerprintFn = (fn: unknown) => {
+        installed.push(fn);
+        return originalSetFingerprintFn(fn as any);
+      };
+
+      const rendererA = createStdoutRenderer(terminal, {
+        output: outputA,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+      const rendererB = createStdoutRenderer(terminal, {
+        output: outputB,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      expect(installed.filter((fn) => typeof fn === "function")).toHaveLength(1);
+
+      rendererA.dispose();
+      outputB.clear();
+
+      terminal.put(0, 0, "x");
+      terminal.commit({ sync: true });
+
+      expect(installed[installed.length - 1]).toEqual(expect.any(Function));
+      expect(outputB.take()).toContain("x");
+
+      rendererB.dispose();
       terminal.dispose();
     });
   });
@@ -1289,7 +1362,7 @@ describe("stdout renderer column diff", () => {
       terminal.commit({ sync: true });
 
       const originalGetRow = terminal.getRow.bind(terminal);
-      const originalGetRowFingerprints = terminal.getRowFingerprints.bind(terminal);
+      const originalGetRowFingerprints = terminal.getRowFingerprints!.bind(terminal);
       const output = createBufferedOutput(false);
       const renderer = createStdoutRenderer(terminal, {
         output,

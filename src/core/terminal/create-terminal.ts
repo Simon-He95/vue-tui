@@ -999,7 +999,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       },
       setFingerprintFn(fn: ((ch: string, style: Style) => number) | null): void {
         assertNotDisposed();
-        base.setFingerprintFn(fn);
+        base.setFingerprintFn?.(fn);
       },
       getRowFingerprints(y: number): Uint32Array | null {
         assertNotDisposed();
@@ -1008,7 +1008,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
         if (!Number.isFinite(yy) || yy < 0 || yy >= size.rows) {
           throw new RangeError("Row out of bounds");
         }
-        return base.getRowFingerprints(yy);
+        return base.getRowFingerprints?.(yy) ?? null;
       },
     };
     planeTerminals.set(plane, api);

@@ -706,7 +706,7 @@ export function createStdoutRenderer(
   function rowFingerprintsForThisRenderer(y: number): Uint32Array | null {
     if (!ownsFingerprintFn || stdoutFingerprintOwners.get(terminal) !== fingerprintOwner)
       return null;
-    return terminal.getRowFingerprints(y);
+    return terminal.getRowFingerprints?.(y) ?? null;
   }
 
   type RowFingerprintSnapshot = Readonly<{
@@ -1772,6 +1772,9 @@ export function createStdoutRenderer(
     }
 
     if (disposed) return;
+    if (!ownsFingerprintFn && !stdoutFingerprintOwners.get(terminal)) {
+      installFingerprintFn();
+    }
     cliLatency?.recordStdoutRenderStart();
     pendingRender = false;
     accumulatedAllRows = false;
@@ -3126,6 +3129,15 @@ export function createStdoutRenderer(
   }
 
   function installFingerprintFn(): void {
+    if (typeof terminal.setFingerprintFn !== "function") {
+      if (ownsFingerprintFn && stdoutFingerprintOwners.get(terminal) === fingerprintOwner) {
+        stdoutFingerprintOwners.delete(terminal);
+      }
+      ownsFingerprintFn = false;
+      invalidateFingerprintBaseline();
+      return;
+    }
+
     const currentOwner = stdoutFingerprintOwners.get(terminal);
 
     if (currentOwner && currentOwner !== fingerprintOwner) {
@@ -3139,6 +3151,7 @@ export function createStdoutRenderer(
     terminal.setFingerprintFn((ch: string, style: Style) => {
       return cellFingerprint(ch, style);
     });
+    invalidateFingerprintBaseline();
   }
 
   function releaseFingerprintFn(): void {
@@ -3151,7 +3164,7 @@ export function createStdoutRenderer(
     stdoutFingerprintOwners.delete(terminal);
     ownsFingerprintFn = false;
     try {
-      terminal.setFingerprintFn(null);
+      terminal.setFingerprintFn?.(null);
     } catch {
       // ignore
     }
