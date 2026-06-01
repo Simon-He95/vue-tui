@@ -988,11 +988,15 @@ export function createStdoutRenderer(
   ): DirtySpanRenderMode => {
     if (spans.length <= 0) return "spans";
 
-    const forceSpanPatch = dirtyRowPatchMode === "span";
+    const forceSpanPatch =
+      dirtyRowPatchMode === "span" ||
+      columnDiffMode === "single-span" ||
+      columnDiffMode === "multi-span";
     const coverage = dirtySpanCoverage(spans);
     const fullRowCoverageLimit = Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD));
 
     if (
+      !forceSpanPatch &&
       dirtyRowPatchMode === "auto" &&
       useConservativeDirtyRows &&
       coverage > dirtySpanConservativeMaxCells

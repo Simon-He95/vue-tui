@@ -28,6 +28,13 @@ const cleanTerminalEnv: Record<string, string | undefined> = {
   ALACRITTY_LOG: undefined,
   TERM_PROGRAM: undefined,
   TERM: undefined,
+  VSCODE_PID: undefined,
+  VSCODE_IPC_HOOK_CLI: undefined,
+  VUE_TUI_DIRTY_ROW_PATCH_MODE: undefined,
+  DIMCODE_TUI_DIRTY_ROW_RENDER_MODE: undefined,
+  DIMCODE_TUI_DIRTY_ROW_PATCH_MODE: undefined,
+  VUE_TUI_DIRTY_SPAN_MAX_CELLS: undefined,
+  DIMCODE_TUI_DIRTY_SPAN_MAX_CELLS: undefined,
 };
 
 function createBufferedOutput(isTTY: boolean): BufferedOutput {

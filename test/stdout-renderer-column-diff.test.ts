@@ -2134,6 +2134,45 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("honors internal multi-span override on conservative TTYs", () => {
+    withTerminalEnv({ WEZTERM_PANE: "1", TERM_PROGRAM: "WezTerm", TERM: "xterm-256color" }, () => {
+      const middle = " unchanged middle that must not be rewritten ".repeat(2);
+      const percentX = 2 + middle.length;
+      const terminal = createTerminal({ cols: percentX + 8, rows: 1 });
+      const output = createBufferedOutput(true);
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtySpanConservativeMaxCells: 1,
+        __columnDiffMode: "multi-span",
+      } as any);
+
+      output.take();
+
+      terminal.write(`⠋ ${middle}000%`, { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+      output.take();
+
+      terminal.put(0, 0, "⠙");
+      terminal.write("001%", { x: percentX, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;1H");
+      expect(frame).toContain("⠙");
+      expect(frame).toContain(`\x1B[1;${percentX + 3}H1`);
+      expect(frame).not.toContain(middle);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("allows dirtyRowPatchMode=span to override conservative TTY detection", () => {
     withTerminalEnv({ WEZTERM_PANE: "1", TERM_PROGRAM: "WezTerm", TERM: "xterm-256color" }, () => {
       const middle = " unchanged middle must not be written when span mode is forced ";
