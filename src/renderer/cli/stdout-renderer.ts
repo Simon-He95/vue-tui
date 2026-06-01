@@ -933,6 +933,7 @@ export function createStdoutRenderer(
     if (spans.length <= 0) return "spans";
 
     const coverage = dirtySpanCoverage(spans);
+    const fullRowCoverageLimit = Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD));
 
     if (
       dirtyRowPatchMode === "auto" &&
@@ -942,15 +943,7 @@ export function createStdoutRenderer(
       return "row";
     }
 
-    if (coverage >= Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD))) {
-      return "row";
-    }
-
-    const fullRowCost = estimatedFullRowPatchBytes(row, y, cols, clearToEol);
-    const multiCost = estimatedSpanPatchBytes(row, spans, y, cols, clearToEol);
-    const tooManySpans = spans.length > DIRTY_SPAN_MAX_PER_ROW;
-
-    if (!tooManySpans && multiCost >= fullRowCost) {
+    if (coverage >= fullRowCoverageLimit) {
       return "row";
     }
 
@@ -958,27 +951,28 @@ export function createStdoutRenderer(
       return "spans";
     }
 
-    const contiguousCost = estimatedContiguousPatchBytes(row, spans, y, cols, clearToEol);
+    const fullRowCost = estimatedFullRowPatchBytes(row, y, cols, clearToEol);
+    const multiCost = estimatedSpanPatchBytes(row, spans, y, cols, clearToEol);
     const first = spans[0]!;
     const last = spans[spans.length - 1]!;
     const contiguousWidth = Math.max(0, last.endXExclusive - first.startX);
-    const contiguousWidthLimit = Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD));
-    const contiguousCostThreshold = fullRowCost * DIRTY_SPAN_FULL_ROW_THRESHOLD;
+    const canUseContiguous = contiguousWidth < fullRowCoverageLimit;
+    const contiguousCost = canUseContiguous
+      ? estimatedContiguousPatchBytes(row, spans, y, cols, clearToEol)
+      : Number.POSITIVE_INFINITY;
 
-    if (
-      contiguousWidth < contiguousWidthLimit &&
-      (tooManySpans
-        ? contiguousCost < fullRowCost
-        : contiguousCost < multiCost && contiguousCost < contiguousCostThreshold)
-    ) {
+    const tooManySpans = spans.length > DIRTY_SPAN_MAX_PER_ROW;
+    const effectiveMultiCost = tooManySpans ? Number.POSITIVE_INFINITY : multiCost;
+
+    if (contiguousCost < effectiveMultiCost && contiguousCost < fullRowCost) {
       return "contiguous";
     }
 
-    if (tooManySpans) {
-      return "row";
+    if (!tooManySpans && multiCost < fullRowCost) {
+      return "spans";
     }
 
-    return "spans";
+    return "row";
   };
 
   const expandSpanStart = (row: readonly Cell[], startX: number, cols: number): number => {
@@ -1966,7 +1960,8 @@ export function createStdoutRenderer(
     ) => {
       const spanStart = Math.max(0, Math.min(size.cols, Math.floor(startX)));
       const spanEnd = Math.max(spanStart, Math.min(size.cols, Math.floor(endXExclusive)));
-      if (spanStart >= spanEnd && !clearToEol) {
+      const shouldClearToEol = clearToEol && spanEnd < size.cols;
+      if (spanStart >= spanEnd && !shouldClearToEol) {
         return;
       }
       hasFrameOutput = true;
@@ -2042,7 +2037,7 @@ export function createStdoutRenderer(
         frameParts.push(currentTextParts.join(""));
       }
 
-      if (clearToEol) {
+      if (shouldClearToEol) {
         // Clear to end-of-line using the UI background color (not the terminal theme).
         // Only reset if we need a different background for the EOL clear
         if (activeStyleKey !== bgKey) {
@@ -2051,7 +2046,7 @@ export function createStdoutRenderer(
         frameParts.push("\u001B[K");
       }
       lastRenderedY = y;
-      lastRenderWasFullRow = spanStart === 0 && clearToEol;
+      lastRenderWasFullRow = spanStart === 0 && (spanEnd >= size.cols || shouldClearToEol);
     };
 
     const lastRenderableColumnInCurrentRow = (
@@ -2782,14 +2777,10 @@ export function createStdoutRenderer(
       }
     } catch (writeError) {
       if (isDebugEnabled()) getDebugLog().error(`Write ERROR:`, writeError);
-      // If ALL write methods fail, attempt to restore terminal to safe state
-      // This prevents terminal from being stuck in synchronized output mode
-      if (!isGhostty && useSyncOutput) {
-        try {
-          out.write(`\u001B[?7h${SYNC_END}`);
-        } catch {
-          // Terminal may be in bad state, but we tried our best
-        }
+      try {
+        out.write(`\u001B[?7h${!isGhostty && useSyncOutput ? SYNC_END : ""}`);
+      } catch {
+        // Terminal may be in bad state, but we tried our best.
       }
       throw writeError;
     }

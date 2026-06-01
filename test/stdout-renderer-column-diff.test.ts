@@ -1701,6 +1701,37 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("does not erase the rightmost cell after repainting a full-width row", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 6;
+      const terminal = createTerminal({ cols, rows: 1 });
+      const output = createBufferedOutput(false);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "row",
+      });
+
+      output.clear();
+
+      terminal.write("abcdef", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      const screen = createTestScreen(cols, 1);
+      applyAnsiFrame(screen, frame);
+
+      expect(screenLine(screen, 0)).toBe("abcdef");
+      expect(frame).not.toContain("\x1B[K");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("falls back to full-row span after resize fingerprint width changes", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const { terminal, output, renderer } = mountRow("abc", { cols: 3, columnDiff: true });
@@ -2059,6 +2090,39 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("uses a bounded contiguous patch instead of repainting a long row when multi-span is expensive", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 80;
+      const protectedTail = "PROTECTED_TAIL_SHOULD_STAY_OUT";
+      const chars = Array.from("a".repeat(cols));
+
+      for (let i = 0; i < protectedTail.length; i++) {
+        chars[45 + i] = protectedTail[i]!;
+      }
+
+      const { terminal, output, renderer } = mountRow(chars.join(""), {
+        cols,
+        dirtyRowPatchMode: "span",
+      });
+
+      for (const x of [0, 4, 8, 12, 16, 20, 24, 28, 32, 36]) {
+        terminal.put(x, 0, "b");
+      }
+
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      const cursorMoves = frame.match(/\x1B\[\d+;\d+H/g) ?? [];
+
+      expect(cursorMoves).toEqual(["\x1B[1;1H"]);
+      expect(frame).toContain(`${"baaa".repeat(9)}b`);
+      expect(frame).not.toContain(protectedTail);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("lets the cost model coalesce two nearby spans into one bounded patch", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const { terminal, output, renderer } = mountRow("abcdefghijklmnopqrstuvwxyz", {
@@ -2302,6 +2366,51 @@ describe("stdout renderer column diff", () => {
         expect(frame).toContain("Y");
         expect(frame).not.toContain("cdef");
       } finally {
+        renderer.dispose();
+        terminal.dispose();
+      }
+    });
+  });
+
+  it("restores line wrap when a non-sync frame write fails", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 16, rows: 1 });
+      const chunks: string[] = [];
+      let failWrites = false;
+
+      const output: CliOutput & { take: () => string } = {
+        write(chunk: string) {
+          chunks.push(String(chunk));
+          if (failWrites) throw new Error("write boom");
+        },
+        take() {
+          const out = chunks.join("");
+          chunks.length = 0;
+          return out;
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      try {
+        terminal.write("abcdef", { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+        chunks.length = 0;
+
+        failWrites = true;
+        terminal.put(0, 0, "X");
+
+        expect(() => terminal.commit({ sync: true })).toThrow("write boom");
+        expect(chunks.join("")).toContain("\x1B[?7h");
+      } finally {
+        failWrites = false;
         renderer.dispose();
         terminal.dispose();
       }
