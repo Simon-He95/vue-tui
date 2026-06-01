@@ -113,7 +113,9 @@ export type StdoutRendererOptions = Readonly<{
    *
    * - "auto": use terminal compatibility detection.
    * - "row": repaint each dirty row.
-   * - "span": use row-internal multi-span diffing.
+   * - "span": prefer row-internal multi-span diffing. Dense, fragmented, or
+   *   terminal-sensitive rows may still repaint the row when that is cheaper
+   *   or safer.
    *
    * Env fallback when this option is not provided:
    * VUE_TUI_DIRTY_ROW_PATCH_MODE, DIMCODE_TUI_DIRTY_ROW_RENDER_MODE,
@@ -570,9 +572,8 @@ export function createStdoutRenderer(
   // Track last known terminal size to detect shrinking
   let lastRenderedRows = 0;
   // Typed-array row fingerprints: double-buffered for frame-to-frame diffing.
-  // Each cell fingerprint hashes the numeric style key and full grapheme.
-  // Exact cell text ids are tracked in parallel as an additional correctness
-  // signal for cell equality.
+  // currentFP stores the exact interned style key. Text and href ids below
+  // carry the other equality dimensions.
   let fpCols = 0;
   let fpRows = 0;
   let currentFP = new Uint32Array(0);
@@ -614,36 +615,12 @@ export function createStdoutRenderer(
     prevOverlayBlockedRows = [];
     prevOverlayPartialRows = [];
   }
-  function hashString32(input: string, seed = 0x811c9dc5): number {
-    let hash = seed >>> 0;
-
-    for (let i = 0; i < input.length; i++) {
-      hash ^= input.charCodeAt(i);
-      hash = Math.imul(hash, 0x01000193) >>> 0;
-    }
-
-    return hash >>> 0;
+  function cellFingerprintFromStyleKey(_ch: string, key: number): number {
+    return key >>> 0;
   }
 
-  function hashNumber32(value: number, seed = 0x811c9dc5): number {
-    let hash = seed >>> 0;
-    let n = value >>> 0;
-
-    for (let i = 0; i < 4; i++) {
-      hash ^= n & 0xff;
-      hash = Math.imul(hash, 0x01000193) >>> 0;
-      n >>>= 8;
-    }
-
-    return hash >>> 0;
-  }
-
-  function cellFingerprintFromStyleKey(ch: string, key: number): number {
-    return hashString32(ch || " ", hashNumber32(key));
-  }
-
-  function cellFingerprint(ch: string, style: Style): number {
-    return cellFingerprintFromStyleKey(ch, styleKey(style));
+  function cellFingerprint(_ch: string, style: Style): number {
+    return styleKey(style) >>> 0;
   }
 
   function allocateCellTextId(text: string): number {
@@ -697,6 +674,11 @@ export function createStdoutRenderer(
   });
 
   const cellAt = (row: readonly Cell[], x: number): Cell => row[x] ?? BLANK_CELL;
+  type RowFingerprintSnapshot = Readonly<{
+    fp: Uint32Array;
+    hrefIds: Uint32Array;
+    textIds: Uint32Array;
+  }>;
 
   function fingerprintRow(row: readonly Cell[], y: number, cols: number): void {
     // Fast path: use pre-computed SoA fingerprints from composite buffer.
@@ -717,6 +699,34 @@ export function createStdoutRenderer(
       currentHrefIds[base + x] = hrefId(normalizeHref(cell.style.href));
       currentTextIds[base + x] = cellTextId(cell.ch);
     }
+  }
+
+  function snapshotRowFingerprints(
+    row: readonly Cell[],
+    y: number,
+    cols: number,
+  ): RowFingerprintSnapshot {
+    const fp = new Uint32Array(cols);
+    const hrefIds = new Uint32Array(cols);
+    const textIds = new Uint32Array(cols);
+    const rowFP = terminal.getRowFingerprints(y);
+
+    if (rowFP && rowFP.length >= cols && row.length >= cols) {
+      fp.set(rowFP.subarray(0, cols));
+    } else {
+      for (let x = 0; x < cols; x++) {
+        const cell = cellAt(row, x);
+        fp[x] = cellFingerprint(cell.ch, cell.style);
+      }
+    }
+
+    for (let x = 0; x < cols; x++) {
+      const cell = cellAt(row, x);
+      hrefIds[x] = hrefId(normalizeHref(cell.style.href));
+      textIds[x] = cellTextId(cell.ch);
+    }
+
+    return { fp, hrefIds, textIds };
   }
 
   const currentCellMatchesPrevious = (base: number, x: number): boolean => {
@@ -910,22 +920,18 @@ export function createStdoutRenderer(
   };
 
   const previousCellLooksLikeWideContinuation = (
-    referenceFP: Uint32Array,
     referenceTextIds: Uint32Array,
     base: number,
     x: number,
   ): boolean => {
     if (x <= 0 || x >= fpCols) return false;
     return (
-      referenceTextIds[base + x] === emptyTextId &&
-      referenceTextIds[base + x - 1] !== emptyTextId &&
-      referenceFP[base + x] !== referenceFP[base + x - 1]
+      referenceTextIds[base + x] === emptyTextId && referenceTextIds[base + x - 1] !== emptyTextId
     );
   };
 
   const expandSpanForReferenceWideGlyphs = (
     span: DirtySpan,
-    referenceFP: Uint32Array,
     referenceTextIds: Uint32Array,
     base: number,
     cols: number,
@@ -935,19 +941,15 @@ export function createStdoutRenderer(
     const limit = Math.max(0, Math.min(cols, fpCols));
 
     if (startX > 0) {
-      if (previousCellLooksLikeWideContinuation(referenceFP, referenceTextIds, base, startX)) {
+      if (previousCellLooksLikeWideContinuation(referenceTextIds, base, startX)) {
         startX--;
-      } else if (
-        previousCellLooksLikeWideContinuation(referenceFP, referenceTextIds, base, startX - 1)
-      ) {
+      } else if (previousCellLooksLikeWideContinuation(referenceTextIds, base, startX - 1)) {
         startX = Math.max(0, startX - 2);
       }
     }
 
     while (endXExclusive < limit) {
-      if (
-        !previousCellLooksLikeWideContinuation(referenceFP, referenceTextIds, base, endXExclusive)
-      ) {
+      if (!previousCellLooksLikeWideContinuation(referenceTextIds, base, endXExclusive)) {
         break;
       }
       endXExclusive++;
@@ -972,7 +974,6 @@ export function createStdoutRenderer(
     row: readonly Cell[],
     y: number,
     cols: number,
-    referenceFP: Uint32Array,
     referenceTextIds: Uint32Array,
   ): readonly DirtySpan[] => {
     if (!spans.length || !fpCols || y < 0 || y >= fpRows) return spans;
@@ -982,7 +983,7 @@ export function createStdoutRenderer(
     for (const span of spans) {
       const next = widenSpanToCurrentGlyphBoundaries(
         row,
-        expandSpanForReferenceWideGlyphs(span, referenceFP, referenceTextIds, base, cols),
+        expandSpanForReferenceWideGlyphs(span, referenceTextIds, base, cols),
         cols,
       );
       const prev = expanded[expanded.length - 1];
@@ -1101,9 +1102,7 @@ export function createStdoutRenderer(
     row: readonly Cell[],
     y: number,
     cols: number,
-    nextFP: Uint32Array = currentFP,
-    nextHrefIds: Uint32Array = currentHrefIds,
-    nextTextIds: Uint32Array = currentTextIds,
+    nextSnapshot?: RowFingerprintSnapshot | null,
   ): readonly DirtySpan[] => {
     if (!fpCols || cols !== fpCols || y >= fpRows || !fpPrevValid) {
       return fullRowDirtySpan(cols);
@@ -1111,13 +1110,12 @@ export function createStdoutRenderer(
 
     const base = y * fpCols;
 
-    if (nextFP === currentFP && nextHrefIds === currentHrefIds && nextTextIds === currentTextIds) {
+    if (!nextSnapshot) {
       return expandSpansForReferenceWideGlyphs(
         collectChangedSpans(row, cols, (x) => !currentCellMatchesPrevious(base, x)),
         row,
         y,
         cols,
-        prevFP,
         prevTextIds,
       );
     }
@@ -1125,15 +1123,14 @@ export function createStdoutRenderer(
     return expandSpansForReferenceWideGlyphs(
       collectChangedSpans(row, cols, (x) => {
         return (
-          nextFP[base + x] !== prevFP[base + x] ||
-          nextTextIds[base + x] !== prevTextIds[base + x] ||
-          nextHrefIds[base + x] !== prevHrefIds[base + x]
+          nextSnapshot.fp[x] !== prevFP[base + x] ||
+          nextSnapshot.textIds[x] !== prevTextIds[base + x] ||
+          nextSnapshot.hrefIds[x] !== prevHrefIds[base + x]
         );
       }),
       row,
       y,
       cols,
-      prevFP,
       prevTextIds,
     );
   };
@@ -1192,7 +1189,6 @@ export function createStdoutRenderer(
       row,
       y,
       cols,
-      referenceFP,
       referenceTextIds,
     );
   };
@@ -1757,28 +1753,13 @@ export function createStdoutRenderer(
       if (!sorted) outRows.sort((a, b) => a - b);
       return outRows;
     })();
-    const dirtyFP = fpPrevValid && rowsToRender ? new Uint32Array(currentFP) : null;
-    const dirtyHrefIds = fpPrevValid && rowsToRender ? new Uint32Array(currentHrefIds) : null;
-    const dirtyTextIds = fpPrevValid && rowsToRender ? new Uint32Array(currentTextIds) : null;
+    const dirtyRowSnapshots =
+      fpPrevValid && rowsToRender ? new Map<number, RowFingerprintSnapshot>() : null;
     const snapshotDirtyRowFingerprints = () => {
-      if (!dirtyFP || !dirtyHrefIds || !dirtyTextIds || !rowsToRender) return;
+      if (!dirtyRowSnapshots || !rowsToRender) return;
       for (const y of rowsToRender) {
         const row = terminal.getRow(y) as Cell[];
-        const rowFP = terminal.getRowFingerprints(y);
-        const base = y * fpCols;
-        if (rowFP && rowFP.length >= size.cols && row.length >= size.cols) {
-          dirtyFP.set(rowFP.subarray(0, size.cols), base);
-        } else {
-          for (let x = 0; x < size.cols; x++) {
-            const cell = cellAt(row, x);
-            dirtyFP[base + x] = cellFingerprint(cell.ch, cell.style);
-          }
-        }
-        for (let x = 0; x < size.cols; x++) {
-          const cell = cellAt(row, x);
-          dirtyHrefIds[base + x] = hrefId(normalizeHref(cell.style.href));
-          dirtyTextIds[base + x] = cellTextId(cell.ch);
-        }
+        dirtyRowSnapshots.set(y, snapshotRowFingerprints(row, y, size.cols));
       }
     };
     snapshotDirtyRowFingerprints();
@@ -2492,14 +2473,7 @@ export function createStdoutRenderer(
           continue;
         }
 
-        const spans = resolveChangedSpans(
-          row,
-          y,
-          size.cols,
-          dirtyFP ?? currentFP,
-          dirtyHrefIds ?? currentHrefIds,
-          dirtyTextIds ?? currentTextIds,
-        );
+        const spans = resolveChangedSpans(row, y, size.cols, dirtyRowSnapshots?.get(y) ?? null);
         if (!spans.length) {
           continue;
         }
