@@ -876,7 +876,6 @@ export function createStdoutRenderer(
     cols: number,
     clearToEol: boolean,
   ): DirtySpanRenderMode => {
-    if (dirtyRowPatchMode === "auto" && useConservativeDirtyRows && clearToEol) return "row";
     if (spans.length <= 0) return "spans";
     if (
       dirtyRowPatchMode === "auto" &&
@@ -2046,11 +2045,9 @@ export function createStdoutRenderer(
 
       const rowCols = size.cols;
       const clearStartX = resolveTailClearStartX(rowY, rowCols, rewriteTail, blankFP);
+      const paintTailInsteadOfEscK =
+        clearStartX != null && dirtyRowPatchMode === "auto" && useConservativeDirtyRows;
 
-      // Compact trailing default-blank changes into one ESC[K before deciding
-      // whether the dirty spans are too dense. Otherwise short text replacing
-      // long text can look like a huge changed span and fall back to a broader
-      // repaint that rewrites unchanged prefixes.
       const spansToPaint: DirtySpan[] = [];
 
       for (const span of rawSpans) {
@@ -2059,7 +2056,7 @@ export function createStdoutRenderer(
 
         if (endXExclusive <= startX) continue;
 
-        if (clearStartX != null) {
+        if (clearStartX != null && !paintTailInsteadOfEscK) {
           // Everything at/after clearStartX will be handled by ESC[K.
           if (startX >= clearStartX) continue;
 
@@ -2079,25 +2076,47 @@ export function createStdoutRenderer(
         });
       }
 
-      // Evaluate fallback after default-tail compaction. Otherwise a long default
-      // blank tail can incorrectly force a broader repaint for text-shrink frames.
-      const clearToEolForCost = clearStartX != null && clearStartX < size.cols;
+      if (paintTailInsteadOfEscK && clearStartX != null && clearStartX < rowCols) {
+        const prev = spansToPaint[spansToPaint.length - 1];
+
+        if (prev && clearStartX <= prev.endXExclusive + DIRTY_SPAN_MERGE_GAP_CELLS) {
+          spansToPaint[spansToPaint.length - 1] = {
+            startX: prev.startX,
+            endXExclusive: rowCols,
+          };
+        } else {
+          spansToPaint.push({
+            startX: clearStartX,
+            endXExclusive: rowCols,
+          });
+        }
+      }
+
+      const clearToEolForCost =
+        clearStartX != null && clearStartX < rowCols && !paintTailInsteadOfEscK;
       const renderMode =
-        !shouldUseMultiDirtySpans() && spansToPaint.length > 0
+        paintTailInsteadOfEscK && spansToPaint.length > 0
           ? "contiguous"
-          : resolveDirtySpanRenderMode(row, spansToPaint, rowY, size.cols, clearToEolForCost);
+          : !shouldUseMultiDirtySpans() && spansToPaint.length > 0
+            ? "contiguous"
+            : resolveDirtySpanRenderMode(row, spansToPaint, rowY, rowCols, clearToEolForCost);
 
       if (renderMode === "row") {
-        renderRow(rowY, row, 0, size.cols, false);
+        renderRow(rowY, row, 0, rowCols, false);
         return;
       } else if (renderMode === "contiguous") {
-        const first = spansToPaint[0]!;
-        const last = spansToPaint[spansToPaint.length - 1]!;
-        const rewriteEnd =
-          clearStartX == null ? last.endXExclusive : Math.min(last.endXExclusive, clearStartX);
+        const first = spansToPaint[0];
+        const last = spansToPaint[spansToPaint.length - 1];
 
-        if (rewriteEnd > first.startX) {
-          renderRow(rowY, row, first.startX, rewriteEnd, false);
+        if (first && last) {
+          const rewriteEnd =
+            clearStartX == null || paintTailInsteadOfEscK
+              ? last.endXExclusive
+              : Math.min(last.endXExclusive, clearStartX);
+
+          if (rewriteEnd > first.startX) {
+            renderRow(rowY, row, first.startX, rewriteEnd, false);
+          }
         }
       } else {
         for (const span of spansToPaint) {
@@ -2107,7 +2126,7 @@ export function createStdoutRenderer(
 
       // Clear only if there is actually a valid cell position inside the viewport.
       // Cursoring to cols + 1 is undefined-ish across terminals and can wrap.
-      if (clearStartX != null) {
+      if (clearStartX != null && !paintTailInsteadOfEscK) {
         renderRow(rowY, row, clearStartX, clearStartX, true);
       }
     };

@@ -380,6 +380,28 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("updates only the text span when the spinner is unchanged", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const { terminal, output, renderer } = mountRow("⠋ Installing", {
+        cols: 80,
+        dirtyRowPatchMode: "span",
+      });
+
+      terminal.write("Building  ", { x: 2, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;3H");
+      expect(frame).toContain("Building");
+      expect(frame).not.toContain("⠋");
+      expect(frame).not.toContain("Installing");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("updates two distant changed regions without rewriting the unchanged middle", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const middle = " building package with a deliberately long unchanged middle segment ";
@@ -782,6 +804,39 @@ describe("stdout renderer column diff", () => {
       renderer.dispose();
       terminal.dispose();
     });
+  });
+
+  it("paints a shortened text tail without repainting unchanged prefix on conservative TTYs", () => {
+    withTerminalEnv(
+      {
+        WEZTERM_PANE: "1",
+        TERM_PROGRAM: "WezTerm",
+        TERM: "xterm-256color",
+      },
+      () => {
+        const longText = "Installing dependencies and building cache from remote registry";
+        const { terminal, output, renderer } = mountRow(`⠙ ${longText}`, {
+          cols: 100,
+          isTTY: true,
+        });
+
+        terminal.clear(2, 0, longText.length, 1);
+        terminal.write("Done", { x: 2, y: 0 });
+        terminal.commit({ sync: true });
+
+        const frame = output.take();
+
+        expect(frame).toContain("\x1B[1;3H");
+        expect(frame).toContain("Done");
+        expect(frame).not.toContain("\x1B[K");
+        expect(frame).not.toContain("⠙");
+        expect(frame).not.toContain("Installing");
+        expect(frame).not.toContain("remote registry");
+
+        renderer.dispose();
+        terminal.dispose();
+      },
+    );
   });
 
   it("does not clear styled blank cells on the right when text shrinks", () => {
