@@ -172,7 +172,10 @@ export function setFingerprintFn(buffer: GridBuffer, fn: CellFingerprintFn | nul
  */
 export function getRowFingerprints(buffer: GridBuffer, y: number): Uint32Array | null {
   if (!buffer.soaFingerprints) return null;
-  const physY = physicalRowIndex(buffer, y);
+  if (buffer.rows <= 0 || buffer.cols <= 0) return null;
+  const yy = Math.floor(y);
+  if (!Number.isFinite(yy) || yy < 0 || yy >= buffer.rows) return null;
+  const physY = physicalRowIndex(buffer, yy);
   const base = physY * buffer.cols;
   return buffer.soaFingerprints.subarray(base, base + buffer.cols);
 }

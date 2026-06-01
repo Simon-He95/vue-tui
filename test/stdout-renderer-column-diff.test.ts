@@ -879,7 +879,7 @@ describe("stdout renderer column diff", () => {
     });
   });
 
-  it("paints a shortened text tail without repainting unchanged prefix on conservative TTYs", () => {
+  it("repaints a shortened text tail as a row on conservative TTYs when coverage is large", () => {
     withTerminalEnv(
       {
         WEZTERM_PANE: "1",
@@ -899,12 +899,44 @@ describe("stdout renderer column diff", () => {
 
         const frame = output.take();
 
-        expect(frame).toContain("\x1B[1;3H");
+        expect(frame).toContain("\x1B[1;1H");
+        expect(frame).toContain("⠙");
         expect(frame).toContain("Done");
         expect(frame).not.toContain("\x1B[K");
-        expect(frame).not.toContain("⠙");
         expect(frame).not.toContain("Installing");
         expect(frame).not.toContain("remote registry");
+
+        renderer.dispose();
+        terminal.dispose();
+      },
+    );
+  });
+
+  it("honors conservative max coverage when tail clear is painted instead of ESC[K", () => {
+    withTerminalEnv(
+      {
+        WEZTERM_PANE: "1",
+        TERM_PROGRAM: "WezTerm",
+        TERM: "xterm-256color",
+      },
+      () => {
+        const longText = "Installing dependencies and building cache from remote registry";
+        const { terminal, output, renderer } = mountRow(`⠙ ${longText}`, {
+          cols: 100,
+          isTTY: true,
+          dirtySpanConservativeMaxCells: 1,
+        });
+
+        terminal.clear(2, 0, longText.length, 1);
+        terminal.write("Done", { x: 2, y: 0 });
+        terminal.commit({ sync: true });
+
+        const frame = output.take();
+
+        expect(frame).toContain("\x1B[1;1H");
+        expect(frame).toContain("⠙");
+        expect(frame).toContain("Done");
+        expect(frame).not.toContain("\x1B[K");
 
         renderer.dispose();
         terminal.dispose();

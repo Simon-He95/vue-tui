@@ -1003,7 +1003,12 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       },
       getRowFingerprints(y: number): Uint32Array | null {
         assertNotDisposed();
-        return base.getRowFingerprints(y);
+        const yy = Math.floor(y);
+        const size = base.size();
+        if (!Number.isFinite(yy) || yy < 0 || yy >= size.rows) {
+          throw new RangeError("Row out of bounds");
+        }
+        return base.getRowFingerprints(yy);
       },
     };
     planeTerminals.set(plane, api);
@@ -1213,7 +1218,11 @@ export function createTerminal(opts: TerminalOptions): Terminal {
 
     getRowFingerprints(y: number): Uint32Array | null {
       assertNotDisposed();
-      return getRowFingerprints(compositeBuffer, y);
+      const yy = Math.floor(y);
+      if (!Number.isFinite(yy) || yy < 0 || yy >= compositeBuffer.rows) {
+        throw new RangeError("Row out of bounds");
+      }
+      return getRowFingerprints(compositeBuffer, yy);
     },
   };
 

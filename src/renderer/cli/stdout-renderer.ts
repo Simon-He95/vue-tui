@@ -2106,11 +2106,9 @@ export function createStdoutRenderer(
       const clearToEolForCost =
         clearStartX != null && clearStartX < rowCols && !paintTailInsteadOfEscK;
       const renderMode =
-        paintTailInsteadOfEscK && spansToPaint.length > 0
+        !shouldUseMultiDirtySpans() && spansToPaint.length > 0
           ? "contiguous"
-          : !shouldUseMultiDirtySpans() && spansToPaint.length > 0
-            ? "contiguous"
-            : resolveDirtySpanRenderMode(row, spansToPaint, rowY, rowCols, clearToEolForCost);
+          : resolveDirtySpanRenderMode(row, spansToPaint, rowY, rowCols, clearToEolForCost);
 
       if (renderMode === "row") {
         renderRow(rowY, row, 0, rowCols, false);
