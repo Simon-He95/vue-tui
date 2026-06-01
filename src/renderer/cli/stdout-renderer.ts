@@ -409,15 +409,22 @@ export function createStdoutRenderer(
   const styleKeyIndex = new Map<string, number>();
   let nextStyleKey = 1;
   const MAX_STYLE_KEYS = 131_072;
+  const MAX_UINT32_INTERN_ID = 0xffff_ffff;
   const STYLE_KEY_SEP = "\u001F";
   const normalizedHrefCache = new Map<string, string | null>();
   const MAX_HREF_CACHE = 2048;
+  let fingerprintInternResetRequiresBaseline = false;
+
+  function invalidateFingerprintBaseline(): void {
+    fpPrevValid = false;
+    fingerprintInternResetRequiresBaseline = true;
+  }
 
   function resetStyleKeyIndex(resetIds = false): void {
     styleKeyCache = new WeakMap<Style, number>();
     styleKeyIndex.clear();
     if (resetIds) nextStyleKey = 1;
-    fpPrevValid = false;
+    invalidateFingerprintBaseline();
   }
 
   function internStyleKey(signature: string): number {
@@ -427,7 +434,7 @@ export function createStdoutRenderer(
     if (styleKeyIndex.size >= MAX_STYLE_KEYS) {
       resetStyleKeyIndex();
     }
-    if (nextStyleKey >= 0xffff_ffff) resetStyleKeyIndex(true);
+    if (nextStyleKey >= MAX_UINT32_INTERN_ID) resetStyleKeyIndex(true);
 
     const key = nextStyleKey++;
     styleKeyIndex.set(signature, key);
@@ -586,10 +593,10 @@ export function createStdoutRenderer(
   let nextHrefId = 1;
   const MAX_HREF_IDS = 8192;
   let hrefIndexResetRequiresBaseline = false;
-  function resetHrefIndex(): void {
+  function resetHrefIndex(resetIds = false): void {
     hrefIndex.clear();
-    nextHrefId = 1;
-    fpPrevValid = false;
+    if (resetIds) nextHrefId = 1;
+    invalidateFingerprintBaseline();
     hrefIndexResetRequiresBaseline = true;
   }
   function ensureFingerprints(cols: number, rows: number): void {
@@ -645,20 +652,21 @@ export function createStdoutRenderer(
     return id;
   }
 
-  function resetCellTextIdCache(): void {
+  function resetCellTextIdCache(resetIds = false): void {
     cellTextIdCache.clear();
-    nextCellTextId = 1;
+    if (resetIds) nextCellTextId = 1;
     blankTextId = allocateCellTextId(" ");
     emptyTextId = allocateCellTextId("");
-    fpPrevValid = false;
+    invalidateFingerprintBaseline();
   }
 
   function cellTextId(text: string): number {
     let cached = cellTextIdCache.get(text);
     if (cached !== undefined) return cached;
 
-    if (cellTextIdCache.size >= MAX_CELL_TEXT_IDS || nextCellTextId >= 0xffff_ffff) {
-      resetCellTextIdCache();
+    const mustResetTextIds = nextCellTextId >= MAX_UINT32_INTERN_ID - 2;
+    if (cellTextIdCache.size >= MAX_CELL_TEXT_IDS || mustResetTextIds) {
+      resetCellTextIdCache(mustResetTextIds);
       cached = cellTextIdCache.get(text);
       if (cached !== undefined) return cached;
     }
@@ -666,14 +674,15 @@ export function createStdoutRenderer(
     return allocateCellTextId(text);
   }
 
-  resetCellTextIdCache();
+  resetCellTextIdCache(true);
 
   function hrefId(href: string | null): number {
     if (!href) return 0;
     const cached = hrefIndex.get(href);
     if (cached != null) return cached;
-    if (hrefIndex.size >= MAX_HREF_IDS || nextHrefId >= 0xffff_ffff) {
-      resetHrefIndex();
+    const mustResetHrefIds = nextHrefId >= MAX_UINT32_INTERN_ID;
+    if (hrefIndex.size >= MAX_HREF_IDS || mustResetHrefIds) {
+      resetHrefIndex(mustResetHrefIds);
     }
     const id = nextHrefId++;
     hrefIndex.set(href, id);
@@ -851,10 +860,6 @@ export function createStdoutRenderer(
     }
 
     if (spans.length === 1) {
-      return "spans";
-    }
-
-    if (spans.length === 2) {
       return "spans";
     }
 
@@ -1711,8 +1716,13 @@ export function createStdoutRenderer(
     const bgKey = styleKeyFromParts({ bg: defaultBg });
     const blankFP = cellFingerprintFromStyleKey(" ", bgKey);
     let dirtySorted = true;
-    const forceFullRender = hrefIndexResetRequiresBaseline;
-    if (forceFullRender) hrefIndexResetRequiresBaseline = false;
+    const forceFullRender =
+      hrefIndexResetRequiresBaseline || fingerprintInternResetRequiresBaseline;
+    if (forceFullRender) {
+      hrefIndexResetRequiresBaseline = false;
+      fingerprintInternResetRequiresBaseline = false;
+      fpPrevValid = false;
+    }
     const normalizedScrollOperations = (() => {
       if (!scrollOperations?.length) return null;
       const outOps: TerminalScrollOperation[] = [];
@@ -1727,7 +1737,7 @@ export function createStdoutRenderer(
       return outOps;
     })();
     let rowsToRender = (() => {
-      if (forceFullRender) return null;
+      if (forceFullRender || !fpPrevValid) return null;
       if (!dirtyRows || dirtyRows.length === 0) return null;
       const outRows: number[] = [];
       outRows.length = dirtyRows.length;
@@ -2532,7 +2542,7 @@ export function createStdoutRenderer(
     const tmpTextIds = prevTextIds;
     prevTextIds = currentTextIds;
     currentTextIds = tmpTextIds;
-    fpPrevValid = !hrefIndexResetRequiresBaseline;
+    fpPrevValid = !hrefIndexResetRequiresBaseline && !fingerprintInternResetRequiresBaseline;
     prevOverlayBlockedRows = overlayCoverage.blockedRows;
     prevOverlayPartialRows = overlayCoverage.partialRows;
 

@@ -1598,6 +1598,29 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("lets the cost model coalesce two nearby spans into one bounded patch", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const { terminal, output, renderer } = mountRow("abcdefghijklmnopqrstuvwxyz", {
+        cols: 80,
+        dirtyRowPatchMode: "span",
+      });
+
+      terminal.put(0, 0, "A");
+      terminal.put(4, 0, "E");
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;1H");
+      expect(frame).toContain("AbcdE");
+      expect(frame).not.toContain("\x1B[1;5H");
+      expect(frame).not.toContain("fghijklmnopqrstuvwxyz");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("falls back to one contiguous span when changed spans are too fragmented", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const unchangedMiddle = " contiguous span fallback keeps unchanged words visible ";
