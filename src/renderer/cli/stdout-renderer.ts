@@ -175,6 +175,9 @@ export function createStdoutRenderer(
   const output: CliOutput | undefined = options?.output ?? (process.stdout as any);
   if (!output) throw new Error("createStdoutRenderer requires a Node stdout-like output");
   const out = output;
+  const outputFd = Number((out as any).fd);
+  const canUseSyncStdout =
+    options?.output == null && Number.isInteger(outputFd) && outputFd === 1;
   const fingerprintOwner = Symbol("stdout-renderer");
   let ownsFingerprintFn = false;
   const fingerprintTerminal = terminal as TerminalFingerprintHooks;
@@ -1851,7 +1854,7 @@ export function createStdoutRenderer(
       if (!sorted) outRows.sort((a, b) => a - b);
       return outRows;
     })();
-    if (rowsToRender?.length === 0 && !normalizedScrollOperations) {
+    if (rowsToRender?.length === 0 && !normalizedScrollOperations && !getImeAnchor) {
       if (isDebugEnabled()) getDebugLog().render(" No valid dirty rows; frame skipped");
       cliLatency?.recordStdoutNoOutput();
       return;
@@ -2669,6 +2672,7 @@ export function createStdoutRenderer(
     }
 
     if (!hasFrameOutput) {
+      commitRenderBaseline();
       if (isDebugEnabled()) getDebugLog().render(" No-op frame skipped");
       cliLatency?.recordStdoutNoOutput();
       return;
@@ -2761,10 +2765,9 @@ export function createStdoutRenderer(
     const resolveWriteMode = (frameSizeBytes: number): "stream" | "sync" | "chunked" => {
       if (isGhostty) return "chunked";
 
-      const canWriteSync = (out as any).fd === 1;
       const preferChunked = frameSizeBytes >= chunkThresholdBytes || writeEmaMs >= 24;
       if (preferChunked) return "chunked";
-      if (canWriteSync && frameSizeBytes <= syncMaxBytes) return "sync";
+      if (canUseSyncStdout && frameSizeBytes <= syncMaxBytes) return "sync";
       return "stream";
     };
     const writeMode = resolveWriteMode(frameBytes);
@@ -2779,10 +2782,10 @@ export function createStdoutRenderer(
           );
         }
         writeChunked(frame);
-      } else if (writeMode === "sync" && (out as any).fd === 1) {
+      } else if (writeMode === "sync" && canUseSyncStdout) {
         if (isDebugEnabled()) getDebugLog().render(` Using writeSync`);
         try {
-          writeFdSync(1, frame);
+          writeFdSync(outputFd, frame);
         } catch {
           // Fall back to stream write if sync fails
           if (isDebugEnabled()) {
@@ -3076,7 +3079,7 @@ export function createStdoutRenderer(
     } else if (dirtyRows.length === 0) {
       if (scrollOperations?.length) {
         mergeScrollOperations(scrollOperations);
-      } else if (!accumulatedAllRows && accumulatedDirtyCount === 0) {
+      } else if (!accumulatedAllRows && accumulatedDirtyCount === 0 && !getImeAnchor) {
         cliLatency?.recordStdoutQueued(0);
         return;
       }

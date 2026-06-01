@@ -2387,6 +2387,38 @@ describe("stdout renderer column diff", () => {
     );
   });
 
+  it("does not bypass a custom output object that exposes fd=1", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 8, rows: 1 });
+      let out = "";
+      const output = {
+        isTTY: true,
+        fd: 1,
+        write(chunk: string) {
+          out += String(chunk);
+        },
+      };
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+      });
+
+      try {
+        out = "";
+        terminal.write("A", { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+
+        expect(out).toContain("A");
+      } finally {
+        renderer.dispose();
+        terminal.dispose();
+      }
+    });
+  });
+
   it("does not advance the stdout diff baseline when a frame write fails", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const terminal = createTerminal({ cols: 16, rows: 1 });

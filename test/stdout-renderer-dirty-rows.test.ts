@@ -652,6 +652,37 @@ describe("stdout renderer", () => {
     renderer.dispose();
   });
 
+  it("moves the IME cursor on an empty dirty-row render", () => {
+    const terminal = createTerminal({ cols: 10, rows: 2 });
+    let out = "";
+    let anchor: { cellX: number; cellY: number } | null = null;
+    const output = {
+      isTTY: false,
+      write(chunk: string) {
+        out += chunk;
+      },
+    };
+    const renderer = createStdoutRenderer(terminal, {
+      output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      useSyncOutput: false,
+      getImeAnchor: () => anchor,
+    });
+
+    terminal.write("seed", { x: 0, y: 0 });
+    terminal.commit({ sync: true });
+
+    out = "";
+    anchor = { cellX: 2, cellY: 1 };
+    (renderer as any).render([], true);
+
+    expect(out).toContain("\u001B[2;3H");
+
+    renderer.dispose();
+  });
+
   it("uses scroll regions for dense scroll-like partial updates before falling back to full repaint", () => {
     const prevThreshold = process.env.DIMCODE_TUI_DIRTY_FULL_THRESHOLD;
     const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
