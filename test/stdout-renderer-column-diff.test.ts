@@ -402,6 +402,26 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("rejects invalid internal column diff modes", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 40, rows: 1 });
+      const output = createBufferedOutput(false);
+
+      expect(() =>
+        createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          useSyncOutput: false,
+          __columnDiffMode: "bad-mode",
+        } as any),
+      ).toThrow(/Invalid __columnDiffMode=.*single-span.*multi-span.*full-row/);
+
+      terminal.dispose();
+    });
+  });
+
   it("releases renderer-owned fingerprint function on dispose", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const terminal = createTerminal({ cols: 20, rows: 1 });
@@ -429,6 +449,38 @@ describe("stdout renderer column diff", () => {
 
       expect(installed[installed.length - 1]).toBe(null);
 
+      terminal.dispose();
+    });
+  });
+
+  it("does not override a pre-existing non-renderer fingerprint provider", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 8, rows: 1 });
+      const output = createBufferedOutput(false);
+      const externalFingerprint = (ch: string, _style: unknown) => ch.charCodeAt(0) || 0;
+
+      terminal.write("abc", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+      terminal.setFingerprintFn(externalFingerprint as any);
+
+      const before = Array.from(terminal.getRowFingerprints(0)!);
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      expect(Array.from(terminal.getRowFingerprints(0)!)).toEqual(before);
+
+      renderer.dispose();
+
+      expect(Array.from(terminal.getRowFingerprints(0)!)).toEqual(before);
+
+      terminal.setFingerprintFn(null);
       terminal.dispose();
     });
   });

@@ -376,8 +376,24 @@ export function createStdoutRenderer(
     const value = Number(raw);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : 32;
   })();
-  const columnDiffMode =
-    (options as InternalStdoutRendererOptions | undefined)?.__columnDiffMode ?? "auto";
+  function resolveInternalColumnDiffMode(): InternalColumnDiffMode {
+    const value = (options as InternalStdoutRendererOptions | undefined)?.__columnDiffMode;
+    if (value == null) return "auto";
+    if (
+      value === "auto" ||
+      value === "single-span" ||
+      value === "multi-span" ||
+      value === "full-row"
+    ) {
+      return value;
+    }
+    throw new Error(
+      `Invalid __columnDiffMode=${JSON.stringify(
+        value,
+      )}; expected "auto", "single-span", "multi-span", or "full-row".`,
+    );
+  }
+  const columnDiffMode = resolveInternalColumnDiffMode();
   function resolveEffectiveDirtyRowPatchMode(): EffectiveDirtyRowPatchMode {
     switch (columnDiffMode) {
       case "full-row":
@@ -465,6 +481,7 @@ export function createStdoutRenderer(
   let fingerprintBaselineGeneration = 0;
   let activeRenderBaselineGeneration = 0;
   let terminalFingerprintFnDirty = false;
+  let fingerprintInstallBlockedByExternalProvider = false;
 
   function invalidateFingerprintBaseline(): void {
     fpPrevValid = false;
@@ -742,6 +759,26 @@ export function createStdoutRenderer(
     if (!ownsFingerprintFn || stdoutFingerprintOwners.get(terminal) !== fingerprintOwner)
       return null;
     return fingerprintTerminal.getRowFingerprints?.(y) ?? null;
+  }
+
+  function hasActiveExternalFingerprintProvider(): boolean {
+    if (!canInstallTerminalFingerprintFn()) return false;
+    if (stdoutFingerprintOwners.has(terminal)) return false;
+
+    try {
+      const rows = terminal.size().rows;
+      if (rows <= 0) return false;
+      return fingerprintTerminal.getRowFingerprints!(0) != null;
+    } catch {
+      return false;
+    }
+  }
+
+  function shouldAttemptFingerprintInstall(): boolean {
+    return (
+      !fingerprintInstallBlockedByExternalProvider ||
+      !hasActiveExternalFingerprintProvider()
+    );
   }
 
   type RowFingerprintSnapshot = Readonly<{
@@ -1849,7 +1886,8 @@ export function createStdoutRenderer(
     if (
       (!ownsFingerprintFn || terminalFingerprintFnDirty) &&
       (!currentFingerprintOwner || currentFingerprintOwner === fingerprintOwner) &&
-      canInstallTerminalFingerprintFn()
+      canInstallTerminalFingerprintFn() &&
+      shouldAttemptFingerprintInstall()
     ) {
       installFingerprintFn(terminalFingerprintFnDirty);
     }
@@ -3222,10 +3260,21 @@ export function createStdoutRenderer(
       }
       ownsFingerprintFn = false;
       terminalFingerprintFnDirty = true;
+      fingerprintInstallBlockedByExternalProvider = false;
       return;
     }
 
     const currentOwner = stdoutFingerprintOwners.get(terminal);
+
+    if (!currentOwner && !ownsFingerprintFn && hasActiveExternalFingerprintProvider()) {
+      fingerprintInstallBlockedByExternalProvider = true;
+      ownsFingerprintFn = false;
+      terminalFingerprintFnDirty = false;
+      invalidateFingerprintBaseline();
+      return;
+    }
+
+    fingerprintInstallBlockedByExternalProvider = false;
 
     if (currentOwner && currentOwner !== fingerprintOwner) {
       if (ownsFingerprintFn) invalidateFingerprintBaseline();
