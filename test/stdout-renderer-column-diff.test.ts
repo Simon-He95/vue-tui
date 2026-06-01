@@ -267,6 +267,26 @@ function mountRow(
 const inverseStyle = "\x1B[7m";
 
 describe("stdout renderer column diff", () => {
+  it("rejects invalid runtime dirtyRowPatchMode values", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 40, rows: 1 });
+      const output = createBufferedOutput(false);
+
+      expect(() =>
+        createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          useSyncOutput: false,
+          dirtyRowPatchMode: "cell" as any,
+        }),
+      ).toThrow(/Invalid dirtyRowPatchMode=.*auto.*row.*span/);
+
+      terminal.dispose();
+    });
+  });
+
   it("keeps OSC8 links enabled for custom outputs that omit isTTY", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const terminal = createTerminal({ cols: 80, rows: 1 });

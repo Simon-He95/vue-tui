@@ -115,14 +115,17 @@ export type StdoutRendererOptions = Readonly<{
    * - "row": repaint each dirty row.
    * - "span": use row-internal multi-span diffing.
    *
-   * Env override: VUE_TUI_DIRTY_ROW_PATCH_MODE or DIMCODE_TUI_DIRTY_ROW_RENDER_MODE.
+   * Env fallback when this option is not provided:
+   * VUE_TUI_DIRTY_ROW_PATCH_MODE, DIMCODE_TUI_DIRTY_ROW_RENDER_MODE,
+   * or DIMCODE_TUI_DIRTY_ROW_PATCH_MODE.
    */
   dirtyRowPatchMode?: DirtyRowPatchMode;
   /**
    * Max changed-cell coverage to patch in auto mode on conservative TTYs.
    * Larger dirty rows fall back to full-row repaint.
    *
-   * Env override: VUE_TUI_DIRTY_SPAN_MAX_CELLS or DIMCODE_TUI_DIRTY_SPAN_MAX_CELLS.
+   * Env fallback when this option is not provided:
+   * VUE_TUI_DIRTY_SPAN_MAX_CELLS or DIMCODE_TUI_DIRTY_SPAN_MAX_CELLS.
    */
   dirtySpanConservativeMaxCells?: number;
   /**
@@ -133,6 +136,8 @@ export type StdoutRendererOptions = Readonly<{
    * - "auto" => "auto"
    *
    * When both are provided, dirtyRowPatchMode wins.
+   *
+   * @deprecated Use dirtyRowPatchMode instead.
    */
   columnDiff?: boolean | "auto";
   /** Optional function to get IME cursor position, included in render output atomically. */
@@ -280,7 +285,18 @@ export function createStdoutRenderer(
     return value === "auto" || value === "row" || value === "span" ? value : null;
   };
   function resolveDirtyRowPatchMode(): DirtyRowPatchMode {
-    if (options?.dirtyRowPatchMode) return options.dirtyRowPatchMode;
+    const explicitMode = options?.dirtyRowPatchMode;
+    if (explicitMode != null) {
+      const optionMode = normalizeDirtyRowPatchMode(explicitMode);
+      if (!optionMode) {
+        throw new Error(
+          `Invalid dirtyRowPatchMode=${JSON.stringify(
+            explicitMode,
+          )}; expected "auto", "row", or "span".`,
+        );
+      }
+      return optionMode;
+    }
 
     const envMode = normalizeDirtyRowPatchMode(
       firstNonEmptyEnv(env, "VUE_TUI_DIRTY_ROW_PATCH_MODE", "DIMCODE_TUI_DIRTY_ROW_RENDER_MODE") ??
