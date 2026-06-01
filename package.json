@@ -1,6 +1,6 @@
 {
   "name": "@simon_he/vue-tui",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Vue 3 terminal UI components and renderers for browser DOM, CLI stdout, logs, markdown transcripts, and agent consoles",
   "keywords": [
     "agent-console",
