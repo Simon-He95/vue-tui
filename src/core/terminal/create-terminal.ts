@@ -997,13 +997,18 @@ export function createTerminal(opts: TerminalOptions): Terminal {
         if (count == null) return all;
         return all.slice(Math.max(0, all.length - Math.max(0, Math.floor(count))));
       },
-      setFingerprintFn(fn: (ch: string, style: Style) => number): void {
+      setFingerprintFn(fn: ((ch: string, style: Style) => number) | null): void {
         assertNotDisposed();
-        base.setFingerprintFn(fn);
+        base.setFingerprintFn?.(fn);
       },
       getRowFingerprints(y: number): Uint32Array | null {
         assertNotDisposed();
-        return base.getRowFingerprints(y);
+        const yy = Math.floor(y);
+        const size = base.size();
+        if (!Number.isFinite(yy) || yy < 0 || yy >= size.rows) {
+          throw new RangeError("Row out of bounds");
+        }
+        return base.getRowFingerprints?.(yy) ?? null;
       },
     };
     planeTerminals.set(plane, api);
@@ -1206,14 +1211,18 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       return all.slice(Math.max(0, all.length - Math.max(0, Math.floor(count))));
     },
 
-    setFingerprintFn(fn: (ch: string, style: Style) => number): void {
+    setFingerprintFn(fn: ((ch: string, style: Style) => number) | null): void {
       assertNotDisposed();
       setFingerprintFn(compositeBuffer, fn);
     },
 
     getRowFingerprints(y: number): Uint32Array | null {
       assertNotDisposed();
-      return getRowFingerprints(compositeBuffer, y);
+      const yy = Math.floor(y);
+      if (!Number.isFinite(yy) || yy < 0 || yy >= compositeBuffer.rows) {
+        throw new RangeError("Row out of bounds");
+      }
+      return getRowFingerprints(compositeBuffer, yy);
     },
   };
 

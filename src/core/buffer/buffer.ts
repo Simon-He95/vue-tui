@@ -97,7 +97,7 @@ export interface GridBuffer {
   scrollback: Cell[][];
   scrollbackLimit: number;
   rowPool: Cell[][];
-  // SoA fingerprint array: flat[physicalRow * cols + x] = (styleKey << 16) | charHash16
+  // SoA fingerprint array: flat[physicalRow * cols + x] = renderer-provided fingerprint
   // Pre-computed during cell writes when fingerprintFn is set.
   soaFingerprints: Uint32Array | null;
   fingerprintFn: CellFingerprintFn | null;
@@ -143,19 +143,18 @@ export function clamp(n: number, min: number, max: number): number {
 }
 
 /**
- * Register a fingerprint function on the buffer. This enables SoA fingerprint
+ * Register or clear a fingerprint function on the buffer. This enables SoA fingerprint
  * pre-computation: cell writes will update fingerprints inline, and the renderer
  * can read them via getRowFingerprints() instead of per-cell hash computation.
  */
-export function setFingerprintFn(buffer: GridBuffer, fn: CellFingerprintFn): void {
+export function setFingerprintFn(buffer: GridBuffer, fn: CellFingerprintFn | null): void {
   buffer.fingerprintFn = fn;
   const len = buffer.rows * buffer.cols;
-  if (!len) {
+  if (!fn || !len) {
     buffer.soaFingerprints = null;
     return;
   }
   buffer.soaFingerprints = new Uint32Array(len);
-  // Compute initial fingerprints for all cells
   for (let y = 0; y < buffer.rows; y++) {
     const row = getBufferRow(buffer, y);
     const physY = physicalRowIndex(buffer, y);
@@ -173,7 +172,10 @@ export function setFingerprintFn(buffer: GridBuffer, fn: CellFingerprintFn): voi
  */
 export function getRowFingerprints(buffer: GridBuffer, y: number): Uint32Array | null {
   if (!buffer.soaFingerprints) return null;
-  const physY = physicalRowIndex(buffer, y);
+  if (buffer.rows <= 0 || buffer.cols <= 0) return null;
+  const yy = Math.floor(y);
+  if (!Number.isFinite(yy) || yy < 0 || yy >= buffer.rows) return null;
+  const physY = physicalRowIndex(buffer, yy);
   const base = physY * buffer.cols;
   return buffer.soaFingerprints.subarray(base, base + buffer.cols);
 }

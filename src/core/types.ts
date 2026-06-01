@@ -124,8 +124,14 @@ export interface Terminal {
   getRow: (y: number) => readonly Cell[];
   setScrollbackLimit: (limit: number) => void;
   getScrollbackLines: (count?: number) => readonly string[];
-  /** Register fingerprint function for SoA pre-computation on the composite buffer. */
-  setFingerprintFn: (fn: (ch: string, style: Style) => number) => void;
-  /** Get pre-computed fingerprints for a composite buffer row (null if not enabled). */
-  getRowFingerprints: (y: number) => Uint32Array | null;
+  /**
+   * @internal Renderer-owned fingerprint hook for SoA pre-computation.
+   * Application code should not call this directly.
+   */
+  setFingerprintFn?: (fn: ((ch: string, style: Style) => number) | null) => void;
+  /**
+   * @internal Return a live pre-computed fingerprint row view.
+   * Treat the returned Uint32Array as readonly.
+   */
+  getRowFingerprints?: (y: number) => Uint32Array | null;
 }

@@ -66,11 +66,11 @@ describe("stdout renderer style diffing", () => {
     });
 
     try {
-      const before = Array.from(terminal.getRowFingerprints(0)!);
+      const before = Array.from(terminal.getRowFingerprints!(0)!);
 
       renderer.updateTheme?.({ defaultBg: "blue" });
 
-      const after = Array.from(terminal.getRowFingerprints(0)!);
+      const after = Array.from(terminal.getRowFingerprints!(0)!);
       expect(after).not.toEqual(before);
     } finally {
       renderer.dispose();

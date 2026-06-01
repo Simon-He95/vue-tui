@@ -26,6 +26,11 @@ const ambientTerminalEnvKeys = [
   "ALACRITTY_LOG",
   "WEZTERM_PANE",
   "WEZTERM_EXECUTABLE",
+  "VUE_TUI_DIRTY_ROW_PATCH_MODE",
+  "DIMCODE_TUI_DIRTY_ROW_RENDER_MODE",
+  "DIMCODE_TUI_DIRTY_ROW_PATCH_MODE",
+  "VUE_TUI_DIRTY_SPAN_MAX_CELLS",
+  "DIMCODE_TUI_DIRTY_SPAN_MAX_CELLS",
 ] as const;
 const ambientTerminalEnv = new Map<string, string | undefined>();
 
@@ -230,6 +235,8 @@ describe("stdout renderer", () => {
     terminal.commit();
 
     out = "";
+    terminal.put(0, 1, "E");
+    terminal.put(0, 2, "F");
     (renderer as any).render([2, 1, -1, 99]);
 
     const row2 = out.indexOf("\u001B[2;1H");
@@ -272,7 +279,9 @@ describe("stdout renderer", () => {
       nowRef.t += frameDelayMs;
       vi.advanceTimersByTime(frameDelayMs);
       out = "";
+      terminal.put(0, 1, "A");
       (renderer as any).render([1]);
+      terminal.put(0, 3, "B");
       (renderer as any).render([3]);
 
       expect(out).toBe("");
@@ -290,7 +299,7 @@ describe("stdout renderer", () => {
     }
   });
 
-  it("rewrites the dirty row when only the row prefix changes", () => {
+  it("patches only the changed row prefix when no conservative fallback is active", () => {
     const terminal = createTerminal({ cols: 24, rows: 4 });
     let out = "";
     const output = {
@@ -315,12 +324,13 @@ describe("stdout renderer", () => {
     terminal.commit();
 
     expect(out.includes("\u001B[2;1H")).toBe(true);
-    expect(out.includes("[ Exit ]")).toBe(true);
+    expect(out.includes("B")).toBe(true);
+    expect(out.includes("[ Exit ]")).toBe(false);
 
     renderer.dispose();
   });
 
-  it("rewrites the full dirty row on alacritty-like terminals", () => {
+  it("patches only the changed span on alacritty-like terminals", () => {
     process.env.TERM_PROGRAM = "Alacritty";
 
     const terminal = createTerminal({ cols: 24, rows: 4 });
@@ -348,13 +358,14 @@ describe("stdout renderer", () => {
     terminal.commit();
     (renderer as any).render([1], true);
 
-    expect(out.includes("B task")).toBe(true);
-    expect(out.includes("[ Exit ]")).toBe(true);
+    expect(out.includes("\u001B[2;1H")).toBe(true);
+    expect(out.includes("B")).toBe(true);
+    expect(out.includes("[ Exit ]")).toBe(false);
 
     renderer.dispose();
   });
 
-  it("rewrites the full dirty row when TERM is alacritty-256color", () => {
+  it("patches only the changed span when TERM is alacritty-256color", () => {
     process.env.TERM = "alacritty-256color";
 
     const terminal = createTerminal({ cols: 24, rows: 4 });
@@ -382,8 +393,9 @@ describe("stdout renderer", () => {
     terminal.commit();
     (renderer as any).render([1], true);
 
-    expect(out.includes("B task")).toBe(true);
-    expect(out.includes("[ Exit ]")).toBe(true);
+    expect(out.includes("\u001B[2;1H")).toBe(true);
+    expect(out.includes("B")).toBe(true);
+    expect(out.includes("[ Exit ]")).toBe(false);
 
     renderer.dispose();
   });
@@ -421,7 +433,7 @@ describe("stdout renderer", () => {
     renderer.dispose();
   });
 
-  it("rewrites the dirty row when overlay is on another row", () => {
+  it("patches only the dirty row column when overlay is on another row", () => {
     const terminal = createTerminal({ cols: 24, rows: 4 });
     const overlay = getPlaneTerminal(terminal, "overlay");
     let out = "";
@@ -448,7 +460,8 @@ describe("stdout renderer", () => {
     terminal.commit({ planes: ["default"] });
 
     expect(out.includes("\u001B[2;1H")).toBe(true);
-    expect(out.includes("[ Exit ]")).toBe(true);
+    expect(out.includes("B")).toBe(true);
+    expect(out.includes("[ Exit ]")).toBe(false);
     expect(out.includes("[Dialog]")).toBe(false);
 
     renderer.dispose();
@@ -518,7 +531,7 @@ describe("stdout renderer", () => {
     });
   });
 
-  it("repaints dirty rows whose fingerprints are unchanged", () => {
+  it("skips dirty rows whose fingerprints are unchanged", () => {
     const terminal = createTerminal({ cols: 24, rows: 4 });
     let out = "";
     const output = {
@@ -543,8 +556,7 @@ describe("stdout renderer", () => {
     terminal.write("A task", { x: 0, y: 1 });
     terminal.commit({ planes: ["default"] });
 
-    expect(out.includes("\u001B[2;1H")).toBe(true);
-    expect(out.includes("A task")).toBe(true);
+    expect(out).toBe("");
 
     renderer.dispose();
   });
@@ -1192,7 +1204,7 @@ describe("stdout renderer", () => {
     });
   });
 
-  it("falls back to repaint for overlapping opposite-direction explicit scroll ops before stdout flush", () => {
+  it("skips output when overlapping opposite-direction explicit scroll ops cancel before stdout flush", () => {
     const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
 
     withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
@@ -1250,9 +1262,14 @@ describe("stdout renderer", () => {
         nowRef.t += frameDelayMs;
         vi.advanceTimersByTime(frameDelayMs);
 
-        expect(out).not.toContain("\u001B[1;4r");
-        expect(out).not.toMatch(/\u001B\[\d+[ST]/);
-        expect(applyAnsiToScreen(transcriptOut, 8, 4)).toEqual(terminal.snapshot().lines);
+        expect(out).toBe("");
+        expect(applyAnsiToScreen(transcriptOut, 8, 4)).toEqual([
+          "        ",
+          "        ",
+          "        ",
+          "        ",
+        ]);
+        expect(terminal.snapshot().lines).toEqual(["row0    ", "row1    ", "row2    ", "row3    "]);
 
         renderer.dispose();
         terminal.dispose();
@@ -1314,7 +1331,76 @@ describe("stdout renderer", () => {
         nowRef.t += frameDelayMs;
         vi.advanceTimersByTime(frameDelayMs);
 
-        expect(out.includes("\u001B[6;1H   x")).toBe(true);
+        expect(out.includes("\u001B[6;4Hx")).toBe(true);
+        expect(out.includes("\u001B[6;1H   x")).toBe(false);
+        expect(applyAnsiToScreen(transcriptOut, 8, 8)).toEqual(terminal.snapshot().lines);
+
+        renderer.dispose();
+      } finally {
+        nowSpy.mockRestore();
+        vi.useRealTimers();
+        if (prevScrollRegions == null) delete process.env.DIMCODE_TUI_SCROLL_REGIONS;
+        else process.env.DIMCODE_TUI_SCROLL_REGIONS = prevScrollRegions;
+      }
+    });
+  });
+
+  it("renders OSC8 hrefs in inserted explicit-scroll rows even when the cell is blank", () => {
+    const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
+
+    withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
+      vi.useFakeTimers();
+      const nowRef = { t: 0 };
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowRef.t);
+      try {
+        process.env.DIMCODE_TUI_SCROLL_REGIONS = "1";
+
+        const terminal = createTerminal({ cols: 8, rows: 8 });
+        const transcript = getPlaneTerminal(terminal, "transcript");
+        let out = "";
+        let transcriptOut = "";
+        const output = {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+            transcriptOut += chunk;
+          },
+        };
+        const renderer = createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+        });
+
+        const writeRow = (y: number, text: string) => {
+          transcript.fill(0, y, 8, 1, " ");
+          transcript.write(text.padEnd(8, " "), { x: 0, y });
+        };
+
+        writeRow(2, "row0");
+        writeRow(3, "row1");
+        writeRow(4, "row2");
+        writeRow(5, "row3");
+        terminal.commit({ planes: ["transcript"], sync: true });
+        const frameDelayMs = getFrameDelayMs();
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        out = "";
+        scrollPlaneRows(terminal, "transcript", 2, 6, 1);
+        transcript.fill(0, 5, 8, 1, " ");
+        transcript.write(" ", {
+          x: 3,
+          y: 5,
+          style: { href: "https://example.com/blank" },
+        });
+        terminal.commit({ planes: ["transcript"], sync: true });
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        expect(out).toContain("\u001B[6;4H");
+        expect(out).toContain("\u001B]8;;https://example.com/blank\u0007");
         expect(applyAnsiToScreen(transcriptOut, 8, 8)).toEqual(terminal.snapshot().lines);
 
         renderer.dispose();
