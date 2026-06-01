@@ -943,6 +943,7 @@ export function createStdoutRenderer(
   ): DirtySpanRenderMode => {
     if (spans.length <= 0) return "spans";
 
+    const forceSpanPatch = dirtyRowPatchMode === "span";
     const coverage = dirtySpanCoverage(spans);
     const fullRowCoverageLimit = Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD));
 
@@ -954,7 +955,7 @@ export function createStdoutRenderer(
       return "row";
     }
 
-    if (coverage >= fullRowCoverageLimit) {
+    if (!forceSpanPatch && coverage >= fullRowCoverageLimit) {
       return "row";
     }
 
@@ -962,20 +963,24 @@ export function createStdoutRenderer(
 
     if (spans.length === 1) {
       const spanCost = estimatedSpanPatchBytes(row, spans, y, cols, clearToEol);
-      return spanCost < fullRowCost ? "spans" : "row";
+      return forceSpanPatch || spanCost < fullRowCost ? "spans" : "row";
     }
 
     const multiCost = estimatedSpanPatchBytes(row, spans, y, cols, clearToEol);
     const first = spans[0]!;
     const last = spans[spans.length - 1]!;
     const contiguousWidth = Math.max(0, last.endXExclusive - first.startX);
-    const canUseContiguous = contiguousWidth < fullRowCoverageLimit;
+    const canUseContiguous = forceSpanPatch || contiguousWidth < fullRowCoverageLimit;
     const contiguousCost = canUseContiguous
       ? estimatedContiguousPatchBytes(row, spans, y, cols, clearToEol)
       : Number.POSITIVE_INFINITY;
 
-    const tooManySpans = spans.length > DIRTY_SPAN_MAX_PER_ROW;
+    const tooManySpans = !forceSpanPatch && spans.length > DIRTY_SPAN_MAX_PER_ROW;
     const effectiveMultiCost = tooManySpans ? Number.POSITIVE_INFINITY : multiCost;
+
+    if (forceSpanPatch) {
+      return contiguousCost < multiCost ? "contiguous" : "spans";
+    }
 
     if (contiguousCost < effectiveMultiCost && contiguousCost < fullRowCost) {
       return "contiguous";

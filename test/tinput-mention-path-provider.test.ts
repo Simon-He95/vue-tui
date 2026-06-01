@@ -68,8 +68,7 @@ describe("TInput mention path provider", () => {
 
       await nextTick();
       app.scheduler.flush();
-      vi.advanceTimersByTime(100);
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(120);
       await nextTick();
       app.scheduler.flush();
 

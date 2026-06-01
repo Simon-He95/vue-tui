@@ -201,6 +201,12 @@ function applyAnsiFrame(screen: TestScreen, frame: string): void {
       continue;
     }
 
+    if (ch === "\n") {
+      screen.y = Math.min(screen.rows - 1, screen.y + 1);
+      i++;
+      continue;
+    }
+
     // Skip common C0 controls.
     if (ch < " ") {
       i++;
@@ -2237,12 +2243,12 @@ describe("stdout renderer column diff", () => {
     });
   });
 
-  it("falls back to full row when fragmented spans would cost more than repainting the row", () => {
+  it("auto mode falls back to full row when fragmented spans would cost more than repainting the row", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const cols = 24;
       const { terminal, output, renderer, initialFrame } = mountRow("abcdefghijklmnopqrstuvwx", {
         cols,
-        dirtyRowPatchMode: "span",
+        dirtyRowPatchMode: "auto",
       });
 
       const screen = createTestScreen(cols, 1);
@@ -2264,6 +2270,39 @@ describe("stdout renderer column diff", () => {
 
       const cursorMoves = [...frame.matchAll(/\x1B\[\d+;\d+H/g)].length;
       expect(cursorMoves).toBeLessThanOrEqual(1);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("honors dirtyRowPatchMode=span by avoiding a cost-model-only full-row repaint", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 24;
+      const { terminal, output, renderer, initialFrame } = mountRow("abcdefghijklmnopqrstuvwx", {
+        cols,
+        dirtyRowPatchMode: "span",
+      });
+
+      const screen = createTestScreen(cols, 1);
+      applyAnsiFrame(screen, initialFrame);
+
+      terminal.put(0, 0, "A");
+      terminal.put(5, 0, "F");
+      terminal.put(10, 0, "K");
+      terminal.put(15, 0, "P");
+      terminal.put(20, 0, "U");
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      applyAnsiFrame(screen, frame);
+
+      expect(screenLine(screen, 0)).toBe("AbcdeFghijKlmnoPqrstUvwx");
+      expect(frame).not.toContain("AbcdeFghijKlmnoPqrstUvwx");
+      expect(frame).not.toContain("vwx");
+
+      const cursorMoves = frame.match(/\x1B\[\d+;\d+H/g) ?? [];
+      expect(cursorMoves.length).toBeGreaterThanOrEqual(1);
 
       renderer.dispose();
       terminal.dispose();
