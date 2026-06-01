@@ -26,6 +26,11 @@ const ambientTerminalEnvKeys = [
   "ALACRITTY_LOG",
   "WEZTERM_PANE",
   "WEZTERM_EXECUTABLE",
+  "VUE_TUI_DIRTY_ROW_PATCH_MODE",
+  "DIMCODE_TUI_DIRTY_ROW_RENDER_MODE",
+  "DIMCODE_TUI_DIRTY_ROW_PATCH_MODE",
+  "VUE_TUI_DIRTY_SPAN_MAX_CELLS",
+  "DIMCODE_TUI_DIRTY_SPAN_MAX_CELLS",
 ] as const;
 const ambientTerminalEnv = new Map<string, string | undefined>();
 
@@ -325,7 +330,7 @@ describe("stdout renderer", () => {
     renderer.dispose();
   });
 
-  it("rewrites the full dirty row on alacritty-like terminals", () => {
+  it("patches only the changed span on alacritty-like terminals", () => {
     process.env.TERM_PROGRAM = "Alacritty";
 
     const terminal = createTerminal({ cols: 24, rows: 4 });
@@ -353,13 +358,14 @@ describe("stdout renderer", () => {
     terminal.commit();
     (renderer as any).render([1], true);
 
-    expect(out.includes("B task")).toBe(true);
-    expect(out.includes("[ Exit ]")).toBe(true);
+    expect(out.includes("\u001B[2;1H")).toBe(true);
+    expect(out.includes("B")).toBe(true);
+    expect(out.includes("[ Exit ]")).toBe(false);
 
     renderer.dispose();
   });
 
-  it("rewrites the full dirty row when TERM is alacritty-256color", () => {
+  it("patches only the changed span when TERM is alacritty-256color", () => {
     process.env.TERM = "alacritty-256color";
 
     const terminal = createTerminal({ cols: 24, rows: 4 });
@@ -387,8 +393,9 @@ describe("stdout renderer", () => {
     terminal.commit();
     (renderer as any).render([1], true);
 
-    expect(out.includes("B task")).toBe(true);
-    expect(out.includes("[ Exit ]")).toBe(true);
+    expect(out.includes("\u001B[2;1H")).toBe(true);
+    expect(out.includes("B")).toBe(true);
+    expect(out.includes("[ Exit ]")).toBe(false);
 
     renderer.dispose();
   });

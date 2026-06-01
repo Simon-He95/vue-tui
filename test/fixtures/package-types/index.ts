@@ -206,6 +206,7 @@ const stdoutOutput: CliOutput = { write: () => {} };
 const stdoutPatchMode: DirtyRowPatchMode = "span";
 const stdoutOptions: StdoutRendererOptions = {
   dirtyRowPatchMode: stdoutPatchMode,
+  dirtySpanConservativeMaxCells: 16,
   colorMode: "ansi16",
   clear: false,
 };

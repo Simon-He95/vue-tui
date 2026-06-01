@@ -114,8 +114,17 @@ export type StdoutRendererOptions = Readonly<{
    * - "auto": use terminal compatibility detection.
    * - "row": repaint each dirty row.
    * - "span": use row-internal multi-span diffing.
+   *
+   * Env override: VUE_TUI_DIRTY_ROW_PATCH_MODE or DIMCODE_TUI_DIRTY_ROW_RENDER_MODE.
    */
   dirtyRowPatchMode?: DirtyRowPatchMode;
+  /**
+   * Max changed-cell coverage to patch in auto mode on conservative TTYs.
+   * Larger dirty rows fall back to full-row repaint.
+   *
+   * Env override: VUE_TUI_DIRTY_SPAN_MAX_CELLS or DIMCODE_TUI_DIRTY_SPAN_MAX_CELLS.
+   */
+  dirtySpanConservativeMaxCells?: number;
   /**
    * Alias for dirtyRowPatchMode.
    *
@@ -267,8 +276,17 @@ export function createStdoutRenderer(
   const useConservativeDirtyRows = Boolean(
     outputIsTTY && (isGhostty || isKitty || isAlacritty || isWezTerm),
   );
+  const normalizeDirtyRowPatchMode = (value: unknown): DirtyRowPatchMode | null => {
+    return value === "auto" || value === "row" || value === "span" ? value : null;
+  };
   function resolveDirtyRowPatchMode(): DirtyRowPatchMode {
     if (options?.dirtyRowPatchMode) return options.dirtyRowPatchMode;
+
+    const envMode = normalizeDirtyRowPatchMode(
+      firstNonEmptyEnv(env, "VUE_TUI_DIRTY_ROW_PATCH_MODE", "DIMCODE_TUI_DIRTY_ROW_RENDER_MODE") ??
+        env.DIMCODE_TUI_DIRTY_ROW_PATCH_MODE,
+    );
+    if (envMode) return envMode;
 
     const legacy = options?.columnDiff ?? "auto";
     if (legacy === true) return "span";
@@ -276,6 +294,14 @@ export function createStdoutRenderer(
     return "auto";
   }
   const dirtyRowPatchMode = resolveDirtyRowPatchMode();
+  const dirtySpanConservativeMaxCells = (() => {
+    const raw =
+      options?.dirtySpanConservativeMaxCells ??
+      firstNonEmptyEnv(env, "VUE_TUI_DIRTY_SPAN_MAX_CELLS", "DIMCODE_TUI_DIRTY_SPAN_MAX_CELLS");
+    const value = typeof raw === "number" ? raw : Number(raw);
+
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 32;
+  })();
   const columnDiffMode =
     (options as InternalStdoutRendererOptions | undefined)?.__columnDiffMode ?? "auto";
   function resolveEffectiveDirtyRowPatchMode(): EffectiveDirtyRowPatchMode {
@@ -285,7 +311,7 @@ export function createStdoutRenderer(
     if (dirtyRowPatchMode === "span") return "multi-span";
     if (dirtyRowPatchMode === "row") return "row";
     if (!outputIsTTY) return "multi-span";
-    return useConservativeDirtyRows ? "row" : "multi-span";
+    return "multi-span";
   }
   const effectiveDirtyRowPatchMode = resolveEffectiveDirtyRowPatchMode();
   const shouldUseDirtySpans = (): boolean => effectiveDirtyRowPatchMode !== "row";
@@ -767,7 +793,15 @@ export function createStdoutRenderer(
     cols: number,
     clearToEol: boolean,
   ): DirtySpanRenderMode => {
+    if (dirtyRowPatchMode === "auto" && useConservativeDirtyRows && clearToEol) return "row";
     if (spans.length <= 0) return "spans";
+    if (
+      dirtyRowPatchMode === "auto" &&
+      useConservativeDirtyRows &&
+      dirtySpanCoverage(spans) > dirtySpanConservativeMaxCells
+    ) {
+      return "row";
+    }
     if (spans.length > DIRTY_SPAN_MAX_PER_ROW) return "row";
 
     const coverage = dirtySpanCoverage(spans);

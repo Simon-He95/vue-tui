@@ -20,6 +20,11 @@ const TERMINAL_ENV_KEYS = [
   "TERM",
   "VSCODE_PID",
   "VSCODE_IPC_HOOK_CLI",
+  "VUE_TUI_DIRTY_ROW_PATCH_MODE",
+  "DIMCODE_TUI_DIRTY_ROW_RENDER_MODE",
+  "DIMCODE_TUI_DIRTY_ROW_PATCH_MODE",
+  "VUE_TUI_DIRTY_SPAN_MAX_CELLS",
+  "DIMCODE_TUI_DIRTY_SPAN_MAX_CELLS",
 ] as const;
 
 function withTerminalEnv<T>(
@@ -225,6 +230,7 @@ function mountRow(
     isTTY?: boolean;
     columnDiff?: boolean | "auto";
     dirtyRowPatchMode?: "auto" | "row" | "span";
+    dirtySpanConservativeMaxCells?: number;
   }> = {},
 ) {
   const cols = options.cols ?? 120;
@@ -239,6 +245,9 @@ function mountRow(
     ...(options.columnDiff !== undefined ? { columnDiff: options.columnDiff } : {}),
     ...(options.dirtyRowPatchMode !== undefined
       ? { dirtyRowPatchMode: options.dirtyRowPatchMode }
+      : {}),
+    ...(options.dirtySpanConservativeMaxCells !== undefined
+      ? { dirtySpanConservativeMaxCells: options.dirtySpanConservativeMaxCells }
       : {}),
   });
 
@@ -1235,9 +1244,41 @@ describe("stdout renderer column diff", () => {
     });
   });
 
-  it("keeps auto columnDiff conservative on known-sensitive TTYs", () => {
+  it("honors env dirty-row row fallback", () => {
+    withTerminalEnv(
+      {
+        VUE_TUI_DIRTY_ROW_PATCH_MODE: "row",
+        WEZTERM_PANE: "1",
+        TERM_PROGRAM: "WezTerm",
+        TERM: "xterm-256color",
+      },
+      () => {
+        const middle = " unchanged middle should be repainted by env fallback ";
+        const percentX = 2 + middle.length;
+        const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+          cols: percentX + 8,
+          isTTY: true,
+        });
+
+        terminal.put(0, 0, "⠙");
+        terminal.write("11%", { x: percentX, y: 0 });
+        terminal.commit({ sync: true });
+
+        const frame = output.take();
+
+        expect(frame).toContain("⠙");
+        expect(frame).toContain("11%");
+        expect(frame).toContain("unchanged middle should be repainted by env fallback");
+
+        renderer.dispose();
+        terminal.dispose();
+      },
+    );
+  });
+
+  it("uses auto columnDiff spans on known-sensitive TTYs", () => {
     withTerminalEnv({ WEZTERM_PANE: "1", TERM_PROGRAM: "WezTerm", TERM: "xterm-256color" }, () => {
-      const middle = " unchanged middle should be repainted in auto ";
+      const middle = " unchanged middle should not be repainted in auto ";
       const percentX = 2 + middle.length;
       const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
         cols: percentX + 8,
@@ -1253,7 +1294,32 @@ describe("stdout renderer column diff", () => {
 
       expect(frame).toContain("⠙");
       expect(frame).toContain("11%");
-      expect(frame).toContain("unchanged middle should be repainted in auto");
+      expect(frame).not.toContain("unchanged middle should not be repainted in auto");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("falls back to full rows when conservative auto spans exceed the max coverage", () => {
+    withTerminalEnv({ WEZTERM_PANE: "1", TERM_PROGRAM: "WezTerm", TERM: "xterm-256color" }, () => {
+      const middle = " unchanged middle should be repainted past conservative max ";
+      const percentX = 2 + middle.length;
+      const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+        cols: percentX + 8,
+        isTTY: true,
+        dirtySpanConservativeMaxCells: 1,
+      });
+
+      terminal.put(0, 0, "⠙");
+      terminal.write("11%", { x: percentX, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("⠙");
+      expect(frame).toContain("11%");
+      expect(frame).toContain("unchanged middle should be repainted past conservative max");
 
       renderer.dispose();
       terminal.dispose();
@@ -1405,7 +1471,7 @@ describe("stdout renderer column diff", () => {
     });
   });
 
-  it("falls back to full dirty-row rendering in conservative TTY mode", () => {
+  it("uses dirty spans in conservative TTY auto mode", () => {
     withTerminalEnv(
       {
         WEZTERM_PANE: "test",
@@ -1413,7 +1479,7 @@ describe("stdout renderer column diff", () => {
         TERM: "xterm-256color",
       },
       () => {
-        const middle = " unchanged middle should be repainted in conservative mode ";
+        const middle = " unchanged middle should not be repainted in conservative mode ";
         const percentX = 2 + middle.length;
         const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
           isTTY: true,
@@ -1427,7 +1493,7 @@ describe("stdout renderer column diff", () => {
 
         expect(frame).toContain("⠙");
         expect(frame).toContain("11%");
-        expect(frame).toContain("unchanged middle should be repainted");
+        expect(frame).not.toContain("unchanged middle should not be repainted");
 
         renderer.dispose();
         terminal.dispose();
