@@ -459,8 +459,13 @@ describe("stdout renderer column diff", () => {
 
   it("does not skip multi-codepoint grapheme changes with the same first code point", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
-      const oldGrapheme = "👨‍👩‍👧‍👦";
-      const newGrapheme = "👨‍👨‍👧‍👦";
+      // Build the family emoji without literal hidden ZWJ characters in source.
+      const man = "\u{1F468}";
+      const woman = "\u{1F469}";
+      const girl = "\u{1F467}";
+      const boy = "\u{1F466}";
+      const oldGrapheme = [man, woman, girl, boy].join("\u200D");
+      const newGrapheme = [man, man, girl, boy].join("\u200D");
 
       expect(oldGrapheme.codePointAt(0)).toBe(newGrapheme.codePointAt(0));
       expect(oldGrapheme).not.toBe(newGrapheme);
@@ -1298,6 +1303,68 @@ describe("stdout renderer column diff", () => {
       renderer.dispose();
       terminal.dispose();
     });
+  });
+
+  it("lets explicit columnDiff=true override dirty-row env row fallback", () => {
+    withTerminalEnv(
+      {
+        VUE_TUI_DIRTY_ROW_PATCH_MODE: "row",
+        TERM_PROGRAM: "iTerm.app",
+        TERM: "xterm-256color",
+      },
+      () => {
+        const middle = " explicit columnDiff should win over env ";
+        const percentX = 2 + middle.length;
+        const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+          cols: percentX + 8,
+          columnDiff: true,
+        });
+
+        terminal.put(0, 0, "⠙");
+        terminal.write("11%", { x: percentX, y: 0 });
+        terminal.commit({ sync: true });
+
+        const frame = output.take();
+
+        expect(frame).toContain("⠙");
+        expect(frame).toContain("11%");
+        expect(frame).not.toContain("explicit columnDiff should win over env");
+
+        renderer.dispose();
+        terminal.dispose();
+      },
+    );
+  });
+
+  it("lets explicit columnDiff=false override dirty-row env span fallback", () => {
+    withTerminalEnv(
+      {
+        VUE_TUI_DIRTY_ROW_PATCH_MODE: "span",
+        TERM_PROGRAM: "iTerm.app",
+        TERM: "xterm-256color",
+      },
+      () => {
+        const middle = " explicit columnDiff false should repaint row ";
+        const percentX = 2 + middle.length;
+        const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+          cols: percentX + 8,
+          columnDiff: false,
+        });
+
+        terminal.put(0, 0, "⠙");
+        terminal.write("11%", { x: percentX, y: 0 });
+        terminal.commit({ sync: true });
+
+        const frame = output.take();
+
+        expect(frame).toContain("⠙");
+        expect(frame).toContain("11%");
+        expect(frame).toContain("explicit columnDiff false should repaint row");
+
+        renderer.dispose();
+        terminal.dispose();
+      },
+    );
   });
 
   it("honors env dirty-row row fallback", () => {

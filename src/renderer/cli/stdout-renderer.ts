@@ -284,6 +284,12 @@ export function createStdoutRenderer(
   const normalizeDirtyRowPatchMode = (value: unknown): DirtyRowPatchMode | null => {
     return value === "auto" || value === "row" || value === "span" ? value : null;
   };
+  const normalizeColumnDiffMode = (value: unknown): DirtyRowPatchMode | null => {
+    if (value === true) return "span";
+    if (value === false) return "row";
+    if (value === "auto") return "auto";
+    return null;
+  };
   const firstValidDirtyRowPatchMode = (
     ...values: readonly unknown[]
   ): DirtyRowPatchMode | null => {
@@ -307,6 +313,17 @@ export function createStdoutRenderer(
       return optionMode;
     }
 
+    const legacy = options?.columnDiff;
+    if (legacy !== undefined) {
+      const legacyMode = normalizeColumnDiffMode(legacy);
+      if (!legacyMode) {
+        throw new Error(
+          `Invalid columnDiff=${JSON.stringify(legacy)}; expected boolean or "auto".`,
+        );
+      }
+      return legacyMode;
+    }
+
     const envMode = firstValidDirtyRowPatchMode(
       env.VUE_TUI_DIRTY_ROW_PATCH_MODE,
       env.DIMCODE_TUI_DIRTY_ROW_RENDER_MODE,
@@ -314,9 +331,6 @@ export function createStdoutRenderer(
     );
     if (envMode) return envMode;
 
-    const legacy = options?.columnDiff ?? "auto";
-    if (legacy === true) return "span";
-    if (legacy === false) return "row";
     return "auto";
   }
   const dirtyRowPatchMode = resolveDirtyRowPatchMode();
