@@ -290,9 +290,7 @@ export function createStdoutRenderer(
     if (value === "auto") return "auto";
     return null;
   };
-  const firstValidDirtyRowPatchMode = (
-    ...values: readonly unknown[]
-  ): DirtyRowPatchMode | null => {
+  const firstValidDirtyRowPatchMode = (...values: readonly unknown[]): DirtyRowPatchMode | null => {
     for (const value of values) {
       const mode = normalizeDirtyRowPatchMode(value);
       if (mode) return mode;
@@ -404,62 +402,66 @@ export function createStdoutRenderer(
   const colorMode = resolveColorMode();
   const enableDim = colorMode === "truecolor";
 
-  // Numeric style key encoding:
-  // Bits 0-7: fg color index (0=none, 1-16=AnsiColorName, 17+=dynamic hex)
-  // Bits 8-15: bg color index
-  // Bit 16: bold, Bit 17: dim, Bit 18: italic, Bit 19: underline, Bit 20: inverse, Bit 21: hasHref
-  //
-  // Cell fingerprints use a 32-bit hash of the style key plus the full grapheme.
+  // Cell fingerprints use a 32-bit hash of the interned exact style signature plus the full grapheme.
   // Dirty-span diff treats equal fingerprints as unchanged, so the character
   // must not be packed into a small fixed-width bit field.
-  const COLOR_INDEX: Record<string, number> = {
-    black: 1,
-    red: 2,
-    green: 3,
-    yellow: 4,
-    blue: 5,
-    magenta: 6,
-    cyan: 7,
-    white: 8,
-    blackBright: 9,
-    redBright: 10,
-    greenBright: 11,
-    yellowBright: 12,
-    blueBright: 13,
-    magentaBright: 14,
-    cyanBright: 15,
-    whiteBright: 16,
-  };
-  const BUILTIN_COLOR_INDEX: Record<string, number> = { ...COLOR_INDEX };
-  let nextColorIdx = 17;
-  const MAX_COLOR_INDEX = 255; // 8-bit limit
-  function colorIndex(color: string | undefined): number {
-    if (!color) return 0;
-    let idx = COLOR_INDEX[color];
-    if (idx !== undefined) return idx;
-    if (nextColorIdx > MAX_COLOR_INDEX) return MAX_COLOR_INDEX; // saturate to avoid overflow
-    idx = nextColorIdx++;
-    COLOR_INDEX[color] = idx;
-    return idx;
-  }
-
   let styleKeyCache = new WeakMap<Style, number>();
+  const styleKeyIndex = new Map<string, number>();
+  let nextStyleKey = 1;
+  const MAX_STYLE_KEYS = 131_072;
+  const STYLE_KEY_SEP = "\u001F";
   const normalizedHrefCache = new Map<string, string | null>();
   const MAX_HREF_CACHE = 2048;
-  const HREF_STYLE_FLAG = 1 << 21;
+
+  function resetStyleKeyIndex(resetIds = false): void {
+    styleKeyCache = new WeakMap<Style, number>();
+    styleKeyIndex.clear();
+    if (resetIds) nextStyleKey = 1;
+    fpPrevValid = false;
+  }
+
+  function internStyleKey(signature: string): number {
+    const cached = styleKeyIndex.get(signature);
+    if (cached !== undefined) return cached;
+
+    if (styleKeyIndex.size >= MAX_STYLE_KEYS) {
+      resetStyleKeyIndex();
+    }
+    if (nextStyleKey >= 0xffff_ffff) resetStyleKeyIndex(true);
+
+    const key = nextStyleKey++;
+    styleKeyIndex.set(signature, key);
+    return key;
+  }
+
+  function styleSignature(
+    style: Readonly<{
+      fg?: string;
+      bg?: string;
+      bold?: boolean;
+      dim?: boolean;
+      italic?: boolean;
+      underline?: boolean;
+      inverse?: boolean;
+      href?: string;
+    }>,
+  ): string {
+    return [
+      style.fg ?? "",
+      style.bg ?? defaultBg ?? "",
+      style.bold ? "1" : "0",
+      enableDim && style.dim ? "1" : "0",
+      style.italic ? "1" : "0",
+      style.underline ? "1" : "0",
+      style.inverse ? "1" : "0",
+      normalizeHref(style.href) ? "1" : "0",
+    ].join(STYLE_KEY_SEP);
+  }
+
   function styleKey(style: Style): number {
     const cached = styleKeyCache.get(style);
     if (cached !== undefined) return cached;
-    const href = normalizeHref(style.href);
-    const key =
-      colorIndex(style.fg) |
-      (colorIndex(style.bg ?? defaultBg) << 8) |
-      (style.bold ? 1 << 16 : 0) |
-      (enableDim && style.dim ? 1 << 17 : 0) |
-      (style.italic ? 1 << 18 : 0) |
-      (style.underline ? 1 << 19 : 0) |
-      (style.inverse ? 1 << 20 : 0) |
-      (href ? HREF_STYLE_FLAG : 0);
+    const key = internStyleKey(styleSignature(style));
     styleKeyCache.set(style, key);
     return key;
   }
@@ -476,16 +478,7 @@ export function createStdoutRenderer(
       href?: string;
     }>,
   ): number {
-    return (
-      colorIndex(style.fg) |
-      (colorIndex(style.bg ?? defaultBg) << 8) |
-      (style.bold ? 1 << 16 : 0) |
-      (enableDim && style.dim ? 1 << 17 : 0) |
-      (style.italic ? 1 << 18 : 0) |
-      (style.underline ? 1 << 19 : 0) |
-      (style.inverse ? 1 << 20 : 0) |
-      (normalizeHref(style.href) ? HREF_STYLE_FLAG : 0)
-    );
+    return internStyleKey(styleSignature(style));
   }
 
   function normalizeHref(value: unknown): string | null {
@@ -586,6 +579,7 @@ export function createStdoutRenderer(
   let blankTextId = 0;
   let emptyTextId = 0;
   const cellTextIdCache = new Map<string, number>();
+  const MAX_CELL_TEXT_IDS = 131_072;
   let prevOverlayBlockedRows: readonly number[] = [];
   let prevOverlayPartialRows: readonly number[] = [];
   const hrefIndex = new Map<string, number>();
@@ -663,7 +657,7 @@ export function createStdoutRenderer(
     let cached = cellTextIdCache.get(text);
     if (cached !== undefined) return cached;
 
-    if (nextCellTextId >= 0xffff_ffff) {
+    if (cellTextIdCache.size >= MAX_CELL_TEXT_IDS || nextCellTextId >= 0xffff_ffff) {
       resetCellTextIdCache();
       cached = cellTextIdCache.get(text);
       if (cached !== undefined) return cached;
@@ -849,7 +843,7 @@ export function createStdoutRenderer(
       return "row";
     }
 
-    const fullRowCost = estimatedFullRowPatchBytes(y, cols, false);
+    const fullRowCost = estimatedFullRowPatchBytes(y, cols, clearToEol);
     const multiCost = estimatedSpanPatchBytes(spans, y, clearToEol);
 
     if (multiCost >= fullRowCost) {
@@ -3162,15 +3156,7 @@ export function createStdoutRenderer(
       if (nextBg !== defaultBg) defaultBg = nextBg;
     }
     if ("palette" in next) palette = next.palette ?? null;
-    styleKeyCache = new WeakMap<Style, number>();
-    // Reset dynamic color indices so theme changes get fresh slots. The color
-    // index uses 8 bits: built-in ANSI colors occupy 1-16, dynamic colors use
-    // 17-255. Resetting avoids stale cache entries and fingerprint collisions
-    // after theme/palette changes.
-    for (const key of Object.keys(COLOR_INDEX)) {
-      if (!(key in BUILTIN_COLOR_INDEX)) delete COLOR_INDEX[key];
-    }
-    nextColorIdx = 17;
+    resetStyleKeyIndex();
     installFingerprintFn();
     fpRows = 0;
     fpPrevValid = false;

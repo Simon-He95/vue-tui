@@ -496,6 +496,44 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("detects style-only changes after many dynamic colors", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 260;
+      const terminal = createTerminal({ cols, rows: 1 });
+      const output = createBufferedOutput(false);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        colorMode: "truecolor",
+        dirtyRowPatchMode: "span",
+      });
+
+      for (let x = 0; x < cols; x++) {
+        terminal.put(x, 0, "x", {
+          fg: `#${(x + 1).toString(16).padStart(6, "0")}`,
+        });
+      }
+
+      terminal.commit({ sync: true });
+      output.take();
+
+      terminal.put(cols - 1, 0, "x", { fg: "#abcdef" });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;260H");
+      expect(frame).toContain("\x1B[38;2;171;205;239m");
+      expect(frame).toContain("x");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("re-emits OSC8 when only href identity changes", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const terminal = createTerminal({ cols: 80, rows: 1 });
