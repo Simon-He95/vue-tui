@@ -407,7 +407,7 @@ describe("stdout renderer column diff", () => {
       const terminal = createTerminal({ cols: 20, rows: 1 });
       const output = createBufferedOutput(false);
       const installed: unknown[] = [];
-      const originalSetFingerprintFn = terminal.setFingerprintFn!.bind(terminal);
+      const originalSetFingerprintFn = terminal.setFingerprintFn.bind(terminal);
 
       (terminal as any).setFingerprintFn = (fn: unknown) => {
         installed.push(fn);
@@ -439,7 +439,7 @@ describe("stdout renderer column diff", () => {
       const outputA = createBufferedOutput(false);
       const outputB = createBufferedOutput(false);
       const installed: unknown[] = [];
-      const originalSetFingerprintFn = terminal.setFingerprintFn!.bind(terminal);
+      const originalSetFingerprintFn = terminal.setFingerprintFn.bind(terminal);
 
       (terminal as any).setFingerprintFn = (fn: unknown) => {
         installed.push(fn);
@@ -544,7 +544,7 @@ describe("stdout renderer column diff", () => {
       const outputA = createBufferedOutput(false);
       const outputB = createBufferedOutput(false);
       const installed: unknown[] = [];
-      const originalSetFingerprintFn = terminal.setFingerprintFn!.bind(terminal);
+      const originalSetFingerprintFn = terminal.setFingerprintFn.bind(terminal);
 
       (terminal as any).setFingerprintFn = (fn: unknown) => {
         installed.push(fn);
@@ -1528,7 +1528,7 @@ describe("stdout renderer column diff", () => {
       terminal.commit({ sync: true });
 
       const originalGetRow = terminal.getRow.bind(terminal);
-      const originalGetRowFingerprints = terminal.getRowFingerprints!.bind(terminal);
+      const originalGetRowFingerprints = terminal.getRowFingerprints.bind(terminal);
       const output = createBufferedOutput(false);
       const renderer = createStdoutRenderer(terminal, {
         output,

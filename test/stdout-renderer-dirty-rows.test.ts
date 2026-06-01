@@ -1204,7 +1204,7 @@ describe("stdout renderer", () => {
     });
   });
 
-  it("skips output when overlapping opposite-direction explicit scroll ops cancel before stdout flush", () => {
+  it("falls back to repaint for overlapping opposite-direction explicit scroll ops before stdout flush", () => {
     const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
 
     withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
@@ -1262,14 +1262,9 @@ describe("stdout renderer", () => {
         nowRef.t += frameDelayMs;
         vi.advanceTimersByTime(frameDelayMs);
 
-        expect(out).toBe("");
-        expect(applyAnsiToScreen(transcriptOut, 8, 4)).toEqual([
-          "        ",
-          "        ",
-          "        ",
-          "        ",
-        ]);
-        expect(terminal.snapshot().lines).toEqual(["row0    ", "row1    ", "row2    ", "row3    "]);
+        expect(out).not.toContain("\u001B[1;4r");
+        expect(out).not.toMatch(/\u001B\[\d+[ST]/);
+        expect(applyAnsiToScreen(transcriptOut, 8, 4)).toEqual(terminal.snapshot().lines);
 
         renderer.dispose();
         terminal.dispose();

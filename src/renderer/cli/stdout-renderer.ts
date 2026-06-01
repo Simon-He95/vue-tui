@@ -121,9 +121,10 @@ export type StdoutRendererOptions = Readonly<{
    * - "auto": prefer span patching, with conservative row fallback on
    *   terminals that are sensitive to fragmented cursor-addressed writes.
    * - "row": repaint each dirty row.
-   * - "span": prefer row-internal multi-span diffing. Dense, fragmented, or
-   *   high-cost rows may still repaint the row when that is cheaper or safer.
-   *   Terminal-sensitive conservative fallback is only applied by "auto".
+   * - "span": force row-internal span/contiguous patching where possible.
+   *   This skips terminal-sensitive conservative row fallback and is intended
+   *   as an escape hatch when the caller wants maximum partial-row patching.
+   *   Safety expansion for wide glyphs and stale-tail handling still applies.
    *
    * Env fallback when this option is not provided:
    * VUE_TUI_DIRTY_ROW_PATCH_MODE, DIMCODE_TUI_DIRTY_ROW_RENDER_MODE,
@@ -414,6 +415,7 @@ export function createStdoutRenderer(
   let accumulatedDirtyCount = 0;
   let accumulatedDirtyMin = Number.POSITIVE_INFINITY;
   let accumulatedDirtyMax = -1;
+  let accumulatedDirtyRowsRequireRepaint = false;
   let accumulatedScrollOperations: TerminalScrollOperation[] | null = null;
   // Minimum frame interval for stdout rendering (16ms = ~60fps max).
   // For non-TTY outputs (tests/logs), render immediately for determinism.
@@ -1770,6 +1772,7 @@ export function createStdoutRenderer(
   function doRender(
     dirtyRows?: readonly number[] | null,
     scrollOperations?: readonly TerminalScrollOperation[] | null,
+    forceDirtyRowsRepaint = false,
   ): void {
     if (isDebugEnabled()) {
       getDebugLog().render(`doRender() START: dirtyRows=${dirtyRows?.length ?? "null"}`);
@@ -1791,6 +1794,7 @@ export function createStdoutRenderer(
     accumulatedDirtyCount = 0;
     accumulatedDirtyMin = Number.POSITIVE_INFINITY;
     accumulatedDirtyMax = -1;
+    accumulatedDirtyRowsRequireRepaint = false;
     accumulatedScrollOperations = null;
     lastFrameTime = Date.now();
 
@@ -2299,6 +2303,7 @@ export function createStdoutRenderer(
       fpPrevValid &&
       scrollRowsCandidate &&
       scrollRowsCandidate.length >= 3 &&
+      !forceDirtyRowsRepaint &&
       allowInferredScrollRegions;
 
     let scrollHandled = false;
@@ -2388,7 +2393,7 @@ export function createStdoutRenderer(
       for (const y of explicitDirtyRows) {
         const row = terminal.getRow(y) as Cell[];
         const overlayRow = overlayTouchedRowSet?.has(y);
-        if (!shouldUseDirtySpans() || overlayRow) {
+        if (forceDirtyRowsRepaint || !shouldUseDirtySpans() || overlayRow) {
           fingerprintRow(row, y, size.cols);
           renderRow(y, row);
           paintedExplicitRows.push(y);
@@ -2590,7 +2595,7 @@ export function createStdoutRenderer(
       for (const y of rowsToRender) {
         const row = terminal.getRow(y) as Cell[];
         fingerprintRow(row, y, size.cols);
-        if (!shouldUseDirtySpans()) {
+        if (forceDirtyRowsRepaint || !shouldUseDirtySpans()) {
           renderRow(y, row);
           continue;
         }
@@ -2982,6 +2987,7 @@ export function createStdoutRenderer(
 
   function markScrollOperationDirty(op: TerminalScrollOperation, rowCount: number): void {
     markAccumulatedDirtyRange(op.startY, op.endY, rowCount);
+    accumulatedDirtyRowsRequireRepaint = true;
   }
 
   function mergeScrollOperations(
@@ -3065,6 +3071,7 @@ export function createStdoutRenderer(
       accumulatedDirtyCount = 0;
       accumulatedDirtyMin = Number.POSITIVE_INFINITY;
       accumulatedDirtyMax = -1;
+      accumulatedDirtyRowsRequireRepaint = false;
       accumulatedScrollOperations = null;
     } else if (dirtyRows.length === 0) {
       if (scrollOperations?.length) {
@@ -3111,8 +3118,9 @@ export function createStdoutRenderer(
       }
       const rows = buildAccumulatedRows(dirtyRows);
       const pendingScrolls = buildAccumulatedScrollOperations();
+      const forceDirtyRowsRepaint = accumulatedDirtyRowsRequireRepaint;
       cliLatency?.recordStdoutQueued(0);
-      doRender(rows, pendingScrolls);
+      doRender(rows, pendingScrolls, forceDirtyRowsRepaint);
       return;
     }
 
@@ -3120,8 +3128,9 @@ export function createStdoutRenderer(
       // Enough time has passed, render immediately
       const rows = buildAccumulatedRows(dirtyRows);
       const pendingScrolls = buildAccumulatedScrollOperations();
+      const forceDirtyRowsRepaint = accumulatedDirtyRowsRequireRepaint;
       cliLatency?.recordStdoutQueued(0);
-      doRender(rows, pendingScrolls);
+      doRender(rows, pendingScrolls, forceDirtyRowsRepaint);
     } else {
       // Too soon, schedule render for later
       pendingRender = true;
@@ -3131,7 +3140,8 @@ export function createStdoutRenderer(
         if (!disposed) {
           const rows = buildAccumulatedRows(dirtyRows);
           const pendingScrolls = buildAccumulatedScrollOperations();
-          doRender(rows, pendingScrolls);
+          const forceDirtyRowsRepaint = accumulatedDirtyRowsRequireRepaint;
+          doRender(rows, pendingScrolls, forceDirtyRowsRepaint);
         }
       }, queuedDelayMs);
       cliLatency?.recordStdoutQueued(queuedDelayMs);
@@ -3270,6 +3280,7 @@ export function createStdoutRenderer(
     accumulatedDirtyCount = 0;
     accumulatedDirtyMin = Number.POSITIVE_INFINITY;
     accumulatedDirtyMax = -1;
+    accumulatedDirtyRowsRequireRepaint = false;
     off();
     releaseFingerprintFn();
     if (canTrackResize && typeof resizeSource?.off === "function") {
