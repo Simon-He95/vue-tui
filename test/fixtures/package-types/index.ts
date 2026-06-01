@@ -209,6 +209,10 @@ const stdoutOptions: StdoutRendererOptions = {
   colorMode: "ansi16",
   clear: false,
 };
+const stdoutInternalOptions: StdoutRendererOptions = {
+  // @ts-expect-error __columnDiffMode is an internal benchmark override.
+  __columnDiffMode: "multi-span",
+};
 const cleanupHandle: TerminalCleanupHandle | null = null;
 const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
 const record: TerminalEventRecord = { type: "keydown", key: "Enter" };
@@ -222,6 +226,7 @@ console.log(
   driver,
   stdoutOutput,
   stdoutOptions,
+  stdoutInternalOptions,
   cleanupHandle,
   signalPolicy,
   record,

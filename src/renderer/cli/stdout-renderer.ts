@@ -117,10 +117,6 @@ export type StdoutRendererOptions = Readonly<{
    */
   dirtyRowPatchMode?: DirtyRowPatchMode;
   /**
-   * @internal Benchmark/test override for row-internal span rendering.
-   */
-  __columnDiffMode?: InternalColumnDiffMode;
-  /**
    * Alias for dirtyRowPatchMode.
    *
    * - true => "span"
@@ -139,6 +135,10 @@ export type StdoutRendererOptions = Readonly<{
     appendFileSync?: (path: string, data: string) => void;
   };
 }>;
+
+type InternalStdoutRendererOptions = StdoutRendererOptions & {
+  __columnDiffMode?: InternalColumnDiffMode;
+};
 
 export function createStdoutRenderer(
   terminal: Terminal,
@@ -243,6 +243,8 @@ export function createStdoutRenderer(
   const DIRTY_SPAN_MERGE_GAP_CELLS = 2;
   const DIRTY_SPAN_MAX_PER_ROW = 12;
   const DIRTY_SPAN_FULL_ROW_THRESHOLD = 0.7;
+  const EST_STYLE_SWITCH_BYTES = 8;
+  const EST_CLEAR_TO_EOL_BYTES = 3;
 
   const disableCursorPos = false;
   const termProgram = String(env.TERM_PROGRAM ?? "")
@@ -274,7 +276,8 @@ export function createStdoutRenderer(
     return "auto";
   }
   const dirtyRowPatchMode = resolveDirtyRowPatchMode();
-  const columnDiffMode = options?.__columnDiffMode ?? "auto";
+  const columnDiffMode =
+    (options as InternalStdoutRendererOptions | undefined)?.__columnDiffMode ?? "auto";
   function resolveEffectiveDirtyRowPatchMode(): EffectiveDirtyRowPatchMode {
     if (columnDiffMode === "full-row") return "row";
     if (columnDiffMode === "single-span") return "single-span";
@@ -723,10 +726,10 @@ export function createStdoutRenderer(
 
       // Approximate style/link overhead. Exact cost depends on SGR/OSC8, but this
       // keeps fragmented rows from winning purely because cell coverage is small.
-      bytes += 8;
+      bytes += EST_STYLE_SWITCH_BYTES;
     }
 
-    if (clearToEol) bytes += 3;
+    if (clearToEol) bytes += EST_CLEAR_TO_EOL_BYTES;
 
     return bytes;
   };
@@ -744,13 +747,18 @@ export function createStdoutRenderer(
     return (
       estimatedCursorMoveBytes(y, first.startX) +
       Math.max(0, last.endXExclusive - first.startX) +
-      8 +
-      (clearToEol ? 3 : 0)
+      EST_STYLE_SWITCH_BYTES +
+      (clearToEol ? EST_CLEAR_TO_EOL_BYTES : 0)
     );
   };
 
   const estimatedFullRowPatchBytes = (y: number, cols: number, clearToEol: boolean): number => {
-    return estimatedCursorMoveBytes(y, 0) + Math.max(0, cols) + (clearToEol ? 3 : 0);
+    return (
+      estimatedCursorMoveBytes(y, 0) +
+      EST_STYLE_SWITCH_BYTES +
+      Math.max(0, cols) +
+      (clearToEol ? EST_CLEAR_TO_EOL_BYTES : 0)
+    );
   };
 
   const resolveDirtySpanRenderMode = (
@@ -763,25 +771,22 @@ export function createStdoutRenderer(
     if (spans.length > DIRTY_SPAN_MAX_PER_ROW) return "row";
 
     const coverage = dirtySpanCoverage(spans);
+    if (coverage >= Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD))) {
+      return "row";
+    }
+
     const fullRowCost = estimatedFullRowPatchBytes(y, cols, false);
-    const rowCostThreshold = fullRowCost * 0.9;
     const multiCost = estimatedSpanPatchBytes(spans, y, clearToEol);
 
-    if (spans.length === 1 && coverage < cols * DIRTY_SPAN_FULL_ROW_THRESHOLD) {
+    if (multiCost >= fullRowCost) {
+      return "row";
+    }
+
+    if (spans.length === 1) {
       return "spans";
     }
 
-    if (
-      spans.length === 2 &&
-      coverage < cols * DIRTY_SPAN_FULL_ROW_THRESHOLD &&
-      multiCost < rowCostThreshold
-    ) {
-      return "spans";
-    }
-
-    const sparseThreshold = fullRowCost * DIRTY_SPAN_FULL_ROW_THRESHOLD;
-
-    if (multiCost < sparseThreshold && coverage < cols * DIRTY_SPAN_FULL_ROW_THRESHOLD) {
+    if (spans.length === 2) {
       return "spans";
     }
 
@@ -789,14 +794,16 @@ export function createStdoutRenderer(
     const first = spans[0]!;
     const last = spans[spans.length - 1]!;
     const contiguousWidth = Math.max(0, last.endXExclusive - first.startX);
+    const contiguousCostThreshold = fullRowCost * DIRTY_SPAN_FULL_ROW_THRESHOLD;
     if (
-      contiguousCost < sparseThreshold &&
-      contiguousWidth < cols * DIRTY_SPAN_FULL_ROW_THRESHOLD
+      contiguousCost < multiCost &&
+      contiguousCost < contiguousCostThreshold &&
+      contiguousWidth < Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD))
     ) {
       return "contiguous";
     }
 
-    return "row";
+    return "spans";
   };
 
   const expandSpanStart = (row: readonly Cell[], startX: number, cols: number): number => {

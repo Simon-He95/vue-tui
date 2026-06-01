@@ -1,10 +1,15 @@
 import { performance } from "node:perf_hooks";
 import { createTerminal } from "../src/core/terminal/create-terminal.js";
 import { createStdoutRenderer } from "../src/renderer/cli/stdout-renderer.js";
-import type { CliOutput } from "../src/renderer/cli/stdout-renderer.js";
+import type { CliOutput, StdoutRendererOptions } from "../src/renderer/cli/stdout-renderer.js";
 
 type BufferedOutput = CliOutput & {
   take: () => string;
+};
+
+type InternalColumnDiffMode = "full-row" | "single-span" | "multi-span";
+type InternalStdoutRendererOptions = StdoutRendererOptions & {
+  __columnDiffMode?: InternalColumnDiffMode;
 };
 
 const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -102,7 +107,7 @@ function runCase(
       colorMode: "ansi16",
       useSyncOutput: false,
       __columnDiffMode: options.columnDiffMode,
-    });
+    } as InternalStdoutRendererOptions);
 
     // Drop renderer's initial blank/full-frame setup.
     output.take();
