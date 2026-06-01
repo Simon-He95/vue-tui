@@ -268,7 +268,7 @@ function mountRow(
 const inverseStyle = "\x1B[7m";
 
 describe("stdout renderer column diff", () => {
-  it("patches only the spinner cell when the trailing label is unchanged", () => {
+  it("patches spinner and label independently in the same row", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const { terminal, output, renderer } = mountRow("⠋ Installing dependencies...", {
         cols: 40,
@@ -285,6 +285,16 @@ describe("stdout renderer column diff", () => {
       expect(frame).toContain("\x1B[1;1H");
       expect(frame).toContain("⠙");
       expect(frame).not.toContain("Installing dependencies");
+
+      terminal.write("Building", { x: 2, y: 0 });
+      terminal.commit({ sync: true });
+
+      const labelFrame = output.take();
+
+      expect(labelFrame).toContain("\x1B[1;3H");
+      expect(labelFrame).toContain("Building");
+      expect(labelFrame).not.toContain("⠙");
+      expect(labelFrame).not.toContain("Installing");
 
       renderer.dispose();
       terminal.dispose();

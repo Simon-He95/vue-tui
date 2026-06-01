@@ -92,7 +92,11 @@ function minimalChangedPatch(previous: string, next: string): string {
 
   let previousEnd = previous.length;
   let nextEnd = next.length;
-  while (previousEnd > start && nextEnd > start && previous[previousEnd - 1] === next[nextEnd - 1]) {
+  while (
+    previousEnd > start &&
+    nextEnd > start &&
+    previous[previousEnd - 1] === next[nextEnd - 1]
+  ) {
     previousEnd--;
     nextEnd--;
   }

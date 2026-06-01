@@ -999,16 +999,17 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       },
       setFingerprintFn(fn: ((ch: string, style: Style) => number) | null): void {
         assertNotDisposed();
-        base.setFingerprintFn?.(fn);
+        const state = getPlaneState(plane);
+        setFingerprintFn(state.buffer, fn);
       },
       getRowFingerprints(y: number): Uint32Array | null {
         assertNotDisposed();
         const yy = Math.floor(y);
-        const size = base.size();
-        if (!Number.isFinite(yy) || yy < 0 || yy >= size.rows) {
+        const state = getPlaneState(plane);
+        if (!Number.isFinite(yy) || yy < 0 || yy >= state.buffer.rows) {
           throw new RangeError("Row out of bounds");
         }
-        return base.getRowFingerprints?.(yy) ?? null;
+        return getRowFingerprints(state.buffer, yy);
       },
     };
     planeTerminals.set(plane, api);

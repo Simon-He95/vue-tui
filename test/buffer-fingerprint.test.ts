@@ -65,4 +65,24 @@ describe("buffer fingerprints", () => {
     expect(() => overlay.getRowFingerprints!(2)).toThrow(RangeError);
     expect(() => overlay.getRowFingerprints!(Number.NaN)).toThrow(RangeError);
   });
+
+  it("keeps plane fingerprints separate from composite fingerprints", () => {
+    const terminal = createTerminal({ cols: 3, rows: 1 });
+    const basePlane = getPlaneTerminal(terminal, "default");
+    const overlay = getPlaneTerminal(terminal, "overlay");
+
+    terminal.setFingerprintFn!(fp);
+    basePlane.setFingerprintFn!(fp);
+    overlay.setFingerprintFn!(fp);
+
+    terminal.write("AAA", { x: 0, y: 0 });
+    overlay.write("BBB", { x: 0, y: 0 });
+    terminal.commit({ planes: ["default", "overlay"], sync: true });
+
+    expect(Array.from(basePlane.getRowFingerprints!(0)!)).toEqual(rowFp("AAA"));
+    expect(Array.from(overlay.getRowFingerprints!(0)!)).toEqual(rowFp("BBB"));
+    expect(Array.from(terminal.getRowFingerprints!(0)!)).toEqual(rowFp("BBB"));
+
+    terminal.dispose();
+  });
 });
