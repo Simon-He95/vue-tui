@@ -906,6 +906,42 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("keeps explicit scroll operations when dirtyRows is empty", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 8, rows: 4 });
+      const output = createBufferedOutput(true);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      terminal.write("row0", { x: 0, y: 0 });
+      terminal.write("row1", { x: 0, y: 1 });
+      terminal.write("row2", { x: 0, y: 2 });
+      terminal.write("row3", { x: 0, y: 3 });
+      terminal.commit({ sync: true });
+      output.take();
+
+      scrollPlaneRows(terminal, "default", 0, 4, 1);
+      output.clear();
+      (renderer as any).render([], true, [{ startY: 0, endY: 4, delta: 1 }]);
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;4r");
+      expect(frame).toContain("\x1B[4;1H");
+      expect(frame).toContain("\x1B[1S");
+      expect(frame).not.toContain("row0");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("closes OSC8 hyperlinks before cursor jumps between non-contiguous spans", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const linkA = "https://example.com/a";
@@ -2170,5 +2206,61 @@ describe("stdout renderer column diff", () => {
         terminal.dispose();
       },
     );
+  });
+
+  it("does not advance the stdout diff baseline when a frame write fails", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 16, rows: 1 });
+      const chunks: string[] = [];
+      let failWrites = false;
+
+      const output: CliOutput & { take: () => string; clear: () => void } = {
+        write(chunk: string) {
+          if (failWrites) throw new Error("write boom");
+          chunks.push(String(chunk));
+        },
+        take() {
+          const out = chunks.join("");
+          chunks.length = 0;
+          return out;
+        },
+        clear() {
+          chunks.length = 0;
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      try {
+        terminal.write("abcdef", { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+        output.take();
+
+        failWrites = true;
+        terminal.put(0, 0, "X");
+        expect(() => terminal.commit({ sync: true })).toThrow("write boom");
+
+        failWrites = false;
+        output.clear();
+        terminal.put(1, 0, "Y");
+        terminal.commit({ sync: true });
+
+        const frame = output.take();
+
+        expect(frame).toContain("X");
+        expect(frame).toContain("Y");
+        expect(frame).not.toContain("cdef");
+      } finally {
+        renderer.dispose();
+        terminal.dispose();
+      }
+    });
   });
 });

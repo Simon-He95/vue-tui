@@ -2141,7 +2141,11 @@ export function createStdoutRenderer(
           : resolveDirtySpanRenderMode(row, spansToPaint, rowY, rowCols, clearToEolForCost);
 
       if (renderMode === "row") {
-        renderRow(rowY, row, 0, rowCols, false);
+        if (clearStartX != null && !paintTailInsteadOfEscK) {
+          renderRow(rowY, row, 0, clearStartX, true);
+        } else {
+          renderRow(rowY, row, 0, rowCols, false);
+        }
         return;
       } else if (renderMode === "contiguous") {
         const first = spansToPaint[0];
@@ -2595,20 +2599,24 @@ export function createStdoutRenderer(
         frameParts.push(rowClearToEol[size.rows + i]!);
       }
     }
-    if (!rowsToRender) lastRenderedRows = size.rows;
-    // Swap fingerprint buffers for next frame diff (zero-copy)
-    const tmpFP = prevFP;
-    prevFP = currentFP;
-    currentFP = tmpFP;
-    const tmpHrefIds = prevHrefIds;
-    prevHrefIds = currentHrefIds;
-    currentHrefIds = tmpHrefIds;
-    const tmpTextIds = prevTextIds;
-    prevTextIds = currentTextIds;
-    currentTextIds = tmpTextIds;
-    fpPrevValid = !hrefIndexResetRequiresBaseline && !fingerprintInternResetRequiresBaseline;
-    prevOverlayBlockedRows = overlayCoverage.blockedRows;
-    prevOverlayPartialRows = overlayCoverage.partialRows;
+    const nextLastRenderedRows = !rowsToRender ? size.rows : lastRenderedRows;
+    const commitRenderBaseline = (): void => {
+      lastRenderedRows = nextLastRenderedRows;
+
+      // The physical terminal only matches currentFP after stdout accepts the frame.
+      const tmpFP = prevFP;
+      prevFP = currentFP;
+      currentFP = tmpFP;
+      const tmpHrefIds = prevHrefIds;
+      prevHrefIds = currentHrefIds;
+      currentHrefIds = tmpHrefIds;
+      const tmpTextIds = prevTextIds;
+      prevTextIds = currentTextIds;
+      currentTextIds = tmpTextIds;
+      fpPrevValid = !hrefIndexResetRequiresBaseline && !fingerprintInternResetRequiresBaseline;
+      prevOverlayBlockedRows = overlayCoverage.blockedRows;
+      prevOverlayPartialRows = overlayCoverage.partialRows;
+    };
 
     // Include cursor position in the same frame if getImeAnchor is provided
     // This eliminates the need for a separate setCursor() call after render
@@ -2770,6 +2778,7 @@ export function createStdoutRenderer(
       }
       throw writeError;
     }
+    commitRenderBaseline();
     {
       const writeMs = performance.now() - writeStart;
       writeEmaMs = writeEmaMs === 0 ? writeMs : writeEmaMs * 0.85 + writeMs * 0.15;
@@ -3035,12 +3044,7 @@ export function createStdoutRenderer(
       accumulatedScrollOperations = null;
     } else if (dirtyRows.length === 0) {
       if (scrollOperations?.length) {
-        accumulatedAllRows = true;
-        accumulatedDirtyBits = null;
-        accumulatedDirtyCount = 0;
-        accumulatedDirtyMin = Number.POSITIVE_INFINITY;
-        accumulatedDirtyMax = -1;
-        accumulatedScrollOperations = null;
+        mergeScrollOperations(scrollOperations);
       } else if (!accumulatedAllRows && accumulatedDirtyCount === 0) {
         cliLatency?.recordStdoutQueued(0);
         return;
