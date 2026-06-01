@@ -1894,8 +1894,45 @@ export function createStdoutRenderer(
       lastRenderWasFullRow = spanStart === 0 && clearToEol;
     };
 
+    const lastRenderableColumnInCurrentRow = (
+      rowY: number,
+      cols: number,
+      blankFingerprint: number,
+    ): number => {
+      if (!fpCols || rowY < 0 || rowY >= fpRows) return -1;
+
+      const base = rowY * fpCols;
+      const limit = Math.min(cols, fpCols);
+
+      for (let x = limit - 1; x >= 0; x--) {
+        if (
+          currentFP[base + x] !== blankFingerprint ||
+          currentTextIds[base + x] !== blankTextId ||
+          currentHrefIds[base + x] !== 0
+        ) {
+          return x;
+        }
+      }
+
+      return -1;
+    };
+
+    const resolveTailClearStartX = (
+      rowY: number,
+      cols: number,
+      shouldRewriteTail: boolean,
+      blankFingerprint: number,
+    ): number | null => {
+      if (!shouldRewriteTail) return null;
+
+      const lastRenderableX = lastRenderableColumnInCurrentRow(rowY, cols, blankFingerprint);
+      const clearStartX = Math.max(0, Math.min(cols, lastRenderableX + 1));
+
+      return clearStartX < cols ? clearStartX : null;
+    };
+
     const renderDirtySpans = (
-      y: number,
+      rowY: number,
       row: readonly Cell[],
       rawSpans: readonly DirtySpan[],
       rewriteTail: boolean,
@@ -1903,9 +1940,7 @@ export function createStdoutRenderer(
       if (!rawSpans.length && !rewriteTail) return;
 
       const rowCols = size.cols;
-      const clearStartX = rewriteTail
-        ? Math.max(0, Math.min(size.cols, lastExplicitPaintColumnInRow(row, size.cols, bgKey) + 1))
-        : null;
+      const clearStartX = resolveTailClearStartX(rowY, rowCols, rewriteTail, blankFP);
 
       // Compact trailing default-blank changes into one ESC[K before deciding
       // whether the dirty spans are too dense. Otherwise short text replacing
@@ -1945,10 +1980,10 @@ export function createStdoutRenderer(
       const renderMode =
         !shouldUseMultiDirtySpans() && spansToPaint.length > 0
           ? "contiguous"
-          : resolveDirtySpanRenderMode(spansToPaint, y, size.cols, clearToEolForCost);
+          : resolveDirtySpanRenderMode(spansToPaint, rowY, size.cols, clearToEolForCost);
 
       if (renderMode === "row") {
-        renderRow(y, row, 0, size.cols, false);
+        renderRow(rowY, row, 0, size.cols, false);
         return;
       } else if (renderMode === "contiguous") {
         const first = spansToPaint[0]!;
@@ -1957,18 +1992,18 @@ export function createStdoutRenderer(
           clearStartX == null ? last.endXExclusive : Math.min(last.endXExclusive, clearStartX);
 
         if (rewriteEnd > first.startX) {
-          renderRow(y, row, first.startX, rewriteEnd, false);
+          renderRow(rowY, row, first.startX, rewriteEnd, false);
         }
       } else {
         for (const span of spansToPaint) {
-          renderRow(y, row, span.startX, span.endXExclusive, false);
+          renderRow(rowY, row, span.startX, span.endXExclusive, false);
         }
       }
 
       // Clear only if there is actually a valid cell position inside the viewport.
       // Cursoring to cols + 1 is undefined-ish across terminals and can wrap.
-      if (clearStartX != null && clearStartX < size.cols) {
-        renderRow(y, row, clearStartX, clearStartX, true);
+      if (clearStartX != null) {
+        renderRow(rowY, row, clearStartX, clearStartX, true);
       }
     };
 
@@ -2185,8 +2220,8 @@ export function createStdoutRenderer(
         const rewriteTail =
           !insertedRow &&
           shouldRewriteRowTail(row, y, size.cols, currentFP, currentHrefIds, currentTextIds, bgKey);
-        renderDirtySpans(y, row, spans, rewriteTail);
         if (!insertedRow) fingerprintRow(row, y, size.cols);
+        renderDirtySpans(y, row, spans, rewriteTail);
         paintedExplicitRows.push(y);
       }
 
@@ -2308,8 +2343,8 @@ export function createStdoutRenderer(
               currentTextIds,
               bgKey,
             );
-            renderDirtySpans(y, row, spans, rewriteTail);
             fingerprintRow(row, y, size.cols);
+            renderDirtySpans(y, row, spans, rewriteTail);
             continue;
           }
 

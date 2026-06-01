@@ -67,6 +67,18 @@ function withEnv<T>(patch: Record<string, string | undefined>, fn: () => T): T {
   }
 }
 
+function assertNoMiddleRewrite(frame: string, unchangedMiddle: string): void {
+  if (frame.includes(unchangedMiddle)) {
+    throw new Error("optimized frame rewrote unchanged middle text");
+  }
+}
+
+function assertContainsPatch(frame: string, expected: string): void {
+  if (!frame.includes(expected)) {
+    throw new Error(`optimized frame did not contain expected patch: ${JSON.stringify(expected)}`);
+  }
+}
+
 function runCase(
   name: string,
   options: Readonly<{
@@ -114,6 +126,12 @@ function runCase(
       terminal.commit({ sync: true });
 
       const frame = output.take();
+      if (options.columnDiffMode === "multi-span" && i > 0 && i < 5) {
+        assertContainsPatch(frame, spinnerFrames[i % spinnerFrames.length]!);
+        assertContainsPatch(frame, `${String(i % 1000).padStart(3, "0")}%`);
+        assertNoMiddleRewrite(frame, middle);
+      }
+
       const bytes = Buffer.byteLength(frame, "utf8");
       totalBytes += bytes;
       maxFrameBytes = Math.max(maxFrameBytes, bytes);

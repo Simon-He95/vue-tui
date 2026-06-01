@@ -722,6 +722,40 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("does not clear styled trailing blank cells when text shrinks", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 32, rows: 1 });
+      const output = createBufferedOutput(false);
+
+      terminal.fill(0, 0, 16, 1, " ", { bg: "blue" });
+      terminal.write("Loading...", { x: 0, y: 0, style: { bg: "blue" } });
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      output.take();
+
+      terminal.fill(0, 0, 16, 1, " ", { bg: "blue" });
+      terminal.write("OK", { x: 0, y: 0, style: { bg: "blue" } });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("OK");
+      expect(frame).not.toContain("\x1B[1;3H\x1B[K");
+      expect(frame).toMatch(/OK\s{2,}/);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("clears only after a styled blank tail", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const { terminal, output, renderer } = mountRow("prefixXXXXXXXX", {
