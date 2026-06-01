@@ -2630,4 +2630,66 @@ describe("stdout renderer column diff", () => {
       }
     });
   });
+
+  it("does not split ZWJ emoji graphemes across ghostty chunked writes", () => {
+    withTerminalEnv({ GHOSTTY_RESOURCES_DIR: "/tmp/ghostty-test" }, () => {
+      const cols = 9000;
+      const terminal = createTerminal({ cols, rows: 1 });
+      const chunks: string[] = [];
+
+      const output: CliOutput = {
+        isTTY: true,
+        write(chunk: string) {
+          chunks.push(String(chunk));
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "row",
+      });
+
+      try {
+        terminal.write("x", { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+        chunks.length = 0;
+
+        terminal.write("y", { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+
+        const rowPatchFrame = chunks.join("");
+        const rowPatchPrefixLength = rowPatchFrame.indexOf("y");
+        expect(rowPatchPrefixLength).toBeGreaterThanOrEqual(0);
+        expect(rowPatchPrefixLength).toBeLessThan(8191);
+        chunks.length = 0;
+
+        const man = "\u{1F468}";
+        const woman = "\u{1F469}";
+        const girl = "\u{1F467}";
+        const boy = "\u{1F466}";
+        const family = [man, woman, girl, boy].join("\u200D");
+        const padding = 8191 - rowPatchPrefixLength;
+        const text = `${"a".repeat(padding)}${family}${"b".repeat(20)}`;
+
+        terminal.write(text, { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+
+        const frame = chunks.join("");
+        const splitAfterFirstEmoji = chunks.some((chunk, index) => {
+          const next = chunks[index + 1] ?? "";
+          return chunk.endsWith(man) && next.startsWith("\u200D");
+        });
+
+        expect(frame).toContain(family);
+        expect(splitAfterFirstEmoji).toBe(false);
+      } finally {
+        renderer.dispose();
+        terminal.dispose();
+      }
+    });
+  });
 });

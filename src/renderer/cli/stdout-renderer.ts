@@ -176,8 +176,7 @@ export function createStdoutRenderer(
   if (!output) throw new Error("createStdoutRenderer requires a Node stdout-like output");
   const out = output;
   const outputFd = Number((out as any).fd);
-  const canUseSyncStdout =
-    options?.output == null && Number.isInteger(outputFd) && outputFd === 1;
+  const canUseSyncStdout = options?.output == null && Number.isInteger(outputFd) && outputFd === 1;
   const fingerprintOwner = Symbol("stdout-renderer");
   let ownsFingerprintFn = false;
   const fingerprintTerminal = terminal as TerminalFingerprintHooks;
@@ -1728,14 +1727,78 @@ export function createStdoutRenderer(
   }
 
   const isHighSurrogate = (code: number): boolean => code >= 0xd800 && code <= 0xdbff;
-  const safeChunkEnd = (data: string, start: number, preferredEnd: number): number => {
-    let end = Math.min(data.length, preferredEnd);
+  const isLowSurrogate = (code: number): boolean => code >= 0xdc00 && code <= 0xdfff;
 
-    if (end < data.length && end > start && isHighSurrogate(data.charCodeAt(end - 1))) {
-      end++;
+  const codePointEnd = (data: string, index: number): number => {
+    const code = data.charCodeAt(index);
+    if (isHighSurrogate(code) && index + 1 < data.length) {
+      const next = data.charCodeAt(index + 1);
+      if (isLowSurrogate(next)) return index + 2;
     }
 
-    return Math.max(start + 1, Math.min(data.length, end));
+    return index + 1;
+  };
+
+  const codePointBefore = (data: string, index: number): number | null => {
+    if (index <= 0) return null;
+    const prev = data.charCodeAt(index - 1);
+    if (isLowSurrogate(prev) && index - 2 >= 0) {
+      const high = data.charCodeAt(index - 2);
+      if (isHighSurrogate(high)) return data.codePointAt(index - 2) ?? null;
+    }
+
+    return data.codePointAt(index - 1) ?? null;
+  };
+
+  const isGraphemeContinuationCodePoint = (codePoint: number): boolean =>
+    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
+    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
+    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
+    (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f) ||
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
+    (codePoint >= 0xe0100 && codePoint <= 0xe01ef) ||
+    (codePoint >= 0x1f3fb && codePoint <= 0x1f3ff) ||
+    (codePoint >= 0xe0020 && codePoint <= 0xe007f);
+
+  const shouldAttachToPreviousGrapheme = (data: string, index: number): boolean => {
+    const codePoint = data.codePointAt(index);
+    if (codePoint == null) return false;
+
+    if (codePoint === 0x200d) return true;
+    if (codePointBefore(data, index) === 0x200d) return true;
+
+    return isGraphemeContinuationCodePoint(codePoint);
+  };
+
+  const safeChunkEnd = (data: string, start: number, maxBytes: number): number => {
+    let end = start;
+    let bytes = 0;
+    const limit = Math.max(1, Math.floor(maxBytes));
+
+    while (end < data.length) {
+      const next = codePointEnd(data, end);
+      const partBytes = Buffer.byteLength(data.slice(end, next), "utf8");
+
+      if (end > start && bytes + partBytes > limit && !shouldAttachToPreviousGrapheme(data, end)) {
+        break;
+      }
+
+      bytes += partBytes;
+      end = next;
+
+      while (end < data.length && shouldAttachToPreviousGrapheme(data, end)) {
+        const attachedEnd = codePointEnd(data, end);
+        bytes += Buffer.byteLength(data.slice(end, attachedEnd), "utf8");
+        end = attachedEnd;
+      }
+
+      if (bytes >= limit && (end >= data.length || !shouldAttachToPreviousGrapheme(data, end))) {
+        break;
+      }
+    }
+
+    return end > start ? end : codePointEnd(data, start);
   };
 
   /**
@@ -1743,7 +1806,7 @@ export function createStdoutRenderer(
    * This is especially important for ghostty which can hang on large writes.
    */
   function writeChunked(data: string): void {
-    if (data.length <= chunkSize) {
+    if (Buffer.byteLength(data, "utf8") <= chunkSize) {
       out.write(data);
       return;
     }
@@ -1756,7 +1819,7 @@ export function createStdoutRenderer(
 
     try {
       for (let start = 0; start < data.length; ) {
-        const end = safeChunkEnd(data, start, start + chunkSize);
+        const end = safeChunkEnd(data, start, chunkSize);
         out.write(data.slice(start, end));
         start = end;
       }
