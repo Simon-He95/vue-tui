@@ -77,6 +77,11 @@ type TerminalFingerprintHooks = Readonly<{
 export type CliOutput = Readonly<{
   write: (chunk: string) => unknown;
   isTTY?: boolean;
+  fd?: number;
+  columns?: number;
+  rows?: number;
+  on?: (event: "resize", listener: () => void) => unknown;
+  off?: (event: "resize", listener: () => void) => unknown;
 }>;
 
 export type StdoutRenderer = Readonly<{
@@ -418,6 +423,8 @@ export function createStdoutRenderer(
   const shouldUseDirtySpans = (): boolean => effectiveDirtyRowPatchMode !== "row";
   const shouldUseMultiDirtySpans = (): boolean => effectiveDirtyRowPatchMode === "multi-span";
   const enableOsc8Links = outputAllowsOsc8Links && !isVscodeTerminal;
+  const renderedHref = (value: unknown): string | null =>
+    enableOsc8Links ? normalizeHref(value) : null;
 
   let disposed = false;
   let lastFrameTime = 0;
@@ -534,7 +541,7 @@ export function createStdoutRenderer(
       style.italic ? "1" : "0",
       style.underline ? "1" : "0",
       style.inverse ? "1" : "0",
-      normalizeHref(style.href) ? "1" : "0",
+      renderedHref(style.href) ? "1" : "0",
     ].join(STYLE_KEY_SEP);
   }
 
@@ -775,10 +782,7 @@ export function createStdoutRenderer(
   }
 
   function shouldAttemptFingerprintInstall(): boolean {
-    return (
-      !fingerprintInstallBlockedByExternalProvider ||
-      !hasActiveExternalFingerprintProvider()
-    );
+    return !fingerprintInstallBlockedByExternalProvider || !hasActiveExternalFingerprintProvider();
   }
 
   type RowFingerprintSnapshot = Readonly<{
@@ -803,7 +807,7 @@ export function createStdoutRenderer(
     }
     for (let x = 0; x < cols; x++) {
       const cell = cellAt(row, x);
-      currentHrefIds[base + x] = hrefId(normalizeHref(cell.style.href));
+      currentHrefIds[base + x] = hrefId(renderedHref(cell.style.href));
       currentTextIds[base + x] = cellIdentityTextId(cell);
     }
   }
@@ -829,7 +833,7 @@ export function createStdoutRenderer(
 
     for (let x = 0; x < cols; x++) {
       const cell = cellAt(row, x);
-      hrefIds[x] = hrefId(normalizeHref(cell.style.href));
+      hrefIds[x] = hrefId(renderedHref(cell.style.href));
       textIds[x] = cellIdentityTextId(cell);
     }
 
@@ -871,7 +875,7 @@ export function createStdoutRenderer(
     return (
       fingerprint === referenceFP[base + x] &&
       cellIdentityTextId(cell) === referenceTextIds[base + x] &&
-      hrefId(normalizeHref(cell.style.href)) === referenceHrefIds[base + x]
+      hrefId(renderedHref(cell.style.href)) === referenceHrefIds[base + x]
     );
   };
 
@@ -1326,7 +1330,7 @@ export function createStdoutRenderer(
 
     // Do not use ESC[K for hyperlink blanks. Even if visually blank,
     // they can still define a clickable region in supporting terminals.
-    if (normalizeHref(cell.style.href)) return false;
+    if (renderedHref(cell.style.href)) return false;
 
     // Conservative: only cells whose full visual style equals the renderer's
     // EOL-clear style may be compacted into ESC[K. This intentionally treats
@@ -2033,7 +2037,7 @@ export function createStdoutRenderer(
         italic: Boolean(style.italic),
         underline: Boolean(style.underline),
         inverse: Boolean(style.inverse),
-        href: normalizeHref(style.href),
+        href: renderedHref(style.href),
       };
     };
 
@@ -2075,7 +2079,7 @@ export function createStdoutRenderer(
     };
 
     const shouldEmitStyle = (style: Style, key: number): boolean =>
-      activeStyleKey !== key || activeStyle.href !== normalizeHref(style.href);
+      activeStyleKey !== key || activeStyle.href !== renderedHref(style.href);
 
     const renderRow = (
       y: number,
@@ -2136,7 +2140,7 @@ export function createStdoutRenderer(
         }
         if (
           key === currentKey &&
-          normalizeHref(nextStyle.href) === normalizeHref(currentStyle?.href)
+          renderedHref(nextStyle.href) === renderedHref(currentStyle?.href)
         ) {
           currentTextParts.push(ch);
           if (needsCursorFix(cell, ch)) {

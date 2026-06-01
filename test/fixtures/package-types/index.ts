@@ -202,7 +202,14 @@ console.log(
 );
 
 const driver: StdinDriver | null = null;
-const stdoutOutput: CliOutput = { write: () => {} };
+const stdoutOutput: CliOutput = {
+  fd: 1,
+  columns: 80,
+  rows: 24,
+  write: () => {},
+  on: () => {},
+  off: () => {},
+};
 const stdoutPatchMode: DirtyRowPatchMode = "span";
 const stdoutOptions: StdoutRendererOptions = {
   dirtyRowPatchMode: stdoutPatchMode,

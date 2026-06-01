@@ -274,6 +274,76 @@ function mountRow(
 const inverseStyle = "\x1B[7m";
 
 describe("stdout renderer column diff", () => {
+  it("ignores href-only changes when OSC8 links are disabled by terminal detection", () => {
+    withTerminalEnv({ TERM_PROGRAM: "vscode", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 80, rows: 1 });
+      const output = createBufferedOutput(true);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      terminal.write("link", {
+        x: 0,
+        y: 0,
+        style: { href: "https://a.example" },
+      });
+      terminal.commit({ sync: true });
+      output.take();
+
+      terminal.write("link", {
+        x: 0,
+        y: 0,
+        style: { href: "https://b.example" },
+      });
+      terminal.commit({ sync: true });
+
+      expect(output.take()).toBe("");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("ignores href-only changes when the output explicitly opts out of TTY links", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 80, rows: 1 });
+      const output = createBufferedOutput(false);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      terminal.write("link", {
+        x: 0,
+        y: 0,
+        style: { href: "https://a.example" },
+      });
+      terminal.commit({ sync: true });
+      output.take();
+
+      terminal.write("link", {
+        x: 0,
+        y: 0,
+        style: { href: "https://b.example" },
+      });
+      terminal.commit({ sync: true });
+
+      expect(output.take()).toBe("");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("patches spinner and label independently in the same row", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const { terminal, output, renderer } = mountRow("⠋ Installing dependencies...", {
