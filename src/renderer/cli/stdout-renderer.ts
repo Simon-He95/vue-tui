@@ -122,8 +122,8 @@ export type StdoutRendererOptions = Readonly<{
    *   terminals that are sensitive to fragmented cursor-addressed writes.
    * - "row": repaint each dirty row.
    * - "span": prefer row-internal multi-span diffing. Dense, fragmented, or
-   *   terminal-sensitive rows may still repaint the row when that is cheaper
-   *   or safer.
+   *   high-cost rows may still repaint the row when that is cheaper or safer.
+   *   Terminal-sensitive conservative fallback is only applied by "auto".
    *
    * Env fallback when this option is not provided:
    * VUE_TUI_DIRTY_ROW_PATCH_MODE, DIMCODE_TUI_DIRTY_ROW_RENDER_MODE,
@@ -376,13 +376,24 @@ export function createStdoutRenderer(
   const columnDiffMode =
     (options as InternalStdoutRendererOptions | undefined)?.__columnDiffMode ?? "auto";
   function resolveEffectiveDirtyRowPatchMode(): EffectiveDirtyRowPatchMode {
-    if (columnDiffMode === "full-row") return "row";
-    if (columnDiffMode === "single-span") return "single-span";
-    if (columnDiffMode === "multi-span") return "multi-span";
-    if (dirtyRowPatchMode === "span") return "multi-span";
-    if (dirtyRowPatchMode === "row") return "row";
-    if (!outputIsTTY) return "multi-span";
-    return "multi-span";
+    switch (columnDiffMode) {
+      case "full-row":
+        return "row";
+      case "single-span":
+        return "single-span";
+      case "multi-span":
+        return "multi-span";
+      case "auto":
+        break;
+    }
+
+    switch (dirtyRowPatchMode) {
+      case "row":
+        return "row";
+      case "span":
+      case "auto":
+        return "multi-span";
+    }
   }
   const effectiveDirtyRowPatchMode = resolveEffectiveDirtyRowPatchMode();
   const shouldUseDirtySpans = (): boolean => effectiveDirtyRowPatchMode !== "row";
@@ -947,11 +958,13 @@ export function createStdoutRenderer(
       return "row";
     }
 
+    const fullRowCost = estimatedFullRowPatchBytes(row, y, cols, clearToEol);
+
     if (spans.length === 1) {
-      return "spans";
+      const spanCost = estimatedSpanPatchBytes(row, spans, y, cols, clearToEol);
+      return spanCost < fullRowCost ? "spans" : "row";
     }
 
-    const fullRowCost = estimatedFullRowPatchBytes(row, y, cols, clearToEol);
     const multiCost = estimatedSpanPatchBytes(row, spans, y, cols, clearToEol);
     const first = spans[0]!;
     const last = spans[spans.length - 1]!;

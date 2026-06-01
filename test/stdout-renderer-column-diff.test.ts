@@ -301,6 +301,38 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("patches a shortened label without repainting the spinner or leaving stale tail", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const oldLabel = "Installing dependencies...";
+      const nextLabel = "Build";
+      const { terminal, output, renderer, initialFrame } = mountRow(`⠋ ${oldLabel}`, {
+        cols: 40,
+        dirtyRowPatchMode: "span",
+      });
+
+      const screen = createTestScreen(40, 1);
+      applyAnsiFrame(screen, initialFrame);
+
+      output.clear();
+
+      terminal.write(nextLabel.padEnd(oldLabel.length, " "), { x: 2, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      applyAnsiFrame(screen, frame);
+
+      expect(frame).toContain("\x1B[1;3H");
+      expect(frame).toContain(nextLabel);
+      expect(frame).not.toContain("⠋");
+      expect(frame).not.toContain(oldLabel);
+      expect(screenLine(screen, 0).startsWith(`⠋ ${nextLabel}`)).toBe(true);
+      expect(screenLine(screen, 0)).not.toContain("dependencies");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("does not treat an ordinary blank after ASCII text as a previous wide-glyph continuation", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const { terminal, output, renderer } = mountRow("A       ", {
