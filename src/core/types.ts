@@ -125,7 +125,7 @@ export interface Terminal {
   setScrollbackLimit: (limit: number) => void;
   getScrollbackLines: (count?: number) => readonly string[];
   /** Register fingerprint function for SoA pre-computation on the composite buffer. */
-  setFingerprintFn: (fn: (ch: string, style: Style) => number) => void;
+  setFingerprintFn: (fn: ((ch: string, style: Style) => number) | null) => void;
   /** Get pre-computed fingerprints for a composite buffer row (null if not enabled). */
   getRowFingerprints: (y: number) => Uint32Array | null;
 }

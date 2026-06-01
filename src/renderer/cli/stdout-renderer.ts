@@ -67,6 +67,8 @@ const SYNC_END = "\u001B[?2026l";
 const OSC8_OPEN = (href: string) => `\u001B]8;;${href}\u0007`;
 const OSC8_CLOSE = "\u001B]8;;\u0007";
 
+const stdoutFingerprintOwners = new WeakMap<Terminal, symbol>();
+
 export type CliOutput = Readonly<{
   write: (chunk: string) => unknown;
   isTTY?: boolean;
@@ -167,6 +169,8 @@ export function createStdoutRenderer(
   const output: CliOutput | undefined = options?.output ?? (process.stdout as any);
   if (!output) throw new Error("createStdoutRenderer requires a Node stdout-like output");
   const out = output;
+  const fingerprintOwner = Symbol("stdout-renderer");
+  let ownsFingerprintFn = false;
   const outputIsTTY = Boolean(out.isTTY);
   // Custom stdout-like outputs that omit `isTTY` are treated as terminal-capable
   // for OSC8 unless they explicitly opt out with `isTTY: false`.
@@ -675,6 +679,13 @@ export function createStdoutRenderer(
   });
 
   const cellAt = (row: readonly Cell[], x: number): Cell => row[x] ?? BLANK_CELL;
+
+  function rowFingerprintsForThisRenderer(y: number): Uint32Array | null {
+    if (!ownsFingerprintFn || stdoutFingerprintOwners.get(terminal) !== fingerprintOwner)
+      return null;
+    return terminal.getRowFingerprints(y);
+  }
+
   type RowFingerprintSnapshot = Readonly<{
     fp: Uint32Array;
     hrefIds: Uint32Array;
@@ -684,7 +695,7 @@ export function createStdoutRenderer(
   function fingerprintRow(row: readonly Cell[], y: number, cols: number): void {
     // Fast path: use pre-computed SoA fingerprints from composite buffer.
     // This is a TypedArray.set() copy instead of per-cell property access + hash.
-    const rowFP = terminal.getRowFingerprints(y);
+    const rowFP = rowFingerprintsForThisRenderer(y);
     const base = y * fpCols;
     if (rowFP && rowFP.length >= cols && row.length >= cols) {
       currentFP.set(rowFP.subarray(0, cols), base);
@@ -710,7 +721,7 @@ export function createStdoutRenderer(
     const fp = new Uint32Array(cols);
     const hrefIds = new Uint32Array(cols);
     const textIds = new Uint32Array(cols);
-    const rowFP = terminal.getRowFingerprints(y);
+    const rowFP = rowFingerprintsForThisRenderer(y);
 
     if (rowFP && rowFP.length >= cols && row.length >= cols) {
       fp.set(rowFP.subarray(0, cols));
@@ -1199,7 +1210,7 @@ export function createStdoutRenderer(
       return fullRowDirtySpan(cols);
     }
 
-    const rowFP = terminal.getRowFingerprints(y);
+    const rowFP = rowFingerprintsForThisRenderer(y);
     const base = y * fpCols;
 
     return expandSpansForReferenceWideGlyphs(
@@ -3072,9 +3083,35 @@ export function createStdoutRenderer(
   }
 
   function installFingerprintFn(): void {
+    const currentOwner = stdoutFingerprintOwners.get(terminal);
+
+    if (currentOwner && currentOwner !== fingerprintOwner) {
+      ownsFingerprintFn = false;
+      invalidateFingerprintBaseline();
+      return;
+    }
+
+    stdoutFingerprintOwners.set(terminal, fingerprintOwner);
+    ownsFingerprintFn = true;
     terminal.setFingerprintFn((ch: string, style: Style) => {
       return cellFingerprint(ch, style);
     });
+  }
+
+  function releaseFingerprintFn(): void {
+    if (!ownsFingerprintFn) return;
+    if (stdoutFingerprintOwners.get(terminal) !== fingerprintOwner) {
+      ownsFingerprintFn = false;
+      return;
+    }
+
+    stdoutFingerprintOwners.delete(terminal);
+    ownsFingerprintFn = false;
+    try {
+      terminal.setFingerprintFn(null);
+    } catch {
+      // ignore
+    }
   }
 
   // Register fingerprint function on the terminal's composite buffer.
@@ -3157,6 +3194,7 @@ export function createStdoutRenderer(
     accumulatedDirtyMin = Number.POSITIVE_INFINITY;
     accumulatedDirtyMax = -1;
     off();
+    releaseFingerprintFn();
     if (canTrackResize && typeof resizeSource?.off === "function") {
       try {
         resizeSource.off("resize", onResize);

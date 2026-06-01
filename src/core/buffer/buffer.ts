@@ -143,19 +143,18 @@ export function clamp(n: number, min: number, max: number): number {
 }
 
 /**
- * Register a fingerprint function on the buffer. This enables SoA fingerprint
+ * Register or clear a fingerprint function on the buffer. This enables SoA fingerprint
  * pre-computation: cell writes will update fingerprints inline, and the renderer
  * can read them via getRowFingerprints() instead of per-cell hash computation.
  */
-export function setFingerprintFn(buffer: GridBuffer, fn: CellFingerprintFn): void {
+export function setFingerprintFn(buffer: GridBuffer, fn: CellFingerprintFn | null): void {
   buffer.fingerprintFn = fn;
   const len = buffer.rows * buffer.cols;
-  if (!len) {
+  if (!fn || !len) {
     buffer.soaFingerprints = null;
     return;
   }
   buffer.soaFingerprints = new Uint32Array(len);
-  // Compute initial fingerprints for all cells
   for (let y = 0; y < buffer.rows; y++) {
     const row = getBufferRow(buffer, y);
     const physY = physicalRowIndex(buffer, y);

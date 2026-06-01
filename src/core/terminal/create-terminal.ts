@@ -997,7 +997,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
         if (count == null) return all;
         return all.slice(Math.max(0, all.length - Math.max(0, Math.floor(count))));
       },
-      setFingerprintFn(fn: (ch: string, style: Style) => number): void {
+      setFingerprintFn(fn: ((ch: string, style: Style) => number) | null): void {
         assertNotDisposed();
         base.setFingerprintFn(fn);
       },
@@ -1206,7 +1206,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       return all.slice(Math.max(0, all.length - Math.max(0, Math.floor(count))));
     },
 
-    setFingerprintFn(fn: (ch: string, style: Style) => number): void {
+    setFingerprintFn(fn: ((ch: string, style: Style) => number) | null): void {
       assertNotDisposed();
       setFingerprintFn(compositeBuffer, fn);
     },

@@ -288,6 +288,79 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("releases renderer-owned fingerprint function on dispose", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 20, rows: 1 });
+      const output = createBufferedOutput(false);
+      const installed: unknown[] = [];
+      const originalSetFingerprintFn = terminal.setFingerprintFn.bind(terminal);
+
+      (terminal as any).setFingerprintFn = (fn: unknown) => {
+        installed.push(fn);
+        return originalSetFingerprintFn(fn as any);
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      expect(installed.some((fn) => typeof fn === "function")).toBe(true);
+
+      renderer.dispose();
+
+      expect(installed[installed.length - 1]).toBe(null);
+
+      terminal.dispose();
+    });
+  });
+
+  it("does not let a second stdout renderer override an active renderer fingerprint provider", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 20, rows: 1 });
+      const outputA = createBufferedOutput(false);
+      const outputB = createBufferedOutput(false);
+      const installed: unknown[] = [];
+      const originalSetFingerprintFn = terminal.setFingerprintFn.bind(terminal);
+
+      (terminal as any).setFingerprintFn = (fn: unknown) => {
+        installed.push(fn);
+        return originalSetFingerprintFn(fn as any);
+      };
+
+      const rendererA = createStdoutRenderer(terminal, {
+        output: outputA,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+      const rendererB = createStdoutRenderer(terminal, {
+        output: outputB,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      expect(installed.filter((fn) => typeof fn === "function")).toHaveLength(1);
+
+      rendererB.dispose();
+      expect(installed[installed.length - 1]).not.toBe(null);
+
+      rendererA.dispose();
+      expect(installed[installed.length - 1]).toBe(null);
+
+      terminal.dispose();
+    });
+  });
+
   it("records frame metrics using UTF-8 byte length", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const terminal = createTerminal({ cols: 8, rows: 1 });
