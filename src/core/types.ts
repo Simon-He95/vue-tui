@@ -128,10 +128,10 @@ export interface Terminal {
    * @internal Renderer-owned fingerprint hook for SoA pre-computation.
    * Application code should not call this directly.
    */
-  setFingerprintFn?: (fn: ((ch: string, style: Style) => number) | null) => void;
+  setFingerprintFn: (fn: ((ch: string, style: Style) => number) | null) => void;
   /**
    * @internal Return a live pre-computed fingerprint row view.
    * Treat the returned Uint32Array as readonly.
    */
-  getRowFingerprints?: (y: number) => Uint32Array | null;
+  getRowFingerprints: (y: number) => Uint32Array | null;
 }

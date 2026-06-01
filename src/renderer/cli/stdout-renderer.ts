@@ -69,6 +69,11 @@ const OSC8_CLOSE = "\u001B]8;;\u0007";
 
 const stdoutFingerprintOwners = new WeakMap<Terminal, symbol>();
 
+type TerminalFingerprintHooks = Readonly<{
+  setFingerprintFn?: (fn: ((ch: string, style: Style) => number) | null) => void;
+  getRowFingerprints?: (y: number) => Uint32Array | null;
+}>;
+
 export type CliOutput = Readonly<{
   write: (chunk: string) => unknown;
   isTTY?: boolean;
@@ -171,9 +176,10 @@ export function createStdoutRenderer(
   const out = output;
   const fingerprintOwner = Symbol("stdout-renderer");
   let ownsFingerprintFn = false;
+  const fingerprintTerminal = terminal as TerminalFingerprintHooks;
   const canInstallTerminalFingerprintFn = (): boolean =>
-    typeof terminal.setFingerprintFn === "function" &&
-    typeof terminal.getRowFingerprints === "function";
+    typeof fingerprintTerminal.setFingerprintFn === "function" &&
+    typeof fingerprintTerminal.getRowFingerprints === "function";
   const outputIsTTY = Boolean(out.isTTY);
   // Custom stdout-like outputs that omit `isTTY` are treated as terminal-capable
   // for OSC8 unless they explicitly opt out with `isTTY: false`.
@@ -443,6 +449,7 @@ export function createStdoutRenderer(
   let fingerprintInternResetRequiresBaseline = false;
   let fingerprintBaselineGeneration = 0;
   let activeRenderBaselineGeneration = 0;
+  let terminalFingerprintFnDirty = false;
 
   function invalidateFingerprintBaseline(): void {
     fpPrevValid = false;
@@ -457,6 +464,7 @@ export function createStdoutRenderer(
     styleKeyCache = new WeakMap<Style, number>();
     styleKeyIndex.clear();
     if (resetIds) nextStyleKey = 1;
+    terminalFingerprintFnDirty = true;
     invalidateFingerprintBaseline();
   }
 
@@ -715,9 +723,10 @@ export function createStdoutRenderer(
   const cellAt = (row: readonly Cell[], x: number): Cell => row[x] ?? BLANK_CELL;
 
   function rowFingerprintsForThisRenderer(y: number): Uint32Array | null {
+    if (terminalFingerprintFnDirty) return null;
     if (!ownsFingerprintFn || stdoutFingerprintOwners.get(terminal) !== fingerprintOwner)
       return null;
-    return terminal.getRowFingerprints?.(y) ?? null;
+    return fingerprintTerminal.getRowFingerprints?.(y) ?? null;
   }
 
   type RowFingerprintSnapshot = Readonly<{
@@ -1750,12 +1759,13 @@ export function createStdoutRenderer(
     }
 
     if (disposed) return;
+    const currentFingerprintOwner = stdoutFingerprintOwners.get(terminal);
     if (
-      !ownsFingerprintFn &&
-      !stdoutFingerprintOwners.get(terminal) &&
+      (!ownsFingerprintFn || terminalFingerprintFnDirty) &&
+      (!currentFingerprintOwner || currentFingerprintOwner === fingerprintOwner) &&
       canInstallTerminalFingerprintFn()
     ) {
-      installFingerprintFn();
+      installFingerprintFn(terminalFingerprintFnDirty);
     }
     cliLatency?.recordStdoutRenderStart();
     pendingRender = false;
@@ -3114,13 +3124,14 @@ export function createStdoutRenderer(
     }
   }
 
-  function installFingerprintFn(): void {
+  function installFingerprintFn(force = false): void {
     if (!canInstallTerminalFingerprintFn()) {
       if (ownsFingerprintFn && stdoutFingerprintOwners.get(terminal) === fingerprintOwner) {
         stdoutFingerprintOwners.delete(terminal);
         invalidateFingerprintBaseline();
       }
       ownsFingerprintFn = false;
+      terminalFingerprintFnDirty = true;
       return;
     }
 
@@ -3132,13 +3143,21 @@ export function createStdoutRenderer(
       return;
     }
 
-    if (ownsFingerprintFn && currentOwner === fingerprintOwner) return;
+    if (
+      ownsFingerprintFn &&
+      currentOwner === fingerprintOwner &&
+      !force &&
+      !terminalFingerprintFnDirty
+    ) {
+      return;
+    }
 
     stdoutFingerprintOwners.set(terminal, fingerprintOwner);
     ownsFingerprintFn = true;
-    terminal.setFingerprintFn!((ch: string, style: Style) => {
+    fingerprintTerminal.setFingerprintFn!((ch: string, style: Style) => {
       return cellFingerprint(ch, style);
     });
+    terminalFingerprintFnDirty = false;
     invalidateFingerprintBaseline();
   }
 
@@ -3152,7 +3171,7 @@ export function createStdoutRenderer(
     stdoutFingerprintOwners.delete(terminal);
     ownsFingerprintFn = false;
     try {
-      terminal.setFingerprintFn?.(null);
+      fingerprintTerminal.setFingerprintFn?.(null);
     } catch {
       // ignore
     }
@@ -3275,7 +3294,7 @@ export function createStdoutRenderer(
     }
     if ("palette" in next) palette = next.palette ?? null;
     resetStyleKeyIndex();
-    installFingerprintFn();
+    installFingerprintFn(true);
     fpRows = 0;
     fpPrevValid = false;
     prevOverlayBlockedRows = [];
