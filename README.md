@@ -8,21 +8,27 @@
 
 # @simon_he/vue-tui
 
-[![npm version](https://img.shields.io/npm/v/@simon_he/vue-tui)](https://www.npmjs.com/package/@simon_he/vue-tui)
-[![npm downloads](https://img.shields.io/npm/dm/@simon_he/vue-tui)](https://www.npmjs.com/package/@simon_he/vue-tui)
+[![npm version](https://img.shields.io/npm/v/@simon_he/vue-tui?style=flat-square)](https://www.npmjs.com/package/@simon_he/vue-tui)
+[![npm downloads](https://img.shields.io/npm/dm/@simon_he/vue-tui?style=flat-square)](https://www.npmjs.com/package/@simon_he/vue-tui)
 [![CI](https://github.com/Simon-He95/vue-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/Simon-He95/vue-tui/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./license)
+[![Runtime compatibility](https://github.com/Simon-He95/vue-tui/actions/workflows/runtime-compat.yml/badge.svg)](https://github.com/Simon-He95/vue-tui/actions/workflows/runtime-compat.yml)
+[![Security](https://github.com/Simon-He95/vue-tui/actions/workflows/security.yml/badge.svg)](https://github.com/Simon-He95/vue-tui/actions/workflows/security.yml)
+![TypeScript types](https://img.shields.io/npm/types/@simon_he/vue-tui?style=flat-square)
+![Node version](https://img.shields.io/node/v/@simon_he/vue-tui?style=flat-square)
+[![MIT License](https://img.shields.io/github/license/Simon-He95/vue-tui?style=flat-square)](./license)
 
 [Docs](https://vue-tui.pages.dev/) | [npm](https://www.npmjs.com/package/@simon_he/vue-tui) | [GitHub](https://github.com/Simon-He95/vue-tui) | [Issues](https://github.com/Simon-He95/vue-tui/issues)
 
-Vue TUI is a Vue 3 terminal UI component library and renderer toolkit for browser-hosted terminal surfaces and real CLI stdout apps. It gives you Vue components, terminal cell rendering, event dispatch, markdown rendering, and high-throughput primitives for lists, logs, and streaming transcripts.
+Vue TUI is a Vue 3 terminal UI toolkit for building terminal-style interfaces that render to browser DOM, real CLI stdout, and headless tests.
 
-Use it when you want:
+Use it to build browser terminal dashboards, Vue-powered CLI apps, streaming markdown transcripts, log viewers, virtual lists, and AI agent consoles with one shared component model.
 
-- Browser-hosted terminal interfaces, dashboards, demos, and playgrounds.
-- CLI apps that use Vue component composition instead of imperative stdout drawing.
-- Shared UI code that can run against a DOM renderer, a stdout renderer, or headless tests.
-- Large terminal surfaces such as virtual lists, append-only logs, markdown transcripts, and agent console UIs.
+## Why Vue TUI?
+
+- **Vue component model for terminal UIs**: build with `TerminalProvider`, `TBox`, `TInput`, `TList`, `TTable`, and more.
+- **Browser + CLI renderers**: render the same UI model to browser DOM or real stdout.
+- **High-throughput surfaces**: virtual lists, append-only logs, streaming markdown, and agent transcripts.
+- **Clear host boundaries**: browser-safe root entrypoint, CLI-only APIs under `/cli`, sanitized links, and explicit host permissions.
 
 ## Agent UI Showcase
 
@@ -243,6 +249,11 @@ This table is a category overview. The generated API reference for root, `/vue`,
 | Page                                                               | Purpose                                                              |
 | ------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | [Docs home](./docs/index.md)                                       | Product overview and reading path                                    |
+| [Vue Terminal UI](./docs/guide/vue-terminal-ui.md)                 | English landing page for terminal-style Vue interfaces               |
+| [Vue CLI UI](./docs/guide/vue-cli-ui.md)                           | CLI app model with Vue component composition                         |
+| [CLI stdout renderer](./docs/guide/cli-stdout-renderer.md)         | Stdout renderer, stdin driver, cleanup, and terminal output          |
+| [Terminal log viewer](./docs/guide/terminal-log-viewer.md)         | Append-only logs, retained windows, wrapping, links, and search      |
+| [Markdown transcripts](./docs/guide/markdown-transcript.md)        | Static and streaming markdown transcript rendering                   |
 | [Examples index](./docs/examples.md)                               | Browser, terminal, and smoke example commands                        |
 | [Core API](./docs/api.md)                                          | Terminal, renderer, events, runtime, planes, and scheduler contracts |
 | [Terminal UI best practices](./docs/terminal-ui-best-practices.md) | Cell layout, input focus, render invalidation, transcripts, tests    |

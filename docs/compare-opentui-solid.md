@@ -1,3 +1,8 @@
+---
+title: Vue TUI vs OpenTUI Solid
+description: Compare Vue TUI with OpenTUI Solid by product fit, runtime target, browser DOM support, CLI rendering path, and benchmark claim boundaries.
+---
+
 # Compare With OpenTUI Solid
 
 This page defines how vue-tui can compare itself with `@opentui/solid` without overstating the current data.

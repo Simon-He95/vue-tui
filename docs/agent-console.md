@@ -1,3 +1,8 @@
+---
+title: Agent Console UI for Vue
+description: Build AI agent console UIs with Vue 3, streaming markdown, tool-call status, logs, links, overlays, search, and CLI stdout support.
+---
+
 # Agent Console Example
 
 `examples/agent-console` 是发布前的端到端场景，用来验证 renderer、log view、markdown、overlay、input 和 stdout runner 能组合成真实 agent UI，而不是只在单组件 demo 中成立。

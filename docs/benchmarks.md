@@ -1,3 +1,8 @@
+---
+title: Vue TUI Benchmarks
+description: Benchmark scope, budgets, sample results, and comparison boundaries for Vue TUI renderers, virtual lists, logs, and agent console scenarios.
+---
+
 # Benchmarks
 
 这页记录 vue-tui 当前公开 benchmark 口径。它用于 1.0 release quality bar 和后续回归对比，不用于宣称对 `@opentui/solid` 或其他 TUI renderer 的横向性能优势。

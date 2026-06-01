@@ -1,3 +1,8 @@
+---
+title: Vue Terminal UI Live Showcase
+description: Explore live Vue TUI components rendered in browser DOM, including layout, forms, overlays, logs, markdown, and agent console surfaces.
+---
+
 <script setup lang="ts">
 import DocsShowcaseTerminal from './.vitepress/components/DocsShowcaseTerminal.vue'
 </script>

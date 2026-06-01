@@ -1,6 +1,6 @@
 ---
-title: Vue TUI
-description: Vue 3 terminal UI components and renderers for browser DOM, CLI stdout, logs, markdown transcripts, and agent consoles.
+title: Vue TUI - Vue 3 Terminal UI Components
+description: Build terminal-style Vue 3 interfaces for browser DOM, CLI stdout, logs, markdown transcripts, virtual lists, and agent consoles.
 ---
 
 <script setup lang="ts">
@@ -63,6 +63,7 @@ Vue 是 peer dependency。当前发布包支持 Vue `>=3.3.0 <4`。
 
 | 目标         | 先读这些页面                                                                                                                                                                                                                                  |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 英文入口页   | [Vue Terminal UI](/guide/vue-terminal-ui)、[Vue CLI UI](/guide/vue-cli-ui)、[CLI Stdout Renderer](/guide/cli-stdout-renderer)、[Terminal Log Viewer](/guide/terminal-log-viewer)、[Markdown Transcript](/guide/markdown-transcript)           |
 | 了解能力边界 | [Live Showcase](/showcase)、[组件总览](/components)、[组件验收](/components-acceptance)、[核心 API](/api)                                                                                                                                     |
 | 跑示例       | [Examples Index](/examples)、[Agent Console 示例](/agent-console)                                                                                                                                                                             |
 | 做 CLI       | [Runtime](/runtime)、[CLI Events](/cli-events)、[Platform Contracts](/platform-contracts)、[Terminal UI Best Practices](/terminal-ui-best-practices)                                                                                          |

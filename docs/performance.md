@@ -1,3 +1,8 @@
+---
+title: Vue TUI Performance Guide
+description: Performance guidance for high-throughput terminal UIs, virtual lists, append-only logs, dirty rows, renderer caching, and streaming transcripts.
+---
+
 # 性能关注点与回归策略
 
 Vue TUI 的性能瓶颈通常来自三部分：
