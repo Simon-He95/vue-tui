@@ -2273,4 +2273,115 @@ describe("stdout renderer column diff", () => {
       }
     });
   });
+
+  it("does not advance the stdout diff baseline when ghostty chunked writes fail", () => {
+    withTerminalEnv({ GHOSTTY_RESOURCES_DIR: "/tmp/ghostty-test" }, () => {
+      const terminal = createTerminal({ cols: 16, rows: 1 });
+      const chunks: string[] = [];
+      let failWrites = false;
+
+      const output: CliOutput & { take: () => string; clear: () => void } = {
+        isTTY: true,
+        write(chunk: string) {
+          if (failWrites) throw new Error("write boom");
+          chunks.push(String(chunk));
+        },
+        take() {
+          const out = chunks.join("");
+          chunks.length = 0;
+          return out;
+        },
+        clear() {
+          chunks.length = 0;
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      try {
+        terminal.write("abcdef", { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+        output.take();
+
+        failWrites = true;
+        terminal.put(0, 0, "X");
+        expect(() => terminal.commit({ sync: true })).toThrow("write boom");
+
+        failWrites = false;
+        output.clear();
+        terminal.put(1, 0, "Y");
+        terminal.commit({ sync: true });
+
+        const frame = output.take();
+
+        expect(frame).toContain("X");
+        expect(frame).toContain("Y");
+        expect(frame).not.toContain("cdef");
+      } finally {
+        renderer.dispose();
+        terminal.dispose();
+      }
+    });
+  });
+
+  it("does not split UTF-16 surrogate pairs across chunked writes", () => {
+    withTerminalEnv({ GHOSTTY_RESOURCES_DIR: "/tmp/ghostty-test" }, () => {
+      const cols = 9000;
+      const terminal = createTerminal({ cols, rows: 1 });
+      const chunks: string[] = [];
+
+      const output: CliOutput = {
+        isTTY: true,
+        write(chunk: string) {
+          chunks.push(Buffer.from(chunk, "utf8").toString("utf8"));
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "row",
+      });
+
+      try {
+        terminal.write("x", { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+        chunks.length = 0;
+
+        terminal.write("y", { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+
+        const rowPatchFrame = chunks.join("");
+        const rowPatchPrefixLength = rowPatchFrame.indexOf("y");
+        expect(rowPatchPrefixLength).toBeGreaterThanOrEqual(0);
+        expect(rowPatchPrefixLength).toBeLessThan(8191);
+        chunks.length = 0;
+
+        const emoji = "😀";
+        const padding = 8191 - rowPatchPrefixLength;
+        const text = `${"a".repeat(padding)}${emoji}${"b".repeat(20)}`;
+
+        terminal.write(text, { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+
+        const frame = chunks.join("");
+
+        expect(frame).toContain(emoji);
+        expect(frame).not.toContain("\uFFFD");
+      } finally {
+        renderer.dispose();
+        terminal.dispose();
+      }
+    });
+  });
 });

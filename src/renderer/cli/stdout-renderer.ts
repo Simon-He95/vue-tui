@@ -1701,29 +1701,27 @@ export function createStdoutRenderer(
     return null;
   }
 
+  const isHighSurrogate = (code: number): boolean => code >= 0xd800 && code <= 0xdbff;
+  const safeChunkEnd = (data: string, start: number, preferredEnd: number): number => {
+    let end = Math.min(data.length, preferredEnd);
+
+    if (end < data.length && end > start && isHighSurrogate(data.charCodeAt(end - 1))) {
+      end++;
+    }
+
+    return Math.max(start + 1, Math.min(data.length, end));
+  };
+
   /**
    * Write data in chunks to avoid overwhelming terminal buffers.
    * This is especially important for ghostty which can hang on large writes.
-   *
-   * CRITICAL: In ghostty, setTimeout callbacks don't execute, so we must use
-   * synchronous chunked writes. We break large writes into smaller chunks to
-   * reduce the chance of terminal hangs.
    */
   function writeChunked(data: string): void {
-    if (!isGhostty) {
-      // Non-ghostty: direct write
-      if (data.length <= chunkSize) {
-        out.write(data);
-        return;
-      }
-      for (let i = 0; i < data.length; i += chunkSize) {
-        const chunk = data.slice(i, i + chunkSize);
-        out.write(chunk);
-      }
+    if (data.length <= chunkSize) {
+      out.write(data);
       return;
     }
 
-    // Ghostty: synchronous chunked write (setTimeout doesn't work in ghostty)
     if (isDebugEnabled()) {
       getDebugLog().render(
         `writeChunked: sync chunked write of ${Buffer.byteLength(data, "utf8")} bytes`,
@@ -1731,18 +1729,16 @@ export function createStdoutRenderer(
     }
 
     try {
-      if (data.length <= chunkSize) {
-        out.write(data);
-      } else {
-        for (let i = 0; i < data.length; i += chunkSize) {
-          const chunk = data.slice(i, i + chunkSize);
-          out.write(chunk);
-        }
+      for (let start = 0; start < data.length; ) {
+        const end = safeChunkEnd(data, start, start + chunkSize);
+        out.write(data.slice(start, end));
+        start = end;
       }
 
       if (isDebugEnabled()) getDebugLog().render(`writeChunked: chunked write completed`);
     } catch (e) {
       if (isDebugEnabled()) getDebugLog().error(`writeChunked: write error`, e);
+      throw e;
     }
   }
 
