@@ -614,6 +614,7 @@ export function createStdoutRenderer(
   let nextCellTextId = 1;
   let blankTextId = 0;
   let emptyTextId = 0;
+  let continuationTextId = 0;
   const cellTextIdCache = new Map<string, number>();
   const MAX_CELL_TEXT_IDS = 131_072;
   let prevOverlayBlockedRows: readonly number[] = [];
@@ -662,7 +663,14 @@ export function createStdoutRenderer(
     if (resetIds) nextCellTextId = 1;
     blankTextId = allocateCellTextId(" ");
     emptyTextId = allocateCellTextId("");
+    continuationTextId = nextCellTextId++;
     invalidateFingerprintBaseline();
+  }
+
+  function cellIdentityTextId(cell: Cell): number {
+    if (cell.continuation) return continuationTextId;
+    if (cell.ch === "") return emptyTextId;
+    return cellTextId(cell.ch);
   }
 
   function cellTextId(text: string): number {
@@ -732,7 +740,7 @@ export function createStdoutRenderer(
     for (let x = 0; x < cols; x++) {
       const cell = cellAt(row, x);
       currentHrefIds[base + x] = hrefId(normalizeHref(cell.style.href));
-      currentTextIds[base + x] = cellTextId(cell.ch);
+      currentTextIds[base + x] = cellIdentityTextId(cell);
     }
   }
 
@@ -758,7 +766,7 @@ export function createStdoutRenderer(
     for (let x = 0; x < cols; x++) {
       const cell = cellAt(row, x);
       hrefIds[x] = hrefId(normalizeHref(cell.style.href));
-      textIds[x] = cellTextId(cell.ch);
+      textIds[x] = cellIdentityTextId(cell);
     }
 
     return { fp, hrefIds, textIds };
@@ -798,7 +806,7 @@ export function createStdoutRenderer(
 
     return (
       fingerprint === referenceFP[base + x] &&
-      cellTextId(cell.ch) === referenceTextIds[base + x] &&
+      cellIdentityTextId(cell) === referenceTextIds[base + x] &&
       hrefId(normalizeHref(cell.style.href)) === referenceHrefIds[base + x]
     );
   };
@@ -988,9 +996,7 @@ export function createStdoutRenderer(
     x: number,
   ): boolean => {
     if (x <= 0 || x >= fpCols) return false;
-    return (
-      referenceTextIds[base + x] === emptyTextId && referenceTextIds[base + x - 1] !== emptyTextId
-    );
+    return referenceTextIds[base + x] === continuationTextId;
   };
 
   const expandSpanForReferenceWideGlyphs = (
@@ -1063,34 +1069,6 @@ export function createStdoutRenderer(
     return expanded;
   };
 
-  const isPercentTokenCell = (cell: Cell | undefined): boolean => {
-    if (!cell || cell.continuation) return false;
-    return /^[0-9.%]$/.test(cell.ch);
-  };
-
-  const expandPercentTokenSpan = (
-    row: readonly Cell[],
-    startX: number,
-    endXExclusive: number,
-    cols: number,
-  ): DirtySpan => {
-    let tokenStart = startX;
-    let tokenEnd = endXExclusive;
-
-    while (tokenStart > 0 && isPercentTokenCell(row[tokenStart - 1])) tokenStart--;
-    while (tokenEnd < cols && isPercentTokenCell(row[tokenEnd])) tokenEnd++;
-
-    let hasPercent = false;
-    for (let x = tokenStart; x < tokenEnd; x++) {
-      if (row[x]?.ch === "%") {
-        hasPercent = true;
-        break;
-      }
-    }
-
-    return hasPercent ? { startX: tokenStart, endXExclusive: tokenEnd } : { startX, endXExclusive };
-  };
-
   const pushDirtySpan = (
     spans: DirtySpan[],
     row: readonly Cell[],
@@ -1105,9 +1083,6 @@ export function createStdoutRenderer(
 
     expandedStart = expandSpanStart(row, expandedStart, cols);
     expandedEnd = expandSpanEnd(row, expandedEnd, cols);
-    const percentTokenSpan = expandPercentTokenSpan(row, expandedStart, expandedEnd, cols);
-    expandedStart = percentTokenSpan.startX;
-    expandedEnd = percentTokenSpan.endXExclusive;
     expandedStart = Math.max(0, Math.min(cols, expandedStart));
     expandedEnd = Math.max(expandedStart, Math.min(cols, expandedEnd));
 

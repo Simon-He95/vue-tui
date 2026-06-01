@@ -268,6 +268,52 @@ function mountRow(
 const inverseStyle = "\x1B[7m";
 
 describe("stdout renderer column diff", () => {
+  it("patches only the spinner cell when the trailing label is unchanged", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const { terminal, output, renderer } = mountRow("⠋ Installing dependencies...", {
+        cols: 40,
+        dirtyRowPatchMode: "span",
+      });
+
+      output.clear();
+
+      terminal.write("⠙", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;1H");
+      expect(frame).toContain("⠙");
+      expect(frame).not.toContain("Installing dependencies");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("does not treat an ordinary blank after ASCII text as a previous wide-glyph continuation", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const { terminal, output, renderer } = mountRow("A       ", {
+        cols: 8,
+        dirtyRowPatchMode: "span",
+      });
+
+      output.clear();
+
+      terminal.write("Z", { x: 1, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;2H");
+      expect(frame).toContain("Z");
+      expect(frame).not.toContain("\x1B[1;1HAZ");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("rejects invalid runtime dirtyRowPatchMode values", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const terminal = createTerminal({ cols: 40, rows: 1 });
@@ -590,9 +636,9 @@ describe("stdout renderer column diff", () => {
 
       expect(screenLine(screen, 0)).toBe(`⠙ ${middle}11%`.padEnd(cols));
       expect(frame).toContain("\x1B[1;1H");
-      expect(frame).toContain(`\x1B[1;${percentX + 1}H`);
+      expect(frame).toContain(`\x1B[1;${percentX + 2}H1`);
       expect(frame).toContain("⠙");
-      expect(frame).toContain("11%");
+      expect(frame).not.toContain("11%");
       expect(frame).not.toContain("deliberately long unchanged middle segment");
       expect(byteLength(frame)).toBeLessThan(90);
 
@@ -1660,7 +1706,8 @@ describe("stdout renderer column diff", () => {
         const frame = output.take();
 
         expect(frame).toContain("⠙");
-        expect(frame).toContain("11%");
+        expect(frame).toContain(`\x1B[1;${percentX + 2}H1`);
+        expect(frame).not.toContain("11%");
         expect(frame).not.toContain("explicit columnDiff should win over env");
 
         renderer.dispose();
@@ -1780,7 +1827,8 @@ describe("stdout renderer column diff", () => {
       const frame = output.take();
 
       expect(frame).toContain("⠙");
-      expect(frame).toContain("11%");
+      expect(frame).toContain(`\x1B[1;${percentX + 2}H1`);
+      expect(frame).not.toContain("11%");
       expect(frame).not.toContain("unchanged middle should not be repainted in auto");
 
       renderer.dispose();
@@ -1830,7 +1878,8 @@ describe("stdout renderer column diff", () => {
       const frame = output.take();
 
       expect(frame).toContain("⠙");
-      expect(frame).toContain("11%");
+      expect(frame).toContain(`\x1B[1;${percentX + 2}H1`);
+      expect(frame).not.toContain("11%");
       expect(frame).not.toContain("unchanged middle must not be written when span mode is forced");
 
       renderer.dispose();
@@ -1855,7 +1904,8 @@ describe("stdout renderer column diff", () => {
       const frame = output.take();
 
       expect(frame).toContain("⠙");
-      expect(frame).toContain("11%");
+      expect(frame).toContain(`\x1B[1;${percentX + 2}H1`);
+      expect(frame).not.toContain("11%");
       expect(frame).not.toContain("unchanged middle must not be written when forced");
 
       renderer.dispose();
@@ -2029,7 +2079,8 @@ describe("stdout renderer column diff", () => {
         const frame = output.take();
 
         expect(frame).toContain("⠙");
-        expect(frame).toContain("11%");
+        expect(frame).toContain(`\x1B[1;${percentX + 2}H1`);
+        expect(frame).not.toContain("11%");
         expect(frame).not.toContain("unchanged middle should not be repainted");
 
         renderer.dispose();
@@ -2075,7 +2126,8 @@ describe("stdout renderer column diff", () => {
         const frame = chunks.join("");
 
         expect(frame).toContain("⠙");
-        expect(frame).toContain("11%");
+        expect(frame).toContain(`\x1B[1;${percentX + 2}H1`);
+        expect(frame).not.toContain("11%");
         expect(frame).not.toContain("unchanged middle should not be repainted");
 
         renderer.dispose();
