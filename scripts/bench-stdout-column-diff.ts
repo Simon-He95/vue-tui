@@ -84,6 +84,22 @@ function assertContainsPatch(frame: string, expected: string): void {
   }
 }
 
+function minimalChangedPatch(previous: string, next: string): string {
+  let start = 0;
+  while (start < previous.length && start < next.length && previous[start] === next[start]) {
+    start++;
+  }
+
+  let previousEnd = previous.length;
+  let nextEnd = next.length;
+  while (previousEnd > start && nextEnd > start && previous[previousEnd - 1] === next[nextEnd - 1]) {
+    previousEnd--;
+    nextEnd--;
+  }
+
+  return next.slice(start, nextEnd);
+}
+
 function runCase(
   name: string,
   options: Readonly<{
@@ -132,8 +148,11 @@ function runCase(
 
       const frame = output.take();
       if (options.columnDiffMode === "multi-span" && i > 0 && i < 5) {
+        const previousProgress = `${String((i - 1) % 1000).padStart(3, "0")}%`;
+        const nextProgress = `${String(i % 1000).padStart(3, "0")}%`;
+
         assertContainsPatch(frame, spinnerFrames[i % spinnerFrames.length]!);
-        assertContainsPatch(frame, `${String(i % 1000).padStart(3, "0")}%`);
+        assertContainsPatch(frame, minimalChangedPatch(previousProgress, nextProgress));
         assertNoMiddleRewrite(frame, middle);
       }
 

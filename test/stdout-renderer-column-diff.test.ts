@@ -454,6 +454,42 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("still uses row-internal spans when fingerprint hooks are missing", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 80, rows: 1 });
+
+      terminal.write("A static suffix that must not be rewritten", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      delete (terminal as any).setFingerprintFn;
+      delete (terminal as any).getRowFingerprints;
+
+      const output = createBufferedOutput(false);
+      const renderer = createStdoutRenderer(terminal as any, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      output.take();
+
+      terminal.put(0, 0, "B");
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("\x1B[1;1H");
+      expect(frame).toContain("B");
+      expect(frame).not.toContain("static suffix that must not be rewritten");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("lets a secondary stdout renderer acquire fingerprints after the owner is disposed", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const terminal = createTerminal({ cols: 20, rows: 1 });

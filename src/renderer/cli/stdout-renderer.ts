@@ -171,6 +171,9 @@ export function createStdoutRenderer(
   const out = output;
   const fingerprintOwner = Symbol("stdout-renderer");
   let ownsFingerprintFn = false;
+  const canInstallTerminalFingerprintFn = (): boolean =>
+    typeof terminal.setFingerprintFn === "function" &&
+    typeof terminal.getRowFingerprints === "function";
   const outputIsTTY = Boolean(out.isTTY);
   // Custom stdout-like outputs that omit `isTTY` are treated as terminal-capable
   // for OSC8 unless they explicitly opt out with `isTTY: false`.
@@ -1747,7 +1750,11 @@ export function createStdoutRenderer(
     }
 
     if (disposed) return;
-    if (!ownsFingerprintFn && !stdoutFingerprintOwners.get(terminal)) {
+    if (
+      !ownsFingerprintFn &&
+      !stdoutFingerprintOwners.get(terminal) &&
+      canInstallTerminalFingerprintFn()
+    ) {
       installFingerprintFn();
     }
     cliLatency?.recordStdoutRenderStart();
@@ -3104,26 +3111,28 @@ export function createStdoutRenderer(
   }
 
   function installFingerprintFn(): void {
-    if (typeof terminal.setFingerprintFn !== "function") {
+    if (!canInstallTerminalFingerprintFn()) {
       if (ownsFingerprintFn && stdoutFingerprintOwners.get(terminal) === fingerprintOwner) {
         stdoutFingerprintOwners.delete(terminal);
+        invalidateFingerprintBaseline();
       }
       ownsFingerprintFn = false;
-      invalidateFingerprintBaseline();
       return;
     }
 
     const currentOwner = stdoutFingerprintOwners.get(terminal);
 
     if (currentOwner && currentOwner !== fingerprintOwner) {
+      if (ownsFingerprintFn) invalidateFingerprintBaseline();
       ownsFingerprintFn = false;
-      invalidateFingerprintBaseline();
       return;
     }
 
+    if (ownsFingerprintFn && currentOwner === fingerprintOwner) return;
+
     stdoutFingerprintOwners.set(terminal, fingerprintOwner);
     ownsFingerprintFn = true;
-    terminal.setFingerprintFn((ch: string, style: Style) => {
+    terminal.setFingerprintFn!((ch: string, style: Style) => {
       return cellFingerprint(ch, style);
     });
     invalidateFingerprintBaseline();
