@@ -438,11 +438,17 @@ export function createStdoutRenderer(
   const normalizedHrefCache = new Map<string, string | null>();
   const MAX_HREF_CACHE = 2048;
   let fingerprintInternResetRequiresBaseline = false;
+  let fingerprintBaselineGeneration = 0;
+  let activeRenderBaselineGeneration = 0;
 
   function invalidateFingerprintBaseline(): void {
     fpPrevValid = false;
     fingerprintInternResetRequiresBaseline = true;
+    fingerprintBaselineGeneration++;
   }
+
+  const activeRenderBaselineChanged = (): boolean =>
+    activeRenderBaselineGeneration !== fingerprintBaselineGeneration;
 
   function resetStyleKeyIndex(resetIds = false): void {
     styleKeyCache = new WeakMap<Style, number>();
@@ -1167,9 +1173,25 @@ export function createStdoutRenderer(
 
     const base = y * fpCols;
 
+    let spans: readonly DirtySpan[];
+
     if (!nextSnapshot) {
-      return expandSpansForReferenceWideGlyphs(
+      spans = expandSpansForReferenceWideGlyphs(
         collectChangedSpans(row, cols, (x) => !currentCellMatchesPrevious(base, x)),
+        row,
+        y,
+        cols,
+        prevTextIds,
+      );
+    } else {
+      spans = expandSpansForReferenceWideGlyphs(
+        collectChangedSpans(row, cols, (x) => {
+          return (
+            nextSnapshot.fp[x] !== prevFP[base + x] ||
+            nextSnapshot.textIds[x] !== prevTextIds[base + x] ||
+            nextSnapshot.hrefIds[x] !== prevHrefIds[base + x]
+          );
+        }),
         row,
         y,
         cols,
@@ -1177,19 +1199,7 @@ export function createStdoutRenderer(
       );
     }
 
-    return expandSpansForReferenceWideGlyphs(
-      collectChangedSpans(row, cols, (x) => {
-        return (
-          nextSnapshot.fp[x] !== prevFP[base + x] ||
-          nextSnapshot.textIds[x] !== prevTextIds[base + x] ||
-          nextSnapshot.hrefIds[x] !== prevHrefIds[base + x]
-        );
-      }),
-      row,
-      y,
-      cols,
-      prevTextIds,
-    );
+    return activeRenderBaselineChanged() ? fullRowDirtySpan(cols) : spans;
   };
 
   const resolveChangedSpansAgainstFill = (
@@ -1206,13 +1216,15 @@ export function createStdoutRenderer(
 
     const base = y * fpCols;
 
-    return collectChangedSpans(row, cols, (x) => {
+    const spans = collectChangedSpans(row, cols, (x) => {
       return (
         currentFP[base + x] !== fillFingerprint ||
         currentTextIds[base + x] !== fillTextId ||
         currentHrefIds[base + x] !== fillHrefId
       );
     });
+
+    return activeRenderBaselineChanged() ? fullRowDirtySpan(cols) : spans;
   };
 
   const resolveChangedSpansAgainstReference = (
@@ -1230,7 +1242,7 @@ export function createStdoutRenderer(
     const rowFP = rowFingerprintsForThisRenderer(y);
     const base = y * fpCols;
 
-    return expandSpansForReferenceWideGlyphs(
+    const spans = expandSpansForReferenceWideGlyphs(
       collectChangedSpans(row, cols, (x) => {
         return !referenceCellMatchesCurrent(
           row,
@@ -1248,6 +1260,8 @@ export function createStdoutRenderer(
       cols,
       referenceTextIds,
     );
+
+    return activeRenderBaselineChanged() ? fullRowDirtySpan(cols) : spans;
   };
 
   const isEolClearEquivalentBlankCell = (
@@ -1308,7 +1322,7 @@ export function createStdoutRenderer(
     );
     if (currentTailStart >= cols) return false;
 
-    const blankFP = cellFingerprint(" ", { bg: defaultBg });
+    const blankFP = cellFingerprintFromStyleKey(" ", defaultBlankStyleKey);
     const base = y * fpCols;
     const limit = Math.min(cols, fpCols);
 
@@ -1785,6 +1799,7 @@ export function createStdoutRenderer(
       fingerprintInternResetRequiresBaseline = false;
       fpPrevValid = false;
     }
+    activeRenderBaselineGeneration = fingerprintBaselineGeneration;
     const normalizedScrollOperations = (() => {
       if (!scrollOperations?.length) return null;
       const outOps: TerminalScrollOperation[] = [];
