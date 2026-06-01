@@ -2025,6 +2025,40 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("uses one bounded contiguous patch for more than the per-row span limit when clustered", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 200;
+      const indices = Array.from({ length: 13 }, (_, index) => index * 4);
+      const protectedTail = "Z".repeat(80);
+      const chars = Array.from("a".repeat(cols));
+
+      for (let i = 0; i < protectedTail.length; i++) {
+        chars[100 + i] = protectedTail[i]!;
+      }
+
+      const { terminal, output, renderer } = mountRow(chars.join(""), {
+        cols,
+        dirtyRowPatchMode: "span",
+      });
+
+      for (const [index, x] of indices.entries()) {
+        terminal.put(x, 0, String.fromCharCode("A".charCodeAt(0) + index));
+      }
+
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      const cursorMoves = frame.match(/\x1B\[\d+;\d+H/g) ?? [];
+
+      expect(cursorMoves).toEqual(["\x1B[1;1H"]);
+      expect(frame).toContain("AaaaBaaaCaaaDaaaEaaaFaaaGaaaHaaaIaaaJaaaKaaaLaaaM");
+      expect(frame).not.toContain(protectedTail);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("lets the cost model coalesce two nearby spans into one bounded patch", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const { terminal, output, renderer } = mountRow("abcdefghijklmnopqrstuvwxyz", {

@@ -931,24 +931,26 @@ export function createStdoutRenderer(
     clearToEol: boolean,
   ): DirtySpanRenderMode => {
     if (spans.length <= 0) return "spans";
+
+    const coverage = dirtySpanCoverage(spans);
+
     if (
       dirtyRowPatchMode === "auto" &&
       useConservativeDirtyRows &&
-      dirtySpanCoverage(spans) > dirtySpanConservativeMaxCells
+      coverage > dirtySpanConservativeMaxCells
     ) {
       return "row";
     }
-    if (spans.length > DIRTY_SPAN_MAX_PER_ROW) return "row";
 
-    const coverage = dirtySpanCoverage(spans);
     if (coverage >= Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD))) {
       return "row";
     }
 
     const fullRowCost = estimatedFullRowPatchBytes(row, y, cols, clearToEol);
     const multiCost = estimatedSpanPatchBytes(row, spans, y, cols, clearToEol);
+    const tooManySpans = spans.length > DIRTY_SPAN_MAX_PER_ROW;
 
-    if (multiCost >= fullRowCost) {
+    if (!tooManySpans && multiCost >= fullRowCost) {
       return "row";
     }
 
@@ -960,13 +962,20 @@ export function createStdoutRenderer(
     const first = spans[0]!;
     const last = spans[spans.length - 1]!;
     const contiguousWidth = Math.max(0, last.endXExclusive - first.startX);
+    const contiguousWidthLimit = Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD));
     const contiguousCostThreshold = fullRowCost * DIRTY_SPAN_FULL_ROW_THRESHOLD;
+
     if (
-      contiguousCost < multiCost &&
-      contiguousCost < contiguousCostThreshold &&
-      contiguousWidth < Math.max(1, Math.floor(cols * DIRTY_SPAN_FULL_ROW_THRESHOLD))
+      contiguousWidth < contiguousWidthLimit &&
+      (tooManySpans
+        ? contiguousCost < fullRowCost
+        : contiguousCost < multiCost && contiguousCost < contiguousCostThreshold)
     ) {
       return "contiguous";
+    }
+
+    if (tooManySpans) {
+      return "row";
     }
 
     return "spans";
