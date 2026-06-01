@@ -271,10 +271,10 @@
     "stream-markdown-parser": "1.0.0"
   },
   "devDependencies": {
-    "@arethetypeswrong/core": "^0.18.2",
+    "@arethetypeswrong/core": "^0.18.3",
     "@playwright/test": "^1.60.0",
     "@types/node": "^18.19.130",
-    "@vitest/coverage-v8": "^4.1.7",
+    "@vitest/coverage-v8": "^4.1.8",
     "bumpp": "^8.2.1",
     "esbuild": "^0.20.2",
     "happy-dom": "^17.6.3",
@@ -286,12 +286,12 @@
     "publint": "^0.3.21",
     "rimraf": "^3.0.2",
     "tsdown": "^0.9.9",
-    "tsx": "^4.22.3",
+    "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vite": "6.4.1",
     "vitepress": "^1.6.4",
-    "vitest": "^4.1.7",
-    "vue": "^3.5.34"
+    "vitest": "^4.1.8",
+    "vue": "^3.5.35"
   },
   "peerDependencies": {
     "vue": ">=3.3.0 <4"
@@ -303,5 +303,5 @@
   "engines": {
     "node": ">=16.17"
   },
-  "packageManager": "pnpm@10.33.4"
+  "packageManager": "pnpm@10.34.1"
 }
