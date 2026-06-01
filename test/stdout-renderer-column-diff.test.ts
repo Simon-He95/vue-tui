@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { charCellWidth } from "../src/core.js";
 import { createTerminal, scrollPlaneRows } from "../src/core/terminal/create-terminal.js";
 import { createStdoutRenderer } from "../src/renderer/cli/stdout-renderer.js";
+import { getStdoutRendererMetrics } from "../src/renderer/cli/stdout-metrics.js";
 import type { CliOutput } from "../src/renderer/cli/stdout-renderer.js";
 
 type BufferedOutput = CliOutput & {
@@ -283,6 +284,32 @@ describe("stdout renderer column diff", () => {
         }),
       ).toThrow(/Invalid dirtyRowPatchMode=.*auto.*row.*span/);
 
+      terminal.dispose();
+    });
+  });
+
+  it("records frame metrics using UTF-8 byte length", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 8, rows: 1 });
+      const output = createBufferedOutput(false);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      output.clear();
+      terminal.write("⠋ 好", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(getStdoutRendererMetrics().lastFrameBytes).toBe(byteLength(frame));
+
+      renderer.dispose();
       terminal.dispose();
     });
   });
@@ -1615,6 +1642,33 @@ describe("stdout renderer column diff", () => {
       expect(frame).toContain("AbcdE");
       expect(frame).not.toContain("\x1B[1;5H");
       expect(frame).not.toContain("fghijklmnopqrstuvwxyz");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("keeps CJK-separated spans split when contiguous text would cost more bytes", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const middle = "一二三四五六七";
+      const secondX = 1 + Array.from(middle).reduce((width, ch) => width + charCellWidth(ch), 0);
+      const { terminal, output, renderer } = mountRow(`a${middle}b`, {
+        cols: 40,
+        dirtyRowPatchMode: "span",
+      });
+
+      terminal.put(0, 0, "A");
+      terminal.put(secondX, 0, "B");
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      const secondCursorX = secondX - 2;
+
+      expect(frame).toContain("\x1B[1;1H");
+      expect(frame).toContain(`\x1B[1;${secondCursorX + 1}H`);
+      expect(frame).toContain("A");
+      expect(frame).toContain("七B");
+      expect(frame).not.toContain("一二三四五六");
 
       renderer.dispose();
       terminal.dispose();

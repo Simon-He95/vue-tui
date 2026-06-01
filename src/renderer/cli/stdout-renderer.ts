@@ -111,7 +111,8 @@ export type StdoutRendererOptions = Readonly<{
   /**
    * Dirty-row stdout patch strategy.
    *
-   * - "auto": use terminal compatibility detection.
+   * - "auto": prefer span patching, with conservative row fallback on
+   *   terminals that are sensitive to fragmented cursor-addressed writes.
    * - "row": repaint each dirty row.
    * - "span": prefer row-internal multi-span diffing. Dense, fragmented, or
    *   terminal-sensitive rows may still repaint the row when that is cheaper
@@ -792,16 +793,37 @@ export function createStdoutRenderer(
     return 3 + String(y + 1).length + 1 + String(x + 1).length + 1;
   };
 
+  const estimatedRenderableTextBytes = (
+    row: readonly Cell[],
+    startX: number,
+    endXExclusive: number,
+    cols: number,
+  ): number => {
+    const start = Math.max(0, Math.min(cols, Math.floor(startX)));
+    const end = Math.max(start, Math.min(cols, Math.floor(endXExclusive)));
+    let bytes = 0;
+
+    for (let x = start; x < end; x++) {
+      const cell = cellAt(row, x);
+      if (cell.continuation) continue;
+      bytes += Buffer.byteLength(cell.ch || " ", "utf8");
+    }
+
+    return bytes;
+  };
+
   const estimatedSpanPatchBytes = (
+    row: readonly Cell[],
     spans: readonly DirtySpan[],
     y: number,
+    cols: number,
     clearToEol: boolean,
   ): number => {
     let bytes = 0;
 
     for (const span of spans) {
       bytes += estimatedCursorMoveBytes(y, span.startX);
-      bytes += dirtySpanWidth(span);
+      bytes += estimatedRenderableTextBytes(row, span.startX, span.endXExclusive, cols);
 
       // Approximate style/link overhead. Exact cost depends on SGR/OSC8, but this
       // keeps fragmented rows from winning purely because cell coverage is small.
@@ -814,8 +836,10 @@ export function createStdoutRenderer(
   };
 
   const estimatedContiguousPatchBytes = (
+    row: readonly Cell[],
     spans: readonly DirtySpan[],
     y: number,
+    cols: number,
     clearToEol: boolean,
   ): number => {
     if (!spans.length) return 0;
@@ -825,22 +849,28 @@ export function createStdoutRenderer(
 
     return (
       estimatedCursorMoveBytes(y, first.startX) +
-      Math.max(0, last.endXExclusive - first.startX) +
+      estimatedRenderableTextBytes(row, first.startX, last.endXExclusive, cols) +
       EST_STYLE_SWITCH_BYTES +
       (clearToEol ? EST_CLEAR_TO_EOL_BYTES : 0)
     );
   };
 
-  const estimatedFullRowPatchBytes = (y: number, cols: number, clearToEol: boolean): number => {
+  const estimatedFullRowPatchBytes = (
+    row: readonly Cell[],
+    y: number,
+    cols: number,
+    clearToEol: boolean,
+  ): number => {
     return (
       estimatedCursorMoveBytes(y, 0) +
       EST_STYLE_SWITCH_BYTES +
-      Math.max(0, cols) +
+      estimatedRenderableTextBytes(row, 0, cols, cols) +
       (clearToEol ? EST_CLEAR_TO_EOL_BYTES : 0)
     );
   };
 
   const resolveDirtySpanRenderMode = (
+    row: readonly Cell[],
     spans: readonly DirtySpan[],
     y: number,
     cols: number,
@@ -862,8 +892,8 @@ export function createStdoutRenderer(
       return "row";
     }
 
-    const fullRowCost = estimatedFullRowPatchBytes(y, cols, clearToEol);
-    const multiCost = estimatedSpanPatchBytes(spans, y, clearToEol);
+    const fullRowCost = estimatedFullRowPatchBytes(row, y, cols, clearToEol);
+    const multiCost = estimatedSpanPatchBytes(row, spans, y, cols, clearToEol);
 
     if (multiCost >= fullRowCost) {
       return "row";
@@ -873,7 +903,7 @@ export function createStdoutRenderer(
       return "spans";
     }
 
-    const contiguousCost = estimatedContiguousPatchBytes(spans, y, clearToEol);
+    const contiguousCost = estimatedContiguousPatchBytes(row, spans, y, cols, clearToEol);
     const first = spans[0]!;
     const last = spans[spans.length - 1]!;
     const contiguousWidth = Math.max(0, last.endXExclusive - first.startX);
@@ -1660,7 +1690,9 @@ export function createStdoutRenderer(
 
     // Ghostty: synchronous chunked write (setTimeout doesn't work in ghostty)
     if (isDebugEnabled()) {
-      getDebugLog().render(`writeChunked: sync chunked write of ${data.length} bytes`);
+      getDebugLog().render(
+        `writeChunked: sync chunked write of ${Buffer.byteLength(data, "utf8")} bytes`,
+      );
     }
 
     try {
@@ -2053,7 +2085,7 @@ export function createStdoutRenderer(
       const renderMode =
         !shouldUseMultiDirtySpans() && spansToPaint.length > 0
           ? "contiguous"
-          : resolveDirtySpanRenderMode(spansToPaint, rowY, size.cols, clearToEolForCost);
+          : resolveDirtySpanRenderMode(row, spansToPaint, rowY, size.cols, clearToEolForCost);
 
       if (renderMode === "row") {
         renderRow(rowY, row, 0, size.cols, false);
@@ -2551,6 +2583,7 @@ export function createStdoutRenderer(
     frameParts.push(!isGhostty && useSyncOutput ? SYNC_END : "");
 
     const frame = frameParts.join("");
+    const frameBytes = Buffer.byteLength(frame, "utf8");
     if (profiler) {
       profiler.recordRender({
         durationMs: profiler.now() - renderStart,
@@ -2610,7 +2643,7 @@ export function createStdoutRenderer(
         return count;
       };
 
-      const frameSize = frame.length;
+      const frameSize = frameBytes;
       const cursorSeqCount = countCursorMoves(frame);
       const resetCount = countResets(frame);
       const buildTime = (performance.now() - renderStart).toFixed(2);
@@ -2635,7 +2668,7 @@ export function createStdoutRenderer(
       if (canWriteSync && frameSizeBytes <= syncMaxBytes) return "sync";
       return "stream";
     };
-    const writeMode = resolveWriteMode(frame.length);
+    const writeMode = resolveWriteMode(frameBytes);
 
     if (isDebugEnabled()) getDebugLog().render(`Before write()`);
 
@@ -2691,7 +2724,7 @@ export function createStdoutRenderer(
       }
       recordStdoutFrame({
         at: Date.now(),
-        bytes: frame.length,
+        bytes: frameBytes,
         writeMs,
         writeEmaMs,
         writeMode: writeMode === "sync" ? "sync" : writeMode === "chunked" ? "chunked" : "stream",
@@ -2699,13 +2732,13 @@ export function createStdoutRenderer(
       if (profiler) {
         profiler.recordWrite({
           durationMs: writeMs,
-          bytes: frame.length,
+          bytes: frameBytes,
           mode: writeMode === "sync" ? "sync" : writeMode === "chunked" ? "chunked" : "stream",
         });
       }
       cliLatency?.recordStdoutWrite({
         durationMs: writeMs,
-        bytes: frame.length,
+        bytes: frameBytes,
         mode: writeMode === "sync" ? "sync" : writeMode === "chunked" ? "chunked" : "stream",
       });
     }
