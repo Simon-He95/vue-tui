@@ -965,6 +965,27 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("does not emit an out-of-bounds cursor fix for a wide emoji at the right edge", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const cols = 4;
+      const { terminal, output, renderer } = mountRow("ab😀", {
+        cols,
+        columnDiff: true,
+      });
+
+      terminal.put(2, 0, "😃");
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+
+      expect(frame).toContain("😃");
+      expect(frame).not.toContain(`\x1B[1;${cols + 1}H`);
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("skips output for dirty rows whose cells still match the previous frame", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const { terminal, output, renderer } = mountRow("stable row", {
@@ -972,6 +993,21 @@ describe("stdout renderer column diff", () => {
       });
 
       (renderer as any).render([0], true);
+
+      expect(output.take()).toBe("");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
+  it("treats an empty dirty-row render as a no-op", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const { terminal, output, renderer } = mountRow("stable row", {
+        columnDiff: true,
+      });
+
+      (renderer as any).render([], true);
 
       expect(output.take()).toBe("");
 
@@ -1289,6 +1325,37 @@ describe("stdout renderer column diff", () => {
         expect(frame).toContain("⠙");
         expect(frame).toContain("11%");
         expect(frame).toContain("unchanged middle should be repainted by env fallback");
+
+        renderer.dispose();
+        terminal.dispose();
+      },
+    );
+  });
+
+  it("uses the first valid dirty-row env mode across aliases", () => {
+    withTerminalEnv(
+      {
+        VUE_TUI_DIRTY_ROW_PATCH_MODE: "invalid",
+        DIMCODE_TUI_DIRTY_ROW_RENDER_MODE: "row",
+        TERM_PROGRAM: "iTerm.app",
+        TERM: "xterm-256color",
+      },
+      () => {
+        const middle = " unchanged middle should be repainted by valid legacy env ";
+        const percentX = 2 + middle.length;
+        const { terminal, output, renderer } = mountRow(`⠋ ${middle}10%`, {
+          cols: percentX + 8,
+        });
+
+        terminal.put(0, 0, "⠙");
+        terminal.write("11%", { x: percentX, y: 0 });
+        terminal.commit({ sync: true });
+
+        const frame = output.take();
+
+        expect(frame).toContain("⠙");
+        expect(frame).toContain("11%");
+        expect(frame).toContain("unchanged middle should be repainted by valid legacy env");
 
         renderer.dispose();
         terminal.dispose();

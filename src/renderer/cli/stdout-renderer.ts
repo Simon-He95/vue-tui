@@ -284,6 +284,15 @@ export function createStdoutRenderer(
   const normalizeDirtyRowPatchMode = (value: unknown): DirtyRowPatchMode | null => {
     return value === "auto" || value === "row" || value === "span" ? value : null;
   };
+  const firstValidDirtyRowPatchMode = (
+    ...values: readonly unknown[]
+  ): DirtyRowPatchMode | null => {
+    for (const value of values) {
+      const mode = normalizeDirtyRowPatchMode(value);
+      if (mode) return mode;
+    }
+    return null;
+  };
   function resolveDirtyRowPatchMode(): DirtyRowPatchMode {
     const explicitMode = options?.dirtyRowPatchMode;
     if (explicitMode != null) {
@@ -298,9 +307,10 @@ export function createStdoutRenderer(
       return optionMode;
     }
 
-    const envMode = normalizeDirtyRowPatchMode(
-      firstNonEmptyEnv(env, "VUE_TUI_DIRTY_ROW_PATCH_MODE", "DIMCODE_TUI_DIRTY_ROW_RENDER_MODE") ??
-        env.DIMCODE_TUI_DIRTY_ROW_PATCH_MODE,
+    const envMode = firstValidDirtyRowPatchMode(
+      env.VUE_TUI_DIRTY_ROW_PATCH_MODE,
+      env.DIMCODE_TUI_DIRTY_ROW_RENDER_MODE,
+      env.DIMCODE_TUI_DIRTY_ROW_PATCH_MODE,
     );
     if (envMode) return envMode;
 
@@ -1875,6 +1885,14 @@ export function createStdoutRenderer(
       }
       hasFrameOutput = true;
 
+      const pushCursorFixAfterCell = (parts: string[], cellX: number, cell: Cell): void => {
+        const afterX = cellX + (cell.width ?? 1);
+
+        if (afterX >= size.cols) return;
+
+        parts.push(`\u001B[${y + 1};${afterX + 1}H`);
+      };
+
       // Skip cursor positioning if disabled (ghostty workaround)
       if (!disableCursorPos) {
         closeActiveHrefBeforeCursorMove();
@@ -1905,7 +1923,7 @@ export function createStdoutRenderer(
           currentStyle = nextStyle;
           currentTextParts.push(ch);
           if (needsCursorFix(cell, ch)) {
-            currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);
+            pushCursorFixAfterCell(currentTextParts, x, cell);
           }
           continue;
         }
@@ -1915,7 +1933,7 @@ export function createStdoutRenderer(
         ) {
           currentTextParts.push(ch);
           if (needsCursorFix(cell, ch)) {
-            currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);
+            pushCursorFixAfterCell(currentTextParts, x, cell);
           }
           continue;
         }
@@ -1928,8 +1946,7 @@ export function createStdoutRenderer(
         currentStyle = nextStyle;
         currentTextParts.length = 0;
         currentTextParts.push(ch);
-        if (needsCursorFix(cell, ch))
-          currentTextParts.push(`\u001B[${y + 1};${x + 1 + (cell.width ?? 1)}H`);
+        if (needsCursorFix(cell, ch)) pushCursorFixAfterCell(currentTextParts, x, cell);
       }
 
       if (currentKey != null) {
@@ -2925,14 +2942,26 @@ export function createStdoutRenderer(
       );
     }
 
-    // Accumulate dirty rows for pending renders. `null/undefined/[]` means full repaint.
-    if (!dirtyRows || dirtyRows.length === 0) {
+    // Accumulate dirty rows for pending renders. `null/undefined` means full repaint.
+    if (dirtyRows == null) {
       accumulatedAllRows = true;
       accumulatedDirtyBits = null;
       accumulatedDirtyCount = 0;
       accumulatedDirtyMin = Number.POSITIVE_INFINITY;
       accumulatedDirtyMax = -1;
       accumulatedScrollOperations = null;
+    } else if (dirtyRows.length === 0) {
+      if (scrollOperations?.length) {
+        accumulatedAllRows = true;
+        accumulatedDirtyBits = null;
+        accumulatedDirtyCount = 0;
+        accumulatedDirtyMin = Number.POSITIVE_INFINITY;
+        accumulatedDirtyMax = -1;
+        accumulatedScrollOperations = null;
+      } else if (!accumulatedAllRows && accumulatedDirtyCount === 0) {
+        cliLatency?.recordStdoutQueued(0);
+        return;
+      }
     } else if (!accumulatedAllRows) {
       const rowCount = terminal.size().rows;
       mergeScrollOperations(scrollOperations);
