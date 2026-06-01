@@ -58,7 +58,10 @@ import {
   createDefaultTInputHostAdapter,
   defaultTInputHostPlugin,
   installTerminalCleanup,
+  type CliOutput,
+  type DirtyRowPatchMode,
   type StdinDriver,
+  type StdoutRendererOptions,
   type TerminalCleanupHandle,
   type TerminalCleanupSignalPolicy,
 } from "@simon_he/vue-tui/cli";
@@ -199,6 +202,25 @@ console.log(
 );
 
 const driver: StdinDriver | null = null;
+const stdoutOutput: CliOutput = {
+  fd: 1,
+  columns: 80,
+  rows: 24,
+  write: () => {},
+  on: () => {},
+  off: () => {},
+};
+const stdoutPatchMode: DirtyRowPatchMode = "span";
+const stdoutOptions: StdoutRendererOptions = {
+  dirtyRowPatchMode: stdoutPatchMode,
+  dirtySpanConservativeMaxCells: 16,
+  colorMode: "ansi16",
+  clear: false,
+};
+const stdoutInternalOptions: StdoutRendererOptions = {
+  // @ts-expect-error __columnDiffMode is an internal benchmark override.
+  __columnDiffMode: "multi-span",
+};
 const cleanupHandle: TerminalCleanupHandle | null = null;
 const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
 const record: TerminalEventRecord = { type: "keydown", key: "Enter" };
@@ -210,6 +232,9 @@ const markdownRows = buildMarkdownVisualRows("| Ω |\n|---|", 20, markdownParser
 const markdownLayoutRows = layoutMarkdownBlocks([], 20, { widthProvider: "cjk" });
 console.log(
   driver,
+  stdoutOutput,
+  stdoutOptions,
+  stdoutInternalOptions,
   cleanupHandle,
   signalPolicy,
   record,

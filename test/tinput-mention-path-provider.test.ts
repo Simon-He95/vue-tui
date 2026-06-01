@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { TInput } from "../src/index.js";
 import { createPromptMentionPlugin } from "../src/vue.js";
@@ -7,6 +7,7 @@ import { MENTION_TOKEN } from "../src/vue/components/input/utils/inlineTextToken
 
 describe("TInput mention path provider", () => {
   it("accepts injected mention path suggestions without a Node workspace adapter", async () => {
+    vi.useFakeTimers();
     const value = ref("");
     const mentions = ref<string[]>([]);
     const plugin = createPromptMentionPlugin({
@@ -24,6 +25,8 @@ describe("TInput mention path provider", () => {
             : [],
       },
     });
+    const plugins = [plugin];
+    let app: ReturnType<typeof createTerminalApp> | null = null;
 
     const App = defineComponent({
       name: "MentionPathProviderApp",
@@ -37,7 +40,7 @@ describe("TInput mention path provider", () => {
             "onUpdate:modelValue": (v: string) => (value.value = v),
             autoFocus: true,
             cursorBlink: false,
-            plugins: [plugin],
+            plugins,
             collectMentions: true,
             mentions: mentions.value,
             "onUpdate:mentions": (v: readonly string[]) => (mentions.value = [...v]),
@@ -45,37 +48,43 @@ describe("TInput mention path provider", () => {
       },
     });
 
-    const app = createTerminalApp({ cols: 40, rows: 6, component: App as any });
-    app.mount();
-    await nextTick();
-    await nextTick();
-    app.scheduler.flush();
+    try {
+      app = createTerminalApp({ cols: 40, rows: 6, component: App as any });
+      app.mount();
+      await nextTick();
+      await nextTick();
+      app.scheduler.flush();
 
-    app.events.dispatch({
-      type: "keydown",
-      key: "@",
-      code: "Digit2",
-      shiftKey: true,
-    } as any);
-    app.scheduler.flush();
+      app.events.dispatch({
+        type: "keydown",
+        key: "@",
+        code: "Digit2",
+        shiftKey: true,
+      } as any);
+      app.scheduler.flush();
 
-    app.events.dispatch({ type: "keydown", key: "d", code: "KeyD" } as any);
-    app.scheduler.flush();
+      app.events.dispatch({ type: "keydown", key: "d", code: "KeyD" } as any);
+      app.scheduler.flush();
 
-    await new Promise((resolve) => setTimeout(resolve, 120));
-    await nextTick();
-    app.scheduler.flush();
+      await nextTick();
+      app.scheduler.flush();
+      await vi.advanceTimersByTimeAsync(120);
+      await nextTick();
+      app.scheduler.flush();
 
-    app.events.dispatch({
-      type: "keydown",
-      key: "Enter",
-      code: "Enter",
-    } as any);
-    await nextTick();
-    app.scheduler.flush();
+      app.events.dispatch({
+        type: "keydown",
+        key: "Enter",
+        code: "Enter",
+      } as any);
+      await nextTick();
+      app.scheduler.flush();
 
-    expect(value.value).toBe(`${MENTION_TOKEN} `);
-    expect(mentions.value).toEqual(["/workspace/docs/readme.md"]);
-    app.dispose();
+      expect(value.value).toBe(`${MENTION_TOKEN} `);
+      expect(mentions.value).toEqual(["/workspace/docs/readme.md"]);
+    } finally {
+      app?.dispose();
+      vi.useRealTimers();
+    }
   });
 });

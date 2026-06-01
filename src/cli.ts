@@ -29,7 +29,14 @@ export { getCliLatencyProfiler } from "./observability/cli-latency-node.js";
 export { createOsc52ClipboardProvider, type Osc52ClipboardOptions } from "./runtime/osc52.js";
 export type { StdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export { getStdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
-export type { StdoutRenderer, ThemePalette } from "./renderer/cli/stdout-renderer.js";
+export type {
+  CliOutput,
+  DirtyRowPatchMode,
+  StdoutColorMode,
+  StdoutRenderer,
+  StdoutRendererOptions,
+  ThemePalette,
+} from "./renderer/cli/stdout-renderer.js";
 export { createStdoutRenderer } from "./renderer/cli/stdout-renderer.js";
 export { sanitizeTerminalHref, type SanitizeTerminalHrefOptions } from "./core/hyperlink.js";
 export type {

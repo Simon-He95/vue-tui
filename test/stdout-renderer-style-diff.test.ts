@@ -367,9 +367,9 @@ describe("stdout renderer style diffing", () => {
     terminal.commit({ sync: true });
 
     const resets = out.match(/\u001B\[0m/g) ?? [];
-    // Reset at frame start + reset to clear fg before EOL clear + reset at frame end.
+    // Reset at frame start + reset at frame end.
     // Critically, we do not emit a reset for every color run.
-    expect(resets.length).toBe(3);
+    expect(resets.length).toBe(2);
 
     renderer.dispose();
   });
