@@ -50,7 +50,7 @@ await build({
   sourcemap: false,
   // CJS intentionally bundles stream-markdown-parser because it only exposes
   // ESM entrypoints. ESM keeps it external via tsdown.
-  external: ["vue"],
+  external: ["vue", "beautiful-mermaid"],
   plugins: [forbidNodeBuiltinsPlugin],
 });
 

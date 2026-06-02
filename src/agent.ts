@@ -27,6 +27,13 @@ export { TLogLinksPanel } from "./vue/components/TLogLinksPanel.js";
 export { TLogVirtualSearchResults } from "./vue/components/TLogVirtualSearchResults.js";
 export { TLogVirtualLinksPanel } from "./vue/components/TLogVirtualLinksPanel.js";
 export { TVirtualMarkdown } from "./vue/components/TVirtualMarkdown.js";
+export { TMermaid, TMermaidText } from "./vue/components/TMermaidText.js";
+export type {
+  TMermaidAsciiOptions,
+  TMermaidAsciiTheme,
+  TMermaidRenderer,
+  TMermaidResolvedAsciiOptions,
+} from "./vue/components/TMermaidText.js";
 export { createMarkdownBlockSource } from "./vue/markdown/block-source.js";
 export { createAppendOnlyLogStore } from "./vue/log/append-only-log-store.js";
 export { useTLogLinkController } from "./vue/log/use-tlog-link-controller.js";

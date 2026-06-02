@@ -9,6 +9,8 @@ const components = [
   "TText",
   "TLinkifyText",
   "TMarkdownText",
+  "TMermaid",
+  "TMermaidText",
   "TBadge",
   "TTag",
   "TDivider",

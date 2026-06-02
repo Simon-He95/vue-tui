@@ -13,13 +13,13 @@ description: Reference for Vue TUI components such as TerminalProvider, TBox, TI
 
 ## 导入入口
 
-| API maturity | Import                           | 组件                                                                                                                                                                                                                                                            |
-| ------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TCommandPalette` `TDataTable` `TDialog` `TInput` `TLink` `TLinkifyText` `TList` `TSelect` `TTable` `TText` `TTree` `TView` form helpers 和 `TBadge`/`TTag`/`TDivider`/`TCode`                                                        |
-| Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TForm` `TInputBox` `TJsonEditor` `TMultilineModal` `TPathPicker` `TProgress` `TSpinner` `TSplitPane` `TTabs` `TToastViewport` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition` 和 overlay/navigation/status helpers |
-| Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                                                                              |
-| Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap`                                                             |
-| Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                                                                             |
+| API maturity | Import                           | 组件                                                                                                                                                                                                                                                                                      |
+| ------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TCommandPalette` `TDataTable` `TDialog` `TInput` `TLink` `TLinkifyText` `TList` `TSelect` `TTable` `TText` `TTree` `TView` form helpers 和 `TBadge`/`TTag`/`TDivider`/`TCode`                                                                                  |
+| Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TForm` `TInputBox` `TJsonEditor` `TMermaid` `TMermaidText` `TMultilineModal` `TPathPicker` `TProgress` `TSpinner` `TSplitPane` `TTabs` `TToastViewport` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition` 和 overlay/navigation/status helpers |
+| Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                                                                                                        |
+| Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap`                                                                                       |
+| Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TMermaid` `TMermaidText` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                                                                             |
 
 下面的组件速读按用途分组，不代表 root entrypoint 导出。每个组件的 primary import 以生成的 [组件 API](/generated/components-api) 为准。
 
@@ -29,7 +29,7 @@ description: Reference for Vue TUI components such as TerminalProvider, TBox, TI
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
 | Root          | `TerminalProvider`                                                                                                                                                                                 | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
 | Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                                     | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
-| Text / Action | `TText` `TLink` `TLinkifyText` `TBadge` `TTag` `TDivider` `TCode` `TKeyHint` `TTransition`                                                                                                         | 文本渲染、链接操作、徽标、分隔符、快捷键提示    | 通用                                               |
+| Text / Action | `TText` `TLink` `TLinkifyText` `TMermaid` `TMermaidText` `TBadge` `TTag` `TDivider` `TCode` `TKeyHint` `TTransition`                                                                               | 文本渲染、链接操作、结构图、徽标、分隔符        | 通用                                               |
 | Input / Form  | `TInput` `TInputBox` `TAutocompleteInput` `TCheckbox` `TFormField` `TPasswordInput` `TRadioGroup` `TSlider` `TSwitch` `TJsonEditor`                                                                | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
 | Data / Tree   | `TTable` `TDataTable` `TTree`                                                                                                                                                                      | 多列数据、排序过滤、层级选择                    | 通用                                               |
 | Pickers       | `TCommandPalette` `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择       | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
@@ -806,6 +806,32 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 > Markdown import: `@simon_he/vue-tui/markdown`
 >
 > `content` string 路径仍然只做 **per-frame coalescing**：一帧内多次 append 会合并成一次 rebuild，但 rebuild 本身仍然会从当前 full markdown string parse。长文档 streaming transcript 场景可以使用 `createMarkdownBlockSource()`，在消息、tool fence 或代码块完成时 `finalizeBlock()`，再把 `blocks` 传给 `TVirtualMarkdown`，避免反复重 parse 已 finalize 的历史。
+
+## TMermaid
+
+`TMermaid` 是 `TMermaidText` 的短别名，适合 agent console 里直接展示 Mermaid flowchart / sequence / state diagram 的 terminal text 输出。
+
+> Advanced import: `@simon_he/vue-tui/vue`
+>
+> Agent import: `@simon_he/vue-tui/agent`
+
+## TMermaidText
+
+Mermaid terminal text renderer。默认动态加载 optional peer `beautiful-mermaid`，把 Mermaid source 渲染成 Unicode box drawing text；传 `ascii=true` 时使用纯 ASCII 输出。
+
+> 使用默认 renderer 前先安装：`pnpm add beautiful-mermaid`
+>
+> 未安装 optional peer 时，组件只在实际渲染 Mermaid 内容时显示 fallback 文本，不影响 `@simon_he/vue-tui/agent` 基础导入。
+
+### Props
+
+- `x`/`y`/`w` `(number, required)`：渲染区域左上角与宽度
+- `h` `(number?)`：固定高度；不传时按渲染行数自适应
+- `content` / `code` `(string?)`：Mermaid source；同时传入时 `code` 优先
+- `ascii` `(boolean)`：使用纯 ASCII 而不是 Unicode box drawing
+- `options` `(TMermaidAsciiOptions?)`：传给 renderer 的 spacing/theme options；组件始终强制 `colorMode: "none"`
+- `renderer` `(TMermaidRenderer?)`：自定义 renderer，适合测试或替换 Mermaid engine
+- `streaming` `(boolean)`：streaming 更新时使用低优先级 frame task 合并重算
 
 ## TVirtualMarkdown
 

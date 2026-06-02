@@ -43,6 +43,8 @@ describe("documented entrypoint exports", () => {
       "TFlow",
       "TInputBox",
       "TJsonEditor",
+      "TMermaid",
+      "TMermaidText",
       "TMultilineModal",
       "TPathPicker",
       "TRenderLayer",

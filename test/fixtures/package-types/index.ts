@@ -36,6 +36,8 @@ import {
   TFlow,
   TInputBox,
   TJsonEditor,
+  TMermaid,
+  TMermaidText,
   TMultilineModal,
   TPathPicker,
   TRenderLayer,
@@ -49,6 +51,8 @@ import {
   type SelectOptionWithStyle as VueSelectOptionWithStyle,
   type TFormHandle,
   type TInputPlugin,
+  type TMermaidAsciiOptions,
+  type TMermaidRenderer,
 } from "@simon_he/vue-tui/vue";
 
 import {
@@ -76,6 +80,8 @@ import {
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import {
   TAgentTranscript,
+  TMermaid as AgentMermaid,
+  TMermaidText as AgentMermaidText,
   computeCommandPaletteMatchRanges,
   type TCommandPaletteItem as AgentTCommandPaletteItem,
   type TCommandPaletteMatchRange,
@@ -131,6 +137,9 @@ const rootCommandPaletteRanges = computeRootCommandPaletteMatchRanges("Open work
 const vueCommandPaletteRanges = computeVueCommandPaletteMatchRanges("Open workspace", "open");
 const vueDialogButton: VueDialogButton = { label: "OK" };
 const vueSelectOption: VueSelectOptionWithStyle = { label: "Remote", value: "remote" };
+const mermaidOptions: TMermaidAsciiOptions = { useAscii: true, paddingX: 1 };
+const mermaidRenderer: TMermaidRenderer = (code, options) =>
+  `${code}:${options.colorMode}:${options.useAscii ? "ascii" : "unicode"}`;
 const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
 const agentCommandPaletteItem: AgentTCommandPaletteItem = {
   label: "Open",
@@ -167,11 +176,15 @@ console.log(
   TFlow,
   TInputBox,
   TJsonEditor,
+  TMermaid,
+  TMermaidText,
   TMultilineModal,
   TPathPicker,
   TRenderLayer,
   TRenderPlane,
   TTransition,
+  AgentMermaid,
+  AgentMermaidText,
   useTerminal,
   createDefaultTInputHostAdapter,
   defaultTInputHostPlugin,
@@ -197,6 +210,8 @@ console.log(
   vueCommandPaletteRanges,
   vueDialogButton,
   vueSelectOption,
+  mermaidOptions,
+  mermaidRenderer,
   agentCommandPaletteItem,
   agentCommandPaletteRanges,
 );
