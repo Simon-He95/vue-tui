@@ -823,6 +823,24 @@ Mermaid terminal text renderer。默认动态加载 optional peer `beautiful-mer
 >
 > 未安装 optional peer 时，组件只在实际渲染 Mermaid 内容时显示 fallback 文本，不影响 `@simon_he/vue-tui/agent` 基础导入。
 
+### Example
+
+```vue
+<script setup lang="ts">
+import { TMermaidText } from "@simon_he/vue-tui/vue";
+
+const diagram = `graph LR
+  Input[User prompt] --> Plan{Need diagram?}
+  Plan -- yes --> Mermaid[TMermaidText]
+  Plan -- no --> Text[TText]
+  Mermaid --> Terminal[Terminal cells]`;
+</script>
+
+<template>
+  <TMermaidText :x="0" :y="0" :w="76" :h="12" :content="diagram" />
+</template>
+```
+
 ### Props
 
 - `x`/`y`/`w` `(number, required)`：渲染区域左上角与宽度
