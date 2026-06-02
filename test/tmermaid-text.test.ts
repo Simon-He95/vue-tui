@@ -43,7 +43,6 @@ describe("TMermaidText", () => {
           ascii: true,
           paddingX: 2,
           options: {
-            useAscii: false,
             paddingX: 1,
             paddingY: 3,
             theme: { line: "gray" },

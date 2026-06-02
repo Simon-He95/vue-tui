@@ -137,7 +137,7 @@ const rootCommandPaletteRanges = computeRootCommandPaletteMatchRanges("Open work
 const vueCommandPaletteRanges = computeVueCommandPaletteMatchRanges("Open workspace", "open");
 const vueDialogButton: VueDialogButton = { label: "OK" };
 const vueSelectOption: VueSelectOptionWithStyle = { label: "Remote", value: "remote" };
-const mermaidOptions: TMermaidAsciiOptions = { useAscii: true, paddingX: 1 };
+const mermaidOptions: TMermaidAsciiOptions = { paddingX: 1 };
 const mermaidRenderer: TMermaidRenderer = (code, options) =>
   `${code}:${options.colorMode}:${options.useAscii ? "ascii" : "unicode"}`;
 const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };

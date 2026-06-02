@@ -38,7 +38,6 @@ export type TMermaidAsciiTheme = Readonly<
 >;
 
 export type TMermaidAsciiOptions = Readonly<{
-  useAscii?: boolean;
   paddingX?: number;
   paddingY?: number;
   boxBorderPadding?: number;
@@ -83,17 +82,6 @@ function errorCode(error: unknown): string {
   return typeof code === "string" ? code : "";
 }
 
-function isEsmRequireError(error: unknown): boolean {
-  const code = errorCode(error);
-  const message = errorMessage(error);
-  return (
-    code === "ERR_REQUIRE_ESM" ||
-    /require\(\) of ES Module/i.test(message) ||
-    /must use import to load ES Module/i.test(message) ||
-    /ESM-only/i.test(message)
-  );
-}
-
 function isMissingBeautifulMermaidError(error: unknown): boolean {
   const code = errorCode(error);
   const message = errorMessage(error);
@@ -106,17 +94,9 @@ function isMissingBeautifulMermaidError(error: unknown): boolean {
   );
 }
 
-async function nativeDynamicImport(specifier: string): Promise<unknown> {
-  return (0, eval)(`import(${JSON.stringify(specifier)})`) as Promise<unknown>;
-}
-
 async function importBeautifulMermaid(): Promise<BeautifulMermaidModule> {
-  try {
-    return (await import("beautiful-mermaid")) as BeautifulMermaidModule;
-  } catch (error) {
-    if (!isEsmRequireError(error)) throw error;
-    return (await nativeDynamicImport(BEAUTIFUL_MERMAID_SPECIFIER)) as BeautifulMermaidModule;
-  }
+  // Keep the optional peer out of static dependency resolution.
+  return (await import(/* @vite-ignore */ BEAUTIFUL_MERMAID_SPECIFIER)) as BeautifulMermaidModule;
 }
 
 function splitRenderedOutput(value: string): readonly string[] {
