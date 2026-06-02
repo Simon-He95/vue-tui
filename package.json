@@ -198,6 +198,8 @@
     "dev": "tsdown --watch",
     "build:examples": "pnpm run build && pnpm -C examples/basic build",
     "build:examples:terminal": "pnpm run build && pnpm -C examples/basic build:terminal",
+    "showcase": "pnpm -C examples/basic dev",
+    "showcase:terminal": "pnpm run build && pnpm -C examples/basic terminal",
     "example:basic:terminal-table:smoke": "pnpm run build && VT_SMOKE=1 pnpm -C examples/basic terminal:table",
     "example:agent-console": "pnpm run build && pnpm -C examples/agent-console dev",
     "example:agent-console:smoke": "pnpm run build && pnpm -C examples/agent-console smoke",

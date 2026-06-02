@@ -37,6 +37,34 @@ import {
 import type { PropType } from "vue";
 
 describe("ui regressions dialog", () => {
+  it("keeps the default background when dialog style only sets foreground", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog,
+          {
+            modelValue: true,
+            w: 12,
+            h: 5,
+            title: "Run",
+            padding: 1,
+            placement: "top-left",
+            backdrop: false,
+            style: { fg: "cyanBright" },
+          },
+          () => h(TText, { x: 0, y: 0, value: "" }),
+        ),
+      20,
+      8,
+      { defaultStyle: { fg: "whiteBright", bg: "black" } },
+    );
+
+    const contentCell = mounted.terminal.getCell(2, 2);
+    expect(contentCell.ch).toBe(" ");
+    expect(contentCell.style).toMatchObject({ fg: "cyanBright", bg: "black" });
+    mounted.unmount();
+  });
+
   it("closes dialog on Escape from an empty focused input", async () => {
     const open = ref(true);
     const value = ref("");

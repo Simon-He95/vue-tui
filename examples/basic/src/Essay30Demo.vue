@@ -1,12 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { TerminalProvider, TBox, TText, TInput } from "@simon_he/vue-tui";
-import { useLayout } from "@simon_he/vue-tui/vue";
-
-// 获取终端布局信息
-const layout = useLayout();
-const cols = computed(() => layout.clipRect?.w ?? 80);
-const rows = computed(() => layout.clipRect?.h ?? 24);
+import { TBox, TText, TInput } from "@simon_he/vue-tui";
 
 // 30字小作文预设
 const essays = [
@@ -105,81 +99,84 @@ const createProgressBar = () => {
 </script>
 
 <template>
-  <TerminalProvider :cols="80" :rows="26" :default-style="{ fg: 'whiteBright' }">
-    <!-- 主边框 -->
-    <TBox
+  <!-- 主边框 -->
+  <TBox
+    :x="1"
+    :y="1"
+    :w="78"
+    :h="24"
+    border
+    title="30字小作文生成器"
+    :style="{ fg: 'magentaBright' }"
+    :padding="1"
+  >
+    <!-- 小作文显示区域 -->
+    <TText :x="1" :y="1" :w="76" value="当前小作文：" :style="{ fg: 'yellowBright' }" />
+    <TText
       :x="1"
-      :y="1"
-      :w="78"
-      :h="24"
-      border
-      title="30字小作文生成器"
-      :style="{ fg: 'magentaBright' }"
-      :padding="1"
-    >
-      <!-- 小作文显示区域 -->
-      <TText :x="1" :y="1" :w="76" value="当前小作文：" :style="{ fg: 'yellowBright' }" />
-      <TText :x="1" :y="3" :w="76" :value="currentEssay" :style="{ fg: 'redBright', bold: true }" />
+      :y="3"
+      :w="76"
+      :h="3"
+      wrap
+      :value="currentEssay"
+      :style="{ fg: 'redBright', bold: true }"
+    />
 
-      <!-- 字符统计 -->
-      <TText
-        :x="1"
-        :y="5"
-        :w="76"
-        :value="`字符数：${charCount} / ${TARGET_CHARS}`"
-        :style="{ fg: 'blueBright' }"
-      />
-      <TText
-        :x="1"
-        :y="6"
-        :w="76"
-        :value="`进度：${createProgressBar()} ${progress}%`"
-        :style="progressStyle"
-      />
+    <!-- 字符统计 -->
+    <TText
+      :x="1"
+      :y="7"
+      :w="76"
+      :value="`字符数：${charCount} / ${TARGET_CHARS}`"
+      :style="{ fg: 'blueBright' }"
+    />
+    <TText
+      :x="1"
+      :y="8"
+      :w="76"
+      :value="`进度：${createProgressBar()} ${progress}%`"
+      :style="progressStyle"
+    />
 
-      <!-- 分隔线 -->
-      <TText
-        :x="1"
-        :y="8"
-        :w="76"
-        value="──────────────────────────────────────────────────────"
-        :style="{ fg: 'gray' }"
-      />
+    <!-- 分隔线 -->
+    <TText
+      :x="1"
+      :y="10"
+      :w="76"
+      value="──────────────────────────────────────────────────────"
+      :style="{ fg: 'gray' }"
+    />
 
-      <!-- 输入区域 -->
-      <TText
-        :x="1"
-        :y="10"
-        :w="76"
-        value="输入新的小作文（按Enter确认）："
-        :style="{ fg: 'yellowBright' }"
-      />
-      <TInput
-        :x="1"
-        :y="12"
-        :w="76"
-        v-model="inputEssay"
-        placeholder="请输入30字小作文..."
-        @keydown.enter="confirmEssay"
-      />
+    <!-- 输入区域 -->
+    <TText
+      :x="1"
+      :y="12"
+      :w="76"
+      value="输入新的小作文（按Enter确认）："
+      :style="{ fg: 'yellowBright' }"
+    />
+    <TInput
+      :x="1"
+      :y="14"
+      :w="76"
+      :h="3"
+      v-model="inputEssay"
+      placeholder="请输入30字小作文..."
+      @keydown.enter="confirmEssay"
+    />
 
-      <!-- 操作提示 -->
-      <TText :x="1" :y="15" :w="76" value="操作说明：" :style="{ fg: 'cyanBright' }" />
-      <TText :x="1" :y="16" :w="76" value="• 在输入框中输入文字" :style="{ fg: 'white' }" />
-      <TText :x="1" :y="17" :w="76" value="• 按 Enter 键确认修改" :style="{ fg: 'white' }" />
-      <TText :x="1" :y="18" :w="76" value="• 最佳长度为30个字符" :style="{ fg: 'white' }" />
-      <TText
-        :x="1"
-        :y="19"
-        :w="76"
-        value="• 绿色=达标 黄色=偏长 红色=偏短"
-        :style="{ fg: 'white' }"
-      />
+    <!-- 操作提示 -->
+    <TText
+      :x="1"
+      :y="18"
+      :w="76"
+      value="提示：绿色=达标 黄色=偏长 红色=偏短"
+      :style="{ fg: 'cyanBright' }"
+    />
 
-      <!-- 底部状态栏 -->
-      <TText :x="1" :y="21" :w="76" :value="status" :style="{ fg: 'green' }" />
-    </TBox>
-  </TerminalProvider>
+    <!-- 底部状态栏 -->
+    <TText :x="1" :y="19" :w="76" :value="status" :style="{ fg: 'green' }" />
+  </TBox>
 </template>
 
 <style scoped>

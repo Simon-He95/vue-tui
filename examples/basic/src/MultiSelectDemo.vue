@@ -125,7 +125,7 @@ function onConfirm(values: string[]) {
           autoFocus
           closeOnBlur
           :style="{ fg: 'whiteBright', bg: 'black' }"
-          :highlightStyle="{ fg: 'whiteBright', bg: 'blueBright', bold: true }"
+          :highlightStyle="{ fg: '#111827', bg: '#5eead4', bold: true }"
           @close="onClose"
           @change="onChange"
           @confirm="onConfirm"

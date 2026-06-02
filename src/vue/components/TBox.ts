@@ -105,7 +105,7 @@ export const TBox = defineComponent({
           const max = Math.max(0, w - 4);
           const safe = sanitizeInlineText(props.title);
           const title = sliceByCells(safe, max);
-          const ts = titleStyle ?? (style.bg ? { bg: style.bg } : {});
+          const ts = titleStyle ?? style;
           terminal.write(` ${title} `, { x: x0 + 1, y: y0, style: ts });
         }
       };

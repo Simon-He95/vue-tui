@@ -498,6 +498,33 @@ describe("P1/P2 public components", () => {
     }
   });
 
+  it("keeps highlighted TSelect detail text fully opaque", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TSelect, {
+          x: 0,
+          y: 0,
+          w: 22,
+          h: 1,
+          options: [{ label: "Apple", detail: "fruit" }],
+          style: { fg: "whiteBright", bg: "black" },
+          highlightStyle: { fg: "whiteBright", bg: "blueBright", bold: true },
+        }),
+      24,
+      3,
+    );
+
+    const detailCell = mounted.terminal.getCell(17, 0);
+    expect(detailCell.ch).toBe("f");
+    expect(detailCell.style).toMatchObject({
+      fg: "whiteBright",
+      bg: "blueBright",
+      bold: true,
+    });
+    expect(detailCell.style.dim).toBeUndefined();
+    mounted.unmount();
+  });
+
   it("clears stale TSelect rows when maxVisible shrinks", async () => {
     const maxVisible = ref(3);
 

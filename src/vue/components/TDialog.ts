@@ -200,7 +200,7 @@ const DialogSurface = defineComponent({
     },
   },
   setup(props) {
-    const { events, scheduler } = useTerminal();
+    const { events, scheduler, defaultStyle } = useTerminal();
     const layout = useLayout();
     const cols = computed(() => layout.clipRect?.w ?? 0);
     const rows = computed(() => layout.clipRect?.h ?? 0);
@@ -581,7 +581,15 @@ const DialogSurface = defineComponent({
         padding: props.padding,
         border: true,
       });
-      const contentStyle = props.contentStyle ?? props.style;
+      const dialogStyle =
+        props.style && props.style.bg == null && defaultStyle.value.bg != null
+          ? { ...props.style, bg: defaultStyle.value.bg }
+          : props.style;
+      const rawContentStyle = props.contentStyle ?? dialogStyle;
+      const contentStyle =
+        rawContentStyle && rawContentStyle.bg == null && defaultStyle.value.bg != null
+          ? { ...rawContentStyle, bg: defaultStyle.value.bg }
+          : rawContentStyle;
 
       const dialogBox = h(
         TView as any,
@@ -614,7 +622,7 @@ const DialogSurface = defineComponent({
               clear: true,
               title: props.title,
               padding: props.padding,
-              style: props.style,
+              style: dialogStyle,
               titleStyle: props.titleStyle,
             },
             () => [
@@ -692,7 +700,7 @@ export const TDialog = defineComponent({
   },
   emits: ["update:modelValue", "close", "focus", "blur", "keydown", "confirm"],
   setup(props, { emit, slots }) {
-    const { runtime, events, scheduler } = useTerminal();
+    const { runtime, events, scheduler, defaultStyle } = useTerminal();
     const layout = useLayout();
     const cols = computed(() => layout.clipRect?.w ?? 0);
     const rows = computed(() => layout.clipRect?.h ?? 0);
@@ -926,7 +934,8 @@ export const TDialog = defineComponent({
             const isDanger = b.kind === "danger";
             const isAccent = b.kind === "accent";
             const isMuted = b.kind === "muted";
-            const baseBg = b.style?.bg ?? props.contentStyle?.bg ?? props.style?.bg;
+            const baseBg =
+              b.style?.bg ?? props.contentStyle?.bg ?? props.style?.bg ?? defaultStyle.value.bg;
             const variantStyle: Style =
               b.style ??
               (isPrimary

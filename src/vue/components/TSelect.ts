@@ -861,14 +861,13 @@ export const TSelect = defineComponent({
           const optDetailStyle = getOptionDetailStyle(opt);
           const rowDetailStyle: Style = {
             ...rowBase,
-            ...(optDetailStyle ?? {}),
             dim: true,
+            ...(optDetailStyle ?? {}),
           };
           const optHighlightDetailStyle = getOptionHighlightDetailStyle(opt);
           const rowHighlightDetailStyle: Style = {
             ...rowHighlightBase,
             ...(optHighlightDetailStyle ?? {}),
-            dim: true,
           };
           const optAccentStyle = getOptionAccentStyle(opt);
           const rowAccentStyle: Style = optAccentStyle

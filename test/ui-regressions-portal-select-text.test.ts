@@ -1248,6 +1248,26 @@ describe("ui regressions portal select and text", () => {
     mounted.unmount();
   });
 
+  it("TBox title inherits the box style by default", async () => {
+    const mounted = await mountTerminal(() =>
+      h(TBox, {
+        x: 0,
+        y: 0,
+        w: 18,
+        h: 4,
+        border: true,
+        title: "Title",
+        padding: 0,
+        style: { fg: "greenBright", bg: "black" },
+      }),
+    );
+
+    const titleCell = mounted.terminal.getCell(2, 0);
+    expect(titleCell.ch).toBe("T");
+    expect(titleCell.style).toMatchObject({ fg: "greenBright", bg: "black" });
+    mounted.unmount();
+  });
+
   it("TBox clipRect prevents child overflow into border/neighbor", async () => {
     const mounted = await mountTerminal(
       () =>

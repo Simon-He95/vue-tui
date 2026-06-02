@@ -5,21 +5,38 @@ import {
   installTerminalCleanup,
   type TerminalCleanupHandle,
 } from "@simon_he/vue-tui/cli";
-import Demo from "./Demo.vue";
+import TerminalShowcase from "./TerminalShowcase.vue";
+import {
+  showcaseAnsiPalette,
+  showcaseTerminalStyle,
+  type ShowcaseThemeMode,
+} from "./showcase-theme";
 
 const cols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : 70;
 const rows = Number.isFinite(process.stdout.rows) ? process.stdout.rows : 22;
+const initialThemeMode: ShowcaseThemeMode = "dark";
+let out!: ReturnType<typeof createStdoutRenderer>;
 
 const app = createTerminalApp({
   cols,
   rows,
-  component: Demo as any,
-  defaultStyle: { fg: "whiteBright" },
+  component: TerminalShowcase as any,
+  props: {
+    onThemeChange: (mode: ShowcaseThemeMode) => {
+      out?.updateTheme?.({ defaultBg: "black", palette: showcaseAnsiPalette(mode) });
+    },
+  },
+  defaultStyle: showcaseTerminalStyle(initialThemeMode),
 });
 app.mount();
 
 const smoke = process.env.VT_SMOKE === "1";
-const out = createStdoutRenderer(
+const rendererTheme = {
+  defaultBg: "black",
+  palette: showcaseAnsiPalette(initialThemeMode),
+  colorMode: "truecolor" as const,
+};
+out = createStdoutRenderer(
   app.terminal,
   smoke
     ? {
@@ -27,8 +44,9 @@ const out = createStdoutRenderer(
         clear: false,
         hideCursor: false,
         altScreen: false,
+        ...rendererTheme,
       }
-    : { output: process.stdout, hideCursor: true, allowFileUrls: true },
+    : { output: process.stdout, hideCursor: true, allowFileUrls: true, ...rendererTheme },
 );
 
 // Keep cursor position updated (even while hidden) so terminals that need it for composition
