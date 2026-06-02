@@ -49,7 +49,8 @@ await build({
   target: ["es2020"],
   sourcemap: false,
   // CJS intentionally bundles stream-markdown-parser because it only exposes
-  // ESM entrypoints. ESM keeps it external via tsdown.
+  // ESM entrypoints. beautiful-mermaid stays external because it is an optional
+  // peer loaded lazily by TMermaidText.
   external: ["vue", "beautiful-mermaid"],
   plugins: [forbidNodeBuiltinsPlugin],
 });

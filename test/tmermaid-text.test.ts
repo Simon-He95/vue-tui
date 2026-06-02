@@ -109,9 +109,18 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("renders dependency guidance when the renderer cannot load beautiful-mermaid", async () => {
+  it.each([
+    "Cannot find package 'beautiful-mermaid'",
+    "Cannot find module 'beautiful-mermaid'",
+    "Failed to resolve module specifier 'beautiful-mermaid'",
+    "Could not resolve 'beautiful-mermaid'",
+  ])("renders dependency guidance for missing optional peer: %s", async (message) => {
     const renderer: TMermaidRenderer = vi.fn(() => {
-      throw new Error("Cannot find package 'beautiful-mermaid'");
+      const error = new Error(message);
+      (error as Error & { code?: string }).code = message.startsWith("Cannot find")
+        ? "ERR_MODULE_NOT_FOUND"
+        : undefined;
+      throw error;
     });
 
     const mounted = await mountTerminal(
@@ -119,22 +128,52 @@ describe("TMermaidText", () => {
         h(TMermaidText, {
           x: 0,
           y: 0,
-          w: 80,
+          w: 160,
           h: 2,
           content: "graph LR\n  A --> B",
           errorText: "diagram error",
           missingDependencyText: "Missing optional peer.",
           renderer,
         }),
-      80,
+      160,
+      4,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toContain("diagram error: Missing optional peer.");
+    expect(rowText(mounted, 0)).toContain(message);
+
+    mounted.unmount();
+  });
+
+  it("does not classify normal render errors as missing dependency", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => {
+      throw new Error("beautiful-mermaid parser rejected invalid graph syntax");
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 100,
+          h: 2,
+          content: "graph LR\n  A -->",
+          errorText: "diagram error",
+          missingDependencyText: "Missing optional peer.",
+          renderer,
+        }),
+      160,
       4,
     );
 
     await settleMermaid(mounted);
 
     expect(rowText(mounted, 0)).toContain(
-      "diagram error: Missing optional peer. Cannot find package 'beautiful-mermaid'",
+      "diagram error: beautiful-mermaid parser rejected invalid graph syntax",
     );
+    expect(rowText(mounted, 0)).not.toContain("Missing optional peer.");
 
     mounted.unmount();
   });

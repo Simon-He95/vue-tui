@@ -65,6 +65,7 @@ type BeautifulMermaidModule = Readonly<{
 }>;
 
 const ANSI_RE = new RegExp(`${String.fromCharCode(27)}(?:\\[[0-?]*[ -/]*[@-~]|[@-Z\\\\-_])`, "g");
+const BEAUTIFUL_MERMAID_SPECIFIER = "beautiful-mermaid";
 
 let cachedBeautifulMermaidRenderer: Promise<TMermaidRenderer> | null = null;
 
@@ -74,6 +75,48 @@ function stripAnsi(value: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function errorCode(error: unknown): string {
+  if (!error || typeof error !== "object") return "";
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : "";
+}
+
+function isEsmRequireError(error: unknown): boolean {
+  const code = errorCode(error);
+  const message = errorMessage(error);
+  return (
+    code === "ERR_REQUIRE_ESM" ||
+    /require\(\) of ES Module/i.test(message) ||
+    /must use import to load ES Module/i.test(message) ||
+    /ESM-only/i.test(message)
+  );
+}
+
+function isMissingBeautifulMermaidError(error: unknown): boolean {
+  const code = errorCode(error);
+  const message = errorMessage(error);
+  return (
+    code === "ERR_MODULE_NOT_FOUND" ||
+    code === "MODULE_NOT_FOUND" ||
+    /Cannot find (module|package) ['"]beautiful-mermaid['"]/i.test(message) ||
+    /Failed to resolve module specifier ['"]beautiful-mermaid['"]/i.test(message) ||
+    /Could not resolve ['"]beautiful-mermaid['"]/i.test(message)
+  );
+}
+
+async function nativeDynamicImport(specifier: string): Promise<unknown> {
+  return (0, eval)(`import(${JSON.stringify(specifier)})`) as Promise<unknown>;
+}
+
+async function importBeautifulMermaid(): Promise<BeautifulMermaidModule> {
+  try {
+    return (await import("beautiful-mermaid")) as BeautifulMermaidModule;
+  } catch (error) {
+    if (!isEsmRequireError(error)) throw error;
+    return (await nativeDynamicImport(BEAUTIFUL_MERMAID_SPECIFIER)) as BeautifulMermaidModule;
+  }
 }
 
 function splitRenderedOutput(value: string): readonly string[] {
@@ -99,9 +142,9 @@ function resolveBeautifulMermaidRenderer(mod: BeautifulMermaidModule): TMermaidR
 
 async function loadBeautifulMermaidRenderer(): Promise<TMermaidRenderer> {
   if (!cachedBeautifulMermaidRenderer) {
-    cachedBeautifulMermaidRenderer = import("beautiful-mermaid")
+    cachedBeautifulMermaidRenderer = importBeautifulMermaid()
       .then((mod) => {
-        const renderer = resolveBeautifulMermaidRenderer(mod as BeautifulMermaidModule);
+        const renderer = resolveBeautifulMermaidRenderer(mod);
         if (!renderer) {
           throw new Error("beautiful-mermaid is installed but does not export renderMermaidASCII.");
         }
@@ -222,10 +265,9 @@ export const TMermaidText = defineComponent({
         if (!alive || version !== renderVersion) return;
 
         const message = errorMessage(err);
-        error.value =
-          message.includes("beautiful-mermaid") || message.includes("Cannot find module")
-            ? `${props.missingDependencyText} ${message}`
-            : message;
+        error.value = isMissingBeautifulMermaidError(err)
+          ? `${props.missingDependencyText} ${message}`
+          : message;
         status.value = "error";
         bump();
       }
