@@ -8,7 +8,9 @@ async function readText(path: string): Promise<string> {
 describe("cursor regressions (native cursor flicker / double caret)", () => {
   it("does not show native cursor in `examples/basic/src/terminal.ts` (non-smoke)", async () => {
     const text = await readText("examples/basic/src/terminal.ts");
-    expect(text).toContain(": { output: process.stdout, hideCursor: true, allowFileUrls: true }");
+    expect(text).toContain(
+      ": { output: process.stdout, hideCursor: true, allowFileUrls: true, ...rendererTheme }",
+    );
     expect(text).not.toContain("showCursor(true)");
   });
 });
