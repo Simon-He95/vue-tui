@@ -15,6 +15,12 @@ const packageJson = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8
 const packageName = packageJson.name;
 const vueVersion = process.argv[3] ?? packageJson.devDependencies?.vue ?? "vue";
 const viteVersion = packageJson.devDependencies?.vite ?? "vite";
+const beautifulMermaidRange =
+  packageJson.peerDependencies?.["beautiful-mermaid"] ??
+  packageJson.devDependencies?.["beautiful-mermaid"];
+const beautifulMermaidSpec = beautifulMermaidRange
+  ? `beautiful-mermaid@${beautifulMermaidRange}`
+  : "beautiful-mermaid";
 const dir = mkdtempSync(join(tmpdir(), "vue-tui-browser-smoke-"));
 const requiredBrowserSubpaths = [
   packageName,
@@ -26,6 +32,8 @@ const requiredBrowserSubpaths = [
   `${packageName}/markdown`,
   `${packageName}/experimental`,
   `${packageName}/agent`,
+  `${packageName}/agent/mermaid`,
+  `${packageName}/mermaid`,
 ];
 const browserSmokeSource = `
 import * as root from "${packageName}";
@@ -37,6 +45,8 @@ import * as vueEntry from "${packageName}/vue";
 import * as markdown from "${packageName}/markdown";
 import * as experimental from "${packageName}/experimental";
 import * as agent from "${packageName}/agent";
+import * as agentMermaid from "${packageName}/agent/mermaid";
+import * as mermaid from "${packageName}/mermaid";
 
 const terminal = root.createTerminal({ cols: 4, rows: 1 });
 terminal.write("OK", { x: 0, y: 0 });
@@ -51,6 +61,10 @@ globalThis.__VUE_TUI_BROWSER_SMOKE__ = Boolean(
     markdown.TMarkdownText &&
     experimental.TVirtualList &&
     agent.TAgentTranscript &&
+    agent.TMermaidText &&
+    agentMermaid.TMermaidText &&
+    mermaid.TMermaidText &&
+    mermaid.beautifulMermaidRenderer &&
     terminal.snapshot().lines[0]?.startsWith("OK"),
 );
 
@@ -222,7 +236,13 @@ async function assertBrowserRuntimeSmoke() {
 
 try {
   run("npm", ["init", "-y"]);
-  run("npm", ["install", resolve(tarball), `vue@${vueVersion}`, `vite@${viteVersion}`]);
+  run("npm", [
+    "install",
+    resolve(tarball),
+    `vue@${vueVersion}`,
+    `vite@${viteVersion}`,
+    beautifulMermaidSpec,
+  ]);
 
   mkdirSync(join(dir, "src"));
   writeFileSync(

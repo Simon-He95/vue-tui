@@ -265,53 +265,7 @@ Public helper `linkifyTextSegments("")` returns an empty segment array; non-empt
 
 ## TMermaid / TMermaidText
 
-`TMermaidText` 把 Mermaid source 渲染成 terminal-safe 的文本行，适合 agent transcript 中展示流程图、架构图、状态机、时序图等内容。
-
-它有三种使用方式：
-
-- `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent`：基础组件，不引入 `beautiful-mermaid`，需要显式传入 `renderer`。
-- `@simon_he/vue-tui/mermaid`：Public optional-peer wrapper。安装 `beautiful-mermaid` 后，直接导入 `TMermaidText` / `TMermaid` 即可自动渲染。
-- `@simon_he/vue-tui/agent/mermaid`：Agent namespace 下的 optional-peer wrapper，行为等同 `/mermaid`，但保持 `/agent` 主入口不依赖 optional peer。
-
-> 注意：`@simon_he/vue-tui/vue` 和 `@simon_he/vue-tui/agent` 导出的 `TMermaidText` 是 renderer-agnostic primitive，不会自动 import `beautiful-mermaid`。
->
-> 需要安装依赖后零配置使用内置 renderer 时，请从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `TMermaidText` / `TMermaid`。
-
-```bash
-pnpm add beautiful-mermaid
-```
-
-```vue
-<script setup lang="ts">
-import { TMermaidText } from "@simon_he/vue-tui/mermaid";
-
-const diagram = `flowchart LR
-  User --> Agent
-  Agent --> Tool
-  Tool --> Agent`;
-</script>
-
-<template>
-  <TMermaidText :x="0" :y="0" :w="80" :code="diagram" />
-</template>
-```
-
-Agent namespace 下也可以直接使用 optional-peer wrapper：
-
-```ts
-import { TMermaidText } from "@simon_he/vue-tui/agent/mermaid";
-```
-
-如果不想让 `/agent` 入口依赖 optional peer，可以从 `/agent` 使用基础组件并传 renderer：
-
-```ts
-import { TMermaidText } from "@simon_he/vue-tui/agent";
-import { beautifulMermaidRenderer } from "@simon_he/vue-tui/mermaid";
-```
-
-```vue
-<TMermaidText :x="0" :y="0" :w="80" :code="diagram" :renderer="beautifulMermaidRenderer" />
-```
+Mermaid 组件详见下方 [TMermaidText](#tmermaidtext)。这里仅作为 Text / Action 分类索引：基础组件从 `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent` 导入并显式传 `renderer`；内置 `beautiful-mermaid` bridge 从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入，使用前需要安装 `beautiful-mermaid`。
 
 ## TCommandPalette
 
