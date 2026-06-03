@@ -27,7 +27,11 @@ export { TLogLinksPanel } from "./vue/components/TLogLinksPanel.js";
 export { TLogVirtualSearchResults } from "./vue/components/TLogVirtualSearchResults.js";
 export { TLogVirtualLinksPanel } from "./vue/components/TLogVirtualLinksPanel.js";
 export { TVirtualMarkdown } from "./vue/components/TVirtualMarkdown.js";
-export { markMermaidRenderErrorFatal, TMermaid, TMermaidText } from "./vue/components/TMermaidText.js";
+export {
+  markMermaidRenderErrorFatal,
+  TMermaid,
+  TMermaidText,
+} from "./vue/components/TMermaidText.js";
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
