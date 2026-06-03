@@ -273,6 +273,10 @@ Public helper `linkifyTextSegments("")` returns an empty segment array; non-empt
 - `@simon_he/vue-tui/mermaid`：Public optional-peer wrapper。安装 `beautiful-mermaid` 后，直接导入 `TMermaidText` / `TMermaid` 即可自动渲染。
 - `@simon_he/vue-tui/agent/mermaid`：Agent namespace 下的 optional-peer wrapper，行为等同 `/mermaid`，但保持 `/agent` 主入口不依赖 optional peer。
 
+> 注意：`@simon_he/vue-tui/vue` 和 `@simon_he/vue-tui/agent` 导出的 `TMermaidText` 是 renderer-agnostic primitive，不会自动 import `beautiful-mermaid`。
+>
+> 需要安装依赖后零配置使用内置 renderer 时，请从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `TMermaidText` / `TMermaid`。
+
 ```bash
 pnpm add beautiful-mermaid
 ```
@@ -281,7 +285,7 @@ pnpm add beautiful-mermaid
 <script setup lang="ts">
 import { TMermaidText } from "@simon_he/vue-tui/mermaid";
 
-const diagram = `graph LR
+const diagram = `flowchart LR
   User --> Agent
   Agent --> Tool
   Tool --> Agent`;
@@ -867,22 +871,45 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 >
 > Agent Beautiful Mermaid bridge import: `@simon_he/vue-tui/agent/mermaid`
 
+> 注意：`@simon_he/vue-tui/vue` 和 `@simon_he/vue-tui/agent` 导出的 `TMermaidText` 是 renderer-agnostic primitive，不会自动 import `beautiful-mermaid`。
+>
+> 需要安装依赖后零配置使用内置 renderer 时，请从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `TMermaidText` / `TMermaid`。
+
 ## TMermaidText
 
 Mermaid terminal text primitive。组件本身不直接依赖 `beautiful-mermaid`，因此可以安全从 `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent` 导入。传 `ascii=true` 时会把该选项传给 renderer，要求 renderer 输出纯 ASCII。
 
 > 使用内置 beautiful-mermaid bridge 前先安装：`pnpm add beautiful-mermaid`
 >
-> 然后从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `beautifulMermaidRenderer` 或 `TBeautifulMermaidText`。
+> 然后从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `TMermaidText` / `TMermaid`。
 
 ### Example
+
+内置 `beautiful-mermaid` bridge：
+
+```vue
+<script setup lang="ts">
+import { TMermaid } from "@simon_he/vue-tui/agent/mermaid";
+
+const diagram = `flowchart LR
+  User[User] --> Agent[Agent]
+  Agent --> Tool[Tool call]
+  Agent --> Answer[Answer]`;
+</script>
+
+<template>
+  <TMermaid :x="0" :y="0" :w="72" :h="12" :content="diagram" />
+</template>
+```
+
+基础组件 + 显式 renderer：
 
 ```vue
 <script setup lang="ts">
 import { TMermaidText } from "@simon_he/vue-tui/vue";
 import { beautifulMermaidRenderer } from "@simon_he/vue-tui/mermaid";
 
-const diagram = `graph LR
+const diagram = `flowchart LR
   Input[User prompt] --> Plan{Need diagram?}
   Plan -- yes --> Mermaid[TMermaidText]
   Plan -- no --> Text[TText]

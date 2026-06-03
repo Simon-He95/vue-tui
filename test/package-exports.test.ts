@@ -598,6 +598,42 @@ describe("package exports", () => {
     expect(agentMermaid.beautifulMermaidRenderer).toBe(mermaid.beautifulMermaidRenderer);
   });
 
+  it.skipIf(!requireDistExports)(
+    "loads the optional Mermaid peer through the built CJS bridge at render time",
+    async () => {
+      expect(existsSync(distMermaidCjs)).toBe(true);
+
+      const require = createRequire(import.meta.url);
+      const mermaid = require(distMermaidCjs) as typeof import("../src/mermaid.js");
+
+      const rendered = await mermaid.beautifulMermaidRenderer("flowchart LR\n  A --> B", {
+        colorMode: "none",
+        useAscii: true,
+      });
+
+      expect(rendered).toContain("A");
+      expect(rendered).toContain("B");
+    },
+  );
+
+  it.skipIf(!requireDistExports)(
+    "loads the optional Mermaid peer through the built agent CJS bridge at render time",
+    async () => {
+      expect(existsSync(distAgentMermaidCjs)).toBe(true);
+
+      const require = createRequire(import.meta.url);
+      const mermaid = require(distAgentMermaidCjs) as typeof import("../src/agent/mermaid.js");
+
+      const rendered = await mermaid.beautifulMermaidRenderer("flowchart LR\n  A --> B", {
+        colorMode: "none",
+        useAscii: true,
+      });
+
+      expect(rendered).toContain("A");
+      expect(rendered).toContain("B");
+    },
+  );
+
   it("keeps existing agent command palette exports", async () => {
     const agent = await import("../src/agent.js");
 
@@ -997,7 +1033,7 @@ describe("package exports", () => {
     expect(mermaidCjs.createBeautifulMermaidRenderer).toBeTruthy();
     expect(agentMermaidCjs.TMermaidText).toBeTruthy();
     expect(agentMermaidCjs.TMermaidText).toBe(agentMermaidCjs.TBeautifulMermaidText);
-    expect(agentMermaidCjs.beautifulMermaidRenderer).toBe(mermaidCjs.beautifulMermaidRenderer);
+    expect(agentMermaidCjs.beautifulMermaidRenderer).toBeTruthy();
     expect("TMarkdownText" in experimentalCjs).toBe(false);
     expect("TVirtualMarkdown" in experimentalCjs).toBe(false);
     expect(experimentalCjs.TVirtualList).toBeTruthy();

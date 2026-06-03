@@ -1,5 +1,4 @@
 import { builtinModules } from "node:module";
-import { mkdir, writeFile } from "node:fs/promises";
 import { build } from "esbuild";
 
 const nodeBuiltins = Array.from(
@@ -41,6 +40,7 @@ await build({
     markdown: "src/markdown.ts",
     experimental: "src/experimental.ts",
     agent: "src/agent.ts",
+    "agent/mermaid": "src/agent/mermaid.ts",
     mermaid: "src/mermaid.ts",
   },
   outdir: "dist",
@@ -56,12 +56,6 @@ await build({
   external: ["vue", "beautiful-mermaid"],
   plugins: [forbidNodeBuiltinsPlugin],
 });
-
-await mkdir("dist/agent", { recursive: true });
-await writeFile(
-  "dist/agent/mermaid.cjs",
-  `"use strict";\nmodule.exports = require("../mermaid.cjs");\n`,
-);
 
 await build({
   entryPoints: {
