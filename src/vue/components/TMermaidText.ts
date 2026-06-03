@@ -456,7 +456,7 @@ export const TMermaidText = defineComponent({
             }
           };
 
-          if (dirtyRows) {
+          if (dirtyRows?.length) {
             for (const y of dirtyRows) paintRow(y);
             return;
           }
