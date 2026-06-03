@@ -13,8 +13,9 @@ function rowText(mounted: MountedTerminal, y: number): string {
 }
 
 async function settleMermaid(mounted: MountedTerminal): Promise<void> {
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 8; i++) {
     await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     await nextTick();
     mounted.scheduler()?.flushNow();
   }
@@ -108,20 +109,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it.each([
-    "Cannot find package 'beautiful-mermaid'",
-    "Cannot find module 'beautiful-mermaid'",
-    "Failed to resolve module specifier 'beautiful-mermaid'",
-    "Could not resolve 'beautiful-mermaid'",
-  ])("renders dependency guidance for missing optional peer: %s", async (message) => {
-    const renderer: TMermaidRenderer = vi.fn(() => {
-      const error = new Error(message);
-      (error as Error & { code?: string }).code = message.startsWith("Cannot find")
-        ? "ERR_MODULE_NOT_FOUND"
-        : undefined;
-      throw error;
-    });
-
+  it("renders renderer guidance when no renderer is provided", async () => {
     const mounted = await mountTerminal(
       () =>
         h(TMermaidText, {
@@ -131,17 +119,17 @@ describe("TMermaidText", () => {
           h: 2,
           content: "graph LR\n  A --> B",
           errorText: "diagram error",
-          missingDependencyText: "Missing optional peer.",
-          renderer,
+          missingDependencyText: "Pass renderer or import @simon_he/vue-tui/mermaid.",
         }),
-      160,
+      120,
       4,
     );
 
     await settleMermaid(mounted);
 
-    expect(rowText(mounted, 0)).toContain("diagram error: Missing optional peer.");
-    expect(rowText(mounted, 0)).toContain(message);
+    expect(rowText(mounted, 0)).toContain(
+      "diagram error: Pass renderer or import @simon_he/vue-tui/mermaid.",
+    );
 
     mounted.unmount();
   });
@@ -174,6 +162,32 @@ describe("TMermaidText", () => {
     );
     expect(rowText(mounted, 0)).not.toContain("Missing optional peer.");
 
+    mounted.unmount();
+  });
+
+  it("TBeautifulMermaidText supplies the beautiful-mermaid renderer", async () => {
+    vi.doMock("beautiful-mermaid", () => ({
+      renderMermaidASCII: vi.fn((code: string) => `rendered:${code}`),
+    }));
+
+    const { TBeautifulMermaidText } = await import("../src/mermaid.js");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TBeautifulMermaidText, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 1,
+          content: "graph LR\n  A --> B",
+        }),
+      40,
+      3,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toBe("rendered:graph LR");
     mounted.unmount();
   });
 

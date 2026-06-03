@@ -27,6 +27,7 @@ export default defineConfig([
       markdown: "src/markdown.ts",
       experimental: "src/experimental.ts",
       agent: "src/agent.ts",
+      mermaid: "src/mermaid.ts",
     },
     format: ["esm"],
     clean: false,

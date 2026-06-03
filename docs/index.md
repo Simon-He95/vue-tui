@@ -54,10 +54,11 @@ Vue 是 peer dependency。当前发布包支持 Vue `>=3.3.0 <4`。
 | `@simon_he/vue-tui/observability` | Advanced     | frame perf store、profiler hooks 和 trace helpers                               |
 | `@simon_he/vue-tui/cli`           | Public       | Node-only headless app、stdin driver、stdout renderer、path provider、recording |
 | `@simon_he/vue-tui/markdown`      | Public       | `TMarkdownText`、`TVirtualMarkdown`、markdown parser、block source              |
+| `@simon_he/vue-tui/mermaid`       | Public       | optional `beautiful-mermaid` bridge、renderer helper、wrapper component         |
 | `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`、`TLogView`、TLog companions、append-only log store              |
 | `@simon_he/vue-tui/agent`         | Experimental | agent/console 常用的 transcript、tool-call、log、markdown、overlay 组件聚合入口 |
 
-稳定面是 terminal core、DOM renderer、CLI runtime、基础 Vue 组件和 markdown API。`/experimental` 和 `/agent` API 仍可能在下一个 stable release 前变化；生产应用建议把这些 import 隔离在少量边界文件内。
+稳定面是 terminal core、DOM renderer、CLI runtime、基础 Vue 组件、markdown API 和 optional Mermaid bridge。`/experimental` 和 `/agent` API 仍可能在下一个 stable release 前变化；生产应用建议把这些 import 隔离在少量边界文件内。
 
 ## 快速路径
 

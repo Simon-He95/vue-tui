@@ -174,6 +174,19 @@ describe("public API surface", () => {
     `);
   });
 
+  it("keeps mermaid entry exports intentional", async () => {
+    expect(await exportNames("../src/mermaid.js")).toMatchInlineSnapshot(`
+      [
+        "TBeautifulMermaid",
+        "TBeautifulMermaidText",
+        "TMermaid",
+        "TMermaidText",
+        "beautifulMermaidRenderer",
+        "createBeautifulMermaidRenderer",
+      ]
+    `);
+  });
+
   it("keeps observability entry exports intentional", async () => {
     expect(await exportNames("../src/observability.js")).toMatchInlineSnapshot(`
       [

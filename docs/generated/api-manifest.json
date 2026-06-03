@@ -567,6 +567,25 @@
         "TuiMarkdownVisualSegment"
       ]
     },
+    "@simon_he/vue-tui/mermaid": {
+      "maturity": "public",
+      "runtime": "browser-safe",
+      "valueExports": [
+        "TBeautifulMermaid",
+        "TBeautifulMermaidText",
+        "TMermaid",
+        "TMermaidText",
+        "beautifulMermaidRenderer",
+        "createBeautifulMermaidRenderer"
+      ],
+      "typeExports": [
+        "TMermaidAsciiOptions",
+        "TMermaidAsciiTheme",
+        "TMermaidRenderer",
+        "TMermaidResolvedAsciiOptions",
+        "TMermaidTextProps"
+      ]
+    },
     "@simon_he/vue-tui/observability": {
       "maturity": "advanced",
       "runtime": "browser-safe",
@@ -5626,7 +5645,7 @@
           "name": "missingDependencyText",
           "type": "string",
           "required": false,
-          "defaultValue": "\"Install beautiful-mermaid to render Mermaid diagrams.\""
+          "defaultValue": "\"Install beautiful-mermaid and use @simon_he/vue-tui/mermaid, or pass a rende..."
         },
         {
           "name": "errorText",
@@ -5762,7 +5781,7 @@
           "name": "missingDependencyText",
           "type": "string",
           "required": false,
-          "defaultValue": "\"Install beautiful-mermaid to render Mermaid diagrams.\""
+          "defaultValue": "\"Install beautiful-mermaid and use @simon_he/vue-tui/mermaid, or pass a rende..."
         },
         {
           "name": "errorText",

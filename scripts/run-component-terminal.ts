@@ -50,6 +50,7 @@ import {
   useLayout,
 } from "../src/vue.js";
 import { TMarkdownText, TVirtualMarkdown } from "../src/markdown.js";
+import { beautifulMermaidRenderer } from "../src/mermaid.js";
 import {
   TLogLinksPanel,
   TLogMinimap,
@@ -1080,6 +1081,7 @@ const demos: Demo[] = [
           h: 12,
           content: mermaid,
           options: { paddingX: 1, paddingY: 0 },
+          renderer: beautifulMermaidRenderer,
         }),
       ),
     ),

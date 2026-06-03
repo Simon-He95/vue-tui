@@ -1,4 +1,4 @@
-import type { PropType } from "vue";
+import type { ExtractPublicPropTypes, PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import type { Rect } from "../../events/manager/types.js";
 import {
@@ -22,6 +22,7 @@ import {
   sliceByCells,
   sliceByCellsRange,
   spaces,
+  withTextWidthProvider,
 } from "../utils/text.js";
 
 export type TMermaidAsciiTheme = Readonly<
@@ -57,16 +58,7 @@ export type TMermaidRenderer = (
 
 type TMermaidStatus = "idle" | "loading" | "ready" | "error";
 
-type BeautifulMermaidModule = Readonly<{
-  renderMermaidASCII?: unknown;
-  renderMermaidAscii?: unknown;
-  default?: unknown;
-}>;
-
 const ANSI_RE = new RegExp(`${String.fromCharCode(27)}(?:\\[[0-?]*[ -/]*[@-~]|[@-Z\\\\-_])`, "g");
-const BEAUTIFUL_MERMAID_SPECIFIER = "beautiful-mermaid";
-
-let cachedBeautifulMermaidRenderer: Promise<TMermaidRenderer> | null = null;
 
 function stripAnsi(value: string): string {
   return value.replace(ANSI_RE, "");
@@ -76,115 +68,64 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function errorCode(error: unknown): string {
-  if (!error || typeof error !== "object") return "";
-  const code = (error as { code?: unknown }).code;
-  return typeof code === "string" ? code : "";
-}
-
-function isMissingBeautifulMermaidError(error: unknown): boolean {
-  const code = errorCode(error);
-  const message = errorMessage(error);
-  return (
-    code === "ERR_MODULE_NOT_FOUND" ||
-    code === "MODULE_NOT_FOUND" ||
-    /Cannot find (module|package) ['"]beautiful-mermaid['"]/i.test(message) ||
-    /Failed to resolve module specifier ['"]beautiful-mermaid['"]/i.test(message) ||
-    /Could not resolve ['"]beautiful-mermaid['"]/i.test(message)
-  );
-}
-
-async function importBeautifulMermaid(): Promise<BeautifulMermaidModule> {
-  // Keep the optional peer out of static dependency resolution.
-  return (await import(/* @vite-ignore */ BEAUTIFUL_MERMAID_SPECIFIER)) as BeautifulMermaidModule;
-}
-
 function splitRenderedOutput(value: string): readonly string[] {
   const normalized = sanitizeTextBlock(stripAnsi(String(value ?? "")).replace(/\r\n?/g, "\n"));
   const lines = normalized.split("\n");
   return lines.length ? lines : [""];
 }
 
-function functionProp(target: unknown, key: string): TMermaidRenderer | null {
-  if (!target || typeof target !== "object") return null;
-  const value = (target as Record<string, unknown>)[key];
-  return typeof value === "function" ? (value as TMermaidRenderer) : null;
-}
+export const tMermaidTextProps = {
+  x: { type: Number, required: true },
+  y: { type: Number, required: true },
+  w: { type: Number, required: true },
+  h: { type: Number, default: undefined },
+  zIndex: { type: Number, default: 0 },
+  content: { type: String, default: "" },
+  code: { type: String, default: undefined },
+  style: { type: Object as PropType<Style>, default: undefined },
+  loadingStyle: { type: Object as PropType<Style>, default: undefined },
+  errorStyle: { type: Object as PropType<Style>, default: undefined },
+  clear: { type: Boolean, default: true },
+  streaming: { type: Boolean, default: false },
+  ascii: { type: Boolean, default: false },
+  paddingX: { type: Number, default: undefined },
+  paddingY: { type: Number, default: undefined },
+  boxBorderPadding: { type: Number, default: undefined },
+  options: {
+    type: Object as PropType<TMermaidAsciiOptions>,
+    default: undefined,
+  },
+  renderer: {
+    type: Function as PropType<TMermaidRenderer>,
+    default: undefined,
+  },
+  loadingText: {
+    type: String,
+    default: "Rendering Mermaid diagram...",
+  },
+  missingDependencyText: {
+    type: String,
+    default:
+      "Install beautiful-mermaid and use @simon_he/vue-tui/mermaid, or pass a renderer prop.",
+  },
+  errorText: {
+    type: String,
+    default: "Mermaid render failed",
+  },
+  showErrorDetails: {
+    type: Boolean,
+    default: true,
+  },
+} as const;
 
-function resolveBeautifulMermaidRenderer(mod: BeautifulMermaidModule): TMermaidRenderer | null {
-  return (
-    functionProp(mod, "renderMermaidASCII") ??
-    functionProp(mod, "renderMermaidAscii") ??
-    functionProp(mod.default, "renderMermaidASCII") ??
-    functionProp(mod.default, "renderMermaidAscii")
-  );
-}
-
-async function loadBeautifulMermaidRenderer(): Promise<TMermaidRenderer> {
-  if (!cachedBeautifulMermaidRenderer) {
-    cachedBeautifulMermaidRenderer = importBeautifulMermaid()
-      .then((mod) => {
-        const renderer = resolveBeautifulMermaidRenderer(mod);
-        if (!renderer) {
-          throw new Error("beautiful-mermaid is installed but does not export renderMermaidASCII.");
-        }
-        return renderer;
-      })
-      .catch((error) => {
-        cachedBeautifulMermaidRenderer = null;
-        throw error;
-      });
-  }
-  return cachedBeautifulMermaidRenderer;
-}
+export type TMermaidTextProps = ExtractPublicPropTypes<typeof tMermaidTextProps>;
 
 export const TMermaidText = defineComponent({
   name: "TMermaidText",
-  props: {
-    x: { type: Number, required: true },
-    y: { type: Number, required: true },
-    w: { type: Number, required: true },
-    h: { type: Number, default: undefined },
-    zIndex: { type: Number, default: 0 },
-    content: { type: String, default: "" },
-    code: { type: String, default: undefined },
-    style: { type: Object as PropType<Style>, default: undefined },
-    loadingStyle: { type: Object as PropType<Style>, default: undefined },
-    errorStyle: { type: Object as PropType<Style>, default: undefined },
-    clear: { type: Boolean, default: true },
-    streaming: { type: Boolean, default: false },
-    ascii: { type: Boolean, default: false },
-    paddingX: { type: Number, default: undefined },
-    paddingY: { type: Number, default: undefined },
-    boxBorderPadding: { type: Number, default: undefined },
-    options: {
-      type: Object as PropType<TMermaidAsciiOptions>,
-      default: undefined,
-    },
-    renderer: {
-      type: Function as PropType<TMermaidRenderer>,
-      default: undefined,
-    },
-    loadingText: {
-      type: String,
-      default: "Rendering Mermaid diagram...",
-    },
-    missingDependencyText: {
-      type: String,
-      default: "Install beautiful-mermaid to render Mermaid diagrams.",
-    },
-    errorText: {
-      type: String,
-      default: "Mermaid render failed",
-    },
-    showErrorDetails: {
-      type: Boolean,
-      default: true,
-    },
-  },
+  props: tMermaidTextProps,
   setup(props) {
     const instance = getCurrentInstance();
-    const { terminal, defaultStyle, scheduler } = useTerminal();
+    const { terminal, defaultStyle, scheduler, widthProvider } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
 
@@ -231,8 +172,15 @@ export const TMermaidText = defineComponent({
       bump();
 
       try {
-        const renderer = props.renderer ?? (await loadBeautifulMermaidRenderer());
-        if (!alive || version !== renderVersion) return;
+        const renderer = props.renderer;
+        if (!renderer) {
+          if (!alive || version !== renderVersion) return;
+          lines.value = markRaw([""]);
+          error.value = props.missingDependencyText;
+          status.value = "error";
+          bump();
+          return;
+        }
 
         const rendered = await renderer(code, resolveAsciiOptions());
         if (!alive || version !== renderVersion) return;
@@ -243,11 +191,7 @@ export const TMermaidText = defineComponent({
         bump();
       } catch (err) {
         if (!alive || version !== renderVersion) return;
-
-        const message = errorMessage(err);
-        error.value = isMissingBeautifulMermaidError(err)
-          ? `${props.missingDependencyText} ${message}`
-          : message;
+        error.value = errorMessage(err);
         status.value = "error";
         bump();
       }
@@ -349,41 +293,43 @@ export const TMermaidText = defineComponent({
         defaultStyle.value,
       ],
       paint: (dirtyRows) => {
-        if (!visible.value) return;
+        withTextWidthProvider(widthProvider, () => {
+          if (!visible.value) return;
 
-        const r = absRect.value;
-        const full = fullRect.value;
-        if (r.w <= 0 || r.h <= 0) return;
+          const r = absRect.value;
+          const full = fullRect.value;
+          if (r.w <= 0 || r.h <= 0) return;
 
-        const style = currentStyle.value;
-        const out = displayLines.value;
-        const dx = Math.max(0, Math.floor(r.x - full.x));
-        const fullY = Math.floor(full.y);
-        const blank = props.clear ? spaces(r.w) : "";
+          const style = currentStyle.value;
+          const out = displayLines.value;
+          const dx = Math.max(0, Math.floor(r.x - full.x));
+          const fullY = Math.floor(full.y);
+          const blank = props.clear ? spaces(r.w) : "";
 
-        const paintRow = (y: number) => {
-          if (y < r.y || y >= r.y + r.h) return;
+          const paintRow = (y: number) => {
+            if (y < r.y || y >= r.y + r.h) return;
 
-          const rowIndex = y - fullY;
-          if (rowIndex < 0 || rowIndex >= out.length) {
-            if (props.clear) terminal.write(blank, { x: r.x, y, style });
+            const rowIndex = y - fullY;
+            if (rowIndex < 0 || rowIndex >= out.length) {
+              if (props.clear) terminal.write(blank, { x: r.x, y, style });
+              return;
+            }
+
+            const src = out[rowIndex] ?? "";
+            const clipped = dx > 0 ? sliceByCellsRange(src, dx, dx + r.w) : sliceByCells(src, r.w);
+            const value = props.clear ? padEndByCells(clipped, r.w) : clipped;
+            if (value || props.clear) {
+              terminal.write(value, { x: r.x, y, style });
+            }
+          };
+
+          if (dirtyRows?.length) {
+            for (const y of dirtyRows) paintRow(y);
             return;
           }
 
-          const src = out[rowIndex] ?? "";
-          const clipped = dx > 0 ? sliceByCellsRange(src, dx, dx + r.w) : sliceByCells(src, r.w);
-          const value = props.clear ? padEndByCells(clipped, r.w) : clipped;
-          if (value || props.clear) {
-            terminal.write(value, { x: r.x, y, style });
-          }
-        };
-
-        if (dirtyRows?.length) {
-          for (const y of dirtyRows) paintRow(y);
-          return;
-        }
-
-        for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+          for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+        });
       },
     }));
 

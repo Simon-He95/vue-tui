@@ -18,6 +18,7 @@ description: Reference for Vue TUI components such as TerminalProvider, TBox, TI
 | Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TCommandPalette` `TDataTable` `TDialog` `TInput` `TLink` `TLinkifyText` `TList` `TSelect` `TTable` `TText` `TTree` `TView` form helpers 和 `TBadge`/`TTag`/`TDivider`/`TCode`                                                                                  |
 | Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TForm` `TInputBox` `TJsonEditor` `TMermaid` `TMermaidText` `TMultilineModal` `TPathPicker` `TProgress` `TSpinner` `TSplitPane` `TTabs` `TToastViewport` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition` 和 overlay/navigation/status helpers |
 | Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                                                                                                        |
+| Public       | `@simon_he/vue-tui/mermaid`      | `beautifulMermaidRenderer` `createBeautifulMermaidRenderer` `TBeautifulMermaidText`                                                                                                                                                                                                       |
 | Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap`                                                                                       |
 | Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TMermaid` `TMermaidText` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                                                                             |
 
@@ -814,20 +815,23 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 > Advanced import: `@simon_he/vue-tui/vue`
 >
 > Agent import: `@simon_he/vue-tui/agent`
+>
+> Beautiful Mermaid bridge import: `@simon_he/vue-tui/mermaid`
 
 ## TMermaidText
 
-Mermaid terminal text renderer。默认动态加载 optional peer `beautiful-mermaid`，把 Mermaid source 渲染成 Unicode box drawing text；传 `ascii=true` 时使用纯 ASCII 输出。
+Mermaid terminal text primitive。组件本身不直接依赖 `beautiful-mermaid`，因此可以安全从 `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent` 导入。传 `ascii=true` 时会把该选项传给 renderer，要求 renderer 输出纯 ASCII。
 
-> 使用默认 renderer 前先安装：`pnpm add beautiful-mermaid`
+> 使用内置 beautiful-mermaid bridge 前先安装：`pnpm add beautiful-mermaid`
 >
-> 未安装 optional peer 时，组件只在实际渲染 Mermaid 内容时显示 fallback 文本，不影响 `@simon_he/vue-tui/agent` 基础导入。
+> 然后从 `@simon_he/vue-tui/mermaid` 导入 `beautifulMermaidRenderer` 或 `TBeautifulMermaidText`。
 
 ### Example
 
 ```vue
 <script setup lang="ts">
 import { TMermaidText } from "@simon_he/vue-tui/vue";
+import { beautifulMermaidRenderer } from "@simon_he/vue-tui/mermaid";
 
 const diagram = `graph LR
   Input[User prompt] --> Plan{Need diagram?}
@@ -837,7 +841,14 @@ const diagram = `graph LR
 </script>
 
 <template>
-  <TMermaidText :x="0" :y="0" :w="76" :h="12" :content="diagram" />
+  <TMermaidText
+    :x="0"
+    :y="0"
+    :w="76"
+    :h="12"
+    :content="diagram"
+    :renderer="beautifulMermaidRenderer"
+  />
 </template>
 ```
 

@@ -19,6 +19,8 @@ export default {
       { find: /^@simon_he\/vue-tui\/vue$/, replacement: distEntry("vue.js") },
       { find: /^@simon_he\/vue-tui\/markdown$/, replacement: distEntry("markdown.js") },
       { find: /^@simon_he\/vue-tui\/experimental$/, replacement: distEntry("experimental.js") },
+      { find: /^@simon_he\/vue-tui\/agent$/, replacement: distEntry("agent.js") },
+      { find: /^@simon_he\/vue-tui\/mermaid$/, replacement: distEntry("mermaid.js") },
     ],
   },
   build: {

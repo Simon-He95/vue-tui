@@ -58,6 +58,9 @@
       "core": [
         "./dist/core.d.ts"
       ],
+      "mermaid": [
+        "./dist/mermaid.d.ts"
+      ],
       "runtime": [
         "./dist/runtime.d.ts"
       ],
@@ -185,6 +188,12 @@
         "default": "./dist/agent.cjs"
       }
     },
+    "./mermaid": {
+      "import": {
+        "types": "./dist/mermaid.d.ts",
+        "default": "./dist/mermaid.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -277,6 +286,7 @@
     "@playwright/test": "^1.60.0",
     "@types/node": "^18.19.130",
     "@vitest/coverage-v8": "^4.1.8",
+    "beautiful-mermaid": "^1.1.3",
     "bumpp": "^8.2.1",
     "esbuild": "^0.20.2",
     "happy-dom": "^17.6.3",

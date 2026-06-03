@@ -91,6 +91,12 @@ import {
   TUserMessageView,
   type TToolCallViewSlotProps,
 } from "@simon_he/vue-tui/agent";
+import {
+  TBeautifulMermaidText,
+  beautifulMermaidRenderer,
+  createBeautifulMermaidRenderer,
+  type TMermaidTextProps,
+} from "@simon_he/vue-tui/mermaid";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
 const domOptions: DomRendererOptions = { links: true };
@@ -140,6 +146,8 @@ const vueSelectOption: VueSelectOptionWithStyle = { label: "Remote", value: "rem
 const mermaidOptions: TMermaidAsciiOptions = { paddingX: 1 };
 const mermaidRenderer: TMermaidRenderer = (code, options) =>
   `${code}:${options.colorMode}:${options.useAscii ? "ascii" : "unicode"}`;
+const mermaidTextProps: TMermaidTextProps = { x: 0, y: 0, w: 12 };
+const createdMermaidRenderer = createBeautifulMermaidRenderer();
 const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
 const agentCommandPaletteItem: AgentTCommandPaletteItem = {
   label: "Open",
@@ -185,6 +193,7 @@ console.log(
   TTransition,
   AgentMermaid,
   AgentMermaidText,
+  TBeautifulMermaidText,
   useTerminal,
   createDefaultTInputHostAdapter,
   defaultTInputHostPlugin,
@@ -212,6 +221,9 @@ console.log(
   vueSelectOption,
   mermaidOptions,
   mermaidRenderer,
+  mermaidTextProps,
+  beautifulMermaidRenderer,
+  createdMermaidRenderer,
   agentCommandPaletteItem,
   agentCommandPaletteRanges,
 );
