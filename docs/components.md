@@ -888,6 +888,16 @@ const diagram = `graph TD
 - `streaming` `(boolean)`：streaming 更新时使用低优先级 frame task 合并重算
 - `incompleteText` `(string)`：流式中间态且还没有任何成功渲染时显示的占位文本
 
+### Streaming error policy
+
+AI 输出 Mermaid fence 时经常会先产生不完整源码。`streaming=true && final=false` 下：
+
+- 如果当前源码能渲染，则立即显示并缓存为最后一次成功图。
+- 如果当前源码暂时不能渲染，但之前有成功图，则继续显示最后一次成功图。
+- 如果当前源码暂时不能渲染，且之前没有成功图，则显示 `incompleteText`。
+- 当 `final=true` 后仍然渲染失败，才显示 `errorText` 和错误详情。
+- 缺少 renderer、optional peer 或 renderer setup failure 属于集成错误，不作为流式中间态吞掉。
+
 ## TVirtualMarkdown
 
 Virtual Markdown renderer。它复用 `TMarkdownText` 的 markdown parsing / painting pipeline，并为长文档提供 viewport scrolling。
