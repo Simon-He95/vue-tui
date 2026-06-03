@@ -7,6 +7,7 @@ import * as vueEntry from "@simon_he/vue-tui/vue";
 import * as markdown from "@simon_he/vue-tui/markdown";
 import * as experimental from "@simon_he/vue-tui/experimental";
 import * as agent from "@simon_he/vue-tui/agent";
+import * as agentMermaid from "@simon_he/vue-tui/agent/mermaid";
 import * as mermaid from "@simon_he/vue-tui/mermaid";
 
 const terminal = root.createTerminal({ cols: 4, rows: 1 });
@@ -22,6 +23,7 @@ console.log(
   markdown.TMarkdownText,
   experimental.TVirtualList,
   agent.TMermaidText,
+  agentMermaid.TMermaidText,
   mermaid.createBeautifulMermaidRenderer,
   terminal.snapshot().lines[0],
 );

@@ -101,6 +101,11 @@ import {
   createBeautifulMermaidRenderer,
   type TMermaidTextProps as MermaidEntryTextProps,
 } from "@simon_he/vue-tui/mermaid";
+import {
+  TMermaid as AgentBeautifulMermaid,
+  TMermaidText as AgentBeautifulMermaidText,
+  beautifulMermaidRenderer as agentBeautifulMermaidRenderer,
+} from "@simon_he/vue-tui/agent/mermaid";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
 const domOptions: DomRendererOptions = { links: true };
@@ -201,6 +206,8 @@ console.log(
   AgentMermaidText,
   BeautifulMermaid,
   BeautifulMermaidText,
+  AgentBeautifulMermaid,
+  AgentBeautifulMermaidText,
   TBeautifulMermaidText,
   useTerminal,
   createDefaultTInputHostAdapter,
@@ -233,6 +240,7 @@ console.log(
   agentMermaidTextProps,
   mermaidEntryTextProps,
   beautifulMermaidRenderer,
+  agentBeautifulMermaidRenderer,
   createdMermaidRenderer,
   agentCommandPaletteItem,
   agentCommandPaletteRanges,

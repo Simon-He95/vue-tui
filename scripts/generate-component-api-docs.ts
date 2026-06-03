@@ -911,7 +911,9 @@ function entrypointMeta(specifier: string): {
     specifier === "@simon_he/vue-tui/runtime" ||
     specifier === "@simon_he/vue-tui/observability"
       ? "advanced"
-      : specifier === "@simon_he/vue-tui/experimental" || specifier === "@simon_he/vue-tui/agent"
+      : specifier === "@simon_he/vue-tui/experimental" ||
+          specifier === "@simon_he/vue-tui/agent" ||
+          specifier.startsWith("@simon_he/vue-tui/agent/")
         ? "experimental"
         : "public";
   const runtime: EntrypointRuntime =

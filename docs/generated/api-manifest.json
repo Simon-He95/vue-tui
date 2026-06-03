@@ -259,6 +259,25 @@
         "TuiMarkdownVisualSegment"
       ]
     },
+    "@simon_he/vue-tui/agent/mermaid": {
+      "maturity": "experimental",
+      "runtime": "browser-safe",
+      "valueExports": [
+        "TBeautifulMermaid",
+        "TBeautifulMermaidText",
+        "TMermaid",
+        "TMermaidText",
+        "beautifulMermaidRenderer",
+        "createBeautifulMermaidRenderer"
+      ],
+      "typeExports": [
+        "TMermaidAsciiOptions",
+        "TMermaidAsciiTheme",
+        "TMermaidRenderer",
+        "TMermaidResolvedAsciiOptions",
+        "TMermaidTextProps"
+      ]
+    },
     "@simon_he/vue-tui/cli": {
       "maturity": "public",
       "runtime": "node-only",

@@ -84,6 +84,9 @@
       ],
       "agent": [
         "./dist/agent.d.ts"
+      ],
+      "agent/mermaid": [
+        "./dist/agent/mermaid.d.ts"
       ]
     }
   },
@@ -186,6 +189,12 @@
       "require": {
         "types": "./dist/agent.d.cts",
         "default": "./dist/agent.cjs"
+      }
+    },
+    "./agent/mermaid": {
+      "import": {
+        "types": "./dist/agent/mermaid.d.ts",
+        "default": "./dist/agent/mermaid.js"
       }
     },
     "./mermaid": {
