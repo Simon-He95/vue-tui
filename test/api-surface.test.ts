@@ -108,6 +108,7 @@ describe("public API surface", () => {
         "createTheme",
         "linkifyTextSegments",
         "lintJsonText",
+        "markMermaidRenderErrorFatal",
         "padEndByCells",
         "resolveOverlayPlacement",
         "sliceByCells",
@@ -183,6 +184,7 @@ describe("public API surface", () => {
         "TMermaidText",
         "beautifulMermaidRenderer",
         "createBeautifulMermaidRenderer",
+        "markMermaidRenderErrorFatal",
       ]
     `);
   });
@@ -196,6 +198,7 @@ describe("public API surface", () => {
         "TMermaidText",
         "beautifulMermaidRenderer",
         "createBeautifulMermaidRenderer",
+        "markMermaidRenderErrorFatal",
       ]
     `);
   });
@@ -313,6 +316,7 @@ describe("public API surface", () => {
         "detectTLogUrls",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
+        "markMermaidRenderErrorFatal",
         "parseTLogAnnotatedText",
         "resolveTLogLinksPanelTheme",
         "resolveTLogMinimapTheme",

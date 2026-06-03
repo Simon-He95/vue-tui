@@ -11,6 +11,7 @@ export type {
 export {
   beautifulMermaidRenderer,
   createBeautifulMermaidRenderer,
+  markMermaidRenderErrorFatal,
   TBeautifulMermaid,
   TBeautifulMermaidText,
   TMermaid,

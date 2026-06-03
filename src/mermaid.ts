@@ -8,6 +8,8 @@ export type {
   TMermaidTransientErrorPredicate,
 } from "./vue/components/TMermaidText.js";
 
+export { markMermaidRenderErrorFatal } from "./vue/components/TMermaidText.js";
+
 export {
   beautifulMermaidRenderer,
   createBeautifulMermaidRenderer,

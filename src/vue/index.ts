@@ -100,7 +100,7 @@ export type {
 } from "./components/link/host.js";
 export { linkifyTextSegments } from "./linkify.js";
 export type { TLinkifyOptions, TLinkifyProtocol, TLinkifySegment } from "./linkify.js";
-export { TMermaid, TMermaidText } from "./components/TMermaidText.js";
+export { markMermaidRenderErrorFatal, TMermaid, TMermaidText } from "./components/TMermaidText.js";
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,

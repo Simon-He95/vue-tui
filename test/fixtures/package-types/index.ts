@@ -36,6 +36,7 @@ import {
   TFlow,
   TInputBox,
   TJsonEditor,
+  markMermaidRenderErrorFatal,
   TMermaid,
   TMermaidText,
   TMultilineModal,
@@ -83,6 +84,7 @@ import {
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import {
   TAgentTranscript,
+  markMermaidRenderErrorFatal as markAgentMermaidRenderErrorFatal,
   TMermaid as AgentMermaid,
   TMermaidText as AgentMermaidText,
   computeCommandPaletteMatchRanges,
@@ -102,6 +104,7 @@ import {
   TBeautifulMermaidText,
   beautifulMermaidRenderer,
   createBeautifulMermaidRenderer,
+  markMermaidRenderErrorFatal as markMermaidEntryRenderErrorFatal,
   type TMermaidRenderErrorContext as MermaidEntryRenderErrorContext,
   type TMermaidTextProps as MermaidEntryTextProps,
   type TMermaidTransientErrorPredicate as MermaidEntryTransientErrorPredicate,
@@ -110,6 +113,7 @@ import {
   TMermaid as AgentBeautifulMermaid,
   TMermaidText as AgentBeautifulMermaidText,
   beautifulMermaidRenderer as agentBeautifulMermaidRenderer,
+  markMermaidRenderErrorFatal as markAgentMermaidEntryRenderErrorFatal,
   type TMermaidTransientErrorPredicate as AgentBeautifulMermaidTransientErrorPredicate,
 } from "@simon_he/vue-tui/agent/mermaid";
 
@@ -180,6 +184,12 @@ const mermaidEntryTransientErrorPredicate: MermaidEntryTransientErrorPredicate =
 const agentBeautifulMermaidTransientErrorPredicate: AgentBeautifulMermaidTransientErrorPredicate =
   mermaidTransientErrorPredicate;
 const createdMermaidRenderer = createBeautifulMermaidRenderer();
+const fatalMermaidError = markMermaidRenderErrorFatal(new Error("fatal"));
+const fatalAgentMermaidError = markAgentMermaidRenderErrorFatal(new Error("fatal-agent"));
+const fatalMermaidEntryError = markMermaidEntryRenderErrorFatal(new Error("fatal-entry"));
+const fatalAgentMermaidEntryError = markAgentMermaidEntryRenderErrorFatal(
+  new Error("fatal-agent-entry"),
+);
 const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
 const agentCommandPaletteItem: AgentTCommandPaletteItem = {
   label: "Open",
@@ -269,6 +279,10 @@ console.log(
   beautifulMermaidRenderer,
   agentBeautifulMermaidRenderer,
   createdMermaidRenderer,
+  fatalMermaidError,
+  fatalAgentMermaidError,
+  fatalMermaidEntryError,
+  fatalAgentMermaidEntryError,
   agentCommandPaletteItem,
   agentCommandPaletteRanges,
 );

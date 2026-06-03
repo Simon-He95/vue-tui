@@ -71,6 +71,7 @@ export type TMermaidTransientErrorPredicate = (
 type TMermaidStatus = "idle" | "loading" | "ready" | "incomplete" | "error";
 
 const TUI_MERMAID_FATAL_RENDER_ERROR = "__vueTuiMermaidFatalRenderError" as const;
+const fatalMermaidRenderErrors = new WeakSet<object>();
 
 const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
@@ -98,22 +99,26 @@ type TMermaidFatalRenderError = Error & {
 
 export function markMermaidRenderErrorFatal(error: unknown): Error {
   const normalized = error instanceof Error ? error : new Error(String(error));
+  fatalMermaidRenderErrors.add(normalized);
+
   try {
     Object.defineProperty(normalized, TUI_MERMAID_FATAL_RENDER_ERROR, {
       value: true,
       configurable: true,
     });
   } catch {
-    (normalized as TMermaidFatalRenderError)[TUI_MERMAID_FATAL_RENDER_ERROR] = true;
+    try {
+      (normalized as TMermaidFatalRenderError)[TUI_MERMAID_FATAL_RENDER_ERROR] = true;
+    } catch {}
   }
   return normalized;
 }
 
 function isMermaidRenderErrorFatal(error: unknown): boolean {
-  return Boolean(
-    error &&
-    typeof error === "object" &&
-    (error as TMermaidFatalRenderError)[TUI_MERMAID_FATAL_RENDER_ERROR] === true,
+  if (!error || typeof error !== "object") return false;
+  return (
+    fatalMermaidRenderErrors.has(error) ||
+    (error as TMermaidFatalRenderError)[TUI_MERMAID_FATAL_RENDER_ERROR] === true
   );
 }
 
