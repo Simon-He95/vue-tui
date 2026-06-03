@@ -879,10 +879,11 @@ const diagram = `graph TD
 - `x`/`y`/`w` `(number, required)`：渲染区域左上角与宽度
 - `h` `(number?)`：固定高度；不传时按渲染行数自适应
 - `content` / `code` `(string?)`：Mermaid source；同时传入时 `code` 优先
-- `final` `(boolean)`：AI 流式 Mermaid source 是否已经结束；`streaming=true && final=false` 时，语法错误会作为中间态处理
+- `final` `(boolean)`：AI 流式 Mermaid source 是否已经结束；`streaming=true && final=false` 时，渲染错误默认视为中间态，不会覆盖最后一次成功图
 - `ascii` `(boolean)`：使用纯 ASCII 而不是 Unicode box drawing
 - `options` `(TMermaidAsciiOptions?)`：传给 renderer 的 spacing/theme options；组件始终强制 `colorMode: "none"`
 - `renderer` `(TMermaidRenderer?)`：自定义 renderer，适合测试或替换 Mermaid engine
+- `isTransientRenderError` `(TMermaidTransientErrorPredicate?)`：自定义哪些 renderer error 可以在 `final=false` 时被忽略；optional peer 缺失这类集成错误应该返回 `false`
 - `streaming` `(boolean)`：streaming 更新时使用低优先级 frame task 合并重算
 - `incompleteText` `(string)`：流式中间态且还没有任何成功渲染时显示的占位文本
 

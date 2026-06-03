@@ -1,9 +1,11 @@
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
+  TMermaidRenderErrorContext,
   TMermaidRenderer,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
+  TMermaidTransientErrorPredicate,
 } from "../mermaid.js";
 
 export {

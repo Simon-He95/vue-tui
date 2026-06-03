@@ -224,9 +224,11 @@
         "TLogViewVisualIndexStatus",
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidRenderErrorContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
+        "TMermaidTransientErrorPredicate",
         "TThinkingViewModel",
         "TToolCallStatus",
         "TToolCallViewModel",
@@ -273,9 +275,11 @@
       "typeExports": [
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidRenderErrorContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
-        "TMermaidTextProps"
+        "TMermaidTextProps",
+        "TMermaidTransientErrorPredicate"
       ]
     },
     "@simon_he/vue-tui/cli": {
@@ -601,9 +605,11 @@
       "typeExports": [
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidRenderErrorContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
-        "TMermaidTextProps"
+        "TMermaidTextProps",
+        "TMermaidTransientErrorPredicate"
       ]
     },
     "@simon_he/vue-tui/observability": {
@@ -831,9 +837,11 @@
         "TLinkifySegment",
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidRenderErrorContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
+        "TMermaidTransientErrorPredicate",
         "TOverlayFocusStack",
         "TOverlayPlacement",
         "TOverlayPlacementOptions",
@@ -5663,6 +5671,12 @@
           "defaultValue": "undefined"
         },
         {
+          "name": "isTransientRenderError",
+          "type": "TMermaidTransientErrorPredicate",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
           "name": "loadingText",
           "type": "string",
           "required": false,
@@ -5807,6 +5821,12 @@
         {
           "name": "renderer",
           "type": "TMermaidRenderer",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "isTransientRenderError",
+          "type": "TMermaidTransientErrorPredicate",
           "required": false,
           "defaultValue": "undefined"
         },

@@ -52,8 +52,10 @@ import {
   type TFormHandle,
   type TInputPlugin,
   type TMermaidAsciiOptions,
+  type TMermaidRenderErrorContext,
   type TMermaidRenderer,
   type TMermaidTextProps as VueMermaidTextProps,
+  type TMermaidTransientErrorPredicate,
 } from "@simon_he/vue-tui/vue";
 
 import {
@@ -86,6 +88,7 @@ import {
   computeCommandPaletteMatchRanges,
   type TCommandPaletteItem as AgentTCommandPaletteItem,
   type TCommandPaletteMatchRange,
+  type TMermaidTransientErrorPredicate as AgentMermaidTransientErrorPredicate,
   type TMermaidTextProps as AgentMermaidTextProps,
   TThinkingView,
   TToolCallView,
@@ -99,12 +102,15 @@ import {
   TBeautifulMermaidText,
   beautifulMermaidRenderer,
   createBeautifulMermaidRenderer,
+  type TMermaidRenderErrorContext as MermaidEntryRenderErrorContext,
   type TMermaidTextProps as MermaidEntryTextProps,
+  type TMermaidTransientErrorPredicate as MermaidEntryTransientErrorPredicate,
 } from "@simon_he/vue-tui/mermaid";
 import {
   TMermaid as AgentBeautifulMermaid,
   TMermaidText as AgentBeautifulMermaidText,
   beautifulMermaidRenderer as agentBeautifulMermaidRenderer,
+  type TMermaidTransientErrorPredicate as AgentBeautifulMermaidTransientErrorPredicate,
 } from "@simon_he/vue-tui/agent/mermaid";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
@@ -155,9 +161,24 @@ const vueSelectOption: VueSelectOptionWithStyle = { label: "Remote", value: "rem
 const mermaidOptions: TMermaidAsciiOptions = { paddingX: 1 };
 const mermaidRenderer: TMermaidRenderer = (code, options) =>
   `${code}:${options.colorMode}:${options.useAscii ? "ascii" : "unicode"}`;
+const mermaidRenderErrorContext: TMermaidRenderErrorContext = {
+  code: "graph LR\n  A -->",
+  final: false,
+  streaming: true,
+  hasPreviousOutput: false,
+};
+const mermaidTransientErrorPredicate: TMermaidTransientErrorPredicate = (_error, context) =>
+  context.streaming && !context.final;
 const mermaidTextProps: VueMermaidTextProps = { x: 0, y: 0, w: 12 };
 const agentMermaidTextProps: AgentMermaidTextProps = mermaidTextProps;
+const agentMermaidTransientErrorPredicate: AgentMermaidTransientErrorPredicate =
+  mermaidTransientErrorPredicate;
 const mermaidEntryTextProps: MermaidEntryTextProps = mermaidTextProps;
+const mermaidEntryRenderErrorContext: MermaidEntryRenderErrorContext = mermaidRenderErrorContext;
+const mermaidEntryTransientErrorPredicate: MermaidEntryTransientErrorPredicate =
+  mermaidTransientErrorPredicate;
+const agentBeautifulMermaidTransientErrorPredicate: AgentBeautifulMermaidTransientErrorPredicate =
+  mermaidTransientErrorPredicate;
 const createdMermaidRenderer = createBeautifulMermaidRenderer();
 const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
 const agentCommandPaletteItem: AgentTCommandPaletteItem = {
@@ -236,9 +257,15 @@ console.log(
   vueSelectOption,
   mermaidOptions,
   mermaidRenderer,
+  mermaidRenderErrorContext,
+  mermaidTransientErrorPredicate,
   mermaidTextProps,
   agentMermaidTextProps,
+  agentMermaidTransientErrorPredicate,
   mermaidEntryTextProps,
+  mermaidEntryRenderErrorContext,
+  mermaidEntryTransientErrorPredicate,
+  agentBeautifulMermaidTransientErrorPredicate,
   beautifulMermaidRenderer,
   agentBeautifulMermaidRenderer,
   createdMermaidRenderer,

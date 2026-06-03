@@ -31,9 +31,11 @@ export { TMermaid, TMermaidText } from "./vue/components/TMermaidText.js";
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
+  TMermaidRenderErrorContext,
   TMermaidRenderer,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
+  TMermaidTransientErrorPredicate,
 } from "./vue/components/TMermaidText.js";
 export { createMarkdownBlockSource } from "./vue/markdown/block-source.js";
 export { createAppendOnlyLogStore } from "./vue/log/append-only-log-store.js";

@@ -104,9 +104,11 @@ export { TMermaid, TMermaidText } from "./components/TMermaidText.js";
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
+  TMermaidRenderErrorContext,
   TMermaidRenderer,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
+  TMermaidTransientErrorPredicate,
 } from "./components/TMermaidText.js";
 export { TMultilineModal } from "./components/TMultilineModal.js";
 export { TBreadcrumb, TKeyHint, TStatusBar } from "./components/TNavigation.js";

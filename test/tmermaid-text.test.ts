@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { TMermaidText, type TMermaidRenderer } from "../src/vue.js";
+import {
+  TMermaidText,
+  type TMermaidRenderer,
+  type TMermaidTransientErrorPredicate,
+} from "../src/vue.js";
 import { markMermaidRenderErrorFatal } from "../src/vue/components/TMermaidText.js";
 import { isMissingBeautifulMermaid } from "../src/vue/mermaid/beautiful-mermaid.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
@@ -413,6 +417,48 @@ describe("TMermaidText", () => {
     await settleMermaid(mounted);
     expect(rowText(mounted, 0)).toContain("diagram failed: Install beautiful-mermaid first");
     expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
+
+    mounted.unmount();
+  });
+
+  it("allows integrations to mark non-final streaming render errors as fatal", async () => {
+    const contexts: Parameters<TMermaidTransientErrorPredicate>[1][] = [];
+    const renderer: TMermaidRenderer = vi.fn(() => {
+      throw new Error("Install beautiful-mermaid first");
+    });
+    const isTransientRenderError: TMermaidTransientErrorPredicate = (_error, context) => {
+      contexts.push(context);
+      return false;
+    };
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 96,
+          h: 2,
+          content: "graph LR\n  A --> B",
+          final: false,
+          streaming: true,
+          errorText: "diagram failed",
+          renderer,
+          isTransientRenderError,
+        }),
+      120,
+      4,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toContain("diagram failed: Install beautiful-mermaid first");
+    expect(contexts).toEqual([
+      {
+        code: "graph LR\n  A --> B",
+        final: false,
+        streaming: true,
+        hasPreviousOutput: false,
+      },
+    ]);
 
     mounted.unmount();
   });

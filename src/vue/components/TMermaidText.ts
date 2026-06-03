@@ -56,6 +56,18 @@ export type TMermaidRenderer = (
   options: TMermaidResolvedAsciiOptions,
 ) => string | Promise<string>;
 
+export type TMermaidRenderErrorContext = Readonly<{
+  code: string;
+  final: boolean;
+  streaming: boolean;
+  hasPreviousOutput: boolean;
+}>;
+
+export type TMermaidTransientErrorPredicate = (
+  error: unknown,
+  context: TMermaidRenderErrorContext,
+) => boolean;
+
 type TMermaidStatus = "idle" | "loading" | "ready" | "incomplete" | "error";
 
 const TUI_MERMAID_FATAL_RENDER_ERROR = "__vueTuiMermaidFatalRenderError" as const;
@@ -160,6 +172,10 @@ export const tMermaidTextProps = {
     type: Function as PropType<TMermaidRenderer>,
     default: undefined,
   },
+  isTransientRenderError: {
+    type: Function as PropType<TMermaidTransientErrorPredicate>,
+    default: undefined,
+  },
   loadingText: {
     type: String,
     default: "Rendering Mermaid diagram...",
@@ -223,8 +239,23 @@ export const TMermaidText = defineComponent({
       };
     }
 
-    function shouldTreatRenderErrorAsTransient(err: unknown): boolean {
-      return props.streaming && !props.final && !isPermanentMermaidRenderError(err);
+    function shouldTreatRenderErrorAsTransient(err: unknown, code: string): boolean {
+      if (!props.streaming || props.final || isPermanentMermaidRenderError(err)) return false;
+
+      const context: TMermaidRenderErrorContext = {
+        code,
+        final: props.final,
+        streaming: props.streaming,
+        hasPreviousOutput: hasRenderedOutput(lines.value),
+      };
+
+      if (!props.isTransientRenderError) return true;
+
+      try {
+        return props.isTransientRenderError(err, context);
+      } catch {
+        return false;
+      }
     }
 
     async function renderNow(version: number): Promise<void> {
@@ -268,7 +299,7 @@ export const TMermaidText = defineComponent({
         missingRenderer.value = false;
         error.value = errorMessage(err);
 
-        if (shouldTreatRenderErrorAsTransient(err)) {
+        if (shouldTreatRenderErrorAsTransient(err, code)) {
           status.value = hasRenderedOutput(lines.value) ? "ready" : "incomplete";
           bump();
           return;
@@ -314,6 +345,7 @@ export const TMermaidText = defineComponent({
         () => props.boxBorderPadding,
         () => props.options,
         () => props.final,
+        () => props.isTransientRenderError,
       ],
       () => {
         scheduleRender();

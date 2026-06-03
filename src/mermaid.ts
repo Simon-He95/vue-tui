@@ -1,9 +1,11 @@
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
+  TMermaidRenderErrorContext,
   TMermaidRenderer,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
+  TMermaidTransientErrorPredicate,
 } from "./vue/components/TMermaidText.js";
 
 export {
