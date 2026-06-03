@@ -315,8 +315,8 @@ assert(
   "mermaid CJS renderer export is missing",
 );
 assert(
-  typeof agentMermaid.TMermaidText !== "undefined",
-  "agent/mermaid CJS TMermaidText export is missing",
+  agentMermaid.TMermaidText === mermaid.TMermaidText,
+  "agent/mermaid CJS wrapper should mirror mermaid entry",
 );
 assert(cli.STDOUT_RENDERER_CAPABILITIES.domRows === false, "stdout capabilities are missing");
 
