@@ -1,4 +1,3 @@
-export { TMermaid, TMermaidText } from "./vue/components/TMermaidText.js";
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
@@ -12,4 +11,6 @@ export {
   createBeautifulMermaidRenderer,
   TBeautifulMermaid,
   TBeautifulMermaidText,
+  TMermaid,
+  TMermaidText,
 } from "./vue/mermaid/beautiful-mermaid.js";

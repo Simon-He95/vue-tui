@@ -92,6 +92,8 @@ import {
   type TToolCallViewSlotProps,
 } from "@simon_he/vue-tui/agent";
 import {
+  TMermaid as BeautifulMermaid,
+  TMermaidText as BeautifulMermaidText,
   TBeautifulMermaidText,
   beautifulMermaidRenderer,
   createBeautifulMermaidRenderer,
@@ -193,6 +195,8 @@ console.log(
   TTransition,
   AgentMermaid,
   AgentMermaidText,
+  BeautifulMermaid,
+  BeautifulMermaidText,
   TBeautifulMermaidText,
   useTerminal,
   createDefaultTInputHostAdapter,

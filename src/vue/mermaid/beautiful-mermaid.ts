@@ -1,9 +1,12 @@
 import { defineComponent, h } from "vue";
 import {
-  TMermaidText,
+  TMermaidText as TBaseMermaidText,
   tMermaidTextProps,
   type TMermaidRenderer,
 } from "../components/TMermaidText.js";
+
+const BEAUTIFUL_MERMAID_INSTALL_HINT =
+  "Install beautiful-mermaid to use @simon_he/vue-tui/mermaid, or pass a custom renderer prop.";
 
 type BeautifulMermaidModule = Readonly<{
   renderMermaidASCII?: unknown;
@@ -17,6 +20,22 @@ function functionProp(target: unknown, key: string): TMermaidRenderer | null {
   if (!target || typeof target !== "object") return null;
   const value = (target as Record<string, unknown>)[key];
   return typeof value === "function" ? (value as TMermaidRenderer) : null;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isMissingBeautifulMermaid(error: unknown): boolean {
+  const message = errorMessage(error);
+  return (
+    message.includes("beautiful-mermaid") ||
+    message.includes("ERR_MODULE_NOT_FOUND") ||
+    message.includes("Cannot find package") ||
+    message.includes("Cannot find module") ||
+    message.includes("Failed to resolve module specifier") ||
+    message.includes("Failed to fetch dynamically imported module")
+  );
 }
 
 function resolveBeautifulMermaidRenderer(mod: BeautifulMermaidModule): TMermaidRenderer {
@@ -39,6 +58,10 @@ async function loadBeautifulMermaid(): Promise<BeautifulMermaidModule> {
       .then((mod) => mod as BeautifulMermaidModule)
       .catch((error) => {
         cachedBeautifulMermaid = null;
+        if (isMissingBeautifulMermaid(error)) {
+          const detail = errorMessage(error);
+          throw new Error(`${BEAUTIFUL_MERMAID_INSTALL_HINT} (${detail})`);
+        }
         throw error;
       });
   }
@@ -55,13 +78,13 @@ export function createBeautifulMermaidRenderer(): TMermaidRenderer {
   return beautifulMermaidRenderer;
 }
 
-export const TBeautifulMermaidText = defineComponent({
-  name: "TBeautifulMermaidText",
+export const TMermaidText = defineComponent({
+  name: "TMermaidText",
   props: tMermaidTextProps,
   setup(props, { slots }) {
     return () =>
       h(
-        TMermaidText,
+        TBaseMermaidText,
         {
           ...props,
           renderer: props.renderer ?? beautifulMermaidRenderer,
@@ -71,4 +94,6 @@ export const TBeautifulMermaidText = defineComponent({
   },
 });
 
-export const TBeautifulMermaid = TBeautifulMermaidText;
+export const TMermaid = TMermaidText;
+export const TBeautifulMermaidText = TMermaidText;
+export const TBeautifulMermaid = TMermaidText;

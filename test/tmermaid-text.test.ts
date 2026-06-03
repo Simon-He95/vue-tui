@@ -165,16 +165,18 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("TBeautifulMermaidText supplies the beautiful-mermaid renderer", async () => {
+  it("the mermaid entry TMermaidText supplies the beautiful-mermaid renderer", async () => {
     vi.doMock("beautiful-mermaid", () => ({
       renderMermaidASCII: vi.fn((code: string) => `rendered:${code}`),
     }));
 
-    const { TBeautifulMermaidText } = await import("../src/mermaid.js");
+    const { TBeautifulMermaidText, TMermaidText: TMermaidTextWithBeautifulRenderer } =
+      await import("../src/mermaid.js");
+    expect(TMermaidTextWithBeautifulRenderer).toBe(TBeautifulMermaidText);
 
     const mounted = await mountTerminal(
       () =>
-        h(TBeautifulMermaidText, {
+        h(TMermaidTextWithBeautifulRenderer, {
           x: 0,
           y: 0,
           w: 40,

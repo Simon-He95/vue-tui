@@ -571,7 +571,9 @@ describe("package exports", () => {
     expect(agent.TUserMessageView).toBeTruthy();
     expect(agent.TVirtualMarkdown).toBe(markdown.TVirtualMarkdown);
     expect(agent.createMarkdownBlockSource).toBe(markdown.createMarkdownBlockSource);
-    expect(mermaid.TMermaidText).toBe(vue.TMermaidText);
+    expect(agent.TMermaidText).toBe(vue.TMermaidText);
+    expect(mermaid.TMermaidText).toBe(mermaid.TBeautifulMermaidText);
+    expect(mermaid.TMermaid).toBe(mermaid.TBeautifulMermaid);
     expect(mermaid.createBeautifulMermaidRenderer).toBeTruthy();
   });
 
@@ -944,6 +946,8 @@ describe("package exports", () => {
     expect(agent.TToolLogView).toBe(experimental.TLogView);
     expect(agent.TUserMessageView).toBeTruthy();
     expect(mermaid.TBeautifulMermaidText).toBeTruthy();
+    expect(mermaid.TMermaidText).toBe(mermaid.TBeautifulMermaidText);
+    expect(mermaid.TMermaid).toBe(mermaid.TBeautifulMermaid);
     expect(mermaid.createBeautifulMermaidRenderer).toBeTruthy();
     expect("TMarkdownText" in experimentalCjs).toBe(false);
     expect("TVirtualMarkdown" in experimentalCjs).toBe(false);
