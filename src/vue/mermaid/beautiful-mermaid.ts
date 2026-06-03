@@ -26,14 +26,21 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function isMissingBeautifulMermaid(error: unknown): boolean {
+function errorCode(error: unknown): string {
+  if (!error || typeof error !== "object") return "";
+  const value = (error as { code?: unknown }).code;
+  return typeof value === "string" ? value : "";
+}
+
+export function isMissingBeautifulMermaid(error: unknown): boolean {
   const message = errorMessage(error);
+  const code = errorCode(error);
   return (
-    message.includes("beautiful-mermaid") ||
-    message.includes("ERR_MODULE_NOT_FOUND") ||
-    message.includes("Cannot find package") ||
-    message.includes("Cannot find module") ||
-    message.includes("Failed to resolve module specifier") ||
+    code === "ERR_MODULE_NOT_FOUND" ||
+    /Cannot find package ['"]beautiful-mermaid['"]/.test(message) ||
+    /Cannot find module ['"]beautiful-mermaid['"]/.test(message) ||
+    /Failed to resolve module specifier ['"]beautiful-mermaid['"]/.test(message) ||
+    /Could not resolve ['"]beautiful-mermaid['"]/.test(message) ||
     message.includes("Failed to fetch dynamically imported module")
   );
 }

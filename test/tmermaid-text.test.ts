@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { TMermaidText, type TMermaidRenderer } from "../src/vue.js";
+import { isMissingBeautifulMermaid } from "../src/vue/mermaid/beautiful-mermaid.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
 type MountedTerminal = Awaited<ReturnType<typeof mountTerminal>>;
@@ -134,6 +135,72 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("repaints custom missing-dependency text after entering error state", async () => {
+    const missingText = ref("install peer first");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 80,
+          h: 1,
+          content: "graph LR\n  A --> B",
+          errorText: "diagram error",
+          missingDependencyText: missingText.value,
+        }),
+      80,
+      3,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toContain("diagram error: install peer first");
+
+    missingText.value = "pass renderer or import @simon_he/vue-tui/mermaid";
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toContain(
+      "diagram error: pass renderer or import @simon_he/vue-tui/mermaid",
+    );
+
+    mounted.unmount();
+  });
+
+  it("renders immediately when streaming frame task scheduling is rejected", async () => {
+    const content = ref("graph LR\n  A --> B");
+    const renderer: TMermaidRenderer = vi.fn((code) => `rendered:${code.split("\n")[1]?.trim()}`);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 1,
+          content: content.value,
+          streaming: true,
+          renderer,
+        }),
+      32,
+      3,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toBe("rendered:A --> B");
+
+    const scheduler = mounted.scheduler();
+    const originalQueueFrameTask = scheduler?.queueFrameTask.bind(scheduler);
+    (scheduler as any).queueFrameTask = () => false;
+
+    content.value = "graph LR\n  B --> C";
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toBe("rendered:B --> C");
+
+    if (originalQueueFrameTask) (scheduler as any).queueFrameTask = originalQueueFrameTask;
+    mounted.unmount();
+  });
+
   it("does not classify normal render errors as missing dependency", async () => {
     const renderer: TMermaidRenderer = vi.fn(() => {
       throw new Error("beautiful-mermaid parser rejected invalid graph syntax");
@@ -191,6 +258,26 @@ describe("TMermaidText", () => {
 
     expect(rowText(mounted, 0)).toBe("rendered:graph LR");
     mounted.unmount();
+  });
+
+  it("classifies only beautiful-mermaid module resolution failures as missing dependency", () => {
+    expect(
+      isMissingBeautifulMermaid(
+        Object.assign(new Error("Cannot find package 'beautiful-mermaid' imported from /app"), {
+          code: "ERR_MODULE_NOT_FOUND",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isMissingBeautifulMermaid(
+        new Error("Cannot find package 'other-beautiful-mermaid-plugin' imported from /app"),
+      ),
+    ).toBe(false);
+    expect(
+      isMissingBeautifulMermaid(
+        new Error("beautiful-mermaid parser rejected invalid graph syntax"),
+      ),
+    ).toBe(false);
   });
 
   it("ignores stale async renders", async () => {

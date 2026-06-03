@@ -131,12 +131,14 @@ export const TMermaidText = defineComponent({
 
     const status = shallowRef<TMermaidStatus>("idle");
     const error = shallowRef("");
+    const missingRenderer = shallowRef(false);
     const lines = shallowRef<readonly string[]>(markRaw([""]));
     const documentVersion = shallowRef(0);
 
     let builtOnce = false;
     let renderVersion = 0;
     let alive = true;
+    const frameTaskId = `TMermaidText:${instance?.uid ?? "unknown"}:mermaid`;
 
     const source = computed(() => props.code ?? props.content ?? "");
 
@@ -163,12 +165,14 @@ export const TMermaidText = defineComponent({
         lines.value = markRaw([""]);
         status.value = "ready";
         error.value = "";
+        missingRenderer.value = false;
         bump();
         return;
       }
 
       status.value = "loading";
       error.value = "";
+      missingRenderer.value = false;
       bump();
 
       try {
@@ -176,7 +180,7 @@ export const TMermaidText = defineComponent({
         if (!renderer) {
           if (!alive || version !== renderVersion) return;
           lines.value = markRaw([""]);
-          error.value = props.missingDependencyText;
+          missingRenderer.value = true;
           status.value = "error";
           bump();
           return;
@@ -188,9 +192,11 @@ export const TMermaidText = defineComponent({
         lines.value = markRaw(splitRenderedOutput(rendered));
         status.value = "ready";
         error.value = "";
+        missingRenderer.value = false;
         bump();
       } catch (err) {
         if (!alive || version !== renderVersion) return;
+        missingRenderer.value = false;
         error.value = errorMessage(err);
         status.value = "error";
         bump();
@@ -206,8 +212,8 @@ export const TMermaidText = defineComponent({
         return;
       }
 
-      scheduler.queueFrameTask({
-        id: `TMermaidText:${instance?.uid ?? "unknown"}:mermaid`,
+      const accepted = scheduler.queueFrameTask({
+        id: frameTaskId,
         reason: "stream",
         priority: "low",
         sync: false,
@@ -217,6 +223,9 @@ export const TMermaidText = defineComponent({
           void renderNow(version);
         },
       });
+      if (accepted === false) {
+        void renderNow(version);
+      }
     }
 
     watch(
@@ -238,11 +247,13 @@ export const TMermaidText = defineComponent({
     onBeforeUnmount(() => {
       alive = false;
       renderVersion++;
+      scheduler.cancelFrameTask?.(frameTaskId);
     });
 
     const displayLines = computed<readonly string[]>(() => {
       if (status.value === "error") {
-        const detail = props.showErrorDetails && error.value ? `: ${error.value}` : "";
+        const detailText = missingRenderer.value ? props.missingDependencyText : error.value;
+        const detail = props.showErrorDetails && detailText ? `: ${detailText}` : "";
         return splitRenderedOutput(`${props.errorText}${detail}`);
       }
       if (status.value === "loading" && lines.value.length <= 1 && !lines.value[0]) {
@@ -283,14 +294,12 @@ export const TMermaidText = defineComponent({
         visible.value,
         absRect.value,
         fullRect.value,
-        props.style,
-        props.loadingStyle,
-        props.errorStyle,
+        displayLines.value,
+        currentStyle.value,
         props.clear,
         status.value,
         error.value,
         documentVersion.value,
-        defaultStyle.value,
       ],
       paint: (dirtyRows) => {
         withTextWidthProvider(widthProvider, () => {

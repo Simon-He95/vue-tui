@@ -143,6 +143,16 @@ describe("package exports", () => {
     expect(source).not.toMatch(/from "\.\/cli\//);
   });
 
+  it("keeps beautiful-mermaid out of base vue and agent entries", () => {
+    const files = requireDistExports
+      ? [distVue, distAgent, distVueCjs, distAgentCjs]
+      : [resolve("src/vue.ts"), resolve("src/agent.ts")];
+
+    for (const file of files) {
+      expect(readFileSync(file, "utf8")).not.toContain("beautiful-mermaid");
+    }
+  });
+
   it("detects bare Node builtins in browser forbidden code scans", () => {
     for (const bad of [
       `const fs = require("fs")`,
