@@ -35,13 +35,14 @@ function errorCode(error: unknown): string {
 export function isMissingBeautifulMermaid(error: unknown): boolean {
   const message = errorMessage(error);
   const code = errorCode(error);
+
   return (
-    code === "ERR_MODULE_NOT_FOUND" ||
-    /Cannot find package ['"]beautiful-mermaid['"]/.test(message) ||
+    (code === "ERR_MODULE_NOT_FOUND" &&
+      /Cannot find package ['"]beautiful-mermaid['"]/.test(message)) ||
     /Cannot find module ['"]beautiful-mermaid['"]/.test(message) ||
     /Failed to resolve module specifier ['"]beautiful-mermaid['"]/.test(message) ||
-    /Could not resolve ['"]beautiful-mermaid['"]/.test(message) ||
-    message.includes("Failed to fetch dynamically imported module")
+    /Failed to resolve import ['"]beautiful-mermaid['"]/.test(message) ||
+    /Could not resolve ['"]beautiful-mermaid['"]/.test(message)
   );
 }
 

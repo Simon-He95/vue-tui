@@ -18,7 +18,7 @@ description: Reference for Vue TUI components such as TerminalProvider, TBox, TI
 | Public       | `@simon_he/vue-tui`              | `TerminalProvider` `TBox` `TCommandPalette` `TDataTable` `TDialog` `TInput` `TLink` `TLinkifyText` `TList` `TSelect` `TTable` `TText` `TTree` `TView` form helpers 和 `TBadge`/`TTag`/`TDivider`/`TCode`                                                                                  |
 | Advanced     | `@simon_he/vue-tui/vue`          | `TAnchor` `TDebugOverlay` `TFlow` `TForm` `TInputBox` `TJsonEditor` `TMermaid` `TMermaidText` `TMultilineModal` `TPathPicker` `TProgress` `TSpinner` `TSplitPane` `TTabs` `TToastViewport` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition` 和 overlay/navigation/status helpers |
 | Public       | `@simon_he/vue-tui/markdown`     | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                                                                                                        |
-| Public       | `@simon_he/vue-tui/mermaid`      | `beautifulMermaidRenderer` `createBeautifulMermaidRenderer` `TBeautifulMermaidText`                                                                                                                                                                                                       |
+| Public       | `@simon_he/vue-tui/mermaid`      | `TMermaid` `TMermaidText` `TBeautifulMermaidText` `beautifulMermaidRenderer` `createBeautifulMermaidRenderer`                                                                                                                                                                             |
 | Experimental | `@simon_he/vue-tui/experimental` | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap`                                                                                       |
 | Experimental | `@simon_he/vue-tui/agent`        | `TAgentTranscript` `TMermaid` `TMermaidText` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                                                                             |
 
@@ -261,6 +261,45 @@ Public helper `linkifyTextSegments("")` returns an empty segment array; non-empt
 ## TCode
 
 单行 code 文本，用于命令、路径或短 token。它只做 cell 截断和样式渲染，不执行命令、不复制内容。
+
+## TMermaid / TMermaidText
+
+`TMermaidText` 把 Mermaid source 渲染成 terminal-safe 的文本行，适合 agent transcript 中展示流程图、架构图、状态机、时序图等内容。
+
+它有两种使用方式：
+
+- `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent`：基础组件，不引入 `beautiful-mermaid`，需要显式传入 `renderer`。
+- `@simon_he/vue-tui/mermaid`：optional-peer wrapper。安装 `beautiful-mermaid` 后，直接导入 `TMermaidText` / `TMermaid` 即可自动渲染。
+
+```bash
+pnpm add beautiful-mermaid
+```
+
+```vue
+<script setup lang="ts">
+import { TMermaidText } from "@simon_he/vue-tui/mermaid";
+
+const diagram = `graph LR
+  User --> Agent
+  Agent --> Tool
+  Tool --> Agent`;
+</script>
+
+<template>
+  <TMermaidText :x="0" :y="0" :w="80" :code="diagram" />
+</template>
+```
+
+如果不想让 `/agent` 入口依赖 optional peer，可以从 `/agent` 使用基础组件并传 renderer：
+
+```ts
+import { TMermaidText } from "@simon_he/vue-tui/agent";
+import { beautifulMermaidRenderer } from "@simon_he/vue-tui/mermaid";
+```
+
+```vue
+<TMermaidText :x="0" :y="0" :w="80" :code="diagram" :renderer="beautifulMermaidRenderer" />
+```
 
 ## TCommandPalette
 

@@ -275,6 +275,16 @@ describe("TMermaidText", () => {
     ).toBe(false);
     expect(
       isMissingBeautifulMermaid(
+        Object.assign(
+          new Error(
+            "Cannot find package 'elkjs' imported from /app/node_modules/beautiful-mermaid/dist/index.js",
+          ),
+          { code: "ERR_MODULE_NOT_FOUND" },
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      isMissingBeautifulMermaid(
         new Error("beautiful-mermaid parser rejected invalid graph syntax"),
       ),
     ).toBe(false);

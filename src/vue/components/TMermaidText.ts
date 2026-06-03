@@ -105,8 +105,7 @@ export const tMermaidTextProps = {
   },
   missingDependencyText: {
     type: String,
-    default:
-      "Install beautiful-mermaid and use @simon_he/vue-tui/mermaid, or pass a renderer prop.",
+    default: "Import @simon_he/vue-tui/mermaid or pass a renderer prop.",
   },
   errorText: {
     type: String,

@@ -53,6 +53,7 @@ import {
   type TInputPlugin,
   type TMermaidAsciiOptions,
   type TMermaidRenderer,
+  type TMermaidTextProps as VueMermaidTextProps,
 } from "@simon_he/vue-tui/vue";
 
 import {
@@ -85,6 +86,7 @@ import {
   computeCommandPaletteMatchRanges,
   type TCommandPaletteItem as AgentTCommandPaletteItem,
   type TCommandPaletteMatchRange,
+  type TMermaidTextProps as AgentMermaidTextProps,
   TThinkingView,
   TToolCallView,
   TToolLogView,
@@ -97,7 +99,7 @@ import {
   TBeautifulMermaidText,
   beautifulMermaidRenderer,
   createBeautifulMermaidRenderer,
-  type TMermaidTextProps,
+  type TMermaidTextProps as MermaidEntryTextProps,
 } from "@simon_he/vue-tui/mermaid";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
@@ -148,7 +150,9 @@ const vueSelectOption: VueSelectOptionWithStyle = { label: "Remote", value: "rem
 const mermaidOptions: TMermaidAsciiOptions = { paddingX: 1 };
 const mermaidRenderer: TMermaidRenderer = (code, options) =>
   `${code}:${options.colorMode}:${options.useAscii ? "ascii" : "unicode"}`;
-const mermaidTextProps: TMermaidTextProps = { x: 0, y: 0, w: 12 };
+const mermaidTextProps: VueMermaidTextProps = { x: 0, y: 0, w: 12 };
+const agentMermaidTextProps: AgentMermaidTextProps = mermaidTextProps;
+const mermaidEntryTextProps: MermaidEntryTextProps = mermaidTextProps;
 const createdMermaidRenderer = createBeautifulMermaidRenderer();
 const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
 const agentCommandPaletteItem: AgentTCommandPaletteItem = {
@@ -226,6 +230,8 @@ console.log(
   mermaidOptions,
   mermaidRenderer,
   mermaidTextProps,
+  agentMermaidTextProps,
+  mermaidEntryTextProps,
   beautifulMermaidRenderer,
   createdMermaidRenderer,
   agentCommandPaletteItem,

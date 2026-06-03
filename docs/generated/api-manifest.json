@@ -226,6 +226,7 @@
         "TMermaidAsciiTheme",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
+        "TMermaidTextProps",
         "TThinkingViewModel",
         "TToolCallStatus",
         "TToolCallViewModel",
@@ -813,6 +814,7 @@
         "TMermaidAsciiTheme",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
+        "TMermaidTextProps",
         "TOverlayFocusStack",
         "TOverlayPlacement",
         "TOverlayPlacementOptions",
@@ -5645,7 +5647,7 @@
           "name": "missingDependencyText",
           "type": "string",
           "required": false,
-          "defaultValue": "\"Install beautiful-mermaid and use @simon_he/vue-tui/mermaid, or pass a rende..."
+          "defaultValue": "\"Import @simon_he/vue-tui/mermaid or pass a renderer prop.\""
         },
         {
           "name": "errorText",
@@ -5781,7 +5783,7 @@
           "name": "missingDependencyText",
           "type": "string",
           "required": false,
-          "defaultValue": "\"Install beautiful-mermaid and use @simon_he/vue-tui/mermaid, or pass a rende..."
+          "defaultValue": "\"Import @simon_he/vue-tui/mermaid or pass a renderer prop.\""
         },
         {
           "name": "errorText",
