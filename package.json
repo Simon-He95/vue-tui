@@ -296,7 +296,7 @@
     "bench:stdout-column-diff": "tsx scripts/bench-stdout-column-diff.ts"
   },
   "dependencies": {
-    "stream-markdown-parser": "1.0.0"
+    "stream-markdown-parser": "1.0.2"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.3",
