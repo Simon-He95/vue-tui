@@ -1,6 +1,7 @@
 import { defineComponent, h } from "vue";
 import {
   TMermaidText as TBaseMermaidText,
+  markMermaidRenderErrorFatal,
   tMermaidTextProps,
   type TMermaidRenderer,
 } from "../components/TMermaidText.js";
@@ -73,9 +74,11 @@ function resolveBeautifulMermaidRenderer(mod: BeautifulMermaidModule): TMermaidR
     functionProp(mod.default, "renderMermaidAscii");
 
   if (!renderer) {
-    throw codedError(
-      "beautiful-mermaid is installed but does not export renderMermaidASCII.",
-      "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT",
+    throw markMermaidRenderErrorFatal(
+      codedError(
+        "beautiful-mermaid is installed but does not export renderMermaidASCII.",
+        "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT",
+      ),
     );
   }
 
@@ -90,12 +93,14 @@ async function loadBeautifulMermaid(): Promise<BeautifulMermaidModule> {
         cachedBeautifulMermaid = null;
         if (isMissingBeautifulMermaid(error)) {
           const detail = errorMessage(error);
-          throw codedError(
-            `${BEAUTIFUL_MERMAID_INSTALL_HINT} (${detail})`,
-            "VUE_TUI_MISSING_BEAUTIFUL_MERMAID",
+          throw markMermaidRenderErrorFatal(
+            codedError(
+              `${BEAUTIFUL_MERMAID_INSTALL_HINT} (${detail})`,
+              "VUE_TUI_MISSING_BEAUTIFUL_MERMAID",
+            ),
           );
         }
-        throw error;
+        throw markMermaidRenderErrorFatal(error);
       });
   }
   return cachedBeautifulMermaid;

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { TMermaidText, type TMermaidRenderer } from "../src/vue.js";
+import { markMermaidRenderErrorFatal } from "../src/vue/components/TMermaidText.js";
 import { isMissingBeautifulMermaid } from "../src/vue/mermaid/beautiful-mermaid.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
@@ -386,11 +387,9 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("does not hide permanent renderer setup errors during streaming", async () => {
+  it("does not hide fatal renderer integration errors during streaming", async () => {
     const renderer: TMermaidRenderer = vi.fn(() => {
-      throw Object.assign(new Error("Install beautiful-mermaid first"), {
-        code: "VUE_TUI_MISSING_BEAUTIFUL_MERMAID",
-      });
+      throw markMermaidRenderErrorFatal(new Error("Install beautiful-mermaid first"));
     });
 
     const mounted = await mountTerminal(
@@ -416,6 +415,44 @@ describe("TMermaidText", () => {
     expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
 
     mounted.unmount();
+  });
+
+  it("does not hide beautiful-mermaid loader setup errors during streaming", async () => {
+    vi.resetModules();
+    vi.doMock("beautiful-mermaid", () => {
+      throw Object.assign(
+        new Error(
+          "Cannot find package 'elkjs' imported from /app/node_modules/beautiful-mermaid/dist/index.js",
+        ),
+        { code: "ERR_MODULE_NOT_FOUND" },
+      );
+    });
+
+    const { TMermaidText: TMermaidTextWithBeautifulRenderer } = await import("../src/mermaid.js");
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidTextWithBeautifulRenderer, {
+          x: 0,
+          y: 0,
+          w: 120,
+          h: 2,
+          content: "graph LR\n  A -->",
+          final: false,
+          streaming: true,
+          incompleteText: "waiting for complete Mermaid source",
+          errorText: "diagram failed",
+        }),
+      140,
+      4,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toContain("diagram failed:");
+    expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
+
+    mounted.unmount();
+    vi.doUnmock("beautiful-mermaid");
+    vi.resetModules();
   });
 
   it("the mermaid entry TMermaidText supplies the beautiful-mermaid renderer", async () => {

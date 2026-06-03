@@ -58,6 +58,8 @@ export type TMermaidRenderer = (
 
 type TMermaidStatus = "idle" | "loading" | "ready" | "incomplete" | "error";
 
+const TUI_MERMAID_FATAL_RENDER_ERROR = "__vueTuiMermaidFatalRenderError" as const;
+
 const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
 const TERMINAL_ESCAPE_RE = new RegExp(
@@ -78,6 +80,31 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+type TMermaidFatalRenderError = Error & {
+  [TUI_MERMAID_FATAL_RENDER_ERROR]?: true;
+};
+
+export function markMermaidRenderErrorFatal(error: unknown): Error {
+  const normalized = error instanceof Error ? error : new Error(String(error));
+  try {
+    Object.defineProperty(normalized, TUI_MERMAID_FATAL_RENDER_ERROR, {
+      value: true,
+      configurable: true,
+    });
+  } catch {
+    (normalized as TMermaidFatalRenderError)[TUI_MERMAID_FATAL_RENDER_ERROR] = true;
+  }
+  return normalized;
+}
+
+function isMermaidRenderErrorFatal(error: unknown): boolean {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    (error as TMermaidFatalRenderError)[TUI_MERMAID_FATAL_RENDER_ERROR] === true,
+  );
+}
+
 function errorCode(error: unknown): string {
   if (!error || typeof error !== "object") return "";
   const value = (error as { code?: unknown }).code;
@@ -87,6 +114,7 @@ function errorCode(error: unknown): string {
 function isPermanentMermaidRenderError(error: unknown): boolean {
   const code = errorCode(error);
   return (
+    isMermaidRenderErrorFatal(error) ||
     code === "VUE_TUI_MISSING_BEAUTIFUL_MERMAID" ||
     code === "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT" ||
     code === "VUE_TUI_MERMAID_RENDERER_SETUP" ||
