@@ -5615,6 +5615,12 @@
           "defaultValue": "true"
         },
         {
+          "name": "final",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
           "name": "streaming",
           "type": "boolean",
           "required": false,
@@ -5663,10 +5669,16 @@
           "defaultValue": "\"Rendering Mermaid diagram...\""
         },
         {
+          "name": "incompleteText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Waiting for complete Mermaid diagram...\""
+        },
+        {
           "name": "missingDependencyText",
           "type": "string",
           "required": false,
-          "defaultValue": "\"Import @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass..."
+          "defaultValue": "\"Install the Mermaid renderer package and use TMermaidText from @simon_he/vue..."
         },
         {
           "name": "errorText",
@@ -5751,6 +5763,12 @@
           "defaultValue": "true"
         },
         {
+          "name": "final",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
           "name": "streaming",
           "type": "boolean",
           "required": false,
@@ -5799,10 +5817,16 @@
           "defaultValue": "\"Rendering Mermaid diagram...\""
         },
         {
+          "name": "incompleteText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Waiting for complete Mermaid diagram...\""
+        },
+        {
           "name": "missingDependencyText",
           "type": "string",
           "required": false,
-          "defaultValue": "\"Import @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass..."
+          "defaultValue": "\"Install the Mermaid renderer package and use TMermaidText from @simon_he/vue..."
         },
         {
           "name": "errorText",

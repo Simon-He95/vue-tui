@@ -56,7 +56,7 @@ export type TMermaidRenderer = (
   options: TMermaidResolvedAsciiOptions,
 ) => string | Promise<string>;
 
-type TMermaidStatus = "idle" | "loading" | "ready" | "error";
+type TMermaidStatus = "idle" | "loading" | "ready" | "incomplete" | "error";
 
 const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
@@ -86,6 +86,10 @@ function splitRenderedOutput(value: string): readonly string[] {
   return lines.length ? lines : [""];
 }
 
+function hasRenderedOutput(value: readonly string[]): boolean {
+  return value.length > 1 || Boolean(value[0]);
+}
+
 export const tMermaidTextProps = {
   x: { type: Number, required: true },
   y: { type: Number, required: true },
@@ -98,6 +102,7 @@ export const tMermaidTextProps = {
   loadingStyle: { type: Object as PropType<Style>, default: undefined },
   errorStyle: { type: Object as PropType<Style>, default: undefined },
   clear: { type: Boolean, default: true },
+  final: { type: Boolean, default: true },
   streaming: { type: Boolean, default: false },
   ascii: { type: Boolean, default: false },
   paddingX: { type: Number, default: undefined },
@@ -114,6 +119,10 @@ export const tMermaidTextProps = {
   loadingText: {
     type: String,
     default: "Rendering Mermaid diagram...",
+  },
+  incompleteText: {
+    type: String,
+    default: "Waiting for complete Mermaid diagram...",
   },
   missingDependencyText: {
     type: String,
@@ -170,6 +179,10 @@ export const TMermaidText = defineComponent({
       };
     }
 
+    function shouldTreatRenderErrorAsTransient(): boolean {
+      return props.streaming && !props.final;
+    }
+
     async function renderNow(version: number): Promise<void> {
       const code = source.value;
       if (!code.trim()) {
@@ -210,6 +223,13 @@ export const TMermaidText = defineComponent({
         if (!alive || version !== renderVersion) return;
         missingRenderer.value = false;
         error.value = errorMessage(err);
+
+        if (shouldTreatRenderErrorAsTransient()) {
+          status.value = hasRenderedOutput(lines.value) ? "ready" : "incomplete";
+          bump();
+          return;
+        }
+
         status.value = "error";
         bump();
       }
@@ -249,6 +269,7 @@ export const TMermaidText = defineComponent({
         () => props.paddingY,
         () => props.boxBorderPadding,
         () => props.options,
+        () => props.final,
       ],
       () => {
         scheduleRender();
@@ -272,6 +293,9 @@ export const TMermaidText = defineComponent({
         const detail = props.showErrorDetails && detailText ? `: ${detailText}` : "";
         return splitRenderedOutput(`${props.errorText}${detail}`);
       }
+      if (status.value === "incomplete") {
+        return splitRenderedOutput(props.incompleteText);
+      }
       if (showingInitialLoadingText.value) {
         return splitRenderedOutput(props.loadingText);
       }
@@ -281,6 +305,9 @@ export const TMermaidText = defineComponent({
     const currentStyle = computed<Style>(() => {
       if (status.value === "error") {
         return props.errorStyle ?? props.style ?? defaultStyle.value;
+      }
+      if (status.value === "incomplete") {
+        return props.loadingStyle ?? props.style ?? defaultStyle.value;
       }
       if (showingInitialLoadingText.value) {
         return props.loadingStyle ?? props.style ?? defaultStyle.value;

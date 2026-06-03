@@ -311,6 +311,81 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("keeps the last successful diagram while streaming source is temporarily invalid", async () => {
+    const content = ref("graph LR\n  A --> B");
+    const renderer: TMermaidRenderer = vi.fn((code) => {
+      if (code.includes("BROKEN")) {
+        throw new Error("Mermaid source is incomplete");
+      }
+      return `rendered:${code.split("\n")[1]?.trim() ?? ""}`;
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 48,
+          h: 1,
+          content: content.value,
+          final: false,
+          streaming: true,
+          renderer,
+        }),
+      64,
+      3,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toBe("rendered:A --> B");
+
+    content.value = "graph LR\n  BROKEN";
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toBe("rendered:A --> B");
+    expect(rowText(mounted, 0)).not.toContain("Mermaid source is incomplete");
+
+    content.value = "graph LR\n  A --> C";
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toBe("rendered:A --> C");
+
+    mounted.unmount();
+  });
+
+  it("shows an incomplete placeholder during streaming and a hard error after final", async () => {
+    const final = ref(false);
+    const renderer: TMermaidRenderer = vi.fn(() => {
+      throw new Error("expected node id after arrow");
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 96,
+          h: 2,
+          content: "graph LR\n  A -->",
+          final: final.value,
+          streaming: true,
+          incompleteText: "waiting for complete Mermaid source",
+          errorText: "diagram failed",
+          renderer,
+        }),
+      120,
+      4,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toContain("waiting for complete Mermaid source");
+    expect(rowText(mounted, 0)).not.toContain("expected node id after arrow");
+
+    final.value = true;
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toContain("diagram failed: expected node id after arrow");
+
+    mounted.unmount();
+  });
+
   it("the mermaid entry TMermaidText supplies the beautiful-mermaid renderer", async () => {
     vi.resetModules();
     vi.doMock("beautiful-mermaid", () => ({
