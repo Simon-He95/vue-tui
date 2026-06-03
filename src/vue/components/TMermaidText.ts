@@ -56,16 +56,15 @@ export type TMermaidRenderer = (
   options: TMermaidResolvedAsciiOptions,
 ) => string | Promise<string>;
 
-export type TMermaidRenderErrorContext = Readonly<{
+export type TMermaidTransientErrorContext = Readonly<{
   code: string;
   final: boolean;
   streaming: boolean;
-  hasPreviousOutput: boolean;
 }>;
 
-export type TMermaidTransientErrorPredicate = (
+export type TMermaidTransientErrorClassifier = (
   error: unknown,
-  context: TMermaidRenderErrorContext,
+  context: TMermaidTransientErrorContext,
 ) => boolean;
 
 type TMermaidStatus = "idle" | "loading" | "ready" | "incomplete" | "error";
@@ -132,6 +131,7 @@ function isPermanentMermaidRenderError(error: unknown): boolean {
   const code = errorCode(error);
   return (
     isMermaidRenderErrorFatal(error) ||
+    isLikelyRendererSetupError(error) ||
     code === "VUE_TUI_MISSING_BEAUTIFUL_MERMAID" ||
     code === "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT" ||
     code === "VUE_TUI_MERMAID_RENDERER_SETUP" ||
@@ -149,6 +149,21 @@ function splitRenderedOutput(value: string): readonly string[] {
 
 function hasRenderedOutput(value: readonly string[]): boolean {
   return value.length > 1 || Boolean(value[0]);
+}
+
+function isLikelyRendererSetupError(error: unknown): boolean {
+  const message = errorMessage(error);
+  return (
+    /Install beautiful-mermaid\b/.test(message) ||
+    /does not export renderMermaidASCII/.test(message) ||
+    /Cannot find package ['"]beautiful-mermaid['"]/.test(message) ||
+    /Cannot find module ['"]beautiful-mermaid['"]/.test(message) ||
+    /Cannot resolve module ['"]beautiful-mermaid['"]/.test(message) ||
+    /Can't resolve ['"]beautiful-mermaid['"]/.test(message) ||
+    /Failed to resolve module specifier ['"]beautiful-mermaid['"]/.test(message) ||
+    /Failed to resolve import ['"]beautiful-mermaid['"]/.test(message) ||
+    /Could not resolve ['"]beautiful-mermaid['"]/.test(message)
+  );
 }
 
 export const tMermaidTextProps = {
@@ -177,8 +192,8 @@ export const tMermaidTextProps = {
     type: Function as PropType<TMermaidRenderer>,
     default: undefined,
   },
-  isTransientRenderError: {
-    type: Function as PropType<TMermaidTransientErrorPredicate>,
+  isTransientError: {
+    type: Function as PropType<TMermaidTransientErrorClassifier>,
     default: undefined,
   },
   loadingText: {
@@ -247,17 +262,16 @@ export const TMermaidText = defineComponent({
     function shouldTreatRenderErrorAsTransient(err: unknown, code: string): boolean {
       if (!props.streaming || props.final || isPermanentMermaidRenderError(err)) return false;
 
-      const context: TMermaidRenderErrorContext = {
+      const context: TMermaidTransientErrorContext = {
         code,
         final: props.final,
         streaming: props.streaming,
-        hasPreviousOutput: hasRenderedOutput(lines.value),
       };
 
-      if (!props.isTransientRenderError) return true;
+      if (!props.isTransientError) return true;
 
       try {
-        return props.isTransientRenderError(err, context);
+        return props.isTransientError(err, context);
       } catch {
         return false;
       }
@@ -350,7 +364,7 @@ export const TMermaidText = defineComponent({
         () => props.boxBorderPadding,
         () => props.options,
         () => props.final,
-        () => props.isTransientRenderError,
+        () => props.isTransientError,
       ],
       () => {
         scheduleRender();

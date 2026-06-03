@@ -1,11 +1,11 @@
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
-  TMermaidRenderErrorContext,
   TMermaidRenderer,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
-  TMermaidTransientErrorPredicate,
+  TMermaidTransientErrorClassifier,
+  TMermaidTransientErrorContext,
 } from "./vue/components/TMermaidText.js";
 
 export { markMermaidRenderErrorFatal } from "./vue/components/TMermaidText.js";

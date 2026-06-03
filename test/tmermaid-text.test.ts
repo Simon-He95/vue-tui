@@ -3,7 +3,7 @@ import {
   markMermaidRenderErrorFatal,
   TMermaidText,
   type TMermaidRenderer,
-  type TMermaidTransientErrorPredicate,
+  type TMermaidTransientErrorClassifier,
 } from "../src/vue.js";
 import { isMissingBeautifulMermaid } from "../src/vue/mermaid/beautiful-mermaid.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
@@ -421,6 +421,38 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("does not hide beautiful-mermaid setup errors as streaming transient errors", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => {
+      throw new Error(
+        "Install beautiful-mermaid and use TMermaidText from @simon_he/vue-tui/mermaid.",
+      );
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 120,
+          h: 2,
+          content: "graph LR\n  A --> B",
+          final: false,
+          streaming: true,
+          errorText: "diagram failed",
+          renderer,
+        }),
+      140,
+      4,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toContain(
+      "diagram failed: Install beautiful-mermaid and use TMermaidText",
+    );
+
+    mounted.unmount();
+  });
+
   it("can mark frozen renderer errors as fatal during non-final streaming", async () => {
     const frozenError = Object.freeze(new Error("renderer setup failed"));
     const renderer: TMermaidRenderer = vi.fn(() => {
@@ -452,12 +484,12 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("allows integrations to mark non-final streaming render errors as fatal", async () => {
-    const contexts: Parameters<TMermaidTransientErrorPredicate>[1][] = [];
+  it("allows callers to override transient Mermaid error classification", async () => {
+    const contexts: Parameters<TMermaidTransientErrorClassifier>[1][] = [];
     const renderer: TMermaidRenderer = vi.fn(() => {
-      throw new Error("Install beautiful-mermaid first");
+      throw new Error("custom permanent Mermaid error");
     });
-    const isTransientRenderError: TMermaidTransientErrorPredicate = (_error, context) => {
+    const isTransientError: TMermaidTransientErrorClassifier = (_error, context) => {
       contexts.push(context);
       return false;
     };
@@ -474,20 +506,19 @@ describe("TMermaidText", () => {
           streaming: true,
           errorText: "diagram failed",
           renderer,
-          isTransientRenderError,
+          isTransientError,
         }),
       120,
       4,
     );
 
     await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("diagram failed: Install beautiful-mermaid first");
+    expect(rowText(mounted, 0)).toContain("diagram failed: custom permanent Mermaid error");
     expect(contexts).toEqual([
       {
         code: "graph LR\n  A --> B",
         final: false,
         streaming: true,
-        hasPreviousOutput: false,
       },
     ]);
 

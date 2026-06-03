@@ -225,11 +225,11 @@
         "TLogViewVisualIndexStatus",
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
-        "TMermaidRenderErrorContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
-        "TMermaidTransientErrorPredicate",
+        "TMermaidTransientErrorClassifier",
+        "TMermaidTransientErrorContext",
         "TThinkingViewModel",
         "TToolCallStatus",
         "TToolCallViewModel",
@@ -277,11 +277,11 @@
       "typeExports": [
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
-        "TMermaidRenderErrorContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
-        "TMermaidTransientErrorPredicate"
+        "TMermaidTransientErrorClassifier",
+        "TMermaidTransientErrorContext"
       ]
     },
     "@simon_he/vue-tui/cli": {
@@ -608,11 +608,11 @@
       "typeExports": [
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
-        "TMermaidRenderErrorContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
-        "TMermaidTransientErrorPredicate"
+        "TMermaidTransientErrorClassifier",
+        "TMermaidTransientErrorContext"
       ]
     },
     "@simon_he/vue-tui/observability": {
@@ -841,11 +841,11 @@
         "TLinkifySegment",
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
-        "TMermaidRenderErrorContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
-        "TMermaidTransientErrorPredicate",
+        "TMermaidTransientErrorClassifier",
+        "TMermaidTransientErrorContext",
         "TOverlayFocusStack",
         "TOverlayPlacement",
         "TOverlayPlacementOptions",
@@ -5675,8 +5675,8 @@
           "defaultValue": "undefined"
         },
         {
-          "name": "isTransientRenderError",
-          "type": "TMermaidTransientErrorPredicate",
+          "name": "isTransientError",
+          "type": "TMermaidTransientErrorClassifier",
           "required": false,
           "defaultValue": "undefined"
         },
@@ -5829,8 +5829,8 @@
           "defaultValue": "undefined"
         },
         {
-          "name": "isTransientRenderError",
-          "type": "TMermaidTransientErrorPredicate",
+          "name": "isTransientError",
+          "type": "TMermaidTransientErrorClassifier",
           "required": false,
           "defaultValue": "undefined"
         },

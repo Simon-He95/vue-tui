@@ -104,11 +104,11 @@ export { markMermaidRenderErrorFatal, TMermaid, TMermaidText } from "./component
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
-  TMermaidRenderErrorContext,
   TMermaidRenderer,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
-  TMermaidTransientErrorPredicate,
+  TMermaidTransientErrorClassifier,
+  TMermaidTransientErrorContext,
 } from "./components/TMermaidText.js";
 export { TMultilineModal } from "./components/TMultilineModal.js";
 export { TBreadcrumb, TKeyHint, TStatusBar } from "./components/TNavigation.js";

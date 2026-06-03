@@ -53,10 +53,10 @@ import {
   type TFormHandle,
   type TInputPlugin,
   type TMermaidAsciiOptions,
-  type TMermaidRenderErrorContext,
   type TMermaidRenderer,
   type TMermaidTextProps as VueMermaidTextProps,
-  type TMermaidTransientErrorPredicate,
+  type TMermaidTransientErrorClassifier,
+  type TMermaidTransientErrorContext,
 } from "@simon_he/vue-tui/vue";
 
 import {
@@ -90,7 +90,7 @@ import {
   computeCommandPaletteMatchRanges,
   type TCommandPaletteItem as AgentTCommandPaletteItem,
   type TCommandPaletteMatchRange,
-  type TMermaidTransientErrorPredicate as AgentMermaidTransientErrorPredicate,
+  type TMermaidTransientErrorClassifier as AgentMermaidTransientErrorClassifier,
   type TMermaidTextProps as AgentMermaidTextProps,
   TThinkingView,
   TToolCallView,
@@ -105,16 +105,16 @@ import {
   beautifulMermaidRenderer,
   createBeautifulMermaidRenderer,
   markMermaidRenderErrorFatal as markMermaidEntryRenderErrorFatal,
-  type TMermaidRenderErrorContext as MermaidEntryRenderErrorContext,
+  type TMermaidTransientErrorContext as MermaidEntryTransientErrorContext,
   type TMermaidTextProps as MermaidEntryTextProps,
-  type TMermaidTransientErrorPredicate as MermaidEntryTransientErrorPredicate,
+  type TMermaidTransientErrorClassifier as MermaidEntryTransientErrorClassifier,
 } from "@simon_he/vue-tui/mermaid";
 import {
   TMermaid as AgentBeautifulMermaid,
   TMermaidText as AgentBeautifulMermaidText,
   beautifulMermaidRenderer as agentBeautifulMermaidRenderer,
   markMermaidRenderErrorFatal as markAgentMermaidEntryRenderErrorFatal,
-  type TMermaidTransientErrorPredicate as AgentBeautifulMermaidTransientErrorPredicate,
+  type TMermaidTransientErrorClassifier as AgentBeautifulMermaidTransientErrorClassifier,
 } from "@simon_he/vue-tui/agent/mermaid";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
@@ -165,24 +165,24 @@ const vueSelectOption: VueSelectOptionWithStyle = { label: "Remote", value: "rem
 const mermaidOptions: TMermaidAsciiOptions = { paddingX: 1 };
 const mermaidRenderer: TMermaidRenderer = (code, options) =>
   `${code}:${options.colorMode}:${options.useAscii ? "ascii" : "unicode"}`;
-const mermaidRenderErrorContext: TMermaidRenderErrorContext = {
+const mermaidTransientErrorContext: TMermaidTransientErrorContext = {
   code: "graph LR\n  A -->",
   final: false,
   streaming: true,
-  hasPreviousOutput: false,
 };
-const mermaidTransientErrorPredicate: TMermaidTransientErrorPredicate = (_error, context) =>
+const mermaidTransientErrorClassifier: TMermaidTransientErrorClassifier = (_error, context) =>
   context.streaming && !context.final;
 const mermaidTextProps: VueMermaidTextProps = { x: 0, y: 0, w: 12 };
 const agentMermaidTextProps: AgentMermaidTextProps = mermaidTextProps;
-const agentMermaidTransientErrorPredicate: AgentMermaidTransientErrorPredicate =
-  mermaidTransientErrorPredicate;
+const agentMermaidTransientErrorClassifier: AgentMermaidTransientErrorClassifier =
+  mermaidTransientErrorClassifier;
 const mermaidEntryTextProps: MermaidEntryTextProps = mermaidTextProps;
-const mermaidEntryRenderErrorContext: MermaidEntryRenderErrorContext = mermaidRenderErrorContext;
-const mermaidEntryTransientErrorPredicate: MermaidEntryTransientErrorPredicate =
-  mermaidTransientErrorPredicate;
-const agentBeautifulMermaidTransientErrorPredicate: AgentBeautifulMermaidTransientErrorPredicate =
-  mermaidTransientErrorPredicate;
+const mermaidEntryTransientErrorContext: MermaidEntryTransientErrorContext =
+  mermaidTransientErrorContext;
+const mermaidEntryTransientErrorClassifier: MermaidEntryTransientErrorClassifier =
+  mermaidTransientErrorClassifier;
+const agentBeautifulMermaidTransientErrorClassifier: AgentBeautifulMermaidTransientErrorClassifier =
+  mermaidTransientErrorClassifier;
 const createdMermaidRenderer = createBeautifulMermaidRenderer();
 const fatalMermaidError = markMermaidRenderErrorFatal(new Error("fatal"));
 const fatalAgentMermaidError = markAgentMermaidRenderErrorFatal(new Error("fatal-agent"));
@@ -267,15 +267,15 @@ console.log(
   vueSelectOption,
   mermaidOptions,
   mermaidRenderer,
-  mermaidRenderErrorContext,
-  mermaidTransientErrorPredicate,
+  mermaidTransientErrorContext,
+  mermaidTransientErrorClassifier,
   mermaidTextProps,
   agentMermaidTextProps,
-  agentMermaidTransientErrorPredicate,
+  agentMermaidTransientErrorClassifier,
   mermaidEntryTextProps,
-  mermaidEntryRenderErrorContext,
-  mermaidEntryTransientErrorPredicate,
-  agentBeautifulMermaidTransientErrorPredicate,
+  mermaidEntryTransientErrorContext,
+  mermaidEntryTransientErrorClassifier,
+  agentBeautifulMermaidTransientErrorClassifier,
   beautifulMermaidRenderer,
   agentBeautifulMermaidRenderer,
   createdMermaidRenderer,

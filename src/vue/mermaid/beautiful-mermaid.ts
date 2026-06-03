@@ -4,7 +4,7 @@ import {
   markMermaidRenderErrorFatal,
   tMermaidTextProps,
   type TMermaidRenderer,
-  type TMermaidTransientErrorPredicate,
+  type TMermaidTransientErrorClassifier,
 } from "../components/TMermaidText.js";
 
 const BEAUTIFUL_MERMAID_INSTALL_HINT =
@@ -90,7 +90,7 @@ function isBeautifulMermaidExportError(error: unknown): boolean {
   return errorCode(error) === "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT";
 }
 
-const isTransientBeautifulMermaidRenderError: TMermaidTransientErrorPredicate = (error) => {
+const isTransientBeautifulMermaidRenderError: TMermaidTransientErrorClassifier = (error) => {
   if (isMissingBeautifulMermaid(error)) return false;
   if (isBeautifulMermaidExportError(error)) return false;
   return true;
@@ -137,8 +137,7 @@ export const TMermaidText = defineComponent({
         {
           ...props,
           renderer: props.renderer ?? beautifulMermaidRenderer,
-          isTransientRenderError:
-            props.isTransientRenderError ?? isTransientBeautifulMermaidRenderError,
+          isTransientError: props.isTransientError ?? isTransientBeautifulMermaidRenderError,
         },
         slots,
       );

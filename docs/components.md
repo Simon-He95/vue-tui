@@ -883,7 +883,7 @@ const diagram = `graph TD
 - `ascii` `(boolean)`：使用纯 ASCII 而不是 Unicode box drawing
 - `options` `(TMermaidAsciiOptions?)`：传给 renderer 的 spacing/theme options；组件始终强制 `colorMode: "none"`
 - `renderer` `(TMermaidRenderer?)`：自定义 renderer，适合测试或替换 Mermaid engine
-- `isTransientRenderError` `(TMermaidTransientErrorPredicate?)`：自定义哪些 renderer error 可以在 `final=false` 时被忽略；optional peer 缺失这类集成错误应该返回 `false`
+- `isTransientError` `(TMermaidTransientErrorClassifier?)`：自定义哪些 renderer error 可以在 `final=false` 时被忽略；optional peer 缺失这类集成错误应该返回 `false`
 - `markMermaidRenderErrorFatal(error)`：给自定义 renderer 标记缺依赖、renderer 初始化失败、wasm 加载失败等不应被当作 AI 中间态的 hard error
 - `streaming` `(boolean)`：streaming 更新时使用低优先级 frame task 合并重算
 - `incompleteText` `(string)`：流式中间态且还没有任何成功渲染时显示的占位文本
