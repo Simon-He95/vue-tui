@@ -67,6 +67,25 @@ function isCompleteCsiSequence(data: string): "complete" | "incomplete" {
   return "incomplete";
 }
 
+function isPotentialSgrMousePayloadPrefix(payload: string): boolean {
+  if (!payload.startsWith("<")) return false;
+
+  let semicolons = 0;
+  for (let i = 1; i < payload.length; i++) {
+    const c = payload.charCodeAt(i);
+    if (c >= 48 && c <= 57) continue;
+    if (payload[i] === ";") {
+      semicolons++;
+      if (semicolons > 2) return false;
+      continue;
+    }
+    if (payload[i] === "M" || payload[i] === "m") return semicolons === 2;
+    return false;
+  }
+
+  return true;
+}
+
 function isCompleteOscSequence(data: string): "complete" | "incomplete" {
   if (!data.startsWith(`${ESC}]`)) return "complete";
   if (data.endsWith(`${ESC}\\`) || data.endsWith("\x07")) return "complete";
@@ -136,12 +155,26 @@ function extractCompleteSequences(buffer: string): {
   return { sequences, remainder: "" };
 }
 
-function looksLikeSplitEscapeContinuation(value: string): boolean {
+function looksLikeSplitEscapeContinuation(value: string, prefix = ESC): boolean {
+  if (
+    prefix.startsWith(`${ESC}[`) &&
+    isPotentialSgrMousePayloadPrefix(`${prefix.slice(2)}${value}`)
+  ) {
+    return true;
+  }
+
   const first = value[0];
   if (first !== "[" && first !== "]" && first !== "P" && first !== "_" && first !== "O") {
     return false;
   }
-  return isCompleteSequence(`${ESC}${value}`) !== "not-escape";
+  return prefix === ESC && isCompleteSequence(`${ESC}${value}`) !== "not-escape";
+}
+
+function rescuableEscapePrefix(value: string): string | null {
+  if (value === ESC) return ESC;
+  if (value === `${ESC}[`) return value;
+  if (value.startsWith(`${ESC}[`) && isPotentialSgrMousePayloadPrefix(value.slice(2))) return value;
+  return null;
 }
 
 export interface StdinBufferOptions {
@@ -167,7 +200,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
   private timeout: ReturnType<typeof setTimeout> | null = null;
   private readonly timeoutMs: number;
   private readonly escTimeoutMs: number;
-  private pendingEscContinuationAt: number | null = null;
+  private pendingEscContinuation: { prefix: string; at: number } | null = null;
   private pasteMode = false;
   private pasteBuffer = "";
 
@@ -195,11 +228,13 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
       str = data;
     }
 
-    if (this.pendingEscContinuationAt != null) {
-      const canRescue =
-        Date.now() - this.pendingEscContinuationAt <= ESC_CONTINUATION_RESCUE_WINDOW_MS;
-      this.pendingEscContinuationAt = null;
-      if (canRescue && looksLikeSplitEscapeContinuation(str)) str = `${ESC}${str}`;
+    if (this.pendingEscContinuation != null) {
+      const pending = this.pendingEscContinuation;
+      const canRescue = Date.now() - pending.at <= ESC_CONTINUATION_RESCUE_WINDOW_MS;
+      this.pendingEscContinuation = null;
+      if (canRescue && looksLikeSplitEscapeContinuation(str, pending.prefix)) {
+        str = `${pending.prefix}${str}`;
+      }
     }
 
     if (str.length === 0 && this.buffer.length === 0) {
@@ -271,10 +306,11 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
     if (this.buffer.length > 0) {
       const timeoutMs = this.buffer === ESC ? this.escTimeoutMs : this.timeoutMs;
       this.timeout = setTimeout(() => {
-        const rescuableLoneEsc = this.buffer === ESC;
+        const prefix = rescuableEscapePrefix(this.buffer);
         const flushed = this.flush();
-        if (rescuableLoneEsc && flushed.length === 1 && flushed[0] === ESC)
-          this.pendingEscContinuationAt = Date.now();
+        if (prefix && flushed.length === 1 && flushed[0] === prefix) {
+          this.pendingEscContinuation = { prefix, at: Date.now() };
+        }
         for (const sequence of flushed) this.emit("data", sequence);
       }, timeoutMs);
     }
@@ -299,7 +335,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
       this.timeout = null;
     }
     this.buffer = "";
-    this.pendingEscContinuationAt = null;
+    this.pendingEscContinuation = null;
     this.pasteMode = false;
     this.pasteBuffer = "";
   }
