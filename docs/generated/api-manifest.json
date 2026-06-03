@@ -5666,7 +5666,7 @@
           "name": "missingDependencyText",
           "type": "string",
           "required": false,
-          "defaultValue": "\"Import @simon_he/vue-tui/mermaid or pass a renderer prop.\""
+          "defaultValue": "\"Import @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass..."
         },
         {
           "name": "errorText",
@@ -5802,7 +5802,7 @@
           "name": "missingDependencyText",
           "type": "string",
           "required": false,
-          "defaultValue": "\"Import @simon_he/vue-tui/mermaid or pass a renderer prop.\""
+          "defaultValue": "\"Import @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass..."
         },
         {
           "name": "errorText",

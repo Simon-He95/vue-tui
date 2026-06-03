@@ -58,10 +58,20 @@ export type TMermaidRenderer = (
 
 type TMermaidStatus = "idle" | "loading" | "ready" | "error";
 
-const ANSI_RE = new RegExp(`${String.fromCharCode(27)}(?:\\[[0-?]*[ -/]*[@-~]|[@-Z\\\\-_])`, "g");
+const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
+const TERMINAL_ESCAPE_RE = new RegExp(
+  [
+    `${ESC}\\][\\s\\S]*?(?:${BEL}|${ESC}\\\\)`,
+    `${ESC}[PX^_][\\s\\S]*?${ESC}\\\\`,
+    `${ESC}\\[[0-?]*[ -/]*[@-~]`,
+    `${ESC}[@-Z\\\\-_]`,
+  ].join("|"),
+  "g",
+);
 
-function stripAnsi(value: string): string {
-  return value.replace(ANSI_RE, "");
+function stripTerminalEscapes(value: string): string {
+  return value.replace(TERMINAL_ESCAPE_RE, "");
 }
 
 function errorMessage(error: unknown): string {
@@ -69,7 +79,9 @@ function errorMessage(error: unknown): string {
 }
 
 function splitRenderedOutput(value: string): readonly string[] {
-  const normalized = sanitizeTextBlock(stripAnsi(String(value ?? "")).replace(/\r\n?/g, "\n"));
+  const normalized = sanitizeTextBlock(
+    stripTerminalEscapes(String(value ?? "")).replace(/\r\n?/g, "\n"),
+  );
   const lines = normalized.split("\n");
   return lines.length ? lines : [""];
 }
@@ -105,7 +117,8 @@ export const tMermaidTextProps = {
   },
   missingDependencyText: {
     type: String,
-    default: "Import @simon_he/vue-tui/mermaid or pass a renderer prop.",
+    default:
+      "Import @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass a renderer prop.",
   },
   errorText: {
     type: String,

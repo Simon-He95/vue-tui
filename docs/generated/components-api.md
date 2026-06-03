@@ -1398,30 +1398,30 @@ Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
-| 名称                               | 类型                              | 默认值                                                                             | 必填 | 说明 |
-| ---------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------- | ---- | ---- |
-| <code>x</code>                     | <code>number</code>               | —                                                                                  | 是   | —    |
-| <code>y</code>                     | <code>number</code>               | —                                                                                  | 是   | —    |
-| <code>w</code>                     | <code>number</code>               | —                                                                                  | 是   | —    |
-| <code>h</code>                     | <code>number</code>               | <code>undefined</code>                                                             | 否   | —    |
-| <code>zIndex</code>                | <code>number</code>               | <code>0</code>                                                                     | 否   | —    |
-| <code>content</code>               | <code>string</code>               | <code>&quot;&quot;</code>                                                          | 否   | —    |
-| <code>code</code>                  | <code>string</code>               | <code>undefined</code>                                                             | 否   | —    |
-| <code>style</code>                 | <code>Style</code>                | <code>undefined</code>                                                             | 否   | —    |
-| <code>loadingStyle</code>          | <code>Style</code>                | <code>undefined</code>                                                             | 否   | —    |
-| <code>errorStyle</code>            | <code>Style</code>                | <code>undefined</code>                                                             | 否   | —    |
-| <code>clear</code>                 | <code>boolean</code>              | <code>true</code>                                                                  | 否   | —    |
-| <code>streaming</code>             | <code>boolean</code>              | <code>false</code>                                                                 | 否   | —    |
-| <code>ascii</code>                 | <code>boolean</code>              | <code>false</code>                                                                 | 否   | —    |
-| <code>paddingX</code>              | <code>number</code>               | <code>undefined</code>                                                             | 否   | —    |
-| <code>paddingY</code>              | <code>number</code>               | <code>undefined</code>                                                             | 否   | —    |
-| <code>boxBorderPadding</code>      | <code>number</code>               | <code>undefined</code>                                                             | 否   | —    |
-| <code>options</code>               | <code>TMermaidAsciiOptions</code> | <code>undefined</code>                                                             | 否   | —    |
-| <code>renderer</code>              | <code>TMermaidRenderer</code>     | <code>undefined</code>                                                             | 否   | —    |
-| <code>loadingText</code>           | <code>string</code>               | <code>&quot;Rendering Mermaid diagram...&quot;</code>                              | 否   | —    |
-| <code>missingDependencyText</code> | <code>string</code>               | <code>&quot;Import @simon_he/vue-tui/mermaid or pass a renderer prop.&quot;</code> | 否   | —    |
-| <code>errorText</code>             | <code>string</code>               | <code>&quot;Mermaid render failed&quot;</code>                                     | 否   | —    |
-| <code>showErrorDetails</code>      | <code>boolean</code>              | <code>true</code>                                                                  | 否   | —    |
+| 名称                               | 类型                              | 默认值                                                                                             | 必填 | 说明 |
+| ---------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------- | ---- | ---- |
+| <code>x</code>                     | <code>number</code>               | —                                                                                                  | 是   | —    |
+| <code>y</code>                     | <code>number</code>               | —                                                                                                  | 是   | —    |
+| <code>w</code>                     | <code>number</code>               | —                                                                                                  | 是   | —    |
+| <code>h</code>                     | <code>number</code>               | <code>undefined</code>                                                                             | 否   | —    |
+| <code>zIndex</code>                | <code>number</code>               | <code>0</code>                                                                                     | 否   | —    |
+| <code>content</code>               | <code>string</code>               | <code>&quot;&quot;</code>                                                                          | 否   | —    |
+| <code>code</code>                  | <code>string</code>               | <code>undefined</code>                                                                             | 否   | —    |
+| <code>style</code>                 | <code>Style</code>                | <code>undefined</code>                                                                             | 否   | —    |
+| <code>loadingStyle</code>          | <code>Style</code>                | <code>undefined</code>                                                                             | 否   | —    |
+| <code>errorStyle</code>            | <code>Style</code>                | <code>undefined</code>                                                                             | 否   | —    |
+| <code>clear</code>                 | <code>boolean</code>              | <code>true</code>                                                                                  | 否   | —    |
+| <code>streaming</code>             | <code>boolean</code>              | <code>false</code>                                                                                 | 否   | —    |
+| <code>ascii</code>                 | <code>boolean</code>              | <code>false</code>                                                                                 | 否   | —    |
+| <code>paddingX</code>              | <code>number</code>               | <code>undefined</code>                                                                             | 否   | —    |
+| <code>paddingY</code>              | <code>number</code>               | <code>undefined</code>                                                                             | 否   | —    |
+| <code>boxBorderPadding</code>      | <code>number</code>               | <code>undefined</code>                                                                             | 否   | —    |
+| <code>options</code>               | <code>TMermaidAsciiOptions</code> | <code>undefined</code>                                                                             | 否   | —    |
+| <code>renderer</code>              | <code>TMermaidRenderer</code>     | <code>undefined</code>                                                                             | 否   | —    |
+| <code>loadingText</code>           | <code>string</code>               | <code>&quot;Rendering Mermaid diagram...&quot;</code>                                              | 否   | —    |
+| <code>missingDependencyText</code> | <code>string</code>               | <code>&quot;Import @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass...</code> | 否   | —    |
+| <code>errorText</code>             | <code>string</code>               | <code>&quot;Mermaid render failed&quot;</code>                                                     | 否   | —    |
+| <code>showErrorDetails</code>      | <code>boolean</code>              | <code>true</code>                                                                                  | 否   | —    |
 
 ### Events
 
@@ -1437,30 +1437,30 @@ Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
-| 名称                               | 类型                              | 默认值                                                                             | 必填 | 说明 |
-| ---------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------- | ---- | ---- |
-| <code>x</code>                     | <code>number</code>               | —                                                                                  | 是   | —    |
-| <code>y</code>                     | <code>number</code>               | —                                                                                  | 是   | —    |
-| <code>w</code>                     | <code>number</code>               | —                                                                                  | 是   | —    |
-| <code>h</code>                     | <code>number</code>               | <code>undefined</code>                                                             | 否   | —    |
-| <code>zIndex</code>                | <code>number</code>               | <code>0</code>                                                                     | 否   | —    |
-| <code>content</code>               | <code>string</code>               | <code>&quot;&quot;</code>                                                          | 否   | —    |
-| <code>code</code>                  | <code>string</code>               | <code>undefined</code>                                                             | 否   | —    |
-| <code>style</code>                 | <code>Style</code>                | <code>undefined</code>                                                             | 否   | —    |
-| <code>loadingStyle</code>          | <code>Style</code>                | <code>undefined</code>                                                             | 否   | —    |
-| <code>errorStyle</code>            | <code>Style</code>                | <code>undefined</code>                                                             | 否   | —    |
-| <code>clear</code>                 | <code>boolean</code>              | <code>true</code>                                                                  | 否   | —    |
-| <code>streaming</code>             | <code>boolean</code>              | <code>false</code>                                                                 | 否   | —    |
-| <code>ascii</code>                 | <code>boolean</code>              | <code>false</code>                                                                 | 否   | —    |
-| <code>paddingX</code>              | <code>number</code>               | <code>undefined</code>                                                             | 否   | —    |
-| <code>paddingY</code>              | <code>number</code>               | <code>undefined</code>                                                             | 否   | —    |
-| <code>boxBorderPadding</code>      | <code>number</code>               | <code>undefined</code>                                                             | 否   | —    |
-| <code>options</code>               | <code>TMermaidAsciiOptions</code> | <code>undefined</code>                                                             | 否   | —    |
-| <code>renderer</code>              | <code>TMermaidRenderer</code>     | <code>undefined</code>                                                             | 否   | —    |
-| <code>loadingText</code>           | <code>string</code>               | <code>&quot;Rendering Mermaid diagram...&quot;</code>                              | 否   | —    |
-| <code>missingDependencyText</code> | <code>string</code>               | <code>&quot;Import @simon_he/vue-tui/mermaid or pass a renderer prop.&quot;</code> | 否   | —    |
-| <code>errorText</code>             | <code>string</code>               | <code>&quot;Mermaid render failed&quot;</code>                                     | 否   | —    |
-| <code>showErrorDetails</code>      | <code>boolean</code>              | <code>true</code>                                                                  | 否   | —    |
+| 名称                               | 类型                              | 默认值                                                                                             | 必填 | 说明 |
+| ---------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------- | ---- | ---- |
+| <code>x</code>                     | <code>number</code>               | —                                                                                                  | 是   | —    |
+| <code>y</code>                     | <code>number</code>               | —                                                                                                  | 是   | —    |
+| <code>w</code>                     | <code>number</code>               | —                                                                                                  | 是   | —    |
+| <code>h</code>                     | <code>number</code>               | <code>undefined</code>                                                                             | 否   | —    |
+| <code>zIndex</code>                | <code>number</code>               | <code>0</code>                                                                                     | 否   | —    |
+| <code>content</code>               | <code>string</code>               | <code>&quot;&quot;</code>                                                                          | 否   | —    |
+| <code>code</code>                  | <code>string</code>               | <code>undefined</code>                                                                             | 否   | —    |
+| <code>style</code>                 | <code>Style</code>                | <code>undefined</code>                                                                             | 否   | —    |
+| <code>loadingStyle</code>          | <code>Style</code>                | <code>undefined</code>                                                                             | 否   | —    |
+| <code>errorStyle</code>            | <code>Style</code>                | <code>undefined</code>                                                                             | 否   | —    |
+| <code>clear</code>                 | <code>boolean</code>              | <code>true</code>                                                                                  | 否   | —    |
+| <code>streaming</code>             | <code>boolean</code>              | <code>false</code>                                                                                 | 否   | —    |
+| <code>ascii</code>                 | <code>boolean</code>              | <code>false</code>                                                                                 | 否   | —    |
+| <code>paddingX</code>              | <code>number</code>               | <code>undefined</code>                                                                             | 否   | —    |
+| <code>paddingY</code>              | <code>number</code>               | <code>undefined</code>                                                                             | 否   | —    |
+| <code>boxBorderPadding</code>      | <code>number</code>               | <code>undefined</code>                                                                             | 否   | —    |
+| <code>options</code>               | <code>TMermaidAsciiOptions</code> | <code>undefined</code>                                                                             | 否   | —    |
+| <code>renderer</code>              | <code>TMermaidRenderer</code>     | <code>undefined</code>                                                                             | 否   | —    |
+| <code>loadingText</code>           | <code>string</code>               | <code>&quot;Rendering Mermaid diagram...&quot;</code>                                              | 否   | —    |
+| <code>missingDependencyText</code> | <code>string</code>               | <code>&quot;Import @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass...</code> | 否   | —    |
+| <code>errorText</code>             | <code>string</code>               | <code>&quot;Mermaid render failed&quot;</code>                                                     | 否   | —    |
+| <code>showErrorDetails</code>      | <code>boolean</code>              | <code>true</code>                                                                                  | 否   | —    |
 
 ### Events
 

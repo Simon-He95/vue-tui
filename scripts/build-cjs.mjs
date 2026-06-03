@@ -58,7 +58,10 @@ await build({
 });
 
 mkdirSync("dist/agent", { recursive: true });
-writeFileSync("dist/agent/mermaid.cjs", `"use strict";\nmodule.exports = require("../mermaid.cjs");\n`);
+writeFileSync(
+  "dist/agent/mermaid.cjs",
+  `"use strict";\nmodule.exports = require("../mermaid.cjs");\n`,
+);
 
 await build({
   entryPoints: {

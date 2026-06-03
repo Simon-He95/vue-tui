@@ -843,16 +843,16 @@ Mermaid terminal text primitive。组件本身不直接依赖 `beautiful-mermaid
 
 ```vue
 <script setup lang="ts">
-import { TMermaid } from "@simon_he/vue-tui/agent/mermaid";
+import { TMermaidText } from "@simon_he/vue-tui/agent/mermaid";
 
-const diagram = `flowchart LR
-  User[User] --> Agent[Agent]
-  Agent --> Tool[Tool call]
-  Agent --> Answer[Answer]`;
+const diagram = `graph TD
+  Prompt --> Plan
+  Plan --> ToolCall
+  ToolCall --> Answer`;
 </script>
 
 <template>
-  <TMermaid :x="0" :y="0" :w="72" :h="12" :content="diagram" />
+  <TMermaidText :x="0" :y="0" :w="72" :content="diagram" />
 </template>
 ```
 
@@ -860,25 +860,17 @@ const diagram = `flowchart LR
 
 ```vue
 <script setup lang="ts">
-import { TMermaidText } from "@simon_he/vue-tui/vue";
-import { beautifulMermaidRenderer } from "@simon_he/vue-tui/mermaid";
+import { TMermaidText } from "@simon_he/vue-tui/agent";
+import { beautifulMermaidRenderer } from "@simon_he/vue-tui/agent/mermaid";
 
-const diagram = `flowchart LR
-  Input[User prompt] --> Plan{Need diagram?}
-  Plan -- yes --> Mermaid[TMermaidText]
-  Plan -- no --> Text[TText]
-  Mermaid --> Terminal[Terminal cells]`;
+const diagram = `graph TD
+  Prompt --> Plan
+  Plan --> ToolCall
+  ToolCall --> Answer`;
 </script>
 
 <template>
-  <TMermaidText
-    :x="0"
-    :y="0"
-    :w="76"
-    :h="12"
-    :content="diagram"
-    :renderer="beautifulMermaidRenderer"
-  />
+  <TMermaidText :x="0" :y="0" :w="72" :content="diagram" :renderer="beautifulMermaidRenderer" />
 </template>
 ```
 

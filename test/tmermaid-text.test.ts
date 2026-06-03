@@ -74,6 +74,33 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("strips terminal escape sequences from renderer output", async () => {
+    const renderer: TMermaidRenderer = vi.fn(
+      () => "\x1B]8;;https://example.com\x07link\x1B]8;;\x07\n\x1B[31mred\x1B[0m",
+    );
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 2,
+          content: "graph LR\n  A --> B",
+          renderer,
+        }),
+      24,
+      4,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toBe("link");
+    expect(rowText(mounted, 1)).toBe("red");
+
+    mounted.unmount();
+  });
+
   it("clips rendered rows and clears stale rows when output shrinks", async () => {
     const content = ref("graph LR\n  A --> B");
     const rendered = ref("ABCDEFGHIJK\nsecond\nthird");
