@@ -144,6 +144,7 @@
         "detectTLogUrls",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
+        "markMermaidRenderErrorFatal",
         "parseTLogAnnotatedText",
         "resolveTLogLinksPanelTheme",
         "resolveTLogMinimapTheme",
@@ -270,7 +271,8 @@
         "TMermaid",
         "TMermaidText",
         "beautifulMermaidRenderer",
-        "createBeautifulMermaidRenderer"
+        "createBeautifulMermaidRenderer",
+        "markMermaidRenderErrorFatal"
       ],
       "typeExports": [
         "TMermaidAsciiOptions",
@@ -600,7 +602,8 @@
         "TMermaid",
         "TMermaidText",
         "beautifulMermaidRenderer",
-        "createBeautifulMermaidRenderer"
+        "createBeautifulMermaidRenderer",
+        "markMermaidRenderErrorFatal"
       ],
       "typeExports": [
         "TMermaidAsciiOptions",
@@ -769,6 +772,7 @@
         "createTheme",
         "linkifyTextSegments",
         "lintJsonText",
+        "markMermaidRenderErrorFatal",
         "padEndByCells",
         "resolveOverlayPlacement",
         "sliceByCells",
