@@ -118,7 +118,7 @@ export const tMermaidTextProps = {
   missingDependencyText: {
     type: String,
     default:
-      "Import @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass a renderer prop.",
+      "Install the Mermaid renderer package and use TMermaidText from @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass a renderer prop.",
   },
   errorText: {
     type: String,
@@ -348,7 +348,7 @@ export const TMermaidText = defineComponent({
             }
           };
 
-          if (dirtyRows?.length) {
+          if (dirtyRows) {
             for (const y of dirtyRows) paintRow(y);
             return;
           }

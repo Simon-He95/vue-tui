@@ -6,7 +6,7 @@ import {
 } from "../components/TMermaidText.js";
 
 const BEAUTIFUL_MERMAID_INSTALL_HINT =
-  "Install beautiful-mermaid to use @simon_he/vue-tui/mermaid, or pass a custom renderer prop.";
+  "Install beautiful-mermaid and use TMermaidText from @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass a custom renderer prop.";
 
 type BeautifulMermaidModule = Readonly<{
   renderMermaidASCII?: unknown;
@@ -16,8 +16,13 @@ type BeautifulMermaidModule = Readonly<{
 
 let cachedBeautifulMermaid: Promise<BeautifulMermaidModule> | null = null;
 
+function functionValue(value: unknown): TMermaidRenderer | null {
+  return typeof value === "function" ? (value as TMermaidRenderer) : null;
+}
+
 function functionProp(target: unknown, key: string): TMermaidRenderer | null {
   if (!target || typeof target !== "object") return null;
+  if (!(key in target)) return null;
   const value = (target as Record<string, unknown>)[key];
   return typeof value === "function" ? (value as TMermaidRenderer) : null;
 }
@@ -35,14 +40,21 @@ function errorCode(error: unknown): string {
 export function isMissingBeautifulMermaid(error: unknown): boolean {
   const message = errorMessage(error);
   const code = errorCode(error);
-
-  return (
-    (code === "ERR_MODULE_NOT_FOUND" &&
-      /Cannot find package ['"]beautiful-mermaid['"]/.test(message)) ||
+  const mentionsBeautifulMermaid =
+    /Cannot find package ['"]beautiful-mermaid['"]/.test(message) ||
     /Cannot find module ['"]beautiful-mermaid['"]/.test(message) ||
+    /Cannot resolve module ['"]beautiful-mermaid['"]/.test(message) ||
+    /Can't resolve ['"]beautiful-mermaid['"]/.test(message) ||
     /Failed to resolve module specifier ['"]beautiful-mermaid['"]/.test(message) ||
     /Failed to resolve import ['"]beautiful-mermaid['"]/.test(message) ||
-    /Could not resolve ['"]beautiful-mermaid['"]/.test(message)
+    /Could not resolve ['"]beautiful-mermaid['"]/.test(message);
+
+  return (
+    mentionsBeautifulMermaid &&
+    (code === "" ||
+      code === "ERR_MODULE_NOT_FOUND" ||
+      code === "MODULE_NOT_FOUND" ||
+      code === "UNRESOLVED_IMPORT")
   );
 }
 
@@ -50,6 +62,7 @@ function resolveBeautifulMermaidRenderer(mod: BeautifulMermaidModule): TMermaidR
   const renderer =
     functionProp(mod, "renderMermaidASCII") ??
     functionProp(mod, "renderMermaidAscii") ??
+    functionValue(mod.default) ??
     functionProp(mod.default, "renderMermaidASCII") ??
     functionProp(mod.default, "renderMermaidAscii");
 

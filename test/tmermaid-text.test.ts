@@ -312,6 +312,7 @@ describe("TMermaidText", () => {
   });
 
   it("the mermaid entry TMermaidText supplies the beautiful-mermaid renderer", async () => {
+    vi.resetModules();
     vi.doMock("beautiful-mermaid", () => ({
       renderMermaidASCII: vi.fn((code: string) => `rendered:${code}`),
     }));
@@ -337,6 +338,27 @@ describe("TMermaidText", () => {
 
     expect(rowText(mounted, 0)).toBe("rendered:graph LR");
     mounted.unmount();
+
+    vi.doUnmock("beautiful-mermaid");
+    vi.resetModules();
+  });
+
+  it("accepts a default-function beautiful-mermaid export", async () => {
+    vi.resetModules();
+    vi.doMock("beautiful-mermaid", () => ({
+      default: vi.fn((code: string) => `default:${code}`),
+    }));
+
+    const { beautifulMermaidRenderer } = await import("../src/mermaid.js");
+    const rendered = await beautifulMermaidRenderer("flowchart LR\n  A --> B", {
+      colorMode: "none",
+      useAscii: true,
+    });
+
+    expect(rendered).toContain("default:flowchart LR");
+
+    vi.doUnmock("beautiful-mermaid");
+    vi.resetModules();
   });
 
   it("classifies only beautiful-mermaid module resolution failures as missing dependency", () => {
@@ -367,6 +389,11 @@ describe("TMermaidText", () => {
         new Error("beautiful-mermaid parser rejected invalid graph syntax"),
       ),
     ).toBe(false);
+    expect(
+      isMissingBeautifulMermaid(
+        new Error("Module not found: Error: Can't resolve 'beautiful-mermaid' in '/app'"),
+      ),
+    ).toBe(true);
   });
 
   it("ignores stale async renders", async () => {

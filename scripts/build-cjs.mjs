@@ -58,6 +58,9 @@ await build({
 });
 
 mkdirSync("dist/agent", { recursive: true });
+// Keep /agent/mermaid as a thin bridge over /mermaid so both entrypoints share
+// the same optional-peer loader/cache and exported component identities.
+writeFileSync("dist/agent/mermaid.js", `export * from "../mermaid.js";\n`);
 writeFileSync(
   "dist/agent/mermaid.cjs",
   `"use strict";\nmodule.exports = require("../mermaid.cjs");\n`,

@@ -4,7 +4,7 @@ export type {
   TMermaidRenderer,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
-} from "../vue/components/TMermaidText.js";
+} from "../mermaid.js";
 
 export {
   beautifulMermaidRenderer,
@@ -13,4 +13,4 @@ export {
   TBeautifulMermaidText,
   TMermaid,
   TMermaidText,
-} from "../vue/mermaid/beautiful-mermaid.js";
+} from "../mermaid.js";
