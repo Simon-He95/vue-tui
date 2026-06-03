@@ -386,6 +386,38 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("does not hide permanent renderer setup errors during streaming", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => {
+      throw Object.assign(new Error("Install beautiful-mermaid first"), {
+        code: "VUE_TUI_MISSING_BEAUTIFUL_MERMAID",
+      });
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 96,
+          h: 2,
+          content: "graph LR\n  A --> B",
+          final: false,
+          streaming: true,
+          incompleteText: "waiting for complete Mermaid source",
+          errorText: "diagram failed",
+          renderer,
+        }),
+      120,
+      4,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toContain("diagram failed: Install beautiful-mermaid first");
+    expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
+
+    mounted.unmount();
+  });
+
   it("the mermaid entry TMermaidText supplies the beautiful-mermaid renderer", async () => {
     vi.resetModules();
     vi.doMock("beautiful-mermaid", () => ({

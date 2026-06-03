@@ -78,6 +78,22 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function errorCode(error: unknown): string {
+  if (!error || typeof error !== "object") return "";
+  const value = (error as { code?: unknown }).code;
+  return typeof value === "string" ? value : "";
+}
+
+function isPermanentMermaidRenderError(error: unknown): boolean {
+  const code = errorCode(error);
+  return (
+    code === "VUE_TUI_MISSING_BEAUTIFUL_MERMAID" ||
+    code === "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT" ||
+    code === "VUE_TUI_MERMAID_RENDERER_SETUP" ||
+    code === "VUE_TUI_MISSING_MERMAID_RENDERER"
+  );
+}
+
 function splitRenderedOutput(value: string): readonly string[] {
   const normalized = sanitizeTextBlock(
     stripTerminalEscapes(String(value ?? "")).replace(/\r\n?/g, "\n"),
@@ -179,8 +195,8 @@ export const TMermaidText = defineComponent({
       };
     }
 
-    function shouldTreatRenderErrorAsTransient(): boolean {
-      return props.streaming && !props.final;
+    function shouldTreatRenderErrorAsTransient(err: unknown): boolean {
+      return props.streaming && !props.final && !isPermanentMermaidRenderError(err);
     }
 
     async function renderNow(version: number): Promise<void> {
@@ -224,7 +240,7 @@ export const TMermaidText = defineComponent({
         missingRenderer.value = false;
         error.value = errorMessage(err);
 
-        if (shouldTreatRenderErrorAsTransient()) {
+        if (shouldTreatRenderErrorAsTransient(err)) {
           status.value = hasRenderedOutput(lines.value) ? "ready" : "incomplete";
           bump();
           return;
