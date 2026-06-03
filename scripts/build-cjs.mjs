@@ -1,4 +1,5 @@
 import { builtinModules } from "node:module";
+import { mkdir, writeFile } from "node:fs/promises";
 import { build } from "esbuild";
 
 const nodeBuiltins = Array.from(
@@ -40,6 +41,7 @@ await build({
     markdown: "src/markdown.ts",
     experimental: "src/experimental.ts",
     agent: "src/agent.ts",
+    mermaid: "src/mermaid.ts",
   },
   outdir: "dist",
   outExtension: { ".js": ".cjs" },
@@ -49,11 +51,17 @@ await build({
   target: ["es2020"],
   sourcemap: false,
   // CJS intentionally bundles stream-markdown-parser because it only exposes
-  // ESM entrypoints. The optional Mermaid bridge is ESM-only and is not built
-  // through this CJS step.
+  // ESM entrypoints. Keep beautiful-mermaid external so the CJS bridge can
+  // load the optional ESM peer through dynamic import at render time.
   external: ["vue", "beautiful-mermaid"],
   plugins: [forbidNodeBuiltinsPlugin],
 });
+
+await mkdir("dist/agent", { recursive: true });
+await writeFile(
+  "dist/agent/mermaid.cjs",
+  `"use strict";\nmodule.exports = require("../mermaid.cjs");\n`,
+);
 
 await build({
   entryPoints: {

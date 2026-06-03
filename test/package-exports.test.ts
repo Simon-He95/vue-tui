@@ -28,6 +28,8 @@ const distVueCjs = resolve("dist/vue.cjs");
 const distMarkdownCjs = resolve("dist/markdown.cjs");
 const distExperimentalCjs = resolve("dist/experimental.cjs");
 const distAgentCjs = resolve("dist/agent.cjs");
+const distAgentMermaidCjs = resolve("dist/agent/mermaid.cjs");
+const distMermaidCjs = resolve("dist/mermaid.cjs");
 const distIndexCjsTypes = resolve("dist/index.d.cts");
 const distCoreCjsTypes = resolve("dist/core.d.cts");
 const distRuntimeCjsTypes = resolve("dist/runtime.d.cts");
@@ -38,6 +40,8 @@ const distCliCjsTypes = resolve("dist/cli.d.cts");
 const distMarkdownCjsTypes = resolve("dist/markdown.d.cts");
 const distExperimentalCjsTypes = resolve("dist/experimental.d.cts");
 const distAgentCjsTypes = resolve("dist/agent.d.cts");
+const distAgentMermaidCjsTypes = resolve("dist/agent/mermaid.d.cts");
+const distMermaidCjsTypes = resolve("dist/mermaid.d.cts");
 const distTypes = resolve("dist/index.d.ts");
 const distCoreTypes = resolve("dist/core.d.ts");
 const distRuntimeTypes = resolve("dist/runtime.d.ts");
@@ -768,6 +772,8 @@ describe("package exports", () => {
       distMarkdownCjs,
       distExperimentalCjs,
       distAgentCjs,
+      distAgentMermaidCjs,
+      distMermaidCjs,
       distIndexCjsTypes,
       distCoreCjsTypes,
       distRuntimeCjsTypes,
@@ -777,6 +783,8 @@ describe("package exports", () => {
       distMarkdownCjsTypes,
       distExperimentalCjsTypes,
       distAgentCjsTypes,
+      distAgentMermaidCjsTypes,
+      distMermaidCjsTypes,
       distTypes,
       distCoreTypes,
       distRuntimeTypes,
@@ -817,6 +825,8 @@ describe("package exports", () => {
     expect(existsSync(distMarkdownCjsTypes)).toBe(true);
     expect(existsSync(distExperimentalCjsTypes)).toBe(true);
     expect(existsSync(distAgentCjsTypes)).toBe(true);
+    expect(existsSync(distAgentMermaidCjsTypes)).toBe(true);
+    expect(existsSync(distMermaidCjsTypes)).toBe(true);
     expect(existsSync(distTypes)).toBe(true);
     expect(existsSync(distCoreTypes)).toBe(true);
     expect(existsSync(distRuntimeTypes)).toBe(true);
@@ -829,6 +839,8 @@ describe("package exports", () => {
     expect(existsSync(distAgentTypes)).toBe(true);
     expect(existsSync(distAgentMermaidTypes)).toBe(true);
     expect(existsSync(distMermaidTypes)).toBe(true);
+    expect(existsSync(distAgentMermaidCjs)).toBe(true);
+    expect(existsSync(distMermaidCjs)).toBe(true);
     expect(readFileSync(distCliTypes, "utf8")).toContain("Osc52ClipboardOptions");
 
     const root = await import(/* @vite-ignore */ pathToFileURL(distIndex).href);
@@ -854,6 +866,8 @@ describe("package exports", () => {
     const markdownCjs = require("../dist/markdown.cjs");
     const experimentalCjs = require("../dist/experimental.cjs");
     const agentCjs = require("../dist/agent.cjs");
+    const agentMermaidCjs = require("../dist/agent/mermaid.cjs");
+    const mermaidCjs = require("../dist/mermaid.cjs");
 
     expect("createTerminalApp" in root).toBe(false);
     expect("createStdoutRenderer" in root).toBe(false);
@@ -977,6 +991,13 @@ describe("package exports", () => {
     expect(agentMermaid.TMermaidText).toBe(mermaid.TMermaidText);
     expect(agentMermaid.TMermaid).toBe(mermaid.TMermaid);
     expect(agentMermaid.beautifulMermaidRenderer).toBe(mermaid.beautifulMermaidRenderer);
+    expect(mermaidCjs.TBeautifulMermaidText).toBeTruthy();
+    expect(mermaidCjs.TMermaidText).toBe(mermaidCjs.TBeautifulMermaidText);
+    expect(mermaidCjs.TMermaid).toBe(mermaidCjs.TBeautifulMermaid);
+    expect(mermaidCjs.createBeautifulMermaidRenderer).toBeTruthy();
+    expect(agentMermaidCjs.TMermaidText).toBeTruthy();
+    expect(agentMermaidCjs.TMermaidText).toBe(agentMermaidCjs.TBeautifulMermaidText);
+    expect(agentMermaidCjs.beautifulMermaidRenderer).toBe(mermaidCjs.beautifulMermaidRenderer);
     expect("TMarkdownText" in experimentalCjs).toBe(false);
     expect("TVirtualMarkdown" in experimentalCjs).toBe(false);
     expect(experimentalCjs.TVirtualList).toBeTruthy();

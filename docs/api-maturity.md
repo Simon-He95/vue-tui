@@ -15,20 +15,20 @@
 
 ## Entrypoint 边界
 
-| Entrypoint                        | 标签         | 内容                                                                           | Breaking policy                                                      |
-| --------------------------------- | ------------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `@simon_he/vue-tui`               | Public       | core terminal、DOM renderer、稳定基础 Vue 组件、browser-safe helpers           | 1.0 stable 后 patch/minor 不做 breaking change                       |
-| `@simon_he/vue-tui/core`          | Public       | terminal core、buffer-facing types、ANSI/theme/path/hyperlink helpers          | 1.0 stable 后类型或语义 breaking 进入下一个 major                    |
-| `@simon_he/vue-tui/renderer/dom`  | Public       | DOM renderer factory、renderer capabilities、DOM renderer options              | 文档化 API patch/minor 不做破坏性改动                                |
-| `@simon_he/vue-tui/vue`           | Advanced     | 扩展 Vue 组件、composables、router helpers 和 Vue runtime internals            | Soft-stable；破坏性调整先 deprecate 或明确排除                       |
-| `@simon_he/vue-tui/runtime`       | Advanced     | runtime wiring、selection helpers、clipboard abstraction                       | Soft-stable；默认无副作用 contract 变更需 migration note             |
-| `@simon_he/vue-tui/observability` | Advanced     | trace、frame perf、profiler hooks                                              | Soft-stable；输出 schema 破坏性变更需要 release note                 |
-| `@simon_he/vue-tui/cli`           | Public       | stdout renderer、stdin driver、headless app、Node providers、recording         | Node-only public contract；breaking 进入下一个 major                 |
-| `@simon_he/vue-tui/markdown`      | Public       | markdown parser / block source / markdown components                           | 文档化 API patch/minor 不做破坏性改动                                |
-| `@simon_he/vue-tui/mermaid`       | Public       | optional `beautiful-mermaid` bridge、renderer helper 和 wrapper component      | ESM-only optional peer bridge；文档化 API patch/minor 不做破坏性改动 |
-| `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`、`TLogView`、TLog companions、retained index、TLog plugins      | 可调整，但必须有 release note                                        |
-| `@simon_he/vue-tui/agent`         | Experimental | agent/console 场景聚合入口，导出 transcript、tool-call、log、markdown 常用组件 | 可调整，但必须有 release note                                        |
-| `@simon_he/vue-tui/agent/mermaid` | Experimental | agent namespace 下的 optional `beautiful-mermaid` bridge 和 wrapper component  | ESM-only optional peer bridge；可调整，但必须有 release note         |
+| Entrypoint                        | 标签         | 内容                                                                           | Breaking policy                                             |
+| --------------------------------- | ------------ | ------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `@simon_he/vue-tui`               | Public       | core terminal、DOM renderer、稳定基础 Vue 组件、browser-safe helpers           | 1.0 stable 后 patch/minor 不做 breaking change              |
+| `@simon_he/vue-tui/core`          | Public       | terminal core、buffer-facing types、ANSI/theme/path/hyperlink helpers          | 1.0 stable 后类型或语义 breaking 进入下一个 major           |
+| `@simon_he/vue-tui/renderer/dom`  | Public       | DOM renderer factory、renderer capabilities、DOM renderer options              | 文档化 API patch/minor 不做破坏性改动                       |
+| `@simon_he/vue-tui/vue`           | Advanced     | 扩展 Vue 组件、composables、router helpers 和 Vue runtime internals            | Soft-stable；破坏性调整先 deprecate 或明确排除              |
+| `@simon_he/vue-tui/runtime`       | Advanced     | runtime wiring、selection helpers、clipboard abstraction                       | Soft-stable；默认无副作用 contract 变更需 migration note    |
+| `@simon_he/vue-tui/observability` | Advanced     | trace、frame perf、profiler hooks                                              | Soft-stable；输出 schema 破坏性变更需要 release note        |
+| `@simon_he/vue-tui/cli`           | Public       | stdout renderer、stdin driver、headless app、Node providers、recording         | Node-only public contract；breaking 进入下一个 major        |
+| `@simon_he/vue-tui/markdown`      | Public       | markdown parser / block source / markdown components                           | 文档化 API patch/minor 不做破坏性改动                       |
+| `@simon_he/vue-tui/mermaid`       | Public       | optional `beautiful-mermaid` bridge、renderer helper 和 wrapper component      | optional peer bridge；文档化 API patch/minor 不做破坏性改动 |
+| `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`、`TLogView`、TLog companions、retained index、TLog plugins      | 可调整，但必须有 release note                               |
+| `@simon_he/vue-tui/agent`         | Experimental | agent/console 场景聚合入口，导出 transcript、tool-call、log、markdown 常用组件 | 可调整，但必须有 release note                               |
+| `@simon_he/vue-tui/agent/mermaid` | Experimental | agent namespace 下的 optional `beautiful-mermaid` bridge 和 wrapper component  | optional peer bridge；可调整，但必须有 release note         |
 
 规则：
 

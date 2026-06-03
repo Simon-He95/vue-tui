@@ -195,12 +195,20 @@
       "import": {
         "types": "./dist/agent/mermaid.d.ts",
         "default": "./dist/agent/mermaid.js"
+      },
+      "require": {
+        "types": "./dist/agent/mermaid.d.cts",
+        "default": "./dist/agent/mermaid.cjs"
       }
     },
     "./mermaid": {
       "import": {
         "types": "./dist/mermaid.d.ts",
         "default": "./dist/mermaid.js"
+      },
+      "require": {
+        "types": "./dist/mermaid.d.cts",
+        "default": "./dist/mermaid.cjs"
       }
     },
     "./package.json": "./package.json"

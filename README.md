@@ -345,7 +345,7 @@ pnpm run release:dry-run
 
 - The published package ships `dist` only.
 - Root, core, runtime, DOM renderer, observability, Vue, CLI, markdown, experimental, and agent entrypoints are available as ESM, CJS, and type declarations after build.
-- The Mermaid bridge entrypoints are ESM-only and ship type declarations.
+- The Mermaid bridge entrypoints ship ESM, CJS, and type declarations.
 - The root browser/core API does not require a Node runtime, but CLI usage expects a Node-like stdout/stdin environment.
 - Terminal emoji and East Asian width behavior still depends on the user terminal and font.
 

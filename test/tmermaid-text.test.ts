@@ -110,6 +110,58 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("keeps existing one-line output style while re-rendering", async () => {
+    const content = ref("graph LR\n  A --> B");
+    const resolvers: Array<(value: string) => void> = [];
+    const renderer: TMermaidRenderer = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 1,
+          content: content.value,
+          streaming: true,
+          style: { fg: "greenBright" },
+          loadingStyle: { fg: "yellowBright" },
+          renderer,
+        }),
+      32,
+      3,
+    );
+
+    expect(resolvers).toHaveLength(1);
+    resolvers[0]?.("ready");
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toBe("ready");
+    expect(mounted.terminal.getCell(0, 0).style.fg).toBe("greenBright");
+
+    content.value = "graph LR\n  B --> C";
+    for (let i = 0; i < 8 && resolvers.length < 2; i++) {
+      await Promise.resolve();
+      await nextTick();
+      mounted.scheduler()?.flushNow();
+    }
+
+    expect(resolvers).toHaveLength(2);
+    expect(rowText(mounted, 0)).toBe("ready");
+    expect(mounted.terminal.getCell(0, 0).style.fg).toBe("greenBright");
+
+    resolvers[1]?.("next");
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toBe("next");
+
+    mounted.unmount();
+  });
+
   it("renders renderer guidance when no renderer is provided", async () => {
     const mounted = await mountTerminal(
       () =>

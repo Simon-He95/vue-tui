@@ -24,6 +24,8 @@ const browserFacingJsEntries = [
   "markdown.cjs",
   "experimental.cjs",
   "agent.cjs",
+  "agent/mermaid.cjs",
+  "mermaid.cjs",
 ];
 const browserFacingDtsFiles = [
   "index.d.ts",
@@ -46,6 +48,8 @@ const browserFacingDtsFiles = [
   "markdown.d.cts",
   "experimental.d.cts",
   "agent.d.cts",
+  "agent/mermaid.d.cts",
+  "mermaid.d.cts",
 ];
 
 function walk(dir, out = []) {

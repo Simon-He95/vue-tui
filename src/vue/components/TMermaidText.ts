@@ -249,13 +249,17 @@ export const TMermaidText = defineComponent({
       scheduler.cancelFrameTask?.(frameTaskId);
     });
 
+    const showingInitialLoadingText = computed(
+      () => status.value === "loading" && lines.value.length <= 1 && !lines.value[0],
+    );
+
     const displayLines = computed<readonly string[]>(() => {
       if (status.value === "error") {
         const detailText = missingRenderer.value ? props.missingDependencyText : error.value;
         const detail = props.showErrorDetails && detailText ? `: ${detailText}` : "";
         return splitRenderedOutput(`${props.errorText}${detail}`);
       }
-      if (status.value === "loading" && lines.value.length <= 1 && !lines.value[0]) {
+      if (showingInitialLoadingText.value) {
         return splitRenderedOutput(props.loadingText);
       }
       return lines.value.length ? lines.value : [""];
@@ -265,7 +269,7 @@ export const TMermaidText = defineComponent({
       if (status.value === "error") {
         return props.errorStyle ?? props.style ?? defaultStyle.value;
       }
-      if (status.value === "loading" && displayLines.value.length === 1) {
+      if (showingInitialLoadingText.value) {
         return props.loadingStyle ?? props.style ?? defaultStyle.value;
       }
       return props.style ?? defaultStyle.value;

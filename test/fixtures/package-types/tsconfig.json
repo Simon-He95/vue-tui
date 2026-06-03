@@ -17,6 +17,7 @@
       "@simon_he/vue-tui/markdown": ["dist/markdown.d.ts"],
       "@simon_he/vue-tui/experimental": ["dist/experimental.d.ts"],
       "@simon_he/vue-tui/agent": ["dist/agent.d.ts"],
+      "@simon_he/vue-tui/agent/mermaid": ["dist/agent/mermaid.d.ts"],
       "@simon_he/vue-tui/mermaid": ["dist/mermaid.d.ts"]
     }
   },
