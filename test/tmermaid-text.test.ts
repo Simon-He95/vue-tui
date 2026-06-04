@@ -391,6 +391,43 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("re-renders when streaming error classification changes", async () => {
+    const streaming = ref(false);
+    const renderer: TMermaidRenderer = vi.fn(() => {
+      throw new Error("source incomplete");
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 96,
+          h: 1,
+          content: "graph LR\n  A -->",
+          final: false,
+          streaming: streaming.value,
+          incompleteText: "waiting for complete Mermaid source",
+          errorText: "diagram failed",
+          renderer,
+        }),
+      120,
+      3,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toContain("diagram failed: source incomplete");
+
+    streaming.value = true;
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toContain("waiting for complete Mermaid source");
+    expect(rowText(mounted, 0)).not.toContain("source incomplete");
+    expect(renderer).toHaveBeenCalledTimes(2);
+
+    mounted.unmount();
+  });
+
   it("does not hide fatal renderer integration errors during streaming", async () => {
     const renderer: TMermaidRenderer = vi.fn(() => {
       throw markMermaidRenderErrorFatal(new Error("Install beautiful-mermaid first"));
@@ -710,6 +747,36 @@ describe("TMermaidText", () => {
     });
 
     expect(rendered).toContain("default:flowchart LR");
+
+    vi.doUnmock("beautiful-mermaid");
+    vi.resetModules();
+  });
+
+  it("wraps a missing beautiful-mermaid peer once", async () => {
+    vi.resetModules();
+    vi.doMock("beautiful-mermaid", () => ({
+      renderMermaidASCII: vi.fn(() => {
+        throw Object.assign(
+          new Error("Cannot find package 'beautiful-mermaid' imported from /app"),
+          {
+            code: "ERR_MODULE_NOT_FOUND",
+          },
+        );
+      }),
+    }));
+
+    const { beautifulMermaidRenderer } = await import("../src/mermaid.js");
+    const installHint =
+      "Install beautiful-mermaid and use TMermaidText from @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass a custom renderer prop.";
+
+    await expect(
+      beautifulMermaidRenderer("flowchart LR\n  A --> B", {
+        colorMode: "none",
+        useAscii: true,
+      }),
+    ).rejects.toThrow(
+      `${installHint} (Cannot find package 'beautiful-mermaid' imported from /app)`,
+    );
 
     vi.doUnmock("beautiful-mermaid");
     vi.resetModules();

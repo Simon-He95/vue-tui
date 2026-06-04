@@ -43,6 +43,14 @@ function codedError(message: string, code: string): Error & { code: string } {
 }
 
 function missingBeautifulMermaidError(error: unknown): Error {
+  if (
+    error &&
+    typeof error === "object" &&
+    errorCode(error) === MISSING_BEAUTIFUL_MERMAID_ERROR_CODE
+  ) {
+    return markMermaidRenderErrorFatal(error);
+  }
+
   const detail = errorMessage(error);
   return markMermaidRenderErrorFatal(
     codedError(

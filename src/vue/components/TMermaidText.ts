@@ -377,6 +377,7 @@ export const TMermaidText = defineComponent({
         () => props.paddingY,
         () => props.boxBorderPadding,
         () => props.options,
+        () => props.streaming,
         () => props.final,
         () => props.isTransientError,
       ],

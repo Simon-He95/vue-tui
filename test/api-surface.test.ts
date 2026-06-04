@@ -203,6 +203,14 @@ describe("public API surface", () => {
     `);
   });
 
+  it("keeps base Mermaid aliases stable", async () => {
+    const vue = await import("../src/vue.js");
+    const agent = await import("../src/agent.js");
+
+    expect(vue.TMermaid).toBe(vue.TMermaidText);
+    expect(agent.TMermaid).toBe(agent.TMermaidText);
+  });
+
   it("keeps observability entry exports intentional", async () => {
     expect(await exportNames("../src/observability.js")).toMatchInlineSnapshot(`
       [
