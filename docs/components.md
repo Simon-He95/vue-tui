@@ -876,6 +876,20 @@ const diagram = `graph TD
 </template>
 ```
 
+流式 Mermaid source：
+
+```vue
+<TMermaidText
+  :x="0"
+  :y="0"
+  :w="72"
+  :content="diagram"
+  :streaming="message.streaming"
+  :final="message.final"
+  incompleteText="waiting for complete diagram"
+/>
+```
+
 ### Props
 
 - `x`/`y`/`w` `(number, required)`：渲染区域左上角与宽度
