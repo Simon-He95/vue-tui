@@ -10,6 +10,9 @@ import {
 const BEAUTIFUL_MERMAID_INSTALL_HINT =
   "Install beautiful-mermaid and use TMermaidText from @simon_he/vue-tui/mermaid or @simon_he/vue-tui/agent/mermaid, or pass a custom renderer prop.";
 
+const MISSING_BEAUTIFUL_MERMAID_ERROR_CODE = "VUE_TUI_MISSING_BEAUTIFUL_MERMAID";
+const INVALID_BEAUTIFUL_MERMAID_EXPORT_ERROR_CODE = "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT";
+
 type BeautifulMermaidModule = Readonly<{
   renderMermaidASCII?: unknown;
   renderMermaidAscii?: unknown;
@@ -44,7 +47,7 @@ function missingBeautifulMermaidError(error: unknown): Error {
   return markMermaidRenderErrorFatal(
     codedError(
       `${BEAUTIFUL_MERMAID_INSTALL_HINT} (${detail})`,
-      "VUE_TUI_MISSING_BEAUTIFUL_MERMAID",
+      MISSING_BEAUTIFUL_MERMAID_ERROR_CODE,
     ),
   );
 }
@@ -61,8 +64,22 @@ function errorCause(error: unknown): unknown {
 }
 
 export function isMissingBeautifulMermaid(error: unknown): boolean {
+  return isMissingBeautifulMermaidWithSeen(error, new WeakSet<object>());
+}
+
+function isMissingBeautifulMermaidWithSeen(error: unknown, seen: WeakSet<object>): boolean {
+  if (error && typeof error === "object") {
+    if (seen.has(error)) return false;
+    seen.add(error);
+  }
+
   const message = errorMessage(error);
   const code = errorCode(error);
+
+  if (code === MISSING_BEAUTIFUL_MERMAID_ERROR_CODE) {
+    return true;
+  }
+
   const mentionsBeautifulMermaid =
     /Cannot find package ['"]beautiful-mermaid['"]/.test(message) ||
     /Cannot find module ['"]beautiful-mermaid['"]/.test(message) ||
@@ -83,7 +100,7 @@ export function isMissingBeautifulMermaid(error: unknown): boolean {
   }
 
   const cause = errorCause(error);
-  return cause !== undefined && isMissingBeautifulMermaid(cause);
+  return cause !== undefined && isMissingBeautifulMermaidWithSeen(cause, seen);
 }
 
 function resolveBeautifulMermaidRenderer(mod: BeautifulMermaidModule): TMermaidRenderer {
@@ -98,7 +115,7 @@ function resolveBeautifulMermaidRenderer(mod: BeautifulMermaidModule): TMermaidR
     throw markMermaidRenderErrorFatal(
       codedError(
         "beautiful-mermaid is installed but does not export renderMermaidASCII.",
-        "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT",
+        INVALID_BEAUTIFUL_MERMAID_EXPORT_ERROR_CODE,
       ),
     );
   }
@@ -106,8 +123,19 @@ function resolveBeautifulMermaidRenderer(mod: BeautifulMermaidModule): TMermaidR
   return renderer;
 }
 
+function hasErrorCode(error: unknown, code: string, seen = new WeakSet<object>()): boolean {
+  if (!error || typeof error !== "object") return false;
+  if (seen.has(error)) return false;
+  seen.add(error);
+
+  if (errorCode(error) === code) return true;
+
+  const cause = errorCause(error);
+  return cause !== undefined && hasErrorCode(cause, code, seen);
+}
+
 function isBeautifulMermaidExportError(error: unknown): boolean {
-  return errorCode(error) === "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT";
+  return hasErrorCode(error, INVALID_BEAUTIFUL_MERMAID_EXPORT_ERROR_CODE);
 }
 
 const isTransientBeautifulMermaidRenderError: TMermaidTransientErrorClassifier = (error) => {

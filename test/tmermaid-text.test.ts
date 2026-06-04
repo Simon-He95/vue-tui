@@ -421,6 +421,38 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("does not hide fatal renderer integration errors from causes during streaming", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => {
+      throw Object.assign(new Error("renderer wrapper failed"), {
+        cause: markMermaidRenderErrorFatal(new Error("missing renderer setup")),
+      });
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 96,
+          h: 2,
+          content: "graph LR\n  A --> B",
+          final: false,
+          streaming: true,
+          incompleteText: "waiting for complete Mermaid source",
+          errorText: "diagram failed",
+          renderer,
+        }),
+      120,
+      4,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toContain("diagram failed: renderer wrapper failed");
+    expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
+
+    mounted.unmount();
+  });
+
   it("does not hide a missing beautiful-mermaid peer as a streaming transient error", async () => {
     vi.resetModules();
     vi.doMock("beautiful-mermaid", () => ({
@@ -487,6 +519,38 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
     expect(rowText(mounted, 0)).toContain("diagram failed: renderer setup failed");
+
+    mounted.unmount();
+  });
+
+  it("does not hide coded renderer setup errors from causes as streaming transient errors", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => {
+      throw Object.assign(new Error("renderer wrapper failed"), {
+        cause: Object.assign(new Error("renderer setup failed"), {
+          code: "VUE_TUI_MERMAID_RENDERER_SETUP",
+        }),
+      });
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 120,
+          h: 2,
+          content: "graph LR\n  A --> B",
+          final: false,
+          streaming: true,
+          errorText: "diagram failed",
+          renderer,
+        }),
+      140,
+      4,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toContain("diagram failed: renderer wrapper failed");
 
     mounted.unmount();
   });
@@ -684,6 +748,19 @@ describe("TMermaidText", () => {
         new Error("Module not found: Error: Can't resolve 'beautiful-mermaid' in '/app'"),
       ),
     ).toBe(true);
+
+    const cyclicError = new Error("wrapper") as Error & { cause?: unknown };
+    cyclicError.cause = cyclicError;
+    expect(isMissingBeautifulMermaid(cyclicError)).toBe(false);
+
+    const missingPeer = Object.assign(
+      new Error("Cannot find package 'beautiful-mermaid' imported from /app"),
+      { code: "ERR_MODULE_NOT_FOUND" },
+    );
+    const wrappedMissingPeer = Object.assign(new Error("wrapper"), {
+      cause: missingPeer,
+    });
+    expect(isMissingBeautifulMermaid(wrappedMissingPeer)).toBe(true);
   });
 
   it("ignores stale async renders", async () => {

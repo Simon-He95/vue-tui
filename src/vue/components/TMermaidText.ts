@@ -113,28 +113,58 @@ export function markMermaidRenderErrorFatal(error: unknown): Error {
   return normalized;
 }
 
-function isMermaidRenderErrorFatal(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  return (
-    fatalMermaidRenderErrors.has(error) ||
-    (error as TMermaidFatalRenderError)[TUI_MERMAID_FATAL_RENDER_ERROR] === true
-  );
-}
-
 function errorCode(error: unknown): string {
   if (!error || typeof error !== "object") return "";
   const value = (error as { code?: unknown }).code;
   return typeof value === "string" ? value : "";
 }
 
+function errorCause(error: unknown): unknown {
+  if (!error || typeof error !== "object") return undefined;
+  return (error as { cause?: unknown }).cause;
+}
+
+const PERMANENT_MERMAID_RENDER_ERROR_CODES = new Set([
+  "VUE_TUI_MISSING_BEAUTIFUL_MERMAID",
+  "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT",
+  "VUE_TUI_MERMAID_RENDERER_SETUP",
+  "VUE_TUI_MISSING_MERMAID_RENDERER",
+]);
+
+function hasErrorCode(
+  error: unknown,
+  codes: ReadonlySet<string>,
+  seen = new WeakSet<object>(),
+): boolean {
+  if (!error || typeof error !== "object") return false;
+  if (seen.has(error)) return false;
+  seen.add(error);
+
+  if (codes.has(errorCode(error))) return true;
+
+  const cause = errorCause(error);
+  return cause !== undefined && hasErrorCode(cause, codes, seen);
+}
+
+function isMermaidRenderErrorFatal(error: unknown, seen = new WeakSet<object>()): boolean {
+  if (!error || typeof error !== "object") return false;
+  if (seen.has(error)) return false;
+  seen.add(error);
+
+  if (
+    fatalMermaidRenderErrors.has(error) ||
+    (error as TMermaidFatalRenderError)[TUI_MERMAID_FATAL_RENDER_ERROR] === true
+  ) {
+    return true;
+  }
+
+  const cause = errorCause(error);
+  return cause !== undefined && isMermaidRenderErrorFatal(cause, seen);
+}
+
 function isPermanentMermaidRenderError(error: unknown): boolean {
-  const code = errorCode(error);
   return (
-    isMermaidRenderErrorFatal(error) ||
-    code === "VUE_TUI_MISSING_BEAUTIFUL_MERMAID" ||
-    code === "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT" ||
-    code === "VUE_TUI_MERMAID_RENDERER_SETUP" ||
-    code === "VUE_TUI_MISSING_MERMAID_RENDERER"
+    isMermaidRenderErrorFatal(error) || hasErrorCode(error, PERMANENT_MERMAID_RENDER_ERROR_CODES)
   );
 }
 
