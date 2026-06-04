@@ -137,6 +137,8 @@ describe("public API surface", () => {
         "STDOUT_RENDERER_CAPABILITIES",
         "createCliEventManager",
         "createDefaultTInputHostAdapter",
+        "createIterm2InlineImageSequence",
+        "createKittyGraphicsSequence",
         "createNodeMentionPathProvider",
         "createNodePathPickerProvider",
         "createOsc52ClipboardProvider",
@@ -145,6 +147,7 @@ describe("public API surface", () => {
         "createTInputHostPlugin",
         "createTerminalApp",
         "defaultTInputHostPlugin",
+        "detectTerminalGraphicsCapabilities",
         "getCliLatencyProfiler",
         "getStdoutRendererMetrics",
         "installNodeFileWriters",
@@ -285,6 +288,7 @@ describe("public API surface", () => {
   it("keeps agent entry exports intentional", async () => {
     expect(await exportNames("../src/agent.js")).toMatchInlineSnapshot(`
       [
+        "TAgentTerminalGraphic",
         "TAgentTranscript",
         "TBox",
         "TCommandPalette",
@@ -314,6 +318,8 @@ describe("public API surface", () => {
         "TVirtualMarkdown",
         "computeCommandPaletteMatchRanges",
         "createAppendOnlyLogStore",
+        "createIterm2InlineImageSequence",
+        "createKittyGraphicsSequence",
         "createMarkdownBlockSource",
         "createTLogDensityBucketsFromMarkers",
         "createTLogLevelPlugin",
@@ -322,6 +328,7 @@ describe("public API surface", () => {
         "createTLogOsc8LinkPlugin",
         "createTLogUrlPlugin",
         "detectTLogUrls",
+        "detectTerminalGraphicsCapabilities",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
         "markMermaidRenderErrorFatal",

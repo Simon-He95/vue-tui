@@ -3,6 +3,14 @@ export { TDialog } from "./vue/components/TDialog.js";
 export { TInput } from "./vue/components/TInput.js";
 export { TSelect } from "./vue/components/TSelect.js";
 export { TText } from "./vue/components/TText.js";
+export { TAgentTerminalGraphic } from "./vue/components/TAgentTerminalGraphic.js";
+export type {
+  TAgentTerminalGraphicKind,
+  TAgentTerminalGraphicRenderer,
+  TAgentTerminalGraphicRendererContext,
+  TAgentTerminalGraphicRenderResult,
+  TAgentTerminalGraphicProps,
+} from "./vue/components/TAgentTerminalGraphic.js";
 export { TThinkingView } from "./vue/components/TThinkingView.js";
 export { TToolCallView } from "./vue/components/TToolCallView.js";
 export { TUserMessageView } from "./vue/components/TUserMessageView.js";
@@ -32,6 +40,16 @@ export {
   TMermaid,
   TMermaidText,
 } from "./vue/components/TMermaidText.js";
+export type {
+  TerminalGraphicsCapabilities,
+  TerminalGraphicsPayload,
+  TerminalGraphicsProtocol,
+} from "./renderer/terminal-graphics.js";
+export {
+  createIterm2InlineImageSequence,
+  createKittyGraphicsSequence,
+  detectTerminalGraphicsCapabilities,
+} from "./renderer/terminal-graphics.js";
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,

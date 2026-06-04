@@ -4,6 +4,7 @@
 
 ## 目录
 
+- [TAgentTerminalGraphic](#tagentterminalgraphic)
 - [TAgentTranscript](#tagenttranscript)
 - [TAnchor](#tanchor)
 - [TAutocompleteInput](#tautocompleteinput)
@@ -72,6 +73,39 @@
 - [TView](#tview)
 - [TVirtualList](#tvirtuallist)
 - [TVirtualMarkdown](#tvirtualmarkdown)
+
+## TAgentTerminalGraphic
+
+源码：`src/vue/components/TAgentTerminalGraphic.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/agent`
+
+### Props
+
+| 名称                      | 类型                                       | 默认值                                                 | 必填 | 说明 |
+| ------------------------- | ------------------------------------------ | ------------------------------------------------------ | ---- | ---- |
+| <code>x</code>            | <code>number</code>                        | —                                                      | 是   | —    |
+| <code>y</code>            | <code>number</code>                        | —                                                      | 是   | —    |
+| <code>w</code>            | <code>number</code>                        | —                                                      | 是   | —    |
+| <code>h</code>            | <code>number</code>                        | <code>undefined</code>                                 | 否   | —    |
+| <code>zIndex</code>       | <code>number</code>                        | <code>0</code>                                         | 否   | —    |
+| <code>content</code>      | <code>string</code>                        | —                                                      | 是   | —    |
+| <code>kind</code>         | <code>TAgentTerminalGraphicKind</code>     | <code>&quot;image&quot;</code>                         | 否   | —    |
+| <code>fallback</code>     | <code>string</code>                        | <code>&quot;&quot;</code>                              | 否   | —    |
+| <code>style</code>        | <code>Style</code>                         | <code>undefined</code>                                 | 否   | —    |
+| <code>loadingStyle</code> | <code>Style</code>                         | <code>undefined</code>                                 | 否   | —    |
+| <code>errorStyle</code>   | <code>Style</code>                         | <code>undefined</code>                                 | 否   | —    |
+| <code>clear</code>        | <code>boolean</code>                       | <code>true</code>                                      | 否   | —    |
+| <code>final</code>        | <code>boolean</code>                       | <code>true</code>                                      | 否   | —    |
+| <code>streaming</code>    | <code>boolean</code>                       | <code>false</code>                                     | 否   | —    |
+| <code>renderer</code>     | <code>TAgentTerminalGraphicRenderer</code> | <code>undefined</code>                                 | 否   | —    |
+| <code>loadingText</code>  | <code>string</code>                        | <code>&quot;Rendering terminal graphic...&quot;</code> | 否   | —    |
+
+### Events
+
+—
 
 ## TAgentTranscript
 

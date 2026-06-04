@@ -6,6 +6,11 @@ import type {
   TerminalScrollOperation,
 } from "../../core/types.js";
 import type { RendererCapabilities } from "../capabilities.js";
+import type {
+  TerminalGraphicsCapabilities,
+  TerminalGraphicsPayload,
+  TerminalGraphicsOutput,
+} from "../terminal-graphics.js";
 import { Buffer } from "node:buffer";
 import { writeSync as fsWriteSync } from "node:fs";
 import process from "node:process";
@@ -43,6 +48,10 @@ import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { firstNonEmptyEnv } from "../../utils/env.js";
 import { STDOUT_RENDERER_CAPABILITIES } from "../capabilities.js";
+import {
+  detectTerminalGraphicsCapabilities,
+  registerTerminalGraphicsOutput,
+} from "../terminal-graphics.js";
 import { recordStdoutFrame } from "./stdout-metrics.js";
 
 // Global debug logger instance (lazy init)
@@ -86,6 +95,7 @@ export type CliOutput = Readonly<{
 
 export type StdoutRenderer = Readonly<{
   capabilities: RendererCapabilities;
+  graphicsCapabilities: TerminalGraphicsCapabilities;
   render: () => void;
   dispose: () => void;
   /** Move terminal cursor to specified cell position for IME input */
@@ -442,6 +452,24 @@ export function createStdoutRenderer(
   let accumulatedDirtyMax = -1;
   let accumulatedDirtyRowsRequireRepaint = false;
   let accumulatedScrollOperations: TerminalScrollOperation[] | null = null;
+  const graphicsCapabilities = detectTerminalGraphicsCapabilities({ env, isTTY: outputIsTTY });
+  const pendingGraphics = new Map<string, TerminalGraphicsPayload>();
+  const graphicsOutput: TerminalGraphicsOutput = {
+    capabilities: graphicsCapabilities,
+    queue(payload) {
+      if (disposed) return;
+      const x = Math.floor(payload.x);
+      const y = Math.floor(payload.y);
+      if (!payload.id || !payload.sequence || !Number.isFinite(x) || !Number.isFinite(y)) return;
+      pendingGraphics.set(payload.id, {
+        id: payload.id,
+        x,
+        y,
+        sequence: payload.sequence,
+      });
+    },
+  };
+  const unregisterGraphicsOutput = registerTerminalGraphicsOutput(terminal, graphicsOutput);
   // Minimum frame interval for stdout rendering (16ms = ~60fps max).
   // For non-TTY outputs (tests/logs), render immediately for determinism.
   const MIN_FRAME_MS = outputIsTTY ? 16 : 0;
@@ -1913,6 +1941,8 @@ export function createStdoutRenderer(
     const renderStart = performance.now();
 
     const size = terminal.size();
+    const graphicsToRender = Array.from(pendingGraphics.values());
+    pendingGraphics.clear();
     ensureRowEscapes(Math.max(size.rows, lastRenderedRows));
     ensureFingerprints(size.cols, size.rows);
     const bgSeq = openBg(defaultBg);
@@ -1963,7 +1993,12 @@ export function createStdoutRenderer(
       if (!sorted) outRows.sort((a, b) => a - b);
       return outRows;
     })();
-    if (rowsToRender?.length === 0 && !normalizedScrollOperations && !getImeAnchor) {
+    if (
+      rowsToRender?.length === 0 &&
+      !normalizedScrollOperations &&
+      !getImeAnchor &&
+      graphicsToRender.length === 0
+    ) {
       if (isDebugEnabled()) getDebugLog().render(" No valid dirty rows; frame skipped");
       cliLatency?.recordStdoutNoOutput();
       return;
@@ -2763,6 +2798,30 @@ export function createStdoutRenderer(
       prevOverlayPartialRows = overlayCoverage.partialRows;
     };
 
+    if (graphicsToRender.length > 0) {
+      hasFrameOutput = true;
+      if (enableOsc8Links && activeStyle.href) frameParts.push(OSC8_CLOSE);
+      activeStyle = {
+        fg: null,
+        bg: defaultBg,
+        bold: false,
+        dim: false,
+        italic: false,
+        underline: false,
+        inverse: false,
+        href: null,
+      };
+      activeStyleKey = null;
+      frameParts.push(SGR_RESET);
+      for (const payload of graphicsToRender) {
+        const { x, y } = clampCellToViewport(
+          { cellX: payload.x, cellY: payload.y },
+          { cols: size.cols, rows: size.rows },
+        );
+        frameParts.push(`\u001B[${y + 1};${x + 1}H`, payload.sequence, SGR_RESET);
+      }
+    }
+
     // Include cursor position in the same frame if getImeAnchor is provided
     // This eliminates the need for a separate setCursor() call after render
     let emittedCursorPos: { x: number; y: number } | null = null;
@@ -3404,6 +3463,8 @@ export function createStdoutRenderer(
     accumulatedDirtyMin = Number.POSITIVE_INFINITY;
     accumulatedDirtyMax = -1;
     accumulatedDirtyRowsRequireRepaint = false;
+    pendingGraphics.clear();
+    unregisterGraphicsOutput();
     off();
     releaseFingerprintFn();
     if (canTrackResize && typeof resizeSource?.off === "function") {
@@ -3452,6 +3513,7 @@ export function createStdoutRenderer(
 
   return {
     capabilities: STDOUT_RENDERER_CAPABILITIES,
+    graphicsCapabilities,
     render,
     dispose,
     setCursor,

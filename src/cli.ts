@@ -38,6 +38,16 @@ export type {
   ThemePalette,
 } from "./renderer/cli/stdout-renderer.js";
 export { createStdoutRenderer } from "./renderer/cli/stdout-renderer.js";
+export type {
+  TerminalGraphicsCapabilities,
+  TerminalGraphicsPayload,
+  TerminalGraphicsProtocol,
+} from "./renderer/terminal-graphics.js";
+export {
+  createIterm2InlineImageSequence,
+  createKittyGraphicsSequence,
+  detectTerminalGraphicsCapabilities,
+} from "./renderer/terminal-graphics.js";
 export { sanitizeTerminalHref, type SanitizeTerminalHrefOptions } from "./core/hyperlink.js";
 export type {
   TerminalLinkOpenContext,

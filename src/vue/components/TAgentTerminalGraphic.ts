@@ -1,0 +1,409 @@
+import type { ExtractPublicPropTypes, PropType } from "vue";
+import type { Style } from "../../core/types.js";
+import type { Rect } from "../../events/manager/types.js";
+import type {
+  TerminalGraphicsCapabilities,
+  TerminalGraphicsProtocol,
+} from "../../renderer/terminal-graphics.js";
+import {
+  computed,
+  defineComponent,
+  getCurrentInstance,
+  h,
+  markRaw,
+  onBeforeUnmount,
+  shallowRef,
+  watch,
+} from "vue";
+import { getTerminalGraphicsOutput } from "../../renderer/terminal-graphics.js";
+import { useLayout } from "../composables/use-layout.js";
+import { useRenderNode } from "../composables/use-render-node.js";
+import { useTerminal } from "../composables/use-terminal.js";
+import { useVisibility } from "../composables/use-visibility.js";
+import { intersectRect, translateRect } from "../utils/rect.js";
+import {
+  padEndByCells,
+  sanitizeTextBlock,
+  sliceByCells,
+  sliceByCellsRange,
+  spaces,
+  withTextWidthProvider,
+} from "../utils/text.js";
+
+export type TAgentTerminalGraphicKind = "image" | "math";
+
+export type TAgentTerminalGraphicRendererContext = Readonly<{
+  kind: TAgentTerminalGraphicKind;
+  width: number;
+  height?: number;
+  final: boolean;
+  streaming: boolean;
+  capabilities: TerminalGraphicsCapabilities;
+}>;
+
+export type TAgentTerminalGraphicRenderResult =
+  | string
+  | Readonly<{
+      sequence: string;
+      protocol?: TerminalGraphicsProtocol;
+      fallback?: string;
+    }>
+  | Readonly<{
+      text: string;
+    }>;
+
+export type TAgentTerminalGraphicRenderer = (
+  content: string,
+  context: TAgentTerminalGraphicRendererContext,
+) => TAgentTerminalGraphicRenderResult | Promise<TAgentTerminalGraphicRenderResult>;
+
+type TAgentTerminalGraphicStatus = "idle" | "loading" | "ready";
+
+const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
+const TERMINAL_ESCAPE_RE = new RegExp(
+  [
+    `${ESC}\\][\\s\\S]*?(?:${BEL}|${ESC}\\\\)`,
+    `${ESC}[PX^_][\\s\\S]*?${ESC}\\\\`,
+    `${ESC}\\[[0-?]*[ -/]*[@-~]`,
+    `${ESC}[@-Z\\\\-_]`,
+  ].join("|"),
+  "g",
+);
+
+const NO_GRAPHICS_CAPABILITIES: TerminalGraphicsCapabilities = Object.freeze({
+  supported: false,
+  kitty: false,
+  iterm2: false,
+  sixel: false,
+  preferredProtocol: null,
+});
+
+function stripTerminalEscapes(value: string): string {
+  return value.replace(TERMINAL_ESCAPE_RE, "");
+}
+
+function splitTextOutput(value: string): readonly string[] {
+  const normalized = sanitizeTextBlock(
+    stripTerminalEscapes(String(value ?? "")).replace(/\r\n?/g, "\n"),
+  );
+  const lines = normalized.split("\n");
+  return lines.length ? lines : [""];
+}
+
+function hasVisibleOutput(value: readonly string[]): boolean {
+  return value.some((line) => line.trim().length > 0);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export const tAgentTerminalGraphicProps = {
+  x: { type: Number, required: true },
+  y: { type: Number, required: true },
+  w: { type: Number, required: true },
+  h: { type: Number, default: undefined },
+  zIndex: { type: Number, default: 0 },
+  content: { type: String, required: true },
+  kind: {
+    type: String as PropType<TAgentTerminalGraphicKind>,
+    default: "image",
+  },
+  fallback: { type: String, default: "" },
+  style: { type: Object as PropType<Style>, default: undefined },
+  loadingStyle: { type: Object as PropType<Style>, default: undefined },
+  errorStyle: { type: Object as PropType<Style>, default: undefined },
+  clear: { type: Boolean, default: true },
+  final: { type: Boolean, default: true },
+  streaming: { type: Boolean, default: false },
+  renderer: {
+    type: Function as PropType<TAgentTerminalGraphicRenderer>,
+    default: undefined,
+  },
+  loadingText: {
+    type: String,
+    default: "Rendering terminal graphic...",
+  },
+} as const;
+
+export type TAgentTerminalGraphicProps = ExtractPublicPropTypes<typeof tAgentTerminalGraphicProps>;
+
+type ResolvedGraphic =
+  | Readonly<{
+      type: "terminal";
+      sequence: string;
+      fallback: string;
+    }>
+  | Readonly<{
+      type: "text";
+      text: string;
+    }>;
+
+export const TAgentTerminalGraphic = defineComponent({
+  name: "TAgentTerminalGraphic",
+  props: tAgentTerminalGraphicProps,
+  setup(props) {
+    const instance = getCurrentInstance();
+    const { terminal, defaultStyle, scheduler, widthProvider } = useTerminal();
+    const layout = useLayout();
+    const { visible, rootProps } = useVisibility();
+
+    const status = shallowRef<TAgentTerminalGraphicStatus>("idle");
+    const error = shallowRef("");
+    const graphic = shallowRef<ResolvedGraphic | null>(null);
+    const documentVersion = shallowRef(0);
+
+    let builtOnce = false;
+    let renderVersion = 0;
+    let alive = true;
+    const rawId = `TAgentTerminalGraphic:${instance?.uid ?? "unknown"}`;
+    const frameTaskId = `${rawId}:render`;
+
+    const graphicsOutput = () => getTerminalGraphicsOutput(terminal);
+    const fallbackText = () => props.fallback || props.content;
+
+    function bump(): void {
+      documentVersion.value++;
+    }
+
+    function resolveRendererContext(): TAgentTerminalGraphicRendererContext {
+      return {
+        kind: props.kind,
+        width: props.w,
+        height: props.h,
+        final: props.final,
+        streaming: props.streaming,
+        capabilities: graphicsOutput()?.capabilities ?? NO_GRAPHICS_CAPABILITIES,
+      };
+    }
+
+    function normalizeResult(result: TAgentTerminalGraphicRenderResult): ResolvedGraphic {
+      if (typeof result === "string") {
+        return {
+          type: "text",
+          text: result,
+        };
+      }
+      if ("text" in result) {
+        return {
+          type: "text",
+          text: result.text,
+        };
+      }
+      return {
+        type: "terminal",
+        sequence: result.sequence,
+        fallback: result.fallback ?? fallbackText(),
+      };
+    }
+
+    async function renderNow(version: number): Promise<void> {
+      const content = props.content;
+      if (!content.trim()) {
+        if (!alive || version !== renderVersion) return;
+        graphic.value = { type: "text", text: "" };
+        status.value = "ready";
+        error.value = "";
+        bump();
+        return;
+      }
+
+      const renderer = props.renderer;
+      if (!renderer) {
+        if (!alive || version !== renderVersion) return;
+        graphic.value = { type: "text", text: fallbackText() };
+        status.value = "ready";
+        error.value = "";
+        bump();
+        return;
+      }
+
+      status.value = "loading";
+      error.value = "";
+      bump();
+
+      try {
+        const result = await renderer(content, resolveRendererContext());
+        if (!alive || version !== renderVersion) return;
+        graphic.value = normalizeResult(result);
+        status.value = "ready";
+        error.value = "";
+        bump();
+      } catch (err) {
+        if (!alive || version !== renderVersion) return;
+        graphic.value = { type: "text", text: fallbackText() };
+        status.value = "ready";
+        error.value = errorMessage(err);
+        bump();
+      }
+    }
+
+    function scheduleRender(): void {
+      const version = ++renderVersion;
+
+      if (!builtOnce || !props.streaming) {
+        builtOnce = true;
+        void renderNow(version);
+        return;
+      }
+
+      const accepted = scheduler.queueFrameTask({
+        id: frameTaskId,
+        reason: "stream",
+        priority: "low",
+        sync: false,
+        run: () => {
+          if (!alive) return;
+          if (version !== renderVersion) return;
+          void renderNow(version);
+        },
+      });
+      if (accepted === false) void renderNow(version);
+    }
+
+    watch(
+      [
+        () => props.content,
+        () => props.kind,
+        () => props.fallback,
+        () => props.renderer,
+        () => props.w,
+        () => props.h,
+        () => props.streaming,
+        () => props.final,
+      ],
+      () => {
+        scheduleRender();
+      },
+      { immediate: true },
+    );
+
+    onBeforeUnmount(() => {
+      alive = false;
+      renderVersion++;
+      scheduler.cancelFrameTask?.(frameTaskId);
+    });
+
+    const showingInitialLoadingText = computed(() => status.value === "loading" && !graphic.value);
+
+    const fullRect = computed<Rect>(() => {
+      const textLines =
+        graphic.value?.type === "text"
+          ? splitTextOutput(graphic.value.text)
+          : splitTextOutput(fallbackText());
+      const height = props.h ?? Math.max(1, textLines.length);
+      return translateRect(
+        { x: props.x, y: props.y, w: props.w, h: height },
+        layout.originX,
+        layout.originY,
+      );
+    });
+
+    const absRect = computed<Rect>(() => {
+      const translated = fullRect.value;
+      if (!layout.clipRect) return translated;
+      return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
+    });
+
+    const rawCanRender = computed(() => {
+      const full = fullRect.value;
+      const abs = absRect.value;
+      return (
+        Boolean(graphicsOutput()?.capabilities.supported) &&
+        abs.x === full.x &&
+        abs.y === full.y &&
+        abs.w === full.w &&
+        abs.h === full.h
+      );
+    });
+
+    const displayLines = computed<readonly string[]>(() => {
+      if (showingInitialLoadingText.value) return splitTextOutput(props.loadingText);
+      const current = graphic.value;
+      if (!current) return splitTextOutput(fallbackText());
+      if (current.type === "terminal" && rawCanRender.value) return markRaw([""]);
+      const text = current.type === "terminal" ? current.fallback : current.text;
+      const lines = splitTextOutput(text);
+      return hasVisibleOutput(lines) ? lines : splitTextOutput(fallbackText());
+    });
+
+    const currentStyle = computed<Style>(() => {
+      if (error.value) return props.errorStyle ?? props.style ?? defaultStyle.value;
+      if (showingInitialLoadingText.value) {
+        return props.loadingStyle ?? props.style ?? defaultStyle.value;
+      }
+      return props.style ?? defaultStyle.value;
+    });
+
+    useRenderNode(() => ({
+      zIndex: props.zIndex,
+      rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
+      deps: [
+        visible.value,
+        absRect.value,
+        fullRect.value,
+        displayLines.value,
+        currentStyle.value,
+        props.clear,
+        status.value,
+        error.value,
+        documentVersion.value,
+        rawCanRender.value,
+      ],
+      paint: (dirtyRows) => {
+        withTextWidthProvider(widthProvider, () => {
+          if (!visible.value) return;
+
+          const r = absRect.value;
+          const full = fullRect.value;
+          if (r.w <= 0 || r.h <= 0) return;
+
+          const style = currentStyle.value;
+          const out = displayLines.value;
+          const dx = Math.max(0, Math.floor(r.x - full.x));
+          const fullY = Math.floor(full.y);
+          const blank = props.clear ? spaces(r.w) : "";
+
+          const paintRow = (y: number) => {
+            if (y < r.y || y >= r.y + r.h) return;
+
+            const rowIndex = y - fullY;
+            if (rowIndex < 0 || rowIndex >= out.length) {
+              if (props.clear) terminal.write(blank, { x: r.x, y, style });
+              return;
+            }
+
+            const src = out[rowIndex] ?? "";
+            const clipped = dx > 0 ? sliceByCellsRange(src, dx, dx + r.w) : sliceByCells(src, r.w);
+            const value = props.clear ? padEndByCells(clipped, r.w) : clipped;
+            if (value || props.clear) terminal.write(value, { x: r.x, y, style });
+          };
+
+          if (dirtyRows?.length) {
+            for (const y of dirtyRows) paintRow(y);
+          } else {
+            for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+          }
+
+          const current = graphic.value;
+          const output = graphicsOutput();
+          if (
+            current?.type === "terminal" &&
+            output?.capabilities.supported &&
+            rawCanRender.value
+          ) {
+            output.queue({
+              id: rawId,
+              x: full.x,
+              y: full.y,
+              sequence: current.sequence,
+            });
+          }
+        });
+      },
+    }));
+
+    return () => h("span", rootProps);
+  },
+});

@@ -105,6 +105,7 @@
       "maturity": "experimental",
       "runtime": "browser-safe",
       "valueExports": [
+        "TAgentTerminalGraphic",
         "TAgentTranscript",
         "TBox",
         "TCommandPalette",
@@ -134,6 +135,8 @@
         "TVirtualMarkdown",
         "computeCommandPaletteMatchRanges",
         "createAppendOnlyLogStore",
+        "createIterm2InlineImageSequence",
+        "createKittyGraphicsSequence",
         "createMarkdownBlockSource",
         "createTLogDensityBucketsFromMarkers",
         "createTLogLevelPlugin",
@@ -142,6 +145,7 @@
         "createTLogOsc8LinkPlugin",
         "createTLogUrlPlugin",
         "detectTLogUrls",
+        "detectTerminalGraphicsCapabilities",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
         "markMermaidRenderErrorFatal",
@@ -174,6 +178,11 @@
         "AppendOnlyLogStore",
         "CreateAppendOnlyLogStoreOptions",
         "RowScrollMode",
+        "TAgentTerminalGraphicKind",
+        "TAgentTerminalGraphicProps",
+        "TAgentTerminalGraphicRenderResult",
+        "TAgentTerminalGraphicRenderer",
+        "TAgentTerminalGraphicRendererContext",
         "TCommandPaletteItem",
         "TCommandPaletteItemsProvider",
         "TCommandPaletteLoadErrorPayload",
@@ -250,6 +259,9 @@
         "TTranscriptVisualSegment",
         "TUserMessageSegment",
         "TUserMessageViewModel",
+        "TerminalGraphicsCapabilities",
+        "TerminalGraphicsPayload",
+        "TerminalGraphicsProtocol",
         "TuiMarkdownBlock",
         "TuiMarkdownBlockSource",
         "TuiMarkdownBlockSourceOptions",
@@ -292,6 +304,8 @@
         "STDOUT_RENDERER_CAPABILITIES",
         "createCliEventManager",
         "createDefaultTInputHostAdapter",
+        "createIterm2InlineImageSequence",
+        "createKittyGraphicsSequence",
         "createNodeMentionPathProvider",
         "createNodePathPickerProvider",
         "createOsc52ClipboardProvider",
@@ -300,6 +314,7 @@
         "createTInputHostPlugin",
         "createTerminalApp",
         "defaultTInputHostPlugin",
+        "detectTerminalGraphicsCapabilities",
         "getCliLatencyProfiler",
         "getStdoutRendererMetrics",
         "installNodeFileWriters",
@@ -336,6 +351,9 @@
         "TerminalCleanupHandle",
         "TerminalCleanupOptions",
         "TerminalCleanupSignalPolicy",
+        "TerminalGraphicsCapabilities",
+        "TerminalGraphicsPayload",
+        "TerminalGraphicsProtocol",
         "TerminalLinkOpenContext",
         "TerminalLinkOpenSource",
         "TerminalLinkOpener",
@@ -898,6 +916,105 @@
     }
   },
   "components": {
+    "TAgentTerminalGraphic": {
+      "entrypoint": "@simon_he/vue-tui/agent",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "kind",
+          "type": "TAgentTerminalGraphicKind",
+          "required": false,
+          "defaultValue": "\"image\""
+        },
+        {
+          "name": "fallback",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "loadingStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "errorStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "clear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "final",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "streaming",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "renderer",
+          "type": "TAgentTerminalGraphicRenderer",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "loadingText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Rendering terminal graphic...\""
+        }
+      ],
+      "events": []
+    },
     "TAgentTranscript": {
       "entrypoint": "@simon_he/vue-tui/agent",
       "maturity": "experimental",
