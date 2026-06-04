@@ -36,6 +36,7 @@ import {
   TInputBox,
   TJsonEditor,
   TKeyHint,
+  TMermaidText,
   TMultilineModal,
   TPathPicker,
   TPopover,
@@ -49,6 +50,7 @@ import {
   useLayout,
 } from "../src/vue.js";
 import { TMarkdownText, TVirtualMarkdown } from "../src/markdown.js";
+import { beautifulMermaidRenderer } from "../src/mermaid.js";
 import {
   TLogLinksPanel,
   TLogMinimap,
@@ -224,6 +226,13 @@ const markdown = [
   "| --- | --- |",
   "| build | fail |",
   "| test | ok |",
+].join("\n");
+const mermaid = [
+  "graph LR",
+  "  Input[User prompt] --> Plan{Need diagram?}",
+  "  Plan -- yes --> Mermaid[TMermaidText]",
+  "  Plan -- no --> Text[TText]",
+  "  Mermaid --> Terminal[Terminal cells]",
 ].join("\n");
 
 function frame(name: string, children: unknown, hint = "q or Ctrl-C exits"): unknown[] {
@@ -1056,6 +1065,25 @@ const demos: Demo[] = [
     group: "markdown",
     component: simple("TMarkdownText", () =>
       frame("TMarkdownText", h(TMarkdownText, { x: 0, y: 3, w: 62, h: 12, content: markdown })),
+    ),
+    rows: 18,
+  },
+  {
+    name: "TMermaidText",
+    group: "markdown",
+    component: simple("TMermaidText", () =>
+      frame(
+        "TMermaidText",
+        h(TMermaidText, {
+          x: 0,
+          y: 3,
+          w: 76,
+          h: 12,
+          content: mermaid,
+          options: { paddingX: 1, paddingY: 0 },
+          renderer: beautifulMermaidRenderer,
+        }),
+      ),
     ),
     rows: 18,
   },

@@ -887,6 +887,60 @@ describe("cli input", () => {
     vi.useRealTimers();
   });
 
+  it("does not leak SGR mouse bytes when ESC bracket prefix times out before continuation", () => {
+    vi.useFakeTimers();
+    const events: any[] = [];
+    const stdin = new FakeStdin() as any;
+    const stdout = new FakeStdout() as any;
+
+    const driver = createStdinDriver({
+      stdin,
+      stdout,
+      dispatch: (e) => {
+        events.push(e);
+      },
+      enableMouse: true,
+    });
+
+    stdin.emit("data", "\u001B[");
+    vi.advanceTimersByTime(60);
+    stdin.emit("data", "<65;49;36M");
+    driver.dispose();
+
+    expect(events.some((e) => e.type === "wheel" && e.cellX === 48 && e.cellY === 35)).toBe(true);
+    expect(events.some((e) => e.type === "keydown" && String(e.key).includes("<"))).toBe(false);
+    expect(events.some((e) => e.type === "keydown" && e.key === "6")).toBe(false);
+
+    vi.useRealTimers();
+  });
+
+  it("does not leak SGR mouse bytes when ESC bracket angle prefix times out before continuation", () => {
+    vi.useFakeTimers();
+    const events: any[] = [];
+    const stdin = new FakeStdin() as any;
+    const stdout = new FakeStdout() as any;
+
+    const driver = createStdinDriver({
+      stdin,
+      stdout,
+      dispatch: (e) => {
+        events.push(e);
+      },
+      enableMouse: true,
+    });
+
+    stdin.emit("data", "\u001B[<");
+    vi.advanceTimersByTime(60);
+    stdin.emit("data", "65;49;36M");
+    driver.dispose();
+
+    expect(events.some((e) => e.type === "wheel" && e.cellX === 48 && e.cellY === 35)).toBe(true);
+    expect(events.some((e) => e.type === "keydown" && e.key === "6")).toBe(false);
+    expect(events.some((e) => e.type === "keydown" && e.key === ";")).toBe(false);
+
+    vi.useRealTimers();
+  });
+
   it("does not leak SGR mouse bytes when ESC-repeat precedes a mouse report", () => {
     const events: any[] = [];
     const stdin = new FakeStdin() as any;

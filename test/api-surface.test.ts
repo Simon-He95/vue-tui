@@ -72,6 +72,8 @@ describe("public API surface", () => {
         "TLink",
         "TLinkifyText",
         "TList",
+        "TMermaid",
+        "TMermaidText",
         "TMultilineModal",
         "TPasswordInput",
         "TPathPicker",
@@ -106,6 +108,7 @@ describe("public API surface", () => {
         "createTheme",
         "linkifyTextSegments",
         "lintJsonText",
+        "markMermaidRenderErrorFatal",
         "padEndByCells",
         "resolveOverlayPlacement",
         "sliceByCells",
@@ -170,6 +173,42 @@ describe("public API surface", () => {
         "layoutMarkdownBlocks",
       ]
     `);
+  });
+
+  it("keeps mermaid entry exports intentional", async () => {
+    expect(await exportNames("../src/mermaid.js")).toMatchInlineSnapshot(`
+      [
+        "TBeautifulMermaid",
+        "TBeautifulMermaidText",
+        "TMermaid",
+        "TMermaidText",
+        "beautifulMermaidRenderer",
+        "createBeautifulMermaidRenderer",
+        "markMermaidRenderErrorFatal",
+      ]
+    `);
+  });
+
+  it("keeps agent mermaid entry exports intentional", async () => {
+    expect(await exportNames("../src/agent/mermaid.js")).toMatchInlineSnapshot(`
+      [
+        "TBeautifulMermaid",
+        "TBeautifulMermaidText",
+        "TMermaid",
+        "TMermaidText",
+        "beautifulMermaidRenderer",
+        "createBeautifulMermaidRenderer",
+        "markMermaidRenderErrorFatal",
+      ]
+    `);
+  });
+
+  it("keeps base Mermaid aliases stable", async () => {
+    const vue = await import("../src/vue.js");
+    const agent = await import("../src/agent.js");
+
+    expect(vue.TMermaid).toBe(vue.TMermaidText);
+    expect(agent.TMermaid).toBe(agent.TMermaidText);
   });
 
   it("keeps observability entry exports intentional", async () => {
@@ -260,6 +299,8 @@ describe("public API surface", () => {
         "TLogView",
         "TLogVirtualLinksPanel",
         "TLogVirtualSearchResults",
+        "TMermaid",
+        "TMermaidText",
         "TRenderPlane",
         "TSelect",
         "TText",
@@ -283,6 +324,7 @@ describe("public API surface", () => {
         "detectTLogUrls",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
+        "markMermaidRenderErrorFatal",
         "parseTLogAnnotatedText",
         "resolveTLogLinksPanelTheme",
         "resolveTLogMinimapTheme",

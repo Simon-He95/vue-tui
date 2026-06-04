@@ -1,6 +1,6 @@
 {
   "name": "@simon_he/vue-tui",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Vue 3 terminal UI components and renderers for browser DOM, CLI stdout, logs, markdown transcripts, and agent consoles",
   "keywords": [
     "agent-console",
@@ -58,6 +58,9 @@
       "core": [
         "./dist/core.d.ts"
       ],
+      "mermaid": [
+        "./dist/mermaid.d.ts"
+      ],
       "runtime": [
         "./dist/runtime.d.ts"
       ],
@@ -81,6 +84,9 @@
       ],
       "agent": [
         "./dist/agent.d.ts"
+      ],
+      "agent/mermaid": [
+        "./dist/agent/mermaid.d.ts"
       ]
     }
   },
@@ -185,6 +191,26 @@
         "default": "./dist/agent.cjs"
       }
     },
+    "./agent/mermaid": {
+      "import": {
+        "types": "./dist/agent/mermaid.d.ts",
+        "default": "./dist/agent/mermaid.js"
+      },
+      "require": {
+        "types": "./dist/agent/mermaid.d.cts",
+        "default": "./dist/agent/mermaid.cjs"
+      }
+    },
+    "./mermaid": {
+      "import": {
+        "types": "./dist/mermaid.d.ts",
+        "default": "./dist/mermaid.js"
+      },
+      "require": {
+        "types": "./dist/mermaid.d.cts",
+        "default": "./dist/mermaid.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -239,7 +265,7 @@
     "release:dry-run": "pnpm run release:check && pnpm run release:bench && pnpm run release:smoke && pnpm run release:pack-smoke",
     "release:pack": "rimraf .release && pnpm run build:checked && pnpm pack --pack-destination .release",
     "release:pack-smoke": "pnpm run release:pack && pnpm run test:package-contract:existing && pnpm run release:pack-smoke:existing",
-    "release:pack-smoke:existing": "node scripts/smoke-packed-package.mjs .release/*.tgz && node scripts/smoke-packed-ssr-import.mjs .release/*.tgz",
+    "release:pack-smoke:existing": "node scripts/smoke-packed-package.mjs .release/*.tgz && node scripts/smoke-packed-ssr-import.mjs .release/*.tgz && node scripts/smoke-packed-no-mermaid-peer.mjs .release/*.tgz",
     "release:smoke": "pnpm run example:tlog-view-lab && pnpm run example:agent-console:smoke && pnpm run example:agent-console:terminal:smoke && pnpm run example:basic:terminal-table:smoke",
     "start": "esno src/index.ts",
     "test": "vitest run",
@@ -270,13 +296,14 @@
     "bench:stdout-column-diff": "tsx scripts/bench-stdout-column-diff.ts"
   },
   "dependencies": {
-    "stream-markdown-parser": "1.0.0"
+    "stream-markdown-parser": "1.0.2"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.3",
     "@playwright/test": "^1.60.0",
     "@types/node": "^18.19.130",
     "@vitest/coverage-v8": "^4.1.8",
+    "beautiful-mermaid": "^1.1.3",
     "bumpp": "^8.2.1",
     "esbuild": "^0.20.2",
     "happy-dom": "^17.6.3",
@@ -296,7 +323,13 @@
     "vue": "^3.5.35"
   },
   "peerDependencies": {
+    "beautiful-mermaid": "^1.1.3",
     "vue": ">=3.3.0 <4"
+  },
+  "peerDependenciesMeta": {
+    "beautiful-mermaid": {
+      "optional": true
+    }
   },
   "lint-staged": {
     "*": "oxfmt --write",

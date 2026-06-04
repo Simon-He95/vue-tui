@@ -100,6 +100,16 @@ export type {
 } from "./components/link/host.js";
 export { linkifyTextSegments } from "./linkify.js";
 export type { TLinkifyOptions, TLinkifyProtocol, TLinkifySegment } from "./linkify.js";
+export { markMermaidRenderErrorFatal, TMermaid, TMermaidText } from "./components/TMermaidText.js";
+export type {
+  TMermaidAsciiOptions,
+  TMermaidAsciiTheme,
+  TMermaidRenderer,
+  TMermaidResolvedAsciiOptions,
+  TMermaidTextProps,
+  TMermaidTransientErrorClassifier,
+  TMermaidTransientErrorContext,
+} from "./components/TMermaidText.js";
 export { TMultilineModal } from "./components/TMultilineModal.js";
 export { TBreadcrumb, TKeyHint, TStatusBar } from "./components/TNavigation.js";
 export type { TBreadcrumbItem, TBreadcrumbSelectPayload } from "./components/TNavigation.js";

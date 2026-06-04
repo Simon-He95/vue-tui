@@ -9,6 +9,8 @@ const components = [
   "TText",
   "TLinkifyText",
   "TMarkdownText",
+  "TMermaid",
+  "TMermaidText",
   "TBadge",
   "TTag",
   "TDivider",
@@ -561,7 +563,7 @@ describe("docs: components coverage", () => {
     } finally {
       rmSync(tmp, { force: true, recursive: true });
     }
-  });
+  }, 15_000);
 
   it("only skips a missing API diff base for the first manifest baseline, non-CI no-tag clones, or explicit env", () => {
     const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");

@@ -20,6 +20,12 @@ if (!existingTarball) throw new Error("Usage: node scripts/smoke-packed-package.
 
 const packageJson = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
 const packageName = packageJson.name;
+const beautifulMermaidRange =
+  packageJson.peerDependencies?.["beautiful-mermaid"] ??
+  packageJson.devDependencies?.["beautiful-mermaid"];
+const beautifulMermaidSpec = beautifulMermaidRange
+  ? `beautiful-mermaid@${beautifulMermaidRange}`
+  : "beautiful-mermaid";
 
 function run(command, args, cwd = rootDir) {
   console.log(`$ ${[command, ...args].join(" ")}`);
@@ -177,6 +183,8 @@ import * as root from "${packageName}";
 import * as markdown from "${packageName}/markdown";
 import * as experimental from "${packageName}/experimental";
 import * as agent from "${packageName}/agent";
+import * as mermaid from "${packageName}/mermaid";
+import * as agentMermaid from "${packageName}/agent/mermaid";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -195,11 +203,30 @@ assert(typeof experimental.TVirtualList !== "undefined", "experimental ESM TVirt
 assert(typeof experimental.TLogView !== "undefined", "experimental ESM TLogView export is missing");
 assert(typeof agent.TAgentTranscript !== "undefined", "agent ESM transcript alias is missing");
 assert(typeof agent.TToolLogView !== "undefined", "agent ESM log alias is missing");
+assert(typeof agent.TMermaidText !== "undefined", "agent ESM Mermaid primitive is missing");
+assert(typeof mermaid.TMermaidText !== "undefined", "mermaid ESM TMermaidText export is missing");
+assert(
+  typeof mermaid.beautifulMermaidRenderer === "function",
+  "mermaid ESM renderer export is missing",
+);
+assert(
+  agentMermaid.TMermaidText === mermaid.TMermaidText,
+  "agent/mermaid ESM wrapper should mirror mermaid entry",
+);
 assert(STDOUT_RENDERER_CAPABILITIES.domRows === false, "stdout capabilities are missing");
 
 const terminal = createTerminal({ cols: 4, rows: 2 });
 assert(terminal, "createTerminal did not return a terminal");
 terminal.dispose();
+
+const renderedMermaid = await mermaid.beautifulMermaidRenderer("flowchart LR\\n  A --> B", {
+  colorMode: "none",
+  useAscii: true,
+});
+assert(
+  renderedMermaid.includes("A") && renderedMermaid.includes("B"),
+  "mermaid ESM renderer did not render output",
+);
 
 function terminalText(app) {
   const size = app.terminal.size();
@@ -261,6 +288,8 @@ const packageMetadata = require("${packageName}/package.json");
 const markdown = require("${packageName}/markdown");
 const experimental = require("${packageName}/experimental");
 const agent = require("${packageName}/agent");
+const mermaid = require("${packageName}/mermaid");
+const agentMermaid = require("${packageName}/agent/mermaid");
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -279,6 +308,16 @@ assert(typeof experimental.TVirtualList !== "undefined", "experimental CJS TVirt
 assert(typeof experimental.TLogView !== "undefined", "experimental CJS TLogView export is missing");
 assert(typeof agent.TAgentTranscript !== "undefined", "agent CJS transcript alias is missing");
 assert(typeof agent.TToolLogView !== "undefined", "agent CJS log alias is missing");
+assert(typeof agent.TMermaidText !== "undefined", "agent CJS Mermaid primitive is missing");
+assert(typeof mermaid.TMermaidText !== "undefined", "mermaid CJS TMermaidText export is missing");
+assert(
+  typeof mermaid.beautifulMermaidRenderer === "function",
+  "mermaid CJS renderer export is missing",
+);
+assert(
+  agentMermaid.TMermaidText === mermaid.TMermaidText,
+  "agent/mermaid CJS wrapper should mirror mermaid entry",
+);
 assert(cli.STDOUT_RENDERER_CAPABILITIES.domRows === false, "stdout capabilities are missing");
 
 const terminal = root.createTerminal({ cols: 4, rows: 2 });
@@ -293,6 +332,15 @@ function terminalText(app) {
 }
 
 async function main() {
+  const renderedMermaid = await mermaid.beautifulMermaidRenderer("flowchart LR\\n  A --> B", {
+    colorMode: "none",
+    useAscii: true,
+  });
+  assert(
+    renderedMermaid.includes("A") && renderedMermaid.includes("B"),
+    "mermaid CJS renderer did not render output",
+  );
+
   const log = experimental.createAppendOnlyLogStore({ maxLines: 8 });
   log.appendLines([
     "INFO consumer boot",
@@ -363,11 +411,28 @@ for (const packageManager of ["pnpm", "npm"]) {
 
   try {
     if (packageManager === "pnpm") {
-      run("pnpm", ["add", "--ignore-workspace", tarballInstallPath, `vue@${vueVersion}`], smokeDir);
+      run(
+        "pnpm",
+        [
+          "add",
+          "--ignore-workspace",
+          tarballInstallPath,
+          `vue@${vueVersion}`,
+          beautifulMermaidSpec,
+        ],
+        smokeDir,
+      );
     } else {
       run(
         "npm",
-        ["install", "--no-audit", "--no-fund", tarballInstallPath, `vue@${vueVersion}`],
+        [
+          "install",
+          "--no-audit",
+          "--no-fund",
+          tarballInstallPath,
+          `vue@${vueVersion}`,
+          beautifulMermaidSpec,
+        ],
         smokeDir,
       );
     }

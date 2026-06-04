@@ -12,6 +12,12 @@ const packageJson = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8
 const packageName = packageJson.name;
 const vueVersion = packageJson.devDependencies?.vue ?? packageJson.peerDependencies?.vue ?? "vue";
 const viteVersion = packageJson.devDependencies?.vite ?? "vite";
+const beautifulMermaidRange =
+  packageJson.peerDependencies?.["beautiful-mermaid"] ??
+  packageJson.devDependencies?.["beautiful-mermaid"];
+const beautifulMermaidSpec = beautifulMermaidRange
+  ? `beautiful-mermaid@${beautifulMermaidRange}`
+  : "beautiful-mermaid";
 const dir = mkdtempSync(join(tmpdir(), "vue-tui-ssr-import-smoke-"));
 
 function run(command, args) {
@@ -51,6 +57,8 @@ import * as vueEntry from "${packageName}/vue";
 import * as markdown from "${packageName}/markdown";
 import * as experimental from "${packageName}/experimental";
 import * as agent from "${packageName}/agent";
+import * as mermaid from "${packageName}/mermaid";
+import * as agentMermaid from "${packageName}/agent/mermaid";
 
 const ok = Boolean(
   root.createTerminal &&
@@ -61,7 +69,10 @@ const ok = Boolean(
     vueEntry.TerminalProvider &&
     markdown.TMarkdownText &&
     experimental.TVirtualList &&
-    agent.TAgentTranscript,
+    agent.TAgentTranscript &&
+    agent.TMermaidText &&
+    mermaid.TMermaidText &&
+    agentMermaid.TMermaidText,
 );
 
 if (!ok) throw new Error("SSR import smoke did not load every public import target");
@@ -79,6 +90,7 @@ console.log("vue-tui-ssr-import-smoke", ok);
     tarballPath,
     `vue@${vueVersion}`,
     `vite@${viteVersion}`,
+    beautifulMermaidSpec,
   ]);
   run("npx", ["vite", "build", "--ssr", "src/entry-server.ts"]);
   run("node", ["dist/entry-server.js"]);

@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       stream-markdown-parser:
-        specifier: 1.0.0
-        version: 1.0.0
+        specifier: 1.0.2
+        version: 1.0.2
     devDependencies:
       '@arethetypeswrong/core':
         specifier: ^0.18.3
@@ -24,6 +24,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.1.8
         version: 4.1.8(vitest@4.1.8)
+      beautiful-mermaid:
+        specifier: ^1.1.3
+        version: 1.1.3
       bumpp:
         specifier: ^8.2.1
         version: 8.2.1
@@ -1783,6 +1786,9 @@ packages:
   balanced-match@1.0.0:
     resolution: {integrity: sha512-9Y0g0Q8rmSt+H33DfKv7FOc3v+iRI+o1lbzt8jGcIosYW37IIW/2XVYq5NPdmaD5NQ59Nk26Kl/vZbwW9Fr8vg==}
 
+  beautiful-mermaid@1.1.3:
+    resolution: {integrity: sha512-TItrtrAyHp1vwFfFVYauWGrquouk/6SS21Aq3RsxindSYZODcN4xYrPZD6BiZRU+o5mKJzDPz9MUSMvELdylyg==}
+
   birpc@2.9.0:
     resolution: {integrity: sha512-KrayHS5pBi69Xi9JmvoqrIgYGDkD6mcSe/i6YKi3w5kekCLzrX4+nawcXqrj2tIp50Kw/mT/s3p+GVK0A0sKxw==}
 
@@ -1917,6 +1923,9 @@ packages:
 
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
+
+  elkjs@0.11.1:
+    resolution: {integrity: sha512-zxxR9k+rx5ktMwT/FwyLdPCrq7xN6e4VGGHH8hA01vVYKjTFik7nHOxBnAYtrgYUB1RpAiLvA1/U2YraWxyKKg==}
 
   emoji-regex-xs@1.0.0:
     resolution: {integrity: sha512-LRlerrMYoIDrT6jgpeZ2YYl/L8EulRTt5hQcYjy5AInh7HWXKimpqx68aknBFpGL2+/IcogTcaydJEgaTmOpDg==}
@@ -2613,8 +2622,8 @@ packages:
   std-env@4.1.0:
     resolution: {integrity: sha512-Rq7ybcX2RuC55r9oaPVEW7/xu3tj8u4GeBYHBWCychFtzMIr86A7e3PPEBPT37sHStKX3+TiX/Fr/ACmJLVlLQ==}
 
-  stream-markdown-parser@1.0.0:
-    resolution: {integrity: sha512-uOYQ8G9YFFtGM726fK77O/mJPYrwYHPy0DKBtk7bCPmkf06XwDVSOAFRTo2FsXnZ3vAaPBtxOgNGJ0CGieBcSQ==}
+  stream-markdown-parser@1.0.2:
+    resolution: {integrity: sha512-JrYxMYmi6z7n7Wo0gXn1+w815Sx+iQXg8hO96HtMqpG+enEyAkgp9b55P8NVQ2rsiE3ffo39AvhPo7PyE+iBOg==}
 
   string-argv@0.3.1:
     resolution: {integrity: sha512-a1uQGz7IyVy9YwhqjZIZu1c8JO8dNIe20xBmSS6qu9kv++k3JGzCVmprbNN5Kn+BgzD5E7YYwg1CcjuJMRNsvg==}
@@ -4190,6 +4199,11 @@ snapshots:
 
   balanced-match@1.0.0: {}
 
+  beautiful-mermaid@1.1.3:
+    dependencies:
+      elkjs: 0.11.1
+      entities: 7.0.1
+
   birpc@2.9.0: {}
 
   brace-expansion@1.1.11:
@@ -4294,6 +4308,8 @@ snapshots:
       pathe: 2.0.3
 
   eastasianwidth@0.2.0: {}
+
+  elkjs@0.11.1: {}
 
   emoji-regex-xs@1.0.0: {}
 
@@ -5106,7 +5122,7 @@ snapshots:
 
   std-env@4.1.0: {}
 
-  stream-markdown-parser@1.0.0:
+  stream-markdown-parser@1.0.2:
     dependencies:
       markdown-it-container: 4.0.0
       markdown-it-footnote: 4.0.0

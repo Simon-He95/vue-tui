@@ -1,4 +1,5 @@
 import { builtinModules } from "node:module";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { build } from "esbuild";
 
 const nodeBuiltins = Array.from(
@@ -40,6 +41,7 @@ await build({
     markdown: "src/markdown.ts",
     experimental: "src/experimental.ts",
     agent: "src/agent.ts",
+    mermaid: "src/mermaid.ts",
   },
   outdir: "dist",
   outExtension: { ".js": ".cjs" },
@@ -48,11 +50,25 @@ await build({
   platform: "neutral",
   target: ["es2020"],
   sourcemap: false,
+  // Keep dynamic import syntax in browser-facing CJS. The Mermaid bridge uses
+  // import("beautiful-mermaid") so CJS consumers can load the optional ESM peer
+  // lazily at render time instead of requiring it during entrypoint import.
+  supported: { "dynamic-import": true },
   // CJS intentionally bundles stream-markdown-parser because it only exposes
-  // ESM entrypoints. ESM keeps it external via tsdown.
-  external: ["vue"],
+  // ESM entrypoints. Keep beautiful-mermaid external so the CJS bridge can
+  // load the optional ESM peer through dynamic import at render time.
+  external: ["vue", "beautiful-mermaid"],
   plugins: [forbidNodeBuiltinsPlugin],
 });
+
+mkdirSync("dist/agent", { recursive: true });
+// Keep /agent/mermaid as a thin bridge over /mermaid so both entrypoints share
+// the same optional-peer loader/cache and exported component identities.
+writeFileSync("dist/agent/mermaid.js", `export * from "../mermaid.js";\n`);
+writeFileSync(
+  "dist/agent/mermaid.cjs",
+  `"use strict";\nmodule.exports = require("../mermaid.cjs");\n`,
+);
 
 await build({
   entryPoints: {

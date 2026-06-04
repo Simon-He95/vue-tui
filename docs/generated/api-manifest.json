@@ -1,5 +1,5 @@
 {
-  "packageVersion": "1.0.1",
+  "packageVersion": "1.1.0",
   "entrypoints": {
     "@simon_he/vue-tui": {
       "maturity": "public",
@@ -119,6 +119,8 @@
         "TLogView",
         "TLogVirtualLinksPanel",
         "TLogVirtualSearchResults",
+        "TMermaid",
+        "TMermaidText",
         "TRenderPlane",
         "TSelect",
         "TText",
@@ -142,6 +144,7 @@
         "detectTLogUrls",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
+        "markMermaidRenderErrorFatal",
         "parseTLogAnnotatedText",
         "resolveTLogLinksPanelTheme",
         "resolveTLogMinimapTheme",
@@ -220,6 +223,13 @@
         "TLogViewVisualIndexOptions",
         "TLogViewVisualIndexPayload",
         "TLogViewVisualIndexStatus",
+        "TMermaidAsciiOptions",
+        "TMermaidAsciiTheme",
+        "TMermaidRenderer",
+        "TMermaidResolvedAsciiOptions",
+        "TMermaidTextProps",
+        "TMermaidTransientErrorClassifier",
+        "TMermaidTransientErrorContext",
         "TThinkingViewModel",
         "TToolCallStatus",
         "TToolCallViewModel",
@@ -250,6 +260,28 @@
         "TuiMarkdownTableCellAlign",
         "TuiMarkdownVisualRow",
         "TuiMarkdownVisualSegment"
+      ]
+    },
+    "@simon_he/vue-tui/agent/mermaid": {
+      "maturity": "experimental",
+      "runtime": "browser-safe",
+      "valueExports": [
+        "TBeautifulMermaid",
+        "TBeautifulMermaidText",
+        "TMermaid",
+        "TMermaidText",
+        "beautifulMermaidRenderer",
+        "createBeautifulMermaidRenderer",
+        "markMermaidRenderErrorFatal"
+      ],
+      "typeExports": [
+        "TMermaidAsciiOptions",
+        "TMermaidAsciiTheme",
+        "TMermaidRenderer",
+        "TMermaidResolvedAsciiOptions",
+        "TMermaidTextProps",
+        "TMermaidTransientErrorClassifier",
+        "TMermaidTransientErrorContext"
       ]
     },
     "@simon_he/vue-tui/cli": {
@@ -561,6 +593,28 @@
         "TuiMarkdownVisualSegment"
       ]
     },
+    "@simon_he/vue-tui/mermaid": {
+      "maturity": "public",
+      "runtime": "browser-safe",
+      "valueExports": [
+        "TBeautifulMermaid",
+        "TBeautifulMermaidText",
+        "TMermaid",
+        "TMermaidText",
+        "beautifulMermaidRenderer",
+        "createBeautifulMermaidRenderer",
+        "markMermaidRenderErrorFatal"
+      ],
+      "typeExports": [
+        "TMermaidAsciiOptions",
+        "TMermaidAsciiTheme",
+        "TMermaidRenderer",
+        "TMermaidResolvedAsciiOptions",
+        "TMermaidTextProps",
+        "TMermaidTransientErrorClassifier",
+        "TMermaidTransientErrorContext"
+      ]
+    },
     "@simon_he/vue-tui/observability": {
       "maturity": "advanced",
       "runtime": "browser-safe",
@@ -682,6 +736,8 @@
         "TLink",
         "TLinkifyText",
         "TList",
+        "TMermaid",
+        "TMermaidText",
         "TMultilineModal",
         "TPasswordInput",
         "TPathPicker",
@@ -716,6 +772,7 @@
         "createTheme",
         "linkifyTextSegments",
         "lintJsonText",
+        "markMermaidRenderErrorFatal",
         "padEndByCells",
         "resolveOverlayPlacement",
         "sliceByCells",
@@ -782,6 +839,13 @@
         "TLinkifyOptions",
         "TLinkifyProtocol",
         "TLinkifySegment",
+        "TMermaidAsciiOptions",
+        "TMermaidAsciiTheme",
+        "TMermaidRenderer",
+        "TMermaidResolvedAsciiOptions",
+        "TMermaidTextProps",
+        "TMermaidTransientErrorClassifier",
+        "TMermaidTransientErrorContext",
         "TOverlayFocusStack",
         "TOverlayPlacement",
         "TOverlayPlacementOptions",
@@ -5491,6 +5555,314 @@
           "defaultValue": "undefined",
           "description": "Markdown theme token overrides for parsed blocks and inline segments.",
           "descriptionSource": "component-default"
+        }
+      ],
+      "events": []
+    },
+    "TMermaid": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "code",
+          "type": "string",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "loadingStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "errorStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "clear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "final",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "streaming",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "ascii",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "paddingX",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "paddingY",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "boxBorderPadding",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "options",
+          "type": "TMermaidAsciiOptions",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "renderer",
+          "type": "TMermaidRenderer",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "isTransientError",
+          "type": "TMermaidTransientErrorClassifier",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "loadingText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Rendering Mermaid diagram...\""
+        },
+        {
+          "name": "incompleteText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Waiting for complete Mermaid diagram...\""
+        },
+        {
+          "name": "missingDependencyText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Install the Mermaid renderer package and use TMermaidText from @simon_he/vue..."
+        },
+        {
+          "name": "errorText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Mermaid render failed\""
+        },
+        {
+          "name": "showErrorDetails",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        }
+      ],
+      "events": []
+    },
+    "TMermaidText": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\""
+        },
+        {
+          "name": "code",
+          "type": "string",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "loadingStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "errorStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "clear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "final",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "streaming",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "ascii",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "paddingX",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "paddingY",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "boxBorderPadding",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "options",
+          "type": "TMermaidAsciiOptions",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "renderer",
+          "type": "TMermaidRenderer",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "isTransientError",
+          "type": "TMermaidTransientErrorClassifier",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "loadingText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Rendering Mermaid diagram...\""
+        },
+        {
+          "name": "incompleteText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Waiting for complete Mermaid diagram...\""
+        },
+        {
+          "name": "missingDependencyText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Install the Mermaid renderer package and use TMermaidText from @simon_he/vue..."
+        },
+        {
+          "name": "errorText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Mermaid render failed\""
+        },
+        {
+          "name": "showErrorDetails",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
         }
       ],
       "events": []

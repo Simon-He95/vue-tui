@@ -12,6 +12,8 @@ const nodeBuiltins = Array.from(
   ]),
 );
 
+const browserExternals = ["vue", "stream-markdown-parser", "beautiful-mermaid"];
+
 export default defineConfig([
   {
     target: "es2020",
@@ -25,12 +27,14 @@ export default defineConfig([
       markdown: "src/markdown.ts",
       experimental: "src/experimental.ts",
       agent: "src/agent.ts",
+      "agent/mermaid": "src/agent/mermaid.ts",
+      mermaid: "src/mermaid.ts",
     },
     format: ["esm"],
     clean: false,
     dts: false,
     platform: "neutral",
-    external: ["vue", "stream-markdown-parser"],
+    external: browserExternals,
   },
   {
     target: "node16",

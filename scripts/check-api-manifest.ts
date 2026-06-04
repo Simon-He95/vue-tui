@@ -37,8 +37,13 @@ const expectedEntrypoints: Record<string, { maturity: Maturity; runtime: Runtime
   "@simon_he/vue-tui/observability": { maturity: "advanced", runtime: "browser-safe" },
   "@simon_he/vue-tui/cli": { maturity: "public", runtime: "node-only" },
   "@simon_he/vue-tui/markdown": { maturity: "public", runtime: "browser-safe" },
+  "@simon_he/vue-tui/mermaid": { maturity: "public", runtime: "browser-safe" },
   "@simon_he/vue-tui/experimental": { maturity: "experimental", runtime: "browser-safe" },
   "@simon_he/vue-tui/agent": { maturity: "experimental", runtime: "browser-safe" },
+  "@simon_he/vue-tui/agent/mermaid": {
+    maturity: "experimental",
+    runtime: "browser-safe",
+  },
 };
 
 for (const [specifier, expected] of Object.entries(expectedEntrypoints)) {

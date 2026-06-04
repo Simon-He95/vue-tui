@@ -13,6 +13,8 @@ const browserFacingJsEntries = [
   "markdown.js",
   "experimental.js",
   "agent.js",
+  "agent/mermaid.js",
+  "mermaid.js",
   "index.cjs",
   "core.cjs",
   "runtime.cjs",
@@ -22,6 +24,8 @@ const browserFacingJsEntries = [
   "markdown.cjs",
   "experimental.cjs",
   "agent.cjs",
+  "agent/mermaid.cjs",
+  "mermaid.cjs",
 ];
 const browserFacingDtsFiles = [
   "index.d.ts",
@@ -33,6 +37,8 @@ const browserFacingDtsFiles = [
   "markdown.d.ts",
   "experimental.d.ts",
   "agent.d.ts",
+  "agent/mermaid.d.ts",
+  "mermaid.d.ts",
   "index.d.cts",
   "core.d.cts",
   "runtime.d.cts",
@@ -42,6 +48,8 @@ const browserFacingDtsFiles = [
   "markdown.d.cts",
   "experimental.d.cts",
   "agent.d.cts",
+  "agent/mermaid.d.cts",
+  "mermaid.d.cts",
 ];
 
 function walk(dir, out = []) {

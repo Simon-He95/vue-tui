@@ -19,6 +19,7 @@ test("basic browser example renders and handles input", async ({ page }) => {
 
   const container = page.locator("[data-vt-container]");
   await expect(container).toBeVisible();
+  await page.getByRole("tab", { name: "基础交互" }).click();
   await expect(container).toContainText("vue-terminal demo");
   await expect(container).toContainText("Reactive count: 0");
 

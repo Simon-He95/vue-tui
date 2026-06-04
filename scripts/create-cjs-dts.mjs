@@ -12,6 +12,8 @@ const entries = [
   "markdown",
   "experimental",
   "agent",
+  "agent/mermaid",
+  "mermaid",
 ];
 
 for (const entry of entries) {

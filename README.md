@@ -64,10 +64,12 @@ Development, release validation, and documentation builds are run on Node.js 20 
 | `@simon_he/vue-tui/observability` | Advanced     | Frame perf store, profiler hooks, and trace helpers                                                                         |
 | `@simon_he/vue-tui/cli`           | Public       | Node-only headless Vue app runtime, stdin driver, stdout renderer, path provider, recording, and terminal clipboard helpers |
 | `@simon_he/vue-tui/markdown`      | Public       | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources                   |
+| `@simon_he/vue-tui/mermaid`       | Public       | Optional `beautiful-mermaid` bridge and wrapper for `TMermaidText`                                                          |
 | `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`, `TTranscriptView`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins |
 | `@simon_he/vue-tui/agent`         | Experimental | Agent/console transcript, tool-call header, log, markdown, virtual list, render plane, and overlay component aggregation    |
+| `@simon_he/vue-tui/agent/mermaid` | Experimental | Agent namespace optional `beautiful-mermaid` bridge and wrapper for `TMermaidText`                                          |
 
-The stable surface is terminal core, DOM rendering, CLI runtime, basic Vue components, and markdown APIs. High-throughput log, virtualization, and agent/console aggregation APIs stay under `/experimental` or `/agent` until their public surface settles; keep those imports isolated in application code.
+The stable surface is terminal core, DOM rendering, CLI runtime, basic Vue components, markdown APIs, and the optional Mermaid bridge. High-throughput log, virtualization, and agent/console aggregation APIs stay under `/experimental` or `/agent` until their public surface settles; keep those imports isolated in application code. Use `/agent/mermaid` when agent code wants the optional Mermaid wrapper without changing the `/agent` main entrypoint.
 
 Do not deep import from `@simon_he/vue-tui/dist/...`; only the entry points above are part of the supported package contract.
 
@@ -229,18 +231,22 @@ Unhandled promise rejections stay host-owned by default. Setting `cleanupOnUnhan
 
 ## Components
 
-| Area           | Import                           | Components / APIs                                                                                                                                                          |
-| -------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stable layout  | `@simon_he/vue-tui`              | `TBox`, `TView`                                                                                                                                                            |
-| Stable text    | `@simon_he/vue-tui`              | `TText`, `TLink`, `TLinkifyText`                                                                                                                                           |
-| Stable input   | `@simon_he/vue-tui`              | `TInput`, `TList`, `TSelect`                                                                                                                                               |
-| Stable overlay | `@simon_he/vue-tui`              | `TDialog`                                                                                                                                                                  |
-| Vue extended   | `@simon_he/vue-tui/vue`          | `TAnchor`, `TFlow`, `TRenderPlane`, `TRenderLayer`, `TTransition`, `TInputBox`, `TPathPicker`, `TJsonEditor`, `TMultilineModal`, `TDebugOverlay`, composables, router APIs |
-| Markdown       | `@simon_he/vue-tui/markdown`     | `TMarkdownText`, `TVirtualMarkdown`                                                                                                                                        |
-| Experimental   | `@simon_he/vue-tui/experimental` | `TVirtualList`, `TTranscriptView`, `TLogView`, `TLogSearchBar`, `TLogLinksPanel`, `TLogScrollbar`, `TLogMinimap`                                                           |
-| Agent console  | `@simon_he/vue-tui/agent`        | `TAgentTranscript`, `TToolCallView`, `TToolLogView`, `TVirtualMarkdown`, `TVirtualList`, `TRenderPlane`                                                                    |
-| Runtime        | `@simon_he/vue-tui/runtime`      | runtime, event, and selection APIs                                                                                                                                         |
-| CLI            | `@simon_he/vue-tui/cli`          | `createTerminalApp`, `createStdoutRenderer`, `createStdinDriver`, Node host adapters                                                                                       |
+| Area           | Import                            | Components / APIs                                                                                                                                                          |
+| -------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stable layout  | `@simon_he/vue-tui`               | `TBox`, `TView`                                                                                                                                                            |
+| Stable text    | `@simon_he/vue-tui`               | `TText`, `TLink`, `TLinkifyText`                                                                                                                                           |
+| Stable input   | `@simon_he/vue-tui`               | `TInput`, `TList`, `TSelect`                                                                                                                                               |
+| Stable overlay | `@simon_he/vue-tui`               | `TDialog`                                                                                                                                                                  |
+| Vue extended   | `@simon_he/vue-tui/vue`           | `TAnchor`, `TFlow`, `TRenderPlane`, `TRenderLayer`, `TTransition`, `TInputBox`, `TPathPicker`, `TJsonEditor`, `TMultilineModal`, `TDebugOverlay`, composables, router APIs |
+| Markdown       | `@simon_he/vue-tui/markdown`      | `TMarkdownText`, `TVirtualMarkdown`                                                                                                                                        |
+| Mermaid        | `@simon_he/vue-tui/mermaid`       | `beautifulMermaidRenderer`, `TMermaid`, `TMermaidText`, `TBeautifulMermaidText`                                                                                            |
+| Experimental   | `@simon_he/vue-tui/experimental`  | `TVirtualList`, `TTranscriptView`, `TLogView`, `TLogSearchBar`, `TLogLinksPanel`, `TLogScrollbar`, `TLogMinimap`                                                           |
+| Agent console  | `@simon_he/vue-tui/agent`         | `TAgentTranscript`, `TToolCallView`, `TToolLogView`, `TVirtualMarkdown`, `TVirtualList`, `TRenderPlane`                                                                    |
+| Agent Mermaid  | `@simon_he/vue-tui/agent/mermaid` | `beautifulMermaidRenderer`, `TMermaid`, `TMermaidText`, `TBeautifulMermaidText`                                                                                            |
+| Runtime        | `@simon_he/vue-tui/runtime`       | runtime, event, and selection APIs                                                                                                                                         |
+| CLI            | `@simon_he/vue-tui/cli`           | `createTerminalApp`, `createStdoutRenderer`, `createStdinDriver`, Node host adapters                                                                                       |
+
+For streaming Mermaid source, pass `streaming` with `final`. When `streaming=true` and `final=false`, transient renderer errors do not replace the last successfully rendered diagram; if no diagram has rendered yet, `incompleteText` is shown until the source becomes renderable or `final=true` surfaces the final error.
 
 This table is a category overview. The generated API reference for root, `/vue`, and `/experimental` components lives in [docs/generated/components-api.md](./docs/generated/components-api.md) for humans and [docs/generated/api-manifest.json](./docs/generated/api-manifest.json) for CI, release checks, and README/docs drift checks; the manifest also tracks package entrypoint exports.
 
@@ -341,6 +347,7 @@ pnpm run release:dry-run
 
 - The published package ships `dist` only.
 - Root, core, runtime, DOM renderer, observability, Vue, CLI, markdown, experimental, and agent entrypoints are available as ESM, CJS, and type declarations after build.
+- The Mermaid bridge entrypoints ship ESM, CJS, and type declarations.
 - The root browser/core API does not require a Node runtime, but CLI usage expects a Node-like stdout/stdin environment.
 - Terminal emoji and East Asian width behavior still depends on the user terminal and font.
 

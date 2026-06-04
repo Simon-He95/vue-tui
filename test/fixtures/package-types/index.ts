@@ -36,6 +36,9 @@ import {
   TFlow,
   TInputBox,
   TJsonEditor,
+  markMermaidRenderErrorFatal,
+  TMermaid,
+  TMermaidText,
   TMultilineModal,
   TPathPicker,
   TRenderLayer,
@@ -49,6 +52,11 @@ import {
   type SelectOptionWithStyle as VueSelectOptionWithStyle,
   type TFormHandle,
   type TInputPlugin,
+  type TMermaidAsciiOptions,
+  type TMermaidRenderer,
+  type TMermaidTextProps as VueMermaidTextProps,
+  type TMermaidTransientErrorClassifier,
+  type TMermaidTransientErrorContext,
 } from "@simon_he/vue-tui/vue";
 
 import {
@@ -76,15 +84,38 @@ import {
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import {
   TAgentTranscript,
+  markMermaidRenderErrorFatal as markAgentMermaidRenderErrorFatal,
+  TMermaid as AgentMermaid,
+  TMermaidText as AgentMermaidText,
   computeCommandPaletteMatchRanges,
   type TCommandPaletteItem as AgentTCommandPaletteItem,
   type TCommandPaletteMatchRange,
+  type TMermaidTransientErrorClassifier as AgentMermaidTransientErrorClassifier,
+  type TMermaidTextProps as AgentMermaidTextProps,
   TThinkingView,
   TToolCallView,
   TToolLogView,
   TUserMessageView,
   type TToolCallViewSlotProps,
 } from "@simon_he/vue-tui/agent";
+import {
+  TMermaid as BeautifulMermaid,
+  TMermaidText as BeautifulMermaidText,
+  TBeautifulMermaidText,
+  beautifulMermaidRenderer,
+  createBeautifulMermaidRenderer,
+  markMermaidRenderErrorFatal as markMermaidEntryRenderErrorFatal,
+  type TMermaidTransientErrorContext as MermaidEntryTransientErrorContext,
+  type TMermaidTextProps as MermaidEntryTextProps,
+  type TMermaidTransientErrorClassifier as MermaidEntryTransientErrorClassifier,
+} from "@simon_he/vue-tui/mermaid";
+import {
+  TMermaid as AgentBeautifulMermaid,
+  TMermaidText as AgentBeautifulMermaidText,
+  beautifulMermaidRenderer as agentBeautifulMermaidRenderer,
+  markMermaidRenderErrorFatal as markAgentBeautifulMermaidRenderErrorFatal,
+  type TMermaidTransientErrorClassifier as AgentBeautifulMermaidTransientErrorClassifier,
+} from "@simon_he/vue-tui/agent/mermaid";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
 const domOptions: DomRendererOptions = { links: true };
@@ -131,6 +162,34 @@ const rootCommandPaletteRanges = computeRootCommandPaletteMatchRanges("Open work
 const vueCommandPaletteRanges = computeVueCommandPaletteMatchRanges("Open workspace", "open");
 const vueDialogButton: VueDialogButton = { label: "OK" };
 const vueSelectOption: VueSelectOptionWithStyle = { label: "Remote", value: "remote" };
+const mermaidOptions: TMermaidAsciiOptions = { paddingX: 1 };
+const mermaidRenderer: TMermaidRenderer = (code, options) =>
+  `${code}:${options.colorMode}:${options.useAscii ? "ascii" : "unicode"}`;
+const mermaidTransientErrorContext: TMermaidTransientErrorContext = {
+  code: "graph LR\n  A -->",
+  final: false,
+  streaming: true,
+};
+const mermaidTransientErrorClassifier: TMermaidTransientErrorClassifier = (_error, context) =>
+  context.streaming && !context.final;
+const mermaidTextProps: VueMermaidTextProps = { x: 0, y: 0, w: 12 };
+const agentMermaidTextProps: AgentMermaidTextProps = mermaidTextProps;
+const agentMermaidTransientErrorClassifier: AgentMermaidTransientErrorClassifier =
+  mermaidTransientErrorClassifier;
+const mermaidEntryTextProps: MermaidEntryTextProps = mermaidTextProps;
+const mermaidEntryTransientErrorContext: MermaidEntryTransientErrorContext =
+  mermaidTransientErrorContext;
+const mermaidEntryTransientErrorClassifier: MermaidEntryTransientErrorClassifier =
+  mermaidTransientErrorClassifier;
+const agentBeautifulMermaidTransientErrorClassifier: AgentBeautifulMermaidTransientErrorClassifier =
+  mermaidTransientErrorClassifier;
+const createdMermaidRenderer = createBeautifulMermaidRenderer();
+const fatalMermaidError = markMermaidRenderErrorFatal(new Error("fatal"));
+const fatalAgentMermaidError = markAgentMermaidRenderErrorFatal(new Error("fatal-agent"));
+const fatalMermaidEntryError = markMermaidEntryRenderErrorFatal(new Error("fatal-entry"));
+const fatalAgentBeautifulMermaidError = markAgentBeautifulMermaidRenderErrorFatal(
+  new Error("fatal-agent-entry"),
+);
 const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
 const agentCommandPaletteItem: AgentTCommandPaletteItem = {
   label: "Open",
@@ -167,11 +226,20 @@ console.log(
   TFlow,
   TInputBox,
   TJsonEditor,
+  TMermaid,
+  TMermaidText,
   TMultilineModal,
   TPathPicker,
   TRenderLayer,
   TRenderPlane,
   TTransition,
+  AgentMermaid,
+  AgentMermaidText,
+  BeautifulMermaid,
+  BeautifulMermaidText,
+  AgentBeautifulMermaid,
+  AgentBeautifulMermaidText,
+  TBeautifulMermaidText,
   useTerminal,
   createDefaultTInputHostAdapter,
   defaultTInputHostPlugin,
@@ -197,6 +265,24 @@ console.log(
   vueCommandPaletteRanges,
   vueDialogButton,
   vueSelectOption,
+  mermaidOptions,
+  mermaidRenderer,
+  mermaidTransientErrorContext,
+  mermaidTransientErrorClassifier,
+  mermaidTextProps,
+  agentMermaidTextProps,
+  agentMermaidTransientErrorClassifier,
+  mermaidEntryTextProps,
+  mermaidEntryTransientErrorContext,
+  mermaidEntryTransientErrorClassifier,
+  agentBeautifulMermaidTransientErrorClassifier,
+  beautifulMermaidRenderer,
+  agentBeautifulMermaidRenderer,
+  createdMermaidRenderer,
+  fatalMermaidError,
+  fatalAgentMermaidError,
+  fatalMermaidEntryError,
+  fatalAgentBeautifulMermaidError,
   agentCommandPaletteItem,
   agentCommandPaletteRanges,
 );

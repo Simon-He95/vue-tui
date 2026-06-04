@@ -17,6 +17,8 @@ const distCli = resolve("dist/cli.js");
 const distMarkdown = resolve("dist/markdown.js");
 const distExperimental = resolve("dist/experimental.js");
 const distAgent = resolve("dist/agent.js");
+const distAgentMermaid = resolve("dist/agent/mermaid.js");
+const distMermaid = resolve("dist/mermaid.js");
 const distIndexCjs = resolve("dist/index.cjs");
 const distCoreCjs = resolve("dist/core.cjs");
 const distRuntimeCjs = resolve("dist/runtime.cjs");
@@ -26,6 +28,8 @@ const distVueCjs = resolve("dist/vue.cjs");
 const distMarkdownCjs = resolve("dist/markdown.cjs");
 const distExperimentalCjs = resolve("dist/experimental.cjs");
 const distAgentCjs = resolve("dist/agent.cjs");
+const distAgentMermaidCjs = resolve("dist/agent/mermaid.cjs");
+const distMermaidCjs = resolve("dist/mermaid.cjs");
 const distIndexCjsTypes = resolve("dist/index.d.cts");
 const distCoreCjsTypes = resolve("dist/core.d.cts");
 const distRuntimeCjsTypes = resolve("dist/runtime.d.cts");
@@ -36,6 +40,8 @@ const distCliCjsTypes = resolve("dist/cli.d.cts");
 const distMarkdownCjsTypes = resolve("dist/markdown.d.cts");
 const distExperimentalCjsTypes = resolve("dist/experimental.d.cts");
 const distAgentCjsTypes = resolve("dist/agent.d.cts");
+const distAgentMermaidCjsTypes = resolve("dist/agent/mermaid.d.cts");
+const distMermaidCjsTypes = resolve("dist/mermaid.d.cts");
 const distTypes = resolve("dist/index.d.ts");
 const distCoreTypes = resolve("dist/core.d.ts");
 const distRuntimeTypes = resolve("dist/runtime.d.ts");
@@ -46,6 +52,8 @@ const distCliTypes = resolve("dist/cli.d.ts");
 const distMarkdownTypes = resolve("dist/markdown.d.ts");
 const distExperimentalTypes = resolve("dist/experimental.d.ts");
 const distAgentTypes = resolve("dist/agent.d.ts");
+const distAgentMermaidTypes = resolve("dist/agent/mermaid.d.ts");
+const distMermaidTypes = resolve("dist/mermaid.d.ts");
 const requireDistExports = process.env.VUE_TUI_REQUIRE_DIST_EXPORTS === "1";
 const forbiddenNodeBuiltins = new Set([
   ...builtinModules,
@@ -141,6 +149,27 @@ describe("package exports", () => {
     expect(source).not.toMatch(/from "\.\/cli\//);
   });
 
+  it("keeps beautiful-mermaid out of base vue and agent entries", () => {
+    const files = requireDistExports
+      ? [distVue, distAgent, distVueCjs, distAgentCjs]
+      : [resolve("src/vue.ts"), resolve("src/agent.ts")];
+
+    for (const file of files) {
+      expect(readFileSync(file, "utf8")).not.toContain("beautiful-mermaid");
+    }
+  });
+
+  it.skipIf(!requireDistExports)("keeps the optional Mermaid peer lazy in built CJS output", () => {
+    const mermaidCjs = readFileSync(distMermaidCjs, "utf8");
+    const agentMermaidCjs = readFileSync(distAgentMermaidCjs, "utf8");
+
+    expect(mermaidCjs).toContain('import("beautiful-mermaid")');
+    expect(mermaidCjs).not.toMatch(/require\(["']beautiful-mermaid["']\)/);
+
+    expect(agentMermaidCjs).toContain('require("../mermaid.cjs")');
+    expect(agentMermaidCjs).not.toMatch(/require\(["']beautiful-mermaid["']\)/);
+  });
+
   it("detects bare Node builtins in browser forbidden code scans", () => {
     for (const bad of [
       `const fs = require("fs")`,
@@ -192,6 +221,8 @@ describe("package exports", () => {
     const markdown = await import("../src/markdown.js");
     const experimental = await import("../src/experimental.js");
     const agent = await import("../src/agent.js");
+    const agentMermaid = await import("../src/agent/mermaid.js");
+    const mermaid = await import("../src/mermaid.js");
 
     expect("createTerminalApp" in root).toBe(false);
     expect("createStdoutRenderer" in root).toBe(false);
@@ -266,6 +297,8 @@ describe("package exports", () => {
       "TLink",
       "TLinkifyText",
       "TList",
+      "TMermaid",
+      "TMermaidText",
       "TMultilineModal",
       "TPasswordInput",
       "TPathPicker",
@@ -300,6 +333,7 @@ describe("package exports", () => {
       "createTheme",
       "linkifyTextSegments",
       "lintJsonText",
+      "markMermaidRenderErrorFatal",
       "padEndByCells",
       "resolveOverlayPlacement",
       "sliceByCells",
@@ -397,6 +431,8 @@ describe("package exports", () => {
       "TLogView",
       "TLogVirtualLinksPanel",
       "TLogVirtualSearchResults",
+      "TMermaid",
+      "TMermaidText",
       "TRenderPlane",
       "TSelect",
       "TText",
@@ -420,6 +456,7 @@ describe("package exports", () => {
       "detectTLogUrls",
       "dispatchTLogPluginLinkAction",
       "getTLogPluginMetadata",
+      "markMermaidRenderErrorFatal",
       "parseTLogAnnotatedText",
       "resolveTLogLinksPanelTheme",
       "resolveTLogMinimapTheme",
@@ -445,6 +482,16 @@ describe("package exports", () => {
       "useTLogSearchResultsPage",
       "useTLogVirtualSearchResults",
     ]);
+    expect(Object.keys(mermaid).sort()).toEqual([
+      "TBeautifulMermaid",
+      "TBeautifulMermaidText",
+      "TMermaid",
+      "TMermaidText",
+      "beautifulMermaidRenderer",
+      "createBeautifulMermaidRenderer",
+      "markMermaidRenderErrorFatal",
+    ]);
+    expect(Object.keys(agentMermaid).sort()).toEqual(Object.keys(mermaid).sort());
     expect(Object.keys(cli).sort()).toEqual([
       "HEADLESS_RENDERER_CAPABILITIES",
       "STDOUT_RENDERER_CAPABILITIES",
@@ -556,7 +603,53 @@ describe("package exports", () => {
     expect(agent.TUserMessageView).toBeTruthy();
     expect(agent.TVirtualMarkdown).toBe(markdown.TVirtualMarkdown);
     expect(agent.createMarkdownBlockSource).toBe(markdown.createMarkdownBlockSource);
+    expect(agent.TMermaidText).toBe(vue.TMermaidText);
+    expect(agent.markMermaidRenderErrorFatal).toBe(vue.markMermaidRenderErrorFatal);
+    expect(mermaid.TMermaidText).toBe(mermaid.TBeautifulMermaidText);
+    expect(mermaid.TMermaid).toBe(mermaid.TBeautifulMermaid);
+    expect(mermaid.createBeautifulMermaidRenderer).toBeTruthy();
+    expect(mermaid.markMermaidRenderErrorFatal).toBe(vue.markMermaidRenderErrorFatal);
+    expect(agentMermaid.TMermaidText).toBe(mermaid.TMermaidText);
+    expect(agentMermaid.TMermaid).toBe(mermaid.TMermaid);
+    expect(agentMermaid.beautifulMermaidRenderer).toBe(mermaid.beautifulMermaidRenderer);
+    expect(agentMermaid.markMermaidRenderErrorFatal).toBe(mermaid.markMermaidRenderErrorFatal);
   });
+
+  it.skipIf(!requireDistExports)(
+    "loads the optional Mermaid peer through the built CJS bridge at render time",
+    async () => {
+      expect(existsSync(distMermaidCjs)).toBe(true);
+
+      const require = createRequire(import.meta.url);
+      const mermaid = require(distMermaidCjs) as typeof import("../src/mermaid.js");
+
+      const rendered = await mermaid.beautifulMermaidRenderer("flowchart LR\n  A --> B", {
+        colorMode: "none",
+        useAscii: true,
+      });
+
+      expect(rendered).toContain("A");
+      expect(rendered).toContain("B");
+    },
+  );
+
+  it.skipIf(!requireDistExports)(
+    "loads the optional Mermaid peer through the built agent CJS bridge at render time",
+    async () => {
+      expect(existsSync(distAgentMermaidCjs)).toBe(true);
+
+      const require = createRequire(import.meta.url);
+      const mermaid = require(distAgentMermaidCjs) as typeof import("../src/agent/mermaid.js");
+
+      const rendered = await mermaid.beautifulMermaidRenderer("flowchart LR\n  A --> B", {
+        colorMode: "none",
+        useAscii: true,
+      });
+
+      expect(rendered).toContain("A");
+      expect(rendered).toContain("B");
+    },
+  );
 
   it("keeps existing agent command palette exports", async () => {
     const agent = await import("../src/agent.js");
@@ -646,7 +739,9 @@ describe("package exports", () => {
           import * as markdown from "./src/markdown.ts";
           import * as experimental from "./src/experimental.ts";
           import * as agent from "./src/agent.ts";
-          console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental, agent);
+          import * as agentMermaid from "./src/agent/mermaid.ts";
+          import * as mermaid from "./src/mermaid.ts";
+          console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental, agent, agentMermaid, mermaid);
         `,
         resolveDir: process.cwd(),
         sourcefile: "vue-tui-browser-smoke.ts",
@@ -655,7 +750,7 @@ describe("package exports", () => {
       write: false,
       platform: "browser",
       format: "esm",
-      external: ["vue"],
+      external: ["vue", "beautiful-mermaid"],
       plugins: [forbidNodeBuiltins],
     });
     const output = result.outputFiles
@@ -671,6 +766,8 @@ describe("package exports", () => {
       expect(existsSync(distMarkdown)).toBe(true);
       expect(existsSync(distExperimental)).toBe(true);
       expect(existsSync(distAgent)).toBe(true);
+      expect(existsSync(distAgentMermaid)).toBe(true);
+      expect(existsSync(distMermaid)).toBe(true);
 
       const { build } = await import("esbuild");
       const result = await build({
@@ -685,7 +782,9 @@ describe("package exports", () => {
             import * as markdown from "./dist/markdown.js";
             import * as experimental from "./dist/experimental.js";
             import * as agent from "./dist/agent.js";
-            console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental, agent);
+            import * as agentMermaid from "./dist/agent/mermaid.js";
+            import * as mermaid from "./dist/mermaid.js";
+            console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental, agent, agentMermaid, mermaid);
           `,
           resolveDir: process.cwd(),
           sourcefile: "vue-tui-dist-browser-smoke.ts",
@@ -694,7 +793,7 @@ describe("package exports", () => {
         write: false,
         platform: "browser",
         format: "esm",
-        external: ["vue"],
+        external: ["vue", "beautiful-mermaid"],
         plugins: [forbidNodeBuiltins],
       });
       const output = result.outputFiles
@@ -715,6 +814,8 @@ describe("package exports", () => {
       distMarkdown,
       distExperimental,
       distAgent,
+      distAgentMermaid,
+      distMermaid,
       distIndexCjs,
       distCoreCjs,
       distRuntimeCjs,
@@ -724,6 +825,8 @@ describe("package exports", () => {
       distMarkdownCjs,
       distExperimentalCjs,
       distAgentCjs,
+      distAgentMermaidCjs,
+      distMermaidCjs,
       distIndexCjsTypes,
       distCoreCjsTypes,
       distRuntimeCjsTypes,
@@ -733,6 +836,8 @@ describe("package exports", () => {
       distMarkdownCjsTypes,
       distExperimentalCjsTypes,
       distAgentCjsTypes,
+      distAgentMermaidCjsTypes,
+      distMermaidCjsTypes,
       distTypes,
       distCoreTypes,
       distRuntimeTypes,
@@ -742,6 +847,8 @@ describe("package exports", () => {
       distMarkdownTypes,
       distExperimentalTypes,
       distAgentTypes,
+      distAgentMermaidTypes,
+      distMermaidTypes,
     ]) {
       expect(existsSync(file)).toBe(true);
       expectNoBrowserForbiddenCode(file);
@@ -759,6 +866,8 @@ describe("package exports", () => {
     expect(existsSync(distMarkdown)).toBe(true);
     expect(existsSync(distExperimental)).toBe(true);
     expect(existsSync(distAgent)).toBe(true);
+    expect(existsSync(distAgentMermaid)).toBe(true);
+    expect(existsSync(distMermaid)).toBe(true);
     expect(existsSync(distIndexCjsTypes)).toBe(true);
     expect(existsSync(distCoreCjsTypes)).toBe(true);
     expect(existsSync(distRuntimeCjsTypes)).toBe(true);
@@ -769,6 +878,8 @@ describe("package exports", () => {
     expect(existsSync(distMarkdownCjsTypes)).toBe(true);
     expect(existsSync(distExperimentalCjsTypes)).toBe(true);
     expect(existsSync(distAgentCjsTypes)).toBe(true);
+    expect(existsSync(distAgentMermaidCjsTypes)).toBe(true);
+    expect(existsSync(distMermaidCjsTypes)).toBe(true);
     expect(existsSync(distTypes)).toBe(true);
     expect(existsSync(distCoreTypes)).toBe(true);
     expect(existsSync(distRuntimeTypes)).toBe(true);
@@ -779,6 +890,10 @@ describe("package exports", () => {
     expect(existsSync(distMarkdownTypes)).toBe(true);
     expect(existsSync(distExperimentalTypes)).toBe(true);
     expect(existsSync(distAgentTypes)).toBe(true);
+    expect(existsSync(distAgentMermaidTypes)).toBe(true);
+    expect(existsSync(distMermaidTypes)).toBe(true);
+    expect(existsSync(distAgentMermaidCjs)).toBe(true);
+    expect(existsSync(distMermaidCjs)).toBe(true);
     expect(readFileSync(distCliTypes, "utf8")).toContain("Osc52ClipboardOptions");
 
     const root = await import(/* @vite-ignore */ pathToFileURL(distIndex).href);
@@ -791,6 +906,8 @@ describe("package exports", () => {
     const markdown = await import(/* @vite-ignore */ pathToFileURL(distMarkdown).href);
     const experimental = await import(/* @vite-ignore */ pathToFileURL(distExperimental).href);
     const agent = await import(/* @vite-ignore */ pathToFileURL(distAgent).href);
+    const agentMermaid = await import(/* @vite-ignore */ pathToFileURL(distAgentMermaid).href);
+    const mermaid = await import(/* @vite-ignore */ pathToFileURL(distMermaid).href);
     const require = createRequire(import.meta.url);
     const rootCjs = require("../dist/index.cjs");
     const coreCjs = require("../dist/core.cjs");
@@ -802,6 +919,8 @@ describe("package exports", () => {
     const markdownCjs = require("../dist/markdown.cjs");
     const experimentalCjs = require("../dist/experimental.cjs");
     const agentCjs = require("../dist/agent.cjs");
+    const agentMermaidCjs = require("../dist/agent/mermaid.cjs");
+    const mermaidCjs = require("../dist/mermaid.cjs");
 
     expect("createTerminalApp" in root).toBe(false);
     expect("createStdoutRenderer" in root).toBe(false);
@@ -918,6 +1037,26 @@ describe("package exports", () => {
     expect(agent.TToolCallView).toBeTruthy();
     expect(agent.TToolLogView).toBe(experimental.TLogView);
     expect(agent.TUserMessageView).toBeTruthy();
+    expect(mermaid.TBeautifulMermaidText).toBeTruthy();
+    expect(mermaid.TMermaidText).toBe(mermaid.TBeautifulMermaidText);
+    expect(mermaid.TMermaid).toBe(mermaid.TBeautifulMermaid);
+    expect(mermaid.createBeautifulMermaidRenderer).toBeTruthy();
+    expect(mermaid.markMermaidRenderErrorFatal).toBeTruthy();
+    expect(agentMermaid.TMermaidText).toBe(mermaid.TMermaidText);
+    expect(agentMermaid.TMermaid).toBe(mermaid.TMermaid);
+    expect(agentMermaid.beautifulMermaidRenderer).toBe(mermaid.beautifulMermaidRenderer);
+    expect(agentMermaid.markMermaidRenderErrorFatal).toBe(mermaid.markMermaidRenderErrorFatal);
+    expect(mermaidCjs.TBeautifulMermaidText).toBeTruthy();
+    expect(mermaidCjs.TMermaidText).toBe(mermaidCjs.TBeautifulMermaidText);
+    expect(mermaidCjs.TMermaid).toBe(mermaidCjs.TBeautifulMermaid);
+    expect(mermaidCjs.createBeautifulMermaidRenderer).toBeTruthy();
+    expect(mermaidCjs.markMermaidRenderErrorFatal).toBeTruthy();
+    expect(agentMermaidCjs.TMermaidText).toBeTruthy();
+    expect(agentMermaidCjs.TMermaidText).toBe(agentMermaidCjs.TBeautifulMermaidText);
+    expect(agentMermaidCjs.beautifulMermaidRenderer).toBeTruthy();
+    expect(agentMermaidCjs.markMermaidRenderErrorFatal).toBe(
+      mermaidCjs.markMermaidRenderErrorFatal,
+    );
     expect("TMarkdownText" in experimentalCjs).toBe(false);
     expect("TVirtualMarkdown" in experimentalCjs).toBe(false);
     expect(experimentalCjs.TVirtualList).toBeTruthy();
