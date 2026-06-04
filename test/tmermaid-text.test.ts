@@ -356,6 +356,43 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("does not keep blank renderer output as the last successful streaming diagram", async () => {
+    const content = ref("graph LR\n  A --> B");
+    let mode: "blank" | "throw" = "blank";
+
+    const renderer: TMermaidRenderer = vi.fn(() => {
+      if (mode === "throw") throw new Error("Mermaid source is incomplete");
+      return "   \n\t";
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 80,
+          h: 2,
+          content: content.value,
+          final: false,
+          streaming: true,
+          incompleteText: "waiting for complete Mermaid source",
+          renderer,
+        }),
+      100,
+      4,
+    );
+
+    await settleMermaid(mounted);
+
+    mode = "throw";
+    content.value = "graph LR\n  A -->";
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toContain("waiting for complete Mermaid source");
+
+    mounted.unmount();
+  });
+
   it("shows an incomplete placeholder during streaming and a hard error after final", async () => {
     const final = ref(false);
     const renderer: TMermaidRenderer = vi.fn(() => {

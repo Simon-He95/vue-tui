@@ -176,8 +176,8 @@ function splitRenderedOutput(value: string): readonly string[] {
   return lines.length ? lines : [""];
 }
 
-function hasRenderedOutput(value: readonly string[]): boolean {
-  return value.length > 1 || Boolean(value[0]);
+function hasVisibleRenderedOutput(value: readonly string[]): boolean {
+  return value.some((line) => line.trim().length > 0);
 }
 
 export const tMermaidTextProps = {
@@ -333,7 +333,7 @@ export const TMermaidText = defineComponent({
         error.value = errorMessage(err);
 
         if (shouldTreatRenderErrorAsTransient(err, code)) {
-          status.value = hasRenderedOutput(lines.value) ? "ready" : "incomplete";
+          status.value = hasVisibleRenderedOutput(lines.value) ? "ready" : "incomplete";
           bump();
           return;
         }
@@ -394,7 +394,7 @@ export const TMermaidText = defineComponent({
     });
 
     const showingInitialLoadingText = computed(
-      () => status.value === "loading" && lines.value.length <= 1 && !lines.value[0],
+      () => status.value === "loading" && !hasVisibleRenderedOutput(lines.value),
     );
 
     const displayLines = computed<readonly string[]>(() => {
