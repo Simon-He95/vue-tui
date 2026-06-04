@@ -271,7 +271,8 @@
         "TMermaid",
         "TMermaidText",
         "beautifulMermaidRenderer",
-        "createBeautifulMermaidRenderer"
+        "createBeautifulMermaidRenderer",
+        "markMermaidRenderErrorFatal"
       ],
       "typeExports": [
         "TMermaidAsciiOptions",
@@ -601,7 +602,8 @@
         "TMermaid",
         "TMermaidText",
         "beautifulMermaidRenderer",
-        "createBeautifulMermaidRenderer"
+        "createBeautifulMermaidRenderer",
+        "markMermaidRenderErrorFatal"
       ],
       "typeExports": [
         "TMermaidAsciiOptions",
