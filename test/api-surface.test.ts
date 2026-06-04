@@ -184,7 +184,6 @@ describe("public API surface", () => {
         "TMermaidText",
         "beautifulMermaidRenderer",
         "createBeautifulMermaidRenderer",
-        "markMermaidRenderErrorFatal",
       ]
     `);
   });
@@ -198,7 +197,6 @@ describe("public API surface", () => {
         "TMermaidText",
         "beautifulMermaidRenderer",
         "createBeautifulMermaidRenderer",
-        "markMermaidRenderErrorFatal",
       ]
     `);
   });

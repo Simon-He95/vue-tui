@@ -421,6 +421,46 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("does not hide a missing beautiful-mermaid peer as a streaming transient error", async () => {
+    vi.resetModules();
+    vi.doMock("beautiful-mermaid", () => ({
+      renderMermaidASCII: vi.fn(() => {
+        throw Object.assign(
+          new Error("Cannot find package 'beautiful-mermaid' imported from /app"),
+          { code: "ERR_MODULE_NOT_FOUND" },
+        );
+      }),
+    }));
+
+    const { TMermaidText: TMermaidTextWithBeautifulRenderer } = await import("../src/mermaid.js");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidTextWithBeautifulRenderer, {
+          x: 0,
+          y: 0,
+          w: 140,
+          h: 2,
+          content: "graph LR\n  A --> B",
+          final: false,
+          streaming: true,
+          incompleteText: "waiting for complete Mermaid source",
+          errorText: "diagram failed",
+        }),
+      160,
+      4,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toContain("diagram failed: Install beautiful-mermaid");
+    expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
+
+    mounted.unmount();
+    vi.doUnmock("beautiful-mermaid");
+    vi.resetModules();
+  });
+
   it("does not hide coded renderer setup errors as streaming transient errors", async () => {
     const renderer: TMermaidRenderer = vi.fn(() => {
       throw Object.assign(new Error("renderer setup failed"), {

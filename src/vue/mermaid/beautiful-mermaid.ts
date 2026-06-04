@@ -39,10 +39,25 @@ function codedError(message: string, code: string): Error & { code: string } {
   return error;
 }
 
+function missingBeautifulMermaidError(error: unknown): Error {
+  const detail = errorMessage(error);
+  return markMermaidRenderErrorFatal(
+    codedError(
+      `${BEAUTIFUL_MERMAID_INSTALL_HINT} (${detail})`,
+      "VUE_TUI_MISSING_BEAUTIFUL_MERMAID",
+    ),
+  );
+}
+
 function errorCode(error: unknown): string {
   if (!error || typeof error !== "object") return "";
   const value = (error as { code?: unknown }).code;
   return typeof value === "string" ? value : "";
+}
+
+function errorCause(error: unknown): unknown {
+  if (!error || typeof error !== "object") return undefined;
+  return (error as { cause?: unknown }).cause;
 }
 
 export function isMissingBeautifulMermaid(error: unknown): boolean {
@@ -57,13 +72,18 @@ export function isMissingBeautifulMermaid(error: unknown): boolean {
     /Failed to resolve import ['"]beautiful-mermaid['"]/.test(message) ||
     /Could not resolve ['"]beautiful-mermaid['"]/.test(message);
 
-  return (
+  if (
     mentionsBeautifulMermaid &&
     (code === "" ||
       code === "ERR_MODULE_NOT_FOUND" ||
       code === "MODULE_NOT_FOUND" ||
       code === "UNRESOLVED_IMPORT")
-  );
+  ) {
+    return true;
+  }
+
+  const cause = errorCause(error);
+  return cause !== undefined && isMissingBeautifulMermaid(cause);
 }
 
 function resolveBeautifulMermaidRenderer(mod: BeautifulMermaidModule): TMermaidRenderer {
@@ -103,13 +123,7 @@ async function loadBeautifulMermaid(): Promise<BeautifulMermaidModule> {
       .catch((error) => {
         cachedBeautifulMermaid = null;
         if (isMissingBeautifulMermaid(error)) {
-          const detail = errorMessage(error);
-          throw markMermaidRenderErrorFatal(
-            codedError(
-              `${BEAUTIFUL_MERMAID_INSTALL_HINT} (${detail})`,
-              "VUE_TUI_MISSING_BEAUTIFUL_MERMAID",
-            ),
-          );
+          throw missingBeautifulMermaidError(error);
         }
         throw markMermaidRenderErrorFatal(error);
       });
@@ -118,9 +132,16 @@ async function loadBeautifulMermaid(): Promise<BeautifulMermaidModule> {
 }
 
 export const beautifulMermaidRenderer: TMermaidRenderer = async (code, options) => {
-  const mod = await loadBeautifulMermaid();
-  const renderer = resolveBeautifulMermaidRenderer(mod);
-  return renderer(code, options);
+  try {
+    const mod = await loadBeautifulMermaid();
+    const renderer = resolveBeautifulMermaidRenderer(mod);
+    return await renderer(code, options);
+  } catch (error) {
+    if (isMissingBeautifulMermaid(error)) {
+      throw missingBeautifulMermaidError(error);
+    }
+    throw error;
+  }
 };
 
 export function createBeautifulMermaidRenderer(): TMermaidRenderer {

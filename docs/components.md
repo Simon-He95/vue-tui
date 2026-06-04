@@ -18,10 +18,10 @@ description: Reference for Vue TUI components such as TerminalProvider, TBox, TI
 | Public       | `@simon_he/vue-tui`               | `TerminalProvider` `TBox` `TCommandPalette` `TDataTable` `TDialog` `TInput` `TLink` `TLinkifyText` `TList` `TSelect` `TTable` `TText` `TTree` `TView` form helpers 和 `TBadge`/`TTag`/`TDivider`/`TCode`                                                                                  |
 | Advanced     | `@simon_he/vue-tui/vue`           | `TAnchor` `TDebugOverlay` `TFlow` `TForm` `TInputBox` `TJsonEditor` `TMermaid` `TMermaidText` `TMultilineModal` `TPathPicker` `TProgress` `TSpinner` `TSplitPane` `TTabs` `TToastViewport` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition` 和 overlay/navigation/status helpers |
 | Public       | `@simon_he/vue-tui/markdown`      | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                                                                                                        |
-| Public       | `@simon_he/vue-tui/mermaid`       | `TMermaid` `TMermaidText` `TBeautifulMermaidText` `beautifulMermaidRenderer` `createBeautifulMermaidRenderer` `markMermaidRenderErrorFatal`                                                                                                                                               |
+| Public       | `@simon_he/vue-tui/mermaid`       | `TMermaid` `TMermaidText` `TBeautifulMermaidText` `beautifulMermaidRenderer` `createBeautifulMermaidRenderer`                                                                                                                                                                             |
 | Experimental | `@simon_he/vue-tui/experimental`  | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap`                                                                                       |
 | Experimental | `@simon_he/vue-tui/agent`         | `TAgentTranscript` `TMermaid` `TMermaidText` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                                                                             |
-| Experimental | `@simon_he/vue-tui/agent/mermaid` | `TMermaid` `TMermaidText` `TBeautifulMermaidText` `beautifulMermaidRenderer` `createBeautifulMermaidRenderer` `markMermaidRenderErrorFatal`                                                                                                                                               |
+| Experimental | `@simon_he/vue-tui/agent/mermaid` | `TMermaid` `TMermaidText` `TBeautifulMermaidText` `beautifulMermaidRenderer` `createBeautifulMermaidRenderer`                                                                                                                                                                             |
 
 下面的组件速读按用途分组，不代表 root entrypoint 导出。每个组件的 primary import 以生成的 [组件 API](/generated/components-api) 为准。
 
@@ -886,7 +886,7 @@ const diagram = `graph TD
 - `options` `(TMermaidAsciiOptions?)`：传给 renderer 的 spacing/theme options；组件始终强制 `colorMode: "none"`
 - `renderer` `(TMermaidRenderer?)`：自定义 renderer，适合测试或替换 Mermaid engine
 - `isTransientError` `(TMermaidTransientErrorClassifier?)`：自定义哪些 renderer error 可以在 `final=false` 时被忽略；optional peer 缺失这类集成错误应该返回 `false`
-- `markMermaidRenderErrorFatal(error)`：给自定义 renderer 标记缺依赖、renderer 初始化失败、wasm 加载失败等不应被当作 AI 中间态的 hard error
+- `markMermaidRenderErrorFatal(error)`：从 `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent` 导入，给自定义 renderer 标记缺依赖、renderer 初始化失败、wasm 加载失败等不应被当作 AI 中间态的 hard error
 - `streaming` `(boolean)`：streaming 更新时使用低优先级 frame task 合并重算
 - `incompleteText` `(string)`：流式中间态且还没有任何成功渲染时显示的占位文本
 

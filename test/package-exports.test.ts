@@ -159,6 +159,17 @@ describe("package exports", () => {
     }
   });
 
+  it.skipIf(!requireDistExports)("keeps the optional Mermaid peer lazy in built CJS output", () => {
+    const mermaidCjs = readFileSync(distMermaidCjs, "utf8");
+    const agentMermaidCjs = readFileSync(distAgentMermaidCjs, "utf8");
+
+    expect(mermaidCjs).toContain('import("beautiful-mermaid")');
+    expect(mermaidCjs).not.toMatch(/require\(["']beautiful-mermaid["']\)/);
+
+    expect(agentMermaidCjs).toContain('require("../mermaid.cjs")');
+    expect(agentMermaidCjs).not.toMatch(/require\(["']beautiful-mermaid["']\)/);
+  });
+
   it("detects bare Node builtins in browser forbidden code scans", () => {
     for (const bad of [
       `const fs = require("fs")`,
@@ -478,7 +489,6 @@ describe("package exports", () => {
       "TMermaidText",
       "beautifulMermaidRenderer",
       "createBeautifulMermaidRenderer",
-      "markMermaidRenderErrorFatal",
     ]);
     expect(Object.keys(agentMermaid).sort()).toEqual(Object.keys(mermaid).sort());
     expect(Object.keys(cli).sort()).toEqual([
@@ -597,11 +607,9 @@ describe("package exports", () => {
     expect(mermaid.TMermaidText).toBe(mermaid.TBeautifulMermaidText);
     expect(mermaid.TMermaid).toBe(mermaid.TBeautifulMermaid);
     expect(mermaid.createBeautifulMermaidRenderer).toBeTruthy();
-    expect(mermaid.markMermaidRenderErrorFatal).toBe(vue.markMermaidRenderErrorFatal);
     expect(agentMermaid.TMermaidText).toBe(mermaid.TMermaidText);
     expect(agentMermaid.TMermaid).toBe(mermaid.TMermaid);
     expect(agentMermaid.beautifulMermaidRenderer).toBe(mermaid.beautifulMermaidRenderer);
-    expect(agentMermaid.markMermaidRenderErrorFatal).toBe(mermaid.markMermaidRenderErrorFatal);
   });
 
   it.skipIf(!requireDistExports)(
@@ -1030,22 +1038,16 @@ describe("package exports", () => {
     expect(mermaid.TMermaidText).toBe(mermaid.TBeautifulMermaidText);
     expect(mermaid.TMermaid).toBe(mermaid.TBeautifulMermaid);
     expect(mermaid.createBeautifulMermaidRenderer).toBeTruthy();
-    expect(mermaid.markMermaidRenderErrorFatal).toBeTruthy();
     expect(agentMermaid.TMermaidText).toBe(mermaid.TMermaidText);
     expect(agentMermaid.TMermaid).toBe(mermaid.TMermaid);
     expect(agentMermaid.beautifulMermaidRenderer).toBe(mermaid.beautifulMermaidRenderer);
-    expect(agentMermaid.markMermaidRenderErrorFatal).toBe(mermaid.markMermaidRenderErrorFatal);
     expect(mermaidCjs.TBeautifulMermaidText).toBeTruthy();
     expect(mermaidCjs.TMermaidText).toBe(mermaidCjs.TBeautifulMermaidText);
     expect(mermaidCjs.TMermaid).toBe(mermaidCjs.TBeautifulMermaid);
     expect(mermaidCjs.createBeautifulMermaidRenderer).toBeTruthy();
-    expect(mermaidCjs.markMermaidRenderErrorFatal).toBeTruthy();
     expect(agentMermaidCjs.TMermaidText).toBeTruthy();
     expect(agentMermaidCjs.TMermaidText).toBe(agentMermaidCjs.TBeautifulMermaidText);
     expect(agentMermaidCjs.beautifulMermaidRenderer).toBeTruthy();
-    expect(agentMermaidCjs.markMermaidRenderErrorFatal).toBe(
-      mermaidCjs.markMermaidRenderErrorFatal,
-    );
     expect("TMarkdownText" in experimentalCjs).toBe(false);
     expect("TVirtualMarkdown" in experimentalCjs).toBe(false);
     expect(experimentalCjs.TVirtualList).toBeTruthy();

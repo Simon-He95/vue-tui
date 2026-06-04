@@ -50,6 +50,10 @@ await build({
   platform: "neutral",
   target: ["es2020"],
   sourcemap: false,
+  // Keep dynamic import syntax in browser-facing CJS. The Mermaid bridge uses
+  // import("beautiful-mermaid") so CJS consumers can load the optional ESM peer
+  // lazily at render time instead of requiring it during entrypoint import.
+  supported: { "dynamic-import": true },
   // CJS intentionally bundles stream-markdown-parser because it only exposes
   // ESM entrypoints. Keep beautiful-mermaid external so the CJS bridge can
   // load the optional ESM peer through dynamic import at render time.

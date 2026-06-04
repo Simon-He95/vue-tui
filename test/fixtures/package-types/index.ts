@@ -104,7 +104,6 @@ import {
   TBeautifulMermaidText,
   beautifulMermaidRenderer,
   createBeautifulMermaidRenderer,
-  markMermaidRenderErrorFatal as markMermaidEntryRenderErrorFatal,
   type TMermaidTransientErrorContext as MermaidEntryTransientErrorContext,
   type TMermaidTextProps as MermaidEntryTextProps,
   type TMermaidTransientErrorClassifier as MermaidEntryTransientErrorClassifier,
@@ -113,7 +112,6 @@ import {
   TMermaid as AgentBeautifulMermaid,
   TMermaidText as AgentBeautifulMermaidText,
   beautifulMermaidRenderer as agentBeautifulMermaidRenderer,
-  markMermaidRenderErrorFatal as markAgentMermaidEntryRenderErrorFatal,
   type TMermaidTransientErrorClassifier as AgentBeautifulMermaidTransientErrorClassifier,
 } from "@simon_he/vue-tui/agent/mermaid";
 
@@ -186,10 +184,6 @@ const agentBeautifulMermaidTransientErrorClassifier: AgentBeautifulMermaidTransi
 const createdMermaidRenderer = createBeautifulMermaidRenderer();
 const fatalMermaidError = markMermaidRenderErrorFatal(new Error("fatal"));
 const fatalAgentMermaidError = markAgentMermaidRenderErrorFatal(new Error("fatal-agent"));
-const fatalMermaidEntryError = markMermaidEntryRenderErrorFatal(new Error("fatal-entry"));
-const fatalAgentMermaidEntryError = markAgentMermaidEntryRenderErrorFatal(
-  new Error("fatal-agent-entry"),
-);
 const agentCommandPaletteRange: TCommandPaletteMatchRange = { start: 0, end: 4 };
 const agentCommandPaletteItem: AgentTCommandPaletteItem = {
   label: "Open",
@@ -281,8 +275,6 @@ console.log(
   createdMermaidRenderer,
   fatalMermaidError,
   fatalAgentMermaidError,
-  fatalMermaidEntryError,
-  fatalAgentMermaidEntryError,
   agentCommandPaletteItem,
   agentCommandPaletteRanges,
 );
