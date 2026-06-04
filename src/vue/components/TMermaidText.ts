@@ -131,7 +131,6 @@ function isPermanentMermaidRenderError(error: unknown): boolean {
   const code = errorCode(error);
   return (
     isMermaidRenderErrorFatal(error) ||
-    isLikelyRendererSetupError(error) ||
     code === "VUE_TUI_MISSING_BEAUTIFUL_MERMAID" ||
     code === "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT" ||
     code === "VUE_TUI_MERMAID_RENDERER_SETUP" ||
@@ -149,21 +148,6 @@ function splitRenderedOutput(value: string): readonly string[] {
 
 function hasRenderedOutput(value: readonly string[]): boolean {
   return value.length > 1 || Boolean(value[0]);
-}
-
-function isLikelyRendererSetupError(error: unknown): boolean {
-  const message = errorMessage(error);
-  return (
-    /Install beautiful-mermaid\b/.test(message) ||
-    /does not export renderMermaidASCII/.test(message) ||
-    /Cannot find package ['"]beautiful-mermaid['"]/.test(message) ||
-    /Cannot find module ['"]beautiful-mermaid['"]/.test(message) ||
-    /Cannot resolve module ['"]beautiful-mermaid['"]/.test(message) ||
-    /Can't resolve ['"]beautiful-mermaid['"]/.test(message) ||
-    /Failed to resolve module specifier ['"]beautiful-mermaid['"]/.test(message) ||
-    /Failed to resolve import ['"]beautiful-mermaid['"]/.test(message) ||
-    /Could not resolve ['"]beautiful-mermaid['"]/.test(message)
-  );
 }
 
 export const tMermaidTextProps = {

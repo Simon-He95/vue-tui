@@ -421,11 +421,11 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("does not hide beautiful-mermaid setup errors as streaming transient errors", async () => {
+  it("does not hide coded renderer setup errors as streaming transient errors", async () => {
     const renderer: TMermaidRenderer = vi.fn(() => {
-      throw new Error(
-        "Install beautiful-mermaid and use TMermaidText from @simon_he/vue-tui/mermaid.",
-      );
+      throw Object.assign(new Error("renderer setup failed"), {
+        code: "VUE_TUI_MERMAID_RENDERER_SETUP",
+      });
     });
 
     const mounted = await mountTerminal(
@@ -446,9 +446,7 @@ describe("TMermaidText", () => {
     );
 
     await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain(
-      "diagram failed: Install beautiful-mermaid and use TMermaidText",
-    );
+    expect(rowText(mounted, 0)).toContain("diagram failed: renderer setup failed");
 
     mounted.unmount();
   });

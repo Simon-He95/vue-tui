@@ -1,5 +1,5 @@
 {
-  "packageVersion": "1.0.2",
+  "packageVersion": "1.1.0",
   "entrypoints": {
     "@simon_he/vue-tui": {
       "maturity": "public",
