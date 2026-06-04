@@ -836,6 +836,8 @@ Mermaid terminal text primitive。组件本身不直接依赖 `beautiful-mermaid
 > 使用内置 beautiful-mermaid bridge 前先安装：`pnpm add beautiful-mermaid`
 >
 > 然后从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `TMermaidText` / `TMermaid`。
+>
+> 未安装 `beautiful-mermaid` 时不要直接 import `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid`；请从 `@simon_he/vue-tui/vue` / `@simon_he/vue-tui/agent` 导入基础组件并显式传 `renderer`。
 
 ### Example
 
