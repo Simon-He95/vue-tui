@@ -166,6 +166,27 @@ function positiveInt(value: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+let textEncoder: TextEncoder | null = null;
+
+function stringByteLength(value: string): number {
+  if (typeof TextEncoder !== "undefined") {
+    textEncoder ??= new TextEncoder();
+    return textEncoder.encode(value).length;
+  }
+
+  let bytes = 0;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x7f) bytes += 1;
+    else if (code <= 0x7ff) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
+      bytes += 4;
+      index++;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
 function smallHash(input: string): string {
   let hash = 2166136261;
 
@@ -333,14 +354,18 @@ export const TAgentTerminalGraphic = defineComponent({
       > = {},
     ): void {
       const capabilities = currentCapabilities();
-      props.trace?.({
-        type,
-        id: rawId,
-        kind: props.kind,
-        protocol: capabilities.protocol,
-        contentHash: smallHash(props.content),
-        ...extra,
-      });
+      try {
+        props.trace?.({
+          type,
+          id: rawId,
+          kind: props.kind,
+          protocol: capabilities.protocol,
+          contentHash: smallHash(props.content),
+          ...extra,
+        });
+      } catch {
+        // Per-component tracing is observational; it must not affect rendering.
+      }
 
       const protocol = isTerminalGraphicsProtocol(capabilities.protocol)
         ? capabilities.protocol
@@ -457,7 +482,7 @@ export const TAgentTerminalGraphic = defineComponent({
         protocol,
         sequence,
         sequenceHash: smallHash(sequence),
-        sequenceBytes: sequence.length,
+        sequenceBytes: stringByteLength(sequence),
         fallback,
         clearSequence,
         clearSequenceHash: clearSequence ? smallHash(clearSequence) : undefined,
@@ -525,8 +550,18 @@ export const TAgentTerminalGraphic = defineComponent({
       const drawKey = terminalDrawKey(current, rect, clearSequence);
       const previous = lastDrawnGraphic.value;
 
-      if (previous?.drawKey === drawKey) return false;
-      if (previous) queueClearLastGraphic();
+      const previousStillActive = previous
+        ? typeof output.isActive === "function"
+          ? output.isActive(previous.id)
+          : true
+        : false;
+
+      if (previous?.drawKey === drawKey && previousStillActive) return false;
+      if (previousStillActive) {
+        queueClearLastGraphic();
+      } else if (previous) {
+        lastDrawnGraphic.value = null;
+      }
 
       output.queue({
         id: rawId,

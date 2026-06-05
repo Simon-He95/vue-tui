@@ -57,13 +57,17 @@ function throwIfAborted(signal: AbortSignal): void {
 }
 
 function defaultCacheKey(content: string, context: TAgentTerminalGraphicRendererContext): string {
+  const contentIdentity =
+    context.cacheKey != null
+      ? `cache:${context.cacheKey}`
+      : `content:${hashTerminalGraphicsString(content)}`;
   return [
     context.kind,
     context.protocol,
     context.width,
     context.height ?? "",
     context.final ? "final" : "draft",
-    hashTerminalGraphicsString(content),
+    contentIdentity,
   ].join("\x1F");
 }
 

@@ -77,6 +77,7 @@ export type TerminalGraphicsOutput = Readonly<{
   capabilities: TerminalGraphicsCapabilities;
   queue: (payload: TerminalGraphicsPayload) => void;
   clear?: (id: string) => void;
+  isActive?: (id: string) => boolean;
 }>;
 
 const ESC = "\x1B";

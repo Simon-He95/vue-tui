@@ -160,7 +160,13 @@ export function recordTerminalGraphicTrace(
     }
   }
 
-  for (const subscriber of subscribers) subscriber(normalized);
+  for (const subscriber of subscribers) {
+    try {
+      subscriber(normalized);
+    } catch {
+      // Trace subscribers are diagnostic hooks; they must not affect rendering.
+    }
+  }
 }
 
 export function getTerminalGraphicTraceMetrics(): TerminalGraphicTraceMetrics {

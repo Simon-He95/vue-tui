@@ -1,4 +1,4 @@
-import { defineComponent, h, nextTick, ref } from "vue";
+import { defineComponent, h, nextTick, provide, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   TAgentTerminalGraphic,
@@ -23,6 +23,7 @@ import {
 } from "../src/cli.js";
 import { getTerminalGraphicsOutput } from "../src/renderer/terminal-graphics.js";
 import { TVirtualRows } from "../src/vue/components/TVirtualRows.js";
+import { TerminalGraphicsActivityKey } from "../src/vue/context.js";
 
 const ESC = "\x1B";
 const ST = `${ESC}\\`;
@@ -457,6 +458,70 @@ describe("TAgentTerminalGraphic", () => {
     expect(queue.stats().cacheEntries).toBe(1);
   });
 
+  it("invalidates the default PNG cache when the renderer context cacheKey changes", async () => {
+    const queue = createTerminalGraphicRenderQueue();
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const toPngBase64 = vi.fn(async (_content: string, context: { cacheKey?: string }) => ({
+      base64: context.cacheKey === "v2" ? "REVG" : "QUJD",
+      fallback: `png fallback ${context.cacheKey}`,
+      cols: 4,
+      rows: 2,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({
+      queue,
+      toPngBase64,
+    });
+    const makeContext = (cacheKey: string) => ({
+      kind: "image" as const,
+      width: 4,
+      height: 2,
+      final: true,
+      streaming: false,
+      protocol: "kitty" as const,
+      capabilities,
+      signal: new AbortController().signal,
+      imageId: 123,
+      placementId: 456,
+      visible: true,
+      rawVisible: true,
+      scrolling: false,
+      cacheKey,
+      viewport: {
+        visible: true,
+        rawVisible: true,
+        scrolling: false,
+        rect: { x: 0, y: 0, w: 4, h: 2 },
+        fullRect: { x: 0, y: 0, w: 4, h: 2 },
+      },
+    });
+
+    const first = await renderer("image.png", makeContext("v1"));
+    const second = await renderer("image.png", makeContext("v2"));
+
+    expect(toPngBase64).toHaveBeenCalledTimes(2);
+    expect(first).toMatchObject({
+      type: "sequence",
+      protocol: "kitty",
+      fallback: "png fallback v1",
+    });
+    expect(second).toMatchObject({
+      type: "sequence",
+      protocol: "kitty",
+      fallback: "png fallback v2",
+    });
+
+    const firstSequence =
+      typeof first === "object" && first && "sequence" in first ? String(first.sequence) : "";
+    const secondSequence =
+      typeof second === "object" && second && "sequence" in second ? String(second.sequence) : "";
+    expect(firstSequence).toContain("QUJD");
+    expect(secondSequence).toContain("REVG");
+    expect(queue.stats().cacheEntries).toBe(2);
+  });
+
   it("does not share abortable PNG renderer work from a deduping custom queue", async () => {
     const queue = createTerminalGraphicRenderQueue({
       maxConcurrency: 2,
@@ -693,6 +758,80 @@ describe("TAgentTerminalGraphic", () => {
     await settle(app);
     flushStdout(stdout);
     expect(writes.join("")).not.toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("redraws a component graphic after stdout clears it for a scroll operation", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      fallback: "fallback",
+    }));
+    const activityVersion = ref(0);
+    const App = defineComponent({
+      setup() {
+        provide(TerminalGraphicsActivityKey, {
+          scrolling: ref(false),
+          version: activityVersion,
+          markScroll() {
+            activityVersion.value++;
+          },
+          dispose() {},
+        });
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 2,
+            y: 1,
+            w: 8,
+            h: 2,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    (stdout.render as any)([], true, [{ startY: 0, endY: 6, delta: 1 }]);
+    expect(writes.join("")).toContain("a=d");
+
+    writes.length = 0;
+    activityVersion.value++;
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
 
     stdout.dispose();
     app.dispose();
