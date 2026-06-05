@@ -294,6 +294,70 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("keeps dirty-span repaint for rows that do not intersect active terminal graphics", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        TERM_PROGRAM: "iTerm.app",
+        KITTY_WINDOW_ID: undefined,
+        TERM: undefined,
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+          dirtyRowPatchMode: "span",
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createIterm2InlineImageSequence("QUJD", { width: 8, height: 1 });
+
+    app.terminal.write("abcdefghij", { x: 0, y: 0 });
+    flushStdout(stdout);
+
+    writes.length = 0;
+    graphics?.queue({
+      id: "active-outside-dirty-row",
+      x: 0,
+      y: 4,
+      w: 8,
+      h: 1,
+      protocol: "iterm2",
+      sequence,
+    });
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    app.terminal.write("abcdXfghij", { x: 0, y: 0 });
+    writes.length = 0;
+    (stdout.render as (dirtyRows?: readonly number[] | null, sync?: boolean) => void)([0], true);
+
+    const frame = writes.join("");
+    expect(frame).toContain("X");
+    expect(frame).not.toContain("abcdXfghij");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it("queues terminal graphics payloads through the stdout renderer", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
@@ -410,6 +474,55 @@ describe("TAgentTerminalGraphic", () => {
     expect(rowText(app, 0)).toBe("second");
 
     app.dispose();
+  });
+
+  it("records component renderer aborts when render work is deferred by scrolling", async () => {
+    resetTerminalGraphicTraceMetrics();
+
+    const scrolling = ref(false);
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      return new Promise<TAgentTerminalGraphicRenderResult>((_resolve, reject) => {
+        context.signal.addEventListener(
+          "abort",
+          () => {
+            const error = new Error("aborted");
+            error.name = "AbortError";
+            reject(error);
+          },
+          { once: true },
+        );
+      });
+    });
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            scrolling: scrolling.value,
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+
+    scrolling.value = true;
+    await settle(app);
+
+    expect(getTerminalGraphicTraceMetrics().rendererAborts).toBeGreaterThan(0);
+
+    app.dispose();
+    resetTerminalGraphicTraceMetrics();
   });
 
   it("does not call renderer while suspended", async () => {

@@ -412,6 +412,14 @@ export const TAgentTerminalGraphic = defineComponent({
         });
       } else if (type === "raw-draw") {
         // The stdout renderer owns queue/bytes metrics after payload validation.
+      } else if (type === "render-abort") {
+        recordTerminalGraphicTrace({
+          type: "renderer-abort",
+          id: rawId,
+          key,
+          protocol,
+          reason: extra.reason,
+        });
       } else if (type === "raw-clear") {
         recordTerminalGraphicTrace({ type: "clear", id: rawId, key, protocol });
       } else if (type === "raw-skip-scroll") {

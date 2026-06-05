@@ -2223,28 +2223,92 @@ export function createStdoutRenderer(
       return outOps;
     })();
 
+    const terminalGraphicsAffectedRows = new Set<number>();
+    const addTerminalGraphicRows = (
+      rect: Readonly<{ x: number; y: number; w: number; h: number }> | null | undefined,
+    ): void => {
+      if (!rect) return;
+      const visible = clampGraphicRectToViewport(rect, size);
+      if (!visible) return;
+
+      for (let y = visible.y; y < visible.y + visible.h; y++) {
+        terminalGraphicsAffectedRows.add(y);
+      }
+    };
+    const payloadRect = (
+      payload: Readonly<{ x: number; y: number; w?: number; h?: number }>,
+    ): { x: number; y: number; w: number; h: number } => ({
+      x: payload.x,
+      y: payload.y,
+      w: payload.w ?? 1,
+      h: payload.h ?? 1,
+    });
+    const intersectsScrollOperations = (
+      rect: Readonly<{ y: number; h: number }> | null | undefined,
+    ): boolean => {
+      if (!rect || !normalizedScrollOperations?.length) return false;
+      const top = rect.y;
+      const bottom = rect.y + rect.h;
+
+      for (const op of normalizedScrollOperations) {
+        if (top < op.endY && bottom > op.startY) return true;
+      }
+      return false;
+    };
+
+    const pendingGraphicIds = new Set(graphicsToRender.map((payload) => payload.id));
+    const explicitGraphicClears = new Set(graphicsClearsToRender);
+
     if (normalizedScrollOperations?.length && activeGraphics.size > 0) {
-      const pendingGraphicIds = new Set(graphicsToRender.map((payload) => payload.id));
-      for (const id of activeGraphics.keys()) {
-        if (!pendingGraphicIds.has(id) && !graphicsClearsToRender.includes(id)) {
+      for (const [id, active] of activeGraphics) {
+        if (!intersectsScrollOperations(active)) continue;
+
+        terminalGraphicsBlockScrollRegions = true;
+        addTerminalGraphicRows(active);
+
+        if (!pendingGraphicIds.has(id) && !explicitGraphicClears.has(id)) {
           graphicsClearsToRender.push(id);
+          explicitGraphicClears.add(id);
         }
         activeGraphicSignatures.delete(id);
         pendingGraphicSignatures.delete(id);
       }
     }
 
-    terminalGraphicsBlockScrollRegions =
-      activeGraphics.size > 0 || graphicsClearsToRender.length > 0 || graphicsToRender.length > 0;
-    const forceTerminalGraphicsRowRepaint =
-      forceDirtyRowsRepaint || terminalGraphicsBlockScrollRegions;
+    for (const id of graphicsClearsToRender) {
+      const active = activeGraphics.get(id);
+      addTerminalGraphicRows(active);
+      if (intersectsScrollOperations(active)) terminalGraphicsBlockScrollRegions = true;
+    }
+
+    for (const payload of graphicsToRender) {
+      const active = activeGraphics.get(payload.id);
+
+      if (payload.op === "clear") {
+        const rect = active ?? payloadRect(payload);
+        addTerminalGraphicRows(rect);
+        if (intersectsScrollOperations(rect)) terminalGraphicsBlockScrollRegions = true;
+        continue;
+      }
+
+      const next = payloadRect(payload);
+      addTerminalGraphicRows(active);
+      addTerminalGraphicRows(next);
+
+      if (intersectsScrollOperations(active) || intersectsScrollOperations(next)) {
+        terminalGraphicsBlockScrollRegions = true;
+      }
+    }
+
+    const forceTerminalGraphicsRowRepaint = (y: number): boolean =>
+      forceDirtyRowsRepaint || terminalGraphicsAffectedRows.has(y);
 
     // Raw terminal graphics are not represented in the cell buffer. If a frame
     // needs to draw/clear protocol graphics, dirty-span patching is unsafe for
-    // those rows: a one-cell span update can make the stdout renderer believe a
-    // row was painted while most of the previous inline image remains in the
-    // terminal. Force full dirty-row repaint for these frames; this keeps the
-    // optimization for ordinary text frames while preserving graphics cleanup.
+    // intersecting rows only: a one-cell span update can make the stdout renderer
+    // believe a row was painted while most of the previous inline image remains
+    // in the terminal. Keep dirty-span and scroll-region optimization for rows
+    // that do not intersect raw graphics.
 
     let rowsToRender = (() => {
       if (forceFullRender || !fpPrevValid) return null;
@@ -2827,7 +2891,7 @@ export function createStdoutRenderer(
       for (const y of explicitDirtyRows) {
         const row = terminal.getRow(y) as Cell[];
         const overlayRow = overlayTouchedRowSet?.has(y);
-        if (forceTerminalGraphicsRowRepaint || !shouldUseDirtySpans() || overlayRow) {
+        if (forceTerminalGraphicsRowRepaint(y) || !shouldUseDirtySpans() || overlayRow) {
           fingerprintRow(row, y, size.cols);
           renderRow(y, row);
           paintedExplicitRows.push(y);
@@ -3029,7 +3093,7 @@ export function createStdoutRenderer(
       for (const y of rowsToRender) {
         const row = terminal.getRow(y) as Cell[];
         fingerprintRow(row, y, size.cols);
-        if (forceTerminalGraphicsRowRepaint || !shouldUseDirtySpans()) {
+        if (forceTerminalGraphicsRowRepaint(y) || !shouldUseDirtySpans()) {
           renderRow(y, row);
           continue;
         }
