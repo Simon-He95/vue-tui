@@ -75,8 +75,8 @@ export type TerminalGraphicsPayload = Readonly<{
 
 export type TerminalGraphicsOutput = Readonly<{
   capabilities: TerminalGraphicsCapabilities;
-  queue: (payload: TerminalGraphicsPayload) => void;
-  clear?: (id: string) => void;
+  queue: (payload: TerminalGraphicsPayload) => boolean;
+  clear?: (id: string) => boolean;
   isActive?: (id: string) => boolean;
 }>;
 
@@ -359,19 +359,20 @@ function stableId(input: string): string {
   return `tg_${hashTerminalGraphicsString(input)}`;
 }
 
-function clampInt(value: unknown, min: number, max: number): number {
+function positiveGraphicInt(value: unknown, max: number): number | null {
   const n = Math.trunc(Number(value));
-  if (!Number.isFinite(n)) return min;
-  return Math.min(max, Math.max(min, n));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(max, n);
 }
 
 export function normalizeTerminalGraphicSize(
   width: unknown,
   height: unknown,
 ): { width: number; height: number } | null {
-  const w = clampInt(width, 1, MAX_TERMINAL_GRAPHIC_CELLS);
-  const h = clampInt(height, 1, MAX_TERMINAL_GRAPHIC_CELLS);
+  const w = positiveGraphicInt(width, MAX_TERMINAL_GRAPHIC_CELLS);
+  const h = positiveGraphicInt(height, MAX_TERMINAL_GRAPHIC_CELLS);
 
+  if (w == null || h == null) return null;
   if (w * h > MAX_TERMINAL_GRAPHIC_CELLS) return null;
 
   return { width: w, height: h };

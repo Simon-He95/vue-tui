@@ -107,16 +107,18 @@ describe("TAgentTerminalGraphic", () => {
     const before = { ...getStdoutRendererMetrics() };
 
     writes.length = 0;
-    graphics?.queue({
-      id: "g1",
-      x: 1,
-      y: 1,
-      w: 4,
-      h: 2,
-      protocol: "kitty",
-      sequence,
-      clearSequence,
-    });
+    expect(
+      graphics?.queue({
+        id: "g1",
+        x: 1,
+        y: 1,
+        w: 4,
+        h: 2,
+        protocol: "kitty",
+        sequence,
+        clearSequence,
+      }),
+    ).toBe(true);
     expect(writes.join("")).toContain(sequence);
     expect(getStdoutRendererMetrics().terminalGraphicsDraws).toBeGreaterThan(
       before.terminalGraphicsDraws,
@@ -127,12 +129,26 @@ describe("TAgentTerminalGraphic", () => {
     expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(1);
 
     writes.length = 0;
-    graphics?.clear?.("g1");
+    expect(graphics?.clear?.("g1")).toBe(true);
     expect(writes.join("")).toContain(clearSequence);
     expect(getStdoutRendererMetrics().terminalGraphicsClears).toBeGreaterThan(
       before.terminalGraphicsClears,
     );
     expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "invalid-size",
+        x: 1,
+        y: 1,
+        w: 0,
+        h: 2,
+        protocol: "kitty",
+        sequence,
+      }),
+    ).toBe(false);
+    expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
     app.dispose();
@@ -1218,6 +1234,78 @@ describe("TAgentTerminalGraphic", () => {
     expect(rowText(app, 0)).toBe("fallback");
     expect(rowText(app, 2)).toBe("");
 
+    app.dispose();
+  });
+
+  it("keeps the last terminal row reservation while rendering is deferred during scroll", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const scrolling = ref(false);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      fallback: "fallback",
+      rows: 3,
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h("span", [
+            h(TText, { x: 0, y: 2, w: 10, value: "covered" }),
+            h(TAgentTerminalGraphic, {
+              x: 0,
+              y: 0,
+              w: 10,
+              zIndex: 1,
+              content: "image.png",
+              fallback: "fallback",
+              scrolling: scrolling.value,
+              renderer,
+            }),
+          ]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 4, component: App });
+    const stdout = withEnv(
+      {
+        KITTY_WINDOW_ID: "1",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(rowText(app, 2)).toBe("");
+
+    scrolling.value = true;
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(rowText(app, 0)).toBe("fallback");
+    expect(rowText(app, 2)).toBe("");
+
+    stdout.dispose();
     app.dispose();
   });
 

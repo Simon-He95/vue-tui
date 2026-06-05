@@ -269,6 +269,11 @@ type LastDrawnGraphic = Readonly<{
   drawKey: string;
 }>;
 
+type ReservedTerminalGraphicSize = Readonly<{
+  key: string;
+  rows: number;
+}>;
+
 function terminalDrawKey(
   current: ResolvedTerminalGraphic,
   rect: Rect,
@@ -310,6 +315,7 @@ export const TAgentTerminalGraphic = defineComponent({
     const rawId = `TAgentTerminalGraphic:${instance?.uid ?? "unknown"}`;
     const frameTaskId = `${rawId}:render`;
     const lastDrawnGraphic = shallowRef<LastDrawnGraphic | null>(null);
+    const reservedTerminalGraphicSize = shallowRef<ReservedTerminalGraphicSize | null>(null);
     let lastRawSkipScrollKey = "";
     let lastDeferTraceKey = "";
 
@@ -335,6 +341,18 @@ export const TAgentTerminalGraphic = defineComponent({
     const placementId = computed(() =>
       stableTerminalGraphicNumericId(`placement:${rawId}:${stableGraphicKey.value}`),
     );
+
+    function rememberTerminalGraphicSize(current: ResolvedGraphic): void {
+      if (current.type !== "terminal") return;
+
+      const rows = positiveInt(current.rows);
+      if (!rows) return;
+
+      reservedTerminalGraphicSize.value = {
+        key: stableGraphicKey.value,
+        rows,
+      };
+    }
 
     function bump(): void {
       documentVersion.value++;
@@ -510,14 +528,16 @@ export const TAgentTerminalGraphic = defineComponent({
         : undefined;
     }
 
-    function queueClearLastGraphic(): void {
+    function queueClearLastGraphic(): boolean {
       const previous = lastDrawnGraphic.value;
-      if (!previous) return;
+      if (!previous) return false;
 
       const output = graphicsOutput();
+      let accepted = false;
+
       if (output) {
         if (previous.clearSequence) {
-          output.queue({
+          accepted = output.queue({
             id: previous.id,
             x: previous.x,
             y: previous.y,
@@ -528,17 +548,21 @@ export const TAgentTerminalGraphic = defineComponent({
             op: "clear",
           });
         } else {
-          output.clear?.(previous.id);
+          accepted = Boolean(output.clear?.(previous.id));
         }
       }
 
       lastDrawnGraphic.value = null;
-      trace("raw-clear", {
-        x: previous.x,
-        y: previous.y,
-        w: previous.w,
-        h: previous.h,
-      });
+      if (accepted) {
+        trace("raw-clear", {
+          x: previous.x,
+          y: previous.y,
+          w: previous.w,
+          h: previous.h,
+        });
+      }
+
+      return accepted;
     }
 
     function queueDrawGraphic(
@@ -563,7 +587,7 @@ export const TAgentTerminalGraphic = defineComponent({
         lastDrawnGraphic.value = null;
       }
 
-      output.queue({
+      const accepted = output.queue({
         id: rawId,
         x: rect.x,
         y: rect.y,
@@ -574,6 +598,11 @@ export const TAgentTerminalGraphic = defineComponent({
         clearSequence,
         fallbackText: current.fallback,
       });
+
+      if (!accepted) {
+        lastDrawnGraphic.value = null;
+        return false;
+      }
 
       lastDrawnGraphic.value = {
         id: rawId,
@@ -593,11 +622,19 @@ export const TAgentTerminalGraphic = defineComponent({
 
     const fullRect = computed<Rect>(() => {
       const current = graphic.value;
+      const reserved = reservedTerminalGraphicSize.value;
+      const reservedRows =
+        current?.type === "terminal"
+          ? undefined
+          : status.value === "idle" && reserved?.key === stableGraphicKey.value
+            ? reserved.rows
+            : undefined;
       const textLines =
         current?.type === "text" ? splitTextOutput(current.text) : splitTextOutput(fallbackText());
       const height =
         props.h ??
         (current?.type === "terminal" ? current.rows : undefined) ??
+        reservedRows ??
         Math.max(1, textLines.length);
       return translateRect(
         { x: props.x, y: props.y, w: props.w, h: height },
@@ -781,6 +818,7 @@ export const TAgentTerminalGraphic = defineComponent({
         if (abort.signal.aborted) return;
         if (!alive || version !== renderVersion) return;
         const normalized = normalizeResult(result);
+        rememberTerminalGraphicSize(normalized);
         graphic.value = normalized;
         lastRenderedContent = content;
         status.value = "ready";

@@ -162,6 +162,8 @@ describe("terminal graphics sequence validation", () => {
     expect(isTerminalGraphicsProtocol("kitty")).toBe(true);
     expect(isTerminalGraphicsProtocol("unknown")).toBe(false);
     expect(normalizeTerminalGraphicSize(4, 2)).toEqual({ width: 4, height: 2 });
+    expect(normalizeTerminalGraphicSize(0, 2)).toBeNull();
+    expect(normalizeTerminalGraphicSize(Number.NaN, 2)).toBeNull();
     expect(normalizeTerminalGraphicSize(200, 200)).toBeNull();
 
     expect(
