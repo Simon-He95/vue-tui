@@ -1,7 +1,6 @@
 import type {
   TAgentTerminalGraphicRenderer,
   TAgentTerminalGraphicRendererContext,
-  TAgentTerminalGraphicRenderResult,
 } from "../components/TAgentTerminalGraphic.js";
 import type { TerminalGraphicRenderQueue } from "../../renderer/terminal-graphic-render-queue.js";
 import {
@@ -33,11 +32,26 @@ export type CreatePngTerminalGraphicRendererOptions = Readonly<{
   queue?: TerminalGraphicRenderQueue;
 }>;
 
-function resultBytes(result: TAgentTerminalGraphicRenderResult): number {
-  if (!result || typeof result !== "object") return 0;
-  if ("sequence" in result && typeof result.sequence === "string") return result.sequence.length;
-  if ("text" in result && typeof result.text === "string") return result.text.length;
-  return 0;
+type CachedPngTerminalGraphicFrame = Readonly<{
+  base64: string;
+  fallback: string;
+  cols: number;
+  rows?: number;
+}>;
+
+function positiveInt(value: unknown): number | undefined {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function abortError(): Error {
+  const error = new Error("Terminal graphic render aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) throw abortError();
 }
 
 function defaultCacheKey(content: string, context: TAgentTerminalGraphicRendererContext): string {
@@ -49,6 +63,27 @@ function defaultCacheKey(content: string, context: TAgentTerminalGraphicRenderer
     context.final ? "final" : "draft",
     content,
   ].join("\x1F");
+}
+
+function normalizeCachedPngFrame(
+  frame: PngTerminalGraphicFrame,
+  fallback: string,
+  context: TAgentTerminalGraphicRendererContext,
+): CachedPngTerminalGraphicFrame {
+  return {
+    base64: String(frame.base64 ?? "").replace(/\s+/g, ""),
+    fallback: sanitizeTerminalFallbackText(frame.fallback ?? fallback),
+    cols: positiveInt(frame.cols) ?? positiveInt(context.width) ?? 1,
+    rows: positiveInt(frame.rows) ?? positiveInt(context.height),
+  };
+}
+
+function pngFrameBytes(frame: CachedPngTerminalGraphicFrame): number {
+  return frame.base64.length + frame.fallback.length;
+}
+
+function stringBytes(value: string): number {
+  return value.length;
 }
 
 export function createPngTerminalGraphicRenderer(
@@ -78,65 +113,78 @@ export function createPngTerminalGraphicRenderer(
 
     const key = options.cacheKey?.(content, context) ?? defaultCacheKey(content, context);
 
-    return queue.cached<TAgentTerminalGraphicRenderResult>(
-      key,
+    const png = await queue.cached<CachedPngTerminalGraphicFrame>(
+      `${key}\x1Fpng`,
       context.signal,
       async () => {
-        const png = await options.toPngBase64(content, context);
-        const localFallback = sanitizeTerminalFallbackText(png.fallback ?? fallback);
-        const cols = png.cols ?? context.width;
-        const rows = png.rows ?? context.height;
-
-        if (context.protocol === "kitty") {
-          return {
-            type: "sequence",
-            protocol: "kitty",
-            sequence: createKittyGraphicsSequence(png.base64, {
-              imageId: context.imageId,
-              placementId: context.placementId,
-              columns: cols,
-              rows,
-            }),
-            clearSequence: createKittyDeleteGraphicsSequence({
-              imageId: context.imageId,
-              placementId: context.placementId,
-            }),
-            fallback: localFallback,
-            cols,
-            rows,
-          };
-        }
-
-        if (context.protocol === "iterm2") {
-          return {
-            type: "sequence",
-            protocol: "iterm2",
-            sequence: createIterm2InlineImageSequence(png.base64, {
-              width: cols,
-              height: rows,
-              preserveAspectRatio: true,
-              doNotMoveCursor: true,
-            }),
-            fallback: localFallback,
-            cols,
-            rows,
-          };
-        }
-
-        if (context.protocol === "sixel" && options.toSixel) {
-          return {
-            type: "sequence",
-            protocol: "sixel",
-            sequence: await options.toSixel(png.base64, context),
-            fallback: localFallback,
-            cols,
-            rows,
-          };
-        }
-
-        return { type: "text", text: localFallback };
+        const frame = await options.toPngBase64(content, context);
+        return normalizeCachedPngFrame(frame, fallback, context);
       },
-      resultBytes,
+      pngFrameBytes,
     );
+
+    throwIfAborted(context.signal);
+
+    if (!png.base64) {
+      return { type: "text", text: png.fallback || fallback };
+    }
+
+    if (context.protocol === "kitty") {
+      return {
+        type: "sequence",
+        protocol: "kitty",
+        sequence: createKittyGraphicsSequence(png.base64, {
+          imageId: context.imageId,
+          placementId: context.placementId,
+          columns: png.cols,
+          rows: png.rows,
+        }),
+        clearSequence: createKittyDeleteGraphicsSequence({
+          imageId: context.imageId,
+          placementId: context.placementId,
+        }),
+        fallback: png.fallback,
+        cols: png.cols,
+        rows: png.rows,
+      };
+    }
+
+    if (context.protocol === "iterm2") {
+      return {
+        type: "sequence",
+        protocol: "iterm2",
+        sequence: createIterm2InlineImageSequence(png.base64, {
+          width: png.cols,
+          height: png.rows,
+          preserveAspectRatio: true,
+          doNotMoveCursor: true,
+        }),
+        fallback: png.fallback,
+        cols: png.cols,
+        rows: png.rows,
+      };
+    }
+
+    if (context.protocol === "sixel" && options.toSixel) {
+      const sixel = await queue.cached<string>(
+        `${key}\x1Fsixel`,
+        context.signal,
+        () => options.toSixel!(png.base64, context),
+        stringBytes,
+      );
+
+      throwIfAborted(context.signal);
+
+      return {
+        type: "sequence",
+        protocol: "sixel",
+        sequence: sixel,
+        fallback: png.fallback,
+        cols: png.cols,
+        rows: png.rows,
+      };
+    }
+
+    return { type: "text", text: png.fallback || fallback };
   };
 }

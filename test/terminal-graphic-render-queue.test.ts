@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createTerminalGraphicRenderQueue } from "../src/agent.js";
+import {
+  createTerminalGraphicRenderQueue,
+  getTerminalGraphicTraceMetrics,
+  resetTerminalGraphicTraceMetrics,
+} from "../src/agent.js";
 
 describe("terminal graphic render queue", () => {
   it("limits concurrency and caches results", async () => {
@@ -41,6 +45,39 @@ describe("terminal graphic render queue", () => {
     expect(metrics).toContain("queue-wait");
     expect(metrics).toContain("cache-hit");
     expect(queue.stats()).toMatchObject({ active: 0, waiting: 0, cacheEntries: 2 });
+  });
+
+  it("records queue wait trace metrics", async () => {
+    resetTerminalGraphicTraceMetrics();
+
+    const queue = createTerminalGraphicRenderQueue({ maxConcurrency: 1 });
+    let releaseFirst!: () => void;
+    const first = queue.cached(
+      "slow",
+      undefined,
+      () =>
+        new Promise<string>((resolve) => {
+          releaseFirst = () => resolve("slow");
+        }),
+      (value) => value.length,
+    );
+    const second = queue.cached(
+      "queued",
+      undefined,
+      async () => "queued",
+      (value) => value.length,
+    );
+
+    await Promise.resolve();
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    const metrics = getTerminalGraphicTraceMetrics();
+    expect(metrics.queueWaits).toBeGreaterThan(0);
+    expect(metrics.totalQueueWaitMs).toBeGreaterThanOrEqual(0);
+    expect(metrics.maxQueueWaitMs).toBeGreaterThanOrEqual(0);
+
+    resetTerminalGraphicTraceMetrics();
   });
 
   it("rejects aborted waiters", async () => {

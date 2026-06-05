@@ -177,10 +177,17 @@ export function createTerminalGraphicRenderQueue(
       const waiter: Waiter = {
         start: () => {
           cleanup();
+          const waitMs = now() - waitStartedAt;
           options.onMetric?.({
             type: "queue-wait",
             key,
-            waitMs: now() - waitStartedAt,
+            waitMs,
+          });
+          recordTerminalGraphicTrace({
+            type: "queue-wait",
+            id: key,
+            key,
+            durationMs: waitMs,
           });
           resolve(release);
         },

@@ -289,6 +289,8 @@ export const TAgentTerminalGraphic = defineComponent({
     const rawId = `TAgentTerminalGraphic:${instance?.uid ?? "unknown"}`;
     const frameTaskId = `${rawId}:render`;
     const lastDrawnGraphic = shallowRef<LastDrawnGraphic | null>(null);
+    let lastRawSkipScrollKey = "";
+    let lastDeferTraceKey = "";
 
     const isParentScrolling = computed(
       () => props.scrolling || Boolean(graphicsActivity?.scrolling.value),
@@ -376,8 +378,22 @@ export const TAgentTerminalGraphic = defineComponent({
       } else if (type === "raw-clear") {
         recordTerminalGraphicTrace({ type: "clear", id: rawId, key, protocol });
       } else if (type === "raw-skip-scroll") {
-        recordTerminalGraphicTrace({ type: "skip-scrolling", id: rawId, key, protocol });
+        recordTerminalGraphicTrace({
+          type: "skip-scrolling",
+          id: rawId,
+          key,
+          protocol,
+          reason: extra.reason,
+        });
       }
+    }
+
+    function traceDeferOnce(reason: string): void {
+      const key = [reason, graphicsActivityVersion.value, stableGraphicKey.value].join(":");
+
+      if (lastDeferTraceKey === key) return;
+      lastDeferTraceKey = key;
+      trace("defer", { reason });
     }
 
     function abortCurrentRender(reason: string): void {
@@ -540,6 +556,7 @@ export const TAgentTerminalGraphic = defineComponent({
         clearSequence,
         drawKey,
       };
+      lastRawSkipScrollKey = "";
       return true;
     }
 
@@ -590,6 +607,23 @@ export const TAgentTerminalGraphic = defineComponent({
     );
 
     const rawCanQueue = computed(() => rawCanRender.value && !rawSuppressedByScroll.value);
+
+    function traceRawSkipScrollOnce(reason: string): void {
+      const r = absRect.value;
+      const key = [
+        reason,
+        graphicsActivityVersion.value,
+        stableGraphicKey.value,
+        r.x,
+        r.y,
+        r.w,
+        r.h,
+      ].join(":");
+
+      if (lastRawSkipScrollKey === key) return;
+      lastRawSkipScrollKey = key;
+      trace("raw-skip-scroll", { reason });
+    }
 
     function hasPaintableRect(): boolean {
       const r = absRect.value;
@@ -698,11 +732,12 @@ export const TAgentTerminalGraphic = defineComponent({
         abortCurrentRender(deferred);
         if (!alive || version !== renderVersion) return;
         setDeferredFallback(content);
-        trace("defer", { reason: deferred });
+        traceDeferOnce(deferred);
         return;
       }
 
       abortCurrentRender("superseded");
+      lastDeferTraceKey = "";
       const abort = new AbortController();
       renderAbort = abort;
       const startedAt = performance.now();
@@ -899,7 +934,7 @@ export const TAgentTerminalGraphic = defineComponent({
             }
           } else {
             if (current?.type === "terminal" && rawSuppressedByScroll.value) {
-              trace("raw-skip-scroll");
+              traceRawSkipScrollOnce(isParentScrolling.value ? "scrolling" : "suspended");
             }
             queueClearLastGraphic();
           }
@@ -932,7 +967,7 @@ export const TAgentTerminalGraphic = defineComponent({
           abortCurrentRender(deferred);
           if (status.value === "loading" || !graphic.value || lastRenderedContent !== props.content)
             setDeferredFallback(props.content);
-          trace("defer", { reason: deferred });
+          traceDeferOnce(deferred);
         }
 
         if (!visible.value || !rawCanQueue.value) queueClearLastGraphic();

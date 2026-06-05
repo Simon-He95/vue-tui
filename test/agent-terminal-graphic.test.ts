@@ -340,8 +340,7 @@ describe("TAgentTerminalGraphic", () => {
       queue,
       toPngBase64,
     });
-    const signal = new AbortController().signal;
-    const context = {
+    const makeContext = (imageId: number, placementId: number) => ({
       kind: "image" as const,
       width: 4,
       height: 2,
@@ -349,9 +348,9 @@ describe("TAgentTerminalGraphic", () => {
       streaming: false,
       protocol: "kitty" as const,
       capabilities,
-      signal,
-      imageId: 123,
-      placementId: 456,
+      signal: new AbortController().signal,
+      imageId,
+      placementId,
       visible: true,
       rawVisible: true,
       scrolling: false,
@@ -362,14 +361,25 @@ describe("TAgentTerminalGraphic", () => {
         rect: { x: 0, y: 0, w: 4, h: 2 },
         fullRect: { x: 0, y: 0, w: 4, h: 2 },
       },
-    };
+    });
 
-    const first = await renderer("image.png", context);
-    const second = await renderer("image.png", context);
+    const first = await renderer("image.png", makeContext(123, 456));
+    const second = await renderer("image.png", makeContext(789, 321));
 
     expect(toPngBase64).toHaveBeenCalledTimes(1);
     expect(first).toMatchObject({ type: "sequence", protocol: "kitty", fallback: "png fallback" });
-    expect(second).toEqual(first);
+    expect(second).toMatchObject({ type: "sequence", protocol: "kitty", fallback: "png fallback" });
+
+    const firstSequence =
+      typeof first === "object" && first && "sequence" in first ? String(first.sequence) : "";
+    const secondSequence =
+      typeof second === "object" && second && "sequence" in second ? String(second.sequence) : "";
+
+    expect(firstSequence).toContain("i=123");
+    expect(firstSequence).toContain("p=456");
+    expect(secondSequence).toContain("i=789");
+    expect(secondSequence).toContain("p=321");
+    expect(secondSequence).not.toBe(firstSequence);
     expect(queue.stats().cacheEntries).toBe(1);
   });
 

@@ -12,6 +12,7 @@ export type TerminalGraphicTraceEventType =
   | "renderer-error"
   | "validate-end"
   | "queue"
+  | "queue-wait"
   | "queue-dedupe"
   | "clear";
 
@@ -37,11 +38,14 @@ export type TerminalGraphicTraceMetrics = Readonly<{
   rendererRuns: number;
   rendererErrors: number;
   queued: number;
+  queueWaits: number;
   queueDeduped: number;
   cleared: number;
   bytesQueued: number;
   totalRendererMs: number;
   totalValidateMs: number;
+  totalQueueWaitMs: number;
+  maxQueueWaitMs: number;
 }>;
 
 const metrics = {
@@ -54,11 +58,14 @@ const metrics = {
   rendererRuns: 0,
   rendererErrors: 0,
   queued: 0,
+  queueWaits: 0,
   queueDeduped: 0,
   cleared: 0,
   bytesQueued: 0,
   totalRendererMs: 0,
   totalValidateMs: 0,
+  totalQueueWaitMs: 0,
+  maxQueueWaitMs: 0,
 };
 
 const subscribers = new Set<(event: TerminalGraphicTraceEvent) => void>();
@@ -112,6 +119,13 @@ export function recordTerminalGraphicTrace(
       metrics.queued++;
       metrics.bytesQueued += normalized.bytes ?? 0;
       break;
+    case "queue-wait": {
+      const durationMs = normalized.durationMs ?? 0;
+      metrics.queueWaits++;
+      metrics.totalQueueWaitMs += durationMs;
+      metrics.maxQueueWaitMs = Math.max(metrics.maxQueueWaitMs, durationMs);
+      break;
+    }
     case "queue-dedupe":
       metrics.queueDeduped++;
       break;
@@ -137,11 +151,14 @@ export function resetTerminalGraphicTraceMetrics(): void {
   metrics.rendererRuns = 0;
   metrics.rendererErrors = 0;
   metrics.queued = 0;
+  metrics.queueWaits = 0;
   metrics.queueDeduped = 0;
   metrics.cleared = 0;
   metrics.bytesQueued = 0;
   metrics.totalRendererMs = 0;
   metrics.totalValidateMs = 0;
+  metrics.totalQueueWaitMs = 0;
+  metrics.maxQueueWaitMs = 0;
 }
 
 export function subscribeTerminalGraphicTrace(
