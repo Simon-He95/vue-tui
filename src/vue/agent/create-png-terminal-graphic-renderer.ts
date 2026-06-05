@@ -7,6 +7,7 @@ import {
   createIterm2InlineImageSequence,
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
+  hashTerminalGraphicsString,
   sanitizeTerminalFallbackText,
 } from "../../renderer/terminal-graphics.js";
 import { createTerminalGraphicRenderQueue } from "../../renderer/terminal-graphic-render-queue.js";
@@ -30,6 +31,7 @@ export type CreatePngTerminalGraphicRendererOptions = Readonly<{
   ) => string | Promise<string>;
   cacheKey?: (content: string, context: TAgentTerminalGraphicRendererContext) => string;
   queue?: TerminalGraphicRenderQueue;
+  dedupeInflight?: boolean;
 }>;
 
 type CachedPngTerminalGraphicFrame = Readonly<{
@@ -61,7 +63,7 @@ function defaultCacheKey(content: string, context: TAgentTerminalGraphicRenderer
     context.width,
     context.height ?? "",
     context.final ? "final" : "draft",
-    content,
+    hashTerminalGraphicsString(content),
   ].join("\x1F");
 }
 
@@ -95,12 +97,16 @@ export function createPngTerminalGraphicRenderer(
       maxConcurrency: 2,
       maxEntries: 128,
       maxBytes: 32 * 1024 * 1024,
+      dedupeInflight: options.dedupeInflight ?? false,
     });
 
   return async (content, context) => {
+    throwIfAborted(context.signal);
+
     const fallback = sanitizeTerminalFallbackText(
       (await options.fallback?.(content, context)) ?? content,
     );
+    throwIfAborted(context.signal);
 
     if (
       !context.capabilities.supported ||
@@ -112,6 +118,7 @@ export function createPngTerminalGraphicRenderer(
     }
 
     const key = options.cacheKey?.(content, context) ?? defaultCacheKey(content, context);
+    throwIfAborted(context.signal);
 
     const png = await queue.cached<CachedPngTerminalGraphicFrame>(
       `${key}\x1Fpng`,

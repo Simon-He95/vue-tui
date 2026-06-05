@@ -47,6 +47,59 @@ describe("terminal graphic render queue", () => {
     expect(queue.stats()).toMatchObject({ active: 0, waiting: 0, cacheEntries: 2 });
   });
 
+  it("does not share abortable in-flight renders by default", async () => {
+    const queue = createTerminalGraphicRenderQueue({ maxConcurrency: 2 });
+    let calls = 0;
+
+    const first = queue.cached(
+      "same-key",
+      undefined,
+      async () => {
+        calls++;
+        await Promise.resolve();
+        throw new Error("first render aborted");
+      },
+      (value) => String(value).length,
+    );
+
+    const second = queue.cached(
+      "same-key",
+      undefined,
+      async () => {
+        calls++;
+        return "second render";
+      },
+      (value) => value.length,
+    );
+
+    await expect(first).rejects.toThrow("first render aborted");
+    await expect(second).resolves.toBe("second render");
+    expect(calls).toBe(2);
+  });
+
+  it("can explicitly dedupe pure in-flight renders", async () => {
+    const queue = createTerminalGraphicRenderQueue({
+      maxConcurrency: 2,
+      dedupeInflight: true,
+    });
+    let resolve!: (value: string) => void;
+    const render = vi.fn(
+      () =>
+        new Promise<string>((done) => {
+          resolve = done;
+        }),
+    );
+
+    const first = queue.cached("same-key", undefined, render, (value) => value.length);
+    const second = queue.cached("same-key", undefined, async () => "unused");
+    await Promise.resolve();
+
+    expect(render).toHaveBeenCalledTimes(1);
+    resolve("shared render");
+    await expect(first).resolves.toBe("shared render");
+    await expect(second).resolves.toBe("shared render");
+  });
+
   it("records queue wait trace metrics", async () => {
     resetTerminalGraphicTraceMetrics();
 

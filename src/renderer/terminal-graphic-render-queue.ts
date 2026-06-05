@@ -11,6 +11,12 @@ export type TerminalGraphicRenderQueueOptions = Readonly<{
   maxEntries?: number;
   maxBytes?: number;
   ttlMs?: number;
+  /**
+   * Share in-flight renders for equal cache keys.
+   *
+   * Keep this disabled when render work observes a caller AbortSignal.
+   */
+  dedupeInflight?: boolean;
   onMetric?: (metric: TerminalGraphicRenderQueueMetric) => void;
 }>;
 
@@ -85,6 +91,7 @@ export function createTerminalGraphicRenderQueue(
   const maxEntries = Math.max(1, Math.floor(options.maxEntries ?? 128));
   const maxBytes = Math.max(1, Math.floor(options.maxBytes ?? 32 * 1024 * 1024));
   const ttlMs = Math.max(1, Math.floor(options.ttlMs ?? 5 * 60_000));
+  const dedupeInflight = options.dedupeInflight ?? false;
 
   let active = 0;
   let cacheBytes = 0;
@@ -220,10 +227,11 @@ export function createTerminalGraphicRenderQueue(
     if (cachedValue != null) return cachedValue;
     recordTerminalGraphicTrace({ type: "cache-miss", id: key, key });
 
-    const existing = inflight.get(key);
+    const existing = dedupeInflight ? inflight.get(key) : undefined;
     if (existing) return raceAbort(existing as Promise<T>, signal);
 
-    const promise = (async () => {
+    let promise!: Promise<T>;
+    promise = (async () => {
       let releaseSlot: (() => void) | null = null;
       const renderGeneration = generation;
 
@@ -239,11 +247,11 @@ export function createTerminalGraphicRenderQueue(
         return value;
       } finally {
         releaseSlot?.();
-        inflight.delete(key);
+        if (dedupeInflight && inflight.get(key) === promise) inflight.delete(key);
       }
     })();
 
-    inflight.set(key, promise);
+    if (dedupeInflight) inflight.set(key, promise);
     return raceAbort(promise, signal);
   }
 
