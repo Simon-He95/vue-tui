@@ -368,13 +368,7 @@ export const TAgentTerminalGraphic = defineComponent({
           reason: extra.reason,
         });
       } else if (type === "raw-draw") {
-        recordTerminalGraphicTrace({
-          type: "queue",
-          id: rawId,
-          key,
-          protocol,
-          bytes: extra.sequenceBytes,
-        });
+        // The stdout renderer owns queue/bytes metrics after payload validation.
       } else if (type === "raw-clear") {
         recordTerminalGraphicTrace({ type: "clear", id: rawId, key, protocol });
       } else if (type === "raw-skip-scroll") {

@@ -618,6 +618,130 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("does not clamp fully offscreen terminal graphics into the visible viewport", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: false,
+      columns: 10,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 10,
+      rows: 4,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+
+    writes.length = 0;
+    graphics?.queue({
+      id: "offscreen",
+      x: 99,
+      y: 0,
+      w: 4,
+      h: 1,
+      protocol: "kitty",
+      sequence,
+    });
+
+    expect(writes.join("")).not.toContain(sequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
+
+    writes.length = 0;
+    graphics?.queue({
+      id: "partially-visible",
+      x: -2,
+      y: 0,
+      w: 4,
+      h: 1,
+      protocol: "kitty",
+      sequence,
+    });
+
+    expect(writes.join("")).toContain(sequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(1);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("records one queue metric per validated stdout graphics payload", async () => {
+    resetTerminalGraphicTraceMetrics();
+
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 2,
+            y: 1,
+            w: 8,
+            h: 2,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(getTerminalGraphicTraceMetrics().queued).toBe(1);
+
+    stdout.dispose();
+    app.dispose();
+    resetTerminalGraphicTraceMetrics();
+  });
+
   it("records terminal graphic trace metrics", async () => {
     resetTerminalGraphicTraceMetrics();
 

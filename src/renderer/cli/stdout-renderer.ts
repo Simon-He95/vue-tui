@@ -678,14 +678,30 @@ export function createStdoutRenderer(
     rect: Readonly<{ x: number; y: number; w: number; h: number }>,
     size: Readonly<{ cols: number; rows: number }>,
   ): { x: number; y: number; w: number; h: number } | null {
-    if (size.cols <= 0 || size.rows <= 0) return null;
+    const cols = Math.max(0, Math.floor(size.cols));
+    const rows = Math.max(0, Math.floor(size.rows));
+    if (cols <= 0 || rows <= 0) return null;
 
-    const { x, y } = clampCellToViewport({ cellX: rect.x, cellY: rect.y }, size);
-    const w = Math.min(Math.max(1, Math.floor(rect.w)), Math.max(0, size.cols - x));
-    const h = Math.min(Math.max(1, Math.floor(rect.h)), Math.max(0, size.rows - y));
-    if (w <= 0 || h <= 0) return null;
+    const x0 = Math.floor(rect.x);
+    const y0 = Math.floor(rect.y);
+    const w0 = Math.max(1, Math.floor(rect.w));
+    const h0 = Math.max(1, Math.floor(rect.h));
+    if (
+      !Number.isFinite(x0) ||
+      !Number.isFinite(y0) ||
+      !Number.isFinite(w0) ||
+      !Number.isFinite(h0)
+    ) {
+      return null;
+    }
 
-    return { x, y, w, h };
+    const left = Math.max(0, x0);
+    const top = Math.max(0, y0);
+    const right = Math.min(cols, x0 + w0);
+    const bottom = Math.min(rows, y0 + h0);
+    if (right <= left || bottom <= top) return null;
+
+    return { x: left, y: top, w: right - left, h: bottom - top };
   }
 
   function clearGraphicRect(
@@ -2173,6 +2189,7 @@ export function createStdoutRenderer(
       const opB = b.op === "clear" ? 0 : 1;
       return opA - opB || a.order - b.order;
     });
+    let terminalGraphicsBlockScrollRegions = false;
     pendingGraphics.clear();
     ensureRowEscapes(Math.max(size.rows, lastRenderedRows));
     ensureFingerprints(size.cols, size.rows);
@@ -2202,6 +2219,21 @@ export function createStdoutRenderer(
       if (!outOps.length) return null;
       return outOps;
     })();
+
+    if (normalizedScrollOperations?.length && activeGraphics.size > 0) {
+      const pendingGraphicIds = new Set(graphicsToRender.map((payload) => payload.id));
+      for (const id of activeGraphics.keys()) {
+        if (!pendingGraphicIds.has(id) && !graphicsClearsToRender.includes(id)) {
+          graphicsClearsToRender.push(id);
+        }
+        activeGraphicSignatures.delete(id);
+        pendingGraphicSignatures.delete(id);
+      }
+    }
+
+    terminalGraphicsBlockScrollRegions =
+      activeGraphics.size > 0 || graphicsClearsToRender.length > 0 || graphicsToRender.length > 0;
+
     let rowsToRender = (() => {
       if (forceFullRender || !fpPrevValid) return null;
       if (!dirtyRows) return null;
@@ -2606,7 +2638,7 @@ export function createStdoutRenderer(
       ]);
     })();
     let explicitScrollOperations: readonly TerminalScrollOperation[] | null =
-      normalizedScrollOperations;
+      terminalGraphicsBlockScrollRegions ? null : normalizedScrollOperations;
     let hiddenExplicitDirtyRows: ReadonlySet<number> | null = null;
     let allowInferredScrollRegions = true;
     if (explicitScrollOperations && overlayRows.length) {
@@ -2656,6 +2688,16 @@ export function createStdoutRenderer(
         }
       }
     };
+    if (terminalGraphicsBlockScrollRegions && normalizedScrollOperations && rowsToRender) {
+      includeRowsForPendingScrollOperations(normalizedScrollOperations);
+      rowsToRender = Array.from(expandedRows).sort((a, b) => a - b);
+      dirtySorted = true;
+      if (isDebugEnabled()) {
+        getDebugLog().render(
+          " Scroll regions disabled for frame with active/pending terminal graphics",
+        );
+      }
+    }
     if (explicitScrollOperations && rowsToRender && (!enableScrollRegions || !fpPrevValid)) {
       includeRowsForPendingScrollOperations(explicitScrollOperations);
       rowsToRender = Array.from(expandedRows).sort((a, b) => a - b);
@@ -2678,6 +2720,7 @@ export function createStdoutRenderer(
     }
     let profiledRowCount = rowsToRender ? rowsToRender.length : size.rows;
     const useScrollRegions =
+      !terminalGraphicsBlockScrollRegions &&
       enableScrollRegions &&
       fpPrevValid &&
       scrollRowsCandidate &&
@@ -3089,7 +3132,13 @@ export function createStdoutRenderer(
             },
             size,
           );
-          if (!rect) continue;
+          if (!rect) {
+            terminalGraphicsClears++;
+            activeGraphics.delete(payload.id);
+            activeGraphicSignatures.delete(payload.id);
+            pendingGraphicSignatures.delete(payload.id);
+            continue;
+          }
 
           const clearRect = clearGraphicRect(rect);
           const cursor = `\u001B[${rect.y + 1};${rect.x + 1}H`;
@@ -3107,13 +3156,25 @@ export function createStdoutRenderer(
           continue;
         }
 
+        const previous = activeGraphics.get(payload.id);
         const rect = clampGraphicRectToViewport(
           { x: payload.x, y: payload.y, w: payload.w ?? 1, h: payload.h ?? 1 },
           size,
         );
-        if (!rect) continue;
+        if (!rect) {
+          if (previous) {
+            const visiblePrevious = clampGraphicRectToViewport(previous, size);
+            if (visiblePrevious) {
+              frameParts.push(countGraphicsBytes(clearGraphicRect(visiblePrevious)));
+              terminalGraphicsClears++;
+            }
+            activeGraphics.delete(payload.id);
+            activeGraphicSignatures.delete(payload.id);
+          }
+          pendingGraphicSignatures.delete(payload.id);
+          continue;
+        }
 
-        const previous = activeGraphics.get(payload.id);
         if (previous && !sameGraphicRect(previous, rect)) {
           const visiblePrevious = clampGraphicRectToViewport(previous, size);
           if (visiblePrevious) {

@@ -440,6 +440,58 @@ function parseKittyPackets(sequence: string): KittyPacket[] | null {
   return packets.length ? packets : null;
 }
 
+const KITTY_DRAW_FIRST_CONTROL_KEYS = new Set([
+  "a",
+  "f",
+  "q",
+  "C",
+  "i",
+  "I",
+  "p",
+  "c",
+  "r",
+  "z",
+  "m",
+  "t",
+]);
+const KITTY_DRAW_CONTINUATION_CONTROL_KEYS = new Set(["a", "q", "m"]);
+const KITTY_CLEAR_CONTROL_KEYS = new Set(["a", "d", "i", "I", "p", "q"]);
+
+function kittyControlsUseOnly(
+  controls: ReadonlyMap<string, string>,
+  allowed: ReadonlySet<string>,
+): boolean {
+  for (const key of controls.keys()) {
+    if (!allowed.has(key)) return false;
+  }
+
+  return true;
+}
+
+function kittyControlIsInteger(controls: ReadonlyMap<string, string>, key: string): boolean {
+  const value = controls.get(key);
+  return value == null || /^-?\d+$/.test(value);
+}
+
+function validateKittySharedSafeControls(controls: ReadonlyMap<string, string>): boolean {
+  const q = controls.get("q");
+  if (q != null && !/^[0-2]$/.test(q)) return false;
+
+  const cursorMove = controls.get("C");
+  if (cursorMove != null && !/^[01]$/.test(cursorMove)) return false;
+
+  for (const key of ["i", "I", "p", "c", "r", "z"]) {
+    if (!kittyControlIsInteger(controls, key)) return false;
+  }
+
+  // Refuse Kitty local-client transfers: file/temp-file/shared-memory modes
+  // make the terminal read host paths or shared-memory names from the payload.
+  const transmissionMedium = controls.get("t");
+  if (transmissionMedium != null && transmissionMedium !== "d") return false;
+
+  return true;
+}
+
 function validateKittySequence(sequence: string, op: TerminalGraphicsOperation = "draw"): boolean {
   const packets = parseKittyPackets(sequence);
   if (!packets) return false;
@@ -448,6 +500,8 @@ function validateKittySequence(sequence: string, op: TerminalGraphicsOperation =
     if (packets.length !== 1) return false;
 
     const packet = packets[0]!;
+    if (!kittyControlsUseOnly(packet.controls, KITTY_CLEAR_CONTROL_KEYS)) return false;
+    if (!validateKittySharedSafeControls(packet.controls)) return false;
     if (packet.payload) return false;
     if (packet.controls.get("a") !== "d") return false;
 
@@ -456,19 +510,33 @@ function validateKittySequence(sequence: string, op: TerminalGraphicsOperation =
   }
 
   const first = packets[0]!;
+  if (!kittyControlsUseOnly(first.controls, KITTY_DRAW_FIRST_CONTROL_KEYS)) return false;
+  if (!validateKittySharedSafeControls(first.controls)) return false;
   if (first.controls.get("a") !== "T") return false;
   if (!first.payload) return false;
 
   const f = first.controls.get("f");
   if (f != null && f !== "24" && f !== "32" && f !== "100") return false;
 
+  const firstMore = first.controls.get("m");
+  if (firstMore != null && firstMore !== "0" && firstMore !== "1") return false;
+  if (packets.length > 1 && firstMore !== "1") return false;
+
   for (let i = 1; i < packets.length; i++) {
     const packet = packets[i]!;
+    if (!kittyControlsUseOnly(packet.controls, KITTY_DRAW_CONTINUATION_CONTROL_KEYS)) return false;
+    if (!validateKittySharedSafeControls(packet.controls)) return false;
+
     const action = packet.controls.get("a");
     if (action != null && action !== "T") return false;
 
     const m = packet.controls.get("m");
-    if (m != null && m !== "0" && m !== "1") return false;
+    if (m !== "0" && m !== "1") return false;
+    if (!packet.payload && !(i === packets.length - 1 && m === "0")) return false;
+  }
+
+  if (packets.length > 1 && packets[packets.length - 1]!.controls.get("m") === "1") {
+    return false;
   }
 
   return true;

@@ -265,6 +265,18 @@ describe("terminal graphics sequence validation", () => {
     expect(isSafeTerminalGraphicsSequence(idSequence, "kitty", "clear")).toBe(true);
   });
 
+  it("rejects kitty file and shared-memory transmission mediums", () => {
+    const direct = `${ESC}_Ga=T,t=d,f=100;QUJD${ST}`;
+    const regularFile = `${ESC}_Ga=T,t=f,f=100;L2V0Yy9wYXNzd2Q=${ST}`;
+    const temporaryFile = `${ESC}_Ga=T,t=t,f=100;QUJD${ST}`;
+    const sharedMemory = `${ESC}_Ga=T,t=s,f=100;QUJD${ST}`;
+
+    expect(isSafeTerminalGraphicsSequence(direct, "kitty", "draw")).toBe(true);
+    expect(isSafeTerminalGraphicsSequence(regularFile, "kitty", "draw")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(temporaryFile, "kitty", "draw")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(sharedMemory, "kitty", "draw")).toBe(false);
+  });
+
   it("requires iTerm2 inline images and rejects iTerm2 clear payloads", () => {
     const data = "QUJD";
     const inline = createIterm2InlineImageSequence(data, { width: 4, height: 2 });
