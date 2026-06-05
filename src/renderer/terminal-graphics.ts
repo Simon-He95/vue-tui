@@ -8,6 +8,12 @@ export type TerminalGraphicsResolvedProtocol =
 export type TerminalGraphicsOperation = "draw" | "clear";
 export type TerminalGraphicsMultiplexer = "tmux" | "screen" | "zellij";
 
+const TERMINAL_GRAPHICS_PROTOCOL_PRIORITY: readonly TerminalGraphicsProtocol[] = [
+  "kitty",
+  "iterm2",
+  "sixel",
+];
+
 export type TerminalGraphicsDetectionInput = Readonly<{
   env?: Record<string, unknown>;
   isTTY?: boolean;
@@ -150,6 +156,18 @@ function uniqueProtocols(protocols: TerminalGraphicsProtocol[]): TerminalGraphic
   return [...new Set(protocols)];
 }
 
+function pickBestTerminalGraphicsProtocol(
+  protocols: readonly TerminalGraphicsProtocol[],
+): TerminalGraphicsProtocol | null {
+  const available = new Set(protocols);
+
+  for (const protocol of TERMINAL_GRAPHICS_PROTOCOL_PRIORITY) {
+    if (available.has(protocol)) return protocol;
+  }
+
+  return null;
+}
+
 function detectCandidates(env: Record<string, unknown>): TerminalGraphicsProtocol[] {
   const candidates: TerminalGraphicsProtocol[] = [];
   const term = String(envString(env, "TERM") ?? "").toLowerCase();
@@ -282,8 +300,8 @@ export function detectTerminalGraphicsCapabilities(
   }
 
   const candidates = detectCandidates(env);
-  const protocol: TerminalGraphicsResolvedProtocol =
-    candidates.length > 0 ? candidates[0]! : "unicode";
+  const preferredProtocol = pickBestTerminalGraphicsProtocol(candidates);
+  const protocol: TerminalGraphicsResolvedProtocol = preferredProtocol ?? "unicode";
   return capabilitiesFor(protocol, {
     ...base,
     candidates,

@@ -4,6 +4,7 @@ import type { Rect } from "../../events/manager/types.js";
 import type {
   TerminalGraphicsCapabilities,
   TerminalGraphicsProtocol,
+  TerminalGraphicsResolvedProtocol,
 } from "../../renderer/terminal-graphics.js";
 import {
   computed,
@@ -43,6 +44,7 @@ export type TAgentTerminalGraphicRendererContext = Readonly<{
   height?: number;
   final: boolean;
   streaming: boolean;
+  protocol: TerminalGraphicsResolvedProtocol;
   capabilities: TerminalGraphicsCapabilities;
 }>;
 
@@ -58,6 +60,8 @@ export type TAgentTerminalGraphicRenderResult =
       type: "text";
       text: string;
     }>
+  | null
+  | undefined
   | string
   | Readonly<{
       sequence: string;
@@ -188,17 +192,25 @@ export const TAgentTerminalGraphic = defineComponent({
     }
 
     function resolveRendererContext(): TAgentTerminalGraphicRendererContext {
+      const capabilities = graphicsOutput()?.capabilities ?? NO_GRAPHICS_CAPABILITIES;
       return {
         kind: props.kind,
         width: props.w,
         height: props.h,
         final: props.final,
         streaming: props.streaming,
-        capabilities: graphicsOutput()?.capabilities ?? NO_GRAPHICS_CAPABILITIES,
+        protocol: capabilities.protocol,
+        capabilities,
       };
     }
 
     function normalizeResult(result: TAgentTerminalGraphicRenderResult): ResolvedGraphic {
+      if (result == null) {
+        return {
+          type: "text",
+          text: fallbackText(),
+        };
+      }
       if (typeof result === "string") {
         return {
           type: "text",
