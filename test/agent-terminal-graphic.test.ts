@@ -9,6 +9,8 @@ import {
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
+  getTerminalGraphicTraceMetrics,
+  resetTerminalGraphicTraceMetrics,
   type TAgentTerminalGraphicRenderer,
   type TAgentTerminalGraphicRenderResult,
   type TerminalGraphicsProtocol,
@@ -150,6 +152,8 @@ describe("TAgentTerminalGraphic", () => {
     const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
       expect(context.capabilities.preferredProtocol).toBe("kitty");
       expect(context.signal).toBeInstanceOf(AbortSignal);
+      expect(Number.isInteger(context.imageId)).toBe(true);
+      expect(Number.isInteger(context.placementId)).toBe(true);
       expect(context.visible).toBe(true);
       expect(context.rawVisible).toBe(true);
       expect(context.scrolling).toBe(false);
@@ -282,6 +286,44 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("does not call renderer while explicit scrolling is active", async () => {
+    const scrolling = ref(true);
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "text" as const,
+      text: "rendered",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            scrolling: scrolling.value,
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(app, 0)).toBe("fallback");
+
+    scrolling.value = false;
+    await settle(app);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(rowText(app, 0)).toBe("rendered");
+
+    app.dispose();
+  });
+
   it("creates cached PNG terminal graphics renderers", async () => {
     const queue = createTerminalGraphicRenderQueue();
     const capabilities = detectTerminalGraphicsCapabilities({
@@ -308,6 +350,8 @@ describe("TAgentTerminalGraphic", () => {
       protocol: "kitty" as const,
       capabilities,
       signal,
+      imageId: 123,
+      placementId: 456,
       visible: true,
       rawVisible: true,
       scrolling: false,
@@ -472,6 +516,69 @@ describe("TAgentTerminalGraphic", () => {
 
     stdout.dispose();
     app.dispose();
+  });
+
+  it("records terminal graphic trace metrics", async () => {
+    resetTerminalGraphicTraceMetrics();
+
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 2,
+            y: 1,
+            w: 8,
+            h: 2,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    const metrics = getTerminalGraphicTraceMetrics();
+    expect(metrics.requests).toBeGreaterThan(0);
+    expect(metrics.rendererRuns).toBe(1);
+    expect(metrics.queued).toBeGreaterThan(0);
+    expect(metrics.bytesQueued).toBeGreaterThan(0);
+    expect(metrics.totalValidateMs).toBeGreaterThanOrEqual(0);
+
+    stdout.dispose();
+    app.dispose();
+    resetTerminalGraphicTraceMetrics();
   });
 
   it("uses renderer returned rows when props.h is omitted", async () => {

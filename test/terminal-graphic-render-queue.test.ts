@@ -55,13 +55,20 @@ describe("terminal graphic render queue", () => {
     });
     const controller = new AbortController();
     const second = queue.cached("b", controller.signal, async () => "B");
+    const secondResult = second.then(
+      () => ({ ok: true as const }),
+      (error) => ({ ok: false as const, error }),
+    );
 
     await Promise.resolve();
     controller.abort();
     releaseFirst();
 
     await expect(first).resolves.toBe("A");
-    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    expect(await secondResult).toMatchObject({
+      ok: false,
+      error: { name: "AbortError" },
+    });
     expect(queue.stats()).toMatchObject({ active: 0, waiting: 0 });
   });
 
@@ -76,13 +83,20 @@ describe("terminal graphic render queue", () => {
       return "A";
     });
     const second = queue.cached("b", undefined, async () => "B");
+    const secondResult = second.then(
+      () => ({ ok: true as const }),
+      (error) => ({ ok: false as const, error }),
+    );
 
     await Promise.resolve();
     queue.clear();
     releaseFirst();
 
     await expect(first).resolves.toBe("A");
-    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    expect(await secondResult).toMatchObject({
+      ok: false,
+      error: { name: "AbortError" },
+    });
     expect(queue.stats()).toMatchObject({ active: 0, waiting: 0, cacheEntries: 0 });
   });
 });

@@ -21,11 +21,13 @@ import {
 import { getTerminalGraphicsOutput } from "../../renderer/terminal-graphics.js";
 import {
   createKittyDeleteGraphicsSequence,
+  stableTerminalGraphicNumericId,
   isTerminalGraphicsProtocol,
   isSafeTerminalGraphicsSequence,
   normalizeTerminalGraphicSize,
   sanitizeTerminalFallbackText,
 } from "../../renderer/terminal-graphics.js";
+import { recordTerminalGraphicTrace } from "../../renderer/terminal-graphics-trace.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
@@ -52,6 +54,8 @@ export type TAgentTerminalGraphicRendererContext = Readonly<{
   protocol: TerminalGraphicsResolvedProtocol;
   capabilities: TerminalGraphicsCapabilities;
   signal: AbortSignal;
+  imageId: number;
+  placementId: number;
   visible: boolean;
   rawVisible: boolean;
   scrolling: boolean;
@@ -202,6 +206,7 @@ export const tAgentTerminalGraphicProps = {
   deferRenderUntilVisible: { type: Boolean, default: true },
   suspendRawWhileScrolling: { type: Boolean, default: true },
   suspendRenderWhileScrolling: { type: Boolean, default: true },
+  scrolling: { type: Boolean, default: false },
   suspended: { type: Boolean, default: false },
   cacheKey: { type: String, default: undefined },
   trace: {
@@ -285,10 +290,28 @@ export const TAgentTerminalGraphic = defineComponent({
     const frameTaskId = `${rawId}:render`;
     const lastDrawnGraphic = shallowRef<LastDrawnGraphic | null>(null);
 
-    const isParentScrolling = computed(() => Boolean(graphicsActivity?.scrolling.value));
+    const isParentScrolling = computed(
+      () => props.scrolling || Boolean(graphicsActivity?.scrolling.value),
+    );
     const graphicsActivityVersion = computed(() => graphicsActivity?.version.value ?? 0);
     const graphicsOutput = () => getTerminalGraphicsOutput(terminal);
     const fallbackText = () => props.fallback || props.content;
+    const stableGraphicKey = computed(() =>
+      [
+        props.cacheKey ?? "",
+        props.kind,
+        props.content,
+        props.w,
+        props.h ?? "",
+        props.final ? "final" : "draft",
+      ].join("\x1F"),
+    );
+    const imageId = computed(() =>
+      stableTerminalGraphicNumericId(`image:${stableGraphicKey.value}`),
+    );
+    const placementId = computed(() =>
+      stableTerminalGraphicNumericId(`placement:${rawId}:${stableGraphicKey.value}`),
+    );
 
     function bump(): void {
       documentVersion.value++;
@@ -307,14 +330,54 @@ export const TAgentTerminalGraphic = defineComponent({
         >
       > = {},
     ): void {
+      const capabilities = currentCapabilities();
       props.trace?.({
         type,
         id: rawId,
         kind: props.kind,
-        protocol: currentCapabilities().protocol,
+        protocol: capabilities.protocol,
         contentHash: smallHash(props.content),
         ...extra,
       });
+
+      const protocol = isTerminalGraphicsProtocol(capabilities.protocol)
+        ? capabilities.protocol
+        : undefined;
+      const key = props.cacheKey ?? smallHash(props.content);
+
+      if (type === "render-start") {
+        recordTerminalGraphicTrace({ type: "renderer-start", id: rawId, key, protocol });
+      } else if (type === "render-end") {
+        recordTerminalGraphicTrace({
+          type: extra.reason ? "renderer-error" : "renderer-end",
+          id: rawId,
+          key,
+          protocol,
+          durationMs: extra.durationMs,
+          bytes: extra.sequenceBytes,
+          error: extra.reason,
+        });
+      } else if (type === "defer") {
+        recordTerminalGraphicTrace({
+          type: extra.reason === "scrolling" ? "skip-scrolling" : "skip-hidden",
+          id: rawId,
+          key,
+          protocol,
+          reason: extra.reason,
+        });
+      } else if (type === "raw-draw") {
+        recordTerminalGraphicTrace({
+          type: "queue",
+          id: rawId,
+          key,
+          protocol,
+          bytes: extra.sequenceBytes,
+        });
+      } else if (type === "raw-clear") {
+        recordTerminalGraphicTrace({ type: "clear", id: rawId, key, protocol });
+      } else if (type === "raw-skip-scroll") {
+        recordTerminalGraphicTrace({ type: "skip-scrolling", id: rawId, key, protocol });
+      }
     }
 
     function abortCurrentRender(reason: string): void {
@@ -394,7 +457,12 @@ export const TAgentTerminalGraphic = defineComponent({
     }
 
     function defaultClearSequence(protocol: TerminalGraphicsProtocol): string {
-      return protocol === "kitty" ? createKittyDeleteGraphicsSequence({ currentCell: true }) : "";
+      return protocol === "kitty"
+        ? createKittyDeleteGraphicsSequence({
+            imageId: imageId.value,
+            placementId: placementId.value,
+          })
+        : "";
     }
 
     function resolveClearSequence(current: ResolvedTerminalGraphic): string | undefined {
@@ -576,6 +644,8 @@ export const TAgentTerminalGraphic = defineComponent({
         protocol: capabilities.protocol,
         capabilities,
         signal,
+        imageId: imageId.value,
+        placementId: placementId.value,
         visible: visibleNow,
         rawVisible,
         scrolling: isParentScrolling.value,
@@ -591,6 +661,14 @@ export const TAgentTerminalGraphic = defineComponent({
     }
 
     async function renderNow(version: number): Promise<void> {
+      const protocol = currentCapabilities().protocol;
+      recordTerminalGraphicTrace({
+        type: "request",
+        id: rawId,
+        key: props.cacheKey ?? smallHash(props.content),
+        protocol: isTerminalGraphicsProtocol(protocol) ? protocol : undefined,
+      });
+
       const content = props.content;
       if (!content.trim()) {
         abortCurrentRender("superseded");
@@ -702,6 +780,7 @@ export const TAgentTerminalGraphic = defineComponent({
         () => props.final,
         () => props.deferRenderUntilVisible,
         () => props.suspendRenderWhileScrolling,
+        () => props.scrolling,
         () => props.suspended,
         () => props.cacheKey,
       ],

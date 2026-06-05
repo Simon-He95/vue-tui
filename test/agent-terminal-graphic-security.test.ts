@@ -251,11 +251,18 @@ describe("terminal graphics sequence validation", () => {
 
   it("creates safe kitty delete sequences", () => {
     const sequence = createKittyDeleteGraphicsSequence({ currentCell: true });
+    const idSequence = createKittyDeleteGraphicsSequence({ imageId: 123, placementId: 456 });
 
+    expect(createKittyDeleteGraphicsSequence()).toBe("");
     expect(sequence).toContain("a=d");
     expect(sequence).toContain("d=c");
+    expect(idSequence).toContain("a=d");
+    expect(idSequence).toContain("d=i");
+    expect(idSequence).toContain("i=123");
+    expect(idSequence).toContain("p=456");
     expect(isSafeTerminalGraphicsSequence(sequence, "kitty", "draw")).toBe(false);
     expect(isSafeTerminalGraphicsSequence(sequence, "kitty", "clear")).toBe(true);
+    expect(isSafeTerminalGraphicsSequence(idSequence, "kitty", "clear")).toBe(true);
   });
 
   it("requires iTerm2 inline images and rejects iTerm2 clear payloads", () => {

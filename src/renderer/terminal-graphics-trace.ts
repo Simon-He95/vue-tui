@@ -1,0 +1,154 @@
+import type { TerminalGraphicsProtocol } from "./terminal-graphics.js";
+
+export type TerminalGraphicTraceEventType =
+  | "request"
+  | "skip-hidden"
+  | "skip-scrolling"
+  | "cache-hit"
+  | "cache-miss"
+  | "cache-store"
+  | "renderer-start"
+  | "renderer-end"
+  | "renderer-error"
+  | "validate-end"
+  | "queue"
+  | "queue-dedupe"
+  | "clear";
+
+export type TerminalGraphicTraceEvent = Readonly<{
+  type: TerminalGraphicTraceEventType;
+  id: string;
+  key?: string;
+  protocol?: TerminalGraphicsProtocol;
+  timestamp: number;
+  durationMs?: number;
+  bytes?: number;
+  reason?: string;
+  error?: string;
+}>;
+
+export type TerminalGraphicTraceMetrics = Readonly<{
+  requests: number;
+  skippedHidden: number;
+  skippedScrolling: number;
+  cacheHits: number;
+  cacheMisses: number;
+  cacheStores: number;
+  rendererRuns: number;
+  rendererErrors: number;
+  queued: number;
+  queueDeduped: number;
+  cleared: number;
+  bytesQueued: number;
+  totalRendererMs: number;
+  totalValidateMs: number;
+}>;
+
+const metrics = {
+  requests: 0,
+  skippedHidden: 0,
+  skippedScrolling: 0,
+  cacheHits: 0,
+  cacheMisses: 0,
+  cacheStores: 0,
+  rendererRuns: 0,
+  rendererErrors: 0,
+  queued: 0,
+  queueDeduped: 0,
+  cleared: 0,
+  bytesQueued: 0,
+  totalRendererMs: 0,
+  totalValidateMs: 0,
+};
+
+const subscribers = new Set<(event: TerminalGraphicTraceEvent) => void>();
+
+export function nowTerminalGraphicTraceTime(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+}
+
+export function recordTerminalGraphicTrace(
+  event: Omit<TerminalGraphicTraceEvent, "timestamp"> & { timestamp?: number },
+): void {
+  const normalized: TerminalGraphicTraceEvent = {
+    ...event,
+    timestamp: event.timestamp ?? nowTerminalGraphicTraceTime(),
+  };
+
+  switch (normalized.type) {
+    case "request":
+      metrics.requests++;
+      break;
+    case "skip-hidden":
+      metrics.skippedHidden++;
+      break;
+    case "skip-scrolling":
+      metrics.skippedScrolling++;
+      break;
+    case "cache-hit":
+      metrics.cacheHits++;
+      break;
+    case "cache-miss":
+      metrics.cacheMisses++;
+      break;
+    case "cache-store":
+      metrics.cacheStores++;
+      break;
+    case "renderer-start":
+      metrics.rendererRuns++;
+      break;
+    case "renderer-end":
+      metrics.totalRendererMs += normalized.durationMs ?? 0;
+      break;
+    case "renderer-error":
+      metrics.rendererErrors++;
+      break;
+    case "validate-end":
+      metrics.totalValidateMs += normalized.durationMs ?? 0;
+      break;
+    case "queue":
+      metrics.queued++;
+      metrics.bytesQueued += normalized.bytes ?? 0;
+      break;
+    case "queue-dedupe":
+      metrics.queueDeduped++;
+      break;
+    case "clear":
+      metrics.cleared++;
+      break;
+  }
+
+  for (const subscriber of subscribers) subscriber(normalized);
+}
+
+export function getTerminalGraphicTraceMetrics(): TerminalGraphicTraceMetrics {
+  return { ...metrics };
+}
+
+export function resetTerminalGraphicTraceMetrics(): void {
+  metrics.requests = 0;
+  metrics.skippedHidden = 0;
+  metrics.skippedScrolling = 0;
+  metrics.cacheHits = 0;
+  metrics.cacheMisses = 0;
+  metrics.cacheStores = 0;
+  metrics.rendererRuns = 0;
+  metrics.rendererErrors = 0;
+  metrics.queued = 0;
+  metrics.queueDeduped = 0;
+  metrics.cleared = 0;
+  metrics.bytesQueued = 0;
+  metrics.totalRendererMs = 0;
+  metrics.totalValidateMs = 0;
+}
+
+export function subscribeTerminalGraphicTrace(
+  listener: (event: TerminalGraphicTraceEvent) => void,
+): () => void {
+  subscribers.add(listener);
+  return () => {
+    subscribers.delete(listener);
+  };
+}

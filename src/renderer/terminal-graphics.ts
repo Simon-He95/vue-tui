@@ -1,4 +1,8 @@
 import type { Terminal } from "../core/types.js";
+import {
+  nowTerminalGraphicTraceTime,
+  recordTerminalGraphicTrace,
+} from "./terminal-graphics-trace.js";
 
 export type TerminalGraphicsProtocol = "kitty" | "iterm2" | "sixel";
 export type TerminalGraphicsFallbackProtocol = "unicode" | "none";
@@ -322,7 +326,7 @@ export function detectTerminalGraphicsCapabilities(
   });
 }
 
-function stableId(input: string): string {
+export function hashTerminalGraphicsString(input: string): string {
   let hash = 2166136261;
 
   for (let index = 0; index < input.length; index += 1) {
@@ -330,7 +334,28 @@ function stableId(input: string): string {
     hash = Math.imul(hash, 16777619);
   }
 
-  return `tg_${(hash >>> 0).toString(36)}`;
+  return (hash >>> 0).toString(36);
+}
+
+export function stableTerminalGraphicNumericId(
+  input: string,
+  options: Readonly<{ min?: number; max?: number }> = {},
+): number {
+  const min = Math.floor(options.min ?? 1);
+  const max = Math.floor(options.max ?? 0x7fffffff);
+  const span = Math.max(1, max - min + 1);
+  let hash = 2166136261;
+
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return min + ((hash >>> 0) % span);
+}
+
+function stableId(input: string): string {
+  return `tg_${hashTerminalGraphicsString(input)}`;
 }
 
 function clampInt(value: unknown, min: number, max: number): number {
@@ -548,29 +573,53 @@ export function sanitizeTerminalFallbackText(text: unknown): string {
 export function validateTerminalGraphicFrame(
   frame: RawTerminalGraphicFrame,
 ): ValidatedTerminalGraphicFrame | null {
-  if (!isTerminalGraphicsProtocol(frame.protocol)) return null;
+  const startedAt = nowTerminalGraphicTraceTime();
+  const protocol = isTerminalGraphicsProtocol(frame.protocol) ? frame.protocol : undefined;
+  const recordValidation = () => {
+    recordTerminalGraphicTrace({
+      type: "validate-end",
+      id: frame.id ?? "",
+      protocol,
+      durationMs: nowTerminalGraphicTraceTime() - startedAt,
+      bytes: typeof frame.sequence === "string" ? frame.sequence.length : undefined,
+    });
+  };
+
+  if (!protocol) {
+    recordValidation();
+    return null;
+  }
 
   const sequence = String(frame.sequence ?? "");
 
   if (sequence.length <= 0 || sequence.length > MAX_TERMINAL_GRAPHICS_SEQUENCE_CHARS) {
+    recordValidation();
     return null;
   }
 
   const size = normalizeTerminalGraphicSize(frame.width, frame.height);
-  if (!size) return null;
+  if (!size) {
+    recordValidation();
+    return null;
+  }
 
   const ok =
-    frame.protocol === "kitty"
+    protocol === "kitty"
       ? validateKittySequence(sequence, "draw")
-      : frame.protocol === "iterm2"
+      : protocol === "iterm2"
         ? validateIterm2Sequence(sequence, "draw")
         : validateSixelSequence(sequence, "draw");
 
-  if (!ok) return null;
+  if (!ok) {
+    recordValidation();
+    return null;
+  }
 
+  recordValidation();
   return {
     ...frame,
-    id: frame.id || stableId(`${frame.protocol}:${sequence.slice(0, 4096)}`),
+    protocol,
+    id: frame.id || stableId(`${protocol}:${sequence.slice(0, 4096)}`),
     sequence,
     fallbackText: sanitizeTerminalFallbackText(frame.fallbackText),
     width: size.width,
@@ -696,8 +745,10 @@ export function createKittyDeleteGraphicsSequence(
     controls.push(`d=${options.freeImageData ? "I" : "i"}`);
     controls.push(intControl("i", options.imageId));
     controls.push(intControl("p", options.placementId));
-  } else {
+  } else if (options.currentCell) {
     controls.push(`d=${options.freeImageData ? "C" : "c"}`);
+  } else {
+    return "";
   }
 
   if (options.quiet !== false) controls.push("q=2");

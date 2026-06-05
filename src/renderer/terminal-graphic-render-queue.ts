@@ -1,3 +1,5 @@
+import { recordTerminalGraphicTrace } from "./terminal-graphics-trace.js";
+
 export type TerminalGraphicRenderQueueMetric =
   | Readonly<{ type: "cache-hit"; key: string }>
   | Readonly<{ type: "cache-store"; key: string; bytes: number }>
@@ -122,6 +124,7 @@ export function createTerminalGraphicRenderQueue(
 
     cacheBytes += bytes;
     options.onMetric?.({ type: "cache-store", key, bytes });
+    recordTerminalGraphicTrace({ type: "cache-store", id: key, key, bytes });
     evictUntilBudget();
   }
 
@@ -138,6 +141,7 @@ export function createTerminalGraphicRenderQueue(
     cache.delete(key);
     cache.set(key, entry);
     options.onMetric?.({ type: "cache-hit", key });
+    recordTerminalGraphicTrace({ type: "cache-hit", id: key, key, bytes: entry.bytes });
 
     return entry.value as T;
   }
@@ -207,6 +211,7 @@ export function createTerminalGraphicRenderQueue(
 
     const cachedValue = getCache<T>(key);
     if (cachedValue != null) return cachedValue;
+    recordTerminalGraphicTrace({ type: "cache-miss", id: key, key });
 
     const existing = inflight.get(key);
     if (existing) return raceAbort(existing as Promise<T>, signal);

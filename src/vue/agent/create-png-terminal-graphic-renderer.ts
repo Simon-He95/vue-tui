@@ -6,6 +6,7 @@ import type {
 import type { TerminalGraphicRenderQueue } from "../../renderer/terminal-graphic-render-queue.js";
 import {
   createIterm2InlineImageSequence,
+  createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   sanitizeTerminalFallbackText,
 } from "../../renderer/terminal-graphics.js";
@@ -91,8 +92,14 @@ export function createPngTerminalGraphicRenderer(
             type: "sequence",
             protocol: "kitty",
             sequence: createKittyGraphicsSequence(png.base64, {
+              imageId: context.imageId,
+              placementId: context.placementId,
               columns: cols,
               rows,
+            }),
+            clearSequence: createKittyDeleteGraphicsSequence({
+              imageId: context.imageId,
+              placementId: context.placementId,
             }),
             fallback: localFallback,
             cols,

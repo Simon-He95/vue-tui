@@ -105,6 +105,7 @@ Import: `@simon_he/vue-tui/agent`
 | <code>deferRenderUntilVisible</code>     | <code>boolean</code>                                             | <code>true</code>                                      | 否   | —    |
 | <code>suspendRawWhileScrolling</code>    | <code>boolean</code>                                             | <code>true</code>                                      | 否   | —    |
 | <code>suspendRenderWhileScrolling</code> | <code>boolean</code>                                             | <code>true</code>                                      | 否   | —    |
+| <code>scrolling</code>                   | <code>boolean</code>                                             | <code>false</code>                                     | 否   | —    |
 | <code>suspended</code>                   | <code>boolean</code>                                             | <code>false</code>                                     | 否   | —    |
 | <code>cacheKey</code>                    | <code>string</code>                                              | <code>undefined</code>                                 | 否   | —    |
 | <code>trace</code>                       | <code>(event: TAgentTerminalGraphicTraceEvent) =&gt; void</code> | <code>undefined</code>                                 | 否   | —    |
