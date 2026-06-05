@@ -51,6 +51,8 @@ import { firstNonEmptyEnv } from "../../utils/env.js";
 import { STDOUT_RENDERER_CAPABILITIES } from "../capabilities.js";
 import {
   detectTerminalGraphicsCapabilities,
+  isSafeTerminalGraphicsSequence,
+  isTerminalGraphicsProtocol,
   registerTerminalGraphicsOutput,
   validateTerminalGraphicsPayload,
   validateTerminalGraphicFrame,
@@ -477,6 +479,16 @@ export function createStdoutRenderer(
   let nextGraphicsOrder = 0;
   const hasPendingTerminalGraphics = (): boolean =>
     pendingGraphics.size > 0 || pendingGraphicClears.size > 0;
+  function canUseTerminalGraphicsProtocol(
+    protocol: unknown,
+    capabilities: TerminalGraphicsCapabilities,
+  ): protocol is TerminalGraphicsPayload["protocol"] {
+    return (
+      capabilities.supported &&
+      isTerminalGraphicsProtocol(protocol) &&
+      Boolean(capabilities[protocol])
+    );
+  }
   function requestTerminalGraphicsFlush(): void {
     if (disposed) return;
     render([], false);
@@ -499,7 +511,9 @@ export function createStdoutRenderer(
         order: nextGraphicsOrder++,
       };
 
-      if (!validateTerminalGraphicsPayload(normalized, graphicsCapabilities)) return;
+      if (!normalized.id.trim()) return;
+      if (!Number.isFinite(normalized.x) || !Number.isFinite(normalized.y)) return;
+      if (!canUseTerminalGraphicsProtocol(normalized.protocol, graphicsCapabilities)) return;
 
       if (op === "draw") {
         const frame = validateTerminalGraphicFrame({
@@ -514,14 +528,7 @@ export function createStdoutRenderer(
 
         const clearSequence =
           normalized.clearSequence &&
-          validateTerminalGraphicsPayload(
-            {
-              ...normalized,
-              sequence: normalized.clearSequence,
-              op: "clear",
-            },
-            graphicsCapabilities,
-          )
+          isSafeTerminalGraphicsSequence(normalized.clearSequence, normalized.protocol, "clear")
             ? normalized.clearSequence
             : undefined;
 
@@ -538,6 +545,8 @@ export function createStdoutRenderer(
         requestTerminalGraphicsFlush();
         return;
       }
+
+      if (!validateTerminalGraphicsPayload(normalized, graphicsCapabilities)) return;
 
       pendingGraphics.delete(`${normalized.id}:draw`);
       pendingGraphics.set(`${normalized.id}:clear`, {
@@ -2937,6 +2946,10 @@ export function createStdoutRenderer(
       }
     }
     const nextLastRenderedRows = !rowsToRender ? size.rows : lastRenderedRows;
+    const graphicsOnlyFrame =
+      Boolean(rowsToRender && rowsToRender.length === 0) &&
+      !scrollHandled &&
+      (graphicsClearsToRender.length > 0 || graphicsToRender.length > 0);
     const commitRenderBaseline = (): void => {
       lastRenderedRows = nextLastRenderedRows;
 
@@ -2950,10 +2963,18 @@ export function createStdoutRenderer(
       const tmpTextIds = prevTextIds;
       prevTextIds = currentTextIds;
       currentTextIds = tmpTextIds;
-      fpPrevValid = !hrefIndexResetRequiresBaseline && !fingerprintInternResetRequiresBaseline;
+      fpPrevValid = graphicsOnlyFrame
+        ? fpPrevValid
+        : !hrefIndexResetRequiresBaseline && !fingerprintInternResetRequiresBaseline;
       prevOverlayBlockedRows = overlayCoverage.blockedRows;
       prevOverlayPartialRows = overlayCoverage.partialRows;
     };
+
+    if (graphicsOnlyFrame && fpPrevValid && currentFP.length === prevFP.length) {
+      currentFP.set(prevFP);
+      currentHrefIds.set(prevHrefIds);
+      currentTextIds.set(prevTextIds);
+    }
 
     if (graphicsClearsToRender.length > 0 || graphicsToRender.length > 0) {
       let terminalGraphicsDraws = 0;

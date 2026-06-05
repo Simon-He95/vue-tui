@@ -42,6 +42,17 @@ export {
   TMermaidText,
 } from "./vue/components/TMermaidText.js";
 export type {
+  CreatePngTerminalGraphicRendererOptions,
+  PngTerminalGraphicFrame,
+} from "./vue/agent/create-png-terminal-graphic-renderer.js";
+export { createPngTerminalGraphicRenderer } from "./vue/agent/create-png-terminal-graphic-renderer.js";
+export type {
+  TerminalGraphicRenderQueue,
+  TerminalGraphicRenderQueueMetric,
+  TerminalGraphicRenderQueueOptions,
+} from "./renderer/terminal-graphic-render-queue.js";
+export { createTerminalGraphicRenderQueue } from "./renderer/terminal-graphic-render-queue.js";
+export type {
   CreateKittyDeleteGraphicsSequenceOptions,
   CreateKittyGraphicsSequenceOptions,
   RawTerminalGraphicFrame,
@@ -60,7 +71,9 @@ export {
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
+  isTerminalGraphicsProtocol,
   isSafeTerminalGraphicsSequence,
+  normalizeTerminalGraphicSize,
   sanitizeTerminalFallbackText,
   validateTerminalGraphicFrame,
   validateTerminalGraphicsPayload,

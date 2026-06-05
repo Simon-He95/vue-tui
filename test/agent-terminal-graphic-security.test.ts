@@ -6,7 +6,9 @@ import {
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
+  isTerminalGraphicsProtocol,
   isSafeTerminalGraphicsSequence,
+  normalizeTerminalGraphicSize,
   sanitizeTerminalFallbackText,
   validateTerminalGraphicFrame,
   validateTerminalGraphicsPayload,
@@ -115,6 +117,22 @@ describe("terminal graphics capability detection", () => {
       reason: "zellij-without-passthrough",
       multiplexer: "zellij",
     });
+
+    expect(
+      detectTerminalGraphicsCapabilities({
+        stdoutIsTTY: true,
+        env: {
+          KITTY_WINDOW_ID: "1",
+          ZELLIJ: "1",
+          VUE_TUI_TERMINAL_GRAPHICS_PASSTHROUGH: "1",
+        },
+      }),
+    ).toMatchObject({
+      protocol: "unicode",
+      supported: false,
+      reason: "zellij-passthrough-not-implemented",
+      passthrough: false,
+    });
   });
 
   it("supports explicit protocol override", () => {
@@ -141,6 +159,11 @@ describe("terminal graphics capability detection", () => {
 
 describe("terminal graphics sequence validation", () => {
   it("accepts only known graphics protocol envelopes", () => {
+    expect(isTerminalGraphicsProtocol("kitty")).toBe(true);
+    expect(isTerminalGraphicsProtocol("unknown")).toBe(false);
+    expect(normalizeTerminalGraphicSize(4, 2)).toEqual({ width: 4, height: 2 });
+    expect(normalizeTerminalGraphicSize(200, 200)).toBeNull();
+
     expect(
       validateTerminalGraphicFrame({
         protocol: "kitty",
@@ -170,6 +193,16 @@ describe("terminal graphics sequence validation", () => {
         height: 2,
       })?.protocol,
     ).toBe("sixel");
+
+    expect(
+      validateTerminalGraphicFrame({
+        protocol: "unknown" as any,
+        sequence: `${ESC}Pq"1;1;4;2#0!4~${ST}`,
+        fallbackText: "abc",
+        width: 4,
+        height: 2,
+      }),
+    ).toBeNull();
   });
 
   it("rejects unrelated terminal control sequences and sanitizes fallback", () => {
@@ -273,6 +306,22 @@ describe("terminal graphics sequence validation", () => {
           sequence: createIterm2InlineImageSequence("QUJD"),
         },
         capabilities,
+      ),
+    ).toBe(false);
+
+    expect(
+      validateTerminalGraphicsPayload(
+        {
+          id: "g1",
+          x: 0,
+          y: 0,
+          protocol: "unknown" as any,
+          sequence: `${ESC}Pq"1;1;4;2#0!4~${ST}`,
+        },
+        detectTerminalGraphicsCapabilities({
+          stdoutIsTTY: true,
+          env: { VUE_TUI_TERMINAL_GRAPHICS: "sixel" },
+        }),
       ),
     ).toBe(false);
   });

@@ -30,6 +30,12 @@ export { createOsc52ClipboardProvider, type Osc52ClipboardOptions } from "./runt
 export type { StdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export { getStdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export type {
+  TerminalGraphicRenderQueue,
+  TerminalGraphicRenderQueueMetric,
+  TerminalGraphicRenderQueueOptions,
+} from "./renderer/terminal-graphic-render-queue.js";
+export { createTerminalGraphicRenderQueue } from "./renderer/terminal-graphic-render-queue.js";
+export type {
   CliOutput,
   DirtyRowPatchMode,
   StdoutColorMode,
@@ -57,7 +63,9 @@ export {
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
+  isTerminalGraphicsProtocol,
   isSafeTerminalGraphicsSequence,
+  normalizeTerminalGraphicSize,
   sanitizeTerminalFallbackText,
   validateTerminalGraphicFrame,
   validateTerminalGraphicsPayload,

@@ -21,9 +21,10 @@ import {
 import { getTerminalGraphicsOutput } from "../../renderer/terminal-graphics.js";
 import {
   createKittyDeleteGraphicsSequence,
+  isTerminalGraphicsProtocol,
   isSafeTerminalGraphicsSequence,
+  normalizeTerminalGraphicSize,
   sanitizeTerminalFallbackText,
-  validateTerminalGraphicFrame,
 } from "../../renderer/terminal-graphics.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
@@ -55,6 +56,13 @@ export type TAgentTerminalGraphicRendererContext = Readonly<{
   rawVisible: boolean;
   scrolling: boolean;
   cacheKey?: string;
+  viewport: Readonly<{
+    visible: boolean;
+    rawVisible: boolean;
+    scrolling: boolean;
+    rect: Rect;
+    fullRect: Rect;
+  }>;
 }>;
 
 export type TAgentTerminalGraphicTraceEvent = Readonly<{
@@ -62,6 +70,7 @@ export type TAgentTerminalGraphicTraceEvent = Readonly<{
     | "render-start"
     | "render-end"
     | "render-abort"
+    | "defer"
     | "raw-draw"
     | "raw-clear"
     | "raw-skip-scroll"
@@ -72,7 +81,12 @@ export type TAgentTerminalGraphicTraceEvent = Readonly<{
   contentHash: string;
   durationMs?: number;
   sequenceChars?: number;
+  sequenceBytes?: number;
   reason?: string;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
 }>;
 
 export type TAgentTerminalGraphicRenderResult =
@@ -188,6 +202,7 @@ export const tAgentTerminalGraphicProps = {
   deferRenderUntilVisible: { type: Boolean, default: true },
   suspendRawWhileScrolling: { type: Boolean, default: true },
   suspendRenderWhileScrolling: { type: Boolean, default: true },
+  suspended: { type: Boolean, default: false },
   cacheKey: { type: String, default: undefined },
   trace: {
     type: Function as PropType<(event: TAgentTerminalGraphicTraceEvent) => void>,
@@ -201,8 +216,11 @@ type ResolvedTerminalGraphic = Readonly<{
   type: "terminal";
   protocol: TerminalGraphicsProtocol;
   sequence: string;
+  sequenceHash: string;
+  sequenceBytes: number;
   fallback: string;
   clearSequence?: string;
+  clearSequenceHash?: string;
   cols?: number;
   rows?: number;
 }>;
@@ -236,8 +254,10 @@ function terminalDrawKey(
     rect.y,
     rect.w,
     rect.h,
-    smallHash(current.sequence),
-    smallHash(clearSequence ?? ""),
+    current.sequenceHash,
+    clearSequence === current.clearSequence
+      ? (current.clearSequenceHash ?? "")
+      : smallHash(clearSequence ?? ""),
   ].join(":");
 }
 
@@ -281,7 +301,10 @@ export const TAgentTerminalGraphic = defineComponent({
     function trace(
       type: TAgentTerminalGraphicTraceEvent["type"],
       extra: Partial<
-        Pick<TAgentTerminalGraphicTraceEvent, "durationMs" | "sequenceChars" | "reason">
+        Pick<
+          TAgentTerminalGraphicTraceEvent,
+          "durationMs" | "sequenceChars" | "sequenceBytes" | "reason" | "x" | "y" | "w" | "h"
+        >
       > = {},
     ): void {
       props.trace?.({
@@ -329,29 +352,42 @@ export const TAgentTerminalGraphic = defineComponent({
 
       const maybeRaw = result as Readonly<{
         sequence?: unknown;
-        protocol?: TerminalGraphicsProtocol;
+        protocol?: unknown;
         fallback?: unknown;
         clearSequence?: unknown;
         cols?: unknown;
         rows?: unknown;
       }>;
       const sequence = typeof maybeRaw.sequence === "string" ? maybeRaw.sequence : "";
-      const protocol = maybeRaw.protocol;
+      const protocol = isTerminalGraphicsProtocol(maybeRaw.protocol) ? maybeRaw.protocol : null;
+      const fallback =
+        typeof maybeRaw.fallback === "string"
+          ? sanitizeTerminalFallbackText(maybeRaw.fallback)
+          : fallbackText();
 
-      if (!sequence || !protocol) {
+      if (!sequence || !protocol || !isSafeTerminalGraphicsSequence(sequence, protocol, "draw")) {
         return {
           type: "text",
-          text: typeof maybeRaw.fallback === "string" ? maybeRaw.fallback : fallbackText(),
+          text: fallback,
         };
       }
+
+      const rawClear =
+        typeof maybeRaw.clearSequence === "string" ? maybeRaw.clearSequence : undefined;
+      const clearSequence =
+        rawClear && isSafeTerminalGraphicsSequence(rawClear, protocol, "clear")
+          ? rawClear
+          : undefined;
 
       return {
         type: "terminal",
         protocol,
         sequence,
-        fallback: typeof maybeRaw.fallback === "string" ? maybeRaw.fallback : fallbackText(),
-        clearSequence:
-          typeof maybeRaw.clearSequence === "string" ? maybeRaw.clearSequence : undefined,
+        sequenceHash: smallHash(sequence),
+        sequenceBytes: sequence.length,
+        fallback,
+        clearSequence,
+        clearSequenceHash: clearSequence ? smallHash(clearSequence) : undefined,
         cols: positiveInt(maybeRaw.cols),
         rows: positiveInt(maybeRaw.rows),
       };
@@ -362,7 +398,9 @@ export const TAgentTerminalGraphic = defineComponent({
     }
 
     function resolveClearSequence(current: ResolvedTerminalGraphic): string | undefined {
-      const candidate = current.clearSequence ?? defaultClearSequence(current.protocol);
+      if (current.clearSequence) return current.clearSequence;
+
+      const candidate = defaultClearSequence(current.protocol);
       if (!candidate) return undefined;
       return isSafeTerminalGraphicsSequence(candidate, current.protocol, "clear")
         ? candidate
@@ -392,7 +430,12 @@ export const TAgentTerminalGraphic = defineComponent({
       }
 
       lastDrawnGraphic.value = null;
-      trace("raw-clear");
+      trace("raw-clear", {
+        x: previous.x,
+        y: previous.y,
+        w: previous.w,
+        h: previous.h,
+      });
     }
 
     function queueDrawGraphic(
@@ -460,19 +503,13 @@ export const TAgentTerminalGraphic = defineComponent({
       const output = graphicsOutput();
       const full = fullRect.value;
       const abs = absRect.value;
+      const size = normalizeTerminalGraphicSize(full.w, full.h);
       return (
         current?.type === "terminal" &&
+        size != null &&
         Boolean(output?.capabilities.supported) &&
         (output?.capabilities.preferredProtocol === current.protocol ||
           Boolean(output?.capabilities[current.protocol])) &&
-        validateTerminalGraphicFrame({
-          id: rawId,
-          protocol: current.protocol,
-          sequence: current.sequence,
-          fallbackText: current.fallback,
-          width: full.w,
-          height: full.h,
-        }) != null &&
         abs.x === full.x &&
         abs.y === full.y &&
         abs.w === full.w &&
@@ -481,7 +518,7 @@ export const TAgentTerminalGraphic = defineComponent({
     });
 
     const rawSuppressedByScroll = computed(
-      () => props.suspendRawWhileScrolling && isParentScrolling.value,
+      () => props.suspended || (props.suspendRawWhileScrolling && isParentScrolling.value),
     );
 
     const rawCanQueue = computed(() => rawCanRender.value && !rawSuppressedByScroll.value);
@@ -505,9 +542,15 @@ export const TAgentTerminalGraphic = defineComponent({
       );
     }
 
+    function renderDeferReason(): string | null {
+      if (props.suspended) return "suspended";
+      if (props.deferRenderUntilVisible && !hasPaintableRect()) return "not-visible";
+      if (props.suspendRenderWhileScrolling && isParentScrolling.value) return "scrolling";
+      return null;
+    }
+
     function shouldDeferRender(): boolean {
-      if (props.deferRenderUntilVisible && !hasPaintableRect()) return true;
-      return props.suspendRenderWhileScrolling && isParentScrolling.value;
+      return renderDeferReason() != null;
     }
 
     function setDeferredFallback(content: string): void {
@@ -522,6 +565,8 @@ export const TAgentTerminalGraphic = defineComponent({
 
     function resolveRendererContext(signal: AbortSignal): TAgentTerminalGraphicRendererContext {
       const capabilities = currentCapabilities();
+      const visibleNow = hasPaintableRect();
+      const rawVisible = rawOutputCanRender() && !rawSuppressedByScroll.value;
       return {
         kind: props.kind,
         width: props.w,
@@ -531,10 +576,17 @@ export const TAgentTerminalGraphic = defineComponent({
         protocol: capabilities.protocol,
         capabilities,
         signal,
-        visible: hasPaintableRect(),
-        rawVisible: rawOutputCanRender() && !rawSuppressedByScroll.value,
+        visible: visibleNow,
+        rawVisible,
         scrolling: isParentScrolling.value,
         cacheKey: props.cacheKey,
+        viewport: {
+          visible: visibleNow,
+          rawVisible,
+          scrolling: isParentScrolling.value,
+          rect: absRect.value,
+          fullRect: fullRect.value,
+        },
       };
     }
 
@@ -563,10 +615,12 @@ export const TAgentTerminalGraphic = defineComponent({
         return;
       }
 
-      if (shouldDeferRender()) {
-        abortCurrentRender("deferred");
+      const deferred = renderDeferReason();
+      if (deferred) {
+        abortCurrentRender(deferred);
         if (!alive || version !== renderVersion) return;
         setDeferredFallback(content);
+        trace("defer", { reason: deferred });
         return;
       }
 
@@ -592,6 +646,7 @@ export const TAgentTerminalGraphic = defineComponent({
         trace("render-end", {
           durationMs: performance.now() - startedAt,
           sequenceChars: normalized.type === "terminal" ? normalized.sequence.length : 0,
+          sequenceBytes: normalized.type === "terminal" ? normalized.sequenceBytes : 0,
         });
         bump();
       } catch (err) {
@@ -647,6 +702,7 @@ export const TAgentTerminalGraphic = defineComponent({
         () => props.final,
         () => props.deferRenderUntilVisible,
         () => props.suspendRenderWhileScrolling,
+        () => props.suspended,
         () => props.cacheKey,
       ],
       () => {
@@ -753,7 +809,14 @@ export const TAgentTerminalGraphic = defineComponent({
             rawCanQueue.value
           ) {
             if (queueDrawGraphic(output, current, full)) {
-              trace("raw-draw", { sequenceChars: current.sequence.length });
+              trace("raw-draw", {
+                sequenceChars: current.sequence.length,
+                sequenceBytes: current.sequenceBytes,
+                x: full.x,
+                y: full.y,
+                w: full.w,
+                h: full.h,
+              });
             }
           } else {
             if (current?.type === "terminal" && rawSuppressedByScroll.value) {
@@ -785,10 +848,12 @@ export const TAgentTerminalGraphic = defineComponent({
       () => {
         if (!alive) return;
 
-        if (shouldDeferRender()) {
-          abortCurrentRender("deferred");
+        const deferred = renderDeferReason();
+        if (deferred) {
+          abortCurrentRender(deferred);
           if (status.value === "loading" || !graphic.value || lastRenderedContent !== props.content)
             setDeferredFallback(props.content);
+          trace("defer", { reason: deferred });
         }
 
         if (!visible.value || !rawCanQueue.value) queueClearLastGraphic();

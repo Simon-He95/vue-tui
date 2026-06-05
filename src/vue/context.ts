@@ -157,8 +157,9 @@ export const TInputPluginsContextKey =
 export const TPathPickerProviderContextKey: InjectionKey<
   Readonly<Ref<PathPickerProvider | undefined>>
 > = injectionKey<Readonly<Ref<PathPickerProvider | undefined>>>("TPathPickerProvider");
-export const TerminalGraphicsActivityKey =
-  injectionKey<TerminalGraphicsActivity>("TerminalGraphicsActivity");
+export const TerminalGraphicsActivityKey = injectionKey<TerminalGraphicsActivity>(
+  "TerminalGraphicsActivity",
+);
 
 // Provided by dialog surfaces to indicate "this subtree is inside a modal dialog".
 // Used by inputs to opt into dialog confirmation semantics (e.g. Enter submits the dialog).

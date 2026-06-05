@@ -86,9 +86,9 @@ const OSC_RE = new RegExp(`${ESC_RE}\\][\\s\\S]*?(?:${BEL_RE}|${ESC_RE}\\\\)`, "
 const DCS_RE = new RegExp(`${ESC_RE}P[\\s\\S]*?${ESC_RE}\\\\`, "g");
 const APC_RE = new RegExp(`${ESC_RE}_[\\s\\S]*?${ESC_RE}\\\\`, "g");
 
-const MAX_SEQUENCE_CHARS = 2 * 1024 * 1024;
-const MAX_FALLBACK_CHARS = 16_384;
-const MAX_GRAPHIC_CELLS = 10_000;
+export const MAX_TERMINAL_GRAPHICS_SEQUENCE_CHARS = 2 * 1024 * 1024;
+export const MAX_TERMINAL_GRAPHICS_FALLBACK_CHARS = 16_384;
+export const MAX_TERMINAL_GRAPHIC_CELLS = 10_000;
 
 const terminalGraphicsOutputs = new WeakMap<Terminal, TerminalGraphicsOutput>();
 
@@ -150,6 +150,10 @@ function normalizeMode(value: unknown): TerminalGraphicsResolvedProtocol | "auto
   }
 
   return "auto";
+}
+
+export function isTerminalGraphicsProtocol(value: unknown): value is TerminalGraphicsProtocol {
+  return value === "kitty" || value === "iterm2" || value === "sixel";
 }
 
 function uniqueProtocols(protocols: TerminalGraphicsProtocol[]): TerminalGraphicsProtocol[] {
@@ -254,9 +258,11 @@ export function detectTerminalGraphicsCapabilities(
       : insideZellij
         ? "zellij"
         : null;
-  const passthrough =
+  const passthroughRequested =
     truthy(envString(env, "VUE_TUI_TERMINAL_GRAPHICS_PASSTHROUGH")) ||
     truthy(envString(env, "VUE_TUI_GRAPHICS_TMUX_PASSTHROUGH"));
+  const passthroughSupported = !multiplexer || multiplexer === "tmux";
+  const passthrough = passthroughRequested && passthroughSupported;
   const mode = normalizeMode(
     envString(env, "VUE_TUI_TERMINAL_GRAPHICS") ?? envString(env, "VUE_TUI_GRAPHICS_PROTOCOL"),
   );
@@ -282,6 +288,13 @@ export function detectTerminalGraphicsCapabilities(
 
   if (truthy(envString(env, "CI")) && !force) {
     return capabilitiesFor("unicode", { ...base, reason: "ci" });
+  }
+
+  if (multiplexer && passthroughRequested && !passthroughSupported && !force) {
+    return capabilitiesFor("unicode", {
+      ...base,
+      reason: `${multiplexer}-passthrough-not-implemented`,
+    });
   }
 
   if (multiplexer && !passthrough && !force) {
@@ -324,6 +337,18 @@ function clampInt(value: unknown, min: number, max: number): number {
   const n = Math.trunc(Number(value));
   if (!Number.isFinite(n)) return min;
   return Math.min(max, Math.max(min, n));
+}
+
+export function normalizeTerminalGraphicSize(
+  width: unknown,
+  height: unknown,
+): { width: number; height: number } | null {
+  const w = clampInt(width, 1, MAX_TERMINAL_GRAPHIC_CELLS);
+  const h = clampInt(height, 1, MAX_TERMINAL_GRAPHIC_CELLS);
+
+  if (w * h > MAX_TERMINAL_GRAPHIC_CELLS) return null;
+
+  return { width: w, height: h };
 }
 
 function withoutNestedEscapes(body: string): boolean {
@@ -517,24 +542,22 @@ export function sanitizeTerminalFallbackText(text: unknown): string {
       .replace(CSI_RE, "")
       .replace(DCS_RE, "")
       .replace(APC_RE, ""),
-  ).slice(0, MAX_FALLBACK_CHARS);
+  ).slice(0, MAX_TERMINAL_GRAPHICS_FALLBACK_CHARS);
 }
 
 export function validateTerminalGraphicFrame(
   frame: RawTerminalGraphicFrame,
 ): ValidatedTerminalGraphicFrame | null {
+  if (!isTerminalGraphicsProtocol(frame.protocol)) return null;
+
   const sequence = String(frame.sequence ?? "");
 
-  if (sequence.length <= 0 || sequence.length > MAX_SEQUENCE_CHARS) {
+  if (sequence.length <= 0 || sequence.length > MAX_TERMINAL_GRAPHICS_SEQUENCE_CHARS) {
     return null;
   }
 
-  const width = clampInt(frame.width, 1, MAX_GRAPHIC_CELLS);
-  const height = clampInt(frame.height, 1, MAX_GRAPHIC_CELLS);
-
-  if (width * height > MAX_GRAPHIC_CELLS) {
-    return null;
-  }
+  const size = normalizeTerminalGraphicSize(frame.width, frame.height);
+  if (!size) return null;
 
   const ok =
     frame.protocol === "kitty"
@@ -550,8 +573,8 @@ export function validateTerminalGraphicFrame(
     id: frame.id || stableId(`${frame.protocol}:${sequence.slice(0, 4096)}`),
     sequence,
     fallbackText: sanitizeTerminalFallbackText(frame.fallbackText),
-    width,
-    height,
+    width: size.width,
+    height: size.height,
   };
 }
 
@@ -560,7 +583,8 @@ export function isSafeTerminalGraphicsSequence(
   protocol: TerminalGraphicsProtocol,
   op: TerminalGraphicsOperation = "draw",
 ): boolean {
-  if (!sequence || sequence.length > MAX_SEQUENCE_CHARS) return false;
+  if (!isTerminalGraphicsProtocol(protocol)) return false;
+  if (!sequence || sequence.length > MAX_TERMINAL_GRAPHICS_SEQUENCE_CHARS) return false;
 
   return protocol === "kitty"
     ? validateKittySequence(sequence, op)
@@ -576,6 +600,7 @@ export function validateTerminalGraphicsPayload(
   if (!payload.id.trim()) return false;
   if (!Number.isFinite(payload.x) || !Number.isFinite(payload.y)) return false;
   if (!capabilities.supported) return false;
+  if (!isTerminalGraphicsProtocol(payload.protocol)) return false;
 
   if (payload.protocol === "kitty" && !capabilities.kitty) return false;
   if (payload.protocol === "iterm2" && !capabilities.iterm2) return false;

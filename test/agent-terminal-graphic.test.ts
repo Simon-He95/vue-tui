@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   TAgentTerminalGraphic,
   TText,
+  createPngTerminalGraphicRenderer,
+  createTerminalGraphicRenderQueue,
   createIterm2InlineImageSequence,
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
@@ -152,6 +154,13 @@ describe("TAgentTerminalGraphic", () => {
       expect(context.rawVisible).toBe(true);
       expect(context.scrolling).toBe(false);
       expect(context.cacheKey).toBe("image-cache-key");
+      expect(context.viewport).toMatchObject({
+        visible: true,
+        rawVisible: true,
+        scrolling: false,
+        rect: { x: 2, y: 1, w: 8, h: 2 },
+        fullRect: { x: 2, y: 1, w: 8, h: 2 },
+      });
       return {
         type: "sequence" as const,
         protocol: "kitty" as const,
@@ -240,6 +249,84 @@ describe("TAgentTerminalGraphic", () => {
     expect(rowText(app, 0)).toBe("second");
 
     app.dispose();
+  });
+
+  it("does not call renderer while suspended", async () => {
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "text" as const,
+      text: "rendered",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            suspended: true,
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(app, 0)).toBe("fallback");
+
+    app.dispose();
+  });
+
+  it("creates cached PNG terminal graphics renderers", async () => {
+    const queue = createTerminalGraphicRenderQueue();
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      fallback: "png fallback",
+      cols: 4,
+      rows: 2,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({
+      queue,
+      toPngBase64,
+    });
+    const signal = new AbortController().signal;
+    const context = {
+      kind: "image" as const,
+      width: 4,
+      height: 2,
+      final: true,
+      streaming: false,
+      protocol: "kitty" as const,
+      capabilities,
+      signal,
+      visible: true,
+      rawVisible: true,
+      scrolling: false,
+      viewport: {
+        visible: true,
+        rawVisible: true,
+        scrolling: false,
+        rect: { x: 0, y: 0, w: 4, h: 2 },
+        fullRect: { x: 0, y: 0, w: 4, h: 2 },
+      },
+    };
+
+    const first = await renderer("image.png", context);
+    const second = await renderer("image.png", context);
+
+    expect(toPngBase64).toHaveBeenCalledTimes(1);
+    expect(first).toMatchObject({ type: "sequence", protocol: "kitty", fallback: "png fallback" });
+    expect(second).toEqual(first);
+    expect(queue.stats().cacheEntries).toBe(1);
   });
 
   it("suspends virtual row raw rendering while scrolling and hydrates after idle", async () => {
