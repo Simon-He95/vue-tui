@@ -339,4 +339,54 @@ describe("terminal graphic render queue", () => {
     });
     expect(queue.stats()).toMatchObject({ active: 0, waiting: 0, cacheEntries: 0 });
   });
+
+  it("releases an active slot when an abortable render is aborted", async () => {
+    const metrics: string[] = [];
+    const queue = createTerminalGraphicRenderQueue({
+      maxConcurrency: 1,
+      onMetric: (metric) => metrics.push(metric.type),
+    });
+
+    const offscreen = new AbortController();
+    let markStarted!: () => void;
+    let finishOffscreen!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const finishGate = new Promise<void>((resolve) => {
+      finishOffscreen = resolve;
+    });
+
+    const first = queue
+      .cached("offscreen", offscreen.signal, async () => {
+        markStarted();
+        await finishGate;
+        return "stale";
+      })
+      .then(
+        () => ({ ok: true as const }),
+        (error) => ({ ok: false as const, error }),
+      );
+
+    await started;
+
+    let visibleStarted = false;
+    const second = queue.cached("visible", undefined, async () => {
+      visibleStarted = true;
+      return "visible";
+    });
+
+    await Promise.resolve();
+    expect(visibleStarted).toBe(false);
+
+    offscreen.abort();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(visibleStarted).toBe(true);
+    await expect(second).resolves.toBe("visible");
+    finishOffscreen();
+    expect(await first).toMatchObject({ ok: false, error: { name: "AbortError" } });
+    expect(metrics).toContain("render-abort");
+  });
 });

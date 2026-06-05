@@ -543,6 +543,44 @@ function validateKittySequence(sequence: string, op: TerminalGraphicsOperation =
   return true;
 }
 
+function validateIterm2Dimension(value: string): boolean {
+  return /^auto$/i.test(value) || /^(?:[1-9]\d{0,4})(?:px|%)?$/.test(value);
+}
+
+function validateIterm2Params(params: string): boolean {
+  const seen = new Set<string>();
+  let inline = false;
+
+  for (const part of params.split(";").filter(Boolean)) {
+    const eq = part.indexOf("=");
+    if (eq <= 0) return false;
+
+    const key = part.slice(0, eq);
+    const value = part.slice(eq + 1);
+    if (seen.has(key)) return false;
+    seen.add(key);
+
+    switch (key) {
+      case "inline":
+        if (value !== "1") return false;
+        inline = true;
+        break;
+      case "width":
+      case "height":
+        if (!validateIterm2Dimension(value)) return false;
+        break;
+      case "preserveAspectRatio":
+      case "doNotMoveCursor":
+        if (!/^[01]$/.test(value)) return false;
+        break;
+      default:
+        return false;
+    }
+  }
+
+  return inline;
+}
+
 function validateIterm2Sequence(sequence: string, op: TerminalGraphicsOperation = "draw"): boolean {
   if (op === "clear") return false;
 
@@ -571,8 +609,7 @@ function validateIterm2Sequence(sequence: string, op: TerminalGraphicsOperation 
     if (!/^[A-Za-z0-9_=;,.%+\-:]*$/.test(params)) return false;
     if (!isBase64ish(payload)) return false;
 
-    const paramSet = new Set(params.split(";").filter(Boolean));
-    if (!paramSet.has("inline=1")) return false;
+    if (!validateIterm2Params(params)) return false;
 
     index = end + (end === stEnd ? ST.length : BEL.length);
   }

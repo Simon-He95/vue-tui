@@ -287,6 +287,19 @@ describe("terminal graphics sequence validation", () => {
     expect(isSafeTerminalGraphicsSequence(inline, "iterm2", "clear")).toBe(false);
   });
 
+  it("rejects iTerm2 inline image payloads with non-whitelisted params", () => {
+    const data = "QUJD";
+    const safe = createIterm2InlineImageSequence(data, { width: 4, height: 2 });
+    const withName = `${ESC}]1337;File=inline=1;name=evil:${data}${BEL}`;
+    const withDownloadShape = `${ESC}]1337;File=inline=1;download=1:${data}${BEL}`;
+    const withHugeDimension = `${ESC}]1337;File=inline=1;width=999999999:${data}${BEL}`;
+
+    expect(isSafeTerminalGraphicsSequence(safe, "iterm2", "draw")).toBe(true);
+    expect(isSafeTerminalGraphicsSequence(withName, "iterm2", "draw")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(withDownloadShape, "iterm2", "draw")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(withHugeDimension, "iterm2", "draw")).toBe(false);
+  });
+
   it("rejects kitty clear payloads as draw payloads", () => {
     const draw = createKittyGraphicsSequence("QUJD");
     const clear = createKittyDeleteGraphicsSequence({ currentCell: true });

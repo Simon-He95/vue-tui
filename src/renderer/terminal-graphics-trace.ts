@@ -9,6 +9,7 @@ export type TerminalGraphicTraceEventType =
   | "cache-store"
   | "renderer-start"
   | "renderer-end"
+  | "renderer-abort"
   | "renderer-error"
   | "validate-end"
   | "queue"
@@ -39,6 +40,7 @@ export type TerminalGraphicTraceMetrics = Readonly<{
   cacheMisses: number;
   cacheStores: number;
   rendererRuns: number;
+  rendererAborts: number;
   rendererErrors: number;
   queued: number;
   queueWaits: number;
@@ -64,6 +66,7 @@ const metrics = {
   cacheMisses: 0,
   cacheStores: 0,
   rendererRuns: 0,
+  rendererAborts: 0,
   rendererErrors: 0,
   queued: 0,
   queueWaits: 0,
@@ -121,6 +124,9 @@ export function recordTerminalGraphicTrace(
       break;
     case "renderer-end":
       metrics.totalRendererMs += normalized.durationMs ?? 0;
+      break;
+    case "renderer-abort":
+      metrics.rendererAborts++;
       break;
     case "renderer-error":
       metrics.rendererErrors++;
@@ -181,6 +187,7 @@ export function resetTerminalGraphicTraceMetrics(): void {
   metrics.cacheMisses = 0;
   metrics.cacheStores = 0;
   metrics.rendererRuns = 0;
+  metrics.rendererAborts = 0;
   metrics.rendererErrors = 0;
   metrics.queued = 0;
   metrics.queueWaits = 0;

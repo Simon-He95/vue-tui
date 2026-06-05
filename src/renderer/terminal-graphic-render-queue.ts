@@ -4,7 +4,8 @@ export type TerminalGraphicRenderQueueMetric =
   | Readonly<{ type: "cache-hit"; key: string }>
   | Readonly<{ type: "cache-store"; key: string; bytes: number }>
   | Readonly<{ type: "evict"; key: string; bytes: number }>
-  | Readonly<{ type: "queue-wait"; key: string; waitMs: number }>;
+  | Readonly<{ type: "queue-wait"; key: string; waitMs: number }>
+  | Readonly<{ type: "render-abort"; key: string }>;
 
 export type TerminalGraphicRenderQueueOptions = Readonly<{
   maxConcurrency?: number;
@@ -164,6 +165,32 @@ export function createTerminalGraphicRenderQueue(
     pump();
   }
 
+  function once(fn: () => void): () => void {
+    let called = false;
+
+    return () => {
+      if (called) return;
+      called = true;
+      fn();
+    };
+  }
+
+  function releaseActiveSlotOnAbort(
+    key: string,
+    signal: AbortSignal | undefined,
+    releaseSlot: () => void,
+  ): () => void {
+    if (!signal) return () => undefined;
+
+    const onAbort = () => {
+      releaseSlot();
+      options.onMetric?.({ type: "render-abort", key });
+      recordTerminalGraphicTrace({ type: "renderer-abort", id: key, key });
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    return () => signal.removeEventListener("abort", onAbort);
+  }
+
   function pump(): void {
     while (active < maxConcurrency && waiters.length > 0) {
       const waiter = waiters.shift()!;
@@ -241,10 +268,12 @@ export function createTerminalGraphicRenderQueue(
     let promise!: Promise<T>;
     promise = (async () => {
       let releaseSlot: (() => void) | null = null;
+      let removeAbortRelease: (() => void) | null = null;
       const renderGeneration = generation;
 
       try {
-        releaseSlot = await acquire(key, signal);
+        releaseSlot = once(await acquire(key, signal));
+        removeAbortRelease = releaseActiveSlotOnAbort(key, signal, releaseSlot);
         throwIfAborted(signal);
 
         // A duplicate render may have filled the cache while this caller was
@@ -261,6 +290,7 @@ export function createTerminalGraphicRenderQueue(
 
         return value;
       } finally {
+        removeAbortRelease?.();
         releaseSlot?.();
         if (shouldDedupeInflight && inflight.get(key) === promise) inflight.delete(key);
       }
