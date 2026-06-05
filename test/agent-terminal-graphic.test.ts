@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   TAgentTerminalGraphic,
   TText,
+  TView,
   createPngTerminalGraphicRenderer,
   createTerminalGraphicRenderQueue,
   createIterm2InlineImageSequence,
@@ -435,6 +436,144 @@ describe("TAgentTerminalGraphic", () => {
     stdout.dispose();
     expect(writes.join("")).toContain(clearSequence);
 
+    app.dispose();
+  });
+
+  it("rerenders PNG graphics after a clipped viewport becomes fully raw-visible", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const clipWidth = ref(5);
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      fallback: "png fallback",
+      cols: 10,
+      rows: 1,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({
+      toPngBase64,
+      fallback: () => "text fallback",
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: clipWidth.value, h: 1 }, () =>
+            h(TAgentTerminalGraphic, {
+              x: 0,
+              y: 0,
+              w: 10,
+              h: 1,
+              content: "image.png",
+              fallback: "fallback",
+              renderer,
+            }),
+          );
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(toPngBase64).not.toHaveBeenCalled();
+    expect(rowText(app, 0)).toBe("text");
+    expect(writes.join("")).not.toContain("QUJD");
+
+    writes.length = 0;
+    clipWidth.value = 10;
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(toPngBase64).toHaveBeenCalledTimes(1);
+    expect(writes.join("")).toContain("QUJD");
+    expect(rowText(app, 0)).toBe("");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("rerenders terminal graphics when stdout graphics output is registered after initial fallback", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      fallback: "png fallback",
+      cols: 13,
+      rows: 1,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({
+      toPngBase64,
+      fallback: () => "text fallback",
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 13,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(toPngBase64).not.toHaveBeenCalled();
+    expect(rowText(app, 0)).toBe("text fallback");
+
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    writes.length = 0;
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(toPngBase64).toHaveBeenCalledTimes(1);
+    expect(writes.join("")).toContain("QUJD");
+    expect(rowText(app, 0)).toBe("");
+
+    stdout.dispose();
     app.dispose();
   });
 

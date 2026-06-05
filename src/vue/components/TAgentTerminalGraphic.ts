@@ -18,7 +18,11 @@ import {
   shallowRef,
   watch,
 } from "vue";
-import { getTerminalGraphicsOutput } from "../../renderer/terminal-graphics.js";
+import {
+  getTerminalGraphicsOutput,
+  getTerminalGraphicsOutputVersion,
+  subscribeTerminalGraphicsOutput,
+} from "../../renderer/terminal-graphics.js";
 import {
   createKittyDeleteGraphicsSequence,
   stableTerminalGraphicNumericId,
@@ -315,6 +319,7 @@ export const TAgentTerminalGraphic = defineComponent({
     let renderAbort: AbortController | null = null;
     let alive = true;
     let lastRenderedContent = "";
+    let lastRenderRawVisible = false;
     const rawId = `TAgentTerminalGraphic:${instance?.uid ?? "unknown"}`;
     const frameTaskId = `${rawId}:render`;
     const lastDrawnGraphic = shallowRef<LastDrawnGraphic | null>(null);
@@ -327,6 +332,10 @@ export const TAgentTerminalGraphic = defineComponent({
     );
     const graphicsActivityVersion = computed(() => graphicsActivity?.version.value ?? 0);
     const graphicsOutput = () => getTerminalGraphicsOutput(terminal);
+    const graphicsOutputVersion = shallowRef(getTerminalGraphicsOutputVersion(terminal));
+    const unsubscribeGraphicsOutput = subscribeTerminalGraphicsOutput(terminal, () => {
+      graphicsOutputVersion.value = getTerminalGraphicsOutputVersion(terminal);
+    });
     const fallbackText = () => props.fallback || props.content;
     const stableGraphicKey = computed(() =>
       [
@@ -661,6 +670,7 @@ export const TAgentTerminalGraphic = defineComponent({
     });
 
     const rawCanRender = computed(() => {
+      void graphicsOutputVersion.value;
       const current = graphic.value;
       const output = graphicsOutput();
       const full = fullRect.value;
@@ -677,6 +687,11 @@ export const TAgentTerminalGraphic = defineComponent({
         abs.w === full.w &&
         abs.h === full.h
       );
+    });
+
+    const rawOutputCanRenderValue = computed(() => {
+      void graphicsOutputVersion.value;
+      return rawOutputCanRender();
     });
 
     const rawSuppressedByScroll = computed(
@@ -745,7 +760,7 @@ export const TAgentTerminalGraphic = defineComponent({
     function resolveRendererContext(signal: AbortSignal): TAgentTerminalGraphicRendererContext {
       const capabilities = currentCapabilities();
       const visibleNow = hasPaintableRect();
-      const rawVisible = rawOutputCanRender() && !rawSuppressedByScroll.value;
+      const rawVisible = rawOutputCanRenderValue.value && !rawSuppressedByScroll.value;
       return {
         kind: props.kind,
         width: props.w,
@@ -825,7 +840,9 @@ export const TAgentTerminalGraphic = defineComponent({
       bump();
 
       try {
-        const result = await renderer(content, resolveRendererContext(abort.signal));
+        const context = resolveRendererContext(abort.signal);
+        lastRenderRawVisible = context.rawVisible;
+        const result = await renderer(content, context);
         if (abort.signal.aborted) return;
         if (!alive || version !== renderVersion) return;
         const normalized = normalizeResult(result);
@@ -906,6 +923,7 @@ export const TAgentTerminalGraphic = defineComponent({
     onBeforeUnmount(() => {
       alive = false;
       renderVersion++;
+      unsubscribeGraphicsOutput();
       abortCurrentRender("unmount");
       scheduler.cancelFrameTask?.(frameTaskId);
       queueClearLastGraphic();
@@ -942,11 +960,13 @@ export const TAgentTerminalGraphic = defineComponent({
         status.value,
         error.value,
         documentVersion.value,
+        rawOutputCanRenderValue.value,
         rawCanRender.value,
         rawCanQueue.value,
         rawSuppressedByScroll.value,
         isParentScrolling.value,
         graphicsActivityVersion.value,
+        graphicsOutputVersion.value,
       ],
       paint: (dirtyRows) => {
         withTextWidthProvider(widthProvider, () => {
@@ -1023,11 +1043,13 @@ export const TAgentTerminalGraphic = defineComponent({
     watch(
       [
         visible,
+        rawOutputCanRenderValue,
         rawCanRender,
         rawCanQueue,
         rawSuppressedByScroll,
         isParentScrolling,
         graphicsActivityVersion,
+        graphicsOutputVersion,
         () => absRect.value.x,
         () => absRect.value.y,
         () => absRect.value.w,
@@ -1050,7 +1072,18 @@ export const TAgentTerminalGraphic = defineComponent({
 
         if (!visible.value || !rawCanQueue.value) queueClearLastGraphic();
 
-        if (!shouldDeferRender() && (!graphic.value || status.value === "idle")) {
+        const shouldRetryTemporaryFallback =
+          Boolean(props.renderer) &&
+          props.content.trim().length > 0 &&
+          graphic.value?.type === "text" &&
+          !lastRenderRawVisible &&
+          rawOutputCanRenderValue.value &&
+          !rawSuppressedByScroll.value;
+
+        if (
+          !shouldDeferRender() &&
+          (!graphic.value || status.value === "idle" || shouldRetryTemporaryFallback)
+        ) {
           scheduleRender();
           return;
         }

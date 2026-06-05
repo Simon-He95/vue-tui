@@ -96,21 +96,55 @@ export const MAX_TERMINAL_GRAPHICS_FALLBACK_CHARS = 16_384;
 export const MAX_TERMINAL_GRAPHIC_CELLS = 10_000;
 
 const terminalGraphicsOutputs = new WeakMap<Terminal, TerminalGraphicsOutput>();
+const terminalGraphicsOutputVersions = new WeakMap<Terminal, number>();
+const terminalGraphicsOutputListeners = new WeakMap<Terminal, Set<() => void>>();
+
+function notifyTerminalGraphicsOutputChange(terminal: Terminal): void {
+  const version = (terminalGraphicsOutputVersions.get(terminal) ?? 0) + 1;
+  terminalGraphicsOutputVersions.set(terminal, version);
+  const listeners = terminalGraphicsOutputListeners.get(terminal);
+  if (!listeners) return;
+
+  for (const listener of listeners) listener();
+}
 
 export function registerTerminalGraphicsOutput(
   terminal: Terminal,
   output: TerminalGraphicsOutput,
 ): () => void {
   terminalGraphicsOutputs.set(terminal, output);
+  notifyTerminalGraphicsOutputChange(terminal);
   return () => {
     if (terminalGraphicsOutputs.get(terminal) === output) {
       terminalGraphicsOutputs.delete(terminal);
+      notifyTerminalGraphicsOutputChange(terminal);
     }
   };
 }
 
 export function getTerminalGraphicsOutput(terminal: Terminal): TerminalGraphicsOutput | null {
   return terminalGraphicsOutputs.get(terminal) ?? null;
+}
+
+export function getTerminalGraphicsOutputVersion(terminal: Terminal): number {
+  return terminalGraphicsOutputVersions.get(terminal) ?? 0;
+}
+
+export function subscribeTerminalGraphicsOutput(
+  terminal: Terminal,
+  listener: () => void,
+): () => void {
+  let listeners = terminalGraphicsOutputListeners.get(terminal);
+  if (!listeners) {
+    listeners = new Set();
+    terminalGraphicsOutputListeners.set(terminal, listeners);
+  }
+
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) terminalGraphicsOutputListeners.delete(terminal);
+  };
 }
 
 function envString(env: Record<string, unknown>, key: string): string | undefined {
