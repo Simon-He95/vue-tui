@@ -54,6 +54,8 @@ type Waiter = Readonly<{
   reject: (error: Error) => void;
 }>;
 
+const CACHE_MISS = Symbol("terminal-graphic-cache-miss");
+
 function now(): number {
   return typeof performance !== "undefined" && typeof performance.now === "function"
     ? performance.now()
@@ -142,14 +144,14 @@ export function createTerminalGraphicRenderQueue(
     evictUntilBudget();
   }
 
-  function getCache<T>(key: string): T | null {
+  function getCache<T>(key: string): T | typeof CACHE_MISS {
     const entry = cache.get(key);
-    if (!entry) return null;
+    if (!entry) return CACHE_MISS;
 
     if (entry.expiresAt < Date.now()) {
       cache.delete(key);
       cacheBytes -= entry.bytes;
-      return null;
+      return CACHE_MISS;
     }
 
     cache.delete(key);
@@ -258,7 +260,7 @@ export function createTerminalGraphicRenderQueue(
     throwIfAborted(signal);
 
     const cachedValue = getCache<T>(key);
-    if (cachedValue != null) return cachedValue;
+    if (cachedValue !== CACHE_MISS) return cachedValue;
     recordTerminalGraphicTrace({ type: "cache-miss", id: key, key });
 
     const shouldDedupeInflight = cachedOptions.dedupeInflight ?? dedupeInflight;
@@ -280,7 +282,7 @@ export function createTerminalGraphicRenderQueue(
         // waiting for a slot. Re-check here to avoid expensive duplicate
         // SVG/PNG/Sixel work during fast virtual-scroll viewport churn.
         const cachedAfterWait = getCache<T>(key);
-        if (cachedAfterWait != null) return cachedAfterWait;
+        if (cachedAfterWait !== CACHE_MISS) return cachedAfterWait;
 
         const value = await render();
         throwIfAborted(signal);

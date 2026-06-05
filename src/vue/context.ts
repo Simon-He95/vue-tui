@@ -227,11 +227,11 @@ export function createTerminalGraphicsActivity(
       scrolling.value = true;
       scrollStartedAt = nowTerminalGraphicTraceTime();
       traceScroll("scroll-start");
+      bump();
     } else {
       traceScroll("scroll-mark");
     }
 
-    bump();
     clearTimer();
     timer = setTimeout(() => {
       timer = null;

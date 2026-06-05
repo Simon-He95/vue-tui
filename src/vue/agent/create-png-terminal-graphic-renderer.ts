@@ -63,7 +63,6 @@ function defaultCacheKey(content: string, context: TAgentTerminalGraphicRenderer
       : `content:${hashTerminalGraphicsString(content)}`;
   return [
     context.kind,
-    context.protocol,
     context.width,
     context.height ?? "",
     context.final ? "final" : "draft",

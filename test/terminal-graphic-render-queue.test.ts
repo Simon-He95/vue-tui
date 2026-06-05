@@ -250,6 +250,30 @@ describe("terminal graphic render queue", () => {
     await expect(second).resolves.toBe("shared render");
   });
 
+  it("caches nullish render results", async () => {
+    const queue = createTerminalGraphicRenderQueue();
+    const renderNull = vi.fn(async () => null as string | null);
+    const renderUndefined = vi.fn(async () => undefined as string | undefined);
+
+    await expect(
+      queue.cached("null-result", undefined, renderNull, (value) =>
+        value == null ? 0 : value.length,
+      ),
+    ).resolves.toBeNull();
+    await expect(queue.cached("null-result", undefined, renderNull)).resolves.toBeNull();
+    expect(renderNull).toHaveBeenCalledTimes(1);
+
+    await expect(
+      queue.cached("undefined-result", undefined, renderUndefined, (value) =>
+        value == null ? 0 : value.length,
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      queue.cached("undefined-result", undefined, renderUndefined),
+    ).resolves.toBeUndefined();
+    expect(renderUndefined).toHaveBeenCalledTimes(1);
+  });
+
   it("records queue wait trace metrics", async () => {
     resetTerminalGraphicTraceMetrics();
 

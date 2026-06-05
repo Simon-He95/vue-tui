@@ -23,7 +23,7 @@ import {
 } from "../src/cli.js";
 import { getTerminalGraphicsOutput } from "../src/renderer/terminal-graphics.js";
 import { TVirtualRows } from "../src/vue/components/TVirtualRows.js";
-import { TerminalGraphicsActivityKey } from "../src/vue/context.js";
+import { createTerminalGraphicsActivity, TerminalGraphicsActivityKey } from "../src/vue/context.js";
 
 const ESC = "\x1B";
 const ST = `${ESC}\\`;
@@ -523,6 +523,74 @@ describe("TAgentTerminalGraphic", () => {
     expect(queue.stats().cacheEntries).toBe(1);
   });
 
+  it("reuses protocol-independent PNG cache across terminal protocols", async () => {
+    const queue = createTerminalGraphicRenderQueue();
+    const kittyCapabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const itermCapabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { TERM_PROGRAM: "iTerm.app" },
+    });
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      fallback: "shared png fallback",
+      cols: 4,
+      rows: 2,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({
+      queue,
+      toPngBase64,
+    });
+    const makeContext = (
+      protocol: "kitty" | "iterm2",
+      capabilities: typeof kittyCapabilities,
+      imageId: number,
+      placementId: number,
+    ) => ({
+      kind: "image" as const,
+      width: 4,
+      height: 2,
+      final: true,
+      streaming: false,
+      protocol,
+      capabilities,
+      signal: new AbortController().signal,
+      imageId,
+      placementId,
+      visible: true,
+      rawVisible: true,
+      scrolling: false,
+      viewport: {
+        visible: true,
+        rawVisible: true,
+        scrolling: false,
+        rect: { x: 0, y: 0, w: 4, h: 2 },
+        fullRect: { x: 0, y: 0, w: 4, h: 2 },
+      },
+    });
+
+    const kitty = await renderer("image.png", makeContext("kitty", kittyCapabilities, 123, 456));
+    const iterm2 = await renderer("image.png", makeContext("iterm2", itermCapabilities, 789, 321));
+
+    expect(toPngBase64).toHaveBeenCalledTimes(1);
+    expect(kitty).toMatchObject({
+      type: "sequence",
+      protocol: "kitty",
+      fallback: "shared png fallback",
+    });
+    expect(iterm2).toMatchObject({
+      type: "sequence",
+      protocol: "iterm2",
+      fallback: "shared png fallback",
+    });
+    expect(
+      typeof iterm2 === "object" && iterm2 && "sequence" in iterm2 ? String(iterm2.sequence) : "",
+    ).toContain("]1337;File=");
+    expect(queue.stats().cacheEntries).toBe(1);
+  });
+
   it("invalidates the default PNG cache when the renderer context cacheKey changes", async () => {
     const queue = createTerminalGraphicRenderQueue();
     const capabilities = detectTerminalGraphicsCapabilities({
@@ -675,6 +743,33 @@ describe("TAgentTerminalGraphic", () => {
       fallback: "second png fallback",
     });
     expect(toPngBase64).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not bump terminal graphics activity version for every scroll mark", () => {
+    vi.useFakeTimers();
+    try {
+      const activity = createTerminalGraphicsActivity({
+        scrollIdleMs: 100,
+        trace: false,
+      });
+
+      expect(activity.version.value).toBe(0);
+      activity.markScroll();
+      const startedVersion = activity.version.value;
+      expect(startedVersion).toBe(1);
+      expect(activity.scrolling.value).toBe(true);
+
+      activity.markScroll();
+      activity.markScroll();
+      expect(activity.version.value).toBe(startedVersion);
+
+      vi.advanceTimersByTime(100);
+      expect(activity.scrolling.value).toBe(false);
+      expect(activity.version.value).toBe(startedVersion + 1);
+      activity.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("suspends virtual row raw rendering while scrolling and hydrates after idle", async () => {

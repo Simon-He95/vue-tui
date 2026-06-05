@@ -300,6 +300,24 @@ describe("terminal graphics sequence validation", () => {
     expect(isSafeTerminalGraphicsSequence(withHugeDimension, "iterm2", "draw")).toBe(false);
   });
 
+  it("normalizes invalid iTerm2 dimensions instead of generating invalid sequences", () => {
+    const invalidDimension = createIterm2InlineImageSequence("QUJD", {
+      width: "1;name=evil",
+      height: Number.NaN,
+    });
+    expect(invalidDimension).toContain("width=auto");
+    expect(invalidDimension).toContain("height=auto");
+    expect(isSafeTerminalGraphicsSequence(invalidDimension, "iterm2", "draw")).toBe(true);
+
+    const hugeDimension = createIterm2InlineImageSequence("QUJD", {
+      width: 9_999_999,
+      height: 2,
+    });
+    expect(hugeDimension).toContain("width=99999");
+    expect(hugeDimension).toContain("height=2");
+    expect(isSafeTerminalGraphicsSequence(hugeDimension, "iterm2", "draw")).toBe(true);
+  });
+
   it("rejects kitty clear payloads as draw payloads", () => {
     const draw = createKittyGraphicsSequence("QUJD");
     const clear = createKittyDeleteGraphicsSequence({ currentCell: true });

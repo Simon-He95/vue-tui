@@ -885,8 +885,14 @@ export function createIterm2InlineImageSequence(
 }
 
 function formatItermDimension(value: number | string): string {
-  if (typeof value === "number") return String(Math.max(1, Math.floor(value)));
-  return value.replace(/[^\w.%]/g, "");
+  if (typeof value === "number") {
+    const n = Math.floor(value);
+    if (!Number.isFinite(n)) return "auto";
+    return String(Math.min(99_999, Math.max(1, n)));
+  }
+
+  const raw = String(value ?? "").trim();
+  return validateIterm2Dimension(raw) ? raw : "auto";
 }
 
 export function wrapTerminalGraphicsForMultiplexer(
