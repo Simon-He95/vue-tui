@@ -3,10 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import {
   TAgentTerminalGraphic,
   createIterm2InlineImageSequence,
+  createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
+  isSafeTerminalGraphicsSequence,
   sanitizeTerminalFallbackText,
   validateTerminalGraphicFrame,
+  validateTerminalGraphicsPayload,
   type TAgentTerminalGraphicRenderer,
 } from "../src/agent.js";
 import { createStdoutRenderer, createTerminalApp, type CliOutput } from "../src/cli.js";
@@ -96,24 +99,41 @@ describe("terminal graphics capability detection", () => {
         env: {
           KITTY_WINDOW_ID: "1",
           TMUX: "/tmp/tmux",
-          VUE_TUI_GRAPHICS_TMUX_PASSTHROUGH: "1",
+          VUE_TUI_TERMINAL_GRAPHICS_PASSTHROUGH: "1",
         },
       }).protocol,
     ).toBe("kitty");
+
+    expect(
+      detectTerminalGraphicsCapabilities({
+        stdoutIsTTY: true,
+        env: { KITTY_WINDOW_ID: "1", ZELLIJ: "1" },
+      }),
+    ).toMatchObject({
+      protocol: "unicode",
+      supported: false,
+      reason: "zellij-without-passthrough",
+      multiplexer: "zellij",
+    });
   });
 
   it("supports explicit protocol override", () => {
     expect(
       detectTerminalGraphicsCapabilities({
         stdoutIsTTY: true,
-        env: { VUE_TUI_GRAPHICS_PROTOCOL: "iterm2" },
+        env: { VUE_TUI_TERMINAL_GRAPHICS: "iterm2" },
       }),
-    ).toMatchObject({ protocol: "iterm2", supported: true, reason: "forced-by-env" });
+    ).toMatchObject({
+      protocol: "iterm2",
+      supported: true,
+      reason: "forced-by-env",
+      forced: true,
+    });
 
     expect(
       detectTerminalGraphicsCapabilities({
         stdoutIsTTY: true,
-        env: { VUE_TUI_GRAPHICS_PROTOCOL: "off", KITTY_WINDOW_ID: "1" },
+        env: { VUE_TUI_TERMINAL_GRAPHICS: "off", KITTY_WINDOW_ID: "1" },
       }),
     ).toMatchObject({ protocol: "none", supported: false });
   });
@@ -175,9 +195,119 @@ describe("terminal graphics sequence validation", () => {
 
     expect(sanitizeTerminalFallbackText(`ok${ESC}[2J${ESC}]52;c;bad${BEL}`)).toBe("ok");
   });
+
+  it("chunks kitty payloads and validates only graphics envelopes", () => {
+    const sequence = createKittyGraphicsSequence("A".repeat(9000), {
+      columns: 20,
+      rows: 5,
+    });
+
+    expect(sequence).toContain("a=T");
+    expect(sequence).toContain("f=100");
+    expect(sequence).toContain("q=2");
+    expect(sequence).toContain("C=1");
+    expect(sequence).toContain("c=20");
+    expect(sequence).toContain("r=5");
+    expect(sequence).toContain("m=1");
+    expect(sequence).toContain("m=0");
+    expect(isSafeTerminalGraphicsSequence(sequence, "kitty")).toBe(true);
+    expect(isSafeTerminalGraphicsSequence(`${sequence}${ESC}]52;c;QUJD${BEL}`, "kitty")).toBe(
+      false,
+    );
+  });
+
+  it("creates safe kitty delete sequences", () => {
+    const sequence = createKittyDeleteGraphicsSequence({ currentCell: true });
+
+    expect(sequence).toContain("a=d");
+    expect(sequence).toContain("d=c");
+    expect(isSafeTerminalGraphicsSequence(sequence, "kitty")).toBe(true);
+  });
+
+  it("validates terminal graphics payloads against capabilities", () => {
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+
+    expect(
+      validateTerminalGraphicsPayload(
+        {
+          id: "g1",
+          x: 0,
+          y: 0,
+          protocol: "kitty",
+          sequence: createKittyGraphicsSequence("QUJD"),
+        },
+        capabilities,
+      ),
+    ).toBe(true);
+
+    expect(
+      validateTerminalGraphicsPayload(
+        {
+          id: "g1",
+          x: 0,
+          y: 0,
+          protocol: "iterm2",
+          sequence: createIterm2InlineImageSequence("QUJD"),
+        },
+        capabilities,
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("TAgentTerminalGraphic security fallback", () => {
+  it("treats bare string renderer results as text, not raw terminal graphics", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const rawSequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => rawSequence);
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const stdout = withEnv({ KITTY_WINDOW_ID: "1", CI: undefined, TMUX: undefined }, () =>
+      createStdoutRenderer(app.terminal, {
+        output,
+        clear: false,
+        altScreen: false,
+        hideCursor: false,
+        trackResize: false,
+      }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+
+    expect(rowText(app, 0)).toBe("fallback");
+    expect(writes.join("")).not.toContain(rawSequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it("renders sanitized fallback instead of invalid raw sequences", async () => {
     const writes: string[] = [];
     const output: CliOutput = {

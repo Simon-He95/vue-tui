@@ -2,6 +2,7 @@ import { defineComponent, h, nextTick } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   TAgentTerminalGraphic,
+  createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
   type TAgentTerminalGraphicRenderer,
@@ -57,10 +58,14 @@ describe("TAgentTerminalGraphic", () => {
       },
     };
     const kittySequence = createKittyGraphicsSequence("QUJD");
+    const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
     const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
       expect(context.capabilities.preferredProtocol).toBe("kitty");
       return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
         sequence: kittySequence,
+        clearSequence,
         fallback: "fallback",
       };
     });
@@ -100,7 +105,10 @@ describe("TAgentTerminalGraphic", () => {
     expect(outputText).toContain(kittySequence);
     expect(rowText(app, 1)).toBe("");
 
+    writes.length = 0;
     stdout.dispose();
+    expect(writes.join("")).toContain(clearSequence);
+
     app.dispose();
   });
 

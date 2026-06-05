@@ -41,10 +41,14 @@ export {
   TMermaidText,
 } from "./vue/components/TMermaidText.js";
 export type {
+  CreateKittyDeleteGraphicsSequenceOptions,
+  CreateKittyGraphicsSequenceOptions,
   RawTerminalGraphicFrame,
   TerminalGraphicsCapabilities,
   TerminalGraphicsDetectionInput,
   TerminalGraphicsFallbackProtocol,
+  TerminalGraphicsMultiplexer,
+  TerminalGraphicsOperation,
   TerminalGraphicsPayload,
   TerminalGraphicsProtocol,
   TerminalGraphicsResolvedProtocol,
@@ -52,10 +56,14 @@ export type {
 } from "./renderer/terminal-graphics.js";
 export {
   createIterm2InlineImageSequence,
+  createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
+  isSafeTerminalGraphicsSequence,
   sanitizeTerminalFallbackText,
   validateTerminalGraphicFrame,
+  validateTerminalGraphicsPayload,
+  wrapTerminalGraphicsForMultiplexer,
 } from "./renderer/terminal-graphics.js";
 export type {
   TMermaidAsciiOptions,

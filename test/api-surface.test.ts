@@ -138,6 +138,7 @@ describe("public API surface", () => {
         "createCliEventManager",
         "createDefaultTInputHostAdapter",
         "createIterm2InlineImageSequence",
+        "createKittyDeleteGraphicsSequence",
         "createKittyGraphicsSequence",
         "createNodeMentionPathProvider",
         "createNodePathPickerProvider",
@@ -152,6 +153,7 @@ describe("public API surface", () => {
         "getStdoutRendererMetrics",
         "installNodeFileWriters",
         "installTerminalCleanup",
+        "isSafeTerminalGraphicsSequence",
         "readEventLog",
         "resetNodeFileWriters",
         "resolveUserPath",
@@ -159,6 +161,8 @@ describe("public API surface", () => {
         "sanitizeTerminalHref",
         "suggestPaths",
         "validateTerminalGraphicFrame",
+        "validateTerminalGraphicsPayload",
+        "wrapTerminalGraphicsForMultiplexer",
         "writeEventLog",
         "writeSnapshot",
       ]
@@ -321,6 +325,7 @@ describe("public API surface", () => {
         "computeCommandPaletteMatchRanges",
         "createAppendOnlyLogStore",
         "createIterm2InlineImageSequence",
+        "createKittyDeleteGraphicsSequence",
         "createKittyGraphicsSequence",
         "createMarkdownBlockSource",
         "createTLogDensityBucketsFromMarkers",
@@ -333,6 +338,7 @@ describe("public API surface", () => {
         "detectTerminalGraphicsCapabilities",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
+        "isSafeTerminalGraphicsSequence",
         "markMermaidRenderErrorFatal",
         "parseTLogAnnotatedText",
         "resolveTLogLinksPanelTheme",
@@ -360,6 +366,8 @@ describe("public API surface", () => {
         "useTLogSearchResultsPage",
         "useTLogVirtualSearchResults",
         "validateTerminalGraphicFrame",
+        "validateTerminalGraphicsPayload",
+        "wrapTerminalGraphicsForMultiplexer",
       ]
     `);
   });

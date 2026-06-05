@@ -5,6 +5,8 @@ export type TerminalGraphicsFallbackProtocol = "unicode" | "none";
 export type TerminalGraphicsResolvedProtocol =
   | TerminalGraphicsProtocol
   | TerminalGraphicsFallbackProtocol;
+export type TerminalGraphicsOperation = "draw" | "clear";
+export type TerminalGraphicsMultiplexer = "tmux" | "screen" | "zellij";
 
 export type TerminalGraphicsDetectionInput = Readonly<{
   env?: Record<string, unknown>;
@@ -23,6 +25,10 @@ export type TerminalGraphicsCapabilities = Readonly<{
   stdoutIsTTY: boolean;
   insideTmux: boolean;
   insideScreen: boolean;
+  insideZellij: boolean;
+  multiplexer: TerminalGraphicsMultiplexer | null;
+  passthrough: boolean;
+  forced: boolean;
   reason?: string;
 }>;
 
@@ -47,11 +53,14 @@ export type TerminalGraphicsPayload = Readonly<{
   id: string;
   x: number;
   y: number;
-  w: number;
-  h: number;
+  w?: number;
+  h?: number;
   protocol: TerminalGraphicsProtocol;
   sequence: string;
+  op?: TerminalGraphicsOperation;
+  order?: number;
   fallbackText?: string;
+  clearSequence?: string;
 }>;
 
 export type TerminalGraphicsOutput = Readonly<{
@@ -143,20 +152,29 @@ function uniqueProtocols(protocols: TerminalGraphicsProtocol[]): TerminalGraphic
 
 function detectCandidates(env: Record<string, unknown>): TerminalGraphicsProtocol[] {
   const candidates: TerminalGraphicsProtocol[] = [];
-  const term = String(envString(env, "TERM") ?? "");
-  const termProgram = String(envString(env, "TERM_PROGRAM") ?? "");
-  const termProgramVersion = String(envString(env, "TERM_PROGRAM_VERSION") ?? "");
+  const term = String(envString(env, "TERM") ?? "").toLowerCase();
+  const termProgram = String(envString(env, "TERM_PROGRAM") ?? "").toLowerCase();
+  const termProgramVersion = String(envString(env, "TERM_PROGRAM_VERSION") ?? "").toLowerCase();
 
   if (envString(env, "KITTY_WINDOW_ID") || /(?:^|-)kitty(?:-|$)/i.test(term)) {
     candidates.push("kitty");
   }
 
-  if (/^iTerm\.app$/i.test(termProgram) || /^WezTerm$/i.test(termProgram)) {
+  if (
+    termProgram.includes("iterm") ||
+    termProgram.includes("wezterm") ||
+    envString(env, "WEZTERM_PANE") ||
+    envString(env, "WEZTERM_EXECUTABLE")
+  ) {
     candidates.push("iterm2");
   }
 
   if (
+    truthy(envString(env, "VUE_TUI_SIXEL")) ||
     truthy(envString(env, "VUE_TUI_GRAPHICS_SIXEL")) ||
+    String(envString(env, "TERMINAL_GRAPHICS") ?? "")
+      .toLowerCase()
+      .includes("sixel") ||
     /\bsixel\b/i.test(`${term} ${termProgram} ${termProgramVersion}`)
   ) {
     candidates.push("sixel");
@@ -172,22 +190,30 @@ function capabilitiesFor(
     stdoutIsTTY: boolean;
     insideTmux: boolean;
     insideScreen: boolean;
+    insideZellij: boolean;
+    multiplexer: TerminalGraphicsMultiplexer | null;
+    passthrough: boolean;
+    forced: boolean;
     reason?: string;
   }>,
 ): TerminalGraphicsCapabilities {
   const supported = protocol === "kitty" || protocol === "iterm2" || protocol === "sixel";
-  const candidates = input.candidates ?? (supported ? [protocol] : []);
+  const candidates = uniqueProtocols([...(input.candidates ?? (supported ? [protocol] : []))]);
   return {
     supported,
-    kitty: protocol === "kitty",
-    iterm2: protocol === "iterm2",
-    sixel: protocol === "sixel",
+    kitty: protocol === "kitty" || candidates.includes("kitty"),
+    iterm2: protocol === "iterm2" || candidates.includes("iterm2"),
+    sixel: protocol === "sixel" || candidates.includes("sixel"),
     preferredProtocol: supported ? protocol : null,
     protocol,
     candidates,
     stdoutIsTTY: input.stdoutIsTTY,
     insideTmux: input.insideTmux,
     insideScreen: input.insideScreen,
+    insideZellij: input.insideZellij,
+    multiplexer: input.multiplexer,
+    passthrough: input.passthrough,
+    forced: input.forced,
     reason: input.reason,
   };
 }
@@ -197,14 +223,36 @@ export function detectTerminalGraphicsCapabilities(
 ): TerminalGraphicsCapabilities {
   const env = options.env ?? {};
   const stdoutIsTTY = options.stdoutIsTTY ?? options.isTTY ?? readStdoutIsTTY();
-  const insideTmux = Boolean(envString(env, "TMUX"));
-  const insideScreen = Boolean(envString(env, "STY"));
-  const force = truthy(envString(env, "VUE_TUI_GRAPHICS_FORCE"));
-  const tmuxPassthrough = truthy(envString(env, "VUE_TUI_GRAPHICS_TMUX_PASSTHROUGH"));
+  const term = String(envString(env, "TERM") ?? "").toLowerCase();
+  const insideTmux = Boolean(envString(env, "TMUX")) || term.includes("tmux");
+  const insideScreen = Boolean(envString(env, "STY")) || term.startsWith("screen");
+  const insideZellij =
+    Boolean(envString(env, "ZELLIJ") || envString(env, "ZELLIJ_SESSION_NAME")) ||
+    term.includes("zellij");
+  const multiplexer: TerminalGraphicsMultiplexer | null = insideTmux
+    ? "tmux"
+    : insideScreen
+      ? "screen"
+      : insideZellij
+        ? "zellij"
+        : null;
+  const passthrough =
+    truthy(envString(env, "VUE_TUI_TERMINAL_GRAPHICS_PASSTHROUGH")) ||
+    truthy(envString(env, "VUE_TUI_GRAPHICS_TMUX_PASSTHROUGH"));
   const mode = normalizeMode(
-    envString(env, "VUE_TUI_GRAPHICS_PROTOCOL") ?? envString(env, "VUE_TUI_TERMINAL_GRAPHICS"),
+    envString(env, "VUE_TUI_TERMINAL_GRAPHICS") ?? envString(env, "VUE_TUI_GRAPHICS_PROTOCOL"),
   );
-  const base = { stdoutIsTTY, insideTmux, insideScreen };
+  const forcedByMode = mode === "kitty" || mode === "iterm2" || mode === "sixel";
+  const force = truthy(envString(env, "VUE_TUI_GRAPHICS_FORCE")) || forcedByMode;
+  const base = {
+    stdoutIsTTY,
+    insideTmux,
+    insideScreen,
+    insideZellij,
+    multiplexer,
+    passthrough,
+    forced: force,
+  };
 
   if (mode === "none") {
     return capabilitiesFor("none", { ...base, reason: "disabled-by-env" });
@@ -218,10 +266,10 @@ export function detectTerminalGraphicsCapabilities(
     return capabilitiesFor("unicode", { ...base, reason: "ci" });
   }
 
-  if ((insideTmux || insideScreen) && !tmuxPassthrough && !force) {
+  if (multiplexer && !passthrough && !force) {
     return capabilitiesFor("unicode", {
       ...base,
-      reason: insideTmux ? "tmux-without-passthrough" : "screen-without-passthrough",
+      reason: `${multiplexer}-without-passthrough`,
     });
   }
 
@@ -269,47 +317,82 @@ function isBase64ish(value: string): boolean {
 }
 
 function validateKittySequence(sequence: string): boolean {
-  if (!sequence.startsWith(`${ESC}_G`)) return false;
-  if (!sequence.endsWith(ST)) return false;
+  let index = 0;
 
-  const body = sequence.slice(3, -2);
-  if (!withoutNestedEscapes(body)) return false;
+  while (index < sequence.length) {
+    if (!sequence.startsWith(`${ESC}_G`, index)) return false;
 
-  const semicolon = body.indexOf(";");
-  if (semicolon < 0) return false;
+    const end = sequence.indexOf(ST, index + 3);
+    if (end < 0) return false;
 
-  return isBase64ish(body.slice(semicolon + 1));
+    const body = sequence.slice(index + 3, end);
+    if (!withoutNestedEscapes(body)) return false;
+
+    const semicolon = body.indexOf(";");
+    const controls = semicolon >= 0 ? body.slice(0, semicolon) : body;
+    const payload = semicolon >= 0 ? body.slice(semicolon + 1) : "";
+
+    if (!/^[A-Za-z0-9_,=+.\-:]*$/.test(controls)) return false;
+    if (payload && !isBase64ish(payload)) return false;
+
+    index = end + ST.length;
+  }
+
+  return sequence.length > 0;
 }
 
 function validateIterm2Sequence(sequence: string): boolean {
-  const starts = sequence.startsWith(`${ESC}]1337;File=`);
-  const endsWithBel = sequence.endsWith(BEL);
-  const endsWithSt = sequence.endsWith(ST);
+  let index = 0;
 
-  if (!starts || (!endsWithBel && !endsWithSt)) return false;
+  while (index < sequence.length) {
+    const prefix = `${ESC}]1337;File=`;
+    if (!sequence.startsWith(prefix, index)) return false;
 
-  const body = endsWithBel
-    ? sequence.slice(`${ESC}]1337;`.length, -1)
-    : sequence.slice(`${ESC}]1337;`.length, -2);
+    const belEnd = sequence.indexOf(BEL, index + prefix.length);
+    const stEnd = sequence.indexOf(ST, index + prefix.length);
+    const end = belEnd >= 0 && stEnd >= 0 ? Math.min(belEnd, stEnd) : belEnd >= 0 ? belEnd : stEnd;
 
-  if (!body.startsWith("File=")) return false;
-  if (!withoutNestedEscapes(body)) return false;
+    if (end < 0) return false;
 
-  const colon = body.indexOf(":");
-  if (colon < 0) return false;
+    const body = sequence.slice(index + `${ESC}]1337;`.length, end);
+    if (!body.startsWith("File=")) return false;
+    if (!withoutNestedEscapes(body)) return false;
 
-  return isBase64ish(body.slice(colon + 1));
+    const colon = body.indexOf(":");
+    if (colon < 0) return false;
+    if (!/^[A-Za-z0-9_=;,.%+\-:]*$/.test(body.slice(0, colon + 1))) return false;
+    if (!isBase64ish(body.slice(colon + 1))) return false;
+
+    index = end + (end === stEnd ? ST.length : BEL.length);
+  }
+
+  return sequence.length > 0;
 }
 
 function validateSixelSequence(sequence: string): boolean {
-  if (!sequence.startsWith(`${ESC}P`)) return false;
-  if (!sequence.endsWith(ST)) return false;
+  let index = 0;
 
-  const body = sequence.slice(2, -2);
-  if (!withoutNestedEscapes(body)) return false;
+  while (index < sequence.length) {
+    if (!sequence.startsWith(`${ESC}P`, index)) return false;
 
-  const q = body.indexOf("q");
-  return q >= 0 && q <= 32;
+    const end = sequence.indexOf(ST, index + 2);
+    if (end < 0) return false;
+
+    const body = sequence.slice(index + 2, end);
+    if (!withoutNestedEscapes(body)) return false;
+
+    for (let i = 0; i < body.length; i++) {
+      const code = body.charCodeAt(i);
+      if (code < 0x20 || code > 0x7e) return false;
+    }
+
+    const q = body.indexOf("q");
+    if (q < 0 || q > 32) return false;
+
+    index = end + ST.length;
+  }
+
+  return sequence.length > 0;
 }
 
 function stripC0ControlChars(value: string): string {
@@ -378,23 +461,164 @@ export function validateTerminalGraphicFrame(
   };
 }
 
-export function createKittyGraphicsSequence(base64Png: string): string {
-  return `${ESC}_Ga=T,f=100;${base64Png}${ST}`;
+export function isSafeTerminalGraphicsSequence(
+  sequence: string,
+  protocol: TerminalGraphicsProtocol,
+): boolean {
+  if (!sequence || sequence.length > MAX_SEQUENCE_CHARS) return false;
+
+  return protocol === "kitty"
+    ? validateKittySequence(sequence)
+    : protocol === "iterm2"
+      ? validateIterm2Sequence(sequence)
+      : validateSixelSequence(sequence);
+}
+
+export function validateTerminalGraphicsPayload(
+  payload: TerminalGraphicsPayload,
+  capabilities: TerminalGraphicsCapabilities,
+): boolean {
+  if (!payload.id.trim()) return false;
+  if (!Number.isFinite(payload.x) || !Number.isFinite(payload.y)) return false;
+  if (!capabilities.supported) return false;
+
+  if (payload.protocol === "kitty" && !capabilities.kitty) return false;
+  if (payload.protocol === "iterm2" && !capabilities.iterm2) return false;
+  if (payload.protocol === "sixel" && !capabilities.sixel) return false;
+
+  return isSafeTerminalGraphicsSequence(payload.sequence, payload.protocol);
+}
+
+function intControl(key: string, value: number | undefined): string {
+  if (value == null) return "";
+  const n = Math.floor(value);
+  return Number.isFinite(n) ? `${key}=${n}` : "";
+}
+
+function sanitizeBase64(value: string): string {
+  return String(value ?? "").replace(/\s+/g, "");
+}
+
+function chunkBase64(value: string, chunkSize: number): string[] {
+  const normalizedSize = Math.max(4, Math.floor(chunkSize / 4) * 4);
+  const chunks: string[] = [];
+
+  for (let index = 0; index < value.length; index += normalizedSize) {
+    chunks.push(value.slice(index, index + normalizedSize));
+  }
+
+  return chunks.length ? chunks : [""];
+}
+
+export type CreateKittyGraphicsSequenceOptions = Readonly<{
+  imageId?: number;
+  imageNumber?: number;
+  placementId?: number;
+  columns?: number;
+  rows?: number;
+  zIndex?: number;
+  quiet?: boolean;
+  noCursorMove?: boolean;
+  chunkSize?: number;
+}>;
+
+export function createKittyGraphicsSequence(
+  base64Png: string,
+  options: CreateKittyGraphicsSequenceOptions = {},
+): string {
+  const data = sanitizeBase64(base64Png);
+  if (!data) return "";
+
+  const chunks = chunkBase64(data, options.chunkSize ?? 4096);
+  const baseControls = [
+    "a=T",
+    "f=100",
+    options.quiet === false ? "" : "q=2",
+    options.noCursorMove === false ? "" : "C=1",
+    intControl("i", options.imageId),
+    intControl("I", options.imageNumber),
+    intControl("p", options.placementId),
+    intControl("c", options.columns),
+    intControl("r", options.rows),
+    intControl("z", options.zIndex),
+  ].filter(Boolean);
+
+  return chunks
+    .map((chunk, index) => {
+      const last = index === chunks.length - 1;
+      const controls =
+        index === 0
+          ? [...baseControls, chunks.length > 1 ? `m=${last ? 0 : 1}` : ""]
+          : [options.quiet === false ? "" : "q=2", `m=${last ? 0 : 1}`].filter(Boolean);
+
+      return `${ESC}_G${controls.filter(Boolean).join(",")};${chunk}${ST}`;
+    })
+    .join("");
+}
+
+export type CreateKittyDeleteGraphicsSequenceOptions = Readonly<{
+  imageId?: number;
+  placementId?: number;
+  currentCell?: boolean;
+  allVisible?: boolean;
+  freeImageData?: boolean;
+  quiet?: boolean;
+}>;
+
+export function createKittyDeleteGraphicsSequence(
+  options: CreateKittyDeleteGraphicsSequenceOptions = {},
+): string {
+  const controls = ["a=d"];
+
+  if (options.allVisible) {
+    controls.push(`d=${options.freeImageData ? "A" : "a"}`);
+  } else if (options.imageId != null) {
+    controls.push(`d=${options.freeImageData ? "I" : "i"}`);
+    controls.push(intControl("i", options.imageId));
+    controls.push(intControl("p", options.placementId));
+  } else {
+    controls.push(`d=${options.freeImageData ? "C" : "c"}`);
+  }
+
+  if (options.quiet !== false) controls.push("q=2");
+
+  return `${ESC}_G${controls.filter(Boolean).join(",")}${ST}`;
 }
 
 export function createIterm2InlineImageSequence(
   base64Data: string,
   options: Readonly<{
-    width?: number;
-    height?: number;
+    width?: number | string;
+    height?: number | string;
     preserveAspectRatio?: boolean;
   }> = {},
 ): string {
+  const data = sanitizeBase64(base64Data);
+  if (!data) return "";
+
   const params = [
     "inline=1",
-    options.width != null ? `width=${Math.max(1, Math.floor(options.width))}` : "",
-    options.height != null ? `height=${Math.max(1, Math.floor(options.height))}` : "",
+    options.width != null ? `width=${formatItermDimension(options.width)}` : "",
+    options.height != null ? `height=${formatItermDimension(options.height)}` : "",
     `preserveAspectRatio=${options.preserveAspectRatio === false ? 0 : 1}`,
   ].filter(Boolean);
-  return `${ESC}]1337;File=${params.join(";")}:${base64Data}${BEL}`;
+  return `${ESC}]1337;File=${params.join(";")}:${data}${BEL}`;
+}
+
+function formatItermDimension(value: number | string): string {
+  if (typeof value === "number") return String(Math.max(1, Math.floor(value)));
+  return value.replace(/[^\w.%]/g, "");
+}
+
+export function wrapTerminalGraphicsForMultiplexer(
+  sequence: string,
+  capabilities: TerminalGraphicsCapabilities,
+): string {
+  if (!capabilities.passthrough) return sequence;
+
+  if (capabilities.multiplexer === "tmux") {
+    return `${ESC}Ptmux;${sequence.split(ESC).join(`${ESC}${ESC}`)}${ST}`;
+  }
+
+  return sequence;
 }

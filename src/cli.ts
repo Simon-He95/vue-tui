@@ -39,10 +39,14 @@ export type {
 } from "./renderer/cli/stdout-renderer.js";
 export { createStdoutRenderer } from "./renderer/cli/stdout-renderer.js";
 export type {
+  CreateKittyDeleteGraphicsSequenceOptions,
+  CreateKittyGraphicsSequenceOptions,
   RawTerminalGraphicFrame,
   TerminalGraphicsCapabilities,
   TerminalGraphicsDetectionInput,
   TerminalGraphicsFallbackProtocol,
+  TerminalGraphicsMultiplexer,
+  TerminalGraphicsOperation,
   TerminalGraphicsPayload,
   TerminalGraphicsProtocol,
   TerminalGraphicsResolvedProtocol,
@@ -50,10 +54,14 @@ export type {
 } from "./renderer/terminal-graphics.js";
 export {
   createIterm2InlineImageSequence,
+  createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
+  isSafeTerminalGraphicsSequence,
   sanitizeTerminalFallbackText,
   validateTerminalGraphicFrame,
+  validateTerminalGraphicsPayload,
+  wrapTerminalGraphicsForMultiplexer,
 } from "./renderer/terminal-graphics.js";
 export { sanitizeTerminalHref, type SanitizeTerminalHrefOptions } from "./core/hyperlink.js";
 export type {
