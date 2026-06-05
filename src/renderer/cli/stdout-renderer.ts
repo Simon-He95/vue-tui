@@ -51,6 +51,7 @@ import { STDOUT_RENDERER_CAPABILITIES } from "../capabilities.js";
 import {
   detectTerminalGraphicsCapabilities,
   registerTerminalGraphicsOutput,
+  validateTerminalGraphicFrame,
 } from "../terminal-graphics.js";
 import { recordStdoutFrame } from "./stdout-metrics.js";
 
@@ -454,19 +455,47 @@ export function createStdoutRenderer(
   let accumulatedScrollOperations: TerminalScrollOperation[] | null = null;
   const graphicsCapabilities = detectTerminalGraphicsCapabilities({ env, isTTY: outputIsTTY });
   const pendingGraphics = new Map<string, TerminalGraphicsPayload>();
+  const pendingGraphicClears = new Set<string>();
+  const activeGraphicsRects = new Map<string, { x: number; y: number; w: number; h: number }>();
   const graphicsOutput: TerminalGraphicsOutput = {
     capabilities: graphicsCapabilities,
     queue(payload) {
       if (disposed) return;
+      if (!graphicsCapabilities.supported) return;
+      if (payload.protocol !== graphicsCapabilities.preferredProtocol) return;
+
       const x = Math.floor(payload.x);
       const y = Math.floor(payload.y);
-      if (!payload.id || !payload.sequence || !Number.isFinite(x) || !Number.isFinite(y)) return;
-      pendingGraphics.set(payload.id, {
+      const w = Math.max(1, Math.floor(payload.w));
+      const h = Math.max(1, Math.floor(payload.h));
+      if (!payload.id || !Number.isFinite(x) || !Number.isFinite(y)) return;
+
+      const frame = validateTerminalGraphicFrame({
         id: payload.id,
+        protocol: payload.protocol,
+        sequence: payload.sequence,
+        fallbackText: payload.fallbackText,
+        width: w,
+        height: h,
+      });
+      if (!frame) return;
+
+      pendingGraphicClears.delete(frame.id);
+      pendingGraphics.set(payload.id, {
+        id: frame.id,
         x,
         y,
-        sequence: payload.sequence,
+        w: frame.width,
+        h: frame.height,
+        protocol: frame.protocol,
+        sequence: frame.sequence,
+        fallbackText: frame.fallbackText,
       });
+    },
+    clear(id) {
+      if (disposed) return;
+      pendingGraphics.delete(id);
+      if (activeGraphicsRects.has(id)) pendingGraphicClears.add(id);
     },
   };
   const unregisterGraphicsOutput = registerTerminalGraphicsOutput(terminal, graphicsOutput);
@@ -485,6 +514,51 @@ export function createStdoutRenderer(
     const x = Math.min(maxX, Math.max(0, x0));
     const y = Math.min(maxY, Math.max(0, y0));
     return { x, y };
+  }
+
+  function clampGraphicRectToViewport(
+    rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+    size: Readonly<{ cols: number; rows: number }>,
+  ): { x: number; y: number; w: number; h: number } | null {
+    if (size.cols <= 0 || size.rows <= 0) return null;
+
+    const { x, y } = clampCellToViewport({ cellX: rect.x, cellY: rect.y }, size);
+    const w = Math.min(Math.max(1, Math.floor(rect.w)), Math.max(0, size.cols - x));
+    const h = Math.min(Math.max(1, Math.floor(rect.h)), Math.max(0, size.rows - y));
+    if (w <= 0 || h <= 0) return null;
+
+    return { x, y, w, h };
+  }
+
+  function clearGraphicRect(
+    rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+  ): string {
+    const blank = " ".repeat(Math.max(0, rect.w));
+    let out = "";
+
+    for (let row = 0; row < rect.h; row++) {
+      out += `\u001B[${rect.y + row + 1};${rect.x + 1}H${blank}`;
+    }
+
+    return out;
+  }
+
+  function sameGraphicRect(
+    a: Readonly<{ x: number; y: number; w: number; h: number }> | undefined,
+    b: Readonly<{ x: number; y: number; w: number; h: number }>,
+  ): boolean {
+    return Boolean(a && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h);
+  }
+
+  function maybeWrapTerminalGraphic(sequence: string): string {
+    if (
+      !env.TMUX ||
+      !/^(1|true|yes|on)$/i.test(String(env.VUE_TUI_GRAPHICS_TMUX_PASSTHROUGH ?? ""))
+    ) {
+      return sequence;
+    }
+
+    return `\u001BPtmux;${sequence.split("\u001B").join("\u001B\u001B")}\u001B\\`;
   }
 
   function resolveColorMode(): Exclude<StdoutColorMode, "auto"> {
@@ -1941,6 +2015,8 @@ export function createStdoutRenderer(
     const renderStart = performance.now();
 
     const size = terminal.size();
+    const graphicsClearsToRender = Array.from(pendingGraphicClears);
+    pendingGraphicClears.clear();
     const graphicsToRender = Array.from(pendingGraphics.values());
     pendingGraphics.clear();
     ensureRowEscapes(Math.max(size.rows, lastRenderedRows));
@@ -1997,6 +2073,7 @@ export function createStdoutRenderer(
       rowsToRender?.length === 0 &&
       !normalizedScrollOperations &&
       !getImeAnchor &&
+      graphicsClearsToRender.length === 0 &&
       graphicsToRender.length === 0
     ) {
       if (isDebugEnabled()) getDebugLog().render(" No valid dirty rows; frame skipped");
@@ -2798,7 +2875,7 @@ export function createStdoutRenderer(
       prevOverlayPartialRows = overlayCoverage.partialRows;
     };
 
-    if (graphicsToRender.length > 0) {
+    if (graphicsClearsToRender.length > 0 || graphicsToRender.length > 0) {
       hasFrameOutput = true;
       if (enableOsc8Links && activeStyle.href) frameParts.push(OSC8_CLOSE);
       activeStyle = {
@@ -2813,12 +2890,35 @@ export function createStdoutRenderer(
       };
       activeStyleKey = null;
       frameParts.push(SGR_RESET);
+
+      for (const id of graphicsClearsToRender) {
+        const rect = activeGraphicsRects.get(id);
+        if (!rect) continue;
+        const visibleRect = clampGraphicRectToViewport(rect, size);
+        if (visibleRect) frameParts.push(clearGraphicRect(visibleRect));
+        activeGraphicsRects.delete(id);
+      }
+
       for (const payload of graphicsToRender) {
-        const { x, y } = clampCellToViewport(
-          { cellX: payload.x, cellY: payload.y },
-          { cols: size.cols, rows: size.rows },
+        const rect = clampGraphicRectToViewport(
+          { x: payload.x, y: payload.y, w: payload.w, h: payload.h },
+          size,
         );
-        frameParts.push(`\u001B[${y + 1};${x + 1}H`, payload.sequence, SGR_RESET);
+        if (!rect) continue;
+
+        const previous = activeGraphicsRects.get(payload.id);
+        if (previous && !sameGraphicRect(previous, rect)) {
+          const visiblePrevious = clampGraphicRectToViewport(previous, size);
+          if (visiblePrevious) frameParts.push(clearGraphicRect(visiblePrevious));
+        }
+
+        frameParts.push(
+          clearGraphicRect(rect),
+          `\u001B[${rect.y + 1};${rect.x + 1}H`,
+          maybeWrapTerminalGraphic(payload.sequence),
+          SGR_RESET,
+        );
+        activeGraphicsRects.set(payload.id, rect);
       }
     }
 
@@ -3464,6 +3564,17 @@ export function createStdoutRenderer(
     accumulatedDirtyMax = -1;
     accumulatedDirtyRowsRequireRepaint = false;
     pendingGraphics.clear();
+    pendingGraphicClears.clear();
+    if (activeGraphicsRects.size > 0) {
+      const size = terminal.size();
+      const clearParts: string[] = [];
+      for (const rect of activeGraphicsRects.values()) {
+        const visibleRect = clampGraphicRectToViewport(rect, size);
+        if (visibleRect) clearParts.push(clearGraphicRect(visibleRect));
+      }
+      activeGraphicsRects.clear();
+      if (clearParts.length > 0) out.write(`${SGR_RESET}${clearParts.join("")}${SGR_RESET}`);
+    }
     unregisterGraphicsOutput();
     off();
     releaseFingerprintFn();

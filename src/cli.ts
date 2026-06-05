@@ -39,14 +39,21 @@ export type {
 } from "./renderer/cli/stdout-renderer.js";
 export { createStdoutRenderer } from "./renderer/cli/stdout-renderer.js";
 export type {
+  RawTerminalGraphicFrame,
   TerminalGraphicsCapabilities,
+  TerminalGraphicsDetectionInput,
+  TerminalGraphicsFallbackProtocol,
   TerminalGraphicsPayload,
   TerminalGraphicsProtocol,
+  TerminalGraphicsResolvedProtocol,
+  ValidatedTerminalGraphicFrame,
 } from "./renderer/terminal-graphics.js";
 export {
   createIterm2InlineImageSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
+  sanitizeTerminalFallbackText,
+  validateTerminalGraphicFrame,
 } from "./renderer/terminal-graphics.js";
 export { sanitizeTerminalHref, type SanitizeTerminalHrefOptions } from "./core/hyperlink.js";
 export type {

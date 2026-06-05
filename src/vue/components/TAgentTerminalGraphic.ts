@@ -16,6 +16,10 @@ import {
   watch,
 } from "vue";
 import { getTerminalGraphicsOutput } from "../../renderer/terminal-graphics.js";
+import {
+  sanitizeTerminalFallbackText,
+  validateTerminalGraphicFrame,
+} from "../../renderer/terminal-graphics.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
@@ -59,34 +63,22 @@ export type TAgentTerminalGraphicRenderer = (
 
 type TAgentTerminalGraphicStatus = "idle" | "loading" | "ready";
 
-const ESC = String.fromCharCode(27);
-const BEL = String.fromCharCode(7);
-const TERMINAL_ESCAPE_RE = new RegExp(
-  [
-    `${ESC}\\][\\s\\S]*?(?:${BEL}|${ESC}\\\\)`,
-    `${ESC}[PX^_][\\s\\S]*?${ESC}\\\\`,
-    `${ESC}\\[[0-?]*[ -/]*[@-~]`,
-    `${ESC}[@-Z\\\\-_]`,
-  ].join("|"),
-  "g",
-);
-
 const NO_GRAPHICS_CAPABILITIES: TerminalGraphicsCapabilities = Object.freeze({
   supported: false,
   kitty: false,
   iterm2: false,
   sixel: false,
   preferredProtocol: null,
+  protocol: "unicode",
+  candidates: [],
+  stdoutIsTTY: false,
+  insideTmux: false,
+  insideScreen: false,
+  reason: "no-terminal-graphics-output",
 });
 
-function stripTerminalEscapes(value: string): string {
-  return value.replace(TERMINAL_ESCAPE_RE, "");
-}
-
 function splitTextOutput(value: string): readonly string[] {
-  const normalized = sanitizeTextBlock(
-    stripTerminalEscapes(String(value ?? "")).replace(/\r\n?/g, "\n"),
-  );
+  const normalized = sanitizeTextBlock(sanitizeTerminalFallbackText(value).replace(/\r\n?/g, "\n"));
   const lines = normalized.split("\n");
   return lines.length ? lines : [""];
 }
@@ -132,6 +124,7 @@ export type TAgentTerminalGraphicProps = ExtractPublicPropTypes<typeof tAgentTer
 type ResolvedGraphic =
   | Readonly<{
       type: "terminal";
+      protocol: TerminalGraphicsProtocol | null;
       sequence: string;
       fallback: string;
     }>
@@ -193,6 +186,7 @@ export const TAgentTerminalGraphic = defineComponent({
       }
       return {
         type: "terminal",
+        protocol: result.protocol ?? resolveRendererContext().capabilities.preferredProtocol,
         sequence: result.sequence,
         fallback: result.fallback ?? fallbackText(),
       };
@@ -283,6 +277,7 @@ export const TAgentTerminalGraphic = defineComponent({
       alive = false;
       renderVersion++;
       scheduler.cancelFrameTask?.(frameTaskId);
+      graphicsOutput()?.clear?.(rawId);
     });
 
     const showingInitialLoadingText = computed(() => status.value === "loading" && !graphic.value);
@@ -307,10 +302,23 @@ export const TAgentTerminalGraphic = defineComponent({
     });
 
     const rawCanRender = computed(() => {
+      const current = graphic.value;
+      const output = graphicsOutput();
       const full = fullRect.value;
       const abs = absRect.value;
       return (
-        Boolean(graphicsOutput()?.capabilities.supported) &&
+        current?.type === "terminal" &&
+        current.protocol != null &&
+        Boolean(output?.capabilities.supported) &&
+        output?.capabilities.preferredProtocol === current.protocol &&
+        validateTerminalGraphicFrame({
+          id: rawId,
+          protocol: current.protocol,
+          sequence: current.sequence,
+          fallbackText: current.fallback,
+          width: full.w,
+          height: full.h,
+        }) != null &&
         abs.x === full.x &&
         abs.y === full.y &&
         abs.w === full.w &&
@@ -363,21 +371,25 @@ export const TAgentTerminalGraphic = defineComponent({
           const out = displayLines.value;
           const dx = Math.max(0, Math.floor(r.x - full.x));
           const fullY = Math.floor(full.y);
-          const blank = props.clear ? spaces(r.w) : "";
+          const current = graphic.value;
+          const output = graphicsOutput();
+          const clearOwnedRegion =
+            props.clear || (current?.type === "terminal" && rawCanRender.value);
+          const blank = clearOwnedRegion ? spaces(r.w) : "";
 
           const paintRow = (y: number) => {
             if (y < r.y || y >= r.y + r.h) return;
 
             const rowIndex = y - fullY;
             if (rowIndex < 0 || rowIndex >= out.length) {
-              if (props.clear) terminal.write(blank, { x: r.x, y, style });
+              if (clearOwnedRegion) terminal.write(blank, { x: r.x, y, style });
               return;
             }
 
             const src = out[rowIndex] ?? "";
             const clipped = dx > 0 ? sliceByCellsRange(src, dx, dx + r.w) : sliceByCells(src, r.w);
-            const value = props.clear ? padEndByCells(clipped, r.w) : clipped;
-            if (value || props.clear) terminal.write(value, { x: r.x, y, style });
+            const value = clearOwnedRegion ? padEndByCells(clipped, r.w) : clipped;
+            if (value || clearOwnedRegion) terminal.write(value, { x: r.x, y, style });
           };
 
           if (dirtyRows?.length) {
@@ -386,19 +398,25 @@ export const TAgentTerminalGraphic = defineComponent({
             for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
           }
 
-          const current = graphic.value;
-          const output = graphicsOutput();
           if (
             current?.type === "terminal" &&
+            current.protocol != null &&
             output?.capabilities.supported &&
+            output.capabilities.preferredProtocol === current.protocol &&
             rawCanRender.value
           ) {
             output.queue({
               id: rawId,
               x: full.x,
               y: full.y,
+              w: full.w,
+              h: full.h,
+              protocol: current.protocol,
               sequence: current.sequence,
+              fallbackText: current.fallback,
             });
+          } else {
+            output?.clear?.(rawId);
           }
         });
       },

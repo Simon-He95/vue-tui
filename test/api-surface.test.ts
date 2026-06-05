@@ -155,8 +155,10 @@ describe("public API surface", () => {
         "readEventLog",
         "resetNodeFileWriters",
         "resolveUserPath",
+        "sanitizeTerminalFallbackText",
         "sanitizeTerminalHref",
         "suggestPaths",
+        "validateTerminalGraphicFrame",
         "writeEventLog",
         "writeSnapshot",
       ]
@@ -343,6 +345,7 @@ describe("public API surface", () => {
         "resolveTThinkingViewModel",
         "resolveTToolCallViewModel",
         "resolveTUserMessageViewModel",
+        "sanitizeTerminalFallbackText",
         "stripTLogAnsiText",
         "tlogDarkPreset",
         "tlogDarkTheme",
@@ -356,6 +359,7 @@ describe("public API surface", () => {
         "useTLogSearchController",
         "useTLogSearchResultsPage",
         "useTLogVirtualSearchResults",
+        "validateTerminalGraphicFrame",
       ]
     `);
   });

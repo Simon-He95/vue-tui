@@ -160,6 +160,7 @@
         "resolveTThinkingViewModel",
         "resolveTToolCallViewModel",
         "resolveTUserMessageViewModel",
+        "sanitizeTerminalFallbackText",
         "stripTLogAnsiText",
         "tlogDarkPreset",
         "tlogDarkTheme",
@@ -172,11 +173,13 @@
         "useTLogRetainedIndex",
         "useTLogSearchController",
         "useTLogSearchResultsPage",
-        "useTLogVirtualSearchResults"
+        "useTLogVirtualSearchResults",
+        "validateTerminalGraphicFrame"
       ],
       "typeExports": [
         "AppendOnlyLogStore",
         "CreateAppendOnlyLogStoreOptions",
+        "RawTerminalGraphicFrame",
         "RowScrollMode",
         "TAgentTerminalGraphicKind",
         "TAgentTerminalGraphicProps",
@@ -260,8 +263,11 @@
         "TUserMessageSegment",
         "TUserMessageViewModel",
         "TerminalGraphicsCapabilities",
+        "TerminalGraphicsDetectionInput",
+        "TerminalGraphicsFallbackProtocol",
         "TerminalGraphicsPayload",
         "TerminalGraphicsProtocol",
+        "TerminalGraphicsResolvedProtocol",
         "TuiMarkdownBlock",
         "TuiMarkdownBlockSource",
         "TuiMarkdownBlockSourceOptions",
@@ -271,7 +277,8 @@
         "TuiMarkdownTableCell",
         "TuiMarkdownTableCellAlign",
         "TuiMarkdownVisualRow",
-        "TuiMarkdownVisualSegment"
+        "TuiMarkdownVisualSegment",
+        "ValidatedTerminalGraphicFrame"
       ]
     },
     "@simon_he/vue-tui/agent/mermaid": {
@@ -322,8 +329,10 @@
         "readEventLog",
         "resetNodeFileWriters",
         "resolveUserPath",
+        "sanitizeTerminalFallbackText",
         "sanitizeTerminalHref",
         "suggestPaths",
+        "validateTerminalGraphicFrame",
         "writeEventLog",
         "writeSnapshot"
       ],
@@ -340,6 +349,7 @@
         "PathPickMode",
         "PathPickerProvider",
         "PathSuggestion",
+        "RawTerminalGraphicFrame",
         "SanitizeTerminalHrefOptions",
         "StdinDriver",
         "StdoutColorMode",
@@ -352,13 +362,17 @@
         "TerminalCleanupOptions",
         "TerminalCleanupSignalPolicy",
         "TerminalGraphicsCapabilities",
+        "TerminalGraphicsDetectionInput",
+        "TerminalGraphicsFallbackProtocol",
         "TerminalGraphicsPayload",
         "TerminalGraphicsProtocol",
+        "TerminalGraphicsResolvedProtocol",
         "TerminalLinkOpenContext",
         "TerminalLinkOpenSource",
         "TerminalLinkOpener",
         "TerminalLinkOpenerLike",
-        "ThemePalette"
+        "ThemePalette",
+        "ValidatedTerminalGraphicFrame"
       ]
     },
     "@simon_he/vue-tui/core": {

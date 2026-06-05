@@ -2,6 +2,7 @@ import { defineComponent, h, nextTick } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   TAgentTerminalGraphic,
+  createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
   type TAgentTerminalGraphicRenderer,
 } from "../src/agent.js";
@@ -55,10 +56,11 @@ describe("TAgentTerminalGraphic", () => {
         writes.push(chunk);
       },
     };
+    const kittySequence = createKittyGraphicsSequence("QUJD");
     const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
       expect(context.capabilities.preferredProtocol).toBe("kitty");
       return {
-        sequence: "<IMG>",
+        sequence: kittySequence,
         fallback: "fallback",
       };
     });
@@ -78,14 +80,16 @@ describe("TAgentTerminalGraphic", () => {
     });
 
     const app = createTerminalApp({ cols: 20, rows: 6, component: App });
-    const stdout = withEnv({ KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty" }, () =>
-      createStdoutRenderer(app.terminal, {
-        output,
-        clear: false,
-        altScreen: false,
-        hideCursor: false,
-        trackResize: false,
-      }),
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
     );
 
     writes.length = 0;
@@ -93,7 +97,7 @@ describe("TAgentTerminalGraphic", () => {
     await settle(app);
 
     const outputText = writes.join("");
-    expect(outputText).toContain("\u001B[2;3H<IMG>");
+    expect(outputText).toContain(kittySequence);
     expect(rowText(app, 1)).toBe("");
 
     stdout.dispose();
@@ -139,16 +143,19 @@ describe("TAgentTerminalGraphic", () => {
     expect(
       detectTerminalGraphicsCapabilities({
         env: { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty" },
+        stdoutIsTTY: true,
       }).preferredProtocol,
     ).toBe("kitty");
     expect(
       detectTerminalGraphicsCapabilities({
         env: { TERM_PROGRAM: "iTerm.app" },
+        stdoutIsTTY: true,
       }).preferredProtocol,
     ).toBe("iterm2");
     expect(
       detectTerminalGraphicsCapabilities({
         env: { TERM: "xterm-sixel" },
+        stdoutIsTTY: true,
       }).preferredProtocol,
     ).toBe("sixel");
   });

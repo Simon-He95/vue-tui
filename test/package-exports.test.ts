@@ -472,6 +472,7 @@ describe("package exports", () => {
       "resolveTThinkingViewModel",
       "resolveTToolCallViewModel",
       "resolveTUserMessageViewModel",
+      "sanitizeTerminalFallbackText",
       "stripTLogAnsiText",
       "tlogDarkPreset",
       "tlogDarkTheme",
@@ -485,6 +486,7 @@ describe("package exports", () => {
       "useTLogSearchController",
       "useTLogSearchResultsPage",
       "useTLogVirtualSearchResults",
+      "validateTerminalGraphicFrame",
     ]);
     expect(Object.keys(mermaid).sort()).toEqual([
       "TBeautifulMermaid",
@@ -519,8 +521,10 @@ describe("package exports", () => {
       "readEventLog",
       "resetNodeFileWriters",
       "resolveUserPath",
+      "sanitizeTerminalFallbackText",
       "sanitizeTerminalHref",
       "suggestPaths",
+      "validateTerminalGraphicFrame",
       "writeEventLog",
       "writeSnapshot",
     ]);

@@ -41,14 +41,21 @@ export {
   TMermaidText,
 } from "./vue/components/TMermaidText.js";
 export type {
+  RawTerminalGraphicFrame,
   TerminalGraphicsCapabilities,
+  TerminalGraphicsDetectionInput,
+  TerminalGraphicsFallbackProtocol,
   TerminalGraphicsPayload,
   TerminalGraphicsProtocol,
+  TerminalGraphicsResolvedProtocol,
+  ValidatedTerminalGraphicFrame,
 } from "./renderer/terminal-graphics.js";
 export {
   createIterm2InlineImageSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
+  sanitizeTerminalFallbackText,
+  validateTerminalGraphicFrame,
 } from "./renderer/terminal-graphics.js";
 export type {
   TMermaidAsciiOptions,
