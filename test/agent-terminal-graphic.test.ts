@@ -12,6 +12,7 @@ import {
   getTerminalGraphicTraceMetrics,
   resetTerminalGraphicTraceMetrics,
   type TAgentTerminalGraphicRenderer,
+  type TAgentTerminalGraphicRendererContext,
   type TAgentTerminalGraphicRenderResult,
   type TerminalGraphicsProtocol,
 } from "../src/agent.js";
@@ -537,6 +538,51 @@ describe("TAgentTerminalGraphic", () => {
     expect(secondSequence).toContain("p=321");
     expect(secondSequence).not.toBe(firstSequence);
     expect(queue.stats().cacheEntries).toBe(1);
+  });
+
+  it("does not render PNG frames when raw terminal output cannot be placed", async () => {
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      fallback: "png fallback",
+      cols: 10,
+      rows: 1,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({
+      toPngBase64,
+      fallback: () => "text fallback",
+    });
+    const context: TAgentTerminalGraphicRendererContext = {
+      kind: "image",
+      width: 10,
+      height: 1,
+      final: true,
+      streaming: false,
+      protocol: "kitty",
+      capabilities,
+      signal: new AbortController().signal,
+      imageId: 1,
+      placementId: 1,
+      visible: true,
+      rawVisible: false,
+      scrolling: false,
+      viewport: {
+        visible: true,
+        rawVisible: false,
+        scrolling: false,
+        rect: { x: 0, y: 0, w: 5, h: 1 },
+        fullRect: { x: 0, y: 0, w: 10, h: 1 },
+      },
+    };
+
+    await expect(renderer("image.png", context)).resolves.toEqual({
+      type: "text",
+      text: "text fallback",
+    });
+    expect(toPngBase64).not.toHaveBeenCalled();
   });
 
   it("reuses protocol-independent PNG cache across terminal protocols", async () => {

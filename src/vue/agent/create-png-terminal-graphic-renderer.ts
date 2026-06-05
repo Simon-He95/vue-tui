@@ -111,11 +111,14 @@ export function createPngTerminalGraphicRenderer(
     );
     throwIfAborted(context.signal);
 
+    const protocol = context.protocol;
     if (
       !context.capabilities.supported ||
-      context.protocol === "unicode" ||
-      context.protocol === "none" ||
-      !context.visible
+      protocol === "unicode" ||
+      protocol === "none" ||
+      !context.visible ||
+      !context.rawVisible ||
+      (protocol === "sixel" && !options.toSixel)
     ) {
       return { type: "text", text: fallback };
     }
@@ -142,7 +145,7 @@ export function createPngTerminalGraphicRenderer(
       return { type: "text", text: png.fallback || fallback };
     }
 
-    if (context.protocol === "kitty") {
+    if (protocol === "kitty") {
       return {
         type: "sequence",
         protocol: "kitty",
@@ -162,7 +165,7 @@ export function createPngTerminalGraphicRenderer(
       };
     }
 
-    if (context.protocol === "iterm2") {
+    if (protocol === "iterm2") {
       return {
         type: "sequence",
         protocol: "iterm2",
@@ -178,7 +181,7 @@ export function createPngTerminalGraphicRenderer(
       };
     }
 
-    if (context.protocol === "sixel" && options.toSixel) {
+    if (protocol === "sixel") {
       const sixel = await queue.cached<string>(
         `${key}\x1Fsixel`,
         context.signal,

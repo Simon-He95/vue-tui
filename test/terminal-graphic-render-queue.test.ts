@@ -364,7 +364,7 @@ describe("terminal graphic render queue", () => {
     expect(queue.stats()).toMatchObject({ active: 0, waiting: 0, cacheEntries: 0 });
   });
 
-  it("releases an active slot when an abortable render is aborted", async () => {
+  it("keeps an active slot until aborted render work settles", async () => {
     const metrics: string[] = [];
     const queue = createTerminalGraphicRenderQueue({
       maxConcurrency: 1,
@@ -407,10 +407,14 @@ describe("terminal graphic render queue", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(visibleStarted).toBe(true);
-    await expect(second).resolves.toBe("visible");
-    finishOffscreen();
+    expect(visibleStarted).toBe(false);
+    expect(queue.stats()).toMatchObject({ active: 1, waiting: 1 });
     expect(await first).toMatchObject({ ok: false, error: { name: "AbortError" } });
+
+    finishOffscreen();
+    await expect(second).resolves.toBe("visible");
+    expect(visibleStarted).toBe(true);
+    expect(queue.stats()).toMatchObject({ active: 0, waiting: 0 });
     expect(metrics).toContain("render-abort");
   });
 });

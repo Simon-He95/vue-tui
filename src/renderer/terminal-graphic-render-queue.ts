@@ -177,15 +177,13 @@ export function createTerminalGraphicRenderQueue(
     };
   }
 
-  function releaseActiveSlotOnAbort(
+  function observeActiveRenderAbort(
     key: string,
     signal: AbortSignal | undefined,
-    releaseSlot: () => void,
   ): () => void {
     if (!signal) return () => undefined;
 
     const onAbort = () => {
-      releaseSlot();
       options.onMetric?.({ type: "render-abort", key });
       recordTerminalGraphicTrace({ type: "renderer-abort", id: key, key });
     };
@@ -270,12 +268,12 @@ export function createTerminalGraphicRenderQueue(
     let promise!: Promise<T>;
     promise = (async () => {
       let releaseSlot: (() => void) | null = null;
-      let removeAbortRelease: (() => void) | null = null;
+      let removeAbortObserver: (() => void) | null = null;
       const renderGeneration = generation;
 
       try {
         releaseSlot = once(await acquire(key, signal));
-        removeAbortRelease = releaseActiveSlotOnAbort(key, signal, releaseSlot);
+        removeAbortObserver = observeActiveRenderAbort(key, signal);
         throwIfAborted(signal);
 
         // A duplicate render may have filled the cache while this caller was
@@ -292,7 +290,7 @@ export function createTerminalGraphicRenderQueue(
 
         return value;
       } finally {
-        removeAbortRelease?.();
+        removeAbortObserver?.();
         releaseSlot?.();
         if (shouldDedupeInflight && inflight.get(key) === promise) inflight.delete(key);
       }
