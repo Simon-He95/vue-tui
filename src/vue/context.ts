@@ -16,6 +16,10 @@ import type { FramePerfReason } from "../observability/frame-perf.js";
 import type { FramePerfStore } from "../observability/frame-perf-store.js";
 import type { TInputPlugin } from "./components/input/plugins/types.js";
 import { readonly, ref } from "vue";
+import {
+  nowTerminalGraphicTraceTime,
+  recordTerminalGraphicTrace,
+} from "../renderer/terminal-graphics-trace.js";
 import { injectionKey } from "./injection-key.js";
 import type { RenderManager } from "./render/render-manager.js";
 
@@ -116,6 +120,12 @@ export type TerminalSelectionContext = Readonly<{
   clear: () => void;
 }>;
 
+export type TerminalGraphicsActivityOptions = Readonly<{
+  scrollIdleMs?: number;
+  traceId?: string;
+  trace?: boolean;
+}>;
+
 export type TerminalGraphicsActivity = Readonly<{
   scrolling: Readonly<Ref<boolean>>;
   version: Readonly<Ref<number>>;
@@ -166,12 +176,14 @@ export const TerminalGraphicsActivityKey = injectionKey<TerminalGraphicsActivity
 export const DialogContextKey = injectionKey<boolean>("DialogContext");
 
 export function createTerminalGraphicsActivity(
-  options: Readonly<{ scrollIdleMs?: number }> = {},
+  options: TerminalGraphicsActivityOptions = {},
 ): TerminalGraphicsActivity {
   const scrollIdleMs = Math.max(16, Math.floor(options.scrollIdleMs ?? 96));
+  const traceId = options.traceId ?? "TerminalGraphicsActivity";
   const scrolling = ref(false);
   const version = ref(0);
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let scrollStartedAt = 0;
 
   function bump(): void {
     version.value++;
@@ -183,22 +195,53 @@ export function createTerminalGraphicsActivity(
     timer = null;
   }
 
+  function traceScroll(
+    type: "scroll-start" | "scroll-mark" | "scroll-idle",
+    durationMs?: number,
+  ): void {
+    if (options.trace === false) return;
+
+    recordTerminalGraphicTrace({
+      type,
+      id: traceId,
+      key: traceId,
+      durationMs,
+    });
+  }
+
+  function finishScroll(): void {
+    if (!scrolling.value) return;
+
+    const endedAt = nowTerminalGraphicTraceTime();
+    const durationMs = scrollStartedAt > 0 ? endedAt - scrollStartedAt : undefined;
+    scrolling.value = false;
+    scrollStartedAt = 0;
+    traceScroll("scroll-idle", durationMs);
+    bump();
+  }
+
   function markScroll(): void {
-    if (!scrolling.value) scrolling.value = true;
+    const started = !scrolling.value;
+
+    if (started) {
+      scrolling.value = true;
+      scrollStartedAt = nowTerminalGraphicTraceTime();
+      traceScroll("scroll-start");
+    } else {
+      traceScroll("scroll-mark");
+    }
+
     bump();
     clearTimer();
     timer = setTimeout(() => {
       timer = null;
-      if (!scrolling.value) return;
-      scrolling.value = false;
-      bump();
+      finishScroll();
     }, scrollIdleMs);
   }
 
   function dispose(): void {
     clearTimer();
-    if (scrolling.value) scrolling.value = false;
-    bump();
+    finishScroll();
   }
 
   return {

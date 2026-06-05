@@ -148,6 +148,7 @@ export const TVirtualList = defineComponent({
     const wheelTaskId = `TVirtualList:${virtualListInstanceId}:wheel`;
     const terminalGraphicsActivity = createTerminalGraphicsActivity({
       scrollIdleMs: props.terminalGraphicScrollIdleMs,
+      traceId: `TVirtualList:${virtualListInstanceId}:terminal-graphics`,
     });
     provide(TerminalGraphicsActivityKey, terminalGraphicsActivity);
 

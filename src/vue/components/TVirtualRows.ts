@@ -232,12 +232,14 @@ export const TVirtualRows = defineComponent({
     provide(LayoutContextKey, childLayout);
     provide(RenderStackKey, childStack as any);
     provide(EventZIndexContextKey, eventZ as any);
+
+    const virtualRowsInstanceId = ++virtualRowsInstanceSeq;
     const terminalGraphicsActivity = createTerminalGraphicsActivity({
       scrollIdleMs: props.terminalGraphicScrollIdleMs,
+      traceId: `TVirtualRows:${virtualRowsInstanceId}:terminal-graphics`,
     });
     provide(TerminalGraphicsActivityKey, terminalGraphicsActivity);
 
-    const virtualRowsInstanceId = ++virtualRowsInstanceSeq;
     const frameTaskId = `TVirtualRows:${virtualRowsInstanceId}`;
     const innerScrollTop = ref(0);
     const controlledScrollTop = ref(0);

@@ -14,7 +14,10 @@ export type TerminalGraphicTraceEventType =
   | "queue"
   | "queue-wait"
   | "queue-dedupe"
-  | "clear";
+  | "clear"
+  | "scroll-start"
+  | "scroll-mark"
+  | "scroll-idle";
 
 export type TerminalGraphicTraceEvent = Readonly<{
   type: TerminalGraphicTraceEventType;
@@ -46,6 +49,11 @@ export type TerminalGraphicTraceMetrics = Readonly<{
   totalValidateMs: number;
   totalQueueWaitMs: number;
   maxQueueWaitMs: number;
+  scrollStarts: number;
+  scrollMarks: number;
+  scrollIdles: number;
+  totalScrollMs: number;
+  maxScrollMs: number;
 }>;
 
 const metrics = {
@@ -66,6 +74,11 @@ const metrics = {
   totalValidateMs: 0,
   totalQueueWaitMs: 0,
   maxQueueWaitMs: 0,
+  scrollStarts: 0,
+  scrollMarks: 0,
+  scrollIdles: 0,
+  totalScrollMs: 0,
+  maxScrollMs: 0,
 };
 
 const subscribers = new Set<(event: TerminalGraphicTraceEvent) => void>();
@@ -132,6 +145,19 @@ export function recordTerminalGraphicTrace(
     case "clear":
       metrics.cleared++;
       break;
+    case "scroll-start":
+      metrics.scrollStarts++;
+      break;
+    case "scroll-mark":
+      metrics.scrollMarks++;
+      break;
+    case "scroll-idle": {
+      const durationMs = normalized.durationMs ?? 0;
+      metrics.scrollIdles++;
+      metrics.totalScrollMs += durationMs;
+      metrics.maxScrollMs = Math.max(metrics.maxScrollMs, durationMs);
+      break;
+    }
   }
 
   for (const subscriber of subscribers) subscriber(normalized);
@@ -159,6 +185,11 @@ export function resetTerminalGraphicTraceMetrics(): void {
   metrics.totalValidateMs = 0;
   metrics.totalQueueWaitMs = 0;
   metrics.maxQueueWaitMs = 0;
+  metrics.scrollStarts = 0;
+  metrics.scrollMarks = 0;
+  metrics.scrollIdles = 0;
+  metrics.totalScrollMs = 0;
+  metrics.maxScrollMs = 0;
 }
 
 export function subscribeTerminalGraphicTrace(

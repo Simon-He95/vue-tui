@@ -110,8 +110,9 @@ describe("terminal graphic render queue", () => {
     await Promise.resolve();
 
     const renderFresh = vi.fn(async () => "fresh");
-    await expect(queue.cached("same-key", undefined, renderFresh, (value) => value.length))
-      .resolves.toBe("fresh");
+    await expect(
+      queue.cached("same-key", undefined, renderFresh, (value) => value.length),
+    ).resolves.toBe("fresh");
     expect(renderFresh).toHaveBeenCalledTimes(1);
   });
 

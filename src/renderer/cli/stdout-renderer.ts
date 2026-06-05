@@ -3085,6 +3085,31 @@ export function createStdoutRenderer(
       currentTextIds.set(prevTextIds);
     }
 
+    let renderedRowsLookup: Set<number> | undefined;
+    const rowWasPaintedByTextRenderer = (y: number): boolean => {
+      if (scrollHandled) return true;
+      if (!rowsToRender) return true;
+
+      renderedRowsLookup ??= new Set(rowsToRender);
+      return renderedRowsLookup.has(y);
+    };
+    const clearGraphicRectForRowsNotPainted = (
+      rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+    ): string => {
+      if (!rowsToRender || scrollHandled) return "";
+
+      const blank = " ".repeat(Math.max(0, rect.w));
+      let out = "";
+
+      for (let row = 0; row < rect.h; row++) {
+        const y = rect.y + row;
+        if (rowWasPaintedByTextRenderer(y)) continue;
+        out += `\u001B[${y + 1};${rect.x + 1}H${blank}`;
+      }
+
+      return out;
+    };
+
     if (graphicsClearsToRender.length > 0 || graphicsToRender.length > 0) {
       let terminalGraphicsDraws = 0;
       let terminalGraphicsClears = 0;
@@ -3113,7 +3138,10 @@ export function createStdoutRenderer(
         const active = activeGraphics.get(id);
         if (!active) continue;
         const visibleRect = clampGraphicRectToViewport(active, size);
-        if (visibleRect) frameParts.push(countGraphicsBytes(clearGraphicRect(visibleRect)));
+        if (visibleRect) {
+          const clearRect = clearGraphicRectForRowsNotPainted(visibleRect);
+          if (clearRect) frameParts.push(countGraphicsBytes(clearRect));
+        }
         terminalGraphicsClears++;
         activeGraphics.delete(id);
         activeGraphicSignatures.delete(id);
@@ -3140,11 +3168,11 @@ export function createStdoutRenderer(
             continue;
           }
 
-          const clearRect = clearGraphicRect(rect);
+          const clearRect = clearGraphicRectForRowsNotPainted(rect);
           const cursor = `\u001B[${rect.y + 1};${rect.x + 1}H`;
           const sequence = maybeWrapTerminalGraphic(payload.sequence);
           frameParts.push(
-            countGraphicsBytes(clearRect),
+            clearRect ? countGraphicsBytes(clearRect) : "",
             countGraphicsBytes(cursor),
             countGraphicsBytes(sequence),
             countGraphicsBytes(SGR_RESET),
@@ -3165,7 +3193,8 @@ export function createStdoutRenderer(
           if (previous) {
             const visiblePrevious = clampGraphicRectToViewport(previous, size);
             if (visiblePrevious) {
-              frameParts.push(countGraphicsBytes(clearGraphicRect(visiblePrevious)));
+              const clearPrevious = clearGraphicRectForRowsNotPainted(visiblePrevious);
+              if (clearPrevious) frameParts.push(countGraphicsBytes(clearPrevious));
               terminalGraphicsClears++;
             }
             activeGraphics.delete(payload.id);
@@ -3178,16 +3207,17 @@ export function createStdoutRenderer(
         if (previous && !sameGraphicRect(previous, rect)) {
           const visiblePrevious = clampGraphicRectToViewport(previous, size);
           if (visiblePrevious) {
-            frameParts.push(countGraphicsBytes(clearGraphicRect(visiblePrevious)));
+            const clearPrevious = clearGraphicRectForRowsNotPainted(visiblePrevious);
+            if (clearPrevious) frameParts.push(countGraphicsBytes(clearPrevious));
             terminalGraphicsClears++;
           }
         }
 
-        const clearRect = clearGraphicRect(rect);
+        const clearRect = clearGraphicRectForRowsNotPainted(rect);
         const cursor = `\u001B[${rect.y + 1};${rect.x + 1}H`;
         const sequence = maybeWrapTerminalGraphic(payload.sequence);
         frameParts.push(
-          countGraphicsBytes(clearRect),
+          clearRect ? countGraphicsBytes(clearRect) : "",
           countGraphicsBytes(cursor),
           countGraphicsBytes(sequence),
           countGraphicsBytes(SGR_RESET),

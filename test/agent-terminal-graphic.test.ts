@@ -137,6 +137,80 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("does not erase fallback text when clearing a raw graphic in the same frame", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const scrolling = ref(false);
+    const iterm2Sequence = createIterm2InlineImageSequence("QUJD", { width: 8, height: 1 });
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "iterm2" as const,
+      sequence: iterm2Sequence,
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            scrolling: scrolling.value,
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    const stdout = withEnv(
+      {
+        TERM_PROGRAM: "iTerm.app",
+        KITTY_WINDOW_ID: undefined,
+        TERM: undefined,
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(iterm2Sequence);
+
+    writes.length = 0;
+    scrolling.value = true;
+    await settle(app);
+    flushStdout(stdout);
+
+    const frame = writes.join("");
+    const fallbackIndex = frame.indexOf("fallback");
+    expect(fallbackIndex).toBeGreaterThanOrEqual(0);
+    expect(frame.indexOf(`${ESC}[1;1H        `, fallbackIndex)).toBe(-1);
+    expect(rowText(app, 0)).toBe("fallback");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it("queues terminal graphics payloads through the stdout renderer", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
@@ -529,6 +603,7 @@ describe("TAgentTerminalGraphic", () => {
       }),
     );
 
+    resetTerminalGraphicTraceMetrics();
     writes.length = 0;
     app.mount();
     await settle(app);
@@ -544,17 +619,22 @@ describe("TAgentTerminalGraphic", () => {
 
     expect(renderer).toHaveBeenCalledTimes(1);
     expect(rowText(app, 0)).toBe("fallback-1");
+    expect(getTerminalGraphicTraceMetrics().scrollStarts).toBeGreaterThan(0);
+    expect(getTerminalGraphicTraceMetrics().skippedScrolling).toBeGreaterThan(0);
     expect(writes.join("")).not.toContain(sequence);
 
     await new Promise((resolve) => setTimeout(resolve, 220));
     await settle(app);
     flushStdout(stdout);
 
+    expect(getTerminalGraphicTraceMetrics().scrollIdles).toBeGreaterThan(0);
+    expect(getTerminalGraphicTraceMetrics().totalScrollMs).toBeGreaterThanOrEqual(0);
     expect(renderer).toHaveBeenCalledTimes(2);
     expect(writes.join("")).toContain(sequence);
 
     stdout.dispose();
     app.dispose();
+    resetTerminalGraphicTraceMetrics();
   });
 
   it("does not queue the same raw sequence twice for the same rect", async () => {
