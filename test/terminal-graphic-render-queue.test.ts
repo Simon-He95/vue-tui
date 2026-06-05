@@ -296,6 +296,10 @@ describe("terminal graphic render queue", () => {
     );
 
     await Promise.resolve();
+    const during = getTerminalGraphicTraceMetrics();
+    expect(during.maxActiveRenders).toBeGreaterThanOrEqual(1);
+    expect(during.maxWaitingRenders).toBeGreaterThanOrEqual(1);
+
     releaseFirst();
     await Promise.all([first, second]);
 
@@ -303,6 +307,8 @@ describe("terminal graphic render queue", () => {
     expect(metrics.queueWaits).toBeGreaterThan(0);
     expect(metrics.totalQueueWaitMs).toBeGreaterThanOrEqual(0);
     expect(metrics.maxQueueWaitMs).toBeGreaterThanOrEqual(0);
+    expect(metrics.maxCacheEntries).toBeGreaterThanOrEqual(2);
+    expect(metrics.maxCacheBytes).toBeGreaterThanOrEqual(10);
 
     resetTerminalGraphicTraceMetrics();
   });

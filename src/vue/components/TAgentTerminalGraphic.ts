@@ -27,7 +27,10 @@ import {
   normalizeTerminalGraphicSize,
   sanitizeTerminalFallbackText,
 } from "../../renderer/terminal-graphics.js";
-import { recordTerminalGraphicTrace } from "../../renderer/terminal-graphics-trace.js";
+import {
+  nowTerminalGraphicTraceTime,
+  recordTerminalGraphicTrace,
+} from "../../renderer/terminal-graphics-trace.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
@@ -443,7 +446,7 @@ export const TAgentTerminalGraphic = defineComponent({
 
     function abortCurrentRender(reason: string): void {
       if (!renderAbort) return;
-      renderAbort.abort(reason);
+      renderAbort.abort();
       renderAbort = null;
       trace("render-abort", { reason });
     }
@@ -814,7 +817,7 @@ export const TAgentTerminalGraphic = defineComponent({
       lastDeferTraceKey = "";
       const abort = new AbortController();
       renderAbort = abort;
-      const startedAt = performance.now();
+      const startedAt = nowTerminalGraphicTraceTime();
 
       status.value = "loading";
       error.value = "";
@@ -832,7 +835,7 @@ export const TAgentTerminalGraphic = defineComponent({
         status.value = "ready";
         error.value = "";
         trace("render-end", {
-          durationMs: performance.now() - startedAt,
+          durationMs: nowTerminalGraphicTraceTime() - startedAt,
           sequenceChars: normalized.type === "terminal" ? normalized.sequence.length : 0,
           sequenceBytes: normalized.type === "terminal" ? normalized.sequenceBytes : 0,
         });
@@ -845,7 +848,7 @@ export const TAgentTerminalGraphic = defineComponent({
         status.value = "ready";
         error.value = errorMessage(err);
         trace("render-end", {
-          durationMs: performance.now() - startedAt,
+          durationMs: nowTerminalGraphicTraceTime() - startedAt,
           reason: error.value,
         });
         bump();

@@ -13,6 +13,7 @@ export type TerminalGraphicTraceEventType =
   | "renderer-error"
   | "validate-end"
   | "queue"
+  | "queue-depth"
   | "queue-wait"
   | "queue-dedupe"
   | "clear"
@@ -30,6 +31,10 @@ export type TerminalGraphicTraceEvent = Readonly<{
   bytes?: number;
   reason?: string;
   error?: string;
+  active?: number;
+  waiting?: number;
+  cacheEntries?: number;
+  cacheBytes?: number;
 }>;
 
 export type TerminalGraphicTraceMetrics = Readonly<{
@@ -51,6 +56,10 @@ export type TerminalGraphicTraceMetrics = Readonly<{
   totalValidateMs: number;
   totalQueueWaitMs: number;
   maxQueueWaitMs: number;
+  maxActiveRenders: number;
+  maxWaitingRenders: number;
+  maxCacheEntries: number;
+  maxCacheBytes: number;
   scrollStarts: number;
   scrollMarks: number;
   scrollIdles: number;
@@ -77,6 +86,10 @@ const metrics = {
   totalValidateMs: 0,
   totalQueueWaitMs: 0,
   maxQueueWaitMs: 0,
+  maxActiveRenders: 0,
+  maxWaitingRenders: 0,
+  maxCacheEntries: 0,
+  maxCacheBytes: 0,
   scrollStarts: 0,
   scrollMarks: 0,
   scrollIdles: 0,
@@ -166,6 +179,25 @@ export function recordTerminalGraphicTrace(
     }
   }
 
+  if (normalized.active != null && Number.isFinite(normalized.active)) {
+    metrics.maxActiveRenders = Math.max(metrics.maxActiveRenders, Math.max(0, normalized.active));
+  }
+  if (normalized.waiting != null && Number.isFinite(normalized.waiting)) {
+    metrics.maxWaitingRenders = Math.max(
+      metrics.maxWaitingRenders,
+      Math.max(0, normalized.waiting),
+    );
+  }
+  if (normalized.cacheEntries != null && Number.isFinite(normalized.cacheEntries)) {
+    metrics.maxCacheEntries = Math.max(
+      metrics.maxCacheEntries,
+      Math.max(0, normalized.cacheEntries),
+    );
+  }
+  if (normalized.cacheBytes != null && Number.isFinite(normalized.cacheBytes)) {
+    metrics.maxCacheBytes = Math.max(metrics.maxCacheBytes, Math.max(0, normalized.cacheBytes));
+  }
+
   for (const subscriber of subscribers) {
     try {
       subscriber(normalized);
@@ -198,6 +230,10 @@ export function resetTerminalGraphicTraceMetrics(): void {
   metrics.totalValidateMs = 0;
   metrics.totalQueueWaitMs = 0;
   metrics.maxQueueWaitMs = 0;
+  metrics.maxActiveRenders = 0;
+  metrics.maxWaitingRenders = 0;
+  metrics.maxCacheEntries = 0;
+  metrics.maxCacheBytes = 0;
   metrics.scrollStarts = 0;
   metrics.scrollMarks = 0;
   metrics.scrollIdles = 0;

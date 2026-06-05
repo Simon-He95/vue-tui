@@ -36,7 +36,7 @@ export type CreatePngTerminalGraphicRendererOptions = Readonly<{
 
 type CachedPngTerminalGraphicFrame = Readonly<{
   base64: string;
-  fallback: string;
+  fallback?: string;
   cols: number;
   rows?: number;
 }>;
@@ -72,19 +72,18 @@ function defaultCacheKey(content: string, context: TAgentTerminalGraphicRenderer
 
 function normalizeCachedPngFrame(
   frame: PngTerminalGraphicFrame,
-  fallback: string,
   context: TAgentTerminalGraphicRendererContext,
 ): CachedPngTerminalGraphicFrame {
   return {
     base64: String(frame.base64 ?? "").replace(/\s+/g, ""),
-    fallback: sanitizeTerminalFallbackText(frame.fallback ?? fallback),
+    fallback: frame.fallback == null ? undefined : sanitizeTerminalFallbackText(frame.fallback),
     cols: positiveInt(frame.cols) ?? positiveInt(context.width) ?? 1,
     rows: positiveInt(frame.rows) ?? positiveInt(context.height),
   };
 }
 
 function pngFrameBytes(frame: CachedPngTerminalGraphicFrame): number {
-  return frame.base64.length + frame.fallback.length;
+  return frame.base64.length + (frame.fallback?.length ?? 0);
 }
 
 function stringBytes(value: string): number {
@@ -100,6 +99,16 @@ async function resolveFallbackText(
   const value = (await options.fallback?.(content, context)) ?? content;
   throwIfAborted(context.signal);
   return sanitizeTerminalFallbackText(value);
+}
+
+async function resolvePngFallbackText(
+  frame: CachedPngTerminalGraphicFrame,
+  options: CreatePngTerminalGraphicRendererOptions,
+  content: string,
+  context: TAgentTerminalGraphicRendererContext,
+): Promise<string> {
+  if (frame.fallback != null) return frame.fallback;
+  return resolveFallbackText(options, content, context);
 }
 
 export function createPngTerminalGraphicRenderer(
@@ -139,20 +148,21 @@ export function createPngTerminalGraphicRenderer(
         throwIfAborted(context.signal);
         const frame = await options.toPngBase64(content, context);
         throwIfAborted(context.signal);
-        const fallback =
-          frame.fallback == null ? await resolveFallbackText(options, content, context) : "";
-        return normalizeCachedPngFrame(frame, fallback, context);
+        return normalizeCachedPngFrame(frame, context);
       },
       pngFrameBytes,
       { dedupeInflight: options.dedupeInflight ?? false },
     );
 
     throwIfAborted(context.signal);
+    let fallbackPromise: Promise<string> | undefined;
+    const fallback = () =>
+      (fallbackPromise ??= resolvePngFallbackText(png, options, content, context));
 
     if (!png.base64) {
       return {
         type: "text",
-        text: png.fallback || (await resolveFallbackText(options, content, context)),
+        text: await fallback(),
       };
     }
 
@@ -170,7 +180,7 @@ export function createPngTerminalGraphicRenderer(
           imageId: context.imageId,
           placementId: context.placementId,
         }),
-        fallback: png.fallback,
+        fallback: await fallback(),
         cols: png.cols,
         rows: png.rows,
       };
@@ -186,7 +196,7 @@ export function createPngTerminalGraphicRenderer(
           preserveAspectRatio: true,
           doNotMoveCursor: true,
         }),
-        fallback: png.fallback,
+        fallback: await fallback(),
         cols: png.cols,
         rows: png.rows,
       };
@@ -212,7 +222,7 @@ export function createPngTerminalGraphicRenderer(
         type: "sequence",
         protocol: "sixel",
         sequence: sixel,
-        fallback: png.fallback,
+        fallback: await fallback(),
         cols: png.cols,
         rows: png.rows,
       };
@@ -220,7 +230,7 @@ export function createPngTerminalGraphicRenderer(
 
     return {
       type: "text",
-      text: png.fallback || (await resolveFallbackText(options, content, context)),
+      text: await fallback(),
     };
   };
 }

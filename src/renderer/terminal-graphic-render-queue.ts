@@ -1,3 +1,4 @@
+import type { TerminalGraphicTraceEvent } from "./terminal-graphics-trace.js";
 import { recordTerminalGraphicTrace } from "./terminal-graphics-trace.js";
 
 export type TerminalGraphicRenderQueueMetric =
@@ -50,6 +51,7 @@ type CacheEntry<T> = Readonly<{
 }>;
 
 type Waiter = Readonly<{
+  key: string;
   start: () => void;
   reject: (error: Error) => void;
 }>;
@@ -110,6 +112,25 @@ export function createTerminalGraphicRenderQueue(
   const cache = new Map<string, CacheEntry<unknown>>();
   const inflight = new Map<string, Promise<unknown>>();
 
+  type QueueStateFields = Pick<
+    TerminalGraphicTraceEvent,
+    "active" | "waiting" | "cacheEntries" | "cacheBytes"
+  >;
+
+  function traceQueueState(
+    event: Omit<TerminalGraphicTraceEvent, "timestamp" | keyof QueueStateFields> &
+      Partial<QueueStateFields> &
+      Readonly<{ timestamp?: number }>,
+  ): void {
+    recordTerminalGraphicTrace({
+      ...event,
+      active,
+      waiting: waiters.length,
+      cacheEntries: cache.size,
+      cacheBytes,
+    });
+  }
+
   function evictUntilBudget(): void {
     while (cache.size > maxEntries || cacheBytes > maxBytes) {
       const oldestKey = cache.keys().next().value as string | undefined;
@@ -140,7 +161,7 @@ export function createTerminalGraphicRenderQueue(
 
     cacheBytes += bytes;
     options.onMetric?.({ type: "cache-store", key, bytes });
-    recordTerminalGraphicTrace({ type: "cache-store", id: key, key, bytes });
+    traceQueueState({ type: "cache-store", id: key, key, bytes });
     evictUntilBudget();
   }
 
@@ -157,7 +178,7 @@ export function createTerminalGraphicRenderQueue(
     cache.delete(key);
     cache.set(key, entry);
     options.onMetric?.({ type: "cache-hit", key });
-    recordTerminalGraphicTrace({ type: "cache-hit", id: key, key, bytes: entry.bytes });
+    traceQueueState({ type: "cache-hit", id: key, key, bytes: entry.bytes });
 
     return entry.value as T;
   }
@@ -182,7 +203,7 @@ export function createTerminalGraphicRenderQueue(
 
     const onAbort = () => {
       options.onMetric?.({ type: "render-abort", key });
-      recordTerminalGraphicTrace({ type: "renderer-abort", id: key, key });
+      traceQueueState({ type: "renderer-abort", id: key, key });
     };
     signal.addEventListener("abort", onAbort, { once: true });
     return () => signal.removeEventListener("abort", onAbort);
@@ -192,6 +213,7 @@ export function createTerminalGraphicRenderQueue(
     while (active < maxConcurrency && waiters.length > 0) {
       const waiter = waiters.shift()!;
       active++;
+      traceQueueState({ type: "queue-depth", id: waiter.key, key: waiter.key });
       waiter.start();
     }
   }
@@ -201,6 +223,7 @@ export function createTerminalGraphicRenderQueue(
 
     if (active < maxConcurrency) {
       active++;
+      traceQueueState({ type: "queue-depth", id: key, key });
       return Promise.resolve(release);
     }
 
@@ -212,6 +235,7 @@ export function createTerminalGraphicRenderQueue(
         signal?.removeEventListener("abort", onAbort);
       };
       const waiter: Waiter = {
+        key,
         start: () => {
           cleanup();
           const waitMs = now() - waitStartedAt;
@@ -220,7 +244,7 @@ export function createTerminalGraphicRenderQueue(
             key,
             waitMs,
           });
-          recordTerminalGraphicTrace({
+          traceQueueState({
             type: "queue-wait",
             id: key,
             key,
@@ -242,6 +266,7 @@ export function createTerminalGraphicRenderQueue(
 
       signal?.addEventListener("abort", onAbort, { once: true });
       waiters.push(waiter);
+      traceQueueState({ type: "queue-depth", id: key, key });
     });
   }
 
@@ -256,7 +281,7 @@ export function createTerminalGraphicRenderQueue(
 
     const cachedValue = getCache<T>(key);
     if (cachedValue !== CACHE_MISS) return cachedValue;
-    recordTerminalGraphicTrace({ type: "cache-miss", id: key, key });
+    traceQueueState({ type: "cache-miss", id: key, key });
 
     const shouldDedupeInflight = cachedOptions.dedupeInflight ?? dedupeInflight;
     const existing = shouldDedupeInflight ? inflight.get(key) : undefined;

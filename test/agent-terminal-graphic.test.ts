@@ -769,6 +769,76 @@ describe("TAgentTerminalGraphic", () => {
     expect(queue.stats().cacheEntries).toBe(1);
   });
 
+  it("does not cache context-dependent fallback text with protocol-independent PNG frames", async () => {
+    const queue = createTerminalGraphicRenderQueue();
+    const kittyCapabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const itermCapabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { TERM_PROGRAM: "iTerm.app" },
+    });
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      cols: 4,
+      rows: 2,
+    }));
+    const fallback = vi.fn(
+      async (_content: string, context: TAgentTerminalGraphicRendererContext) =>
+        `fallback:${context.protocol}`,
+    );
+    const renderer = createPngTerminalGraphicRenderer({
+      queue,
+      toPngBase64,
+      fallback,
+    });
+    const makeContext = (
+      protocol: "kitty" | "iterm2",
+      capabilities: typeof kittyCapabilities,
+      imageId: number,
+      placementId: number,
+    ): TAgentTerminalGraphicRendererContext => ({
+      kind: "image",
+      width: 4,
+      height: 2,
+      final: true,
+      streaming: false,
+      protocol,
+      capabilities,
+      signal: new AbortController().signal,
+      imageId,
+      placementId,
+      visible: true,
+      rawVisible: true,
+      scrolling: false,
+      viewport: {
+        visible: true,
+        rawVisible: true,
+        scrolling: false,
+        rect: { x: 0, y: 0, w: 4, h: 2 },
+        fullRect: { x: 0, y: 0, w: 4, h: 2 },
+      },
+    });
+
+    const kitty = await renderer("image.png", makeContext("kitty", kittyCapabilities, 123, 456));
+    const iterm2 = await renderer("image.png", makeContext("iterm2", itermCapabilities, 789, 321));
+
+    expect(toPngBase64).toHaveBeenCalledTimes(1);
+    expect(fallback).toHaveBeenCalledTimes(2);
+    expect(kitty).toMatchObject({
+      type: "sequence",
+      protocol: "kitty",
+      fallback: "fallback:kitty",
+    });
+    expect(iterm2).toMatchObject({
+      type: "sequence",
+      protocol: "iterm2",
+      fallback: "fallback:iterm2",
+    });
+    expect(queue.stats().cacheEntries).toBe(1);
+  });
+
   it("invalidates the default PNG cache when the renderer context cacheKey changes", async () => {
     const queue = createTerminalGraphicRenderQueue();
     const capabilities = detectTerminalGraphicsCapabilities({
