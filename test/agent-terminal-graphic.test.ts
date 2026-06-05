@@ -212,6 +212,71 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("uses full-row repaint instead of dirty spans while clearing active raw graphics", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 4,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        TERM_PROGRAM: "iTerm.app",
+        KITTY_WINDOW_ID: undefined,
+        TERM: undefined,
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+          dirtyRowPatchMode: "span",
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createIterm2InlineImageSequence("QUJD", { width: 8, height: 1 });
+
+    app.terminal.write("abcdefghij", { x: 0, y: 0 });
+    flushStdout(stdout);
+
+    writes.length = 0;
+    graphics?.queue({
+      id: "span-clear",
+      x: 0,
+      y: 0,
+      w: 8,
+      h: 1,
+      protocol: "iterm2",
+      sequence,
+    });
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    app.terminal.write("abcdXfghij", { x: 0, y: 0 });
+    writes.length = 0;
+    graphics?.clear?.("span-clear");
+    (stdout.render as (dirtyRows?: readonly number[] | null, sync?: boolean) => void)([0], true);
+
+    const frame = writes.join("");
+    expect(frame).toContain("abcdXfghij");
+    expect(frame).not.toBe("X");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it("queues terminal graphics payloads through the stdout renderer", async () => {
     const writes: string[] = [];
     const output: CliOutput = {

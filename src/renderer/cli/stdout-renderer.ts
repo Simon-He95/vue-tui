@@ -2236,6 +2236,15 @@ export function createStdoutRenderer(
 
     terminalGraphicsBlockScrollRegions =
       activeGraphics.size > 0 || graphicsClearsToRender.length > 0 || graphicsToRender.length > 0;
+    const forceTerminalGraphicsRowRepaint =
+      forceDirtyRowsRepaint || terminalGraphicsBlockScrollRegions;
+
+    // Raw terminal graphics are not represented in the cell buffer. If a frame
+    // needs to draw/clear protocol graphics, dirty-span patching is unsafe for
+    // those rows: a one-cell span update can make the stdout renderer believe a
+    // row was painted while most of the previous inline image remains in the
+    // terminal. Force full dirty-row repaint for these frames; this keeps the
+    // optimization for ordinary text frames while preserving graphics cleanup.
 
     let rowsToRender = (() => {
       if (forceFullRender || !fpPrevValid) return null;
@@ -2818,7 +2827,7 @@ export function createStdoutRenderer(
       for (const y of explicitDirtyRows) {
         const row = terminal.getRow(y) as Cell[];
         const overlayRow = overlayTouchedRowSet?.has(y);
-        if (forceDirtyRowsRepaint || !shouldUseDirtySpans() || overlayRow) {
+        if (forceTerminalGraphicsRowRepaint || !shouldUseDirtySpans() || overlayRow) {
           fingerprintRow(row, y, size.cols);
           renderRow(y, row);
           paintedExplicitRows.push(y);
@@ -3020,7 +3029,7 @@ export function createStdoutRenderer(
       for (const y of rowsToRender) {
         const row = terminal.getRow(y) as Cell[];
         fingerprintRow(row, y, size.cols);
-        if (forceDirtyRowsRepaint || !shouldUseDirtySpans()) {
+        if (forceTerminalGraphicsRowRepaint || !shouldUseDirtySpans()) {
           renderRow(y, row);
           continue;
         }
