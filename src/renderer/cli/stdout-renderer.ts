@@ -54,6 +54,7 @@ import {
   hashTerminalGraphicsString,
   isSafeTerminalGraphicsSequence,
   isTerminalGraphicsProtocol,
+  normalizeTerminalGraphicSize,
   registerTerminalGraphicsOutput,
   validateTerminalGraphicsPayload,
   validateTerminalGraphicFrame,
@@ -677,18 +678,13 @@ export function createStdoutRenderer(
     return { x, y };
   }
 
-  function clampGraphicRectToViewport(
+  function normalizeGraphicRect(
     rect: Readonly<{ x: number; y: number; w: number; h: number }>,
-    size: Readonly<{ cols: number; rows: number }>,
   ): { x: number; y: number; w: number; h: number } | null {
-    const cols = Math.max(0, Math.floor(size.cols));
-    const rows = Math.max(0, Math.floor(size.rows));
-    if (cols <= 0 || rows <= 0) return null;
-
     const x0 = Math.floor(rect.x);
     const y0 = Math.floor(rect.y);
-    const w0 = Math.max(1, Math.floor(rect.w));
-    const h0 = Math.max(1, Math.floor(rect.h));
+    const w0 = Math.floor(rect.w);
+    const h0 = Math.floor(rect.h);
     if (
       !Number.isFinite(x0) ||
       !Number.isFinite(y0) ||
@@ -698,6 +694,28 @@ export function createStdoutRenderer(
       return null;
     }
 
+    const size = normalizeTerminalGraphicSize(w0, h0);
+    if (!size) return null;
+
+    return { x: x0, y: y0, w: size.width, h: size.height };
+  }
+
+  function clipGraphicRectToViewport(
+    rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+    size: Readonly<{ cols: number; rows: number }>,
+  ): { x: number; y: number; w: number; h: number } | null {
+    const cols = Math.max(0, Math.floor(size.cols));
+    const rows = Math.max(0, Math.floor(size.rows));
+    if (cols <= 0 || rows <= 0) return null;
+
+    const normalized = normalizeGraphicRect(rect);
+    if (!normalized) return null;
+
+    const x0 = normalized.x;
+    const y0 = normalized.y;
+    const w0 = normalized.w;
+    const h0 = normalized.h;
+
     const left = Math.max(0, x0);
     const top = Math.max(0, y0);
     const right = Math.min(cols, x0 + w0);
@@ -705,6 +723,29 @@ export function createStdoutRenderer(
     if (right <= left || bottom <= top) return null;
 
     return { x: left, y: top, w: right - left, h: bottom - top };
+  }
+
+  function fullGraphicRectInViewport(
+    rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+    size: Readonly<{ cols: number; rows: number }>,
+  ): { x: number; y: number; w: number; h: number } | null {
+    const cols = Math.max(0, Math.floor(size.cols));
+    const rows = Math.max(0, Math.floor(size.rows));
+    if (cols <= 0 || rows <= 0) return null;
+
+    const normalized = normalizeGraphicRect(rect);
+    if (!normalized) return null;
+
+    if (
+      normalized.x < 0 ||
+      normalized.y < 0 ||
+      normalized.x + normalized.w > cols ||
+      normalized.y + normalized.h > rows
+    ) {
+      return null;
+    }
+
+    return normalized;
   }
 
   function clearGraphicRect(
@@ -2228,7 +2269,7 @@ export function createStdoutRenderer(
       rect: Readonly<{ x: number; y: number; w: number; h: number }> | null | undefined,
     ): void => {
       if (!rect) return;
-      const visible = clampGraphicRectToViewport(rect, size);
+      const visible = clipGraphicRectToViewport(rect, size);
       if (!visible) return;
 
       for (let y = visible.y; y < visible.y + visible.h; y++) {
@@ -3234,7 +3275,7 @@ export function createStdoutRenderer(
       for (const id of graphicsClearsToRender) {
         const active = activeGraphics.get(id);
         if (!active) continue;
-        const visibleRect = clampGraphicRectToViewport(active, size);
+        const visibleRect = clipGraphicRectToViewport(active, size);
         if (visibleRect) {
           const clearRect = clearGraphicRectForRowsNotPainted(visibleRect);
           if (clearRect) frameParts.push(countGraphicsBytes(clearRect));
@@ -3249,7 +3290,7 @@ export function createStdoutRenderer(
       for (const payload of graphicsToRender) {
         if (payload.op === "clear") {
           const active = activeGraphics.get(payload.id);
-          const rect = clampGraphicRectToViewport(
+          const rect = clipGraphicRectToViewport(
             {
               x: active?.x ?? payload.x,
               y: active?.y ?? payload.y,
@@ -3272,13 +3313,13 @@ export function createStdoutRenderer(
         }
 
         const previous = activeGraphics.get(payload.id);
-        const rect = clampGraphicRectToViewport(
+        const rect = fullGraphicRectInViewport(
           { x: payload.x, y: payload.y, w: payload.w ?? 1, h: payload.h ?? 1 },
           size,
         );
         if (!rect) {
           if (previous) {
-            const visiblePrevious = clampGraphicRectToViewport(previous, size);
+            const visiblePrevious = clipGraphicRectToViewport(previous, size);
             if (visiblePrevious) {
               const clearPrevious = clearGraphicRectForRowsNotPainted(visiblePrevious);
               if (clearPrevious) frameParts.push(countGraphicsBytes(clearPrevious));
@@ -3293,7 +3334,7 @@ export function createStdoutRenderer(
         }
 
         if (previous && !sameGraphicRect(previous, rect)) {
-          const visiblePrevious = clampGraphicRectToViewport(previous, size);
+          const visiblePrevious = clipGraphicRectToViewport(previous, size);
           if (visiblePrevious) {
             const clearPrevious = clearGraphicRectForRowsNotPainted(visiblePrevious);
             if (clearPrevious) frameParts.push(countGraphicsBytes(clearPrevious));
@@ -3986,7 +4027,7 @@ export function createStdoutRenderer(
       const clearParts: string[] = [];
       let terminalGraphicsClears = 0;
       for (const active of activeGraphics.values()) {
-        const visibleRect = clampGraphicRectToViewport(active, size);
+        const visibleRect = clipGraphicRectToViewport(active, size);
         if (!visibleRect) continue;
 
         clearParts.push(clearGraphicRect(visibleRect));

@@ -376,6 +376,38 @@ describe("terminal graphics sequence validation", () => {
         }),
       ),
     ).toBe(false);
+
+    expect(
+      validateTerminalGraphicsPayload(
+        {
+          id: "bad-clear-size",
+          x: 0,
+          y: 0,
+          w: 0,
+          h: 1,
+          protocol: "kitty",
+          sequence: createKittyDeleteGraphicsSequence({ currentCell: true }),
+          op: "clear",
+        },
+        capabilities,
+      ),
+    ).toBe(false);
+
+    expect(
+      validateTerminalGraphicsPayload(
+        {
+          id: "huge-clear-size",
+          x: 0,
+          y: 0,
+          w: 200,
+          h: 200,
+          protocol: "kitty",
+          sequence: createKittyDeleteGraphicsSequence({ currentCell: true }),
+          op: "clear",
+        },
+        capabilities,
+      ),
+    ).toBe(false);
   });
 });
 

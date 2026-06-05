@@ -606,8 +606,10 @@ describe("TAgentTerminalGraphic", () => {
       cols: 4,
       rows: 2,
     }));
+    const fallback = vi.fn(async () => "expensive fallback");
     const renderer = createPngTerminalGraphicRenderer({
       queue,
+      fallback,
       toPngBase64,
     });
     const makeContext = (imageId: number, placementId: number) => ({
@@ -637,6 +639,7 @@ describe("TAgentTerminalGraphic", () => {
     const second = await renderer("image.png", makeContext(789, 321));
 
     expect(toPngBase64).toHaveBeenCalledTimes(1);
+    expect(fallback).not.toHaveBeenCalled();
     expect(first).toMatchObject({ type: "sequence", protocol: "kitty", fallback: "png fallback" });
     expect(second).toMatchObject({ type: "sequence", protocol: "kitty", fallback: "png fallback" });
 
@@ -1172,7 +1175,7 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
-  it("does not clamp fully offscreen terminal graphics into the visible viewport", () => {
+  it("does not clamp offscreen or partially visible terminal graphics into the visible viewport", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: false,
@@ -1231,8 +1234,8 @@ describe("TAgentTerminalGraphic", () => {
       sequence,
     });
 
-    expect(writes.join("")).toContain(sequence);
-    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(1);
+    expect(writes.join("")).not.toContain(sequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
 
     stdout.dispose();
     app.dispose();

@@ -177,10 +177,7 @@ export function createTerminalGraphicRenderQueue(
     };
   }
 
-  function observeActiveRenderAbort(
-    key: string,
-    signal: AbortSignal | undefined,
-  ): () => void {
+  function observeActiveRenderAbort(key: string, signal: AbortSignal | undefined): () => void {
     if (!signal) return () => undefined;
 
     const onAbort = () => {

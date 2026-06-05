@@ -91,6 +91,17 @@ function stringBytes(value: string): number {
   return value.length;
 }
 
+async function resolveFallbackText(
+  options: CreatePngTerminalGraphicRendererOptions,
+  content: string,
+  context: TAgentTerminalGraphicRendererContext,
+): Promise<string> {
+  throwIfAborted(context.signal);
+  const value = (await options.fallback?.(content, context)) ?? content;
+  throwIfAborted(context.signal);
+  return sanitizeTerminalFallbackText(value);
+}
+
 export function createPngTerminalGraphicRenderer(
   options: CreatePngTerminalGraphicRendererOptions,
 ): TAgentTerminalGraphicRenderer {
@@ -106,11 +117,6 @@ export function createPngTerminalGraphicRenderer(
   return async (content, context) => {
     throwIfAborted(context.signal);
 
-    const fallback = sanitizeTerminalFallbackText(
-      (await options.fallback?.(content, context)) ?? content,
-    );
-    throwIfAborted(context.signal);
-
     const protocol = context.protocol;
     if (
       !context.capabilities.supported ||
@@ -120,7 +126,7 @@ export function createPngTerminalGraphicRenderer(
       !context.rawVisible ||
       (protocol === "sixel" && !options.toSixel)
     ) {
-      return { type: "text", text: fallback };
+      return { type: "text", text: await resolveFallbackText(options, content, context) };
     }
 
     const key = options.cacheKey?.(content, context) ?? defaultCacheKey(content, context);
@@ -133,6 +139,8 @@ export function createPngTerminalGraphicRenderer(
         throwIfAborted(context.signal);
         const frame = await options.toPngBase64(content, context);
         throwIfAborted(context.signal);
+        const fallback =
+          frame.fallback == null ? await resolveFallbackText(options, content, context) : "";
         return normalizeCachedPngFrame(frame, fallback, context);
       },
       pngFrameBytes,
@@ -142,7 +150,10 @@ export function createPngTerminalGraphicRenderer(
     throwIfAborted(context.signal);
 
     if (!png.base64) {
-      return { type: "text", text: png.fallback || fallback };
+      return {
+        type: "text",
+        text: png.fallback || (await resolveFallbackText(options, content, context)),
+      };
     }
 
     if (protocol === "kitty") {
@@ -207,6 +218,9 @@ export function createPngTerminalGraphicRenderer(
       };
     }
 
-    return { type: "text", text: png.fallback || fallback };
+    return {
+      type: "text",
+      text: png.fallback || (await resolveFallbackText(options, content, context)),
+    };
   };
 }

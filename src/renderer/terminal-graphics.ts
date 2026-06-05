@@ -755,6 +755,7 @@ export function validateTerminalGraphicsPayload(
 ): boolean {
   if (!payload.id.trim()) return false;
   if (!Number.isFinite(payload.x) || !Number.isFinite(payload.y)) return false;
+  if (!normalizeTerminalGraphicSize(payload.w ?? 1, payload.h ?? 1)) return false;
   if (!capabilities.supported) return false;
   if (!isTerminalGraphicsProtocol(payload.protocol)) return false;
 
