@@ -14,7 +14,12 @@ export type TerminalGraphicRenderQueueOptions = Readonly<{
   /**
    * Share in-flight renders for equal cache keys.
    *
-   * Keep this disabled when render work observes a caller AbortSignal.
+   * Keep this disabled when render work observes a caller AbortSignal. This is
+   * the safe default for viewport-bound graphics in virtual scrollers: an
+   * offscreen row may abort while another still-visible row with the same cache
+   * key is still valid. Duplicate queued renders are still cheap because each
+   * task re-checks the cache after acquiring a concurrency slot, so a render
+   * completed by an earlier row is reused instead of rendering again.
    */
   dedupeInflight?: boolean;
   onMetric?: (metric: TerminalGraphicRenderQueueMetric) => void;
@@ -241,6 +246,13 @@ export function createTerminalGraphicRenderQueue(
       try {
         releaseSlot = await acquire(key, signal);
         throwIfAborted(signal);
+
+        // A duplicate render may have filled the cache while this caller was
+        // waiting for a slot. Re-check here to avoid expensive duplicate
+        // SVG/PNG/Sixel work during fast virtual-scroll viewport churn.
+        const cachedAfterWait = getCache<T>(key);
+        if (cachedAfterWait != null) return cachedAfterWait;
+
         const value = await render();
         throwIfAborted(signal);
 

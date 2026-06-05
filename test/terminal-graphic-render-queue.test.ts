@@ -47,6 +47,120 @@ describe("terminal graphic render queue", () => {
     expect(queue.stats()).toMatchObject({ active: 0, waiting: 0, cacheEntries: 2 });
   });
 
+  it("reuses a cache entry filled while a duplicate render waits for a slot", async () => {
+    const metrics: string[] = [];
+    const queue = createTerminalGraphicRenderQueue({
+      maxConcurrency: 1,
+      dedupeInflight: false,
+      onMetric: (metric) => metrics.push(metric.type),
+    });
+
+    let resolveFirst!: (value: string) => void;
+    const renderFirst = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    const renderSecond = vi.fn(async () => "duplicate-render-should-not-run");
+
+    const first = queue.cached("same-key", undefined, renderFirst, (value) => value.length);
+    const second = queue.cached("same-key", undefined, renderSecond, (value) => value.length);
+
+    await Promise.resolve();
+    expect(queue.stats()).toMatchObject({ active: 1, waiting: 1 });
+    expect(renderFirst).toHaveBeenCalledTimes(1);
+    expect(renderSecond).not.toHaveBeenCalled();
+
+    resolveFirst("rendered-once");
+
+    await expect(first).resolves.toBe("rendered-once");
+    await expect(second).resolves.toBe("rendered-once");
+    expect(renderSecond).not.toHaveBeenCalled();
+    expect(metrics).toContain("queue-wait");
+    expect(metrics).toContain("cache-hit");
+    expect(queue.stats()).toMatchObject({ active: 0, waiting: 0, cacheEntries: 1 });
+  });
+
+  it("does not cache a value that finishes after its caller is aborted", async () => {
+    const queue = createTerminalGraphicRenderQueue({ maxConcurrency: 1 });
+    const controller = new AbortController();
+    let finishStale!: (value: string) => void;
+
+    const stale = queue.cached(
+      "same-key",
+      controller.signal,
+      () =>
+        new Promise<string>((resolve) => {
+          finishStale = resolve;
+        }),
+      (value) => value.length,
+    );
+
+    await Promise.resolve();
+    controller.abort();
+
+    await expect(stale).rejects.toMatchObject({ name: "AbortError" });
+
+    // Simulate a converter that ignores AbortSignal and finishes later. The
+    // queue must not cache this stale value after the component has unmounted or
+    // scrolled out of the virtual viewport.
+    finishStale("stale");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const renderFresh = vi.fn(async () => "fresh");
+    await expect(queue.cached("same-key", undefined, renderFresh, (value) => value.length))
+      .resolves.toBe("fresh");
+    expect(renderFresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps same-key virtual scroll renders independent when one aborts", async () => {
+    const queue = createTerminalGraphicRenderQueue({ maxConcurrency: 1, dedupeInflight: false });
+    const offscreenController = new AbortController();
+    const visibleController = new AbortController();
+    const calls: string[] = [];
+    let resolveOffscreenStarted!: () => void;
+    const offscreenStarted = new Promise<void>((resolve) => {
+      resolveOffscreenStarted = resolve;
+    });
+
+    const offscreen = queue.cached(
+      "row1",
+      offscreenController.signal,
+      async () => {
+        calls.push("offscreen");
+        resolveOffscreenStarted();
+        await new Promise<void>((_, reject) => {
+          offscreenController.signal.addEventListener("abort", () => reject(new Error("aborted")), {
+            once: true,
+          });
+        });
+        return "offscreen";
+      },
+      (value) => value.length,
+    );
+
+    await offscreenStarted;
+
+    const visible = queue.cached(
+      "row1",
+      visibleController.signal,
+      async () => {
+        calls.push("visible");
+        return "row1";
+      },
+      (value) => value.length,
+    );
+
+    offscreenController.abort();
+
+    await expect(offscreen).rejects.toMatchObject({ name: "AbortError" });
+    await expect(visible).resolves.toBe("row1");
+    expect(calls).toEqual(["offscreen", "visible"]);
+    expect(queue.stats()).toMatchObject({ active: 0, waiting: 0, cacheEntries: 1 });
+  });
+
   it("does not share abortable in-flight renders by default", async () => {
     const queue = createTerminalGraphicRenderQueue({ maxConcurrency: 2 });
     let calls = 0;
