@@ -77,6 +77,41 @@ describe("terminal graphic render queue", () => {
     expect(calls).toBe(2);
   });
 
+  it("lets cached calls opt out of global in-flight dedupe", async () => {
+    const queue = createTerminalGraphicRenderQueue({
+      maxConcurrency: 2,
+      dedupeInflight: true,
+    });
+    let calls = 0;
+
+    const first = queue.cached(
+      "same-key",
+      undefined,
+      async () => {
+        calls++;
+        await Promise.resolve();
+        throw new Error("first render aborted");
+      },
+      (value) => String(value).length,
+      { dedupeInflight: false },
+    );
+
+    const second = queue.cached(
+      "same-key",
+      undefined,
+      async () => {
+        calls++;
+        return "second render";
+      },
+      (value) => value.length,
+      { dedupeInflight: false },
+    );
+
+    await expect(first).rejects.toThrow("first render aborted");
+    await expect(second).resolves.toBe("second render");
+    expect(calls).toBe(2);
+  });
+
   it("can explicitly dedupe pure in-flight renders", async () => {
     const queue = createTerminalGraphicRenderQueue({
       maxConcurrency: 2,

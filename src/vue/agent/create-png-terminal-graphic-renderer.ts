@@ -124,10 +124,13 @@ export function createPngTerminalGraphicRenderer(
       `${key}\x1Fpng`,
       context.signal,
       async () => {
+        throwIfAborted(context.signal);
         const frame = await options.toPngBase64(content, context);
+        throwIfAborted(context.signal);
         return normalizeCachedPngFrame(frame, fallback, context);
       },
       pngFrameBytes,
+      { dedupeInflight: options.dedupeInflight ?? false },
     );
 
     throwIfAborted(context.signal);
@@ -176,8 +179,14 @@ export function createPngTerminalGraphicRenderer(
       const sixel = await queue.cached<string>(
         `${key}\x1Fsixel`,
         context.signal,
-        () => options.toSixel!(png.base64, context),
+        async () => {
+          throwIfAborted(context.signal);
+          const sixel = await options.toSixel!(png.base64, context);
+          throwIfAborted(context.signal);
+          return sixel;
+        },
         stringBytes,
+        { dedupeInflight: options.dedupeInflight ?? false },
       );
 
       throwIfAborted(context.signal);

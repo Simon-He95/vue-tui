@@ -383,6 +383,96 @@ describe("TAgentTerminalGraphic", () => {
     expect(queue.stats().cacheEntries).toBe(1);
   });
 
+  it("does not share abortable PNG renderer work from a deduping custom queue", async () => {
+    const queue = createTerminalGraphicRenderQueue({
+      maxConcurrency: 2,
+      dedupeInflight: true,
+    });
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    let releaseFirst!: () => void;
+    let startFirst!: () => void;
+    const firstStarted = new Promise<void>((resolve) => {
+      startFirst = resolve;
+    });
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let calls = 0;
+    const toPngBase64 = vi.fn(async () => {
+      calls++;
+      if (calls === 1) {
+        startFirst();
+        await firstGate;
+        return {
+          base64: "RklSU1Q=",
+          fallback: "first png fallback",
+          cols: 4,
+          rows: 2,
+        };
+      }
+
+      return {
+        base64: "U0VDT05E",
+        fallback: "second png fallback",
+        cols: 4,
+        rows: 2,
+      };
+    });
+    const renderer = createPngTerminalGraphicRenderer({
+      queue,
+      toPngBase64,
+    });
+    const makeContext = (signal: AbortSignal, imageId: number, placementId: number) => ({
+      kind: "image" as const,
+      width: 4,
+      height: 2,
+      final: true,
+      streaming: false,
+      protocol: "kitty" as const,
+      capabilities,
+      signal,
+      imageId,
+      placementId,
+      visible: true,
+      rawVisible: true,
+      scrolling: false,
+      viewport: {
+        visible: true,
+        rawVisible: true,
+        scrolling: false,
+        rect: { x: 0, y: 0, w: 4, h: 2 },
+        fullRect: { x: 0, y: 0, w: 4, h: 2 },
+      },
+    });
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+
+    const first = Promise.resolve(
+      renderer("image.png", makeContext(firstController.signal, 123, 456)),
+    ).then(
+      () => ({ ok: true as const }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    await firstStarted;
+    firstController.abort();
+    const second = renderer("image.png", makeContext(secondController.signal, 789, 321));
+    releaseFirst();
+
+    expect(await first).toMatchObject({
+      ok: false,
+      error: { name: "AbortError" },
+    });
+    await expect(second).resolves.toMatchObject({
+      type: "sequence",
+      protocol: "kitty",
+      fallback: "second png fallback",
+    });
+    expect(toPngBase64).toHaveBeenCalledTimes(2);
+  });
+
   it("suspends virtual row raw rendering while scrolling and hydrates after idle", async () => {
     const writes: string[] = [];
     const output: CliOutput = {

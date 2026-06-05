@@ -26,6 +26,7 @@ export type TerminalGraphicRenderQueue = Readonly<{
     signal: AbortSignal | undefined,
     render: () => Promise<T>,
     estimateBytes?: (value: T) => number,
+    options?: Readonly<{ dedupeInflight?: boolean }>,
   ) => Promise<T>;
   clear: () => void;
   stats: () => Readonly<{
@@ -220,6 +221,7 @@ export function createTerminalGraphicRenderQueue(
     signal: AbortSignal | undefined,
     render: () => Promise<T>,
     estimateBytes: (value: T) => number = () => 0,
+    cachedOptions: Readonly<{ dedupeInflight?: boolean }> = {},
   ): Promise<T> {
     throwIfAborted(signal);
 
@@ -227,7 +229,8 @@ export function createTerminalGraphicRenderQueue(
     if (cachedValue != null) return cachedValue;
     recordTerminalGraphicTrace({ type: "cache-miss", id: key, key });
 
-    const existing = dedupeInflight ? inflight.get(key) : undefined;
+    const shouldDedupeInflight = cachedOptions.dedupeInflight ?? dedupeInflight;
+    const existing = shouldDedupeInflight ? inflight.get(key) : undefined;
     if (existing) return raceAbort(existing as Promise<T>, signal);
 
     let promise!: Promise<T>;
@@ -247,11 +250,11 @@ export function createTerminalGraphicRenderQueue(
         return value;
       } finally {
         releaseSlot?.();
-        if (dedupeInflight && inflight.get(key) === promise) inflight.delete(key);
+        if (shouldDedupeInflight && inflight.get(key) === promise) inflight.delete(key);
       }
     })();
 
-    if (dedupeInflight) inflight.set(key, promise);
+    if (shouldDedupeInflight) inflight.set(key, promise);
     return raceAbort(promise, signal);
   }
 
