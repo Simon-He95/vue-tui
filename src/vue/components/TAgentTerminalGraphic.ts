@@ -12,6 +12,7 @@ import {
   defineComponent,
   getCurrentInstance,
   h,
+  inject,
   markRaw,
   onBeforeUnmount,
   shallowRef,
@@ -28,6 +29,7 @@ import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
+import { TerminalGraphicsActivityKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
 import {
   padEndByCells,
@@ -48,6 +50,29 @@ export type TAgentTerminalGraphicRendererContext = Readonly<{
   streaming: boolean;
   protocol: TerminalGraphicsResolvedProtocol;
   capabilities: TerminalGraphicsCapabilities;
+  signal: AbortSignal;
+  visible: boolean;
+  rawVisible: boolean;
+  scrolling: boolean;
+  cacheKey?: string;
+}>;
+
+export type TAgentTerminalGraphicTraceEvent = Readonly<{
+  type:
+    | "render-start"
+    | "render-end"
+    | "render-abort"
+    | "raw-draw"
+    | "raw-clear"
+    | "raw-skip-scroll"
+    | "cache-hit";
+  id: string;
+  kind: TAgentTerminalGraphicKind;
+  protocol: TerminalGraphicsResolvedProtocol;
+  contentHash: string;
+  durationMs?: number;
+  sequenceChars?: number;
+  reason?: string;
 }>;
 
 export type TAgentTerminalGraphicRenderResult =
@@ -160,6 +185,14 @@ export const tAgentTerminalGraphicProps = {
     type: String,
     default: "Rendering terminal graphic...",
   },
+  deferRenderUntilVisible: { type: Boolean, default: true },
+  suspendRawWhileScrolling: { type: Boolean, default: true },
+  suspendRenderWhileScrolling: { type: Boolean, default: true },
+  cacheKey: { type: String, default: undefined },
+  trace: {
+    type: Function as PropType<(event: TAgentTerminalGraphicTraceEvent) => void>,
+    default: undefined,
+  },
 } as const;
 
 export type TAgentTerminalGraphicProps = ExtractPublicPropTypes<typeof tAgentTerminalGraphicProps>;
@@ -216,6 +249,7 @@ export const TAgentTerminalGraphic = defineComponent({
     const { terminal, defaultStyle, scheduler, widthProvider } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
+    const graphicsActivity = inject(TerminalGraphicsActivityKey, null);
 
     const status = shallowRef<TAgentTerminalGraphicStatus>("idle");
     const error = shallowRef("");
@@ -224,11 +258,15 @@ export const TAgentTerminalGraphic = defineComponent({
 
     let builtOnce = false;
     let renderVersion = 0;
+    let renderAbort: AbortController | null = null;
     let alive = true;
+    let lastRenderedContent = "";
     const rawId = `TAgentTerminalGraphic:${instance?.uid ?? "unknown"}`;
     const frameTaskId = `${rawId}:render`;
     const lastDrawnGraphic = shallowRef<LastDrawnGraphic | null>(null);
 
+    const isParentScrolling = computed(() => Boolean(graphicsActivity?.scrolling.value));
+    const graphicsActivityVersion = computed(() => graphicsActivity?.version.value ?? 0);
     const graphicsOutput = () => getTerminalGraphicsOutput(terminal);
     const fallbackText = () => props.fallback || props.content;
 
@@ -236,17 +274,31 @@ export const TAgentTerminalGraphic = defineComponent({
       documentVersion.value++;
     }
 
-    function resolveRendererContext(): TAgentTerminalGraphicRendererContext {
-      const capabilities = graphicsOutput()?.capabilities ?? NO_GRAPHICS_CAPABILITIES;
-      return {
+    function currentCapabilities(): TerminalGraphicsCapabilities {
+      return graphicsOutput()?.capabilities ?? NO_GRAPHICS_CAPABILITIES;
+    }
+
+    function trace(
+      type: TAgentTerminalGraphicTraceEvent["type"],
+      extra: Partial<
+        Pick<TAgentTerminalGraphicTraceEvent, "durationMs" | "sequenceChars" | "reason">
+      > = {},
+    ): void {
+      props.trace?.({
+        type,
+        id: rawId,
         kind: props.kind,
-        width: props.w,
-        height: props.h,
-        final: props.final,
-        streaming: props.streaming,
-        protocol: capabilities.protocol,
-        capabilities,
-      };
+        protocol: currentCapabilities().protocol,
+        contentHash: smallHash(props.content),
+        ...extra,
+      });
+    }
+
+    function abortCurrentRender(reason: string): void {
+      if (!renderAbort) return;
+      renderAbort.abort(reason);
+      renderAbort = null;
+      trace("render-abort", { reason });
     }
 
     function normalizeResult(result: TAgentTerminalGraphicRenderResult): ResolvedGraphic {
@@ -340,18 +392,19 @@ export const TAgentTerminalGraphic = defineComponent({
       }
 
       lastDrawnGraphic.value = null;
+      trace("raw-clear");
     }
 
     function queueDrawGraphic(
       output: TerminalGraphicsOutput,
       current: ResolvedTerminalGraphic,
       rect: Rect,
-    ): void {
+    ): boolean {
       const clearSequence = resolveClearSequence(current);
       const drawKey = terminalDrawKey(current, rect, clearSequence);
       const previous = lastDrawnGraphic.value;
 
-      if (previous?.drawKey === drawKey) return;
+      if (previous?.drawKey === drawKey) return false;
       if (previous) queueClearLastGraphic();
 
       output.queue({
@@ -376,96 +429,8 @@ export const TAgentTerminalGraphic = defineComponent({
         clearSequence,
         drawKey,
       };
+      return true;
     }
-
-    async function renderNow(version: number): Promise<void> {
-      const content = props.content;
-      if (!content.trim()) {
-        if (!alive || version !== renderVersion) return;
-        graphic.value = { type: "text", text: "" };
-        status.value = "ready";
-        error.value = "";
-        bump();
-        return;
-      }
-
-      const renderer = props.renderer;
-      if (!renderer) {
-        if (!alive || version !== renderVersion) return;
-        graphic.value = { type: "text", text: fallbackText() };
-        status.value = "ready";
-        error.value = "";
-        bump();
-        return;
-      }
-
-      status.value = "loading";
-      error.value = "";
-      bump();
-
-      try {
-        const result = await renderer(content, resolveRendererContext());
-        if (!alive || version !== renderVersion) return;
-        graphic.value = normalizeResult(result);
-        status.value = "ready";
-        error.value = "";
-        bump();
-      } catch (err) {
-        if (!alive || version !== renderVersion) return;
-        graphic.value = { type: "text", text: fallbackText() };
-        status.value = "ready";
-        error.value = errorMessage(err);
-        bump();
-      }
-    }
-
-    function scheduleRender(): void {
-      const version = ++renderVersion;
-      queueClearLastGraphic();
-
-      if (!builtOnce || !props.streaming) {
-        builtOnce = true;
-        void renderNow(version);
-        return;
-      }
-
-      const accepted = scheduler.queueFrameTask({
-        id: frameTaskId,
-        reason: "stream",
-        priority: "low",
-        sync: false,
-        run: () => {
-          if (!alive) return;
-          if (version !== renderVersion) return;
-          void renderNow(version);
-        },
-      });
-      if (accepted === false) void renderNow(version);
-    }
-
-    watch(
-      [
-        () => props.content,
-        () => props.kind,
-        () => props.fallback,
-        () => props.renderer,
-        () => props.w,
-        () => props.h,
-        () => props.streaming,
-        () => props.final,
-      ],
-      () => {
-        scheduleRender();
-      },
-      { immediate: true },
-    );
-
-    onBeforeUnmount(() => {
-      alive = false;
-      renderVersion++;
-      scheduler.cancelFrameTask?.(frameTaskId);
-      queueClearLastGraphic();
-    });
 
     const showingInitialLoadingText = computed(() => status.value === "loading" && !graphic.value);
 
@@ -515,11 +480,194 @@ export const TAgentTerminalGraphic = defineComponent({
       );
     });
 
+    const rawSuppressedByScroll = computed(
+      () => props.suspendRawWhileScrolling && isParentScrolling.value,
+    );
+
+    const rawCanQueue = computed(() => rawCanRender.value && !rawSuppressedByScroll.value);
+
+    function hasPaintableRect(): boolean {
+      const r = absRect.value;
+      return visible.value && r.w > 0 && r.h > 0;
+    }
+
+    function rawOutputCanRender(): boolean {
+      const output = graphicsOutput();
+      const full = fullRect.value;
+      const abs = absRect.value;
+      return (
+        hasPaintableRect() &&
+        Boolean(output?.capabilities.supported) &&
+        abs.x === full.x &&
+        abs.y === full.y &&
+        abs.w === full.w &&
+        abs.h === full.h
+      );
+    }
+
+    function shouldDeferRender(): boolean {
+      if (props.deferRenderUntilVisible && !hasPaintableRect()) return true;
+      return props.suspendRenderWhileScrolling && isParentScrolling.value;
+    }
+
+    function setDeferredFallback(content: string): void {
+      if (!graphic.value || lastRenderedContent !== content) {
+        graphic.value = { type: "text", text: content.trim() ? fallbackText() : "" };
+      }
+      lastRenderedContent = content;
+      status.value = "idle";
+      error.value = "";
+      bump();
+    }
+
+    function resolveRendererContext(signal: AbortSignal): TAgentTerminalGraphicRendererContext {
+      const capabilities = currentCapabilities();
+      return {
+        kind: props.kind,
+        width: props.w,
+        height: props.h,
+        final: props.final,
+        streaming: props.streaming,
+        protocol: capabilities.protocol,
+        capabilities,
+        signal,
+        visible: hasPaintableRect(),
+        rawVisible: rawOutputCanRender() && !rawSuppressedByScroll.value,
+        scrolling: isParentScrolling.value,
+        cacheKey: props.cacheKey,
+      };
+    }
+
+    async function renderNow(version: number): Promise<void> {
+      const content = props.content;
+      if (!content.trim()) {
+        abortCurrentRender("superseded");
+        if (!alive || version !== renderVersion) return;
+        graphic.value = { type: "text", text: "" };
+        lastRenderedContent = content;
+        status.value = "ready";
+        error.value = "";
+        bump();
+        return;
+      }
+
+      const renderer = props.renderer;
+      if (!renderer) {
+        abortCurrentRender("superseded");
+        if (!alive || version !== renderVersion) return;
+        graphic.value = { type: "text", text: fallbackText() };
+        lastRenderedContent = content;
+        status.value = "ready";
+        error.value = "";
+        bump();
+        return;
+      }
+
+      if (shouldDeferRender()) {
+        abortCurrentRender("deferred");
+        if (!alive || version !== renderVersion) return;
+        setDeferredFallback(content);
+        return;
+      }
+
+      abortCurrentRender("superseded");
+      const abort = new AbortController();
+      renderAbort = abort;
+      const startedAt = performance.now();
+
+      status.value = "loading";
+      error.value = "";
+      trace("render-start");
+      bump();
+
+      try {
+        const result = await renderer(content, resolveRendererContext(abort.signal));
+        if (abort.signal.aborted) return;
+        if (!alive || version !== renderVersion) return;
+        const normalized = normalizeResult(result);
+        graphic.value = normalized;
+        lastRenderedContent = content;
+        status.value = "ready";
+        error.value = "";
+        trace("render-end", {
+          durationMs: performance.now() - startedAt,
+          sequenceChars: normalized.type === "terminal" ? normalized.sequence.length : 0,
+        });
+        bump();
+      } catch (err) {
+        if (abort.signal.aborted) return;
+        if (!alive || version !== renderVersion) return;
+        graphic.value = { type: "text", text: fallbackText() };
+        lastRenderedContent = content;
+        status.value = "ready";
+        error.value = errorMessage(err);
+        trace("render-end", {
+          durationMs: performance.now() - startedAt,
+          reason: error.value,
+        });
+        bump();
+      } finally {
+        if (renderAbort === abort) renderAbort = null;
+      }
+    }
+
+    function scheduleRender(): void {
+      const version = ++renderVersion;
+      queueClearLastGraphic();
+
+      if (!builtOnce || !props.streaming) {
+        builtOnce = true;
+        void renderNow(version);
+        return;
+      }
+
+      const accepted = scheduler.queueFrameTask({
+        id: frameTaskId,
+        reason: "stream",
+        priority: "low",
+        sync: false,
+        run: () => {
+          if (!alive) return;
+          if (version !== renderVersion) return;
+          void renderNow(version);
+        },
+      });
+      if (accepted === false) void renderNow(version);
+    }
+
+    watch(
+      [
+        () => props.content,
+        () => props.kind,
+        () => props.fallback,
+        () => props.renderer,
+        () => props.w,
+        () => props.h,
+        () => props.streaming,
+        () => props.final,
+        () => props.deferRenderUntilVisible,
+        () => props.suspendRenderWhileScrolling,
+        () => props.cacheKey,
+      ],
+      () => {
+        scheduleRender();
+      },
+      { immediate: true },
+    );
+
+    onBeforeUnmount(() => {
+      alive = false;
+      renderVersion++;
+      abortCurrentRender("unmount");
+      scheduler.cancelFrameTask?.(frameTaskId);
+      queueClearLastGraphic();
+    });
+
     const displayLines = computed<readonly string[]>(() => {
       if (showingInitialLoadingText.value) return splitTextOutput(props.loadingText);
       const current = graphic.value;
       if (!current) return splitTextOutput(fallbackText());
-      if (current.type === "terminal" && rawCanRender.value) return markRaw([""]);
+      if (current.type === "terminal" && rawCanQueue.value) return markRaw([""]);
       const text = current.type === "terminal" ? current.fallback : current.text;
       const lines = splitTextOutput(text);
       return hasVisibleOutput(lines) ? lines : splitTextOutput(fallbackText());
@@ -547,6 +695,10 @@ export const TAgentTerminalGraphic = defineComponent({
         error.value,
         documentVersion.value,
         rawCanRender.value,
+        rawCanQueue.value,
+        rawSuppressedByScroll.value,
+        isParentScrolling.value,
+        graphicsActivityVersion.value,
       ],
       paint: (dirtyRows) => {
         withTextWidthProvider(widthProvider, () => {
@@ -569,7 +721,7 @@ export const TAgentTerminalGraphic = defineComponent({
           const current = graphic.value;
           const output = graphicsOutput();
           const clearOwnedRegion =
-            props.clear || (current?.type === "terminal" && rawCanRender.value);
+            props.clear || (current?.type === "terminal" && rawCanQueue.value);
           const blank = clearOwnedRegion ? spaces(r.w) : "";
 
           const paintRow = (y: number) => {
@@ -598,10 +750,15 @@ export const TAgentTerminalGraphic = defineComponent({
             output?.capabilities.supported &&
             (output.capabilities.preferredProtocol === current.protocol ||
               output.capabilities[current.protocol]) &&
-            rawCanRender.value
+            rawCanQueue.value
           ) {
-            queueDrawGraphic(output, current, full);
+            if (queueDrawGraphic(output, current, full)) {
+              trace("raw-draw", { sequenceChars: current.sequence.length });
+            }
           } else {
+            if (current?.type === "terminal" && rawSuppressedByScroll.value) {
+              trace("raw-skip-scroll");
+            }
             queueClearLastGraphic();
           }
         });
@@ -612,6 +769,10 @@ export const TAgentTerminalGraphic = defineComponent({
       [
         visible,
         rawCanRender,
+        rawCanQueue,
+        rawSuppressedByScroll,
+        isParentScrolling,
+        graphicsActivityVersion,
         () => absRect.value.x,
         () => absRect.value.y,
         () => absRect.value.w,
@@ -622,8 +783,22 @@ export const TAgentTerminalGraphic = defineComponent({
         () => fullRect.value.h,
       ],
       () => {
-        if (!lastDrawnGraphic.value) return;
-        if (!visible.value || !rawCanRender.value) queueClearLastGraphic();
+        if (!alive) return;
+
+        if (shouldDeferRender()) {
+          abortCurrentRender("deferred");
+          if (status.value === "loading" || !graphic.value || lastRenderedContent !== props.content)
+            setDeferredFallback(props.content);
+        }
+
+        if (!visible.value || !rawCanQueue.value) queueClearLastGraphic();
+
+        if (!shouldDeferRender() && (!graphic.value || status.value === "idle")) {
+          scheduleRender();
+          return;
+        }
+
+        scheduler.invalidate({ priority: "low", reason: "data" });
       },
       { flush: "post" },
     );

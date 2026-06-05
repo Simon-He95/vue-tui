@@ -15,6 +15,7 @@ import type { TraceStore } from "../observability/trace.js";
 import type { FramePerfReason } from "../observability/frame-perf.js";
 import type { FramePerfStore } from "../observability/frame-perf-store.js";
 import type { TInputPlugin } from "./components/input/plugins/types.js";
+import { readonly, ref } from "vue";
 import { injectionKey } from "./injection-key.js";
 import type { RenderManager } from "./render/render-manager.js";
 
@@ -115,6 +116,13 @@ export type TerminalSelectionContext = Readonly<{
   clear: () => void;
 }>;
 
+export type TerminalGraphicsActivity = Readonly<{
+  scrolling: Readonly<Ref<boolean>>;
+  version: Readonly<Ref<number>>;
+  markScroll: () => void;
+  dispose: () => void;
+}>;
+
 export type ImeAnchor = Readonly<{
   cellX: number;
   cellY: number;
@@ -149,7 +157,53 @@ export const TInputPluginsContextKey =
 export const TPathPickerProviderContextKey: InjectionKey<
   Readonly<Ref<PathPickerProvider | undefined>>
 > = injectionKey<Readonly<Ref<PathPickerProvider | undefined>>>("TPathPickerProvider");
+export const TerminalGraphicsActivityKey =
+  injectionKey<TerminalGraphicsActivity>("TerminalGraphicsActivity");
 
 // Provided by dialog surfaces to indicate "this subtree is inside a modal dialog".
 // Used by inputs to opt into dialog confirmation semantics (e.g. Enter submits the dialog).
 export const DialogContextKey = injectionKey<boolean>("DialogContext");
+
+export function createTerminalGraphicsActivity(
+  options: Readonly<{ scrollIdleMs?: number }> = {},
+): TerminalGraphicsActivity {
+  const scrollIdleMs = Math.max(16, Math.floor(options.scrollIdleMs ?? 96));
+  const scrolling = ref(false);
+  const version = ref(0);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  function bump(): void {
+    version.value++;
+  }
+
+  function clearTimer(): void {
+    if (!timer) return;
+    clearTimeout(timer);
+    timer = null;
+  }
+
+  function markScroll(): void {
+    if (!scrolling.value) scrolling.value = true;
+    bump();
+    clearTimer();
+    timer = setTimeout(() => {
+      timer = null;
+      if (!scrolling.value) return;
+      scrolling.value = false;
+      bump();
+    }, scrollIdleMs);
+  }
+
+  function dispose(): void {
+    clearTimer();
+    if (scrolling.value) scrolling.value = false;
+    bump();
+  }
+
+  return {
+    scrolling: readonly(scrolling) as Readonly<Ref<boolean>>,
+    version: readonly(version) as Readonly<Ref<number>>,
+    markScroll,
+    dispose,
+  };
+}

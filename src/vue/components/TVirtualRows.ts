@@ -35,7 +35,13 @@ import { useRenderStack } from "../composables/use-render-stack.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useVisibility } from "../composables/use-visibility.js";
-import { EventZIndexContextKey, LayoutContextKey, RenderPlaneContextKey } from "../context.js";
+import {
+  createTerminalGraphicsActivity,
+  EventZIndexContextKey,
+  LayoutContextKey,
+  RenderPlaneContextKey,
+  TerminalGraphicsActivityKey,
+} from "../context.js";
 import { RenderStackKey } from "../render/context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
@@ -185,6 +191,7 @@ export const TVirtualRows = defineComponent({
       type: String as PropType<TVirtualRowsRowScrollMode>,
       default: "off",
     },
+    terminalGraphicScrollIdleMs: { type: Number, default: 96 },
   },
   emits: [
     "update:scrollTop",
@@ -225,6 +232,10 @@ export const TVirtualRows = defineComponent({
     provide(LayoutContextKey, childLayout);
     provide(RenderStackKey, childStack as any);
     provide(EventZIndexContextKey, eventZ as any);
+    const terminalGraphicsActivity = createTerminalGraphicsActivity({
+      scrollIdleMs: props.terminalGraphicScrollIdleMs,
+    });
+    provide(TerminalGraphicsActivityKey, terminalGraphicsActivity);
 
     const virtualRowsInstanceId = ++virtualRowsInstanceSeq;
     const frameTaskId = `TVirtualRows:${virtualRowsInstanceId}`;
@@ -418,6 +429,7 @@ export const TVirtualRows = defineComponent({
       const clampedTop = clampScrollTop(nextTop);
       const delta = clampedTop - prevTop;
       if (!delta) return false;
+      terminalGraphicsActivity.markScroll();
 
       if (isScrollControlled()) {
         if (options?.emitUpdate !== false) emit("update:scrollTop", clampedTop);
@@ -771,6 +783,7 @@ export const TVirtualRows = defineComponent({
         cancelWheelScrollFrame();
         const prevTop = controlledScrollTop.value;
         controlledScrollTop.value = nextTop;
+        terminalGraphicsActivity.markScroll();
         markScrollDamage(prevTop, nextTop);
         selection.refresh(pendingSelectionScrollFocusRemap ? { remapFocus: true } : undefined);
         pendingSelectionScrollFocusRemap = false;
@@ -847,6 +860,7 @@ export const TVirtualRows = defineComponent({
       pendingWheelTop = null;
       resetWheelScrollState(wheelState);
       wheelMailbox.dispose();
+      terminalGraphicsActivity.dispose();
     });
 
     const renderNode = useRenderNode(() => ({

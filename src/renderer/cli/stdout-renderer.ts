@@ -56,7 +56,7 @@ import {
   validateTerminalGraphicFrame,
   wrapTerminalGraphicsForMultiplexer,
 } from "../terminal-graphics.js";
-import { recordStdoutFrame } from "./stdout-metrics.js";
+import { recordStdoutFrame, recordStdoutTerminalGraphics } from "./stdout-metrics.js";
 
 // Global debug logger instance (lazy init)
 let debugLog: ReturnType<typeof createDebugLogger> | null = null;
@@ -2956,6 +2956,14 @@ export function createStdoutRenderer(
     };
 
     if (graphicsClearsToRender.length > 0 || graphicsToRender.length > 0) {
+      let terminalGraphicsDraws = 0;
+      let terminalGraphicsClears = 0;
+      let terminalGraphicsBytes = 0;
+      const countGraphicsBytes = (value: string): string => {
+        terminalGraphicsBytes += Buffer.byteLength(value, "utf8");
+        return value;
+      };
+
       hasFrameOutput = true;
       if (enableOsc8Links && activeStyle.href) frameParts.push(OSC8_CLOSE);
       activeStyle = {
@@ -2969,13 +2977,14 @@ export function createStdoutRenderer(
         href: null,
       };
       activeStyleKey = null;
-      frameParts.push(SGR_RESET);
+      frameParts.push(countGraphicsBytes(SGR_RESET));
 
       for (const id of graphicsClearsToRender) {
         const active = activeGraphics.get(id);
         if (!active) continue;
         const visibleRect = clampGraphicRectToViewport(active, size);
-        if (visibleRect) frameParts.push(clearGraphicRect(visibleRect));
+        if (visibleRect) frameParts.push(countGraphicsBytes(clearGraphicRect(visibleRect)));
+        terminalGraphicsClears++;
         activeGraphics.delete(id);
       }
 
@@ -2993,12 +3002,16 @@ export function createStdoutRenderer(
           );
           if (!rect) continue;
 
+          const clearRect = clearGraphicRect(rect);
+          const cursor = `\u001B[${rect.y + 1};${rect.x + 1}H`;
+          const sequence = maybeWrapTerminalGraphic(payload.sequence);
           frameParts.push(
-            clearGraphicRect(rect),
-            `\u001B[${rect.y + 1};${rect.x + 1}H`,
-            maybeWrapTerminalGraphic(payload.sequence),
-            SGR_RESET,
+            countGraphicsBytes(clearRect),
+            countGraphicsBytes(cursor),
+            countGraphicsBytes(sequence),
+            countGraphicsBytes(SGR_RESET),
           );
+          terminalGraphicsClears++;
           activeGraphics.delete(payload.id);
           continue;
         }
@@ -3012,21 +3025,35 @@ export function createStdoutRenderer(
         const previous = activeGraphics.get(payload.id);
         if (previous && !sameGraphicRect(previous, rect)) {
           const visiblePrevious = clampGraphicRectToViewport(previous, size);
-          if (visiblePrevious) frameParts.push(clearGraphicRect(visiblePrevious));
+          if (visiblePrevious) {
+            frameParts.push(countGraphicsBytes(clearGraphicRect(visiblePrevious)));
+            terminalGraphicsClears++;
+          }
         }
 
+        const clearRect = clearGraphicRect(rect);
+        const cursor = `\u001B[${rect.y + 1};${rect.x + 1}H`;
+        const sequence = maybeWrapTerminalGraphic(payload.sequence);
         frameParts.push(
-          clearGraphicRect(rect),
-          `\u001B[${rect.y + 1};${rect.x + 1}H`,
-          maybeWrapTerminalGraphic(payload.sequence),
-          SGR_RESET,
+          countGraphicsBytes(clearRect),
+          countGraphicsBytes(cursor),
+          countGraphicsBytes(sequence),
+          countGraphicsBytes(SGR_RESET),
         );
+        terminalGraphicsDraws++;
         activeGraphics.set(payload.id, {
           ...rect,
           protocol: payload.protocol,
           clearSequence: payload.clearSequence,
         });
       }
+
+      recordStdoutTerminalGraphics({
+        draws: terminalGraphicsDraws,
+        clears: terminalGraphicsClears,
+        bytes: terminalGraphicsBytes,
+        active: activeGraphics.size,
+      });
     }
 
     // Include cursor position in the same frame if getImeAnchor is provided
@@ -3680,6 +3707,7 @@ export function createStdoutRenderer(
     if (activeGraphics.size > 0) {
       const size = terminal.size();
       const clearParts: string[] = [];
+      let terminalGraphicsClears = 0;
       for (const active of activeGraphics.values()) {
         const visibleRect = clampGraphicRectToViewport(active, size);
         if (!visibleRect) continue;
@@ -3691,9 +3719,20 @@ export function createStdoutRenderer(
             maybeWrapTerminalGraphic(active.clearSequence),
           );
         }
+        terminalGraphicsClears++;
       }
       activeGraphics.clear();
-      if (clearParts.length > 0) out.write(`${SGR_RESET}${clearParts.join("")}${SGR_RESET}`);
+      if (clearParts.length > 0) {
+        const frame = `${SGR_RESET}${clearParts.join("")}${SGR_RESET}`;
+        out.write(frame);
+        recordStdoutTerminalGraphics({
+          clears: terminalGraphicsClears,
+          bytes: Buffer.byteLength(frame, "utf8"),
+          active: 0,
+        });
+      } else {
+        recordStdoutTerminalGraphics({ active: 0 });
+      }
     }
     unregisterGraphicsOutput();
     off();

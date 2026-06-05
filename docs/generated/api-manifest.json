@@ -192,6 +192,7 @@
         "TAgentTerminalGraphicRenderResult",
         "TAgentTerminalGraphicRenderer",
         "TAgentTerminalGraphicRendererContext",
+        "TAgentTerminalGraphicTraceEvent",
         "TCommandPaletteItem",
         "TCommandPaletteItemsProvider",
         "TCommandPaletteLoadErrorPayload",
@@ -1041,6 +1042,36 @@
           "type": "string",
           "required": false,
           "defaultValue": "\"Rendering terminal graphic...\""
+        },
+        {
+          "name": "deferRenderUntilVisible",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "suspendRawWhileScrolling",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "suspendRenderWhileScrolling",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "cacheKey",
+          "type": "string",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "trace",
+          "type": "(event: TAgentTerminalGraphicTraceEvent) => void",
+          "required": false,
+          "defaultValue": "undefined"
         }
       ],
       "events": []
@@ -9091,6 +9122,12 @@
           "type": "RowScrollMode",
           "required": false,
           "defaultValue": "\"off\""
+        },
+        {
+          "name": "terminalGraphicScrollIdleMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "96"
         }
       ],
       "events": [

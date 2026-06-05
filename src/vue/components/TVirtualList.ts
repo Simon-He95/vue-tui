@@ -20,6 +20,7 @@ import {
   h,
   inject,
   onBeforeUnmount,
+  provide,
   ref,
   watch,
   watchEffect,
@@ -29,7 +30,12 @@ import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
-import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
+import {
+  createTerminalGraphicsActivity,
+  EventZIndexContextKey,
+  RenderPlaneContextKey,
+  TerminalGraphicsActivityKey,
+} from "../context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
 import {
   terminalSelectionRowSpans,
@@ -117,6 +123,7 @@ export const TVirtualList = defineComponent({
       type: String as PropType<RowScrollMode>,
       default: "off",
     },
+    terminalGraphicScrollIdleMs: { type: Number, default: 96 },
   },
   emits: [
     "update:modelValue",
@@ -139,6 +146,10 @@ export const TVirtualList = defineComponent({
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
     const virtualListInstanceId = ++virtualListInstanceSeq;
     const wheelTaskId = `TVirtualList:${virtualListInstanceId}:wheel`;
+    const terminalGraphicsActivity = createTerminalGraphicsActivity({
+      scrollIdleMs: props.terminalGraphicScrollIdleMs,
+    });
+    provide(TerminalGraphicsActivityKey, terminalGraphicsActivity);
 
     const focused = ref(false);
     const active = ref(props.modelValue);
@@ -393,6 +404,7 @@ export const TVirtualList = defineComponent({
         const changed = scrollTop.value !== nextTop;
         scrollTop.value = nextTop;
         if (!wasInitialized || !changed) return;
+        terminalGraphicsActivity.markScroll();
 
         const remap = pendingSelectionScrollFocusRemap;
         pendingSelectionScrollFocusRemap = false;
@@ -709,6 +721,7 @@ export const TVirtualList = defineComponent({
       pendingWheelTop = null;
       resetWheelScrollState(wheelState);
       wheelMailbox.dispose();
+      terminalGraphicsActivity.dispose();
     });
 
     function viewportRows(): number[] {
@@ -761,6 +774,7 @@ export const TVirtualList = defineComponent({
       const clampedTop = clampScrollTop(nextTop);
       const delta = clampedTop - scrollTop.value;
       if (!delta) return { changed: false, dirty: false, top: scrollTop.value, controlled };
+      terminalGraphicsActivity.markScroll();
       if (controlled) {
         if (options?.emitUpdate ?? true) emit("update:scrollTop", clampedTop);
         if (options?.emitScroll) emit("scroll", clampedTop);

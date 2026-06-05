@@ -1,4 +1,4 @@
-import { defineComponent, h, nextTick } from "vue";
+import { defineComponent, h, nextTick, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   TAgentTerminalGraphic,
@@ -8,10 +8,17 @@ import {
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
   type TAgentTerminalGraphicRenderer,
+  type TAgentTerminalGraphicRenderResult,
   type TerminalGraphicsProtocol,
 } from "../src/agent.js";
-import { createStdoutRenderer, createTerminalApp, type CliOutput } from "../src/cli.js";
+import {
+  createStdoutRenderer,
+  createTerminalApp,
+  getStdoutRendererMetrics,
+  type CliOutput,
+} from "../src/cli.js";
 import { getTerminalGraphicsOutput } from "../src/renderer/terminal-graphics.js";
+import { TVirtualRows } from "../src/vue/components/TVirtualRows.js";
 
 const ESC = "\x1B";
 const ST = `${ESC}\\`;
@@ -92,6 +99,7 @@ describe("TAgentTerminalGraphic", () => {
     const graphics = getTerminalGraphicsOutput(app.terminal);
     const sequence = createKittyGraphicsSequence("QUJD");
     const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
+    const before = { ...getStdoutRendererMetrics() };
 
     writes.length = 0;
     graphics?.queue({
@@ -105,10 +113,21 @@ describe("TAgentTerminalGraphic", () => {
       clearSequence,
     });
     expect(writes.join("")).toContain(sequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsDraws).toBeGreaterThan(
+      before.terminalGraphicsDraws,
+    );
+    expect(getStdoutRendererMetrics().terminalGraphicsBytes).toBeGreaterThan(
+      before.terminalGraphicsBytes,
+    );
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(1);
 
     writes.length = 0;
     graphics?.clear?.("g1");
     expect(writes.join("")).toContain(clearSequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsClears).toBeGreaterThan(
+      before.terminalGraphicsClears,
+    );
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
 
     stdout.dispose();
     app.dispose();
@@ -128,6 +147,11 @@ describe("TAgentTerminalGraphic", () => {
     const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
     const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
       expect(context.capabilities.preferredProtocol).toBe("kitty");
+      expect(context.signal).toBeInstanceOf(AbortSignal);
+      expect(context.visible).toBe(true);
+      expect(context.rawVisible).toBe(true);
+      expect(context.scrolling).toBe(false);
+      expect(context.cacheKey).toBe("image-cache-key");
       return {
         type: "sequence" as const,
         protocol: "kitty" as const,
@@ -146,6 +170,7 @@ describe("TAgentTerminalGraphic", () => {
             h: 2,
             content: "image.png",
             fallback: "fallback",
+            cacheKey: "image-cache-key",
             renderer,
           });
       },
@@ -176,6 +201,128 @@ describe("TAgentTerminalGraphic", () => {
     stdout.dispose();
     expect(writes.join("")).toContain(clearSequence);
 
+    app.dispose();
+  });
+
+  it("aborts superseded renderer work", async () => {
+    const content = ref("first");
+    const signals: AbortSignal[] = [];
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((value, context) => {
+      signals.push(context.signal);
+      if (value === "first") return new Promise<TAgentTerminalGraphicRenderResult>(() => undefined);
+      return { type: "text" as const, text: value };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: content.value,
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 3, component: App });
+    app.mount();
+    await settle(app);
+
+    content.value = "second";
+    await settle(app);
+
+    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(signals[0]?.aborted).toBe(true);
+    expect(signals[1]?.aborted).toBe(false);
+    expect(rowText(app, 0)).toBe("second");
+
+    app.dispose();
+  });
+
+  it("suspends virtual row raw rendering while scrolling and hydrates after idle", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => ({
+      type: "sequence" as const,
+      protocol: context.capabilities.preferredProtocol as "kitty",
+      sequence,
+      fallback: "fallback",
+    }));
+    const items = ["image-0", "image-1", "image-2"];
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualRows, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 1,
+            itemCount: items.length,
+            itemVersion: 1,
+            terminalGraphicScrollIdleMs: 200,
+            getItem: (index: number) => items[index],
+            paintItem: () => undefined,
+            renderItemNodes: (ctx: { item: unknown; index: number; row: number }) =>
+              h(TAgentTerminalGraphic, {
+                x: 0,
+                y: ctx.row,
+                w: 10,
+                h: 1,
+                content: String(ctx.item),
+                fallback: `fallback-${ctx.index}`,
+                renderer,
+              }),
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const stdout = withEnv({ KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined }, () =>
+      createStdoutRenderer(app.terminal, {
+        output,
+        clear: false,
+        altScreen: false,
+        hideCursor: false,
+        trackResize: false,
+      }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: Date.now() });
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(rowText(app, 0)).toBe("fallback-1");
+    expect(writes.join("")).not.toContain(sequence);
+
+    await new Promise((resolve) => setTimeout(resolve, 220));
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(writes.join("")).toContain(sequence);
+
+    stdout.dispose();
     app.dispose();
   });
 

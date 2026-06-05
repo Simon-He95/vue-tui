@@ -10,6 +10,7 @@ export type {
   TAgentTerminalGraphicRendererContext,
   TAgentTerminalGraphicRenderResult,
   TAgentTerminalGraphicProps,
+  TAgentTerminalGraphicTraceEvent,
 } from "./vue/components/TAgentTerminalGraphic.js";
 export { TThinkingView } from "./vue/components/TThinkingView.js";
 export { TToolCallView } from "./vue/components/TToolCallView.js";
