@@ -221,7 +221,27 @@ describe("terminal graphics sequence validation", () => {
 
     expect(sequence).toContain("a=d");
     expect(sequence).toContain("d=c");
-    expect(isSafeTerminalGraphicsSequence(sequence, "kitty")).toBe(true);
+    expect(isSafeTerminalGraphicsSequence(sequence, "kitty", "draw")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(sequence, "kitty", "clear")).toBe(true);
+  });
+
+  it("requires iTerm2 inline images and rejects iTerm2 clear payloads", () => {
+    const data = "QUJD";
+    const inline = createIterm2InlineImageSequence(data, { width: 4, height: 2 });
+    const download = `${ESC}]1337;File=name=test:${data}${BEL}`;
+
+    expect(isSafeTerminalGraphicsSequence(inline, "iterm2", "draw")).toBe(true);
+    expect(isSafeTerminalGraphicsSequence(download, "iterm2", "draw")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(inline, "iterm2", "clear")).toBe(false);
+  });
+
+  it("rejects kitty clear payloads as draw payloads", () => {
+    const draw = createKittyGraphicsSequence("QUJD");
+    const clear = createKittyDeleteGraphicsSequence({ currentCell: true });
+
+    expect(isSafeTerminalGraphicsSequence(draw, "kitty", "draw")).toBe(true);
+    expect(isSafeTerminalGraphicsSequence(clear, "kitty", "draw")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(clear, "kitty", "clear")).toBe(true);
   });
 
   it("validates terminal graphics payloads against capabilities", () => {

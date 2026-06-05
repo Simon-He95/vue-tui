@@ -2,6 +2,7 @@ import { defineComponent, h, nextTick } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   TAgentTerminalGraphic,
+  TText,
   createIterm2InlineImageSequence,
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
@@ -10,6 +11,7 @@ import {
   type TerminalGraphicsProtocol,
 } from "../src/agent.js";
 import { createStdoutRenderer, createTerminalApp, type CliOutput } from "../src/cli.js";
+import { getTerminalGraphicsOutput } from "../src/renderer/terminal-graphics.js";
 
 const ESC = "\x1B";
 const ST = `${ESC}\\`;
@@ -56,6 +58,62 @@ function withEnv<T>(env: Record<string, string | undefined>, run: () => T): T {
 }
 
 describe("TAgentTerminalGraphic", () => {
+  it("flushes terminal graphics queue operations without dirty rows", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: false,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
+
+    writes.length = 0;
+    graphics?.queue({
+      id: "g1",
+      x: 1,
+      y: 1,
+      w: 4,
+      h: 2,
+      protocol: "kitty",
+      sequence,
+      clearSequence,
+    });
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    graphics?.clear?.("g1");
+    expect(writes.join("")).toContain(clearSequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it("queues terminal graphics payloads through the stdout renderer", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
@@ -117,6 +175,104 @@ describe("TAgentTerminalGraphic", () => {
     writes.length = 0;
     stdout.dispose();
     expect(writes.join("")).toContain(clearSequence);
+
+    app.dispose();
+  });
+
+  it("does not queue the same raw sequence twice for the same rect", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 2,
+            y: 1,
+            w: 8,
+            h: 2,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    app.scheduler.invalidate();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).not.toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("uses renderer returned rows when props.h is omitted", async () => {
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      fallback: "fallback",
+      rows: 3,
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h("span", [
+            h(TText, { x: 0, y: 2, w: 10, value: "covered" }),
+            h(TAgentTerminalGraphic, {
+              x: 0,
+              y: 0,
+              w: 10,
+              zIndex: 1,
+              content: "image.png",
+              fallback: "fallback",
+              renderer,
+            }),
+          ]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(rowText(app, 0)).toBe("fallback");
+    expect(rowText(app, 2)).toBe("");
 
     app.dispose();
   });

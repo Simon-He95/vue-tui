@@ -271,7 +271,7 @@ Mermaid 组件详见下方 [TMermaidText](#tmermaidtext)。这里仅作为 Text 
 
 Agent terminal graphics 组件，从 `@simon_he/vue-tui/agent` 引入。它面向真实 stdout terminal：组件在 TUI buffer 中占用指定 cell rect，并通过 `createStdoutRenderer()` 注册的 terminal graphics output 在帧末尾写入 Kitty / iTerm2 / Sixel 等 raw escape payload。DOM/headless 或不支持图像协议时自动显示 `fallback` 文本。
 
-组件本身不 import KaTeX、不读取图片文件、不执行外部命令。宿主传入 `renderer(content, context)`，根据 `context.protocol` 或 `context.capabilities.preferredProtocol` 返回 `{ type: "sequence", protocol, sequence, fallback?, clearSequence? }` 作为可信 terminal image escape，或返回 `{ type: "text", text }` 作为 Unicode/ANSI fallback。返回 `null` / `undefined` 会使用组件 `fallback`，不会进入错误态；renderer 抛错时同样显示 fallback，但会使用 `errorStyle`。为了避免 terminal escape injection，bare string 只会按普通文本 fallback 处理，不会作为 raw escape 写入 stdout。`kind="math"` 可用于 KaTeX/LaTeX，`kind="image"` 可用于普通图片。
+组件本身不 import KaTeX、不读取图片文件、不执行外部命令。宿主传入 `renderer(content, context)`，根据 `context.protocol` 或 `context.capabilities.preferredProtocol` 返回 `{ type: "sequence", protocol, sequence, fallback?, clearSequence?, rows?, cols? }` 作为可信 terminal image escape，或返回 `{ type: "text", text }` 作为 Unicode/ANSI fallback。返回 `null` / `undefined` 会使用组件 `fallback`，不会进入错误态；renderer 抛错时同样显示 fallback，但会使用 `errorStyle`。为了避免 terminal escape injection，bare string 只会按普通文本 fallback 处理，不会作为 raw escape 写入 stdout。`h` 省略时会优先使用 renderer result 的 `rows` 推导占用高度，仍建议宿主显式传入最终 cell 高度。`kind="math"` 可用于 KaTeX/LaTeX，`kind="image"` 可用于普通图片。
 
 ```vue
 <TAgentTerminalGraphic

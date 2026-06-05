@@ -3,6 +3,7 @@ import type { Style } from "../../core/types.js";
 import type { Rect } from "../../events/manager/types.js";
 import type {
   TerminalGraphicsCapabilities,
+  TerminalGraphicsOutput,
   TerminalGraphicsProtocol,
   TerminalGraphicsResolvedProtocol,
 } from "../../renderer/terminal-graphics.js";
@@ -19,6 +20,7 @@ import {
 import { getTerminalGraphicsOutput } from "../../renderer/terminal-graphics.js";
 import {
   createKittyDeleteGraphicsSequence,
+  isSafeTerminalGraphicsSequence,
   sanitizeTerminalFallbackText,
   validateTerminalGraphicFrame,
 } from "../../renderer/terminal-graphics.js";
@@ -55,6 +57,8 @@ export type TAgentTerminalGraphicRenderResult =
       protocol: TerminalGraphicsProtocol;
       fallback?: string;
       clearSequence?: string;
+      cols?: number;
+      rows?: number;
     }>
   | Readonly<{
       type: "text";
@@ -68,6 +72,8 @@ export type TAgentTerminalGraphicRenderResult =
       protocol?: TerminalGraphicsProtocol;
       fallback?: string;
       clearSequence?: string;
+      cols?: number;
+      rows?: number;
     }>
   | Readonly<{
       text: string;
@@ -112,6 +118,22 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function positiveInt(value: unknown): number | undefined {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function smallHash(input: string): string {
+  let hash = 2166136261;
+
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
 export const tAgentTerminalGraphicProps = {
   x: { type: Number, required: true },
   y: { type: Number, required: true },
@@ -142,18 +164,49 @@ export const tAgentTerminalGraphicProps = {
 
 export type TAgentTerminalGraphicProps = ExtractPublicPropTypes<typeof tAgentTerminalGraphicProps>;
 
+type ResolvedTerminalGraphic = Readonly<{
+  type: "terminal";
+  protocol: TerminalGraphicsProtocol;
+  sequence: string;
+  fallback: string;
+  clearSequence?: string;
+  cols?: number;
+  rows?: number;
+}>;
+
 type ResolvedGraphic =
-  | Readonly<{
-      type: "terminal";
-      protocol: TerminalGraphicsProtocol;
-      sequence: string;
-      fallback: string;
-      clearSequence?: string;
-    }>
+  | ResolvedTerminalGraphic
   | Readonly<{
       type: "text";
       text: string;
     }>;
+
+type LastDrawnGraphic = Readonly<{
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  protocol: TerminalGraphicsProtocol;
+  clearSequence?: string;
+  drawKey: string;
+}>;
+
+function terminalDrawKey(
+  current: ResolvedTerminalGraphic,
+  rect: Rect,
+  clearSequence: string | undefined,
+): string {
+  return [
+    current.protocol,
+    rect.x,
+    rect.y,
+    rect.w,
+    rect.h,
+    smallHash(current.sequence),
+    smallHash(clearSequence ?? ""),
+  ].join(":");
+}
 
 export const TAgentTerminalGraphic = defineComponent({
   name: "TAgentTerminalGraphic",
@@ -174,15 +227,7 @@ export const TAgentTerminalGraphic = defineComponent({
     let alive = true;
     const rawId = `TAgentTerminalGraphic:${instance?.uid ?? "unknown"}`;
     const frameTaskId = `${rawId}:render`;
-    const lastDrawnGraphic = shallowRef<{
-      id: string;
-      x: number;
-      y: number;
-      w: number;
-      h: number;
-      protocol: TerminalGraphicsProtocol;
-      clearSequence?: string;
-    } | null>(null);
+    const lastDrawnGraphic = shallowRef<LastDrawnGraphic | null>(null);
 
     const graphicsOutput = () => getTerminalGraphicsOutput(terminal);
     const fallbackText = () => props.fallback || props.content;
@@ -229,27 +274,34 @@ export const TAgentTerminalGraphic = defineComponent({
           text: result.text,
         };
       }
-      if ("type" in result && result.type === "sequence") {
-        return {
-          type: "terminal",
-          protocol: result.protocol,
-          sequence: result.sequence,
-          fallback: result.fallback ?? fallbackText(),
-          clearSequence: result.clearSequence,
-        };
-      }
-      if (!result.protocol) {
+
+      const maybeRaw = result as Readonly<{
+        sequence?: unknown;
+        protocol?: TerminalGraphicsProtocol;
+        fallback?: unknown;
+        clearSequence?: unknown;
+        cols?: unknown;
+        rows?: unknown;
+      }>;
+      const sequence = typeof maybeRaw.sequence === "string" ? maybeRaw.sequence : "";
+      const protocol = maybeRaw.protocol;
+
+      if (!sequence || !protocol) {
         return {
           type: "text",
-          text: result.fallback ?? fallbackText(),
+          text: typeof maybeRaw.fallback === "string" ? maybeRaw.fallback : fallbackText(),
         };
       }
+
       return {
         type: "terminal",
-        protocol: result.protocol,
-        sequence: result.sequence,
-        fallback: result.fallback ?? fallbackText(),
-        clearSequence: result.clearSequence,
+        protocol,
+        sequence,
+        fallback: typeof maybeRaw.fallback === "string" ? maybeRaw.fallback : fallbackText(),
+        clearSequence:
+          typeof maybeRaw.clearSequence === "string" ? maybeRaw.clearSequence : undefined,
+        cols: positiveInt(maybeRaw.cols),
+        rows: positiveInt(maybeRaw.rows),
       };
     }
 
@@ -257,31 +309,73 @@ export const TAgentTerminalGraphic = defineComponent({
       return protocol === "kitty" ? createKittyDeleteGraphicsSequence({ currentCell: true }) : "";
     }
 
-    function queueClearLastGraphic(): void {
-      if (!props.clear) return;
+    function resolveClearSequence(current: ResolvedTerminalGraphic): string | undefined {
+      const candidate = current.clearSequence ?? defaultClearSequence(current.protocol);
+      if (!candidate) return undefined;
+      return isSafeTerminalGraphicsSequence(candidate, current.protocol, "clear")
+        ? candidate
+        : undefined;
+    }
 
+    function queueClearLastGraphic(): void {
       const previous = lastDrawnGraphic.value;
       if (!previous) return;
 
       const output = graphicsOutput();
-      if (!output) return;
-
-      if (previous.clearSequence) {
-        output.queue({
-          id: previous.id,
-          x: previous.x,
-          y: previous.y,
-          w: previous.w,
-          h: previous.h,
-          protocol: previous.protocol,
-          sequence: previous.clearSequence,
-          op: "clear",
-        });
-      } else {
-        output.clear?.(previous.id);
+      if (output) {
+        if (previous.clearSequence) {
+          output.queue({
+            id: previous.id,
+            x: previous.x,
+            y: previous.y,
+            w: previous.w,
+            h: previous.h,
+            protocol: previous.protocol,
+            sequence: previous.clearSequence,
+            op: "clear",
+          });
+        } else {
+          output.clear?.(previous.id);
+        }
       }
 
       lastDrawnGraphic.value = null;
+    }
+
+    function queueDrawGraphic(
+      output: TerminalGraphicsOutput,
+      current: ResolvedTerminalGraphic,
+      rect: Rect,
+    ): void {
+      const clearSequence = resolveClearSequence(current);
+      const drawKey = terminalDrawKey(current, rect, clearSequence);
+      const previous = lastDrawnGraphic.value;
+
+      if (previous?.drawKey === drawKey) return;
+      if (previous) queueClearLastGraphic();
+
+      output.queue({
+        id: rawId,
+        x: rect.x,
+        y: rect.y,
+        w: rect.w,
+        h: rect.h,
+        protocol: current.protocol,
+        sequence: current.sequence,
+        clearSequence,
+        fallbackText: current.fallback,
+      });
+
+      lastDrawnGraphic.value = {
+        id: rawId,
+        x: rect.x,
+        y: rect.y,
+        w: rect.w,
+        h: rect.h,
+        protocol: current.protocol,
+        clearSequence,
+        drawKey,
+      };
     }
 
     async function renderNow(version: number): Promise<void> {
@@ -376,11 +470,13 @@ export const TAgentTerminalGraphic = defineComponent({
     const showingInitialLoadingText = computed(() => status.value === "loading" && !graphic.value);
 
     const fullRect = computed<Rect>(() => {
+      const current = graphic.value;
       const textLines =
-        graphic.value?.type === "text"
-          ? splitTextOutput(graphic.value.text)
-          : splitTextOutput(fallbackText());
-      const height = props.h ?? Math.max(1, textLines.length);
+        current?.type === "text" ? splitTextOutput(current.text) : splitTextOutput(fallbackText());
+      const height =
+        props.h ??
+        (current?.type === "terminal" ? current.rows : undefined) ??
+        Math.max(1, textLines.length);
       return translateRect(
         { x: props.x, y: props.y, w: props.w, h: height },
         layout.originX,
@@ -454,11 +550,17 @@ export const TAgentTerminalGraphic = defineComponent({
       ],
       paint: (dirtyRows) => {
         withTextWidthProvider(widthProvider, () => {
-          if (!visible.value) return;
+          if (!visible.value) {
+            queueClearLastGraphic();
+            return;
+          }
 
           const r = absRect.value;
           const full = fullRect.value;
-          if (r.w <= 0 || r.h <= 0) return;
+          if (r.w <= 0 || r.h <= 0) {
+            queueClearLastGraphic();
+            return;
+          }
 
           const style = currentStyle.value;
           const out = displayLines.value;
@@ -498,34 +600,33 @@ export const TAgentTerminalGraphic = defineComponent({
               output.capabilities[current.protocol]) &&
             rawCanRender.value
           ) {
-            const clearSequence = current.clearSequence ?? defaultClearSequence(current.protocol);
-            output.queue({
-              id: rawId,
-              x: full.x,
-              y: full.y,
-              w: full.w,
-              h: full.h,
-              protocol: current.protocol,
-              sequence: current.sequence,
-              clearSequence,
-              fallbackText: current.fallback,
-            });
-            lastDrawnGraphic.value = {
-              id: rawId,
-              x: full.x,
-              y: full.y,
-              w: full.w,
-              h: full.h,
-              protocol: current.protocol,
-              clearSequence,
-            };
+            queueDrawGraphic(output, current, full);
           } else {
-            output?.clear?.(rawId);
-            lastDrawnGraphic.value = null;
+            queueClearLastGraphic();
           }
         });
       },
     }));
+
+    watch(
+      [
+        visible,
+        rawCanRender,
+        () => absRect.value.x,
+        () => absRect.value.y,
+        () => absRect.value.w,
+        () => absRect.value.h,
+        () => fullRect.value.x,
+        () => fullRect.value.y,
+        () => fullRect.value.w,
+        () => fullRect.value.h,
+      ],
+      () => {
+        if (!lastDrawnGraphic.value) return;
+        if (!visible.value || !rawCanRender.value) queueClearLastGraphic();
+      },
+      { flush: "post" },
+    );
 
     return () => h("span", rootProps);
   },

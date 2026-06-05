@@ -475,6 +475,12 @@ export function createStdoutRenderer(
   const pendingGraphicClears = new Set<string>();
   const activeGraphics = new Map<string, ActiveTerminalGraphic>();
   let nextGraphicsOrder = 0;
+  const hasPendingTerminalGraphics = (): boolean =>
+    pendingGraphics.size > 0 || pendingGraphicClears.size > 0;
+  function requestTerminalGraphicsFlush(): void {
+    if (disposed) return;
+    render([], false);
+  }
   const graphicsOutput: TerminalGraphicsOutput = {
     capabilities: graphicsCapabilities,
     queue(payload) {
@@ -529,6 +535,7 @@ export function createStdoutRenderer(
           clearSequence,
           fallbackText: frame.fallbackText,
         });
+        requestTerminalGraphicsFlush();
         return;
       }
 
@@ -538,13 +545,17 @@ export function createStdoutRenderer(
         w: normalized.w,
         h: normalized.h,
       });
+      requestTerminalGraphicsFlush();
     },
     clear(id) {
       if (disposed) return;
       pendingGraphics.delete(`${id}:draw`);
 
       const active = activeGraphics.get(id);
-      if (!active) return;
+      if (!active) {
+        requestTerminalGraphicsFlush();
+        return;
+      }
 
       if (active.clearSequence) {
         const payload: QueuedTerminalGraphicsPayload = {
@@ -561,11 +572,13 @@ export function createStdoutRenderer(
 
         if (validateTerminalGraphicsPayload(payload, graphicsCapabilities)) {
           pendingGraphics.set(`${id}:clear`, payload);
+          requestTerminalGraphicsFlush();
           return;
         }
       }
 
       pendingGraphicClears.add(id);
+      requestTerminalGraphicsFlush();
     },
   };
   const unregisterGraphicsOutput = registerTerminalGraphicsOutput(terminal, graphicsOutput);
@@ -3441,7 +3454,12 @@ export function createStdoutRenderer(
     } else if (dirtyRows.length === 0) {
       if (scrollOperations?.length) {
         mergeScrollOperations(scrollOperations);
-      } else if (!accumulatedAllRows && accumulatedDirtyCount === 0 && !getImeAnchor) {
+      } else if (
+        !accumulatedAllRows &&
+        accumulatedDirtyCount === 0 &&
+        !getImeAnchor &&
+        !hasPendingTerminalGraphics()
+      ) {
         cliLatency?.recordStdoutQueued(0);
         return;
       }

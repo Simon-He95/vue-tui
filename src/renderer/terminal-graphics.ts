@@ -334,32 +334,99 @@ function isBase64ish(value: string): boolean {
   return /^[A-Za-z0-9+/=\s]*$/.test(value);
 }
 
-function validateKittySequence(sequence: string): boolean {
+type KittyPacket = Readonly<{
+  controls: ReadonlyMap<string, string>;
+  payload: string;
+}>;
+
+function parseKittyControls(raw: string): Map<string, string> | null {
+  const out = new Map<string, string>();
+
+  if (!/^[A-Za-z0-9_,=+.\-:]*$/.test(raw)) return null;
+
+  for (const part of raw.split(",")) {
+    if (!part) continue;
+
+    const eq = part.indexOf("=");
+    if (eq <= 0) return null;
+
+    const key = part.slice(0, eq);
+    const value = part.slice(eq + 1);
+
+    if (!/^[A-Za-z]$/.test(key)) return null;
+    if (!/^[A-Za-z0-9+.\-:]*$/.test(value)) return null;
+
+    out.set(key, value);
+  }
+
+  return out;
+}
+
+function parseKittyPackets(sequence: string): KittyPacket[] | null {
+  const packets: KittyPacket[] = [];
   let index = 0;
 
   while (index < sequence.length) {
-    if (!sequence.startsWith(`${ESC}_G`, index)) return false;
+    if (!sequence.startsWith(`${ESC}_G`, index)) return null;
 
     const end = sequence.indexOf(ST, index + 3);
-    if (end < 0) return false;
+    if (end < 0) return null;
 
     const body = sequence.slice(index + 3, end);
-    if (!withoutNestedEscapes(body)) return false;
+    if (!withoutNestedEscapes(body)) return null;
 
     const semicolon = body.indexOf(";");
-    const controls = semicolon >= 0 ? body.slice(0, semicolon) : body;
+    const rawControls = semicolon >= 0 ? body.slice(0, semicolon) : body;
     const payload = semicolon >= 0 ? body.slice(semicolon + 1) : "";
 
-    if (!/^[A-Za-z0-9_,=+.\-:]*$/.test(controls)) return false;
-    if (payload && !isBase64ish(payload)) return false;
+    const controls = parseKittyControls(rawControls);
+    if (!controls) return null;
+    if (payload && !isBase64ish(payload)) return null;
 
+    packets.push({ controls, payload });
     index = end + ST.length;
   }
 
-  return sequence.length > 0;
+  return packets.length ? packets : null;
 }
 
-function validateIterm2Sequence(sequence: string): boolean {
+function validateKittySequence(sequence: string, op: TerminalGraphicsOperation = "draw"): boolean {
+  const packets = parseKittyPackets(sequence);
+  if (!packets) return false;
+
+  if (op === "clear") {
+    if (packets.length !== 1) return false;
+
+    const packet = packets[0]!;
+    if (packet.payload) return false;
+    if (packet.controls.get("a") !== "d") return false;
+
+    const d = packet.controls.get("d");
+    return d == null || /^[aAcCiI]$/.test(d);
+  }
+
+  const first = packets[0]!;
+  if (first.controls.get("a") !== "T") return false;
+  if (!first.payload) return false;
+
+  const f = first.controls.get("f");
+  if (f != null && f !== "24" && f !== "32" && f !== "100") return false;
+
+  for (let i = 1; i < packets.length; i++) {
+    const packet = packets[i]!;
+    const action = packet.controls.get("a");
+    if (action != null && action !== "T") return false;
+
+    const m = packet.controls.get("m");
+    if (m != null && m !== "0" && m !== "1") return false;
+  }
+
+  return true;
+}
+
+function validateIterm2Sequence(sequence: string, op: TerminalGraphicsOperation = "draw"): boolean {
+  if (op === "clear") return false;
+
   let index = 0;
 
   while (index < sequence.length) {
@@ -378,8 +445,15 @@ function validateIterm2Sequence(sequence: string): boolean {
 
     const colon = body.indexOf(":");
     if (colon < 0) return false;
-    if (!/^[A-Za-z0-9_=;,.%+\-:]*$/.test(body.slice(0, colon + 1))) return false;
-    if (!isBase64ish(body.slice(colon + 1))) return false;
+
+    const params = body.slice("File=".length, colon);
+    const payload = body.slice(colon + 1);
+
+    if (!/^[A-Za-z0-9_=;,.%+\-:]*$/.test(params)) return false;
+    if (!isBase64ish(payload)) return false;
+
+    const paramSet = new Set(params.split(";").filter(Boolean));
+    if (!paramSet.has("inline=1")) return false;
 
     index = end + (end === stEnd ? ST.length : BEL.length);
   }
@@ -387,7 +461,9 @@ function validateIterm2Sequence(sequence: string): boolean {
   return sequence.length > 0;
 }
 
-function validateSixelSequence(sequence: string): boolean {
+function validateSixelSequence(sequence: string, op: TerminalGraphicsOperation = "draw"): boolean {
+  if (op === "clear") return false;
+
   let index = 0;
 
   while (index < sequence.length) {
@@ -462,10 +538,10 @@ export function validateTerminalGraphicFrame(
 
   const ok =
     frame.protocol === "kitty"
-      ? validateKittySequence(sequence)
+      ? validateKittySequence(sequence, "draw")
       : frame.protocol === "iterm2"
-        ? validateIterm2Sequence(sequence)
-        : validateSixelSequence(sequence);
+        ? validateIterm2Sequence(sequence, "draw")
+        : validateSixelSequence(sequence, "draw");
 
   if (!ok) return null;
 
@@ -482,14 +558,15 @@ export function validateTerminalGraphicFrame(
 export function isSafeTerminalGraphicsSequence(
   sequence: string,
   protocol: TerminalGraphicsProtocol,
+  op: TerminalGraphicsOperation = "draw",
 ): boolean {
   if (!sequence || sequence.length > MAX_SEQUENCE_CHARS) return false;
 
   return protocol === "kitty"
-    ? validateKittySequence(sequence)
+    ? validateKittySequence(sequence, op)
     : protocol === "iterm2"
-      ? validateIterm2Sequence(sequence)
-      : validateSixelSequence(sequence);
+      ? validateIterm2Sequence(sequence, op)
+      : validateSixelSequence(sequence, op);
 }
 
 export function validateTerminalGraphicsPayload(
@@ -504,7 +581,7 @@ export function validateTerminalGraphicsPayload(
   if (payload.protocol === "iterm2" && !capabilities.iterm2) return false;
   if (payload.protocol === "sixel" && !capabilities.sixel) return false;
 
-  return isSafeTerminalGraphicsSequence(payload.sequence, payload.protocol);
+  return isSafeTerminalGraphicsSequence(payload.sequence, payload.protocol, payload.op ?? "draw");
 }
 
 function intControl(key: string, value: number | undefined): string {
@@ -609,6 +686,7 @@ export function createIterm2InlineImageSequence(
     width?: number | string;
     height?: number | string;
     preserveAspectRatio?: boolean;
+    doNotMoveCursor?: boolean;
   }> = {},
 ): string {
   const data = sanitizeBase64(base64Data);
@@ -619,6 +697,7 @@ export function createIterm2InlineImageSequence(
     options.width != null ? `width=${formatItermDimension(options.width)}` : "",
     options.height != null ? `height=${formatItermDimension(options.height)}` : "",
     `preserveAspectRatio=${options.preserveAspectRatio === false ? 0 : 1}`,
+    options.doNotMoveCursor === false ? "" : "doNotMoveCursor=1",
   ].filter(Boolean);
   return `${ESC}]1337;File=${params.join(";")}:${data}${BEL}`;
 }
