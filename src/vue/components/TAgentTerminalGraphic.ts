@@ -119,7 +119,7 @@ export type TAgentTerminalGraphicRenderResult =
   | string
   | Readonly<{
       sequence: string;
-      protocol?: TerminalGraphicsProtocol;
+      protocol: TerminalGraphicsProtocol;
       fallback?: string;
       clearSequence?: string;
       cols?: number;
@@ -320,6 +320,8 @@ export const TAgentTerminalGraphic = defineComponent({
     let alive = true;
     let lastRenderedContent = "";
     let lastRenderRawVisible = false;
+    let lastRenderProtocol: TerminalGraphicsResolvedProtocol | null = null;
+    let lastRenderGraphicsOutputVersion = 0;
     const rawId = `TAgentTerminalGraphic:${instance?.uid ?? "unknown"}`;
     const frameTaskId = `${rawId}:render`;
     const lastDrawnGraphic = shallowRef<LastDrawnGraphic | null>(null);
@@ -747,6 +749,20 @@ export const TAgentTerminalGraphic = defineComponent({
       return renderDeferReason() != null;
     }
 
+    function shouldRerenderForGraphicsOutputChange(): boolean {
+      if (!props.renderer) return false;
+      if (!props.content.trim()) return false;
+      if (shouldDeferRender()) return false;
+      if (!rawOutputCanRenderValue.value || rawSuppressedByScroll.value) return false;
+
+      const protocol = currentCapabilities().protocol;
+      return (
+        lastRenderProtocol != null &&
+        (lastRenderProtocol !== protocol ||
+          lastRenderGraphicsOutputVersion !== graphicsOutputVersion.value)
+      );
+    }
+
     function setDeferredFallback(content: string): void {
       if (!graphic.value || lastRenderedContent !== content) {
         graphic.value = { type: "text", text: content.trim() ? fallbackText() : "" };
@@ -840,8 +856,11 @@ export const TAgentTerminalGraphic = defineComponent({
       bump();
 
       try {
+        const contextGraphicsOutputVersion = graphicsOutputVersion.value;
         const context = resolveRendererContext(abort.signal);
         lastRenderRawVisible = context.rawVisible;
+        lastRenderProtocol = context.protocol;
+        lastRenderGraphicsOutputVersion = contextGraphicsOutputVersion;
         const result = await renderer(content, context);
         if (abort.signal.aborted) return;
         if (!alive || version !== renderVersion) return;
@@ -1079,10 +1098,14 @@ export const TAgentTerminalGraphic = defineComponent({
           !lastRenderRawVisible &&
           rawOutputCanRenderValue.value &&
           !rawSuppressedByScroll.value;
+        const shouldRerenderForOutputChange = shouldRerenderForGraphicsOutputChange();
 
         if (
           !shouldDeferRender() &&
-          (!graphic.value || status.value === "idle" || shouldRetryTemporaryFallback)
+          (!graphic.value ||
+            status.value === "idle" ||
+            shouldRetryTemporaryFallback ||
+            shouldRerenderForOutputChange)
         ) {
           scheduleRender();
           return;

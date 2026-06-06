@@ -29,6 +29,7 @@ export type CreatePngTerminalGraphicRendererOptions = Readonly<{
     content: string,
     context: TAgentTerminalGraphicRendererContext,
   ) => string | Promise<string>;
+  cacheSalt?: string | ((content: string, context: TAgentTerminalGraphicRendererContext) => string);
   cacheKey?: (content: string, context: TAgentTerminalGraphicRendererContext) => string;
   queue?: TerminalGraphicRenderQueue;
   dedupeInflight?: boolean;
@@ -56,7 +57,11 @@ function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw abortError();
 }
 
-function defaultCacheKey(content: string, context: TAgentTerminalGraphicRendererContext): string {
+function defaultCacheKey(
+  content: string,
+  context: TAgentTerminalGraphicRendererContext,
+  cacheSalt: string,
+): string {
   const contentIdentity =
     context.cacheKey != null
       ? `cache:${context.cacheKey}`
@@ -66,8 +71,21 @@ function defaultCacheKey(content: string, context: TAgentTerminalGraphicRenderer
     context.width,
     context.height ?? "",
     context.final ? "final" : "draft",
+    cacheSalt,
     contentIdentity,
   ].join("\x1F");
+}
+
+function resolveCacheSalt(
+  options: CreatePngTerminalGraphicRendererOptions,
+  content: string,
+  context: TAgentTerminalGraphicRendererContext,
+): string {
+  const salt =
+    typeof options.cacheSalt === "function"
+      ? options.cacheSalt(content, context)
+      : options.cacheSalt;
+  return salt == null ? "" : String(salt);
 }
 
 function normalizeCachedPngFrame(
@@ -138,7 +156,9 @@ export function createPngTerminalGraphicRenderer(
       return { type: "text", text: await resolveFallbackText(options, content, context) };
     }
 
-    const key = options.cacheKey?.(content, context) ?? defaultCacheKey(content, context);
+    const key =
+      options.cacheKey?.(content, context) ??
+      defaultCacheKey(content, context, resolveCacheSalt(options, content, context));
     throwIfAborted(context.signal);
 
     const png = await queue.cached<CachedPngTerminalGraphicFrame>(

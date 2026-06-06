@@ -577,6 +577,209 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("rerenders terminal graphics when stdout graphics protocol changes", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const kittySequence = createKittyGraphicsSequence("S0lUVFk=");
+    const iterm2Sequence = createIterm2InlineImageSequence("SVRFUk0=", { width: 8, height: 1 });
+    const renderProtocols: string[] = [];
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      renderProtocols.push(context.protocol);
+      if (context.protocol === "kitty") {
+        return {
+          type: "sequence" as const,
+          protocol: "kitty" as const,
+          sequence: kittySequence,
+          fallback: "kitty fallback",
+        };
+      }
+
+      if (context.protocol === "iterm2") {
+        return {
+          type: "sequence" as const,
+          protocol: "iterm2" as const,
+          sequence: iterm2Sequence,
+          fallback: "iterm2 fallback",
+        };
+      }
+
+      return { type: "text" as const, text: "fallback" };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const kittyStdout = withEnv(
+      {
+        KITTY_WINDOW_ID: "1",
+        TERM_PROGRAM: "kitty",
+        TERM: undefined,
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(kittyStdout);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(renderProtocols).toEqual(["kitty"]);
+    expect(writes.join("")).toContain(kittySequence);
+
+    writes.length = 0;
+    kittyStdout.dispose();
+    const iterm2Stdout = withEnv(
+      {
+        KITTY_WINDOW_ID: undefined,
+        TERM_PROGRAM: "iTerm.app",
+        TERM: undefined,
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    writes.length = 0;
+    app.scheduler.invalidate();
+    await settle(app);
+    flushStdout(iterm2Stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(renderProtocols).toEqual(["kitty", "iterm2"]);
+    expect(writes.join("")).toContain(iterm2Sequence);
+    expect(rowText(app, 0)).toBe("");
+
+    iterm2Stdout.dispose();
+    app.dispose();
+  });
+
+  it("rerenders PNG fallback after sixel without encoder switches to kitty", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 30,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      fallback: "png fallback",
+      cols: 20,
+      rows: 1,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({
+      toPngBase64,
+      fallback: (_content, context) => `text fallback:${context.protocol}`,
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 30, rows: 4, component: App });
+    const sixelStdout = withEnv(
+      {
+        KITTY_WINDOW_ID: undefined,
+        TERM_PROGRAM: undefined,
+        TERM: "xterm-sixel",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(sixelStdout);
+
+    expect(toPngBase64).not.toHaveBeenCalled();
+    expect(rowText(app, 0)).toBe("text fallback:sixel");
+
+    sixelStdout.dispose();
+    const kittyStdout = withEnv(
+      {
+        KITTY_WINDOW_ID: "1",
+        TERM_PROGRAM: "kitty",
+        TERM: undefined,
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    writes.length = 0;
+    app.scheduler.invalidate();
+    await settle(app);
+    flushStdout(kittyStdout);
+
+    expect(toPngBase64).toHaveBeenCalledTimes(1);
+    expect(writes.join("")).toContain("QUJD");
+    expect(rowText(app, 0)).toBe("");
+
+    kittyStdout.dispose();
+    app.dispose();
+  });
+
   it("aborts superseded renderer work", async () => {
     const content = ref("first");
     const signals: AbortSignal[] = [];
@@ -1039,6 +1242,65 @@ describe("TAgentTerminalGraphic", () => {
       typeof second === "object" && second && "sequence" in second ? String(second.sequence) : "";
     expect(firstSequence).toContain("QUJD");
     expect(secondSequence).toContain("REVG");
+    expect(queue.stats().cacheEntries).toBe(2);
+  });
+
+  it("invalidates the default PNG cache when cacheSalt changes", async () => {
+    const queue = createTerminalGraphicRenderQueue();
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    let theme = "light";
+    const toPngBase64 = vi.fn(async () => ({
+      base64: theme === "dark" ? "REVG" : "QUJD",
+      fallback: `png fallback ${theme}`,
+      cols: 4,
+      rows: 2,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({
+      queue,
+      cacheSalt: () => theme,
+      toPngBase64,
+    });
+    const makeContext = (): TAgentTerminalGraphicRendererContext => ({
+      kind: "image",
+      width: 4,
+      height: 2,
+      final: true,
+      streaming: false,
+      protocol: "kitty",
+      capabilities,
+      signal: new AbortController().signal,
+      imageId: 123,
+      placementId: 456,
+      visible: true,
+      rawVisible: true,
+      scrolling: false,
+      viewport: {
+        visible: true,
+        rawVisible: true,
+        scrolling: false,
+        rect: { x: 0, y: 0, w: 4, h: 2 },
+        fullRect: { x: 0, y: 0, w: 4, h: 2 },
+      },
+    });
+
+    const first = await renderer("image.png", makeContext());
+    theme = "dark";
+    const second = await renderer("image.png", makeContext());
+
+    expect(toPngBase64).toHaveBeenCalledTimes(2);
+    expect(first).toMatchObject({
+      type: "sequence",
+      protocol: "kitty",
+      fallback: "png fallback light",
+    });
+    expect(second).toMatchObject({
+      type: "sequence",
+      protocol: "kitty",
+      fallback: "png fallback dark",
+    });
     expect(queue.stats().cacheEntries).toBe(2);
   });
 
@@ -1767,10 +2029,13 @@ describe("TAgentTerminalGraphic", () => {
   });
 
   it("falls back to text when no terminal graphics output is registered", async () => {
-    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
-      sequence: "<IMG>",
-      fallback: "fallback",
-    }));
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(
+      () =>
+        ({
+          sequence: "<IMG>",
+          fallback: "fallback",
+        }) as unknown as TAgentTerminalGraphicRenderResult,
+    );
     const App = defineComponent({
       setup() {
         return () =>

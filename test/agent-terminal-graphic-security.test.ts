@@ -13,6 +13,7 @@ import {
   validateTerminalGraphicFrame,
   validateTerminalGraphicsPayload,
   type TAgentTerminalGraphicRenderer,
+  type TAgentTerminalGraphicRenderResult,
 } from "../src/agent.js";
 import { createStdoutRenderer, createTerminalApp, type CliOutput } from "../src/cli.js";
 
@@ -481,10 +482,13 @@ describe("TAgentTerminalGraphic security fallback", () => {
         writes.push(chunk);
       },
     };
-    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
-      sequence: `${ESC}]52;c;QUJD${BEL}`,
-      fallback: `ok${ESC}]52;c;bad${BEL}`,
-    }));
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(
+      () =>
+        ({
+          sequence: `${ESC}]52;c;QUJD${BEL}`,
+          fallback: `ok${ESC}]52;c;bad${BEL}`,
+        }) as unknown as TAgentTerminalGraphicRenderResult,
+    );
     const App = defineComponent({
       setup() {
         return () =>
