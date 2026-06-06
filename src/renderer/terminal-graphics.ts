@@ -429,7 +429,7 @@ function withoutNestedEscapes(body: string): boolean {
 }
 
 function isBase64ish(value: string): boolean {
-  return /^[A-Za-z0-9+/=\s]*$/.test(value);
+  return /^[A-Za-z0-9+/=]*$/.test(value);
 }
 
 type KittyPacket = Readonly<{

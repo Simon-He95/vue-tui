@@ -309,6 +309,17 @@ describe("terminal graphics sequence validation", () => {
     expect(createIterm2InlineImageSequence("QUJD\n", { width: 4 })).toContain(":QUJD");
   });
 
+  it("rejects raw Kitty and iTerm2 payloads containing whitespace", () => {
+    for (const payload of ["QUJD\r", "QUJD\n", "QUJD\t", "QUJD\f"]) {
+      expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100;${payload}${ST}`, "kitty")).toBe(
+        false,
+      );
+      expect(
+        isSafeTerminalGraphicsSequence(`${ESC}]1337;File=inline=1:${payload}${BEL}`, "iterm2"),
+      ).toBe(false);
+    }
+  });
+
   it("omits invalid kitty numeric controls when creating public image sequences", () => {
     const sequence = createKittyGraphicsSequence("QUJD", {
       imageId: -1,
