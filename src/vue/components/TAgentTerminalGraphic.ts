@@ -215,7 +215,7 @@ export const tAgentTerminalGraphicProps = {
     type: String as PropType<TAgentTerminalGraphicKind>,
     default: "image",
   },
-  fallback: { type: String, default: "" },
+  fallback: { type: String, default: undefined },
   style: { type: Object as PropType<Style>, default: undefined },
   loadingStyle: { type: Object as PropType<Style>, default: undefined },
   errorStyle: { type: Object as PropType<Style>, default: undefined },
@@ -337,7 +337,7 @@ export const TAgentTerminalGraphic = defineComponent({
     const unsubscribeGraphicsOutput = subscribeTerminalGraphicsOutput(terminal, () => {
       graphicsOutputVersion.value = getTerminalGraphicsOutputVersion(terminal);
     });
-    const fallbackText = () => props.fallback || props.content;
+    const fallbackText = () => props.fallback ?? props.content;
     const stableGraphicKey = computed(() =>
       [
         props.cacheKey ?? "",
@@ -953,7 +953,9 @@ export const TAgentTerminalGraphic = defineComponent({
       if (current.type === "terminal" && rawCanQueue.value) return markRaw([""]);
       const text = current.type === "terminal" ? current.fallback : current.text;
       const lines = splitTextOutput(text);
-      return hasVisibleOutput(lines) ? lines : splitTextOutput(fallbackText());
+      return text.trim().length > 0 && !hasVisibleOutput(lines)
+        ? splitTextOutput(fallbackText())
+        : lines;
     });
 
     const currentStyle = computed<Style>(() => {

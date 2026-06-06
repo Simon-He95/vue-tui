@@ -986,7 +986,7 @@
           "name": "fallback",
           "type": "string",
           "required": false,
-          "defaultValue": "\"\""
+          "defaultValue": "undefined"
         },
         {
           "name": "style",

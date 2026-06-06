@@ -93,7 +93,7 @@ Import: `@simon_he/vue-tui/agent`
 | <code>zIndex</code>                      | <code>number</code>                                              | <code>0</code>                                         | 否   | —    |
 | <code>content</code>                     | <code>string</code>                                              | —                                                      | 是   | —    |
 | <code>kind</code>                        | <code>TAgentTerminalGraphicKind</code>                           | <code>&quot;image&quot;</code>                         | 否   | —    |
-| <code>fallback</code>                    | <code>string</code>                                              | <code>&quot;&quot;</code>                              | 否   | —    |
+| <code>fallback</code>                    | <code>string</code>                                              | <code>undefined</code>                                 | 否   | —    |
 | <code>style</code>                       | <code>Style</code>                                               | <code>undefined</code>                                 | 否   | —    |
 | <code>loadingStyle</code>                | <code>Style</code>                                               | <code>undefined</code>                                 | 否   | —    |
 | <code>errorStyle</code>                  | <code>Style</code>                                               | <code>undefined</code>                                 | 否   | —    |

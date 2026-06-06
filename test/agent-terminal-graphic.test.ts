@@ -361,6 +361,113 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("uses content fallback only when fallback is omitted", async () => {
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(rowText(app, 0)).toBe("image.png");
+
+    app.dispose();
+  });
+
+  it("honors explicit empty fallback text", async () => {
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+            fallback: "",
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(rowText(app, 0)).toBe("");
+
+    app.dispose();
+  });
+
+  it("honors empty text returned by renderers", async () => {
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "text" as const,
+      text: "",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(rowText(app, 0)).toBe("");
+
+    app.dispose();
+  });
+
+  it("honors empty terminal result fallback text", async () => {
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence: createKittyGraphicsSequence("QUJD"),
+      fallback: "",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(rowText(app, 0)).toBe("");
+
+    app.dispose();
+  });
+
   it("queues terminal graphics payloads through the stdout renderer", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
