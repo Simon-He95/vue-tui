@@ -200,7 +200,7 @@ export function createTerminalGraphicsActivity(
     type: "scroll-start" | "scroll-mark" | "scroll-idle",
     durationMs?: number,
   ): void {
-    if (options.trace === false) return;
+    if (options.trace !== true) return;
 
     recordTerminalGraphicTrace({
       type,

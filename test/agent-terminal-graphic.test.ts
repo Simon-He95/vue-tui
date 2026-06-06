@@ -2103,7 +2103,7 @@ describe("TAgentTerminalGraphic", () => {
     expect(queue.stats().cacheEntries).toBe(1);
   });
 
-  it("normalizes oversized PNG frame dimensions before creating terminal sequences", async () => {
+  it("falls back to text for PNG frame dimensions that exceed terminal graphic limits", async () => {
     const capabilities = detectTerminalGraphicsCapabilities({
       stdoutIsTTY: true,
       env: { KITTY_WINDOW_ID: "1" },
@@ -2138,19 +2138,10 @@ describe("TAgentTerminalGraphic", () => {
       },
     });
 
-    expect(result).toMatchObject({
-      type: "sequence",
-      protocol: "kitty",
-      fallback: "png fallback",
-      cols: 4,
+    expect(result).toEqual({
+      type: "text",
+      text: "png fallback",
     });
-    expect(typeof result === "object" && result && "rows" in result ? result.rows : undefined).toBe(
-      undefined,
-    );
-    const sequence =
-      typeof result === "object" && result && "sequence" in result ? String(result.sequence) : "";
-    expect(sequence).not.toContain("c=1000000");
-    expect(sequence).not.toContain("r=1000000");
   });
 
   it("clamps PNG frame columns to context width when rows are omitted", async () => {
@@ -2638,6 +2629,44 @@ describe("TAgentTerminalGraphic", () => {
     }
   });
 
+  it("records terminal graphics activity scroll trace only when enabled", () => {
+    vi.useFakeTimers();
+    try {
+      resetTerminalGraphicTraceMetrics();
+      const quiet = createTerminalGraphicsActivity({ scrollIdleMs: 100 });
+
+      quiet.markScroll();
+      vi.advanceTimersByTime(100);
+      quiet.dispose();
+
+      expect(getTerminalGraphicTraceMetrics()).toMatchObject({
+        scrollStarts: 0,
+        scrollMarks: 0,
+        scrollIdles: 0,
+      });
+
+      const traced = createTerminalGraphicsActivity({
+        scrollIdleMs: 100,
+        trace: true,
+        traceId: "test-scroll",
+      });
+
+      traced.markScroll();
+      traced.markScroll();
+      vi.advanceTimersByTime(100);
+      traced.dispose();
+
+      expect(getTerminalGraphicTraceMetrics()).toMatchObject({
+        scrollStarts: 1,
+        scrollMarks: 1,
+        scrollIdles: 1,
+      });
+    } finally {
+      resetTerminalGraphicTraceMetrics();
+      vi.useRealTimers();
+    }
+  });
+
   it("updates virtual row terminal graphics idle delay when the prop changes", async () => {
     const idleMs = ref(100);
     let activity: ReturnType<typeof createTerminalGraphicsActivity> | null = null;
@@ -2687,6 +2716,68 @@ describe("TAgentTerminalGraphic", () => {
     } finally {
       app.dispose();
       if (fakeTimers) vi.useRealTimers();
+    }
+  });
+
+  it("marks virtual row terminal graphics scrolling only after controlled scrollTop writes back", async () => {
+    vi.useFakeTimers();
+    const scrollTop = ref(0);
+    let pendingScrollTop: number | null = null;
+    let activity: ReturnType<typeof createTerminalGraphicsActivity> | null = null;
+    const Probe = defineComponent({
+      setup() {
+        activity = inject(TerminalGraphicsActivityKey, null);
+        return () => null;
+      },
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualRows, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 2,
+            itemCount: 20,
+            itemVersion: 1,
+            scrollTop: scrollTop.value,
+            terminalGraphicScrollIdleMs: 100,
+            getItem: (index: number) => `item-${index}`,
+            paintItem: () => undefined,
+            renderItemNodes: () => h(Probe),
+            "onUpdate:scrollTop": (value: number) => {
+              pendingScrollTop = value;
+            },
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      await nextTick();
+      expect(activity).not.toBeNull();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(pendingScrollTop).toBe(1);
+      expect(activity!.scrolling.value).toBe(false);
+
+      scrollTop.value = pendingScrollTop!;
+      pendingScrollTop = null;
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(activity!.scrolling.value).toBe(true);
+      vi.advanceTimersByTime(100);
+      expect(activity!.scrolling.value).toBe(false);
+    } finally {
+      app.dispose();
+      vi.useRealTimers();
     }
   });
 
@@ -2762,7 +2853,6 @@ describe("TAgentTerminalGraphic", () => {
 
     expect(renderer).toHaveBeenCalledTimes(1);
     expect(rowText(app, 0)).toBe("fallback-1");
-    expect(getTerminalGraphicTraceMetrics().scrollStarts).toBeGreaterThan(0);
     expect(getTerminalGraphicTraceMetrics().skippedScrolling).toBeGreaterThan(0);
     expect(writes.join("")).not.toContain(sequence);
 
@@ -2770,8 +2860,6 @@ describe("TAgentTerminalGraphic", () => {
     await settle(app);
     flushStdout(stdout);
 
-    expect(getTerminalGraphicTraceMetrics().scrollIdles).toBeGreaterThan(0);
-    expect(getTerminalGraphicTraceMetrics().totalScrollMs).toBeGreaterThanOrEqual(0);
     expect(renderer).toHaveBeenCalledTimes(2);
     expect(writes.join("")).toContain(sequence);
 
@@ -3452,6 +3540,61 @@ describe("TAgentTerminalGraphic", () => {
     expect(writes.join("")).toContain("\u001B[2;2H\u001B[44m   \u001B[0m");
 
     stdout.dispose();
+    app.dispose();
+  });
+
+  it("clears active stdout terminal graphics when the renderer is disposed", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 8,
+      rows: 3,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 8,
+      rows: 3,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
+    expect(graphics).not.toBeNull();
+
+    expect(
+      graphics!.queue({
+        id: "graphic",
+        x: 1,
+        y: 1,
+        w: 3,
+        h: 1,
+        protocol: "kitty",
+        sequence: createKittyGraphicsSequence("QUJD"),
+        clearSequence,
+      }),
+    ).toBe(true);
+    flushStdoutRows(stdout, []);
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(1);
+
+    writes.length = 0;
+    stdout.dispose();
+
+    expect(writes.join("")).toContain("\u001B[2;2H");
+    expect(writes.join("")).toContain(clearSequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
+
     app.dispose();
   });
 

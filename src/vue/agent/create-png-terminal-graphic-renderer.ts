@@ -99,6 +99,14 @@ function normalizeCachedPngFrame(
   const rawRows = positiveInt(frame.rows) ?? positiveInt(context.height);
   const size = normalizeTerminalGraphicSize(cols, rawRows ?? 1);
 
+  if (rawRows != null && !size) {
+    return {
+      base64: "",
+      fallback: frame.fallback == null ? undefined : sanitizeTerminalFallbackText(frame.fallback),
+      cols: fallbackCols,
+    };
+  }
+
   return {
     base64: String(frame.base64 ?? "").replace(/\s+/g, ""),
     fallback: frame.fallback == null ? undefined : sanitizeTerminalFallbackText(frame.fallback),

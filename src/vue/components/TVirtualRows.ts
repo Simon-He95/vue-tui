@@ -443,7 +443,6 @@ export const TVirtualRows = defineComponent({
       const clampedTop = clampScrollTop(nextTop);
       const delta = clampedTop - prevTop;
       if (!delta) return false;
-      terminalGraphicsActivity.markScroll();
 
       if (isScrollControlled()) {
         if (options?.emitUpdate !== false) emit("update:scrollTop", clampedTop);
@@ -451,6 +450,7 @@ export const TVirtualRows = defineComponent({
         return true;
       }
 
+      terminalGraphicsActivity.markScroll();
       setCurrentScrollTop(clampedTop);
       if (options?.emitUpdate !== false) emit("update:scrollTop", clampedTop);
 

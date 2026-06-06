@@ -787,12 +787,12 @@ export const TVirtualList = defineComponent({
       const clampedTop = clampScrollTop(nextTop);
       const delta = clampedTop - scrollTop.value;
       if (!delta) return { changed: false, dirty: false, top: scrollTop.value, controlled };
-      terminalGraphicsActivity.markScroll();
       if (controlled) {
         if (options?.emitUpdate ?? true) emit("update:scrollTop", clampedTop);
         if (options?.emitScroll) emit("scroll", clampedTop);
         return { changed: true, dirty: false, top: clampedTop, controlled };
       }
+      terminalGraphicsActivity.markScroll();
       scrollTop.value = clampedTop;
       if (options?.emitUpdate) emit("update:scrollTop", clampedTop);
       const canUseTerminalRowScroll =
