@@ -988,9 +988,7 @@ export const TAgentTerminalGraphic = defineComponent({
       }
     }
 
-    function scheduleRender(
-      options: Readonly<{ clearLastGraphic?: boolean }> = {},
-    ): void {
+    function scheduleRender(options: Readonly<{ clearLastGraphic?: boolean }> = {}): void {
       const version = ++renderVersion;
       if (options.clearLastGraphic ?? true) queueClearLastGraphic();
 

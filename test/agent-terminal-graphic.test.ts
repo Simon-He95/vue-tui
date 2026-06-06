@@ -4527,4 +4527,46 @@ describe("TAgentTerminalGraphic", () => {
       candidates: ["kitty", "iterm2", "sixel"],
     });
   });
+
+  it("reports option-disabled graphics without overriding stdout tty diagnostics", () => {
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write() {},
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 4,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        KITTY_WINDOW_ID: "1",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_TERMINAL_GRAPHICS: undefined,
+        VUE_TUI_GRAPHICS_PROTOCOL: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+          terminalGraphics: false,
+        }),
+    );
+
+    expect(stdout.graphicsCapabilities).toMatchObject({
+      protocol: "none",
+      supported: false,
+      stdoutIsTTY: true,
+      reason: "disabled-by-option",
+    });
+
+    stdout.dispose();
+    app.dispose();
+  });
 });

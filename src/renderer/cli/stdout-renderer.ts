@@ -210,8 +210,9 @@ function resolveTerminalGraphicsCapabilities(
   const terminalGraphics = options?.terminalGraphics;
   if (terminalGraphics === false) {
     return detectTerminalGraphicsCapabilities({
-      env: { VUE_TUI_TERMINAL_GRAPHICS: "none" },
-      isTTY: false,
+      env,
+      isTTY: outputIsTTY,
+      protocol: "none",
     });
   }
   if (isTerminalGraphicsCapabilities(terminalGraphics)) return terminalGraphics;
