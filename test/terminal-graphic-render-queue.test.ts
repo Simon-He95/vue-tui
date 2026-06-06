@@ -278,7 +278,12 @@ describe("terminal graphic render queue", () => {
     const queue = createTerminalGraphicRenderQueue();
 
     await expect(
-      queue.cached("bad-estimate", undefined, async () => "x", () => Number.NaN),
+      queue.cached(
+        "bad-estimate",
+        undefined,
+        async () => "x",
+        () => Number.NaN,
+      ),
     ).resolves.toBe("x");
 
     expect(queue.stats().cacheBytes).toBe(0);

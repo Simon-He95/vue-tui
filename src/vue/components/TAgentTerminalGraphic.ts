@@ -567,28 +567,28 @@ export const TAgentTerminalGraphic = defineComponent({
       const output = graphicsOutput();
       let accepted = false;
 
-      if (output) {
-        if (previous.clearSequence) {
-          try {
-            accepted = output.queue({
-              id: previous.id,
-              x: previous.x,
-              y: previous.y,
-              w: previous.w,
-              h: previous.h,
-              protocol: previous.protocol,
-              sequence: previous.clearSequence,
-              op: "clear",
-            });
-          } catch {
-            accepted = false;
-          }
-        } else {
-          try {
-            accepted = Boolean(output.clear?.(previous.id));
-          } catch {
-            accepted = false;
-          }
+      if (output?.clear) {
+        try {
+          accepted = Boolean(output.clear(previous.id));
+        } catch {
+          accepted = false;
+        }
+      }
+
+      if (!accepted && output && previous.clearSequence) {
+        try {
+          accepted = output.queue({
+            id: previous.id,
+            x: previous.x,
+            y: previous.y,
+            w: previous.w,
+            h: previous.h,
+            protocol: previous.protocol,
+            sequence: previous.clearSequence,
+            op: "clear",
+          });
+        } catch {
+          accepted = false;
         }
       }
 

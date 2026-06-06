@@ -1191,6 +1191,79 @@ describe("TAgentTerminalGraphic", () => {
     unregister();
   });
 
+  it("uses graphics output clear before queueing a raw clear payload", async () => {
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const content = ref("image-a.png");
+    const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
+    let clearCalls = 0;
+    let queuedClearAttempts = 0;
+    const draws: string[] = [];
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((value) => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence: createKittyGraphicsSequence(value === "image-b.png" ? "REVG" : "QUJD"),
+      clearSequence,
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            content: content.value,
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const unregister = registerTerminalGraphicsOutput(app.terminal, {
+      capabilities,
+      queue(payload) {
+        if (payload.op === "clear") {
+          queuedClearAttempts++;
+          return false;
+        }
+
+        draws.push(payload.sequence);
+        return true;
+      },
+      clear() {
+        clearCalls++;
+        return true;
+      },
+      isActive: () => true,
+    });
+
+    app.mount();
+    await settle(app);
+
+    expect(draws).toHaveLength(1);
+
+    content.value = "image-b.png";
+    await settle(app);
+
+    expect(clearCalls).toBeGreaterThan(0);
+    expect(queuedClearAttempts).toBe(0);
+    expect(draws).toHaveLength(2);
+    expect(draws[1]).toContain("REVG");
+
+    app.scheduler.invalidate();
+    await settle(app);
+
+    expect(draws).toHaveLength(2);
+
+    app.dispose();
+    unregister();
+  });
+
   it("treats terminal graphics output queue throws as rejected raw operations", async () => {
     const capabilities = detectTerminalGraphicsCapabilities({
       stdoutIsTTY: true,
