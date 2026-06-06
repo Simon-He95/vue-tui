@@ -172,6 +172,52 @@ function positiveInt(value: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+function parseKittyClearControls(sequence: string): Map<string, string> | null {
+  const prefix = "\x1B_G";
+  const terminator = "\x1B\\";
+  if (!sequence.startsWith(prefix) || !sequence.endsWith(terminator)) return null;
+
+  const body = sequence.slice(prefix.length, -terminator.length);
+  if (body.includes(terminator) || body.includes("\x1B") || body.includes("\x07")) return null;
+
+  const semicolon = body.indexOf(";");
+  const rawControls = semicolon >= 0 ? body.slice(0, semicolon) : body;
+  const controls = new Map<string, string>();
+
+  for (const part of rawControls.split(",")) {
+    const eq = part.indexOf("=");
+    if (eq <= 0) return null;
+    controls.set(part.slice(0, eq), part.slice(eq + 1));
+  }
+
+  return controls;
+}
+
+function kittyClearTargetsComponent(
+  sequence: string,
+  imageId: number,
+  placementId: number,
+): boolean {
+  const controls = parseKittyClearControls(sequence);
+  if (!controls) return false;
+
+  const mode = controls.get("d");
+  if (mode === "c" || mode === "C") return true;
+  if (mode !== "i" && mode !== "I") return false;
+
+  return controls.get("i") === String(imageId) && controls.get("p") === String(placementId);
+}
+
+function isSafeComponentClearSequence(
+  sequence: string,
+  protocol: TerminalGraphicsProtocol,
+  imageId: number,
+  placementId: number,
+): boolean {
+  if (!isSafeTerminalGraphicsSequence(sequence, protocol, "clear")) return false;
+  return protocol !== "kitty" || kittyClearTargetsComponent(sequence, imageId, placementId);
+}
+
 let textEncoder: TextEncoder | null = null;
 
 function stringByteLength(value: string): number {
@@ -324,6 +370,7 @@ export const TAgentTerminalGraphic = defineComponent({
     const rawId = `TAgentTerminalGraphic:${instance?.uid ?? "unknown"}`;
     const frameTaskId = `${rawId}:render`;
     const lastDrawnGraphic = shallowRef<LastDrawnGraphic | null>(null);
+    const rawClearPendingRepaint = shallowRef<LastDrawnGraphic | null>(null);
     const rawDrawRejectedKey = shallowRef<string | null>(null);
     const reservedTerminalGraphicSize = shallowRef<ReservedTerminalGraphicSize | null>(null);
     let lastRawSkipScrollKey = "";
@@ -524,7 +571,8 @@ export const TAgentTerminalGraphic = defineComponent({
       const rawClear =
         typeof maybeRaw.clearSequence === "string" ? maybeRaw.clearSequence : undefined;
       const clearSequence =
-        rawClear && isSafeTerminalGraphicsSequence(rawClear, protocol, "clear")
+        rawClear &&
+        isSafeComponentClearSequence(rawClear, protocol, imageId.value, placementId.value)
           ? rawClear
           : undefined;
       const declaredRows = positiveInt(maybeRaw.rows);
@@ -562,12 +610,19 @@ export const TAgentTerminalGraphic = defineComponent({
 
       const candidate = defaultClearSequence(current.protocol);
       if (!candidate) return undefined;
-      return isSafeTerminalGraphicsSequence(candidate, current.protocol, "clear")
+      return isSafeComponentClearSequence(
+        candidate,
+        current.protocol,
+        imageId.value,
+        placementId.value,
+      )
         ? candidate
         : undefined;
     }
 
-    function queueClearLastGraphic(): boolean {
+    function queueClearLastGraphic(
+      options: Readonly<{ markPendingRepaint?: boolean }> = {},
+    ): boolean {
       const previous = lastDrawnGraphic.value;
       if (!previous) return false;
 
@@ -600,6 +655,7 @@ export const TAgentTerminalGraphic = defineComponent({
       }
 
       if (accepted) {
+        if (options.markPendingRepaint ?? true) rawClearPendingRepaint.value = previous;
         lastDrawnGraphic.value = null;
         trace("raw-clear", {
           x: previous.x,
@@ -629,9 +685,10 @@ export const TAgentTerminalGraphic = defineComponent({
 
       if (previous?.drawKey === drawKey && previousStillActive) return false;
       if (previousStillActive) {
-        if (!queueClearLastGraphic()) return false;
+        if (!queueClearLastGraphic({ markPendingRepaint: false })) return false;
       } else if (previous) {
         lastDrawnGraphic.value = null;
+        rawClearPendingRepaint.value = null;
       }
 
       let accepted = false;
@@ -661,6 +718,7 @@ export const TAgentTerminalGraphic = defineComponent({
       }
 
       rawDrawRejectedKey.value = null;
+      rawClearPendingRepaint.value = null;
       lastDrawnGraphic.value = {
         id: rawId,
         x: rect.x,
@@ -1023,6 +1081,7 @@ export const TAgentTerminalGraphic = defineComponent({
         rawOutputCanRenderValue.value,
         rawCanRender.value,
         rawCanQueue.value,
+        rawClearPendingRepaint.value,
         rawDrawRejectedKey.value,
         rawSuppressedByScroll.value,
         isParentScrolling.value,
@@ -1049,8 +1108,12 @@ export const TAgentTerminalGraphic = defineComponent({
           const fullY = Math.floor(full.y);
           const current = graphic.value;
           const output = graphicsOutput();
+          const clearingRawGraphic =
+            rawClearPendingRepaint.value != null || lastDrawnGraphic.value != null;
           const clearOwnedRegion =
-            props.clear || (current?.type === "terminal" && rawCanQueue.value);
+            props.clear ||
+            clearingRawGraphic ||
+            (current?.type === "terminal" && rawCanQueue.value);
           const blank = clearOwnedRegion ? spaces(r.w) : "";
 
           const paintRow = (y: number) => {
@@ -1094,8 +1157,9 @@ export const TAgentTerminalGraphic = defineComponent({
             if (current?.type === "terminal" && rawSuppressedByScroll.value) {
               traceRawSkipScrollOnce(isParentScrolling.value ? "scrolling" : "suspended");
             }
-            queueClearLastGraphic();
+            queueClearLastGraphic({ markPendingRepaint: false });
           }
+          if (clearingRawGraphic) rawClearPendingRepaint.value = null;
         });
       },
     }));

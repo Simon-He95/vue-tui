@@ -546,6 +546,26 @@ function kittyControlIsInt32(controls: ReadonlyMap<string, string>, key: string)
   return Number.isSafeInteger(n) && n >= KITTY_INT32_MIN && n <= KITTY_INT32_MAX;
 }
 
+function kittyControlPositiveInt(
+  controls: ReadonlyMap<string, string>,
+  key: string,
+  fallback: number,
+): number | null {
+  const value = controls.get(key);
+  if (value == null) return fallback;
+  if (!/^\d+$/.test(value)) return null;
+
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= 1 ? n : null;
+}
+
+function kittyControlIsTerminalGraphicCellsBounded(controls: ReadonlyMap<string, string>): boolean {
+  const columns = kittyControlPositiveInt(controls, "c", 1);
+  const rows = kittyControlPositiveInt(controls, "r", 1);
+
+  return columns != null && rows != null && columns * rows <= MAX_TERMINAL_GRAPHIC_CELLS;
+}
+
 function validateKittySharedSafeControls(controls: ReadonlyMap<string, string>): boolean {
   const q = controls.get("q");
   if (q != null && !/^[0-2]$/.test(q)) return false;
@@ -560,6 +580,7 @@ function validateKittySharedSafeControls(controls: ReadonlyMap<string, string>):
   for (const key of ["c", "r"]) {
     if (!kittyControlIsUint32(controls, key, 1)) return false;
   }
+  if (!kittyControlIsTerminalGraphicCellsBounded(controls)) return false;
 
   if (!kittyControlIsInt32(controls, "z")) return false;
 
@@ -870,6 +891,15 @@ function sanitizeBase64(value: string): string {
   return isBase64ish(data) ? data : "";
 }
 
+function kittyGraphicCellControls(columns: number | undefined, rows: number | undefined): string[] {
+  if (columns == null && rows == null) return [];
+
+  const size = normalizeTerminalGraphicSize(columns ?? 1, rows ?? 1);
+  if (!size) return [];
+
+  return [columns == null ? "" : `c=${size.width}`, rows == null ? "" : `r=${size.height}`];
+}
+
 function chunkBase64(value: string, chunkSize: number): string[] {
   const normalizedSize = Math.max(4, Math.floor(chunkSize / 4) * 4);
   const chunks: string[] = [];
@@ -909,8 +939,7 @@ export function createKittyGraphicsSequence(
     uint32Control("i", options.imageId),
     uint32Control("I", options.imageNumber),
     uint32Control("p", options.placementId),
-    uint32Control("c", options.columns, 1),
-    uint32Control("r", options.rows, 1),
+    ...kittyGraphicCellControls(options.columns, options.rows),
     int32Control("z", options.zIndex),
   ].filter(Boolean);
 

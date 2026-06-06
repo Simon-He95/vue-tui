@@ -296,6 +296,12 @@ describe("terminal graphics sequence validation", () => {
     expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,p=-1;QUJD${ST}`, "kitty")).toBe(false);
     expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=0;QUJD${ST}`, "kitty")).toBe(false);
     expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,r=-1;QUJD${ST}`, "kitty")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=10001;QUJD${ST}`, "kitty")).toBe(
+      false,
+    );
+    expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=101,r=100;QUJD${ST}`, "kitty")).toBe(
+      false,
+    );
     expect(
       isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,i=4294967296;QUJD${ST}`, "kitty"),
     ).toBe(false);
@@ -340,6 +346,14 @@ describe("terminal graphics sequence validation", () => {
     expect(sequence).not.toContain("r=-1");
     expect(sequence).toContain("z=-1");
     expect(isSafeTerminalGraphicsSequence(sequence, "kitty")).toBe(true);
+
+    const oversized = createKittyGraphicsSequence("QUJD", {
+      columns: 101,
+      rows: 100,
+    });
+    expect(oversized).not.toContain("c=101");
+    expect(oversized).not.toContain("r=100");
+    expect(isSafeTerminalGraphicsSequence(oversized, "kitty")).toBe(true);
   });
 
   it("creates safe kitty delete sequences", () => {

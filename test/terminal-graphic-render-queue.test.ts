@@ -290,6 +290,49 @@ describe("terminal graphic render queue", () => {
     expect(queue.stats().cacheEntries).toBe(1);
   });
 
+  it("removes the previous same-key cache entry when a later result is too large", async () => {
+    const queue = createTerminalGraphicRenderQueue({
+      maxConcurrency: 2,
+      maxBytes: 4,
+      dedupeInflight: false,
+    });
+    let resolveSmall!: (value: string) => void;
+    let resolveLarge!: (value: string) => void;
+    const renderSmall = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveSmall = resolve;
+        }),
+    );
+    const renderLarge = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveLarge = resolve;
+        }),
+    );
+
+    const small = queue.cached("same-key", undefined, renderSmall, (value) => value.length);
+    const large = queue.cached("same-key", undefined, renderLarge, (value) => value.length);
+
+    await Promise.resolve();
+    expect(renderSmall).toHaveBeenCalledTimes(1);
+    expect(renderLarge).toHaveBeenCalledTimes(1);
+
+    resolveSmall("tiny");
+    await expect(small).resolves.toBe("tiny");
+    expect(queue.stats()).toMatchObject({ cacheEntries: 1, cacheBytes: 4 });
+
+    resolveLarge("too-large");
+    await expect(large).resolves.toBe("too-large");
+    expect(queue.stats()).toMatchObject({ cacheEntries: 0, cacheBytes: 0 });
+
+    const renderFresh = vi.fn(async () => "new");
+    await expect(
+      queue.cached("same-key", undefined, renderFresh, (value) => value.length),
+    ).resolves.toBe("new");
+    expect(renderFresh).toHaveBeenCalledTimes(1);
+  });
+
   it("records queue wait trace metrics", async () => {
     resetTerminalGraphicTraceMetrics();
 

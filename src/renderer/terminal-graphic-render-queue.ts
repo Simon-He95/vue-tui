@@ -147,12 +147,14 @@ export function createTerminalGraphicRenderQueue(
   }
 
   function setCache<T>(key: string, value: T, bytes: number): void {
+    const prev = cache.get(key);
+    if (prev) {
+      cache.delete(key);
+      cacheBytes -= prev.bytes;
+    }
+
     if (bytes > maxBytes) return;
 
-    const prev = cache.get(key);
-    if (prev) cacheBytes -= prev.bytes;
-
-    cache.delete(key);
     cache.set(key, {
       value,
       bytes,

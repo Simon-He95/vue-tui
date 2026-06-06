@@ -580,6 +580,70 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("pads fallback text while clearing a previously drawn raw graphic", async () => {
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { TERM_PROGRAM: "iTerm.app" },
+    });
+    const content = ref("image.png");
+    const sequence = createIterm2InlineImageSequence("QUJD", { width: 10, height: 1 });
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((value) => {
+      if (value === "image.png") {
+        return {
+          type: "sequence" as const,
+          protocol: "iterm2" as const,
+          sequence,
+          fallback: "fallback",
+        };
+      }
+
+      return { type: "text" as const, text: "x" };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: content.value,
+            clear: false,
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const written: string[] = [];
+    const terminalWrite = app.terminal.write.bind(app.terminal);
+    vi.spyOn(app.terminal, "write").mockImplementation(((value: string, options?: unknown) => {
+      written.push(value);
+      return terminalWrite(value, options as never);
+    }) as typeof app.terminal.write);
+    const unregister = registerTerminalGraphicsOutput(app.terminal, {
+      capabilities,
+      queue: () => true,
+      clear: () => true,
+      isActive: () => true,
+    });
+
+    app.mount();
+    await settle(app);
+    expect(renderer).toHaveBeenCalledTimes(1);
+
+    written.length = 0;
+    content.value = "fallback.txt";
+    await settle(app);
+
+    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(written).toContain("x         ");
+    expect(rowText(app, 0)).toBe("x");
+
+    app.dispose();
+    unregister();
+  });
+
   it("uses full-row repaint instead of dirty spans while clearing active raw graphics", () => {
     const writes: string[] = [];
     const output: CliOutput = {
@@ -1007,6 +1071,69 @@ describe("TAgentTerminalGraphic", () => {
 
     app.dispose();
     unregister();
+  });
+
+  it("does not use all-visible Kitty clears as component clear sequences", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const allVisibleClear = createKittyDeleteGraphicsSequence({ allVisible: true });
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      clearSequence: allVisibleClear,
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    stdout.dispose();
+    const clearFrame = writes.join("");
+    expect(clearFrame).not.toContain(allVisibleClear);
+    expect(clearFrame).toContain("a=d");
+    expect(clearFrame).toContain("d=i");
+
+    app.dispose();
   });
 
   it("prioritizes explicit sequence results over compatible text fields", async () => {
