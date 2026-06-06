@@ -772,9 +772,7 @@ export const TAgentTerminalGraphic = defineComponent({
     }
 
     function setDeferredFallback(content: string): void {
-      if (!graphic.value || lastRenderedContent !== content) {
-        graphic.value = { type: "text", text: content.trim() ? fallbackText() : "" };
-      }
+      graphic.value = { type: "text", text: content.trim() ? fallbackText() : "" };
       lastRenderedContent = content;
       status.value = "idle";
       error.value = "";

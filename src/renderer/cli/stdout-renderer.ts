@@ -772,6 +772,47 @@ export function createStdoutRenderer(
     return wrapTerminalGraphicsForMultiplexer(sequence, graphicsCapabilities);
   }
 
+  function kittyClearTargetsCurrentCell(sequence: string): boolean {
+    const prefix = "\u001B_G";
+    const terminator = "\u001B\\";
+    let index = 0;
+
+    while (index < sequence.length) {
+      if (!sequence.startsWith(prefix, index)) return false;
+
+      const end = sequence.indexOf(terminator, index + prefix.length);
+      if (end < 0) return false;
+
+      const body = sequence.slice(index + prefix.length, end);
+      const semicolon = body.indexOf(";");
+      const controlsText = semicolon < 0 ? body : body.slice(0, semicolon);
+      let action = "";
+      let deleteMode = "";
+
+      for (const part of controlsText.split(",")) {
+        const eq = part.indexOf("=");
+        if (eq <= 0) continue;
+
+        const key = part.slice(0, eq);
+        const value = part.slice(eq + 1);
+        if (key === "a") action = value;
+        else if (key === "d") deleteMode = value;
+      }
+
+      if (action === "d" && (deleteMode === "c" || deleteMode === "C")) return true;
+      index = end + terminator.length;
+    }
+
+    return false;
+  }
+
+  function clearSequenceNeedsVisibleCell(
+    sequence: string,
+    protocol: TerminalGraphicsPayload["protocol"],
+  ): boolean {
+    return protocol === "kitty" && kittyClearTargetsCurrentCell(sequence);
+  }
+
   function resolveColorMode(): Exclude<StdoutColorMode, "auto"> {
     const opt = options?.colorMode ?? "auto";
     if (opt !== "auto") return opt;
@@ -3226,7 +3267,19 @@ export function createStdoutRenderer(
 
       return out;
     };
+    let commitTerminalGraphicsState: (() => void) | null = null;
+    let restoreTerminalGraphicsAfterWriteFailure: (() => void) | null = null;
+    let terminalGraphicsMetrics: Readonly<{
+      draws?: number;
+      clears?: number;
+      bytes?: number;
+      active: number;
+    }> | null = null;
+
     if (graphicsClearsToRender.length > 0 || graphicsToRender.length > 0) {
+      const nextActiveGraphics = new Map(activeGraphics);
+      const nextActiveGraphicSignatures = new Map(activeGraphicSignatures);
+      const nextPendingGraphicSignatures = new Map(pendingGraphicSignatures);
       let terminalGraphicsDraws = 0;
       let terminalGraphicsClears = 0;
       let terminalGraphicsBytes = 0;
@@ -3238,23 +3291,32 @@ export function createStdoutRenderer(
         sequence: string,
         rect: Readonly<{ x: number; y: number }> | null | undefined,
         fallbackCell: Readonly<{ cellX: number; cellY: number }>,
-      ): void => {
+        skipWithoutRect = false,
+      ): boolean => {
+        if (!rect && skipWithoutRect) return false;
+
         const cell = rect ? { x: rect.x, y: rect.y } : clampCellToViewport(fallbackCell, size);
         frameParts.push(
           countGraphicsBytes(`\u001B[${cell.y + 1};${cell.x + 1}H`),
           countGraphicsBytes(maybeWrapTerminalGraphic(sequence)),
           countGraphicsBytes(SGR_RESET),
         );
+        return true;
       };
       const appendActiveGraphicProtocolClear = (
         active: ActiveTerminalGraphic,
         rect: Readonly<{ x: number; y: number }> | null | undefined,
-      ): void => {
-        if (!active.clearSequence) return;
-        appendTerminalGraphicSequenceAt(active.clearSequence, rect, {
-          cellX: active.x,
-          cellY: active.y,
-        });
+      ): boolean => {
+        if (!active.clearSequence) return false;
+        return appendTerminalGraphicSequenceAt(
+          active.clearSequence,
+          rect,
+          {
+            cellX: active.x,
+            cellY: active.y,
+          },
+          clearSequenceNeedsVisibleCell(active.clearSequence, active.protocol),
+        );
       };
 
       hasFrameOutput = true;
@@ -3273,23 +3335,27 @@ export function createStdoutRenderer(
       frameParts.push(countGraphicsBytes(SGR_RESET));
 
       for (const id of graphicsClearsToRender) {
-        const active = activeGraphics.get(id);
+        const active = nextActiveGraphics.get(id);
         if (!active) continue;
         const visibleRect = clipGraphicRectToViewport(active, size);
+        let wroteClear = false;
         if (visibleRect) {
           const clearRect = clearGraphicRectForRowsNotPainted(visibleRect);
-          if (clearRect) frameParts.push(countGraphicsBytes(clearRect));
+          if (clearRect) {
+            frameParts.push(countGraphicsBytes(clearRect));
+            wroteClear = true;
+          }
         }
-        appendActiveGraphicProtocolClear(active, visibleRect);
-        terminalGraphicsClears++;
-        activeGraphics.delete(id);
-        activeGraphicSignatures.delete(id);
-        pendingGraphicSignatures.delete(id);
+        wroteClear = appendActiveGraphicProtocolClear(active, visibleRect) || wroteClear;
+        if (wroteClear) terminalGraphicsClears++;
+        nextActiveGraphics.delete(id);
+        nextActiveGraphicSignatures.delete(id);
+        nextPendingGraphicSignatures.delete(id);
       }
 
       for (const payload of graphicsToRender) {
         if (payload.op === "clear") {
-          const active = activeGraphics.get(payload.id);
+          const active = nextActiveGraphics.get(payload.id);
           const rect = clipGraphicRectToViewport(
             {
               x: active?.x ?? payload.x,
@@ -3300,19 +3366,29 @@ export function createStdoutRenderer(
             size,
           );
           const clearRect = rect ? clearGraphicRectForRowsNotPainted(rect) : "";
-          frameParts.push(clearRect ? countGraphicsBytes(clearRect) : "");
-          appendTerminalGraphicSequenceAt(payload.sequence, rect, {
-            cellX: active?.x ?? payload.x,
-            cellY: active?.y ?? payload.y,
-          });
-          terminalGraphicsClears++;
-          activeGraphics.delete(payload.id);
-          activeGraphicSignatures.delete(payload.id);
-          pendingGraphicSignatures.delete(payload.id);
+          let wroteClear = false;
+          if (clearRect) {
+            frameParts.push(countGraphicsBytes(clearRect));
+            wroteClear = true;
+          }
+          wroteClear =
+            appendTerminalGraphicSequenceAt(
+              payload.sequence,
+              rect,
+              {
+                cellX: active?.x ?? payload.x,
+                cellY: active?.y ?? payload.y,
+              },
+              clearSequenceNeedsVisibleCell(payload.sequence, payload.protocol),
+            ) || wroteClear;
+          if (wroteClear) terminalGraphicsClears++;
+          nextActiveGraphics.delete(payload.id);
+          nextActiveGraphicSignatures.delete(payload.id);
+          nextPendingGraphicSignatures.delete(payload.id);
           continue;
         }
 
-        const previous = activeGraphics.get(payload.id);
+        const previous = nextActiveGraphics.get(payload.id);
         const rect = fullGraphicRectInViewport(
           { x: payload.x, y: payload.y, w: payload.w ?? 1, h: payload.h ?? 1 },
           size,
@@ -3320,27 +3396,35 @@ export function createStdoutRenderer(
         if (!rect) {
           if (previous) {
             const visiblePrevious = clipGraphicRectToViewport(previous, size);
+            let wroteClear = false;
             if (visiblePrevious) {
               const clearPrevious = clearGraphicRectForRowsNotPainted(visiblePrevious);
-              if (clearPrevious) frameParts.push(countGraphicsBytes(clearPrevious));
+              if (clearPrevious) {
+                frameParts.push(countGraphicsBytes(clearPrevious));
+                wroteClear = true;
+              }
             }
-            appendActiveGraphicProtocolClear(previous, visiblePrevious);
-            terminalGraphicsClears++;
-            activeGraphics.delete(payload.id);
-            activeGraphicSignatures.delete(payload.id);
+            wroteClear = appendActiveGraphicProtocolClear(previous, visiblePrevious) || wroteClear;
+            if (wroteClear) terminalGraphicsClears++;
+            nextActiveGraphics.delete(payload.id);
+            nextActiveGraphicSignatures.delete(payload.id);
           }
-          pendingGraphicSignatures.delete(payload.id);
+          nextPendingGraphicSignatures.delete(payload.id);
           continue;
         }
 
         if (previous && !sameGraphicRect(previous, rect)) {
           const visiblePrevious = clipGraphicRectToViewport(previous, size);
+          let wroteClear = false;
           if (visiblePrevious) {
             const clearPrevious = clearGraphicRectForRowsNotPainted(visiblePrevious);
-            if (clearPrevious) frameParts.push(countGraphicsBytes(clearPrevious));
+            if (clearPrevious) {
+              frameParts.push(countGraphicsBytes(clearPrevious));
+              wroteClear = true;
+            }
           }
-          appendActiveGraphicProtocolClear(previous, visiblePrevious);
-          terminalGraphicsClears++;
+          wroteClear = appendActiveGraphicProtocolClear(previous, visiblePrevious) || wroteClear;
+          if (wroteClear) terminalGraphicsClears++;
         }
 
         const clearRect = clearGraphicRectForRowsNotPainted(rect);
@@ -3353,24 +3437,42 @@ export function createStdoutRenderer(
           countGraphicsBytes(SGR_RESET),
         );
         terminalGraphicsDraws++;
-        activeGraphics.set(payload.id, {
+        nextActiveGraphics.set(payload.id, {
           ...rect,
           protocol: payload.protocol,
           clearSequence: payload.clearSequence,
         });
-        activeGraphicSignatures.set(
+        nextActiveGraphicSignatures.set(
           payload.id,
-          pendingGraphicSignatures.get(payload.id) ?? terminalGraphicsPayloadSignature(payload),
+          nextPendingGraphicSignatures.get(payload.id) ?? terminalGraphicsPayloadSignature(payload),
         );
-        pendingGraphicSignatures.delete(payload.id);
+        nextPendingGraphicSignatures.delete(payload.id);
       }
 
-      recordStdoutTerminalGraphics({
+      restoreTerminalGraphicsAfterWriteFailure = () => {
+        for (const id of graphicsClearsToRender) pendingGraphicClears.add(id);
+        for (const payload of graphicsToRender) {
+          pendingGraphics.set(`${payload.id}:${payload.op}`, payload);
+        }
+      };
+      commitTerminalGraphicsState = () => {
+        activeGraphics.clear();
+        for (const [id, active] of nextActiveGraphics) activeGraphics.set(id, active);
+        activeGraphicSignatures.clear();
+        for (const [id, signature] of nextActiveGraphicSignatures) {
+          activeGraphicSignatures.set(id, signature);
+        }
+        pendingGraphicSignatures.clear();
+        for (const [id, signature] of nextPendingGraphicSignatures) {
+          pendingGraphicSignatures.set(id, signature);
+        }
+      };
+      terminalGraphicsMetrics = {
         draws: terminalGraphicsDraws,
         clears: terminalGraphicsClears,
         bytes: terminalGraphicsBytes,
-        active: activeGraphics.size,
-      });
+        active: nextActiveGraphics.size,
+      };
     }
 
     // Include cursor position in the same frame if getImeAnchor is provided
@@ -3521,6 +3623,7 @@ export function createStdoutRenderer(
         getDebugLog().render(` Write completed in ${writeTime}ms`);
       }
     } catch (writeError) {
+      restoreTerminalGraphicsAfterWriteFailure?.();
       if (isDebugEnabled()) getDebugLog().error(`Write ERROR:`, writeError);
       try {
         out.write(`\u001B[?7h${!isGhostty && useSyncOutput ? SYNC_END : ""}`);
@@ -3529,6 +3632,8 @@ export function createStdoutRenderer(
       }
       throw writeError;
     }
+    commitTerminalGraphicsState?.();
+    if (terminalGraphicsMetrics) recordStdoutTerminalGraphics(terminalGraphicsMetrics);
     commitRenderBaseline();
     {
       const writeMs = performance.now() - writeStart;
@@ -4009,6 +4114,7 @@ export function createStdoutRenderer(
   function dispose(): void {
     if (disposed) return;
     disposed = true;
+    let disposeError: unknown = null;
     if (renderTimer) {
       clearTimeout(renderTimer);
       renderTimer = null;
@@ -4022,37 +4128,49 @@ export function createStdoutRenderer(
     pendingGraphics.clear();
     pendingGraphicClears.clear();
     pendingGraphicSignatures.clear();
-    if (activeGraphics.size > 0) {
-      const size = terminal.size();
-      const clearParts: string[] = [];
-      let terminalGraphicsClears = 0;
-      for (const active of activeGraphics.values()) {
-        const visibleRect = clipGraphicRectToViewport(active, size);
-        if (visibleRect) clearParts.push(clearGraphicRect(visibleRect));
-        if (active.clearSequence) {
-          const cell = visibleRect
-            ? { x: visibleRect.x, y: visibleRect.y }
-            : clampCellToViewport({ cellX: active.x, cellY: active.y }, size);
-          clearParts.push(
-            `\u001B[${cell.y + 1};${cell.x + 1}H`,
-            maybeWrapTerminalGraphic(active.clearSequence),
-          );
+    try {
+      if (activeGraphics.size > 0) {
+        const size = terminal.size();
+        const clearParts: string[] = [];
+        let terminalGraphicsClears = 0;
+        for (const active of activeGraphics.values()) {
+          const visibleRect = clipGraphicRectToViewport(active, size);
+          let wroteClear = false;
+          if (visibleRect) {
+            clearParts.push(clearGraphicRect(visibleRect));
+            wroteClear = true;
+          }
+          if (
+            active.clearSequence &&
+            (visibleRect || !clearSequenceNeedsVisibleCell(active.clearSequence, active.protocol))
+          ) {
+            const cell = visibleRect
+              ? { x: visibleRect.x, y: visibleRect.y }
+              : clampCellToViewport({ cellX: active.x, cellY: active.y }, size);
+            clearParts.push(
+              `\u001B[${cell.y + 1};${cell.x + 1}H`,
+              maybeWrapTerminalGraphic(active.clearSequence),
+            );
+            wroteClear = true;
+          }
+          if (wroteClear) terminalGraphicsClears++;
         }
-        if (visibleRect || active.clearSequence) terminalGraphicsClears++;
+        activeGraphics.clear();
+        activeGraphicSignatures.clear();
+        if (clearParts.length > 0) {
+          const frame = `${SGR_RESET}${clearParts.join("")}${SGR_RESET}`;
+          out.write(frame);
+          recordStdoutTerminalGraphics({
+            clears: terminalGraphicsClears,
+            bytes: Buffer.byteLength(frame, "utf8"),
+            active: 0,
+          });
+        } else {
+          recordStdoutTerminalGraphics({ active: 0 });
+        }
       }
-      activeGraphics.clear();
-      activeGraphicSignatures.clear();
-      if (clearParts.length > 0) {
-        const frame = `${SGR_RESET}${clearParts.join("")}${SGR_RESET}`;
-        out.write(frame);
-        recordStdoutTerminalGraphics({
-          clears: terminalGraphicsClears,
-          bytes: Buffer.byteLength(frame, "utf8"),
-          active: 0,
-        });
-      } else {
-        recordStdoutTerminalGraphics({ active: 0 });
-      }
+    } catch (err) {
+      disposeError = err;
     }
     unregisterGraphicsOutput();
     off();
@@ -4070,9 +4188,14 @@ export function createStdoutRenderer(
         // ignore
       }
     }
-    if (hideCursor) out.write("\u001B[?25h");
-    if (altScreen && outputIsTTY) out.write("\u001B[?1049l");
+    try {
+      if (hideCursor) out.write("\u001B[?25h");
+      if (altScreen && outputIsTTY) out.write("\u001B[?1049l");
+    } catch (err) {
+      if (disposeError == null) disposeError = err;
+    }
     profiler?.dispose();
+    if (disposeError) throw disposeError;
   }
 
   const updateTheme = (

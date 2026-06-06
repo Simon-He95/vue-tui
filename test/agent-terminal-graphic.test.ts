@@ -110,7 +110,7 @@ describe("TAgentTerminalGraphic", () => {
     );
     const graphics = getTerminalGraphicsOutput(app.terminal);
     const sequence = createKittyGraphicsSequence("QUJD");
-    const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
+    const clearSequence = createKittyDeleteGraphicsSequence({ imageId: 123, placementId: 456 });
     const before = { ...getStdoutRendererMetrics() };
 
     writes.length = 0;
@@ -194,7 +194,7 @@ describe("TAgentTerminalGraphic", () => {
     );
     const graphics = getTerminalGraphicsOutput(app.terminal);
     const sequence = createKittyGraphicsSequence("QUJD");
-    const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
+    const clearSequence = createKittyDeleteGraphicsSequence({ imageId: 123, placementId: 456 });
 
     writes.length = 0;
     expect(
@@ -216,6 +216,195 @@ describe("TAgentTerminalGraphic", () => {
     stdout.dispose();
     expect(writes.join("")).toContain(clearSequence);
 
+    app.dispose();
+  });
+
+  it("unregisters terminal graphics output when dispose clear write fails", () => {
+    const writes: string[] = [];
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const clearSequence = createKittyDeleteGraphicsSequence({ imageId: 123, placementId: 456 });
+    let failClear = false;
+    const output: CliOutput = {
+      isTTY: false,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        if (failClear && chunk.includes(clearSequence)) {
+          throw new Error("dispose clear failed");
+        }
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+
+    expect(
+      graphics?.queue({
+        id: "dispose-write-failure",
+        x: 1,
+        y: 1,
+        w: 4,
+        h: 2,
+        protocol: "kitty",
+        sequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    expect(writes.join("")).toContain(sequence);
+
+    failClear = true;
+    expect(() => stdout.dispose()).toThrow("dispose clear failed");
+    expect(getTerminalGraphicsOutput(app.terminal)).toBeNull();
+
+    app.dispose();
+  });
+
+  it("retries queued terminal graphics after stdout write failure", () => {
+    const writes: string[] = [];
+    const sequence = createKittyGraphicsSequence("QUJD");
+    let failNextGraphicWrite = true;
+    const output: CliOutput = {
+      isTTY: false,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        if (failNextGraphicWrite && chunk.includes(sequence)) {
+          failNextGraphicWrite = false;
+          throw new Error("graphics write failed");
+        }
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    expect(graphics).not.toBeNull();
+
+    expect(() =>
+      graphics!.queue({
+        id: "retry-draw",
+        x: 1,
+        y: 1,
+        w: 4,
+        h: 2,
+        protocol: "kitty",
+        sequence,
+      }),
+    ).toThrow("graphics write failed");
+
+    writes.length = 0;
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("skips offscreen current-cell clear payloads instead of clamping them into the viewport", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: false,
+      columns: 4,
+      rows: 2,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 4,
+      rows: 2,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const currentCellClear = createKittyDeleteGraphicsSequence({ currentCell: true });
+
+    expect(
+      graphics?.queue({
+        id: "visible-target",
+        x: 3,
+        y: 1,
+        w: 1,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+      }),
+    ).toBe(true);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "offscreen-current-cell-clear",
+        x: 10,
+        y: 4,
+        w: 2,
+        h: 1,
+        protocol: "kitty",
+        sequence: currentCellClear,
+        op: "clear",
+      }),
+    ).toBe(true);
+
+    expect(writes.join("")).not.toContain(currentCellClear);
+    expect(graphics?.isActive?.("visible-target")).toBe(true);
+
+    stdout.dispose();
     app.dispose();
   });
 
@@ -441,6 +630,42 @@ describe("TAgentTerminalGraphic", () => {
     await settle(app);
 
     expect(rowText(app, 0)).toBe("image.png");
+
+    app.dispose();
+  });
+
+  it("updates deferred fallback text when fallback changes without content changes", async () => {
+    const fallback = ref("fallback-a");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence: createKittyGraphicsSequence("QUJD"),
+      fallback: fallback.value,
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 1,
+            content: "image.png",
+            fallback: fallback.value,
+            suspended: true,
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+    expect(rowText(app, 0)).toBe("fallback-a");
+
+    fallback.value = "fallback-b";
+    await settle(app);
+    expect(rowText(app, 0)).toBe("fallback-b");
 
     app.dispose();
   });
