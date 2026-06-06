@@ -1477,6 +1477,66 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("does not render PNG frames when a fully visible raw rect exceeds terminal graphic limits", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 120,
+      rows: 120,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      fallback: "png fallback",
+      cols: 101,
+      rows: 100,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({
+      toPngBase64,
+      fallback: () => "text fallback",
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 101,
+            h: 100,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 120, rows: 120, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(toPngBase64).not.toHaveBeenCalled();
+    expect(rowText(app, 0)).toBe("text fallback");
+    expect(writes.join("")).not.toContain("QUJD");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it("rerenders terminal graphics when stdout graphics output is registered after initial fallback", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
@@ -2143,6 +2203,86 @@ describe("TAgentTerminalGraphic", () => {
       type: "text",
       text: "png fallback",
     });
+  });
+
+  it("falls back to text when PNG helper creates unsafe terminal sequences", async () => {
+    const kittyCapabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const itermCapabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { TERM_PROGRAM: "iTerm.app" },
+    });
+    const sixelCapabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { VUE_TUI_TERMINAL_GRAPHICS: "sixel" },
+    });
+    const makeContext = (
+      protocol: TerminalGraphicsProtocol,
+      capabilities: ReturnType<typeof detectTerminalGraphicsCapabilities>,
+    ): TAgentTerminalGraphicRendererContext => ({
+      kind: "image",
+      width: 4,
+      height: 2,
+      final: true,
+      streaming: false,
+      protocol,
+      capabilities,
+      signal: new AbortController().signal,
+      imageId: 123,
+      placementId: 456,
+      visible: true,
+      rawVisible: true,
+      scrolling: false,
+      viewport: {
+        visible: true,
+        rawVisible: true,
+        scrolling: false,
+        rect: { x: 0, y: 0, w: 4, h: 2 },
+        fullRect: { x: 0, y: 0, w: 4, h: 2 },
+      },
+    });
+    const toInvalidBase64 = vi.fn(async () => ({
+      base64: "QUJD;",
+      fallback: "png fallback",
+      cols: 4,
+      rows: 2,
+    }));
+    const base64Renderer = createPngTerminalGraphicRenderer({ toPngBase64: toInvalidBase64 });
+
+    await expect(
+      base64Renderer("image.png", makeContext("kitty", kittyCapabilities)),
+    ).resolves.toEqual({
+      type: "text",
+      text: "png fallback",
+    });
+    await expect(
+      base64Renderer("image.png", makeContext("iterm2", itermCapabilities)),
+    ).resolves.toEqual({
+      type: "text",
+      text: "png fallback",
+    });
+    expect(toInvalidBase64).toHaveBeenCalledTimes(1);
+
+    const toSixel = vi.fn(async () => `${ESC}Pq${ST}`);
+    const sixelRenderer = createPngTerminalGraphicRenderer({
+      toPngBase64: vi.fn(async () => ({
+        base64: "QUJD",
+        fallback: "png fallback",
+        cols: 4,
+        rows: 2,
+      })),
+      toSixel,
+    });
+
+    await expect(
+      sixelRenderer("image.png", makeContext("sixel", sixelCapabilities)),
+    ).resolves.toEqual({
+      type: "text",
+      text: "png fallback",
+    });
+    expect(toSixel).toHaveBeenCalledTimes(1);
   });
 
   it("clamps PNG frame columns to context width when rows are omitted", async () => {

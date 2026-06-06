@@ -762,7 +762,9 @@ export const TAgentTerminalGraphic = defineComponent({
       const output = graphicsOutput();
       const full = fullRect.value;
       const abs = absRect.value;
+      const size = normalizeTerminalGraphicSize(full.w, full.h);
       return (
+        size != null &&
         hasPaintableRect() &&
         Boolean(output?.capabilities.supported) &&
         abs.x === full.x &&

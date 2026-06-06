@@ -90,6 +90,10 @@ const CSI_RE = new RegExp(`${ESC_RE}\\[[0-?]*[ -/]*[@-~]`, "g");
 const OSC_RE = new RegExp(`${ESC_RE}\\][\\s\\S]*?(?:${BEL_RE}|${ESC_RE}\\\\)`, "g");
 const DCS_RE = new RegExp(`${ESC_RE}P[\\s\\S]*?${ESC_RE}\\\\`, "g");
 const APC_RE = new RegExp(`${ESC_RE}_[\\s\\S]*?${ESC_RE}\\\\`, "g");
+const C1_CSI_RE = new RegExp("\\u009B[0-?]*[ -/]*[@-~]", "g");
+const C1_OSC_RE = new RegExp(`\\u009D[\\s\\S]*?(?:${BEL_RE}|\\u009C)`, "g");
+const C1_DCS_RE = new RegExp("\\u0090[\\s\\S]*?\\u009C", "g");
+const C1_APC_RE = new RegExp("\\u009F[\\s\\S]*?\\u009C", "g");
 
 export const MAX_TERMINAL_GRAPHICS_SEQUENCE_CHARS = 2 * 1024 * 1024;
 export const MAX_TERMINAL_GRAPHICS_FALLBACK_CHARS = 16_384;
@@ -725,7 +729,7 @@ function validateSixelSequence(sequence: string, op: TerminalGraphicsOperation =
   return sequence.length > 0;
 }
 
-function stripC0ControlChars(value: string): string {
+function stripTerminalControlChars(value: string): string {
   let out = "";
 
   for (let index = 0; index < value.length; index++) {
@@ -735,7 +739,8 @@ function stripC0ControlChars(value: string): string {
       code === 0x0b ||
       code === 0x0c ||
       (code >= 0x0e && code <= 0x1f) ||
-      code === 0x7f
+      code === 0x7f ||
+      (code >= 0x80 && code <= 0x9f)
     ) {
       continue;
     }
@@ -747,12 +752,16 @@ function stripC0ControlChars(value: string): string {
 }
 
 export function sanitizeTerminalFallbackText(text: unknown): string {
-  return stripC0ControlChars(
+  return stripTerminalControlChars(
     String(text ?? "")
       .replace(OSC_RE, "")
       .replace(CSI_RE, "")
       .replace(DCS_RE, "")
-      .replace(APC_RE, ""),
+      .replace(APC_RE, "")
+      .replace(C1_OSC_RE, "")
+      .replace(C1_CSI_RE, "")
+      .replace(C1_DCS_RE, "")
+      .replace(C1_APC_RE, ""),
   ).slice(0, MAX_TERMINAL_GRAPHICS_FALLBACK_CHARS);
 }
 

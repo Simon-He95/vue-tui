@@ -8,6 +8,7 @@ import {
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   hashTerminalGraphicsString,
+  isSafeTerminalGraphicsSequence,
   normalizeTerminalGraphicSize,
   sanitizeTerminalFallbackText,
 } from "../../renderer/terminal-graphics.js";
@@ -202,15 +203,23 @@ export function createPngTerminalGraphicRenderer(
     }
 
     if (protocol === "kitty") {
+      const sequence = createKittyGraphicsSequence(png.base64, {
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: png.cols,
+        rows: png.rows,
+      });
+      if (!isSafeTerminalGraphicsSequence(sequence, "kitty", "draw")) {
+        return {
+          type: "text",
+          text: await fallback(),
+        };
+      }
+
       return {
         type: "sequence",
         protocol: "kitty",
-        sequence: createKittyGraphicsSequence(png.base64, {
-          imageId: context.imageId,
-          placementId: context.placementId,
-          columns: png.cols,
-          rows: png.rows,
-        }),
+        sequence,
         clearSequence: createKittyDeleteGraphicsSequence({
           imageId: context.imageId,
           placementId: context.placementId,
@@ -222,15 +231,23 @@ export function createPngTerminalGraphicRenderer(
     }
 
     if (protocol === "iterm2") {
+      const sequence = createIterm2InlineImageSequence(png.base64, {
+        width: png.cols,
+        height: png.rows,
+        preserveAspectRatio: true,
+        doNotMoveCursor: true,
+      });
+      if (!isSafeTerminalGraphicsSequence(sequence, "iterm2", "draw")) {
+        return {
+          type: "text",
+          text: await fallback(),
+        };
+      }
+
       return {
         type: "sequence",
         protocol: "iterm2",
-        sequence: createIterm2InlineImageSequence(png.base64, {
-          width: png.cols,
-          height: png.rows,
-          preserveAspectRatio: true,
-          doNotMoveCursor: true,
-        }),
+        sequence,
         fallback: await fallback(),
         cols: png.cols,
         rows: png.rows,
@@ -252,6 +269,13 @@ export function createPngTerminalGraphicRenderer(
       );
 
       throwIfAborted(context.signal);
+
+      if (!isSafeTerminalGraphicsSequence(sixel, "sixel", "draw")) {
+        return {
+          type: "text",
+          text: await fallback(),
+        };
+      }
 
       return {
         type: "sequence",

@@ -266,6 +266,9 @@ describe("terminal graphics sequence validation", () => {
     ).toBeNull();
 
     expect(sanitizeTerminalFallbackText(`ok${ESC}[2J${ESC}]52;c;bad${BEL}`)).toBe("ok");
+    expect(sanitizeTerminalFallbackText("ok\x9B2J\x9D52;c;bad\x07")).toBe("ok");
+    expect(sanitizeTerminalFallbackText("ok\x90$qbad\x9C\x9Fbad\x9C")).toBe("ok");
+    expect(sanitizeTerminalFallbackText("ok\x9B")).toBe("ok");
   });
 
   it("chunks kitty payloads and validates only graphics envelopes", () => {
