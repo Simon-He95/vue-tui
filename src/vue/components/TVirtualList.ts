@@ -553,6 +553,7 @@ export const TVirtualList = defineComponent({
         if (pendingSelectionScrollFocusRemap) return false;
 
         pendingSelectionScrollFocusRemap = true;
+        terminalGraphicsActivity.markScroll();
         emit("update:scrollTop", nextTop);
         emit("scroll", nextTop);
         return true;
@@ -788,6 +789,7 @@ export const TVirtualList = defineComponent({
       const delta = clampedTop - scrollTop.value;
       if (!delta) return { changed: false, dirty: false, top: scrollTop.value, controlled };
       if (controlled) {
+        terminalGraphicsActivity.markScroll();
         if (options?.emitUpdate ?? true) emit("update:scrollTop", clampedTop);
         if (options?.emitScroll) emit("scroll", clampedTop);
         return { changed: true, dirty: false, top: clampedTop, controlled };

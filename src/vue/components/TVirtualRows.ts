@@ -445,6 +445,7 @@ export const TVirtualRows = defineComponent({
       if (!delta) return false;
 
       if (isScrollControlled()) {
+        terminalGraphicsActivity.markScroll();
         if (options?.emitUpdate !== false) emit("update:scrollTop", clampedTop);
         if (options?.emitScroll) emitScroll(clampedTop);
         return true;

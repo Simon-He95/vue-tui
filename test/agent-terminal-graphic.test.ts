@@ -29,6 +29,7 @@ import {
   getTerminalGraphicTraceMetrics,
   resetTerminalGraphicTraceMetrics,
 } from "../src/renderer/terminal-graphics-trace.js";
+import { TVirtualList } from "../src/vue/components/TVirtualList.js";
 import { TVirtualRows } from "../src/vue/components/TVirtualRows.js";
 import { createTerminalGraphicsActivity, TerminalGraphicsActivityKey } from "../src/vue/context.js";
 
@@ -2719,7 +2720,7 @@ describe("TAgentTerminalGraphic", () => {
     }
   });
 
-  it("marks virtual row terminal graphics scrolling only after controlled scrollTop writes back", async () => {
+  it("marks virtual row terminal graphics scrolling when controlled wheel emits scrollTop", async () => {
     vi.useFakeTimers();
     const scrollTop = ref(0);
     let pendingScrollTop: number | null = null;
@@ -2765,7 +2766,7 @@ describe("TAgentTerminalGraphic", () => {
       await nextTick();
 
       expect(pendingScrollTop).toBe(1);
-      expect(activity!.scrolling.value).toBe(false);
+      expect(activity!.scrolling.value).toBe(true);
 
       scrollTop.value = pendingScrollTop!;
       pendingScrollTop = null;
@@ -2779,6 +2780,145 @@ describe("TAgentTerminalGraphic", () => {
       app.dispose();
       vi.useRealTimers();
     }
+  });
+
+  it("marks virtual list terminal graphics scrolling when controlled wheel emits scrollTop", async () => {
+    const scrollTop = ref(0);
+    const onUpdateScrollTop = vi.fn();
+    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualList, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 2,
+            itemCount: 20,
+            itemVersion: 1,
+            scrollTop: scrollTop.value,
+            terminalGraphicScrollIdleMs: 123,
+            getItem: (index: number) => `item-${index}`,
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      await nextTick();
+      timeoutSpy.mockClear();
+
+      app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+      app.scheduler.flushNow();
+      await nextTick();
+
+      expect(onUpdateScrollTop).toHaveBeenCalledWith(1);
+      expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 123);
+    } finally {
+      app.dispose();
+      timeoutSpy.mockRestore();
+    }
+  });
+
+  it("suspends controlled virtual row raw rendering while waiting for scrollTop writeback", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const firstSequence = createKittyGraphicsSequence("QUJD");
+    const secondSequence = createKittyGraphicsSequence("REVG");
+    const graphicContent = ref("first");
+    const itemVersion = ref(1);
+    const onUpdateScrollTop = vi.fn();
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((content, context) => ({
+      type: "sequence" as const,
+      protocol: context.capabilities.preferredProtocol as "kitty",
+      sequence: content === "second" ? secondSequence : firstSequence,
+      fallback: `fallback-${content}`,
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualRows, {
+            x: 0,
+            y: 0,
+            w: 18,
+            h: 1,
+            itemCount: 3,
+            itemVersion: itemVersion.value,
+            scrollTop: 0,
+            terminalGraphicScrollIdleMs: 80,
+            getItem: (index: number) => `item-${index}`,
+            paintItem: () => undefined,
+            renderItemNodes: (ctx: { row: number }) =>
+              h(TAgentTerminalGraphic, {
+                x: 0,
+                y: ctx.row,
+                w: 16,
+                h: 1,
+                content: graphicContent.value,
+                fallback: `fallback-${graphicContent.value}`,
+                renderer,
+              }),
+            "onUpdate:scrollTop": onUpdateScrollTop,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const stdout = withEnv({ KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined }, () =>
+      createStdoutRenderer(app.terminal, {
+        output,
+        clear: false,
+        altScreen: false,
+        hideCursor: false,
+        trackResize: false,
+      }),
+    );
+
+    resetTerminalGraphicTraceMetrics();
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(writes.join("")).toContain(firstSequence);
+
+    writes.length = 0;
+    app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+    await settle(app);
+    expect(onUpdateScrollTop).toHaveBeenCalledWith(1);
+
+    graphicContent.value = "second";
+    itemVersion.value++;
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(rowText(app, 0)).toBe("fallback-second");
+    expect(getTerminalGraphicTraceMetrics().skippedScrolling).toBeGreaterThan(0);
+    expect(writes.join("")).not.toContain(secondSequence);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(writes.join("")).toContain(secondSequence);
+
+    stdout.dispose();
+    app.dispose();
+    resetTerminalGraphicTraceMetrics();
   });
 
   it("suspends virtual row raw rendering while scrolling and hydrates after idle", async () => {
