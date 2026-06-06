@@ -475,6 +475,12 @@ export const TAgentTerminalGraphic = defineComponent({
           text: result,
         };
       }
+      if (typeof result !== "object") {
+        return {
+          type: "text",
+          text: fallbackText(),
+        };
+      }
       if ("type" in result && result.type === "text") {
         return {
           type: "text",

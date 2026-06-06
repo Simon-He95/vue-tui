@@ -15,7 +15,7 @@ import type { TraceStore } from "../observability/trace.js";
 import type { FramePerfReason } from "../observability/frame-perf.js";
 import type { FramePerfStore } from "../observability/frame-perf-store.js";
 import type { TInputPlugin } from "./components/input/plugins/types.js";
-import { readonly, ref } from "vue";
+import { computed, readonly, ref } from "vue";
 import {
   nowTerminalGraphicTraceTime,
   recordTerminalGraphicTrace,
@@ -262,6 +262,21 @@ export function createTerminalGraphicsActivity(
     markScroll,
     setScrollIdleMs,
     dispose,
+  };
+}
+
+export function createCombinedTerminalGraphicsActivity(
+  parent: TerminalGraphicsActivity | null | undefined,
+  own: TerminalGraphicsActivity,
+): TerminalGraphicsActivity {
+  if (!parent) return own;
+
+  return {
+    scrolling: computed(() => parent.scrolling.value || own.scrolling.value),
+    version: computed(() => parent.version.value + own.version.value),
+    markScroll: own.markScroll,
+    setScrollIdleMs: own.setScrollIdleMs,
+    dispose: own.dispose,
   };
 }
 

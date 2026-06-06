@@ -31,6 +31,7 @@ import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import {
+  createCombinedTerminalGraphicsActivity,
   createTerminalGraphicsActivity,
   EventZIndexContextKey,
   RenderPlaneContextKey,
@@ -146,11 +147,18 @@ export const TVirtualList = defineComponent({
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
     const virtualListInstanceId = ++virtualListInstanceSeq;
     const wheelTaskId = `TVirtualList:${virtualListInstanceId}:wheel`;
+    const parentTerminalGraphicsActivity = inject(TerminalGraphicsActivityKey, null);
     const terminalGraphicsActivity = createTerminalGraphicsActivity({
       scrollIdleMs: props.terminalGraphicScrollIdleMs,
       traceId: `TVirtualList:${virtualListInstanceId}:terminal-graphics`,
     });
-    provide(TerminalGraphicsActivityKey, terminalGraphicsActivity);
+    provide(
+      TerminalGraphicsActivityKey,
+      createCombinedTerminalGraphicsActivity(
+        parentTerminalGraphicsActivity,
+        terminalGraphicsActivity,
+      ),
+    );
     watch(
       () => props.terminalGraphicScrollIdleMs,
       (value) => terminalGraphicsActivity.setScrollIdleMs(value),

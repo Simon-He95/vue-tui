@@ -36,6 +36,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import {
+  createCombinedTerminalGraphicsActivity,
   createTerminalGraphicsActivity,
   EventZIndexContextKey,
   LayoutContextKey,
@@ -234,11 +235,18 @@ export const TVirtualRows = defineComponent({
     provide(EventZIndexContextKey, eventZ as any);
 
     const virtualRowsInstanceId = ++virtualRowsInstanceSeq;
+    const parentTerminalGraphicsActivity = inject(TerminalGraphicsActivityKey, null);
     const terminalGraphicsActivity = createTerminalGraphicsActivity({
       scrollIdleMs: props.terminalGraphicScrollIdleMs,
       traceId: `TVirtualRows:${virtualRowsInstanceId}:terminal-graphics`,
     });
-    provide(TerminalGraphicsActivityKey, terminalGraphicsActivity);
+    provide(
+      TerminalGraphicsActivityKey,
+      createCombinedTerminalGraphicsActivity(
+        parentTerminalGraphicsActivity,
+        terminalGraphicsActivity,
+      ),
+    );
     watch(
       () => props.terminalGraphicScrollIdleMs,
       (value) => terminalGraphicsActivity.setScrollIdleMs(value),

@@ -65,6 +65,7 @@ import {
   createTerminalApp,
   createDefaultTInputHostAdapter,
   defaultTInputHostPlugin,
+  detectTerminalGraphicsCapabilities,
   installTerminalCleanup,
   type CliOutput,
   type DirtyRowPatchMode,
@@ -302,6 +303,19 @@ const stdoutOptions: StdoutRendererOptions = {
   dirtySpanConservativeMaxCells: 16,
   colorMode: "ansi16",
   clear: false,
+  terminalGraphics: {
+    env: { VUE_TUI_TERMINAL_GRAPHICS: "kitty" },
+    isTTY: false,
+  },
+};
+const stdoutCapabilitiesOptions: StdoutRendererOptions = {
+  terminalGraphics: detectTerminalGraphicsCapabilities({
+    env: { VUE_TUI_TERMINAL_GRAPHICS: "iterm2" },
+    stdoutIsTTY: false,
+  }),
+};
+const stdoutDisabledGraphicsOptions: StdoutRendererOptions = {
+  terminalGraphics: false,
 };
 const stdoutInternalOptions: StdoutRendererOptions = {
   // @ts-expect-error __columnDiffMode is an internal benchmark override.
@@ -320,6 +334,8 @@ console.log(
   driver,
   stdoutOutput,
   stdoutOptions,
+  stdoutCapabilitiesOptions,
+  stdoutDisabledGraphicsOptions,
   stdoutInternalOptions,
   cleanupHandle,
   signalPolicy,

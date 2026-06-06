@@ -2685,6 +2685,107 @@ describe("TAgentTerminalGraphic", () => {
     resetTerminalGraphicTraceMetrics();
   });
 
+  it("suspends nested virtual row graphics while an ancestor virtual row scrolls", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => ({
+      type: "sequence" as const,
+      protocol: context.capabilities.preferredProtocol as "kitty",
+      sequence,
+      fallback: "fallback",
+    }));
+    const items = ["image-0", "image-1", "image-2"];
+    const outerRows = ref<any>(null);
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualRows, {
+            ref: outerRows,
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 1,
+            itemCount: items.length,
+            itemVersion: 1,
+            terminalGraphicScrollIdleMs: 200,
+            getItem: (index: number) => items[index],
+            paintItem: () => undefined,
+            renderItemNodes: (outerCtx: { item: unknown; index: number; row: number }) =>
+              h(TVirtualRows, {
+                x: 0,
+                y: outerCtx.row,
+                w: 12,
+                h: 1,
+                itemCount: 1,
+                itemVersion: outerCtx.index + 1,
+                terminalGraphicScrollIdleMs: 200,
+                getItem: () => outerCtx.item,
+                paintItem: () => undefined,
+                renderItemNodes: (innerCtx: { item: unknown; row: number }) =>
+                  h(TAgentTerminalGraphic, {
+                    x: 0,
+                    y: innerCtx.row,
+                    w: 10,
+                    h: 1,
+                    content: String(innerCtx.item),
+                    fallback: `fallback-${outerCtx.index}`,
+                    renderer,
+                  }),
+              }),
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const stdout = withEnv({ KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined }, () =>
+      createStdoutRenderer(app.terminal, {
+        output,
+        clear: false,
+        altScreen: false,
+        hideCursor: false,
+        trackResize: false,
+      }),
+    );
+
+    resetTerminalGraphicTraceMetrics();
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    outerRows.value.scrollTo(1);
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(rowText(app, 0)).toBe("fallback-1");
+    expect(getTerminalGraphicTraceMetrics().skippedScrolling).toBeGreaterThan(0);
+    expect(writes.join("")).not.toContain(sequence);
+
+    await new Promise((resolve) => setTimeout(resolve, 220));
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(writes.join("")).toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+    resetTerminalGraphicTraceMetrics();
+  });
+
   it("does not queue the same raw sequence twice for the same rect", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
@@ -3373,11 +3474,103 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("uses explicit stdout terminal graphics detection input", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: false,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      expect(context.protocol).toBe("kitty");
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence,
+        fallback: "fallback",
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const stdout = createStdoutRenderer(app.terminal, {
+      output,
+      clear: false,
+      altScreen: false,
+      hideCursor: false,
+      trackResize: false,
+      terminalGraphics: {
+        env: { VUE_TUI_TERMINAL_GRAPHICS: "kitty" },
+        isTTY: false,
+      },
+    });
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(stdout.graphicsCapabilities.preferredProtocol).toBe("kitty");
+    expect(writes.join("")).toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it("falls back without error style when renderer returns undefined", async () => {
     const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
       expect(context.protocol).toBe("unicode");
       return undefined;
     });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            style: { fg: "green" },
+            errorStyle: { fg: "red" },
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 3, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(rowText(app, 0)).toBe("fallback");
+    expect(app.terminal.getCell(0, 0).style.fg).toBe("green");
+
+    app.dispose();
+  });
+
+  it("falls back without error style when renderer returns a primitive", async () => {
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(
+      () => 123 as unknown as TAgentTerminalGraphicRenderResult,
+    );
     const App = defineComponent({
       setup() {
         return () =>

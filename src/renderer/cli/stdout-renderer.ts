@@ -8,6 +8,7 @@ import type {
 import type { RendererCapabilities } from "../capabilities.js";
 import type {
   TerminalGraphicsCapabilities,
+  TerminalGraphicsDetectionInput,
   TerminalGraphicsOperation,
   TerminalGraphicsPayload,
   TerminalGraphicsOutput,
@@ -179,6 +180,7 @@ export type StdoutRendererOptions = Readonly<{
   getImeAnchor?: () => { cellX: number; cellY: number } | null;
   /** Use DEC 2026 synchronized output mode. */
   useSyncOutput?: boolean;
+  terminalGraphics?: false | TerminalGraphicsCapabilities | TerminalGraphicsDetectionInput;
   allowFileUrls?: boolean;
   profileFileWriter?: {
     appendFileSync?: (path: string, data: string) => void;
@@ -188,6 +190,38 @@ export type StdoutRendererOptions = Readonly<{
 type InternalStdoutRendererOptions = StdoutRendererOptions & {
   __columnDiffMode?: InternalColumnDiffMode;
 };
+
+function isTerminalGraphicsCapabilities(value: unknown): value is TerminalGraphicsCapabilities {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "supported" in value &&
+    "protocol" in value &&
+    "preferredProtocol" in value &&
+    "candidates" in value
+  );
+}
+
+function resolveTerminalGraphicsCapabilities(
+  options: StdoutRendererOptions | undefined,
+  env: Record<string, unknown>,
+  outputIsTTY: boolean,
+): TerminalGraphicsCapabilities {
+  const terminalGraphics = options?.terminalGraphics;
+  if (terminalGraphics === false) {
+    return detectTerminalGraphicsCapabilities({
+      env: { VUE_TUI_TERMINAL_GRAPHICS: "none" },
+      isTTY: false,
+    });
+  }
+  if (isTerminalGraphicsCapabilities(terminalGraphics)) return terminalGraphics;
+
+  return detectTerminalGraphicsCapabilities({
+    env,
+    isTTY: outputIsTTY,
+    ...(terminalGraphics ?? {}),
+  });
+}
 
 export function createStdoutRenderer(
   terminal: Terminal,
@@ -475,7 +509,7 @@ export function createStdoutRenderer(
     clearSequence?: string;
   }>;
 
-  const graphicsCapabilities = detectTerminalGraphicsCapabilities({ env, isTTY: outputIsTTY });
+  const graphicsCapabilities = resolveTerminalGraphicsCapabilities(options, env, outputIsTTY);
   const pendingGraphics = new Map<string, QueuedTerminalGraphicsPayload>();
   const pendingGraphicClears = new Set<string>();
   const activeGraphics = new Map<string, ActiveTerminalGraphic>();
