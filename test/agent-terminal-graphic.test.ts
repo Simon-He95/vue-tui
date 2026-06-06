@@ -2583,6 +2583,93 @@ describe("TAgentTerminalGraphic", () => {
     expect(toPngBase64).not.toHaveBeenCalled();
   });
 
+  it("uses component fallback when png renderer has no fallback option and graphics are unsupported", async () => {
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      cols: 10,
+      rows: 1,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({ toPngBase64 });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 1,
+            content: "https://example.com/image.png",
+            fallback: "[image omitted]",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 30, rows: 3, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(rowText(app, 0)).toBe("[image omitted]");
+    expect(toPngBase64).not.toHaveBeenCalled();
+
+    app.dispose();
+  });
+
+  it("omits helper fallback by default for sequence results so component fallback remains authoritative", async () => {
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      cols: 10,
+      rows: 1,
+    }));
+    const pngRenderer = createPngTerminalGraphicRenderer({ toPngBase64 });
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(async (content, context) => {
+      const result = await pngRenderer(content, context);
+      expect(result).toMatchObject({ type: "sequence", protocol: "kitty" });
+      expect(result).not.toHaveProperty("fallback");
+      return result;
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 1,
+            content: "data:image/png;base64,QUJD",
+            fallback: "[image omitted]",
+            renderer,
+          });
+      },
+    });
+
+    let queueAttempts = 0;
+    const app = createTerminalApp({ cols: 30, rows: 3, component: App });
+    const unregister = registerTerminalGraphicsOutput(app.terminal, {
+      capabilities,
+      queue() {
+        queueAttempts++;
+        return false;
+      },
+      isActive: () => false,
+    });
+
+    app.mount();
+    await settle(app);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(toPngBase64).toHaveBeenCalledTimes(1);
+    expect(queueAttempts).toBeGreaterThan(0);
+    expect(rowText(app, 0)).toBe("[image omitted]");
+
+    app.dispose();
+    unregister();
+  });
+
   it("reuses protocol-independent PNG cache across terminal protocols", async () => {
     const queue = createTerminalGraphicRenderQueue();
     const kittyCapabilities = detectTerminalGraphicsCapabilities({

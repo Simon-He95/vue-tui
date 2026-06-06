@@ -128,9 +128,10 @@ async function resolveFallbackText(
   options: CreatePngTerminalGraphicRendererOptions,
   content: string,
   context: TAgentTerminalGraphicRendererContext,
-): Promise<string> {
+): Promise<string | undefined> {
   throwIfAborted(context.signal);
-  const value = (await options.fallback?.(content, context)) ?? content;
+  if (!options.fallback) return undefined;
+  const value = await options.fallback(content, context);
   throwIfAborted(context.signal);
   return sanitizeTerminalFallbackText(value);
 }
@@ -140,9 +141,15 @@ async function resolvePngFallbackText(
   options: CreatePngTerminalGraphicRendererOptions,
   content: string,
   context: TAgentTerminalGraphicRendererContext,
-): Promise<string> {
+): Promise<string | undefined> {
   if (frame.fallback != null) return frame.fallback;
   return resolveFallbackText(options, content, context);
+}
+
+function textFallbackResult(
+  text: string | undefined,
+): Readonly<{ type: "text"; text: string }> | null {
+  return text == null ? null : { type: "text", text };
 }
 
 export function createPngTerminalGraphicRenderer(
@@ -169,7 +176,7 @@ export function createPngTerminalGraphicRenderer(
       !context.rawVisible ||
       (protocol === "sixel" && !options.toSixel)
     ) {
-      return { type: "text", text: await resolveFallbackText(options, content, context) };
+      return textFallbackResult(await resolveFallbackText(options, content, context));
     }
 
     const key =
@@ -191,15 +198,17 @@ export function createPngTerminalGraphicRenderer(
     );
 
     throwIfAborted(context.signal);
-    let fallbackPromise: Promise<string> | undefined;
+    let fallbackPromise: Promise<string | undefined> | undefined;
     const fallback = () =>
       (fallbackPromise ??= resolvePngFallbackText(png, options, content, context));
+    const sequenceFallback = async (): Promise<Readonly<{ fallback?: string }>> => {
+      if (png.fallback == null && !options.fallback) return {};
+      const text = await fallback();
+      return text == null ? {} : { fallback: text };
+    };
 
     if (!png.base64) {
-      return {
-        type: "text",
-        text: await fallback(),
-      };
+      return textFallbackResult(await fallback());
     }
 
     if (protocol === "kitty") {
@@ -210,10 +219,7 @@ export function createPngTerminalGraphicRenderer(
         rows: png.rows,
       });
       if (!isSafeTerminalGraphicsSequence(sequence, "kitty", "draw")) {
-        return {
-          type: "text",
-          text: await fallback(),
-        };
+        return textFallbackResult(await fallback());
       }
 
       return {
@@ -224,7 +230,7 @@ export function createPngTerminalGraphicRenderer(
           imageId: context.imageId,
           placementId: context.placementId,
         }),
-        fallback: await fallback(),
+        ...(await sequenceFallback()),
         cols: png.cols,
         rows: png.rows,
       };
@@ -238,17 +244,14 @@ export function createPngTerminalGraphicRenderer(
         doNotMoveCursor: true,
       });
       if (!isSafeTerminalGraphicsSequence(sequence, "iterm2", "draw")) {
-        return {
-          type: "text",
-          text: await fallback(),
-        };
+        return textFallbackResult(await fallback());
       }
 
       return {
         type: "sequence",
         protocol: "iterm2",
         sequence,
-        fallback: await fallback(),
+        ...(await sequenceFallback()),
         cols: png.cols,
         rows: png.rows,
       };
@@ -271,25 +274,19 @@ export function createPngTerminalGraphicRenderer(
       throwIfAborted(context.signal);
 
       if (!isSafeTerminalGraphicsSequence(sixel, "sixel", "draw")) {
-        return {
-          type: "text",
-          text: await fallback(),
-        };
+        return textFallbackResult(await fallback());
       }
 
       return {
         type: "sequence",
         protocol: "sixel",
         sequence: sixel,
-        fallback: await fallback(),
+        ...(await sequenceFallback()),
         cols: png.cols,
         rows: png.rows,
       };
     }
 
-    return {
-      type: "text",
-      text: await fallback(),
-    };
+    return textFallbackResult(await fallback());
   };
 }
