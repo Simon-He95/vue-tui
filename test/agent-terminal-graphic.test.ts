@@ -171,6 +171,93 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("cancels a pending clear when an identical draw arrives before a TTY flush", () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const clearSequence = createKittyDeleteGraphicsSequence({ imageId: 123, placementId: 456 });
+
+    try {
+      writes.length = 0;
+      expect(
+        graphics?.queue({
+          id: "g1",
+          x: 1,
+          y: 1,
+          w: 4,
+          h: 2,
+          protocol: "kitty",
+          sequence,
+          clearSequence,
+        }),
+      ).toBe(true);
+      expect(writes.join("")).not.toContain(sequence);
+
+      vi.advanceTimersByTime(16);
+      expect(writes.join("")).toContain(sequence);
+      expect(graphics?.isActive?.("g1")).toBe(true);
+
+      writes.length = 0;
+      expect(graphics?.clear?.("g1")).toBe(true);
+      expect(graphics?.isActive?.("g1")).toBe(false);
+      expect(writes.join("")).not.toContain(clearSequence);
+
+      expect(
+        graphics?.queue({
+          id: "g1",
+          x: 1,
+          y: 1,
+          w: 4,
+          h: 2,
+          protocol: "kitty",
+          sequence,
+          clearSequence,
+        }),
+      ).toBe(true);
+      expect(graphics?.isActive?.("g1")).toBe(true);
+
+      vi.advanceTimersByTime(16);
+      const outputText = writes.join("");
+      expect(outputText).not.toContain(clearSequence);
+      expect(outputText).not.toContain(sequence);
+      expect(graphics?.isActive?.("g1")).toBe(true);
+    } finally {
+      stdout.dispose();
+      app.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it("clears offscreen active terminal graphics on stdout dispose", () => {
     const writes: string[] = [];
     const output: CliOutput = {

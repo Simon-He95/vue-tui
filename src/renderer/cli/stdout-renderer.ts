@@ -558,6 +558,7 @@ export function createStdoutRenderer(
   const graphicsOutput: TerminalGraphicsOutput = {
     capabilities: graphicsCapabilities,
     isActive(id) {
+      if (pendingGraphicClears.has(id) || pendingGraphics.has(`${id}:clear`)) return false;
       return activeGraphics.has(id) || pendingGraphics.has(`${id}:draw`);
     },
     queue(payload) {
@@ -605,9 +606,14 @@ export function createStdoutRenderer(
           clearSequence,
         });
 
+        const removedPendingGraphicClear = pendingGraphics.delete(`${frame.id}:clear`);
+        const removedPendingClear = pendingGraphicClears.delete(frame.id);
+        const canceledPendingClear = removedPendingGraphicClear || removedPendingClear;
+
         if (
-          pendingGraphicSignatures.get(frame.id) === signature ||
-          activeGraphicSignatures.get(frame.id) === signature
+          !canceledPendingClear &&
+          (pendingGraphicSignatures.get(frame.id) === signature ||
+            activeGraphicSignatures.get(frame.id) === signature)
         ) {
           recordTerminalGraphicTrace({
             type: "queue-dedupe",
@@ -617,7 +623,15 @@ export function createStdoutRenderer(
           return true;
         }
 
-        pendingGraphicClears.delete(frame.id);
+        if (canceledPendingClear && activeGraphicSignatures.get(frame.id) === signature) {
+          recordTerminalGraphicTrace({
+            type: "queue-dedupe",
+            id: frame.id,
+            protocol: normalized.protocol,
+          });
+          return true;
+        }
+
         pendingGraphics.set(`${frame.id}:draw`, {
           ...normalized,
           id: frame.id,
@@ -647,7 +661,6 @@ export function createStdoutRenderer(
         w: normalized.w,
         h: normalized.h,
       });
-      activeGraphicSignatures.delete(normalized.id);
       recordTerminalGraphicTrace({
         type: "clear",
         id: normalized.id,
@@ -680,7 +693,6 @@ export function createStdoutRenderer(
 
         if (validateTerminalGraphicsPayload(payload, graphicsCapabilities)) {
           pendingGraphics.set(`${id}:clear`, payload);
-          activeGraphicSignatures.delete(id);
           recordTerminalGraphicTrace({ type: "clear", id, protocol: payload.protocol });
           requestTerminalGraphicsFlush();
           return true;
@@ -688,7 +700,6 @@ export function createStdoutRenderer(
       }
 
       pendingGraphicClears.add(id);
-      activeGraphicSignatures.delete(id);
       recordTerminalGraphicTrace({ type: "clear", id });
       requestTerminalGraphicsFlush();
       return true;
