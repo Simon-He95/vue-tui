@@ -10,8 +10,6 @@ import {
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
-  getTerminalGraphicTraceMetrics,
-  resetTerminalGraphicTraceMetrics,
   type TAgentTerminalGraphicRenderer,
   type TAgentTerminalGraphicRendererContext,
   type TAgentTerminalGraphicRenderResult,
@@ -24,6 +22,10 @@ import {
   type CliOutput,
 } from "../src/cli.js";
 import { getTerminalGraphicsOutput } from "../src/renderer/terminal-graphics.js";
+import {
+  getTerminalGraphicTraceMetrics,
+  resetTerminalGraphicTraceMetrics,
+} from "../src/renderer/terminal-graphics-trace.js";
 import { TVirtualRows } from "../src/vue/components/TVirtualRows.js";
 import { createTerminalGraphicsActivity, TerminalGraphicsActivityKey } from "../src/vue/context.js";
 
@@ -2023,6 +2025,82 @@ describe("TAgentTerminalGraphic", () => {
 
     expect(writes.join("")).toContain(entry.sequence);
     expect(rowText(app, 1)).toBe("");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("falls back when renderer returns a non-preferred detected protocol", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 24,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const itermSequence = createIterm2InlineImageSequence("QUJD", { width: 8, height: 2 });
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      expect(context.protocol).toBe("kitty");
+      expect(context.capabilities).toMatchObject({
+        preferredProtocol: "kitty",
+        candidates: ["kitty", "iterm2"],
+      });
+      return {
+        type: "sequence" as const,
+        protocol: "iterm2" as const,
+        sequence: itermSequence,
+        fallback: "iterm fallback",
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 14,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 24, rows: 6, component: App });
+    const stdout = withEnv(
+      {
+        KITTY_WINDOW_ID: "1",
+        TERM: undefined,
+        TERM_PROGRAM: "iTerm.app",
+        WEZTERM_PANE: undefined,
+        WEZTERM_EXECUTABLE: undefined,
+        VUE_TUI_SIXEL: undefined,
+        VUE_TUI_GRAPHICS_SIXEL: undefined,
+        VUE_TUI_TERMINAL_GRAPHICS: undefined,
+        VUE_TUI_GRAPHICS_PROTOCOL: undefined,
+        VUE_TUI_GRAPHICS_FORCE: undefined,
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(rowText(app, 0)).toBe("iterm fallback");
+    expect(writes.join("")).not.toContain(itermSequence);
 
     stdout.dispose();
     app.dispose();

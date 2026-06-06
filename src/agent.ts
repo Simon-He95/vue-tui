@@ -53,45 +53,20 @@ export type {
 } from "./renderer/terminal-graphic-render-queue.js";
 export { createTerminalGraphicRenderQueue } from "./renderer/terminal-graphic-render-queue.js";
 export type {
-  TerminalGraphicTraceEvent,
-  TerminalGraphicTraceEventType,
-  TerminalGraphicTraceMetrics,
-} from "./renderer/terminal-graphics-trace.js";
-export {
-  getTerminalGraphicTraceMetrics,
-  nowTerminalGraphicTraceTime,
-  recordTerminalGraphicTrace,
-  resetTerminalGraphicTraceMetrics,
-  subscribeTerminalGraphicTrace,
-} from "./renderer/terminal-graphics-trace.js";
-export type {
   CreateKittyDeleteGraphicsSequenceOptions,
   CreateKittyGraphicsSequenceOptions,
-  RawTerminalGraphicFrame,
   TerminalGraphicsCapabilities,
   TerminalGraphicsDetectionInput,
   TerminalGraphicsFallbackProtocol,
   TerminalGraphicsMultiplexer,
-  TerminalGraphicsOperation,
-  TerminalGraphicsPayload,
   TerminalGraphicsProtocol,
   TerminalGraphicsResolvedProtocol,
-  ValidatedTerminalGraphicFrame,
 } from "./renderer/terminal-graphics.js";
 export {
   createIterm2InlineImageSequence,
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
-  hashTerminalGraphicsString,
-  isTerminalGraphicsProtocol,
-  isSafeTerminalGraphicsSequence,
-  normalizeTerminalGraphicSize,
-  sanitizeTerminalFallbackText,
-  stableTerminalGraphicNumericId,
-  validateTerminalGraphicFrame,
-  validateTerminalGraphicsPayload,
-  wrapTerminalGraphicsForMultiplexer,
 } from "./renderer/terminal-graphics.js";
 export type {
   TMermaidAsciiOptions,

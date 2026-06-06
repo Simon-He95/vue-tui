@@ -491,7 +491,7 @@ export function createStdoutRenderer(
     return (
       capabilities.supported &&
       isTerminalGraphicsProtocol(protocol) &&
-      Boolean(capabilities[protocol])
+      protocol === capabilities.preferredProtocol
     );
   }
   function requestTerminalGraphicsFlush(): void {

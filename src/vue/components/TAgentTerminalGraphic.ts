@@ -84,8 +84,7 @@ export type TAgentTerminalGraphicTraceEvent = Readonly<{
     | "defer"
     | "raw-draw"
     | "raw-clear"
-    | "raw-skip-scroll"
-    | "cache-hit";
+    | "raw-skip-scroll";
   id: string;
   kind: TAgentTerminalGraphicKind;
   protocol: TerminalGraphicsResolvedProtocol;
@@ -682,8 +681,7 @@ export const TAgentTerminalGraphic = defineComponent({
         current?.type === "terminal" &&
         size != null &&
         Boolean(output?.capabilities.supported) &&
-        (output?.capabilities.preferredProtocol === current.protocol ||
-          Boolean(output?.capabilities[current.protocol])) &&
+        output?.capabilities.preferredProtocol === current.protocol &&
         abs.x === full.x &&
         abs.y === full.y &&
         abs.w === full.w &&
@@ -1035,8 +1033,7 @@ export const TAgentTerminalGraphic = defineComponent({
           if (
             current?.type === "terminal" &&
             output?.capabilities.supported &&
-            (output.capabilities.preferredProtocol === current.protocol ||
-              output.capabilities[current.protocol]) &&
+            output.capabilities.preferredProtocol === current.protocol &&
             rawCanQueue.value
           ) {
             if (queueDrawGraphic(output, current, full)) {

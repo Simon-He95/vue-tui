@@ -798,10 +798,7 @@ export function validateTerminalGraphicsPayload(
   if (!normalizeTerminalGraphicSize(payload.w ?? 1, payload.h ?? 1)) return false;
   if (!capabilities.supported) return false;
   if (!isTerminalGraphicsProtocol(payload.protocol)) return false;
-
-  if (payload.protocol === "kitty" && !capabilities.kitty) return false;
-  if (payload.protocol === "iterm2" && !capabilities.iterm2) return false;
-  if (payload.protocol === "sixel" && !capabilities.sixel) return false;
+  if (payload.protocol !== capabilities.preferredProtocol) return false;
 
   return isSafeTerminalGraphicsSequence(payload.sequence, payload.protocol, payload.op ?? "draw");
 }

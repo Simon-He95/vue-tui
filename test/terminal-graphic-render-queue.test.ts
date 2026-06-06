@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { createTerminalGraphicRenderQueue } from "../src/agent.js";
 import {
-  createTerminalGraphicRenderQueue,
   getTerminalGraphicTraceMetrics,
   resetTerminalGraphicTraceMetrics,
-} from "../src/agent.js";
+} from "../src/renderer/terminal-graphics-trace.js";
 
 describe("terminal graphic render queue", () => {
   it("limits concurrency and caches results", async () => {

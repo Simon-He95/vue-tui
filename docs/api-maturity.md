@@ -37,7 +37,7 @@
 - `/agent` 是聚合入口，不能承载 provider/session/tool approval 等具体 agent 业务模型。
 - `/agent/mermaid` 是 optional peer bridge，不改变 `/agent` 主入口依赖边界。
 - `/experimental` 不能 re-export `/markdown` 的组件；高吞吐 log stack 和 markdown stack 分开发布。
-- `/agent` 中的 terminal graphics trace/hash/validation helper 属诊断 API；schema 和实现策略仍按 Experimental 处理。
+- `/agent` 的 terminal graphics 导出面保持在组件、PNG renderer helper、render queue、capability detection 和协议 sequence creator；trace/hash/validation/sanitize helper 保持 Internal。
 - Internal helper 只允许在源码内部相对路径引用，不能加入 `exports`、`src/index.ts`、`src/cli.ts`、`src/markdown.ts` 或 `src/experimental.ts`。
 - Deep import `@simon_he/vue-tui/dist/...` 不属于支持面。
 - Vue injection keys 使用全局 protocol namespace，让同一 protocol 的 root/cli/experimental bundle 可以互通；如果 context shape 发生不兼容变化，必须 bump injection protocol。

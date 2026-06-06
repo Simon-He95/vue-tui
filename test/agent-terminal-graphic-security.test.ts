@@ -6,15 +6,17 @@ import {
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
+  type TAgentTerminalGraphicRenderer,
+  type TAgentTerminalGraphicRenderResult,
+} from "../src/agent.js";
+import {
   isTerminalGraphicsProtocol,
   isSafeTerminalGraphicsSequence,
   normalizeTerminalGraphicSize,
   sanitizeTerminalFallbackText,
   validateTerminalGraphicFrame,
   validateTerminalGraphicsPayload,
-  type TAgentTerminalGraphicRenderer,
-  type TAgentTerminalGraphicRenderResult,
-} from "../src/agent.js";
+} from "../src/renderer/terminal-graphics.js";
 import { createStdoutRenderer, createTerminalApp, type CliOutput } from "../src/cli.js";
 
 const ESC = "\x1B";
@@ -345,6 +347,10 @@ describe("terminal graphics sequence validation", () => {
       stdoutIsTTY: true,
       env: { KITTY_WINDOW_ID: "1" },
     });
+    const multiCandidateCapabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "iTerm.app" },
+    });
 
     expect(
       validateTerminalGraphicsPayload(
@@ -369,6 +375,23 @@ describe("terminal graphics sequence validation", () => {
           sequence: createIterm2InlineImageSequence("QUJD"),
         },
         capabilities,
+      ),
+    ).toBe(false);
+
+    expect(multiCandidateCapabilities).toMatchObject({
+      preferredProtocol: "kitty",
+      candidates: ["kitty", "iterm2"],
+    });
+    expect(
+      validateTerminalGraphicsPayload(
+        {
+          id: "g1",
+          x: 0,
+          y: 0,
+          protocol: "iterm2",
+          sequence: createIterm2InlineImageSequence("QUJD"),
+        },
+        multiCandidateCapabilities,
       ),
     ).toBe(false);
 
