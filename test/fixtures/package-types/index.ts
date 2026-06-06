@@ -308,6 +308,13 @@ const stdoutOptions: StdoutRendererOptions = {
     isTTY: false,
   },
 };
+const stdoutDirectGraphicsOptions: StdoutRendererOptions = {
+  terminalGraphics: {
+    protocol: "kitty",
+    force: true,
+    passthrough: true,
+  },
+};
 const stdoutCapabilitiesOptions: StdoutRendererOptions = {
   terminalGraphics: detectTerminalGraphicsCapabilities({
     env: { VUE_TUI_TERMINAL_GRAPHICS: "iterm2" },

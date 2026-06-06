@@ -22,6 +22,9 @@ export type TerminalGraphicsDetectionInput = Readonly<{
   env?: Record<string, unknown>;
   isTTY?: boolean;
   stdoutIsTTY?: boolean;
+  protocol?: TerminalGraphicsResolvedProtocol | "auto" | "off";
+  force?: boolean;
+  passthrough?: boolean;
 }>;
 
 export type TerminalGraphicsCapabilities = Readonly<{
@@ -314,15 +317,20 @@ export function detectTerminalGraphicsCapabilities(
         ? "zellij"
         : null;
   const passthroughRequested =
-    truthy(envString(env, "VUE_TUI_TERMINAL_GRAPHICS_PASSTHROUGH")) ||
-    truthy(envString(env, "VUE_TUI_GRAPHICS_TMUX_PASSTHROUGH"));
+    options.passthrough ??
+    (truthy(envString(env, "VUE_TUI_TERMINAL_GRAPHICS_PASSTHROUGH")) ||
+      truthy(envString(env, "VUE_TUI_GRAPHICS_TMUX_PASSTHROUGH")));
   const passthroughSupported = !multiplexer || multiplexer === "tmux";
   const passthrough = passthroughRequested && passthroughSupported;
+  const protocolOptionProvided = options.protocol != null;
   const mode = normalizeMode(
-    envString(env, "VUE_TUI_TERMINAL_GRAPHICS") ?? envString(env, "VUE_TUI_GRAPHICS_PROTOCOL"),
+    options.protocol ??
+      envString(env, "VUE_TUI_TERMINAL_GRAPHICS") ??
+      envString(env, "VUE_TUI_GRAPHICS_PROTOCOL"),
   );
   const forcedByMode = mode === "kitty" || mode === "iterm2" || mode === "sixel";
-  const force = truthy(envString(env, "VUE_TUI_GRAPHICS_FORCE")) || forcedByMode;
+  const force =
+    options.force ?? (truthy(envString(env, "VUE_TUI_GRAPHICS_FORCE")) || forcedByMode);
   const base = {
     stdoutIsTTY,
     insideTmux,
@@ -334,7 +342,10 @@ export function detectTerminalGraphicsCapabilities(
   };
 
   if (mode === "none") {
-    return capabilitiesFor("none", { ...base, reason: "disabled-by-env" });
+    return capabilitiesFor("none", {
+      ...base,
+      reason: protocolOptionProvided ? "disabled-by-option" : "disabled-by-env",
+    });
   }
 
   if (!stdoutIsTTY && !force) {
@@ -360,11 +371,18 @@ export function detectTerminalGraphicsCapabilities(
   }
 
   if (mode === "kitty" || mode === "iterm2" || mode === "sixel") {
-    return capabilitiesFor(mode, { ...base, candidates: [mode], reason: "forced-by-env" });
+    return capabilitiesFor(mode, {
+      ...base,
+      candidates: [mode],
+      reason: protocolOptionProvided ? "forced-by-option" : "forced-by-env",
+    });
   }
 
   if (mode === "unicode") {
-    return capabilitiesFor("unicode", { ...base, reason: "unicode-forced-by-env" });
+    return capabilitiesFor("unicode", {
+      ...base,
+      reason: protocolOptionProvided ? "unicode-forced-by-option" : "unicode-forced-by-env",
+    });
   }
 
   const candidates = detectCandidates(env);

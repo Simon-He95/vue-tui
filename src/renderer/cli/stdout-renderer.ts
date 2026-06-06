@@ -2312,15 +2312,15 @@ export function createStdoutRenderer(
     const renderStart = performance.now();
 
     const size = terminal.size();
-    const graphicsClearsToRender = Array.from(pendingGraphicClears);
-    pendingGraphicClears.clear();
-    const graphicsToRender = Array.from(pendingGraphics.values()).sort((a, b) => {
+    const pendingGraphicClearsToRender = new Set(pendingGraphicClears);
+    const graphicsClearsToRender = Array.from(pendingGraphicClearsToRender);
+    const graphicsEntriesToRender = Array.from(pendingGraphics.entries()).sort(([, a], [, b]) => {
       const opA = a.op === "clear" ? 0 : 1;
       const opB = b.op === "clear" ? 0 : 1;
       return opA - opB || a.order - b.order;
     });
+    const graphicsToRender = graphicsEntriesToRender.map(([, payload]) => payload);
     let terminalGraphicsBlockScrollRegions = false;
-    pendingGraphics.clear();
     ensureRowEscapes(Math.max(size.rows, lastRenderedRows));
     ensureFingerprints(size.cols, size.rows);
     const bgSeq = openBg(defaultBg);
@@ -2397,8 +2397,6 @@ export function createStdoutRenderer(
           graphicsClearsToRender.push(id);
           explicitGraphicClears.add(id);
         }
-        activeGraphicSignatures.delete(id);
-        pendingGraphicSignatures.delete(id);
       }
     }
 
@@ -3496,11 +3494,15 @@ export function createStdoutRenderer(
 
       restoreTerminalGraphicsAfterWriteFailure = () => {
         for (const id of graphicsClearsToRender) pendingGraphicClears.add(id);
-        for (const payload of graphicsToRender) {
-          pendingGraphics.set(`${payload.id}:${payload.op}`, payload);
+        for (const [key, payload] of graphicsEntriesToRender) {
+          pendingGraphics.set(key, payload);
         }
       };
       commitTerminalGraphicsState = () => {
+        for (const id of pendingGraphicClearsToRender) pendingGraphicClears.delete(id);
+        for (const [key, payload] of graphicsEntriesToRender) {
+          if (pendingGraphics.get(key) === payload) pendingGraphics.delete(key);
+        }
         activeGraphics.clear();
         for (const [id, active] of nextActiveGraphics) activeGraphics.set(id, active);
         activeGraphicSignatures.clear();
@@ -4214,8 +4216,10 @@ export function createStdoutRenderer(
           recordStdoutTerminalGraphics({ active: 0 });
         }
       }
-    } catch (err) {
-      disposeError = err;
+    } catch {
+      activeGraphics.clear();
+      activeGraphicSignatures.clear();
+      recordStdoutTerminalGraphics({ active: 0 });
     }
     unregisterGraphicsOutput();
     off();

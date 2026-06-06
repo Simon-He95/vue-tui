@@ -297,6 +297,7 @@ type ResolvedTerminalGraphic = Readonly<{
   sequenceHash: string;
   sequenceBytes: number;
   fallback: string;
+  fallbackFromProps: boolean;
   clearSequence?: string;
   clearSequenceHash?: string;
   cols?: number;
@@ -560,6 +561,7 @@ export const TAgentTerminalGraphic = defineComponent({
         typeof maybeRaw.fallback === "string"
           ? sanitizeTerminalFallbackText(maybeRaw.fallback)
           : fallbackText();
+      const fallbackFromProps = typeof maybeRaw.fallback !== "string";
 
       if (!sequence || !protocol || !isSafeTerminalGraphicsSequence(sequence, protocol, "draw")) {
         return {
@@ -589,6 +591,7 @@ export const TAgentTerminalGraphic = defineComponent({
         sequenceHash: smallHash(sequence),
         sequenceBytes: stringByteLength(sequence),
         fallback,
+        fallbackFromProps,
         clearSequence,
         clearSequenceHash: clearSequence ? smallHash(clearSequence) : undefined,
         cols: declaredRows == null ? declaredCols : declaredSize?.width,
@@ -985,9 +988,11 @@ export const TAgentTerminalGraphic = defineComponent({
       }
     }
 
-    function scheduleRender(): void {
+    function scheduleRender(
+      options: Readonly<{ clearLastGraphic?: boolean }> = {},
+    ): void {
       const version = ++renderVersion;
-      queueClearLastGraphic();
+      if (options.clearLastGraphic ?? true) queueClearLastGraphic();
 
       if (!builtOnce || !props.streaming) {
         builtOnce = true;
@@ -1013,7 +1018,6 @@ export const TAgentTerminalGraphic = defineComponent({
       [
         () => props.content,
         () => props.kind,
-        () => props.fallback,
         () => props.renderer,
         () => props.w,
         () => props.h,
@@ -1030,6 +1034,24 @@ export const TAgentTerminalGraphic = defineComponent({
         scheduleRender();
       },
       { immediate: true },
+    );
+
+    watch(
+      () => props.fallback,
+      () => {
+        const current = graphic.value;
+        if (current?.type === "terminal") {
+          if (current.fallbackFromProps) {
+            graphic.value = { ...current, fallback: fallbackText() };
+            bump();
+            scheduler.invalidate({ priority: "low", reason: "data" });
+            return;
+          }
+          scheduleRender({ clearLastGraphic: false });
+          return;
+        }
+        scheduleRender();
+      },
     );
 
     onBeforeUnmount(() => {

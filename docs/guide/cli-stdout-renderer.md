@@ -82,6 +82,35 @@ Both renderers consume the same terminal model, so most component behavior shoul
 
 The renderer emits one composed output per flushed frame. For high-throughput apps, keep frequently changing areas small and use render planes so transcript, chrome, input, and overlay updates stay independent. See [Performance](/performance) and [High-throughput Rendering](/high-throughput-rendering) for dirty-row and plane guidance.
 
+## Terminal Graphics
+
+Terminal graphics are auto-detected from stdout TTY state and common terminal environment variables. Disable them with `terminalGraphics: false`.
+
+For demos, tests, or hosts that already know the terminal capability, pass an explicit protocol:
+
+```ts
+const stdout = createStdoutRenderer(app.terminal, {
+  terminalGraphics: {
+    protocol: "kitty",
+    force: true,
+  },
+});
+```
+
+Use `protocol: "iterm2"` or `protocol: "sixel"` for those renderers. Inside tmux, request passthrough explicitly:
+
+```ts
+const stdout = createStdoutRenderer(app.terminal, {
+  terminalGraphics: {
+    protocol: "kitty",
+    force: true,
+    passthrough: true,
+  },
+});
+```
+
+`stdout.dispose()` restores cursor and alt-screen state as before. Active terminal graphics are cleared on a best-effort basis during disposal; a failed image clear write does not make `dispose()` throw.
+
 ## Related Pages
 
 - [Vue CLI UI](/guide/vue-cli-ui)

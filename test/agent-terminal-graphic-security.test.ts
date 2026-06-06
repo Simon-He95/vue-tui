@@ -182,6 +182,45 @@ describe("terminal graphics capability detection", () => {
       }),
     ).toMatchObject({ protocol: "none", supported: false });
   });
+
+  it("supports direct protocol and passthrough options", () => {
+    expect(
+      detectTerminalGraphicsCapabilities({
+        stdoutIsTTY: false,
+        protocol: "kitty",
+        force: true,
+      }),
+    ).toMatchObject({
+      protocol: "kitty",
+      supported: true,
+      forced: true,
+      reason: "forced-by-option",
+    });
+
+    expect(
+      detectTerminalGraphicsCapabilities({
+        stdoutIsTTY: true,
+        env: { KITTY_WINDOW_ID: "1", TMUX: "/tmp/tmux" },
+        passthrough: true,
+      }),
+    ).toMatchObject({
+      protocol: "kitty",
+      supported: true,
+      passthrough: true,
+    });
+
+    expect(
+      detectTerminalGraphicsCapabilities({
+        stdoutIsTTY: true,
+        env: { KITTY_WINDOW_ID: "1" },
+        protocol: "off",
+      }),
+    ).toMatchObject({
+      protocol: "none",
+      supported: false,
+      reason: "disabled-by-option",
+    });
+  });
 });
 
 describe("terminal graphics sequence validation", () => {
