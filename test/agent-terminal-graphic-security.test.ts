@@ -288,6 +288,20 @@ describe("terminal graphics sequence validation", () => {
     );
   });
 
+  it("rejects invalid kitty numeric controls", () => {
+    expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,i=-1;QUJD${ST}`, "kitty")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,p=-1;QUJD${ST}`, "kitty")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=0;QUJD${ST}`, "kitty")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,r=-1;QUJD${ST}`, "kitty")).toBe(false);
+    expect(
+      isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,i=4294967296;QUJD${ST}`, "kitty"),
+    ).toBe(false);
+    expect(
+      isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,z=2147483648;QUJD${ST}`, "kitty"),
+    ).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,z=-1;QUJD${ST}`, "kitty")).toBe(true);
+  });
+
   it("rejects unsafe base64 input before creating public image sequences", () => {
     expect(createKittyGraphicsSequence(`QUJD${ST}${ESC}]52;c;bad${BEL}`)).toBe("");
     expect(createIterm2InlineImageSequence(`QUJD${BEL}${ESC}[2J`, { width: 4 })).toBe("");
@@ -295,11 +309,32 @@ describe("terminal graphics sequence validation", () => {
     expect(createIterm2InlineImageSequence("QUJD\n", { width: 4 })).toContain(":QUJD");
   });
 
+  it("omits invalid kitty numeric controls when creating public image sequences", () => {
+    const sequence = createKittyGraphicsSequence("QUJD", {
+      imageId: -1,
+      imageNumber: Number.POSITIVE_INFINITY,
+      placementId: -1,
+      columns: 0,
+      rows: -1,
+      zIndex: -1,
+    });
+
+    expect(sequence).not.toContain("i=-1");
+    expect(sequence).not.toContain("I=");
+    expect(sequence).not.toContain("p=-1");
+    expect(sequence).not.toContain("c=0");
+    expect(sequence).not.toContain("r=-1");
+    expect(sequence).toContain("z=-1");
+    expect(isSafeTerminalGraphicsSequence(sequence, "kitty")).toBe(true);
+  });
+
   it("creates safe kitty delete sequences", () => {
     const sequence = createKittyDeleteGraphicsSequence({ currentCell: true });
     const idSequence = createKittyDeleteGraphicsSequence({ imageId: 123, placementId: 456 });
 
     expect(createKittyDeleteGraphicsSequence()).toBe("");
+    expect(createKittyDeleteGraphicsSequence({ imageId: -1 })).toBe("");
+    expect(createKittyDeleteGraphicsSequence({ imageId: 123, placementId: -1 })).toBe("");
     expect(sequence).toContain("a=d");
     expect(sequence).toContain("d=c");
     expect(idSequence).toContain("a=d");

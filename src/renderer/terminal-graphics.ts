@@ -516,9 +516,30 @@ function kittyControlsUseOnly(
   return true;
 }
 
-function kittyControlIsInteger(controls: ReadonlyMap<string, string>, key: string): boolean {
+const KITTY_UINT32_MAX = 0xffffffff;
+const KITTY_INT32_MIN = -0x80000000;
+const KITTY_INT32_MAX = 0x7fffffff;
+
+function kittyControlIsUint32(
+  controls: ReadonlyMap<string, string>,
+  key: string,
+  min = 0,
+): boolean {
   const value = controls.get(key);
-  return value == null || /^-?\d+$/.test(value);
+  if (value == null) return true;
+  if (!/^\d+$/.test(value)) return false;
+
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= min && n <= KITTY_UINT32_MAX;
+}
+
+function kittyControlIsInt32(controls: ReadonlyMap<string, string>, key: string): boolean {
+  const value = controls.get(key);
+  if (value == null) return true;
+  if (!/^-?\d+$/.test(value)) return false;
+
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= KITTY_INT32_MIN && n <= KITTY_INT32_MAX;
 }
 
 function validateKittySharedSafeControls(controls: ReadonlyMap<string, string>): boolean {
@@ -528,9 +549,15 @@ function validateKittySharedSafeControls(controls: ReadonlyMap<string, string>):
   const cursorMove = controls.get("C");
   if (cursorMove != null && !/^[01]$/.test(cursorMove)) return false;
 
-  for (const key of ["i", "I", "p", "c", "r", "z"]) {
-    if (!kittyControlIsInteger(controls, key)) return false;
+  for (const key of ["i", "I", "p"]) {
+    if (!kittyControlIsUint32(controls, key)) return false;
   }
+
+  for (const key of ["c", "r"]) {
+    if (!kittyControlIsUint32(controls, key, 1)) return false;
+  }
+
+  if (!kittyControlIsInt32(controls, "z")) return false;
 
   // Refuse Kitty local-client transfers: file/temp-file/shared-memory modes
   // make the terminal read host paths or shared-memory names from the payload.
@@ -815,10 +842,18 @@ export function validateTerminalGraphicsPayload(
   return isSafeTerminalGraphicsSequence(payload.sequence, payload.protocol, payload.op ?? "draw");
 }
 
-function intControl(key: string, value: number | undefined): string {
+function uint32Control(key: string, value: number | undefined, min = 0): string {
   if (value == null) return "";
   const n = Math.floor(value);
-  return Number.isFinite(n) ? `${key}=${n}` : "";
+  return Number.isSafeInteger(n) && n >= min && n <= KITTY_UINT32_MAX ? `${key}=${n}` : "";
+}
+
+function int32Control(key: string, value: number | undefined): string {
+  if (value == null) return "";
+  const n = Math.floor(value);
+  return Number.isSafeInteger(n) && n >= KITTY_INT32_MIN && n <= KITTY_INT32_MAX
+    ? `${key}=${n}`
+    : "";
 }
 
 function sanitizeBase64(value: string): string {
@@ -862,12 +897,12 @@ export function createKittyGraphicsSequence(
     "f=100",
     options.quiet === false ? "" : "q=2",
     options.noCursorMove === false ? "" : "C=1",
-    intControl("i", options.imageId),
-    intControl("I", options.imageNumber),
-    intControl("p", options.placementId),
-    intControl("c", options.columns),
-    intControl("r", options.rows),
-    intControl("z", options.zIndex),
+    uint32Control("i", options.imageId),
+    uint32Control("I", options.imageNumber),
+    uint32Control("p", options.placementId),
+    uint32Control("c", options.columns, 1),
+    uint32Control("r", options.rows, 1),
+    int32Control("z", options.zIndex),
   ].filter(Boolean);
 
   return chunks
@@ -900,9 +935,13 @@ export function createKittyDeleteGraphicsSequence(
   if (options.allVisible) {
     controls.push(`d=${options.freeImageData ? "A" : "a"}`);
   } else if (options.imageId != null) {
+    const imageId = uint32Control("i", options.imageId);
+    const placementId = uint32Control("p", options.placementId);
+    if (!imageId || (options.placementId != null && !placementId)) return "";
+
     controls.push(`d=${options.freeImageData ? "I" : "i"}`);
-    controls.push(intControl("i", options.imageId));
-    controls.push(intControl("p", options.placementId));
+    controls.push(imageId);
+    controls.push(placementId);
   } else if (options.currentCell) {
     controls.push(`d=${options.freeImageData ? "C" : "c"}`);
   } else {
