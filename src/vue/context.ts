@@ -130,6 +130,7 @@ export type TerminalGraphicsActivity = Readonly<{
   scrolling: Readonly<Ref<boolean>>;
   version: Readonly<Ref<number>>;
   markScroll: () => void;
+  setScrollIdleMs: (value: number | undefined) => void;
   dispose: () => void;
 }>;
 
@@ -178,7 +179,7 @@ export const DialogContextKey = injectionKey<boolean>("DialogContext");
 export function createTerminalGraphicsActivity(
   options: TerminalGraphicsActivityOptions = {},
 ): TerminalGraphicsActivity {
-  const scrollIdleMs = Math.max(16, Math.floor(options.scrollIdleMs ?? 96));
+  let scrollIdleMs = normalizeTerminalGraphicsScrollIdleMs(options.scrollIdleMs);
   const traceId = options.traceId ?? "TerminalGraphicsActivity";
   const scrolling = ref(false);
   const version = ref(0);
@@ -239,6 +240,17 @@ export function createTerminalGraphicsActivity(
     }, scrollIdleMs);
   }
 
+  function setScrollIdleMs(value: number | undefined): void {
+    scrollIdleMs = normalizeTerminalGraphicsScrollIdleMs(value);
+    if (!scrolling.value) return;
+
+    clearTimer();
+    timer = setTimeout(() => {
+      timer = null;
+      finishScroll();
+    }, scrollIdleMs);
+  }
+
   function dispose(): void {
     clearTimer();
     finishScroll();
@@ -248,6 +260,11 @@ export function createTerminalGraphicsActivity(
     scrolling: readonly(scrolling) as Readonly<Ref<boolean>>,
     version: readonly(version) as Readonly<Ref<number>>,
     markScroll,
+    setScrollIdleMs,
     dispose,
   };
+}
+
+function normalizeTerminalGraphicsScrollIdleMs(value: number | undefined): number {
+  return Math.max(16, Math.floor(value ?? 96));
 }

@@ -239,6 +239,10 @@ export const TVirtualRows = defineComponent({
       traceId: `TVirtualRows:${virtualRowsInstanceId}:terminal-graphics`,
     });
     provide(TerminalGraphicsActivityKey, terminalGraphicsActivity);
+    watch(
+      () => props.terminalGraphicScrollIdleMs,
+      (value) => terminalGraphicsActivity.setScrollIdleMs(value),
+    );
 
     const frameTaskId = `TVirtualRows:${virtualRowsInstanceId}`;
     const innerScrollTop = ref(0);

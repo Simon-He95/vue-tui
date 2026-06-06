@@ -4028,16 +4028,17 @@ export function createStdoutRenderer(
       let terminalGraphicsClears = 0;
       for (const active of activeGraphics.values()) {
         const visibleRect = clipGraphicRectToViewport(active, size);
-        if (!visibleRect) continue;
-
-        clearParts.push(clearGraphicRect(visibleRect));
+        if (visibleRect) clearParts.push(clearGraphicRect(visibleRect));
         if (active.clearSequence) {
+          const cell = visibleRect
+            ? { x: visibleRect.x, y: visibleRect.y }
+            : clampCellToViewport({ cellX: active.x, cellY: active.y }, size);
           clearParts.push(
-            `\u001B[${visibleRect.y + 1};${visibleRect.x + 1}H`,
+            `\u001B[${cell.y + 1};${cell.x + 1}H`,
             maybeWrapTerminalGraphic(active.clearSequence),
           );
         }
-        terminalGraphicsClears++;
+        if (visibleRect || active.clearSequence) terminalGraphicsClears++;
       }
       activeGraphics.clear();
       activeGraphicSignatures.clear();

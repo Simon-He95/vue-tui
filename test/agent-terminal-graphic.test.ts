@@ -1,4 +1,4 @@
-import { defineComponent, h, nextTick, provide, ref } from "vue";
+import { defineComponent, h, inject, nextTick, provide, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   TAgentTerminalGraphic,
@@ -158,6 +158,64 @@ describe("TAgentTerminalGraphic", () => {
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
+    app.dispose();
+  });
+
+  it("clears offscreen active terminal graphics on stdout dispose", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: false,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "offscreen-kitty",
+        x: 10,
+        y: 4,
+        w: 4,
+        h: 2,
+        protocol: "kitty",
+        sequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    expect(writes.join("")).toContain(sequence);
+
+    app.terminal.resize(4, 2);
+    writes.length = 0;
+    stdout.dispose();
+    expect(writes.join("")).toContain(clearSequence);
+
     app.dispose();
   });
 
@@ -548,6 +606,67 @@ describe("TAgentTerminalGraphic", () => {
     stdout.dispose();
     expect(writes.join("")).toContain(clearSequence);
 
+    app.dispose();
+  });
+
+  it("prioritizes explicit sequence results over compatible text fields", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const kittySequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(
+      () =>
+        ({
+          type: "sequence",
+          protocol: "kitty",
+          sequence: kittySequence,
+          fallback: "fallback",
+          text: "debug text",
+        }) as unknown as TAgentTerminalGraphicRenderResult,
+    );
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(writes.join("")).toContain(kittySequence);
+    expect(rowText(app, 0)).toBe("");
+
+    stdout.dispose();
     app.dispose();
   });
 
@@ -1305,10 +1424,7 @@ describe("TAgentTerminalGraphic", () => {
       cols: 1_000_000,
     }));
     const renderer = createPngTerminalGraphicRenderer({ toPngBase64 });
-    const makeContext = (
-      protocol: "kitty" | "iterm2",
-      capabilities: typeof kittyCapabilities,
-    ) => ({
+    const makeContext = (protocol: "kitty" | "iterm2", capabilities: typeof kittyCapabilities) => ({
       kind: "image" as const,
       width: 4,
       final: true,
@@ -1778,6 +1894,58 @@ describe("TAgentTerminalGraphic", () => {
     }
   });
 
+  it("updates virtual row terminal graphics idle delay when the prop changes", async () => {
+    const idleMs = ref(100);
+    let activity: ReturnType<typeof createTerminalGraphicsActivity> | null = null;
+    let fakeTimers = false;
+    const Probe = defineComponent({
+      setup() {
+        activity = inject(TerminalGraphicsActivityKey, null);
+        return () => null;
+      },
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TVirtualRows, {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 1,
+            itemCount: 1,
+            itemVersion: 1,
+            terminalGraphicScrollIdleMs: idleMs.value,
+            getItem: () => "item",
+            paintItem: () => undefined,
+            renderItemNodes: () => h(Probe),
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+
+    try {
+      app.mount();
+      await settle(app);
+      expect(activity).not.toBeNull();
+
+      idleMs.value = 32;
+      await nextTick();
+      app.scheduler.flushNow();
+      await nextTick();
+
+      vi.useFakeTimers();
+      fakeTimers = true;
+      activity!.markScroll();
+      vi.advanceTimersByTime(31);
+      expect(activity!.scrolling.value).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(activity!.scrolling.value).toBe(false);
+    } finally {
+      app.dispose();
+      if (fakeTimers) vi.useRealTimers();
+    }
+  });
+
   it("suspends virtual row raw rendering while scrolling and hydrates after idle", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
@@ -1955,6 +2123,7 @@ describe("TAgentTerminalGraphic", () => {
           markScroll() {
             activityVersion.value++;
           },
+          setScrollIdleMs() {},
           dispose() {},
         });
         return () =>

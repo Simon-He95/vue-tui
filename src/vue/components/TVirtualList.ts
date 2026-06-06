@@ -151,6 +151,10 @@ export const TVirtualList = defineComponent({
       traceId: `TVirtualList:${virtualListInstanceId}:terminal-graphics`,
     });
     provide(TerminalGraphicsActivityKey, terminalGraphicsActivity);
+    watch(
+      () => props.terminalGraphicScrollIdleMs,
+      (value) => terminalGraphicsActivity.setScrollIdleMs(value),
+    );
 
     const focused = ref(false);
     const active = ref(props.modelValue);

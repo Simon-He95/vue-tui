@@ -480,14 +480,9 @@ export const TAgentTerminalGraphic = defineComponent({
           text: result.text,
         };
       }
-      if ("text" in result) {
-        return {
-          type: "text",
-          text: result.text,
-        };
-      }
 
       const maybeRaw = result as Readonly<{
+        type?: unknown;
         sequence?: unknown;
         protocol?: unknown;
         fallback?: unknown;
@@ -495,6 +490,15 @@ export const TAgentTerminalGraphic = defineComponent({
         cols?: unknown;
         rows?: unknown;
       }>;
+      const isRawCandidate =
+        maybeRaw.type === "sequence" || "sequence" in result || "protocol" in result;
+      if (!isRawCandidate && "text" in result) {
+        return {
+          type: "text",
+          text: result.text,
+        };
+      }
+
       const sequence = typeof maybeRaw.sequence === "string" ? maybeRaw.sequence : "";
       const protocol = isTerminalGraphicsProtocol(maybeRaw.protocol) ? maybeRaw.protocol : null;
       const fallback =
