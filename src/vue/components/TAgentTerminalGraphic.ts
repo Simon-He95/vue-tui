@@ -324,6 +324,7 @@ export const TAgentTerminalGraphic = defineComponent({
     const rawId = `TAgentTerminalGraphic:${instance?.uid ?? "unknown"}`;
     const frameTaskId = `${rawId}:render`;
     const lastDrawnGraphic = shallowRef<LastDrawnGraphic | null>(null);
+    const rawDrawRejectedKey = shallowRef<string | null>(null);
     const reservedTerminalGraphicSize = shallowRef<ReservedTerminalGraphicSize | null>(null);
     let lastRawSkipScrollKey = "";
     let lastDeferTraceKey = "";
@@ -652,9 +653,14 @@ export const TAgentTerminalGraphic = defineComponent({
 
       if (!accepted) {
         lastDrawnGraphic.value = null;
+        if (rawDrawRejectedKey.value !== drawKey) {
+          rawDrawRejectedKey.value = drawKey;
+          scheduler.invalidate({ priority: "low", reason: "data" });
+        }
         return false;
       }
 
+      rawDrawRejectedKey.value = null;
       lastDrawnGraphic.value = {
         id: rawId,
         x: rect.x,
@@ -979,7 +985,11 @@ export const TAgentTerminalGraphic = defineComponent({
       if (showingInitialLoadingText.value) return splitTextOutput(props.loadingText);
       const current = graphic.value;
       if (!current) return splitTextOutput(fallbackText());
-      if (current.type === "terminal" && rawCanQueue.value) return markRaw([""]);
+      if (current.type === "terminal" && rawCanQueue.value) {
+        const clearSequence = resolveClearSequence(current);
+        const drawKey = terminalDrawKey(current, fullRect.value, clearSequence);
+        if (rawDrawRejectedKey.value !== drawKey) return markRaw([""]);
+      }
       const text = current.type === "terminal" ? current.fallback : current.text;
       const lines = splitTextOutput(text);
       return text.trim().length > 0 && !hasVisibleOutput(lines)
@@ -1011,6 +1021,7 @@ export const TAgentTerminalGraphic = defineComponent({
         rawOutputCanRenderValue.value,
         rawCanRender.value,
         rawCanQueue.value,
+        rawDrawRejectedKey.value,
         rawSuppressedByScroll.value,
         isParentScrolling.value,
         graphicsActivityVersion.value,

@@ -1351,49 +1351,57 @@ describe("TAgentTerminalGraphic", () => {
     unregister();
   });
 
-  it("treats terminal graphics output queue throws as rejected raw operations", async () => {
-    const capabilities = detectTerminalGraphicsCapabilities({
-      stdoutIsTTY: true,
-      env: { KITTY_WINDOW_ID: "1" },
-    });
-    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
-      type: "sequence" as const,
-      protocol: "kitty" as const,
-      sequence: createKittyGraphicsSequence("QUJD"),
-      fallback: "fallback",
-    }));
-    const App = defineComponent({
-      setup() {
-        return () =>
-          h(TAgentTerminalGraphic, {
-            x: 0,
-            y: 0,
-            w: 8,
-            h: 1,
-            content: "image.png",
-            fallback: "fallback",
-            renderer,
-          });
-      },
-    });
+  it.each(["returns false", "throws"] as const)(
+    "shows fallback when terminal graphics output queue %s for raw draws",
+    async (mode) => {
+      const capabilities = detectTerminalGraphicsCapabilities({
+        stdoutIsTTY: true,
+        env: { KITTY_WINDOW_ID: "1" },
+      });
+      let queueAttempts = 0;
+      const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence: createKittyGraphicsSequence("QUJD"),
+        fallback: "fallback",
+      }));
+      const App = defineComponent({
+        setup() {
+          return () =>
+            h(TAgentTerminalGraphic, {
+              x: 0,
+              y: 0,
+              w: 8,
+              h: 1,
+              content: "image.png",
+              fallback: "fallback",
+              renderer,
+            });
+        },
+      });
 
-    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
-    const unregister = registerTerminalGraphicsOutput(app.terminal, {
-      capabilities,
-      queue() {
-        throw new Error("stdout write failed");
-      },
-      isActive: () => false,
-    });
+      const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+      const unregister = registerTerminalGraphicsOutput(app.terminal, {
+        capabilities,
+        queue() {
+          queueAttempts++;
+          if (mode === "throws") throw new Error("stdout write failed");
+          return false;
+        },
+        isActive: () => false,
+      });
 
-    app.mount();
-    await settle(app);
+      app.mount();
+      await settle(app);
 
-    expect(renderer).toHaveBeenCalledTimes(1);
+      expect(renderer).toHaveBeenCalledTimes(1);
+      expect(queueAttempts).toBeGreaterThan(0);
+      expect(rowText(app, 0)).toBe("fallback");
 
-    app.dispose();
-    unregister();
-  });
+      app.dispose();
+      unregister();
+    },
+  );
 
   it("rerenders PNG graphics after a clipped viewport becomes fully raw-visible", async () => {
     const writes: string[] = [];
