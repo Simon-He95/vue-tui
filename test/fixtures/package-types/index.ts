@@ -341,6 +341,7 @@ console.log(
   driver,
   stdoutOutput,
   stdoutOptions,
+  stdoutDirectGraphicsOptions,
   stdoutCapabilitiesOptions,
   stdoutDisabledGraphicsOptions,
   stdoutInternalOptions,
