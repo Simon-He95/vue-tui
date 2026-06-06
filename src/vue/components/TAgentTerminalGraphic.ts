@@ -515,6 +515,12 @@ export const TAgentTerminalGraphic = defineComponent({
         rawClear && isSafeTerminalGraphicsSequence(rawClear, protocol, "clear")
           ? rawClear
           : undefined;
+      const declaredRows = positiveInt(maybeRaw.rows);
+      const declaredCols = positiveInt(maybeRaw.cols);
+      const declaredSize =
+        declaredRows == null
+          ? null
+          : normalizeTerminalGraphicSize(declaredCols ?? props.w, declaredRows);
 
       return {
         type: "terminal",
@@ -525,8 +531,8 @@ export const TAgentTerminalGraphic = defineComponent({
         fallback,
         clearSequence,
         clearSequenceHash: clearSequence ? smallHash(clearSequence) : undefined,
-        cols: positiveInt(maybeRaw.cols),
-        rows: positiveInt(maybeRaw.rows),
+        cols: declaredRows == null ? declaredCols : declaredSize?.width,
+        rows: declaredSize?.height,
       };
     }
 
@@ -573,8 +579,8 @@ export const TAgentTerminalGraphic = defineComponent({
         }
       }
 
-      lastDrawnGraphic.value = null;
       if (accepted) {
+        lastDrawnGraphic.value = null;
         trace("raw-clear", {
           x: previous.x,
           y: previous.y,

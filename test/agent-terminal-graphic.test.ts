@@ -21,7 +21,10 @@ import {
   getStdoutRendererMetrics,
   type CliOutput,
 } from "../src/cli.js";
-import { getTerminalGraphicsOutput } from "../src/renderer/terminal-graphics.js";
+import {
+  getTerminalGraphicsOutput,
+  registerTerminalGraphicsOutput,
+} from "../src/renderer/terminal-graphics.js";
 import {
   getTerminalGraphicTraceMetrics,
   resetTerminalGraphicTraceMetrics,
@@ -546,6 +549,136 @@ describe("TAgentTerminalGraphic", () => {
     expect(writes.join("")).toContain(clearSequence);
 
     app.dispose();
+  });
+
+  it("does not reserve unbounded layout height from renderer rows", async () => {
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const queued: Array<{ op?: string; w?: number; h?: number; protocol?: string }> = [];
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      rows: 1_000_000,
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 8,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const unregister = registerTerminalGraphicsOutput(app.terminal, {
+      capabilities,
+      queue(payload) {
+        queued.push(payload);
+        return true;
+      },
+      isActive: () => true,
+    });
+
+    app.mount();
+    await settle(app);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(queued.find((payload) => payload.op !== "clear")).toMatchObject({
+      protocol: "kitty",
+      w: 8,
+      h: 1,
+    });
+    expect(rowText(app, 0)).toBe("");
+    expect(rowText(app, 1)).toBe("");
+
+    app.dispose();
+    unregister();
+  });
+
+  it("retries clearing the last raw graphic when a clear payload is rejected", async () => {
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const content = ref("image-a.png");
+    const suspended = ref(false);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
+    let acceptClear = false;
+    let drawCount = 0;
+    let clearAttempts = 0;
+    let acceptedClears = 0;
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      clearSequence,
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            content: content.value,
+            fallback: "fallback",
+            suspended: suspended.value,
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const unregister = registerTerminalGraphicsOutput(app.terminal, {
+      capabilities,
+      queue(payload) {
+        if (payload.op === "clear") {
+          clearAttempts++;
+          if (acceptClear) {
+            acceptedClears++;
+            return true;
+          }
+          return false;
+        }
+
+        drawCount++;
+        return true;
+      },
+      isActive: () => true,
+    });
+
+    app.mount();
+    await settle(app);
+    expect(drawCount).toBeGreaterThan(0);
+
+    suspended.value = true;
+    await settle(app);
+    const failedAttempts = clearAttempts;
+    expect(failedAttempts).toBeGreaterThan(0);
+    expect(acceptedClears).toBe(0);
+
+    acceptClear = true;
+    content.value = "image-b.png";
+    await settle(app);
+
+    expect(clearAttempts).toBeGreaterThan(failedAttempts);
+    expect(acceptedClears).toBeGreaterThan(0);
+
+    app.dispose();
+    unregister();
   });
 
   it("rerenders PNG graphics after a clipped viewport becomes fully raw-visible", async () => {
@@ -1105,6 +1238,56 @@ describe("TAgentTerminalGraphic", () => {
     expect(secondSequence).toContain("p=321");
     expect(secondSequence).not.toBe(firstSequence);
     expect(queue.stats().cacheEntries).toBe(1);
+  });
+
+  it("normalizes oversized PNG frame dimensions before creating terminal sequences", async () => {
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      fallback: "png fallback",
+      cols: 1_000_000,
+      rows: 1_000_000,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({ toPngBase64 });
+    const result = await renderer("image.png", {
+      kind: "image",
+      width: 4,
+      height: 2,
+      final: true,
+      streaming: false,
+      protocol: "kitty",
+      capabilities,
+      signal: new AbortController().signal,
+      imageId: 123,
+      placementId: 456,
+      visible: true,
+      rawVisible: true,
+      scrolling: false,
+      viewport: {
+        visible: true,
+        rawVisible: true,
+        scrolling: false,
+        rect: { x: 0, y: 0, w: 4, h: 2 },
+        fullRect: { x: 0, y: 0, w: 4, h: 2 },
+      },
+    });
+
+    expect(result).toMatchObject({
+      type: "sequence",
+      protocol: "kitty",
+      fallback: "png fallback",
+      cols: 4,
+    });
+    expect(typeof result === "object" && result && "rows" in result ? result.rows : undefined).toBe(
+      undefined,
+    );
+    const sequence =
+      typeof result === "object" && result && "sequence" in result ? String(result.sequence) : "";
+    expect(sequence).not.toContain("c=1000000");
+    expect(sequence).not.toContain("r=1000000");
   });
 
   it("does not render PNG frames when raw terminal output cannot be placed", async () => {

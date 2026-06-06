@@ -171,6 +171,18 @@ function readStdoutIsTTY(): boolean {
   return Boolean(maybeProcess?.stdout?.isTTY);
 }
 
+function readProcessEnv(): Record<string, unknown> {
+  const maybeProcess = (
+    globalThis as {
+      process?: {
+        env?: Record<string, unknown>;
+      };
+    }
+  ).process;
+
+  return maybeProcess?.env ?? {};
+}
+
 function normalizeMode(value: unknown): TerminalGraphicsResolvedProtocol | "auto" {
   const raw = String(value ?? "auto")
     .trim()
@@ -282,7 +294,7 @@ function capabilitiesFor(
 export function detectTerminalGraphicsCapabilities(
   options: TerminalGraphicsDetectionInput = {},
 ): TerminalGraphicsCapabilities {
-  const env = options.env ?? {};
+  const env = options.env ?? readProcessEnv();
   const stdoutIsTTY = options.stdoutIsTTY ?? options.isTTY ?? readStdoutIsTTY();
   const term = String(envString(env, "TERM") ?? "").toLowerCase();
   const insideTmux = Boolean(envString(env, "TMUX")) || term.includes("tmux");

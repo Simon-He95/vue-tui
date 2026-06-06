@@ -8,6 +8,7 @@ import {
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   hashTerminalGraphicsString,
+  normalizeTerminalGraphicSize,
   sanitizeTerminalFallbackText,
 } from "../../renderer/terminal-graphics.js";
 import { createTerminalGraphicRenderQueue } from "../../renderer/terminal-graphic-render-queue.js";
@@ -92,11 +93,16 @@ function normalizeCachedPngFrame(
   frame: PngTerminalGraphicFrame,
   context: TAgentTerminalGraphicRendererContext,
 ): CachedPngTerminalGraphicFrame {
+  const fallbackCols = normalizeTerminalGraphicSize(context.width, 1)?.width ?? 1;
+  const rawCols = positiveInt(frame.cols) ?? fallbackCols;
+  const rawRows = positiveInt(frame.rows) ?? positiveInt(context.height);
+  const size = normalizeTerminalGraphicSize(rawCols, rawRows ?? 1);
+
   return {
     base64: String(frame.base64 ?? "").replace(/\s+/g, ""),
     fallback: frame.fallback == null ? undefined : sanitizeTerminalFallbackText(frame.fallback),
-    cols: positiveInt(frame.cols) ?? positiveInt(context.width) ?? 1,
-    rows: positiveInt(frame.rows) ?? positiveInt(context.height),
+    cols: size?.width ?? fallbackCols,
+    rows: rawRows == null ? undefined : size?.height,
   };
 }
 

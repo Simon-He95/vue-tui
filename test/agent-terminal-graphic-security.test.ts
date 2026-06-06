@@ -61,6 +61,30 @@ function withEnv<T>(env: Record<string, string | undefined>, run: () => T): T {
 }
 
 describe("terminal graphics capability detection", () => {
+  it("reads process.env by default in Node", () => {
+    withEnv(
+      {
+        KITTY_WINDOW_ID: "1",
+        CI: undefined,
+        TMUX: undefined,
+        STY: undefined,
+        ZELLIJ: undefined,
+        ZELLIJ_SESSION_NAME: undefined,
+        TERM: undefined,
+        TERM_PROGRAM: undefined,
+        VUE_TUI_TERMINAL_GRAPHICS: undefined,
+        VUE_TUI_GRAPHICS_PROTOCOL: undefined,
+        VUE_TUI_GRAPHICS_FORCE: undefined,
+      },
+      () => {
+        expect(detectTerminalGraphicsCapabilities({ stdoutIsTTY: true })).toMatchObject({
+          protocol: "kitty",
+          supported: true,
+        });
+      },
+    );
+  });
+
   it("uses graphics protocols only when tty and not blocked by ci or tmux", () => {
     expect(
       detectTerminalGraphicsCapabilities({
