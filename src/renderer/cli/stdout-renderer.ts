@@ -3262,7 +3262,7 @@ export function createStdoutRenderer(
       for (let row = 0; row < rect.h; row++) {
         const y = rect.y + row;
         if (rowWasPaintedByTextRenderer(y)) continue;
-        out += `\u001B[${y + 1};${rect.x + 1}H${blank}`;
+        out += `\u001B[${y + 1};${rect.x + 1}H${bgSeq}${blank}${SGR_RESET}`;
       }
 
       return out;

@@ -349,7 +349,7 @@ export const TAgentTerminalGraphic = defineComponent({
       ].join("\x1F"),
     );
     const imageId = computed(() =>
-      stableTerminalGraphicNumericId(`image:${stableGraphicKey.value}`),
+      stableTerminalGraphicNumericId(`image:${rawId}:${stableGraphicKey.value}`),
     );
     const placementId = computed(() =>
       stableTerminalGraphicNumericId(`placement:${rawId}:${stableGraphicKey.value}`),
@@ -761,7 +761,7 @@ export const TAgentTerminalGraphic = defineComponent({
       if (!props.renderer) return false;
       if (!props.content.trim()) return false;
       if (shouldDeferRender()) return false;
-      if (!rawOutputCanRenderValue.value || rawSuppressedByScroll.value) return false;
+      if (rawSuppressedByScroll.value) return false;
 
       const protocol = currentCapabilities().protocol;
       return (
