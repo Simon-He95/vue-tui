@@ -1112,6 +1112,129 @@ describe("TAgentTerminalGraphic", () => {
     unregister();
   });
 
+  it("does not replace remembered raw graphic state when clearing the previous draw is rejected", async () => {
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const content = ref("image-a.png");
+    const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
+    let acceptClear = false;
+    let clearAttempts = 0;
+    let acceptedClears = 0;
+    const draws: string[] = [];
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((value) => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence: createKittyGraphicsSequence(
+        value === "image-c.png" ? "R0hJ" : value === "image-b.png" ? "REVG" : "QUJD",
+      ),
+      clearSequence,
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            content: content.value,
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const unregister = registerTerminalGraphicsOutput(app.terminal, {
+      capabilities,
+      queue(payload) {
+        if (payload.op === "clear") {
+          clearAttempts++;
+          if (acceptClear) {
+            acceptedClears++;
+            return true;
+          }
+          return false;
+        }
+
+        draws.push(payload.sequence);
+        return true;
+      },
+      isActive: () => true,
+    });
+
+    app.mount();
+    await settle(app);
+
+    expect(draws).toHaveLength(1);
+
+    content.value = "image-b.png";
+    await settle(app);
+
+    expect(clearAttempts).toBeGreaterThan(0);
+    expect(acceptedClears).toBe(0);
+    expect(draws).toHaveLength(1);
+    expect(draws[0]).toContain("QUJD");
+
+    acceptClear = true;
+    content.value = "image-c.png";
+    await settle(app);
+
+    expect(acceptedClears).toBeGreaterThan(0);
+    expect(draws).toHaveLength(2);
+    expect(draws[1]).toContain("R0hJ");
+
+    app.dispose();
+    unregister();
+  });
+
+  it("treats terminal graphics output queue throws as rejected raw operations", async () => {
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence: createKittyGraphicsSequence("QUJD"),
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const unregister = registerTerminalGraphicsOutput(app.terminal, {
+      capabilities,
+      queue() {
+        throw new Error("stdout write failed");
+      },
+      isActive: () => false,
+    });
+
+    app.mount();
+    await settle(app);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+
+    app.dispose();
+    unregister();
+  });
+
   it("rerenders PNG graphics after a clipped viewport becomes fully raw-visible", async () => {
     const writes: string[] = [];
     const output: CliOutput = {

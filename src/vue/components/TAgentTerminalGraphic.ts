@@ -338,11 +338,12 @@ export const TAgentTerminalGraphic = defineComponent({
       graphicsOutputVersion.value = getTerminalGraphicsOutputVersion(terminal);
     });
     const fallbackText = () => props.fallback ?? props.content;
+    const contentIdentity = computed(() => `${props.content.length}:${smallHash(props.content)}`);
     const stableGraphicKey = computed(() =>
       [
         props.cacheKey ?? "",
         props.kind,
-        props.content,
+        contentIdentity.value,
         props.w,
         props.h ?? "",
         props.final ? "final" : "draft",
@@ -568,18 +569,26 @@ export const TAgentTerminalGraphic = defineComponent({
 
       if (output) {
         if (previous.clearSequence) {
-          accepted = output.queue({
-            id: previous.id,
-            x: previous.x,
-            y: previous.y,
-            w: previous.w,
-            h: previous.h,
-            protocol: previous.protocol,
-            sequence: previous.clearSequence,
-            op: "clear",
-          });
+          try {
+            accepted = output.queue({
+              id: previous.id,
+              x: previous.x,
+              y: previous.y,
+              w: previous.w,
+              h: previous.h,
+              protocol: previous.protocol,
+              sequence: previous.clearSequence,
+              op: "clear",
+            });
+          } catch {
+            accepted = false;
+          }
         } else {
-          accepted = Boolean(output.clear?.(previous.id));
+          try {
+            accepted = Boolean(output.clear?.(previous.id));
+          } catch {
+            accepted = false;
+          }
         }
       }
 
@@ -613,22 +622,27 @@ export const TAgentTerminalGraphic = defineComponent({
 
       if (previous?.drawKey === drawKey && previousStillActive) return false;
       if (previousStillActive) {
-        queueClearLastGraphic();
+        if (!queueClearLastGraphic()) return false;
       } else if (previous) {
         lastDrawnGraphic.value = null;
       }
 
-      const accepted = output.queue({
-        id: rawId,
-        x: rect.x,
-        y: rect.y,
-        w: rect.w,
-        h: rect.h,
-        protocol: current.protocol,
-        sequence: current.sequence,
-        clearSequence,
-        fallbackText: current.fallback,
-      });
+      let accepted = false;
+      try {
+        accepted = output.queue({
+          id: rawId,
+          x: rect.x,
+          y: rect.y,
+          w: rect.w,
+          h: rect.h,
+          protocol: current.protocol,
+          sequence: current.sequence,
+          clearSequence,
+          fallbackText: current.fallback,
+        });
+      } catch {
+        accepted = false;
+      }
 
       if (!accepted) {
         lastDrawnGraphic.value = null;
