@@ -105,7 +105,7 @@ export type CliOutput = Readonly<{
 
 export type StdoutRenderer = Readonly<{
   capabilities: RendererCapabilities;
-  graphicsCapabilities: TerminalGraphicsCapabilities;
+  graphicsCapabilities?: TerminalGraphicsCapabilities;
   render: () => void;
   dispose: () => void;
   /** Move terminal cursor to specified cell position for IME input */

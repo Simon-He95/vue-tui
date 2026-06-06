@@ -70,6 +70,7 @@ import {
   type CliOutput,
   type DirtyRowPatchMode,
   type StdinDriver,
+  type StdoutRenderer,
   type StdoutRendererOptions,
   type TerminalCleanupHandle,
   type TerminalCleanupSignalPolicy,
@@ -328,6 +329,17 @@ const stdoutInternalOptions: StdoutRendererOptions = {
   // @ts-expect-error __columnDiffMode is an internal benchmark override.
   __columnDiffMode: "multi-span",
 };
+const stdoutRendererMock: StdoutRenderer = {
+  capabilities: {
+    syncFlush: true,
+    scrollOperations: true,
+    domRows: false,
+  },
+  render: () => {},
+  dispose: () => {},
+  setCursor: () => {},
+  showCursor: () => {},
+};
 const cleanupHandle: TerminalCleanupHandle | null = null;
 const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
 const record: TerminalEventRecord = { type: "keydown", key: "Enter" };
@@ -345,6 +357,7 @@ console.log(
   stdoutCapabilitiesOptions,
   stdoutDisabledGraphicsOptions,
   stdoutInternalOptions,
+  stdoutRendererMock,
   cleanupHandle,
   signalPolicy,
   record,

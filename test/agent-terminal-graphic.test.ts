@@ -991,8 +991,11 @@ describe("TAgentTerminalGraphic", () => {
       },
     };
     const kittySequence = createKittyGraphicsSequence("QUJD");
-    const clearSequence = createKittyDeleteGraphicsSequence({ currentCell: true });
     const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      const clearSequence = createKittyDeleteGraphicsSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+      });
       expect(context.capabilities.preferredProtocol).toBe("kitty");
       expect(context.signal).toBeInstanceOf(AbortSignal);
       expect(Number.isInteger(context.imageId)).toBe(true);
@@ -1055,7 +1058,8 @@ describe("TAgentTerminalGraphic", () => {
 
     writes.length = 0;
     stdout.dispose();
-    expect(writes.join("")).toContain(clearSequence);
+    expect(writes.join("")).toContain("a=d");
+    expect(writes.join("")).toContain("d=i");
 
     app.dispose();
   });
@@ -1194,6 +1198,69 @@ describe("TAgentTerminalGraphic", () => {
     stdout.dispose();
     const clearFrame = writes.join("");
     expect(clearFrame).not.toContain(allVisibleClear);
+    expect(clearFrame).toContain("a=d");
+    expect(clearFrame).toContain("d=i");
+
+    app.dispose();
+  });
+
+  it("does not use current-cell Kitty clears as component clear sequences", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const currentCellClear = createKittyDeleteGraphicsSequence({ currentCell: true });
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      clearSequence: currentCellClear,
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    stdout.dispose();
+    const clearFrame = writes.join("");
+    expect(clearFrame).not.toContain(currentCellClear);
     expect(clearFrame).toContain("a=d");
     expect(clearFrame).toContain("d=i");
 
@@ -4031,7 +4098,7 @@ describe("TAgentTerminalGraphic", () => {
           trackResize: false,
         }),
     );
-    expect(stdout.graphicsCapabilities.preferredProtocol).toBe(entry.protocol);
+    expect(stdout.graphicsCapabilities!.preferredProtocol).toBe(entry.protocol);
 
     writes.length = 0;
     app.mount();
@@ -4324,7 +4391,7 @@ describe("TAgentTerminalGraphic", () => {
     flushStdout(stdout);
 
     expect(renderer).toHaveBeenCalledTimes(1);
-    expect(stdout.graphicsCapabilities.preferredProtocol).toBe("kitty");
+    expect(stdout.graphicsCapabilities!.preferredProtocol).toBe("kitty");
     expect(writes.join("")).toContain(sequence);
 
     stdout.dispose();

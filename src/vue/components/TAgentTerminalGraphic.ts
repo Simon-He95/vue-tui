@@ -202,7 +202,6 @@ function kittyClearTargetsComponent(
   if (!controls) return false;
 
   const mode = controls.get("d");
-  if (mode === "c" || mode === "C") return true;
   if (mode !== "i" && mode !== "I") return false;
 
   return controls.get("i") === String(imageId) && controls.get("p") === String(placementId);
