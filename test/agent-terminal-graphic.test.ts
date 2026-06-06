@@ -1804,6 +1804,75 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("rerenders renderer context when raw scroll suspension changes", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const suspendRawWhileScrolling = ref(true);
+    const rawVisibleValues: boolean[] = [];
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      rawVisibleValues.push(context.rawVisible);
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence,
+        fallback: context.rawVisible ? "raw" : "text",
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            scrolling: true,
+            suspendRenderWhileScrolling: false,
+            suspendRawWhileScrolling: suspendRawWhileScrolling.value,
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(rawVisibleValues).toEqual([false]);
+
+    suspendRawWhileScrolling.value = false;
+    await settle(app);
+
+    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(rawVisibleValues).toEqual([false, true]);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it("creates cached PNG terminal graphics renderers", async () => {
     const queue = createTerminalGraphicRenderQueue();
     const capabilities = detectTerminalGraphicsCapabilities({

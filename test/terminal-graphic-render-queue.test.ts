@@ -274,6 +274,17 @@ describe("terminal graphic render queue", () => {
     expect(renderUndefined).toHaveBeenCalledTimes(1);
   });
 
+  it("treats non-finite cache size estimates as zero bytes", async () => {
+    const queue = createTerminalGraphicRenderQueue();
+
+    await expect(
+      queue.cached("bad-estimate", undefined, async () => "x", () => Number.NaN),
+    ).resolves.toBe("x");
+
+    expect(queue.stats().cacheBytes).toBe(0);
+    expect(queue.stats().cacheEntries).toBe(1);
+  });
+
   it("records queue wait trace metrics", async () => {
     resetTerminalGraphicTraceMetrics();
 

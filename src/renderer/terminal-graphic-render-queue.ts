@@ -307,7 +307,8 @@ export function createTerminalGraphicRenderQueue(
         const value = await render();
         throwIfAborted(signal);
 
-        const bytes = Math.max(0, Math.floor(estimateBytes(value)));
+        const rawBytes = Math.floor(Number(estimateBytes(value)));
+        const bytes = Number.isFinite(rawBytes) && rawBytes > 0 ? rawBytes : 0;
         if (renderGeneration === generation) setCache(key, value, bytes);
 
         return value;

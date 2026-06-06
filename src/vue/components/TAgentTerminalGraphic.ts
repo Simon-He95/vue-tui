@@ -948,6 +948,7 @@ export const TAgentTerminalGraphic = defineComponent({
         () => props.streaming,
         () => props.final,
         () => props.deferRenderUntilVisible,
+        () => props.suspendRawWhileScrolling,
         () => props.suspendRenderWhileScrolling,
         () => props.scrolling,
         () => props.suspended,
