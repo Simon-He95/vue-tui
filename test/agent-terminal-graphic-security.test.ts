@@ -207,6 +207,16 @@ describe("terminal graphics sequence validation", () => {
     ).toBeNull();
   });
 
+  it("rejects DCS payloads that are not Sixel image envelopes", () => {
+    const safe = `${ESC}P?0;1;2q~${ST}`;
+
+    expect(isSafeTerminalGraphicsSequence(safe, "sixel")).toBe(true);
+    expect(isSafeTerminalGraphicsSequence(`${ESC}P$qpayload${ST}`, "sixel")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(`${ESC}P+qpayload${ST}`, "sixel")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(`${ESC}Pabcqpayload${ST}`, "sixel")).toBe(false);
+    expect(isSafeTerminalGraphicsSequence(`${ESC}Pq${ST}`, "sixel")).toBe(false);
+  });
+
   it("rejects unrelated terminal control sequences and sanitizes fallback", () => {
     expect(
       validateTerminalGraphicFrame({

@@ -674,6 +674,12 @@ function validateSixelSequence(sequence: string, op: TerminalGraphicsOperation =
     const q = body.indexOf("q");
     if (q < 0 || q > 32) return false;
 
+    const introducer = body.slice(0, q);
+    if (!/^[0-9;?]*$/.test(introducer)) return false;
+
+    const data = body.slice(q + 1);
+    if (!data.length) return false;
+
     index = end + ST.length;
   }
 
