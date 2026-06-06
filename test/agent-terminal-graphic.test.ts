@@ -1290,6 +1290,71 @@ describe("TAgentTerminalGraphic", () => {
     expect(sequence).not.toContain("r=1000000");
   });
 
+  it("clamps PNG frame columns to context width when rows are omitted", async () => {
+    const kittyCapabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    const itermCapabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { TERM_PROGRAM: "iTerm.app" },
+    });
+    const toPngBase64 = vi.fn(async () => ({
+      base64: "QUJD",
+      fallback: "png fallback",
+      cols: 1_000_000,
+    }));
+    const renderer = createPngTerminalGraphicRenderer({ toPngBase64 });
+    const makeContext = (
+      protocol: "kitty" | "iterm2",
+      capabilities: typeof kittyCapabilities,
+    ) => ({
+      kind: "image" as const,
+      width: 4,
+      final: true,
+      streaming: false,
+      protocol,
+      capabilities,
+      signal: new AbortController().signal,
+      imageId: 123,
+      placementId: 456,
+      visible: true,
+      rawVisible: true,
+      scrolling: false,
+      viewport: {
+        visible: true,
+        rawVisible: true,
+        scrolling: false,
+        rect: { x: 0, y: 0, w: 4, h: 1 },
+        fullRect: { x: 0, y: 0, w: 4, h: 1 },
+      },
+    });
+
+    const kitty = await renderer("image.png", makeContext("kitty", kittyCapabilities));
+    const iterm2 = await renderer("image.png", makeContext("iterm2", itermCapabilities));
+
+    expect(kitty).toMatchObject({
+      type: "sequence",
+      protocol: "kitty",
+      cols: 4,
+    });
+    expect(iterm2).toMatchObject({
+      type: "sequence",
+      protocol: "iterm2",
+      cols: 4,
+    });
+
+    const kittySequence =
+      typeof kitty === "object" && kitty && "sequence" in kitty ? String(kitty.sequence) : "";
+    const iterm2Sequence =
+      typeof iterm2 === "object" && iterm2 && "sequence" in iterm2 ? String(iterm2.sequence) : "";
+
+    expect(kittySequence).toContain("c=4");
+    expect(kittySequence).not.toContain("c=10000");
+    expect(iterm2Sequence).toContain("width=4");
+    expect(iterm2Sequence).not.toContain("width=10000");
+  });
+
   it("does not render PNG frames when raw terminal output cannot be placed", async () => {
     const capabilities = detectTerminalGraphicsCapabilities({
       stdoutIsTTY: true,

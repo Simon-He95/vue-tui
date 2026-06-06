@@ -288,6 +288,13 @@ describe("terminal graphics sequence validation", () => {
     );
   });
 
+  it("rejects unsafe base64 input before creating public image sequences", () => {
+    expect(createKittyGraphicsSequence(`QUJD${ST}${ESC}]52;c;bad${BEL}`)).toBe("");
+    expect(createIterm2InlineImageSequence(`QUJD${BEL}${ESC}[2J`, { width: 4 })).toBe("");
+    expect(createKittyGraphicsSequence("QUJD\n")).toContain(";QUJD");
+    expect(createIterm2InlineImageSequence("QUJD\n", { width: 4 })).toContain(":QUJD");
+  });
+
   it("creates safe kitty delete sequences", () => {
     const sequence = createKittyDeleteGraphicsSequence({ currentCell: true });
     const idSequence = createKittyDeleteGraphicsSequence({ imageId: 123, placementId: 456 });

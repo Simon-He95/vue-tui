@@ -94,9 +94,10 @@ function normalizeCachedPngFrame(
   context: TAgentTerminalGraphicRendererContext,
 ): CachedPngTerminalGraphicFrame {
   const fallbackCols = normalizeTerminalGraphicSize(context.width, 1)?.width ?? 1;
-  const rawCols = positiveInt(frame.cols) ?? fallbackCols;
+  const requestedCols = positiveInt(frame.cols) ?? fallbackCols;
+  const cols = Math.min(requestedCols, fallbackCols);
   const rawRows = positiveInt(frame.rows) ?? positiveInt(context.height);
-  const size = normalizeTerminalGraphicSize(rawCols, rawRows ?? 1);
+  const size = normalizeTerminalGraphicSize(cols, rawRows ?? 1);
 
   return {
     base64: String(frame.base64 ?? "").replace(/\s+/g, ""),

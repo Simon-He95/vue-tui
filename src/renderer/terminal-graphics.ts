@@ -822,7 +822,8 @@ function intControl(key: string, value: number | undefined): string {
 }
 
 function sanitizeBase64(value: string): string {
-  return String(value ?? "").replace(/\s+/g, "");
+  const data = String(value ?? "").replace(/\s+/g, "");
+  return isBase64ish(data) ? data : "";
 }
 
 function chunkBase64(value: string, chunkSize: number): string[] {
