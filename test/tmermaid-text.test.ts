@@ -560,7 +560,7 @@ describe("TMermaidText", () => {
     const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
 
     Object.defineProperty(globalThis.navigator, "clipboard", {
-      value: { writeText },
+      value: { readText: vi.fn().mockResolvedValue(""), writeText },
       configurable: true,
     });
 
@@ -612,7 +612,7 @@ describe("TMermaidText", () => {
     const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
 
     Object.defineProperty(globalThis.navigator, "clipboard", {
-      value: { writeText },
+      value: { readText: vi.fn().mockResolvedValue(""), writeText },
       configurable: true,
     });
 
@@ -667,7 +667,7 @@ describe("TMermaidText", () => {
     const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
 
     Object.defineProperty(globalThis.navigator, "clipboard", {
-      value: { writeText },
+      value: { readText: vi.fn().mockResolvedValue(""), writeText },
       configurable: true,
     });
 
@@ -787,6 +787,131 @@ describe("TMermaidText", () => {
         delete (globalThis.navigator as any).clipboard;
       }
     }
+  });
+
+  it("does not bypass an explicitly unsupported injected clipboard", async () => {
+    const source = "graph LR\n  A --> B";
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+    const navigatorWriteText = vi.fn().mockResolvedValue(undefined);
+    const injectedWriteText = vi.fn().mockResolvedValue(undefined);
+    const onCopy = vi.fn();
+    const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText: navigatorWriteText },
+      configurable: true,
+    });
+
+    try {
+      const cols = 32;
+      const rows = 5;
+      const mounted = await mountTerminal(
+        () =>
+          h(TMermaidText, {
+            x: 0,
+            y: 0,
+            w: 28,
+            content: source,
+            renderer,
+            onCopy,
+          }),
+        cols,
+        rows,
+        {
+          clipboard: {
+            supported: false,
+            readText: vi.fn(),
+            writeText: injectedWriteText,
+          },
+        },
+      );
+
+      await settleMermaid(mounted);
+      setDeterministicMetrics(mounted, cols, rows);
+
+      clickCell(mounted, 22, 0);
+      await settleMermaid(mounted);
+
+      expect(injectedWriteText).not.toHaveBeenCalled();
+      expect(navigatorWriteText).not.toHaveBeenCalled();
+      expect(onCopy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: source,
+          ok: false,
+          error: expect.any(Error),
+        }),
+      );
+      expect(rowText(mounted, 0)).toContain("copy");
+      expect(rowText(mounted, 0)).not.toContain("copied");
+
+      mounted.unmount();
+    } finally {
+      if (originalClipboard) {
+        Object.defineProperty(globalThis.navigator, "clipboard", originalClipboard);
+      } else {
+        delete (globalThis.navigator as any).clipboard;
+      }
+    }
+  });
+
+  it("does not show copied feedback for a stale async copy after source changes", async () => {
+    const firstSource = "graph LR\n  A --> B";
+    const nextSource = "graph LR\n  A --> C";
+    const content = ref(firstSource);
+    const renderer: TMermaidRenderer = vi.fn((code) => `rendered:${code.split("\n")[1]?.trim()}`);
+    const onCopy = vi.fn();
+
+    let resolveWrite!: () => void;
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = resolve;
+        }),
+    );
+
+    const cols = 32;
+    const rows = 5;
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 28,
+          content: content.value,
+          renderer,
+          onCopy,
+        }),
+      cols,
+      rows,
+      {
+        clipboard: {
+          supported: true,
+          readText: vi.fn(),
+          writeText,
+        },
+      },
+    );
+
+    await settleMermaid(mounted);
+    setDeterministicMetrics(mounted, cols, rows);
+
+    clickCell(mounted, 22, 0);
+    await settleMermaidMicrotasks(mounted);
+
+    expect(writeText).toHaveBeenCalledWith(firstSource);
+
+    content.value = nextSource;
+    await settleMermaid(mounted);
+
+    resolveWrite();
+    await settleMermaid(mounted);
+
+    expect(onCopy).toHaveBeenCalledWith({ text: firstSource, ok: true });
+    expect(rowText(mounted, 0)).toContain("copy");
+    expect(rowText(mounted, 0)).not.toContain("copied");
+    expect(rowText(mounted, 1)).toContain("rendered:A --> C");
+
+    mounted.unmount();
   });
 
   it("uses the createTerminalApp clipboard for copy", async () => {
@@ -1039,7 +1164,7 @@ describe("TMermaidText", () => {
     const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
 
     Object.defineProperty(globalThis.navigator, "clipboard", {
-      value: { writeText },
+      value: { readText: vi.fn().mockResolvedValue(""), writeText },
       configurable: true,
     });
 

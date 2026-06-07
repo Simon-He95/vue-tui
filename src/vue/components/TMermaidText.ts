@@ -319,6 +319,7 @@ export const TMermaidText = defineComponent({
     let alive = true;
     const frameTaskId = `TMermaidText:${instance?.uid ?? "unknown"}:mermaid`;
     let copiedTimer: ReturnType<typeof setTimeout> | null = null;
+    let copyRequestVersion = 0;
 
     const source = computed(() => props.code ?? props.content ?? "");
 
@@ -367,6 +368,11 @@ export const TMermaidText = defineComponent({
       if (copied.value === next) return;
       copied.value = next;
       if (repaint) bump();
+    }
+
+    function resetCopyFeedback(repaint = true): void {
+      copyRequestVersion++;
+      setCopied(false, repaint);
     }
 
     function showCopiedFeedback(): void {
@@ -519,7 +525,7 @@ export const TMermaidText = defineComponent({
 
     function scheduleRender(): void {
       const version = ++renderVersion;
-      setCopied(false, false);
+      resetCopyFeedback(false);
 
       if (props.streaming && !props.final) {
         builtOnce = true;
@@ -725,7 +731,11 @@ export const TMermaidText = defineComponent({
 
     async function writeClipboardText(text: string): Promise<void> {
       const contextClipboard = terminalContext.clipboard;
-      if (contextClipboard?.supported) {
+
+      if (contextClipboard) {
+        if (!contextClipboard.supported) {
+          throw new Error("Clipboard not available in this runtime");
+        }
         await contextClipboard.writeText(text);
         return;
       }
@@ -736,16 +746,12 @@ export const TMermaidText = defineComponent({
         return;
       }
 
-      if (contextClipboard) {
-        await contextClipboard.writeText(text);
-        return;
-      }
-
       throw new Error("Clipboard not available");
     }
 
     async function copySource(): Promise<void> {
       const text = source.value;
+      const requestVersion = ++copyRequestVersion;
       let ok = false;
       let copyError: unknown;
 
@@ -757,8 +763,12 @@ export const TMermaidText = defineComponent({
       }
 
       if (!alive) return;
-      if (ok) showCopiedFeedback();
-      else setCopied(false);
+      const isLatestForCurrentSource =
+        requestVersion === copyRequestVersion && source.value === text;
+      if (isLatestForCurrentSource) {
+        if (ok) showCopiedFeedback();
+        else setCopied(false);
+      }
       emit("copy", ok ? { text, ok } : { text, ok, error: copyError });
     }
 
