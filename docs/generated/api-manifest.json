@@ -5926,6 +5926,30 @@
           "type": "string",
           "required": false,
           "defaultValue": "\"copied\""
+        },
+        {
+          "name": "renderTimeoutMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_RENDER_TIMEOUT_MS"
+        },
+        {
+          "name": "maxRenderSourceChars",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS"
+        },
+        {
+          "name": "maxRenderSourceLines",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES"
+        },
+        {
+          "name": "copiedDurationMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_COPIED_DURATION_MS"
         }
       ],
       "events": [
@@ -6115,6 +6139,30 @@
           "type": "string",
           "required": false,
           "defaultValue": "\"copied\""
+        },
+        {
+          "name": "renderTimeoutMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_RENDER_TIMEOUT_MS"
+        },
+        {
+          "name": "maxRenderSourceChars",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS"
+        },
+        {
+          "name": "maxRenderSourceLines",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES"
+        },
+        {
+          "name": "copiedDurationMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_COPIED_DURATION_MS"
         }
       ],
       "events": [

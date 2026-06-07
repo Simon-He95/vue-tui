@@ -1471,6 +1471,10 @@ Import: `@simon_he/vue-tui/vue`
 | <code>copyButton</code>            | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
 | <code>copyText</code>              | <code>string</code>                           | <code>&quot;copy&quot;</code>                                                                      | 否   | —    |
 | <code>copiedText</code>            | <code>string</code>                           | <code>&quot;copied&quot;</code>                                                                    | 否   | —    |
+| <code>renderTimeoutMs</code>       | <code>number</code>                           | <code>DEFAULT_MERMAID_RENDER_TIMEOUT_MS</code>                                                     | 否   | —    |
+| <code>maxRenderSourceChars</code>  | <code>number</code>                           | <code>DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS</code>                                               | 否   | —    |
+| <code>maxRenderSourceLines</code>  | <code>number</code>                           | <code>DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES</code>                                               | 否   | —    |
+| <code>copiedDurationMs</code>      | <code>number</code>                           | <code>DEFAULT_MERMAID_COPIED_DURATION_MS</code>                                                    | 否   | —    |
 
 ### Events
 
@@ -1520,6 +1524,10 @@ Import: `@simon_he/vue-tui/vue`
 | <code>copyButton</code>            | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
 | <code>copyText</code>              | <code>string</code>                           | <code>&quot;copy&quot;</code>                                                                      | 否   | —    |
 | <code>copiedText</code>            | <code>string</code>                           | <code>&quot;copied&quot;</code>                                                                    | 否   | —    |
+| <code>renderTimeoutMs</code>       | <code>number</code>                           | <code>DEFAULT_MERMAID_RENDER_TIMEOUT_MS</code>                                                     | 否   | —    |
+| <code>maxRenderSourceChars</code>  | <code>number</code>                           | <code>DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS</code>                                               | 否   | —    |
+| <code>maxRenderSourceLines</code>  | <code>number</code>                           | <code>DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES</code>                                               | 否   | —    |
+| <code>copiedDurationMs</code>      | <code>number</code>                           | <code>DEFAULT_MERMAID_COPIED_DURATION_MS</code>                                                    | 否   | —    |
 
 ### Events
 

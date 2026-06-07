@@ -90,6 +90,10 @@ export type TMermaidCopyPayload = Readonly<{
 
 const TUI_MERMAID_FATAL_RENDER_ERROR = "__vueTuiMermaidFatalRenderError" as const;
 const fatalMermaidRenderErrors = new WeakSet<object>();
+const DEFAULT_MERMAID_RENDER_TIMEOUT_MS = 2500;
+const DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS = 20_000;
+const DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES = 400;
+const DEFAULT_MERMAID_COPIED_DURATION_MS = 1200;
 
 const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
@@ -109,6 +113,30 @@ function stripTerminalEscapes(value: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeNonNegativeInt(value: unknown, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.floor(n));
+}
+
+function countLinesUpTo(value: string, max: number): number {
+  if (max <= 0) return 0;
+
+  let lines = 1;
+  for (let index = 0; index < value.length; index++) {
+    if (value.charCodeAt(index) !== 10) continue;
+    lines++;
+    if (lines > max) return lines;
+  }
+  return lines;
+}
+
+function timeoutError(ms: number): Error & { code: string } {
+  const error = new Error(`Mermaid render timed out after ${ms}ms`) as Error & { code: string };
+  error.code = "VUE_TUI_MERMAID_RENDER_TIMEOUT";
+  return error;
 }
 
 type TMermaidFatalRenderError = Error & {
@@ -255,6 +283,10 @@ export const tMermaidTextProps = {
   copyButton: { type: Boolean, default: true },
   copyText: { type: String, default: "copy" },
   copiedText: { type: String, default: "copied" },
+  renderTimeoutMs: { type: Number, default: DEFAULT_MERMAID_RENDER_TIMEOUT_MS },
+  maxRenderSourceChars: { type: Number, default: DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS },
+  maxRenderSourceLines: { type: Number, default: DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES },
+  copiedDurationMs: { type: Number, default: DEFAULT_MERMAID_COPIED_DURATION_MS },
 } as const;
 
 export type TMermaidTextProps = ExtractPublicPropTypes<typeof tMermaidTextProps>;
@@ -283,6 +315,7 @@ export const TMermaidText = defineComponent({
     let renderVersion = 0;
     let alive = true;
     const frameTaskId = `TMermaidText:${instance?.uid ?? "unknown"}:mermaid`;
+    let copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
     const source = computed(() => props.code ?? props.content ?? "");
 
@@ -320,6 +353,77 @@ export const TMermaidText = defineComponent({
       }
     }
 
+    function clearCopiedTimer(): void {
+      if (copiedTimer == null) return;
+      clearTimeout(copiedTimer);
+      copiedTimer = null;
+    }
+
+    function setCopied(next: boolean, repaint = true): void {
+      if (!next) clearCopiedTimer();
+      if (copied.value === next) return;
+      copied.value = next;
+      if (repaint) bump();
+    }
+
+    function showCopiedFeedback(): void {
+      setCopied(true);
+      clearCopiedTimer();
+
+      const duration = normalizeNonNegativeInt(
+        props.copiedDurationMs,
+        DEFAULT_MERMAID_COPIED_DURATION_MS,
+      );
+      if (duration <= 0) return;
+
+      copiedTimer = setTimeout(() => {
+        copiedTimer = null;
+        if (!alive) return;
+        setCopied(false);
+      }, duration);
+    }
+
+    function shouldSkipRenderForSize(code: string): boolean {
+      const maxChars = normalizeNonNegativeInt(
+        props.maxRenderSourceChars,
+        DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS,
+      );
+      if (maxChars > 0 && code.length > maxChars) return true;
+
+      const maxLines = normalizeNonNegativeInt(
+        props.maxRenderSourceLines,
+        DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES,
+      );
+      if (maxLines > 0 && countLinesUpTo(code, maxLines) > maxLines) return true;
+
+      return false;
+    }
+
+    async function renderWithTimeout(
+      renderer: TMermaidRenderer,
+      code: string,
+      options: TMermaidResolvedAsciiOptions,
+    ): Promise<string> {
+      const timeoutMs = normalizeNonNegativeInt(
+        props.renderTimeoutMs,
+        DEFAULT_MERMAID_RENDER_TIMEOUT_MS,
+      );
+      if (timeoutMs <= 0) return await renderer(code, options);
+
+      let timer: ReturnType<typeof setTimeout> | null = null;
+
+      try {
+        return await Promise.race([
+          Promise.resolve().then(() => renderer(code, options)),
+          new Promise<string>((_resolve, reject) => {
+            timer = setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs);
+          }),
+        ]);
+      } finally {
+        if (timer != null) clearTimeout(timer);
+      }
+    }
+
     async function renderNow(version: number): Promise<void> {
       const code = source.value;
       if (!code.trim()) {
@@ -333,6 +437,16 @@ export const TMermaidText = defineComponent({
       }
 
       if (props.streaming && !props.final) {
+        if (!alive || version !== renderVersion) return;
+        renderedSnapshot.value = null;
+        status.value = "idle";
+        error.value = "";
+        missingRenderer.value = false;
+        bump();
+        return;
+      }
+
+      if (shouldSkipRenderForSize(code)) {
         if (!alive || version !== renderVersion) return;
         renderedSnapshot.value = null;
         status.value = "idle";
@@ -359,7 +473,7 @@ export const TMermaidText = defineComponent({
           return;
         }
 
-        const rendered = await renderer(code, resolveAsciiOptions());
+        const rendered = await renderWithTimeout(renderer, code, resolveAsciiOptions());
         if (!alive || version !== renderVersion) return;
 
         const renderedLines = splitRenderedOutput(rendered);
@@ -399,7 +513,7 @@ export const TMermaidText = defineComponent({
 
     function scheduleRender(): void {
       const version = ++renderVersion;
-      copied.value = false;
+      setCopied(false, false);
 
       if (props.streaming && !props.final) {
         builtOnce = true;
@@ -446,6 +560,9 @@ export const TMermaidText = defineComponent({
         () => props.streaming,
         () => props.final,
         () => props.isTransientError,
+        () => props.renderTimeoutMs,
+        () => props.maxRenderSourceChars,
+        () => props.maxRenderSourceLines,
       ],
       () => {
         scheduleRender();
@@ -456,6 +573,7 @@ export const TMermaidText = defineComponent({
     onBeforeUnmount(() => {
       alive = false;
       renderVersion++;
+      clearCopiedTimer();
       scheduler.cancelFrameTask?.(frameTaskId);
     });
 
@@ -505,22 +623,76 @@ export const TMermaidText = defineComponent({
       return withTextWidthProvider(widthProvider, () => textCellWidth(value));
     }
 
+    type HeaderSegment = Readonly<{
+      text: string;
+      start: number;
+      cells: number;
+    }>;
+
+    function segmentCells(text: string): number {
+      return cellWidth(text);
+    }
+
+    function headerCopySegment(width: number): HeaderSegment | null {
+      if (!hasBox.value || !props.copyButton) return null;
+
+      const rowWidth = Math.max(0, Math.floor(width));
+      if (rowWidth < 4) return null;
+
+      const label = sanitizeInlineText(copyLabel.value);
+      if (!label) return null;
+
+      const maxCells = Math.max(0, rowWidth - 2);
+      const text = sliceByCells(` ${label} `, maxCells);
+      const cells = segmentCells(text);
+      if (!text || cells <= 0) return null;
+
+      return {
+        text,
+        start: Math.max(1, rowWidth - cells - 1),
+        cells,
+      };
+    }
+
+    function headerTitleSegment(width: number, copy: HeaderSegment | null): HeaderSegment | null {
+      if (!hasBox.value) return null;
+
+      const rowWidth = Math.max(0, Math.floor(width));
+      if (rowWidth < 4) return null;
+
+      const title = sanitizeInlineText(props.title);
+      if (!title) return null;
+
+      const titleStart = 1;
+      const titleEnd = copy ? Math.max(titleStart, copy.start - 1) : rowWidth - 1;
+      const maxCells = Math.max(0, titleEnd - titleStart);
+      if (maxCells <= 0) return null;
+
+      const text = sliceByCells(` ${title} `, maxCells);
+      const cells = segmentCells(text);
+      if (!text || cells <= 0) return null;
+
+      return {
+        text,
+        start: titleStart,
+        cells,
+      };
+    }
+
     const copyHitRect = computed<Rect>(() => {
       if (!visible.value || !hasBox.value || !props.copyButton) return { x: 0, y: 0, w: 0, h: 0 };
+
       const full = fullRect.value;
-      const fullW = Math.max(0, Math.floor(full.w));
-      if (fullW < 4) return { x: 0, y: 0, w: 0, h: 0 };
-      const label = sanitizeInlineText(copyLabel.value);
-      if (!label) return { x: 0, y: 0, w: 0, h: 0 };
-      const labelWidth = cellWidth(label);
-      const hitWidth = Math.min(Math.max(0, fullW - 2), labelWidth + 2);
-      if (hitWidth <= 0) return { x: 0, y: 0, w: 0, h: 0 };
+      const copy = headerCopySegment(Math.max(0, Math.floor(full.w)));
+      if (!copy) return { x: 0, y: 0, w: 0, h: 0 };
+
       const raw = {
-        x: Math.floor(full.x) + Math.max(1, fullW - hitWidth - 1),
+        x: Math.floor(full.x) + copy.start,
         y: Math.floor(full.y),
-        w: hitWidth,
+        w: copy.cells,
         h: 1,
       };
+
       if (!layout.clipRect) return raw;
       return intersectRect(raw, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
@@ -559,8 +731,8 @@ export const TMermaidText = defineComponent({
       }
 
       if (!alive) return;
-      copied.value = ok;
-      bump();
+      if (ok) showCopiedFeedback();
+      else setCopied(false);
       emit("copy", ok ? { text, ok } : { text, ok, error: copyError });
     }
 
@@ -588,18 +760,17 @@ export const TMermaidText = defineComponent({
       },
     }));
 
-    function overlayCells(row: string, text: string, start: number, width: number): string {
+    function overlayCells(row: string, segment: HeaderSegment, width: number): string {
       const rowWidth = Math.max(0, Math.floor(width));
-      const end = Math.max(0, rowWidth - 1);
-      const clampedStart = Math.max(0, Math.floor(start));
-      if (rowWidth <= 1 || clampedStart >= end) return row;
-      const clipped = sliceByCells(text, Math.max(0, end - clampedStart));
-      if (!clipped) return row;
-      return `${sliceByCells(row, clampedStart)}${clipped}${sliceByCellsRange(
-        row,
-        clampedStart + cellWidth(clipped),
-        rowWidth,
-      )}`;
+      const start = Math.max(0, Math.floor(segment.start));
+      if (rowWidth <= 1 || start >= rowWidth - 1 || segment.cells <= 0) return row;
+
+      const maxCells = Math.max(0, rowWidth - 1 - start);
+      const text = sliceByCells(segment.text, maxCells);
+      const cells = segmentCells(text);
+      if (!text || cells <= 0) return row;
+
+      return `${sliceByCells(row, start)}${text}${sliceByCellsRange(row, start + cells, rowWidth)}`;
     }
 
     function contentLine(rowIndex: number, width: number, pad: boolean): string {
@@ -609,27 +780,26 @@ export const TMermaidText = defineComponent({
     }
 
     function boxRow(rowIndex: number, width: number, height: number): string {
-      if (!hasBox.value || width < 2 || height < 2) {
-        return contentLine(rowIndex, width, props.clear);
+      const rowWidth = Math.max(0, Math.floor(width));
+      const rowHeight = Math.max(0, Math.floor(height));
+
+      if (!hasBox.value || rowWidth < 2 || rowHeight < 2) {
+        return contentLine(rowIndex, rowWidth, props.clear);
       }
 
-      const innerW = Math.max(0, width - 2);
+      const innerW = Math.max(0, rowWidth - 2);
       if (rowIndex === 0) {
         let row = `┌${repeatChar("─", innerW)}┐`;
-        const title = sanitizeInlineText(props.title);
-        if (title) row = overlayCells(row, ` ${title} `, 1, width);
-        if (props.copyButton) {
-          const label = sanitizeInlineText(copyLabel.value);
-          if (label) {
-            const copy = sliceByCells(` ${label} `, Math.max(0, width - 2));
-            const start = Math.max(1, width - cellWidth(copy) - 1);
-            row = overlayCells(row, copy, start, width);
-          }
-        }
+        const copy = headerCopySegment(rowWidth);
+        const title = headerTitleSegment(rowWidth, copy);
+
+        if (title) row = overlayCells(row, title, rowWidth);
+        if (copy) row = overlayCells(row, copy, rowWidth);
+
         return row;
       }
 
-      if (rowIndex === height - 1) return `└${repeatChar("─", innerW)}┘`;
+      if (rowIndex === rowHeight - 1) return `└${repeatChar("─", innerW)}┘`;
 
       return `│${contentLine(rowIndex - 1, innerW, true)}│`;
     }

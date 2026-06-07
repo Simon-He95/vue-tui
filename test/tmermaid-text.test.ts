@@ -61,6 +61,14 @@ async function settleMermaid(mounted: MountedTerminal): Promise<void> {
   }
 }
 
+async function settleMermaidMicrotasks(mounted: MountedTerminal): Promise<void> {
+  for (let i = 0; i < 8; i++) {
+    await Promise.resolve();
+    await nextTick();
+    mounted.scheduler()?.flushNow();
+  }
+}
+
 async function settleTerminalApp(app: ReturnType<typeof createTerminalApp>): Promise<void> {
   for (let i = 0; i < 8; i++) {
     await Promise.resolve();
@@ -334,6 +342,75 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("skips renderer for oversized Mermaid source and keeps source visible", async () => {
+    const source = [
+      "graph LR",
+      ...Array.from({ length: 6 }, (_, i) => `  A${i} --> A${i + 1}`),
+    ].join("\n");
+    const renderer: TMermaidRenderer = vi.fn(() => "should not render");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 8,
+          box: false,
+          content: source,
+          renderer,
+          maxRenderSourceLines: 3,
+        }),
+      48,
+      10,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 1)).toBe("  A0 --> A1");
+
+    mounted.unmount();
+  });
+
+  it("keeps source when Mermaid rendering times out", async () => {
+    vi.useFakeTimers();
+
+    let mounted: MountedTerminal | null = null;
+    const renderer: TMermaidRenderer = vi.fn(() => new Promise<string>(() => {}));
+
+    try {
+      mounted = await mountTerminal(
+        () =>
+          h(TMermaidText, {
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 2,
+            box: false,
+            content: "graph LR\n  A --> B",
+            renderer,
+            renderTimeoutMs: 25,
+          }),
+        48,
+        4,
+      );
+
+      await settleMermaidMicrotasks(mounted);
+      expect(renderer).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(25);
+      await settleMermaidMicrotasks(mounted);
+
+      expect(rowText(mounted, 0)).toBe("graph LR");
+      expect(rowText(mounted, 1)).toBe("  A --> B");
+    } finally {
+      mounted?.unmount();
+      vi.useRealTimers();
+    }
+  });
+
   it("shows streaming source without calling the renderer until final", async () => {
     const content = ref("graph LR\n  A --> B");
     const final = ref(false);
@@ -454,6 +531,85 @@ describe("TMermaidText", () => {
         delete (globalThis.navigator as any).clipboard;
       }
     }
+  });
+
+  it("resets copied label after copiedDurationMs", async () => {
+    const source = "graph LR\n  A --> B";
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    const cols = 32;
+    const rows = 5;
+    let mounted: MountedTerminal | null = null;
+
+    try {
+      mounted = await mountTerminal(
+        () =>
+          h(TMermaidText, {
+            x: 0,
+            y: 0,
+            w: 28,
+            content: source,
+            renderer,
+            copiedDurationMs: 50,
+          }),
+        cols,
+        rows,
+      );
+
+      await settleMermaid(mounted);
+      setDeterministicMetrics(mounted, cols, rows);
+
+      vi.useFakeTimers();
+      clickCell(mounted, 22, 0);
+      await settleMermaidMicrotasks(mounted);
+
+      expect(rowText(mounted, 0)).toContain("copied");
+
+      await vi.advanceTimersByTimeAsync(50);
+      await settleMermaidMicrotasks(mounted);
+
+      expect(rowText(mounted, 0)).toContain("copy");
+      expect(rowText(mounted, 0)).not.toContain("copied");
+    } finally {
+      vi.useRealTimers();
+      mounted?.unmount();
+      if (originalClipboard) {
+        Object.defineProperty(globalThis.navigator, "clipboard", originalClipboard);
+      } else {
+        delete (globalThis.navigator as any).clipboard;
+      }
+    }
+  });
+
+  it("keeps title and copy label separated in narrow Mermaid headers", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 12,
+          content: "graph LR\n  A --> B",
+          title: "very-long-mermaid-title",
+          renderer,
+        }),
+      16,
+      4,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toBe("┌ ve─ copy ┐");
+
+    mounted.unmount();
   });
 
   it("uses the injected clipboard for copy", async () => {
