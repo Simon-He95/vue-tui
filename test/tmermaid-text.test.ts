@@ -374,9 +374,9 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("lets non-flowchart Mermaid diagram types render when the renderer supports them", async () => {
+  it("skips non-flowchart Mermaid diagram types and keeps source visible", async () => {
     const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
-    const renderer: TMermaidRenderer = vi.fn(() => "rendered sequence");
+    const renderer: TMermaidRenderer = vi.fn(() => "should not render");
 
     const mounted = await mountTerminal(
       () =>
@@ -395,20 +395,15 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
 
-    expect(renderer).toHaveBeenCalledTimes(1);
-    expect(renderer).toHaveBeenCalledWith(
-      source,
-      expect.objectContaining({
-        colorMode: "none",
-        useAscii: false,
-      }),
-    );
-    expect(rowText(mounted, 0)).toBe("rendered sequence");
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("sequenceDiagram");
+    expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
+    expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
 
     mounted.unmount();
   });
 
-  it("keeps non-flowchart Mermaid source visible when rendering fails", async () => {
+  it("does not call renderer for non-flowchart Mermaid source", async () => {
     const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
     const renderer: TMermaidRenderer = vi.fn(() => {
       throw new Error("unsupported sequence diagram");
@@ -431,7 +426,7 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
 
-    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(renderer).not.toHaveBeenCalled();
     expect(rowText(mounted, 0)).toBe("sequenceDiagram");
     expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
     expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
@@ -636,7 +631,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("renders when final is false but streaming is not enabled", async () => {
+  it("keeps source while final is false even when streaming is not enabled", async () => {
     const final = ref(false);
     const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
 
@@ -659,19 +654,20 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
 
-    expect(renderer).toHaveBeenCalledTimes(1);
-    expect(rowText(mounted, 0)).toBe("rendered diagram");
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 1)).toBe("  A --> B");
 
     final.value = true;
     await settleMermaid(mounted);
 
-    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(renderer).toHaveBeenCalledTimes(1);
     expect(rowText(mounted, 0)).toBe("rendered diagram");
 
     mounted.unmount();
   });
 
-  it("skips renderer only for unfinished streaming Mermaid source", async () => {
+  it("skips renderer for any non-final Mermaid source", async () => {
     const final = ref(false);
     const streaming = ref(true);
     const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
@@ -700,6 +696,13 @@ describe("TMermaidText", () => {
     expect(rowText(mounted, 1)).toBe("  A --> B");
 
     streaming.value = false;
+    await settleMermaid(mounted);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 1)).toBe("  A --> B");
+
+    final.value = true;
     await settleMermaid(mounted);
 
     expect(renderer).toHaveBeenCalledTimes(1);

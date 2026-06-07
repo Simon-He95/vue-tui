@@ -99,7 +99,9 @@ const DEFAULT_MERMAID_COPIED_DURATION_MS = 1200;
 
 // Keep Mermaid rendering intentionally conservative. The renderer runs on the
 // main thread, so timeout guards cannot protect us from synchronous CPU-heavy
-// Mermaid layouts. Unsupported or complex sources should stay as source text.
+// Mermaid layouts. Only simple graph/flowchart sources are eligible for
+// replacement rendering; unsupported, non-flowchart, or complex sources stay as
+// source text.
 const DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS = 120;
 const SIMPLE_MERMAID_DIRECTIVE_RE = /^(?:graph|flowchart)\s+(?:TB|TD|BT|LR|RL)\b/i;
 const MERMAID_INIT_DIRECTIVE_RE = /^%%\{/;
@@ -228,7 +230,7 @@ function countMermaidFlowStatementsUpTo(code: string, max: number): number {
 function shouldSkipRenderForComplexity(code: string): boolean {
   const first = firstMermaidStatement(code);
   if (!first) return true;
-  if (!SIMPLE_MERMAID_DIRECTIVE_RE.test(first)) return false;
+  if (!SIMPLE_MERMAID_DIRECTIVE_RE.test(first)) return true;
   if (hasComplexMermaidFlowFeature(code)) return true;
 
   return (
@@ -554,7 +556,7 @@ export const TMermaidText = defineComponent({
         return;
       }
 
-      if (props.streaming && !props.final) {
+      if (!props.final) {
         if (!alive || version !== renderVersion) return;
         renderedSnapshot.value = null;
         status.value = "idle";
@@ -633,7 +635,7 @@ export const TMermaidText = defineComponent({
       const version = ++renderVersion;
       resetCopyFeedback(false);
 
-      if (props.streaming && !props.final) {
+      if (!props.final) {
         builtOnce = true;
         scheduler.cancelFrameTask?.(frameTaskId);
         renderedSnapshot.value = null;
