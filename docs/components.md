@@ -20,24 +20,24 @@ description: Reference for Vue TUI components such as TerminalProvider, TBox, TI
 | Public       | `@simon_he/vue-tui/markdown`      | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                                                                                                        |
 | Public       | `@simon_he/vue-tui/mermaid`       | `TMermaid` `TMermaidText` `TBeautifulMermaidText` `beautifulMermaidRenderer` `createBeautifulMermaidRenderer`                                                                                                                                                                             |
 | Experimental | `@simon_he/vue-tui/experimental`  | `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap`                                                                                       |
-| Experimental | `@simon_he/vue-tui/agent`         | `TAgentTranscript` `TMermaid` `TMermaidText` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                                                                             |
+| Experimental | `@simon_he/vue-tui/agent`         | `TAgentTerminalGraphic` `TAgentTranscript` `TMermaid` `TMermaidText` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                                                     |
 | Experimental | `@simon_he/vue-tui/agent/mermaid` | `TMermaid` `TMermaidText` `TBeautifulMermaidText` `beautifulMermaidRenderer` `createBeautifulMermaidRenderer`                                                                                                                                                                             |
 
 下面的组件速读按用途分组，不代表 root entrypoint 导出。每个组件的 primary import 以生成的 [组件 API](/generated/components-api) 为准。
 
 ## 组件速读
 
-| 类别          | 组件                                                                                                                                                                                               | 典型用途                                        | 适配性判断                                         |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
-| Root          | `TerminalProvider`                                                                                                                                                                                 | 创建 terminal / renderer / event manager 上下文 | 通用，适合所有宿主                                 |
-| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                                     | 布局、裁剪、层级、分层组合                      | 通用，和 CLI 业务无关                              |
-| Text / Action | `TText` `TLink` `TLinkifyText` `TMermaid` `TMermaidText` `TBadge` `TTag` `TDivider` `TCode` `TKeyHint` `TTransition`                                                                               | 文本渲染、链接操作、结构图、徽标、分隔符        | 通用                                               |
-| Input / Form  | `TInput` `TInputBox` `TAutocompleteInput` `TCheckbox` `TFormField` `TPasswordInput` `TRadioGroup` `TSlider` `TSwitch` `TJsonEditor`                                                                | prompt、表单、结构化文本编辑                    | 通用，但推荐把补全/校验放到插件层                  |
-| Data / Tree   | `TTable` `TDataTable` `TTree`                                                                                                                                                                      | 多列数据、排序过滤、层级选择                    | 通用                                               |
-| Pickers       | `TCommandPalette` `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择       | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
-| Overlay       | `TDialog` `TContextMenu` `TPopover` `TTooltip` `TToastViewport` `TMultilineModal` `TDebugOverlay`                                                                                                  | 对话框、菜单、提示、toast、详情查看、调试覆盖层 | 通用，适合多种宿主                                 |
-| Navigation    | `TBreadcrumb` `TStatusBar` `TTabs` `TSplitPane` `TRouterView` + `createTerminalRouter()`                                                                                                           | 路径导航、状态栏、多页面 TUI / shell            | 通用                                               |
-| Agent Chrome  | `TThinkingView` `TUserMessageView` `TToolCallView`                                                                                                                                                 | thinking/user/tool-call transcript chrome       | 默认对齐 best-agent 风格，可通过 style props 覆盖  |
+| 类别          | 组件                                                                                                                                                                                               | 典型用途                                          | 适配性判断                                         |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------- |
+| Root          | `TerminalProvider`                                                                                                                                                                                 | 创建 terminal / renderer / event manager 上下文   | 通用，适合所有宿主                                 |
+| Layout        | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                                     | 布局、裁剪、层级、分层组合                        | 通用，和 CLI 业务无关                              |
+| Text / Action | `TText` `TLink` `TLinkifyText` `TMermaid` `TMermaidText` `TBadge` `TTag` `TDivider` `TCode` `TKeyHint` `TTransition`                                                                               | 文本渲染、链接操作、结构图、徽标、分隔符          | 通用                                               |
+| Input / Form  | `TInput` `TInputBox` `TAutocompleteInput` `TCheckbox` `TFormField` `TPasswordInput` `TRadioGroup` `TSlider` `TSwitch` `TJsonEditor`                                                                | prompt、表单、结构化文本编辑                      | 通用，但推荐把补全/校验放到插件层                  |
+| Data / Tree   | `TTable` `TDataTable` `TTree`                                                                                                                                                                      | 多列数据、排序过滤、层级选择                      | 通用                                               |
+| Pickers       | `TCommandPalette` `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择         | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Overlay       | `TDialog` `TContextMenu` `TPopover` `TTooltip` `TToastViewport` `TMultilineModal` `TDebugOverlay`                                                                                                  | 对话框、菜单、提示、toast、详情查看、调试覆盖层   | 通用，适合多种宿主                                 |
+| Navigation    | `TBreadcrumb` `TStatusBar` `TTabs` `TSplitPane` `TRouterView` + `createTerminalRouter()`                                                                                                           | 路径导航、状态栏、多页面 TUI / shell              | 通用                                               |
+| Agent Chrome  | `TAgentTerminalGraphic` `TThinkingView` `TUserMessageView` `TToolCallView`                                                                                                                         | terminal graphics、thinking/user/tool-call chrome | 默认对齐 best-agent 风格，可通过 style props 覆盖  |
 
 如果你更关心“哪些地方还应该继续做插件化”，建议配合阅读：[扩展性与插件化](./extensibility.md)。
 
@@ -266,6 +266,35 @@ Public helper `linkifyTextSegments("")` returns an empty segment array; non-empt
 ## TMermaid / TMermaidText
 
 Mermaid 组件详见下方 [TMermaidText](#tmermaidtext)。这里仅作为 Text / Action 分类索引：基础组件从 `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent` 导入并显式传 `renderer`；内置 `beautiful-mermaid` bridge 从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入，使用前需要安装 `beautiful-mermaid`。
+
+## TAgentTerminalGraphic
+
+Agent terminal graphics 组件，从 `@simon_he/vue-tui/agent` 引入。它面向真实 stdout terminal：组件在 TUI buffer 中占用指定 cell rect，并通过 `createStdoutRenderer()` 注册的 terminal graphics output 在帧末尾写入 Kitty / iTerm2 / Sixel 等 raw escape payload。DOM/headless 或不支持图像协议时自动显示 `fallback` 文本；未传 `fallback` 时，`kind="image"` 默认为空文本，`kind="math"` 使用 `content`。
+
+组件本身不 import KaTeX、不读取图片文件、不执行外部命令。宿主传入 `renderer(content, context)`，根据 `context.protocol` 或 `context.capabilities.preferredProtocol` 返回 `{ type: "sequence", protocol, sequence, fallback?, clearSequence?, rows?, cols? }` 作为可信 terminal image escape，或返回 `{ type: "text", text }` 作为 Unicode/ANSI fallback。返回 `null` / `undefined` 会使用组件 `fallback`，不会进入错误态；renderer 抛错时同样显示 fallback，但会使用 `errorStyle`。为了避免 terminal escape injection，bare string 只会按普通文本 fallback 处理，不会作为 raw escape 写入 stdout。`h` 省略时会优先使用 renderer result 的 `rows` 推导占用高度，仍建议宿主显式传入最终 cell 高度。`kind="math"` 可用于 KaTeX/LaTeX，`kind="image"` 可用于普通图片。
+
+虚拟滚动或重内容场景建议使用 `deferRenderUntilVisible`、`suspendRenderWhileScrolling` / `suspended` 和 `createTerminalGraphicRenderQueue()` 控制懒渲染、取消、缓存与并发。PNG 渲染链路可用 `createPngTerminalGraphicRenderer()` 组合 Kitty / iTerm2 序列；Sixel 需要宿主提供 `toSixel` encoder，例如 libsixel binding、`img2sixel` 包装或自定义 renderer。传给 PNG/Sixel renderer 的转换函数应观察 `context.signal` 并及时 settle；queue 会在 caller abort 后 reject，但并发 slot 会等实际转换 settle 后释放。默认 PNG cache key 覆盖 `kind`、尺寸、`final`、content/组件 `cacheKey` 和 renderer `cacheSalt`，不包含 protocol，因此使用默认 key 时 `toPngBase64()` 应保持协议无关；随 PNG frame 返回的 `fallback` 也会进入同一缓存，如果它依赖 protocol、主题、字体、DPR、KaTeX macro 或 renderer options，应传 `cacheSalt`、自行提供完整 `cacheKey()`，或改用 renderer 的 `fallback()` option。terminal 不支持图像、raw 不可见、组件不可见或缺少 Sixel encoder 时只会走 renderer-level `fallback()` 或组件 `fallback`，不会为了读取 PNG frame `fallback` 而执行 `toPngBase64()`。Kitty 支持显式 delete sequence；组件级自定义 Kitty `clearSequence` 只接受 `context.imageId` / `context.placementId` 对应的 `d=i` / `d=I` delete，current-cell `d=c` / `d=C` 不会作为组件 clear 使用。iTerm2 inline image 和 Sixel clear 是 best-effort，通过重绘占用的 cell rect 清理。自定义 Kitty renderer 如果依赖组件默认 clear，应使用 `context.imageId` / `context.placementId` 创建 draw sequence；否则应返回同一组 id/placement 的可靠 `clearSequence`。
+
+真实终端 smoke checklist：
+
+- [ ] Kitty native
+- [ ] iTerm2 inline image
+- [ ] tmux passthrough
+- [ ] Sixel-capable terminal
+- [ ] unsupported / CI / non-TTY fallback
+
+```vue
+<TAgentTerminalGraphic
+  :x="0"
+  :y="2"
+  :w="72"
+  :h="12"
+  kind="math"
+  content="\\frac{a}{b}"
+  fallback="a / b"
+  :renderer="terminalMathRenderer"
+/>
+```
 
 ## TCommandPalette
 

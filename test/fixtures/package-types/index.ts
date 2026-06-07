@@ -65,10 +65,12 @@ import {
   createTerminalApp,
   createDefaultTInputHostAdapter,
   defaultTInputHostPlugin,
+  detectTerminalGraphicsCapabilities,
   installTerminalCleanup,
   type CliOutput,
   type DirtyRowPatchMode,
   type StdinDriver,
+  type StdoutRenderer,
   type StdoutRendererOptions,
   type TerminalCleanupHandle,
   type TerminalCleanupSignalPolicy,
@@ -302,10 +304,41 @@ const stdoutOptions: StdoutRendererOptions = {
   dirtySpanConservativeMaxCells: 16,
   colorMode: "ansi16",
   clear: false,
+  terminalGraphics: {
+    env: { VUE_TUI_TERMINAL_GRAPHICS: "kitty" },
+    isTTY: false,
+  },
+};
+const stdoutDirectGraphicsOptions: StdoutRendererOptions = {
+  terminalGraphics: {
+    protocol: "kitty",
+    force: true,
+    passthrough: true,
+  },
+};
+const stdoutCapabilitiesOptions: StdoutRendererOptions = {
+  terminalGraphics: detectTerminalGraphicsCapabilities({
+    env: { VUE_TUI_TERMINAL_GRAPHICS: "iterm2" },
+    stdoutIsTTY: false,
+  }),
+};
+const stdoutDisabledGraphicsOptions: StdoutRendererOptions = {
+  terminalGraphics: false,
 };
 const stdoutInternalOptions: StdoutRendererOptions = {
   // @ts-expect-error __columnDiffMode is an internal benchmark override.
   __columnDiffMode: "multi-span",
+};
+const stdoutRendererMock: StdoutRenderer = {
+  capabilities: {
+    syncFlush: true,
+    scrollOperations: true,
+    domRows: false,
+  },
+  render: () => {},
+  dispose: () => {},
+  setCursor: () => {},
+  showCursor: () => {},
 };
 const cleanupHandle: TerminalCleanupHandle | null = null;
 const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
@@ -320,7 +353,11 @@ console.log(
   driver,
   stdoutOutput,
   stdoutOptions,
+  stdoutDirectGraphicsOptions,
+  stdoutCapabilitiesOptions,
+  stdoutDisabledGraphicsOptions,
   stdoutInternalOptions,
+  stdoutRendererMock,
   cleanupHandle,
   signalPolicy,
   record,

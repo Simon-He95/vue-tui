@@ -105,6 +105,7 @@
       "maturity": "experimental",
       "runtime": "browser-safe",
       "valueExports": [
+        "TAgentTerminalGraphic",
         "TAgentTranscript",
         "TBox",
         "TCommandPalette",
@@ -134,14 +135,20 @@
         "TVirtualMarkdown",
         "computeCommandPaletteMatchRanges",
         "createAppendOnlyLogStore",
+        "createIterm2InlineImageSequence",
+        "createKittyDeleteGraphicsSequence",
+        "createKittyGraphicsSequence",
         "createMarkdownBlockSource",
+        "createPngTerminalGraphicRenderer",
         "createTLogDensityBucketsFromMarkers",
         "createTLogLevelPlugin",
         "createTLogLineMatcherPlugin",
         "createTLogLinkActionPlugin",
         "createTLogOsc8LinkPlugin",
         "createTLogUrlPlugin",
+        "createTerminalGraphicRenderQueue",
         "detectTLogUrls",
+        "detectTerminalGraphicsCapabilities",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
         "markMermaidRenderErrorFatal",
@@ -173,7 +180,17 @@
       "typeExports": [
         "AppendOnlyLogStore",
         "CreateAppendOnlyLogStoreOptions",
+        "CreateKittyDeleteGraphicsSequenceOptions",
+        "CreateKittyGraphicsSequenceOptions",
+        "CreatePngTerminalGraphicRendererOptions",
+        "PngTerminalGraphicFrame",
         "RowScrollMode",
+        "TAgentTerminalGraphicKind",
+        "TAgentTerminalGraphicProps",
+        "TAgentTerminalGraphicRenderResult",
+        "TAgentTerminalGraphicRenderer",
+        "TAgentTerminalGraphicRendererContext",
+        "TAgentTerminalGraphicTraceEvent",
         "TCommandPaletteItem",
         "TCommandPaletteItemsProvider",
         "TCommandPaletteLoadErrorPayload",
@@ -250,6 +267,15 @@
         "TTranscriptVisualSegment",
         "TUserMessageSegment",
         "TUserMessageViewModel",
+        "TerminalGraphicRenderQueue",
+        "TerminalGraphicRenderQueueMetric",
+        "TerminalGraphicRenderQueueOptions",
+        "TerminalGraphicsCapabilities",
+        "TerminalGraphicsDetectionInput",
+        "TerminalGraphicsFallbackProtocol",
+        "TerminalGraphicsMultiplexer",
+        "TerminalGraphicsProtocol",
+        "TerminalGraphicsResolvedProtocol",
         "TuiMarkdownBlock",
         "TuiMarkdownBlockSource",
         "TuiMarkdownBlockSourceOptions",
@@ -292,6 +318,9 @@
         "STDOUT_RENDERER_CAPABILITIES",
         "createCliEventManager",
         "createDefaultTInputHostAdapter",
+        "createIterm2InlineImageSequence",
+        "createKittyDeleteGraphicsSequence",
+        "createKittyGraphicsSequence",
         "createNodeMentionPathProvider",
         "createNodePathPickerProvider",
         "createOsc52ClipboardProvider",
@@ -299,7 +328,9 @@
         "createStdoutRenderer",
         "createTInputHostPlugin",
         "createTerminalApp",
+        "createTerminalGraphicRenderQueue",
         "defaultTInputHostPlugin",
+        "detectTerminalGraphicsCapabilities",
         "getCliLatencyProfiler",
         "getStdoutRendererMetrics",
         "installNodeFileWriters",
@@ -316,6 +347,8 @@
         "CliEventManager",
         "CliOutput",
         "CreateDefaultTInputHostAdapterOptions",
+        "CreateKittyDeleteGraphicsSequenceOptions",
+        "CreateKittyGraphicsSequenceOptions",
         "CreateTerminalAppOptions",
         "DirtyRowPatchMode",
         "FsDirEntry",
@@ -336,6 +369,15 @@
         "TerminalCleanupHandle",
         "TerminalCleanupOptions",
         "TerminalCleanupSignalPolicy",
+        "TerminalGraphicRenderQueue",
+        "TerminalGraphicRenderQueueMetric",
+        "TerminalGraphicRenderQueueOptions",
+        "TerminalGraphicsCapabilities",
+        "TerminalGraphicsDetectionInput",
+        "TerminalGraphicsFallbackProtocol",
+        "TerminalGraphicsMultiplexer",
+        "TerminalGraphicsProtocol",
+        "TerminalGraphicsResolvedProtocol",
         "TerminalLinkOpenContext",
         "TerminalLinkOpenSource",
         "TerminalLinkOpener",
@@ -898,6 +940,147 @@
     }
   },
   "components": {
+    "TAgentTerminalGraphic": {
+      "entrypoint": "@simon_he/vue-tui/agent",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "kind",
+          "type": "TAgentTerminalGraphicKind",
+          "required": false,
+          "defaultValue": "\"image\""
+        },
+        {
+          "name": "fallback",
+          "type": "string",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "loadingStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "errorStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "clear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "final",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "streaming",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "renderer",
+          "type": "TAgentTerminalGraphicRenderer",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "loadingText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"Rendering terminal graphic...\""
+        },
+        {
+          "name": "deferRenderUntilVisible",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "suspendRawWhileScrolling",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "suspendRenderWhileScrolling",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "scrolling",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "suspended",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "cacheKey",
+          "type": "string",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "trace",
+          "type": "(event: TAgentTerminalGraphicTraceEvent) => void",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": []
+    },
     "TAgentTranscript": {
       "entrypoint": "@simon_he/vue-tui/agent",
       "maturity": "experimental",
@@ -8944,6 +9127,12 @@
           "type": "RowScrollMode",
           "required": false,
           "defaultValue": "\"off\""
+        },
+        {
+          "name": "terminalGraphicScrollIdleMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "96"
         }
       ],
       "events": [

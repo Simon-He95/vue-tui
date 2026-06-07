@@ -3,6 +3,15 @@ export { TDialog } from "./vue/components/TDialog.js";
 export { TInput } from "./vue/components/TInput.js";
 export { TSelect } from "./vue/components/TSelect.js";
 export { TText } from "./vue/components/TText.js";
+export { TAgentTerminalGraphic } from "./vue/components/TAgentTerminalGraphic.js";
+export type {
+  TAgentTerminalGraphicKind,
+  TAgentTerminalGraphicRenderer,
+  TAgentTerminalGraphicRendererContext,
+  TAgentTerminalGraphicRenderResult,
+  TAgentTerminalGraphicProps,
+  TAgentTerminalGraphicTraceEvent,
+} from "./vue/components/TAgentTerminalGraphic.js";
 export { TThinkingView } from "./vue/components/TThinkingView.js";
 export { TToolCallView } from "./vue/components/TToolCallView.js";
 export { TUserMessageView } from "./vue/components/TUserMessageView.js";
@@ -32,6 +41,33 @@ export {
   TMermaid,
   TMermaidText,
 } from "./vue/components/TMermaidText.js";
+export type {
+  CreatePngTerminalGraphicRendererOptions,
+  PngTerminalGraphicFrame,
+} from "./vue/agent/create-png-terminal-graphic-renderer.js";
+export { createPngTerminalGraphicRenderer } from "./vue/agent/create-png-terminal-graphic-renderer.js";
+export type {
+  TerminalGraphicRenderQueue,
+  TerminalGraphicRenderQueueMetric,
+  TerminalGraphicRenderQueueOptions,
+} from "./renderer/terminal-graphic-render-queue.js";
+export { createTerminalGraphicRenderQueue } from "./renderer/terminal-graphic-render-queue.js";
+export type {
+  CreateKittyDeleteGraphicsSequenceOptions,
+  CreateKittyGraphicsSequenceOptions,
+  TerminalGraphicsCapabilities,
+  TerminalGraphicsDetectionInput,
+  TerminalGraphicsFallbackProtocol,
+  TerminalGraphicsMultiplexer,
+  TerminalGraphicsProtocol,
+  TerminalGraphicsResolvedProtocol,
+} from "./renderer/terminal-graphics.js";
+export {
+  createIterm2InlineImageSequence,
+  createKittyDeleteGraphicsSequence,
+  createKittyGraphicsSequence,
+  detectTerminalGraphicsCapabilities,
+} from "./renderer/terminal-graphics.js";
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,

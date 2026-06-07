@@ -1,0 +1,355 @@
+import type { TerminalGraphicTraceEvent } from "./terminal-graphics-trace.js";
+import { recordTerminalGraphicTrace } from "./terminal-graphics-trace.js";
+
+export type TerminalGraphicRenderQueueMetric =
+  | Readonly<{ type: "cache-hit"; key: string }>
+  | Readonly<{ type: "cache-store"; key: string; bytes: number }>
+  | Readonly<{ type: "evict"; key: string; bytes: number }>
+  | Readonly<{ type: "queue-wait"; key: string; waitMs: number }>
+  | Readonly<{ type: "render-abort"; key: string }>;
+
+export type TerminalGraphicRenderQueueOptions = Readonly<{
+  maxConcurrency?: number;
+  maxEntries?: number;
+  maxBytes?: number;
+  ttlMs?: number;
+  /**
+   * Share in-flight renders for equal cache keys.
+   *
+   * Keep this disabled when render work observes a caller AbortSignal. This is
+   * the safe default for viewport-bound graphics in virtual scrollers: an
+   * offscreen row may abort while another still-visible row with the same cache
+   * key is still valid. Duplicate queued renders are still cheap because each
+   * task re-checks the cache after acquiring a concurrency slot, so a render
+   * completed by an earlier row is reused instead of rendering again.
+   */
+  dedupeInflight?: boolean;
+  onMetric?: (metric: TerminalGraphicRenderQueueMetric) => void;
+}>;
+
+export type TerminalGraphicRenderQueue = Readonly<{
+  cached: <T>(
+    key: string,
+    signal: AbortSignal | undefined,
+    render: () => Promise<T>,
+    estimateBytes?: (value: T) => number,
+    options?: Readonly<{ dedupeInflight?: boolean }>,
+  ) => Promise<T>;
+  clear: () => void;
+  stats: () => Readonly<{
+    active: number;
+    waiting: number;
+    cacheEntries: number;
+    cacheBytes: number;
+  }>;
+}>;
+
+type CacheEntry<T> = Readonly<{
+  value: T;
+  bytes: number;
+  expiresAt: number;
+}>;
+
+type Waiter = Readonly<{
+  key: string;
+  start: () => void;
+  reject: (error: Error) => void;
+}>;
+
+const CACHE_MISS = Symbol("terminal-graphic-cache-miss");
+
+function now(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+}
+
+function createAbortError(): Error {
+  const error = new Error("Terminal graphic render aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function positiveFiniteInt(value: unknown, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+
+  const int = Math.floor(n);
+  return int > 0 ? int : fallback;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw createAbortError();
+}
+
+function raceAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(createAbortError());
+
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(createAbortError());
+    signal.addEventListener("abort", onAbort, { once: true });
+
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+export function createTerminalGraphicRenderQueue(
+  options: TerminalGraphicRenderQueueOptions = {},
+): TerminalGraphicRenderQueue {
+  const maxConcurrency = positiveFiniteInt(options.maxConcurrency, 2);
+  const maxEntries = positiveFiniteInt(options.maxEntries, 128);
+  const maxBytes = positiveFiniteInt(options.maxBytes, 32 * 1024 * 1024);
+  const ttlMs = positiveFiniteInt(options.ttlMs, 5 * 60_000);
+  const dedupeInflight = options.dedupeInflight ?? false;
+
+  let active = 0;
+  let cacheBytes = 0;
+  let generation = 0;
+
+  const waiters: Waiter[] = [];
+  const cache = new Map<string, CacheEntry<unknown>>();
+  const inflight = new Map<string, Promise<unknown>>();
+
+  type QueueStateFields = Pick<
+    TerminalGraphicTraceEvent,
+    "active" | "waiting" | "cacheEntries" | "cacheBytes"
+  >;
+
+  function traceQueueState(
+    event: Omit<TerminalGraphicTraceEvent, "timestamp" | keyof QueueStateFields> &
+      Partial<QueueStateFields> &
+      Readonly<{ timestamp?: number }>,
+  ): void {
+    recordTerminalGraphicTrace({
+      ...event,
+      active,
+      waiting: waiters.length,
+      cacheEntries: cache.size,
+      cacheBytes,
+    });
+  }
+
+  function evictUntilBudget(): void {
+    while (cache.size > maxEntries || cacheBytes > maxBytes) {
+      const oldestKey = cache.keys().next().value as string | undefined;
+      if (!oldestKey) break;
+
+      const entry = cache.get(oldestKey);
+      cache.delete(oldestKey);
+
+      if (entry) {
+        cacheBytes -= entry.bytes;
+        options.onMetric?.({ type: "evict", key: oldestKey, bytes: entry.bytes });
+      }
+    }
+  }
+
+  function setCache<T>(key: string, value: T, bytes: number): void {
+    const prev = cache.get(key);
+    if (prev) {
+      cache.delete(key);
+      cacheBytes -= prev.bytes;
+    }
+
+    if (bytes > maxBytes) return;
+
+    cache.set(key, {
+      value,
+      bytes,
+      expiresAt: Date.now() + ttlMs,
+    });
+
+    cacheBytes += bytes;
+    options.onMetric?.({ type: "cache-store", key, bytes });
+    traceQueueState({ type: "cache-store", id: key, key, bytes });
+    evictUntilBudget();
+  }
+
+  function getCache<T>(key: string): T | typeof CACHE_MISS {
+    const entry = cache.get(key);
+    if (!entry) return CACHE_MISS;
+
+    if (entry.expiresAt < Date.now()) {
+      cache.delete(key);
+      cacheBytes -= entry.bytes;
+      return CACHE_MISS;
+    }
+
+    cache.delete(key);
+    cache.set(key, entry);
+    options.onMetric?.({ type: "cache-hit", key });
+    traceQueueState({ type: "cache-hit", id: key, key, bytes: entry.bytes });
+
+    return entry.value as T;
+  }
+
+  function release(): void {
+    active = Math.max(0, active - 1);
+    pump();
+  }
+
+  function once(fn: () => void): () => void {
+    let called = false;
+
+    return () => {
+      if (called) return;
+      called = true;
+      fn();
+    };
+  }
+
+  function observeActiveRenderAbort(key: string, signal: AbortSignal | undefined): () => void {
+    if (!signal) return () => undefined;
+
+    const onAbort = () => {
+      options.onMetric?.({ type: "render-abort", key });
+      traceQueueState({ type: "renderer-abort", id: key, key });
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    return () => signal.removeEventListener("abort", onAbort);
+  }
+
+  function pump(): void {
+    while (active < maxConcurrency && waiters.length > 0) {
+      const waiter = waiters.shift()!;
+      active++;
+      traceQueueState({ type: "queue-depth", id: waiter.key, key: waiter.key });
+      waiter.start();
+    }
+  }
+
+  function acquire(key: string, signal?: AbortSignal): Promise<() => void> {
+    throwIfAborted(signal);
+
+    if (active < maxConcurrency) {
+      active++;
+      traceQueueState({ type: "queue-depth", id: key, key });
+      return Promise.resolve(release);
+    }
+
+    const waitStartedAt = now();
+
+    return new Promise((resolve, reject) => {
+      let onAbort = () => undefined;
+      const cleanup = () => {
+        signal?.removeEventListener("abort", onAbort);
+      };
+      const waiter: Waiter = {
+        key,
+        start: () => {
+          cleanup();
+          const waitMs = now() - waitStartedAt;
+          options.onMetric?.({
+            type: "queue-wait",
+            key,
+            waitMs,
+          });
+          traceQueueState({
+            type: "queue-wait",
+            id: key,
+            key,
+            durationMs: waitMs,
+          });
+          resolve(release);
+        },
+        reject: (error) => {
+          cleanup();
+          reject(error);
+        },
+      };
+      onAbort = () => {
+        const index = waiters.indexOf(waiter);
+        if (index >= 0) waiters.splice(index, 1);
+        cleanup();
+        reject(createAbortError());
+      };
+
+      signal?.addEventListener("abort", onAbort, { once: true });
+      waiters.push(waiter);
+      traceQueueState({ type: "queue-depth", id: key, key });
+    });
+  }
+
+  async function cached<T>(
+    key: string,
+    signal: AbortSignal | undefined,
+    render: () => Promise<T>,
+    estimateBytes: (value: T) => number = () => 0,
+    cachedOptions: Readonly<{ dedupeInflight?: boolean }> = {},
+  ): Promise<T> {
+    throwIfAborted(signal);
+
+    const cachedValue = getCache<T>(key);
+    if (cachedValue !== CACHE_MISS) return cachedValue;
+    traceQueueState({ type: "cache-miss", id: key, key });
+
+    const shouldDedupeInflight = cachedOptions.dedupeInflight ?? dedupeInflight;
+    const existing = shouldDedupeInflight ? inflight.get(key) : undefined;
+    if (existing) return raceAbort(existing as Promise<T>, signal);
+
+    let promise!: Promise<T>;
+    promise = (async () => {
+      let releaseSlot: (() => void) | null = null;
+      let removeAbortObserver: (() => void) | null = null;
+      const renderGeneration = generation;
+
+      try {
+        releaseSlot = once(await acquire(key, signal));
+        removeAbortObserver = observeActiveRenderAbort(key, signal);
+        throwIfAborted(signal);
+
+        // A duplicate render may have filled the cache while this caller was
+        // waiting for a slot. Re-check here to avoid expensive duplicate
+        // SVG/PNG/Sixel work during fast virtual-scroll viewport churn.
+        const cachedAfterWait = getCache<T>(key);
+        if (cachedAfterWait !== CACHE_MISS) return cachedAfterWait;
+
+        const value = await render();
+        throwIfAborted(signal);
+
+        const rawBytes = Math.floor(Number(estimateBytes(value)));
+        const bytes = Number.isFinite(rawBytes) && rawBytes > 0 ? rawBytes : 0;
+        if (renderGeneration === generation) setCache(key, value, bytes);
+
+        return value;
+      } finally {
+        removeAbortObserver?.();
+        releaseSlot?.();
+        if (shouldDedupeInflight && inflight.get(key) === promise) inflight.delete(key);
+      }
+    })();
+
+    if (shouldDedupeInflight) inflight.set(key, promise);
+    return raceAbort(promise, signal);
+  }
+
+  return {
+    cached,
+    clear() {
+      generation++;
+      cache.clear();
+      inflight.clear();
+      const pending = waiters.splice(0);
+      for (const waiter of pending) waiter.reject(createAbortError());
+      cacheBytes = 0;
+    },
+    stats() {
+      return {
+        active,
+        waiting: waiters.length,
+        cacheEntries: cache.size,
+        cacheBytes,
+      };
+    },
+  };
+}

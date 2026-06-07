@@ -6,6 +6,13 @@ import type {
   TerminalScrollOperation,
 } from "../../core/types.js";
 import type { RendererCapabilities } from "../capabilities.js";
+import type {
+  TerminalGraphicsCapabilities,
+  TerminalGraphicsDetectionInput,
+  TerminalGraphicsOperation,
+  TerminalGraphicsPayload,
+  TerminalGraphicsOutput,
+} from "../terminal-graphics.js";
 import { Buffer } from "node:buffer";
 import { writeSync as fsWriteSync } from "node:fs";
 import process from "node:process";
@@ -43,7 +50,20 @@ import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { firstNonEmptyEnv } from "../../utils/env.js";
 import { STDOUT_RENDERER_CAPABILITIES } from "../capabilities.js";
-import { recordStdoutFrame } from "./stdout-metrics.js";
+import {
+  detectTerminalGraphicsCapabilities,
+  canDrawTerminalGraphicRect,
+  hashTerminalGraphicsString,
+  isSafeTerminalGraphicsSequence,
+  isTerminalGraphicsProtocol,
+  normalizeTerminalGraphicSize,
+  registerTerminalGraphicsOutput,
+  validateTerminalGraphicsPayload,
+  validateTerminalGraphicFrame,
+  wrapTerminalGraphicsForMultiplexer,
+} from "../terminal-graphics.js";
+import { recordTerminalGraphicTrace } from "../terminal-graphics-trace.js";
+import { recordStdoutFrame, recordStdoutTerminalGraphics } from "./stdout-metrics.js";
 
 // Global debug logger instance (lazy init)
 let debugLog: ReturnType<typeof createDebugLogger> | null = null;
@@ -86,6 +106,7 @@ export type CliOutput = Readonly<{
 
 export type StdoutRenderer = Readonly<{
   capabilities: RendererCapabilities;
+  graphicsCapabilities?: TerminalGraphicsCapabilities;
   render: () => void;
   dispose: () => void;
   /** Move terminal cursor to specified cell position for IME input */
@@ -160,6 +181,7 @@ export type StdoutRendererOptions = Readonly<{
   getImeAnchor?: () => { cellX: number; cellY: number } | null;
   /** Use DEC 2026 synchronized output mode. */
   useSyncOutput?: boolean;
+  terminalGraphics?: false | TerminalGraphicsCapabilities | TerminalGraphicsDetectionInput;
   allowFileUrls?: boolean;
   profileFileWriter?: {
     appendFileSync?: (path: string, data: string) => void;
@@ -169,6 +191,39 @@ export type StdoutRendererOptions = Readonly<{
 type InternalStdoutRendererOptions = StdoutRendererOptions & {
   __columnDiffMode?: InternalColumnDiffMode;
 };
+
+function isTerminalGraphicsCapabilities(value: unknown): value is TerminalGraphicsCapabilities {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "supported" in value &&
+    "protocol" in value &&
+    "preferredProtocol" in value &&
+    "candidates" in value
+  );
+}
+
+function resolveTerminalGraphicsCapabilities(
+  options: StdoutRendererOptions | undefined,
+  env: Record<string, unknown>,
+  outputIsTTY: boolean,
+): TerminalGraphicsCapabilities {
+  const terminalGraphics = options?.terminalGraphics;
+  if (terminalGraphics === false) {
+    return detectTerminalGraphicsCapabilities({
+      env,
+      isTTY: outputIsTTY,
+      protocol: "none",
+    });
+  }
+  if (isTerminalGraphicsCapabilities(terminalGraphics)) return terminalGraphics;
+
+  return detectTerminalGraphicsCapabilities({
+    env,
+    isTTY: outputIsTTY,
+    ...(terminalGraphics ?? {}),
+  });
+}
 
 export function createStdoutRenderer(
   terminal: Terminal,
@@ -442,6 +497,229 @@ export function createStdoutRenderer(
   let accumulatedDirtyMax = -1;
   let accumulatedDirtyRowsRequireRepaint = false;
   let accumulatedScrollOperations: TerminalScrollOperation[] | null = null;
+  type QueuedTerminalGraphicsPayload = TerminalGraphicsPayload &
+    Readonly<{
+      op: TerminalGraphicsOperation;
+      order: number;
+    }>;
+  type ActiveTerminalGraphic = Readonly<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    protocol: TerminalGraphicsPayload["protocol"];
+    clearSequence?: string;
+  }>;
+
+  const graphicsCapabilities = resolveTerminalGraphicsCapabilities(options, env, outputIsTTY);
+  const pendingGraphics = new Map<string, QueuedTerminalGraphicsPayload>();
+  const pendingGraphicClears = new Set<string>();
+  const activeGraphics = new Map<string, ActiveTerminalGraphic>();
+  const pendingGraphicSignatures = new Map<string, string>();
+  const activeGraphicSignatures = new Map<string, string>();
+  let nextGraphicsOrder = 0;
+  const hasPendingTerminalGraphics = (): boolean =>
+    pendingGraphics.size > 0 || pendingGraphicClears.size > 0;
+  function canUseTerminalGraphicsProtocol(
+    protocol: unknown,
+    capabilities: TerminalGraphicsCapabilities,
+  ): protocol is TerminalGraphicsPayload["protocol"] {
+    return (
+      capabilities.supported &&
+      isTerminalGraphicsProtocol(protocol) &&
+      protocol === capabilities.preferredProtocol
+    );
+  }
+  function requestTerminalGraphicsFlush(): void {
+    if (disposed) return;
+    render([], false);
+  }
+  function terminalGraphicsPayloadSignature(
+    payload: Readonly<{
+      id: string;
+      x: number;
+      y: number;
+      w?: number;
+      h?: number;
+      protocol: TerminalGraphicsPayload["protocol"];
+      sequence: string;
+      clearSequence?: string;
+    }>,
+  ): string {
+    return [
+      payload.id,
+      payload.protocol,
+      payload.x,
+      payload.y,
+      payload.w ?? "",
+      payload.h ?? "",
+      hashTerminalGraphicsString(payload.sequence),
+      hashTerminalGraphicsString(payload.clearSequence ?? ""),
+    ].join(":");
+  }
+  function queueTerminalGraphicClear(id: string): boolean {
+    if (disposed) return false;
+
+    const removedPendingDraw = pendingGraphics.delete(`${id}:draw`);
+    pendingGraphicSignatures.delete(id);
+
+    const active = activeGraphics.get(id);
+    if (!active) return removedPendingDraw;
+
+    if (active.clearSequence) {
+      const payload: QueuedTerminalGraphicsPayload = {
+        id,
+        x: active.x,
+        y: active.y,
+        w: active.w,
+        h: active.h,
+        protocol: active.protocol,
+        sequence: active.clearSequence,
+        op: "clear",
+        order: nextGraphicsOrder++,
+      };
+
+      if (validateTerminalGraphicsPayload(payload, graphicsCapabilities)) {
+        pendingGraphics.set(`${id}:clear`, payload);
+        recordTerminalGraphicTrace({ type: "clear", id, protocol: payload.protocol });
+        requestTerminalGraphicsFlush();
+        return true;
+      }
+    }
+
+    pendingGraphicClears.add(id);
+    recordTerminalGraphicTrace({ type: "clear", id });
+    requestTerminalGraphicsFlush();
+    return true;
+  }
+  const graphicsOutput: TerminalGraphicsOutput = {
+    capabilities: graphicsCapabilities,
+    isActive(id) {
+      if (pendingGraphicClears.has(id) || pendingGraphics.has(`${id}:clear`)) return false;
+      return activeGraphics.has(id) || pendingGraphics.has(`${id}:draw`);
+    },
+    queue(payload) {
+      if (disposed) return false;
+
+      const x = Math.floor(payload.x);
+      const y = Math.floor(payload.y);
+      const op: TerminalGraphicsOperation = payload.op ?? "draw";
+      const normalized: QueuedTerminalGraphicsPayload = {
+        ...payload,
+        x,
+        y,
+        w: payload.w == null ? undefined : Math.floor(payload.w),
+        h: payload.h == null ? undefined : Math.floor(payload.h),
+        op,
+        order: nextGraphicsOrder++,
+      };
+
+      if (!normalized.id.trim()) return false;
+      if (!Number.isFinite(normalized.x) || !Number.isFinite(normalized.y)) return false;
+      if (!canUseTerminalGraphicsProtocol(normalized.protocol, graphicsCapabilities)) return false;
+
+      if (op === "draw") {
+        const frame = validateTerminalGraphicFrame({
+          id: normalized.id,
+          protocol: normalized.protocol,
+          sequence: normalized.sequence,
+          fallbackText: normalized.fallbackText,
+          width: normalized.w ?? 1,
+          height: normalized.h ?? 1,
+        });
+        if (!frame) return false;
+        if (
+          !canDrawTerminalGraphicRect(
+            { x: normalized.x, y: normalized.y, w: frame.width, h: frame.height },
+            terminal.size(),
+          )
+        ) {
+          queueTerminalGraphicClear(frame.id);
+          return false;
+        }
+
+        const clearSequence =
+          normalized.clearSequence &&
+          isSafeTerminalGraphicsSequence(normalized.clearSequence, normalized.protocol, "clear")
+            ? normalized.clearSequence
+            : undefined;
+        const signature = terminalGraphicsPayloadSignature({
+          ...normalized,
+          id: frame.id,
+          w: frame.width,
+          h: frame.height,
+          sequence: frame.sequence,
+          clearSequence,
+        });
+
+        const removedPendingGraphicClear = pendingGraphics.delete(`${frame.id}:clear`);
+        const removedPendingClear = pendingGraphicClears.delete(frame.id);
+        const canceledPendingClear = removedPendingGraphicClear || removedPendingClear;
+
+        if (
+          !canceledPendingClear &&
+          (pendingGraphicSignatures.get(frame.id) === signature ||
+            activeGraphicSignatures.get(frame.id) === signature)
+        ) {
+          recordTerminalGraphicTrace({
+            type: "queue-dedupe",
+            id: frame.id,
+            protocol: normalized.protocol,
+          });
+          return true;
+        }
+
+        if (canceledPendingClear && activeGraphicSignatures.get(frame.id) === signature) {
+          recordTerminalGraphicTrace({
+            type: "queue-dedupe",
+            id: frame.id,
+            protocol: normalized.protocol,
+          });
+          return true;
+        }
+
+        pendingGraphics.set(`${frame.id}:draw`, {
+          ...normalized,
+          id: frame.id,
+          w: frame.width,
+          h: frame.height,
+          sequence: frame.sequence,
+          clearSequence,
+          fallbackText: frame.fallbackText,
+        });
+        pendingGraphicSignatures.set(frame.id, signature);
+        recordTerminalGraphicTrace({
+          type: "queue",
+          id: frame.id,
+          protocol: normalized.protocol,
+          bytes: frame.sequence.length,
+        });
+        requestTerminalGraphicsFlush();
+        return true;
+      }
+
+      if (!validateTerminalGraphicsPayload(normalized, graphicsCapabilities)) return false;
+
+      pendingGraphics.delete(`${normalized.id}:draw`);
+      pendingGraphicSignatures.delete(normalized.id);
+      pendingGraphics.set(`${normalized.id}:clear`, {
+        ...normalized,
+        w: normalized.w,
+        h: normalized.h,
+      });
+      recordTerminalGraphicTrace({
+        type: "clear",
+        id: normalized.id,
+        protocol: normalized.protocol,
+      });
+      requestTerminalGraphicsFlush();
+      return true;
+    },
+    clear(id) {
+      return queueTerminalGraphicClear(id);
+    },
+  };
+  const unregisterGraphicsOutput = registerTerminalGraphicsOutput(terminal, graphicsOutput);
   // Minimum frame interval for stdout rendering (16ms = ~60fps max).
   // For non-TTY outputs (tests/logs), render immediately for determinism.
   const MIN_FRAME_MS = outputIsTTY ? 16 : 0;
@@ -457,6 +735,136 @@ export function createStdoutRenderer(
     const x = Math.min(maxX, Math.max(0, x0));
     const y = Math.min(maxY, Math.max(0, y0));
     return { x, y };
+  }
+
+  function normalizeGraphicRect(
+    rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+  ): { x: number; y: number; w: number; h: number } | null {
+    const x0 = Math.floor(rect.x);
+    const y0 = Math.floor(rect.y);
+    const w0 = Math.floor(rect.w);
+    const h0 = Math.floor(rect.h);
+    if (
+      !Number.isFinite(x0) ||
+      !Number.isFinite(y0) ||
+      !Number.isFinite(w0) ||
+      !Number.isFinite(h0)
+    ) {
+      return null;
+    }
+
+    const size = normalizeTerminalGraphicSize(w0, h0);
+    if (!size) return null;
+
+    return { x: x0, y: y0, w: size.width, h: size.height };
+  }
+
+  function clipGraphicRectToViewport(
+    rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+    size: Readonly<{ cols: number; rows: number }>,
+  ): { x: number; y: number; w: number; h: number } | null {
+    const cols = Math.max(0, Math.floor(size.cols));
+    const rows = Math.max(0, Math.floor(size.rows));
+    if (cols <= 0 || rows <= 0) return null;
+
+    const normalized = normalizeGraphicRect(rect);
+    if (!normalized) return null;
+
+    const x0 = normalized.x;
+    const y0 = normalized.y;
+    const w0 = normalized.w;
+    const h0 = normalized.h;
+
+    const left = Math.max(0, x0);
+    const top = Math.max(0, y0);
+    const right = Math.min(cols, x0 + w0);
+    const bottom = Math.min(rows, y0 + h0);
+    if (right <= left || bottom <= top) return null;
+
+    return { x: left, y: top, w: right - left, h: bottom - top };
+  }
+
+  function fullGraphicRectInViewport(
+    rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+    size: Readonly<{ cols: number; rows: number }>,
+  ): { x: number; y: number; w: number; h: number } | null {
+    const cols = Math.max(0, Math.floor(size.cols));
+    const rows = Math.max(0, Math.floor(size.rows));
+    if (cols <= 0 || rows <= 0) return null;
+
+    const normalized = normalizeGraphicRect(rect);
+    if (!normalized) return null;
+
+    if (!canDrawTerminalGraphicRect(normalized, { cols, rows })) {
+      return null;
+    }
+
+    return normalized;
+  }
+
+  function clearGraphicRect(
+    rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+  ): string {
+    const blank = " ".repeat(Math.max(0, rect.w));
+    let out = "";
+
+    for (let row = 0; row < rect.h; row++) {
+      out += `\u001B[${rect.y + row + 1};${rect.x + 1}H${blank}`;
+    }
+
+    return out;
+  }
+
+  function sameGraphicRect(
+    a: Readonly<{ x: number; y: number; w: number; h: number }> | undefined,
+    b: Readonly<{ x: number; y: number; w: number; h: number }>,
+  ): boolean {
+    return Boolean(a && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h);
+  }
+
+  function maybeWrapTerminalGraphic(sequence: string): string {
+    return wrapTerminalGraphicsForMultiplexer(sequence, graphicsCapabilities);
+  }
+
+  function kittyClearTargetsCurrentCell(sequence: string): boolean {
+    const prefix = "\u001B_G";
+    const terminator = "\u001B\\";
+    let index = 0;
+
+    while (index < sequence.length) {
+      if (!sequence.startsWith(prefix, index)) return false;
+
+      const end = sequence.indexOf(terminator, index + prefix.length);
+      if (end < 0) return false;
+
+      const body = sequence.slice(index + prefix.length, end);
+      const semicolon = body.indexOf(";");
+      const controlsText = semicolon < 0 ? body : body.slice(0, semicolon);
+      let action = "";
+      let deleteMode = "";
+
+      for (const part of controlsText.split(",")) {
+        const eq = part.indexOf("=");
+        if (eq <= 0) continue;
+
+        const key = part.slice(0, eq);
+        const value = part.slice(eq + 1);
+        if (key === "a") action = value;
+        else if (key === "d") deleteMode = value;
+      }
+
+      if (action === "d" && (deleteMode === "c" || deleteMode === "C")) return true;
+      index = end + terminator.length;
+    }
+
+    return false;
+  }
+
+  function clearSequenceNeedsVisibleCell(
+    sequence: string,
+    protocol: TerminalGraphicsPayload["protocol"],
+  ): boolean {
+    return protocol === "kitty" && kittyClearTargetsCurrentCell(sequence);
   }
 
   function resolveColorMode(): Exclude<StdoutColorMode, "auto"> {
@@ -1913,6 +2321,15 @@ export function createStdoutRenderer(
     const renderStart = performance.now();
 
     const size = terminal.size();
+    const pendingGraphicClearsToRender = new Set(pendingGraphicClears);
+    const graphicsClearsToRender = Array.from(pendingGraphicClearsToRender);
+    const graphicsEntriesToRender = Array.from(pendingGraphics.entries()).sort(([, a], [, b]) => {
+      const opA = a.op === "clear" ? 0 : 1;
+      const opB = b.op === "clear" ? 0 : 1;
+      return opA - opB || a.order - b.order;
+    });
+    const graphicsToRender = graphicsEntriesToRender.map(([, payload]) => payload);
+    let terminalGraphicsBlockScrollRegions = false;
     ensureRowEscapes(Math.max(size.rows, lastRenderedRows));
     ensureFingerprints(size.cols, size.rows);
     const bgSeq = openBg(defaultBg);
@@ -1941,6 +2358,92 @@ export function createStdoutRenderer(
       if (!outOps.length) return null;
       return outOps;
     })();
+
+    const terminalGraphicsAffectedRows = new Set<number>();
+    const addTerminalGraphicRows = (
+      rect: Readonly<{ x: number; y: number; w: number; h: number }> | null | undefined,
+    ): void => {
+      if (!rect) return;
+      const visible = clipGraphicRectToViewport(rect, size);
+      if (!visible) return;
+
+      for (let y = visible.y; y < visible.y + visible.h; y++) {
+        terminalGraphicsAffectedRows.add(y);
+      }
+    };
+    const payloadRect = (
+      payload: Readonly<{ x: number; y: number; w?: number; h?: number }>,
+    ): { x: number; y: number; w: number; h: number } => ({
+      x: payload.x,
+      y: payload.y,
+      w: payload.w ?? 1,
+      h: payload.h ?? 1,
+    });
+    const intersectsScrollOperations = (
+      rect: Readonly<{ y: number; h: number }> | null | undefined,
+    ): boolean => {
+      if (!rect || !normalizedScrollOperations?.length) return false;
+      const top = rect.y;
+      const bottom = rect.y + rect.h;
+
+      for (const op of normalizedScrollOperations) {
+        if (top < op.endY && bottom > op.startY) return true;
+      }
+      return false;
+    };
+
+    const pendingGraphicIds = new Set(graphicsToRender.map((payload) => payload.id));
+    const explicitGraphicClears = new Set(graphicsClearsToRender);
+
+    if (normalizedScrollOperations?.length && activeGraphics.size > 0) {
+      for (const [id, active] of activeGraphics) {
+        if (!intersectsScrollOperations(active)) continue;
+
+        terminalGraphicsBlockScrollRegions = true;
+        addTerminalGraphicRows(active);
+
+        if (!pendingGraphicIds.has(id) && !explicitGraphicClears.has(id)) {
+          graphicsClearsToRender.push(id);
+          explicitGraphicClears.add(id);
+        }
+      }
+    }
+
+    for (const id of graphicsClearsToRender) {
+      const active = activeGraphics.get(id);
+      addTerminalGraphicRows(active);
+      if (intersectsScrollOperations(active)) terminalGraphicsBlockScrollRegions = true;
+    }
+
+    for (const payload of graphicsToRender) {
+      const active = activeGraphics.get(payload.id);
+
+      if (payload.op === "clear") {
+        const rect = active ?? payloadRect(payload);
+        addTerminalGraphicRows(rect);
+        if (intersectsScrollOperations(rect)) terminalGraphicsBlockScrollRegions = true;
+        continue;
+      }
+
+      const next = payloadRect(payload);
+      addTerminalGraphicRows(active);
+      addTerminalGraphicRows(next);
+
+      if (intersectsScrollOperations(active) || intersectsScrollOperations(next)) {
+        terminalGraphicsBlockScrollRegions = true;
+      }
+    }
+
+    const forceTerminalGraphicsRowRepaint = (y: number): boolean =>
+      forceDirtyRowsRepaint || terminalGraphicsAffectedRows.has(y);
+
+    // Raw terminal graphics are not represented in the cell buffer. If a frame
+    // needs to draw/clear protocol graphics, dirty-span patching is unsafe for
+    // intersecting rows only: a one-cell span update can make the stdout renderer
+    // believe a row was painted while most of the previous inline image remains
+    // in the terminal. Keep dirty-span and scroll-region optimization for rows
+    // that do not intersect raw graphics.
+
     let rowsToRender = (() => {
       if (forceFullRender || !fpPrevValid) return null;
       if (!dirtyRows) return null;
@@ -1963,7 +2466,13 @@ export function createStdoutRenderer(
       if (!sorted) outRows.sort((a, b) => a - b);
       return outRows;
     })();
-    if (rowsToRender?.length === 0 && !normalizedScrollOperations && !getImeAnchor) {
+    if (
+      rowsToRender?.length === 0 &&
+      !normalizedScrollOperations &&
+      !getImeAnchor &&
+      graphicsClearsToRender.length === 0 &&
+      graphicsToRender.length === 0
+    ) {
       if (isDebugEnabled()) getDebugLog().render(" No valid dirty rows; frame skipped");
       cliLatency?.recordStdoutNoOutput();
       return;
@@ -2339,7 +2848,7 @@ export function createStdoutRenderer(
       ]);
     })();
     let explicitScrollOperations: readonly TerminalScrollOperation[] | null =
-      normalizedScrollOperations;
+      terminalGraphicsBlockScrollRegions ? null : normalizedScrollOperations;
     let hiddenExplicitDirtyRows: ReadonlySet<number> | null = null;
     let allowInferredScrollRegions = true;
     if (explicitScrollOperations && overlayRows.length) {
@@ -2389,6 +2898,16 @@ export function createStdoutRenderer(
         }
       }
     };
+    if (terminalGraphicsBlockScrollRegions && normalizedScrollOperations && rowsToRender) {
+      includeRowsForPendingScrollOperations(normalizedScrollOperations);
+      rowsToRender = Array.from(expandedRows).sort((a, b) => a - b);
+      dirtySorted = true;
+      if (isDebugEnabled()) {
+        getDebugLog().render(
+          " Scroll regions disabled for frame with active/pending terminal graphics",
+        );
+      }
+    }
     if (explicitScrollOperations && rowsToRender && (!enableScrollRegions || !fpPrevValid)) {
       includeRowsForPendingScrollOperations(explicitScrollOperations);
       rowsToRender = Array.from(expandedRows).sort((a, b) => a - b);
@@ -2411,6 +2930,7 @@ export function createStdoutRenderer(
     }
     let profiledRowCount = rowsToRender ? rowsToRender.length : size.rows;
     const useScrollRegions =
+      !terminalGraphicsBlockScrollRegions &&
       enableScrollRegions &&
       fpPrevValid &&
       scrollRowsCandidate &&
@@ -2505,7 +3025,7 @@ export function createStdoutRenderer(
       for (const y of explicitDirtyRows) {
         const row = terminal.getRow(y) as Cell[];
         const overlayRow = overlayTouchedRowSet?.has(y);
-        if (forceDirtyRowsRepaint || !shouldUseDirtySpans() || overlayRow) {
+        if (forceTerminalGraphicsRowRepaint(y) || !shouldUseDirtySpans() || overlayRow) {
           fingerprintRow(row, y, size.cols);
           renderRow(y, row);
           paintedExplicitRows.push(y);
@@ -2707,7 +3227,7 @@ export function createStdoutRenderer(
       for (const y of rowsToRender) {
         const row = terminal.getRow(y) as Cell[];
         fingerprintRow(row, y, size.cols);
-        if (forceDirtyRowsRepaint || !shouldUseDirtySpans()) {
+        if (forceTerminalGraphicsRowRepaint(y) || !shouldUseDirtySpans()) {
           renderRow(y, row);
           continue;
         }
@@ -2745,6 +3265,10 @@ export function createStdoutRenderer(
       }
     }
     const nextLastRenderedRows = !rowsToRender ? size.rows : lastRenderedRows;
+    const graphicsOnlyFrame =
+      Boolean(rowsToRender && rowsToRender.length === 0) &&
+      !scrollHandled &&
+      (graphicsClearsToRender.length > 0 || graphicsToRender.length > 0);
     const commitRenderBaseline = (): void => {
       lastRenderedRows = nextLastRenderedRows;
 
@@ -2758,10 +3282,257 @@ export function createStdoutRenderer(
       const tmpTextIds = prevTextIds;
       prevTextIds = currentTextIds;
       currentTextIds = tmpTextIds;
-      fpPrevValid = !hrefIndexResetRequiresBaseline && !fingerprintInternResetRequiresBaseline;
+      fpPrevValid = graphicsOnlyFrame
+        ? fpPrevValid
+        : !hrefIndexResetRequiresBaseline && !fingerprintInternResetRequiresBaseline;
       prevOverlayBlockedRows = overlayCoverage.blockedRows;
       prevOverlayPartialRows = overlayCoverage.partialRows;
     };
+
+    if (graphicsOnlyFrame && fpPrevValid && currentFP.length === prevFP.length) {
+      currentFP.set(prevFP);
+      currentHrefIds.set(prevHrefIds);
+      currentTextIds.set(prevTextIds);
+    }
+
+    let renderedRowsLookup: Set<number> | undefined;
+    const rowWasPaintedByTextRenderer = (y: number): boolean => {
+      if (scrollHandled) return true;
+      if (!rowsToRender) return true;
+
+      renderedRowsLookup ??= new Set(rowsToRender);
+      return renderedRowsLookup.has(y);
+    };
+    const clearGraphicRectForRowsNotPainted = (
+      rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+    ): string => {
+      if (!rowsToRender || scrollHandled) return "";
+
+      const blank = " ".repeat(Math.max(0, rect.w));
+      let out = "";
+
+      for (let row = 0; row < rect.h; row++) {
+        const y = rect.y + row;
+        if (rowWasPaintedByTextRenderer(y)) continue;
+        out += `\u001B[${y + 1};${rect.x + 1}H${bgSeq}${blank}${SGR_RESET}`;
+      }
+
+      return out;
+    };
+    let commitTerminalGraphicsState: (() => void) | null = null;
+    let restoreTerminalGraphicsAfterWriteFailure: (() => void) | null = null;
+    let terminalGraphicsMetrics: Readonly<{
+      draws?: number;
+      clears?: number;
+      bytes?: number;
+      active: number;
+    }> | null = null;
+
+    if (graphicsClearsToRender.length > 0 || graphicsToRender.length > 0) {
+      const nextActiveGraphics = new Map(activeGraphics);
+      const nextActiveGraphicSignatures = new Map(activeGraphicSignatures);
+      const nextPendingGraphicSignatures = new Map(pendingGraphicSignatures);
+      let terminalGraphicsDraws = 0;
+      let terminalGraphicsClears = 0;
+      let terminalGraphicsBytes = 0;
+      const countGraphicsBytes = (value: string): string => {
+        terminalGraphicsBytes += Buffer.byteLength(value, "utf8");
+        return value;
+      };
+      const appendTerminalGraphicSequenceAt = (
+        sequence: string,
+        rect: Readonly<{ x: number; y: number }> | null | undefined,
+        fallbackCell: Readonly<{ cellX: number; cellY: number }>,
+        skipWithoutRect = false,
+      ): boolean => {
+        if (!rect && skipWithoutRect) return false;
+
+        const cell = rect ? { x: rect.x, y: rect.y } : clampCellToViewport(fallbackCell, size);
+        frameParts.push(
+          countGraphicsBytes(`\u001B[${cell.y + 1};${cell.x + 1}H`),
+          countGraphicsBytes(maybeWrapTerminalGraphic(sequence)),
+          countGraphicsBytes(SGR_RESET),
+        );
+        return true;
+      };
+      const appendActiveGraphicProtocolClear = (
+        active: ActiveTerminalGraphic,
+        rect: Readonly<{ x: number; y: number }> | null | undefined,
+      ): boolean => {
+        if (!active.clearSequence) return false;
+        return appendTerminalGraphicSequenceAt(
+          active.clearSequence,
+          rect,
+          {
+            cellX: active.x,
+            cellY: active.y,
+          },
+          clearSequenceNeedsVisibleCell(active.clearSequence, active.protocol),
+        );
+      };
+
+      hasFrameOutput = true;
+      if (enableOsc8Links && activeStyle.href) frameParts.push(OSC8_CLOSE);
+      activeStyle = {
+        fg: null,
+        bg: defaultBg,
+        bold: false,
+        dim: false,
+        italic: false,
+        underline: false,
+        inverse: false,
+        href: null,
+      };
+      activeStyleKey = null;
+      frameParts.push(countGraphicsBytes(SGR_RESET));
+
+      for (const id of graphicsClearsToRender) {
+        const active = nextActiveGraphics.get(id);
+        if (!active) continue;
+        const visibleRect = clipGraphicRectToViewport(active, size);
+        let wroteClear = false;
+        if (visibleRect) {
+          const clearRect = clearGraphicRectForRowsNotPainted(visibleRect);
+          if (clearRect) {
+            frameParts.push(countGraphicsBytes(clearRect));
+            wroteClear = true;
+          }
+        }
+        wroteClear = appendActiveGraphicProtocolClear(active, visibleRect) || wroteClear;
+        if (wroteClear) terminalGraphicsClears++;
+        nextActiveGraphics.delete(id);
+        nextActiveGraphicSignatures.delete(id);
+        nextPendingGraphicSignatures.delete(id);
+      }
+
+      for (const payload of graphicsToRender) {
+        if (payload.op === "clear") {
+          const active = nextActiveGraphics.get(payload.id);
+          const rect = clipGraphicRectToViewport(
+            {
+              x: active?.x ?? payload.x,
+              y: active?.y ?? payload.y,
+              w: active?.w ?? payload.w ?? 1,
+              h: active?.h ?? payload.h ?? 1,
+            },
+            size,
+          );
+          const clearRect = rect ? clearGraphicRectForRowsNotPainted(rect) : "";
+          let wroteClear = false;
+          if (clearRect) {
+            frameParts.push(countGraphicsBytes(clearRect));
+            wroteClear = true;
+          }
+          wroteClear =
+            appendTerminalGraphicSequenceAt(
+              payload.sequence,
+              rect,
+              {
+                cellX: active?.x ?? payload.x,
+                cellY: active?.y ?? payload.y,
+              },
+              clearSequenceNeedsVisibleCell(payload.sequence, payload.protocol),
+            ) || wroteClear;
+          if (wroteClear) terminalGraphicsClears++;
+          nextActiveGraphics.delete(payload.id);
+          nextActiveGraphicSignatures.delete(payload.id);
+          nextPendingGraphicSignatures.delete(payload.id);
+          continue;
+        }
+
+        const previous = nextActiveGraphics.get(payload.id);
+        const rect = fullGraphicRectInViewport(
+          { x: payload.x, y: payload.y, w: payload.w ?? 1, h: payload.h ?? 1 },
+          size,
+        );
+        if (!rect) {
+          if (previous) {
+            const visiblePrevious = clipGraphicRectToViewport(previous, size);
+            let wroteClear = false;
+            if (visiblePrevious) {
+              const clearPrevious = clearGraphicRectForRowsNotPainted(visiblePrevious);
+              if (clearPrevious) {
+                frameParts.push(countGraphicsBytes(clearPrevious));
+                wroteClear = true;
+              }
+            }
+            wroteClear = appendActiveGraphicProtocolClear(previous, visiblePrevious) || wroteClear;
+            if (wroteClear) terminalGraphicsClears++;
+            nextActiveGraphics.delete(payload.id);
+            nextActiveGraphicSignatures.delete(payload.id);
+          }
+          nextPendingGraphicSignatures.delete(payload.id);
+          continue;
+        }
+
+        const previousSignature = previous
+          ? nextActiveGraphicSignatures.get(payload.id)
+          : undefined;
+        const nextSignature =
+          nextPendingGraphicSignatures.get(payload.id) ?? terminalGraphicsPayloadSignature(payload);
+
+        if (previous && (previousSignature !== nextSignature || !sameGraphicRect(previous, rect))) {
+          const visiblePrevious = clipGraphicRectToViewport(previous, size);
+          let wroteClear = false;
+          if (visiblePrevious) {
+            const clearPrevious = clearGraphicRectForRowsNotPainted(visiblePrevious);
+            if (clearPrevious) {
+              frameParts.push(countGraphicsBytes(clearPrevious));
+              wroteClear = true;
+            }
+          }
+          wroteClear = appendActiveGraphicProtocolClear(previous, visiblePrevious) || wroteClear;
+          if (wroteClear) terminalGraphicsClears++;
+        }
+
+        const clearRect = clearGraphicRectForRowsNotPainted(rect);
+        const cursor = `\u001B[${rect.y + 1};${rect.x + 1}H`;
+        const sequence = maybeWrapTerminalGraphic(payload.sequence);
+        frameParts.push(
+          clearRect ? countGraphicsBytes(clearRect) : "",
+          countGraphicsBytes(cursor),
+          countGraphicsBytes(sequence),
+          countGraphicsBytes(SGR_RESET),
+        );
+        terminalGraphicsDraws++;
+        nextActiveGraphics.set(payload.id, {
+          ...rect,
+          protocol: payload.protocol,
+          clearSequence: payload.clearSequence,
+        });
+        nextActiveGraphicSignatures.set(payload.id, nextSignature);
+        nextPendingGraphicSignatures.delete(payload.id);
+      }
+
+      restoreTerminalGraphicsAfterWriteFailure = () => {
+        for (const id of graphicsClearsToRender) pendingGraphicClears.add(id);
+        for (const [key, payload] of graphicsEntriesToRender) {
+          pendingGraphics.set(key, payload);
+        }
+      };
+      commitTerminalGraphicsState = () => {
+        for (const id of pendingGraphicClearsToRender) pendingGraphicClears.delete(id);
+        for (const [key, payload] of graphicsEntriesToRender) {
+          if (pendingGraphics.get(key) === payload) pendingGraphics.delete(key);
+        }
+        activeGraphics.clear();
+        for (const [id, active] of nextActiveGraphics) activeGraphics.set(id, active);
+        activeGraphicSignatures.clear();
+        for (const [id, signature] of nextActiveGraphicSignatures) {
+          activeGraphicSignatures.set(id, signature);
+        }
+        pendingGraphicSignatures.clear();
+        for (const [id, signature] of nextPendingGraphicSignatures) {
+          pendingGraphicSignatures.set(id, signature);
+        }
+      };
+      terminalGraphicsMetrics = {
+        draws: terminalGraphicsDraws,
+        clears: terminalGraphicsClears,
+        bytes: terminalGraphicsBytes,
+        active: nextActiveGraphics.size,
+      };
+    }
 
     // Include cursor position in the same frame if getImeAnchor is provided
     // This eliminates the need for a separate setCursor() call after render
@@ -2911,6 +3682,7 @@ export function createStdoutRenderer(
         getDebugLog().render(` Write completed in ${writeTime}ms`);
       }
     } catch (writeError) {
+      restoreTerminalGraphicsAfterWriteFailure?.();
       if (isDebugEnabled()) getDebugLog().error(`Write ERROR:`, writeError);
       try {
         out.write(`\u001B[?7h${!isGhostty && useSyncOutput ? SYNC_END : ""}`);
@@ -2919,6 +3691,8 @@ export function createStdoutRenderer(
       }
       throw writeError;
     }
+    commitTerminalGraphicsState?.();
+    if (terminalGraphicsMetrics) recordStdoutTerminalGraphics(terminalGraphicsMetrics);
     commitRenderBaseline();
     {
       const writeMs = performance.now() - writeStart;
@@ -3188,7 +3962,12 @@ export function createStdoutRenderer(
     } else if (dirtyRows.length === 0) {
       if (scrollOperations?.length) {
         mergeScrollOperations(scrollOperations);
-      } else if (!accumulatedAllRows && accumulatedDirtyCount === 0 && !getImeAnchor) {
+      } else if (
+        !accumulatedAllRows &&
+        accumulatedDirtyCount === 0 &&
+        !getImeAnchor &&
+        !hasPendingTerminalGraphics()
+      ) {
         cliLatency?.recordStdoutQueued(0);
         return;
       }
@@ -3394,6 +4173,7 @@ export function createStdoutRenderer(
   function dispose(): void {
     if (disposed) return;
     disposed = true;
+    let disposeError: unknown = null;
     if (renderTimer) {
       clearTimeout(renderTimer);
       renderTimer = null;
@@ -3404,6 +4184,56 @@ export function createStdoutRenderer(
     accumulatedDirtyMin = Number.POSITIVE_INFINITY;
     accumulatedDirtyMax = -1;
     accumulatedDirtyRowsRequireRepaint = false;
+    pendingGraphics.clear();
+    pendingGraphicClears.clear();
+    pendingGraphicSignatures.clear();
+    try {
+      if (activeGraphics.size > 0) {
+        const size = terminal.size();
+        const clearParts: string[] = [];
+        let terminalGraphicsClears = 0;
+        for (const active of activeGraphics.values()) {
+          const visibleRect = clipGraphicRectToViewport(active, size);
+          let wroteClear = false;
+          if (visibleRect) {
+            clearParts.push(clearGraphicRect(visibleRect));
+            wroteClear = true;
+          }
+          if (
+            active.clearSequence &&
+            (visibleRect || !clearSequenceNeedsVisibleCell(active.clearSequence, active.protocol))
+          ) {
+            const cell = visibleRect
+              ? { x: visibleRect.x, y: visibleRect.y }
+              : clampCellToViewport({ cellX: active.x, cellY: active.y }, size);
+            clearParts.push(
+              `\u001B[${cell.y + 1};${cell.x + 1}H`,
+              maybeWrapTerminalGraphic(active.clearSequence),
+            );
+            wroteClear = true;
+          }
+          if (wroteClear) terminalGraphicsClears++;
+        }
+        activeGraphics.clear();
+        activeGraphicSignatures.clear();
+        if (clearParts.length > 0) {
+          const frame = `${SGR_RESET}${clearParts.join("")}${SGR_RESET}`;
+          out.write(frame);
+          recordStdoutTerminalGraphics({
+            clears: terminalGraphicsClears,
+            bytes: Buffer.byteLength(frame, "utf8"),
+            active: 0,
+          });
+        } else {
+          recordStdoutTerminalGraphics({ active: 0 });
+        }
+      }
+    } catch {
+      activeGraphics.clear();
+      activeGraphicSignatures.clear();
+      recordStdoutTerminalGraphics({ active: 0 });
+    }
+    unregisterGraphicsOutput();
     off();
     releaseFingerprintFn();
     if (canTrackResize && typeof resizeSource?.off === "function") {
@@ -3419,9 +4249,14 @@ export function createStdoutRenderer(
         // ignore
       }
     }
-    if (hideCursor) out.write("\u001B[?25h");
-    if (altScreen && outputIsTTY) out.write("\u001B[?1049l");
+    try {
+      if (hideCursor) out.write("\u001B[?25h");
+      if (altScreen && outputIsTTY) out.write("\u001B[?1049l");
+    } catch (err) {
+      if (disposeError == null) disposeError = err;
+    }
     profiler?.dispose();
+    if (disposeError) throw disposeError;
   }
 
   const updateTheme = (
@@ -3452,6 +4287,7 @@ export function createStdoutRenderer(
 
   return {
     capabilities: STDOUT_RENDERER_CAPABILITIES,
+    graphicsCapabilities,
     render,
     dispose,
     setCursor,

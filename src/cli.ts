@@ -30,6 +30,12 @@ export { createOsc52ClipboardProvider, type Osc52ClipboardOptions } from "./runt
 export type { StdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export { getStdoutRendererMetrics } from "./renderer/cli/stdout-metrics.js";
 export type {
+  TerminalGraphicRenderQueue,
+  TerminalGraphicRenderQueueMetric,
+  TerminalGraphicRenderQueueOptions,
+} from "./renderer/terminal-graphic-render-queue.js";
+export { createTerminalGraphicRenderQueue } from "./renderer/terminal-graphic-render-queue.js";
+export type {
   CliOutput,
   DirtyRowPatchMode,
   StdoutColorMode,
@@ -38,6 +44,22 @@ export type {
   ThemePalette,
 } from "./renderer/cli/stdout-renderer.js";
 export { createStdoutRenderer } from "./renderer/cli/stdout-renderer.js";
+export type {
+  CreateKittyDeleteGraphicsSequenceOptions,
+  CreateKittyGraphicsSequenceOptions,
+  TerminalGraphicsCapabilities,
+  TerminalGraphicsDetectionInput,
+  TerminalGraphicsFallbackProtocol,
+  TerminalGraphicsMultiplexer,
+  TerminalGraphicsProtocol,
+  TerminalGraphicsResolvedProtocol,
+} from "./renderer/terminal-graphics.js";
+export {
+  createIterm2InlineImageSequence,
+  createKittyDeleteGraphicsSequence,
+  createKittyGraphicsSequence,
+  detectTerminalGraphicsCapabilities,
+} from "./renderer/terminal-graphics.js";
 export { sanitizeTerminalHref, type SanitizeTerminalHrefOptions } from "./core/hyperlink.js";
 export type {
   TerminalLinkOpenContext,

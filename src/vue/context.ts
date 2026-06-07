@@ -15,6 +15,11 @@ import type { TraceStore } from "../observability/trace.js";
 import type { FramePerfReason } from "../observability/frame-perf.js";
 import type { FramePerfStore } from "../observability/frame-perf-store.js";
 import type { TInputPlugin } from "./components/input/plugins/types.js";
+import { computed, readonly, ref } from "vue";
+import {
+  nowTerminalGraphicTraceTime,
+  recordTerminalGraphicTrace,
+} from "../renderer/terminal-graphics-trace.js";
 import { injectionKey } from "./injection-key.js";
 import type { RenderManager } from "./render/render-manager.js";
 
@@ -115,6 +120,20 @@ export type TerminalSelectionContext = Readonly<{
   clear: () => void;
 }>;
 
+export type TerminalGraphicsActivityOptions = Readonly<{
+  scrollIdleMs?: number;
+  traceId?: string;
+  trace?: boolean;
+}>;
+
+export type TerminalGraphicsActivity = Readonly<{
+  scrolling: Readonly<Ref<boolean>>;
+  version: Readonly<Ref<number>>;
+  markScroll: () => void;
+  setScrollIdleMs: (value: number | undefined) => void;
+  dispose: () => void;
+}>;
+
 export type ImeAnchor = Readonly<{
   cellX: number;
   cellY: number;
@@ -149,7 +168,126 @@ export const TInputPluginsContextKey =
 export const TPathPickerProviderContextKey: InjectionKey<
   Readonly<Ref<PathPickerProvider | undefined>>
 > = injectionKey<Readonly<Ref<PathPickerProvider | undefined>>>("TPathPickerProvider");
+export const TerminalGraphicsActivityKey = injectionKey<TerminalGraphicsActivity>(
+  "TerminalGraphicsActivity",
+);
 
 // Provided by dialog surfaces to indicate "this subtree is inside a modal dialog".
 // Used by inputs to opt into dialog confirmation semantics (e.g. Enter submits the dialog).
 export const DialogContextKey = injectionKey<boolean>("DialogContext");
+
+export function createTerminalGraphicsActivity(
+  options: TerminalGraphicsActivityOptions = {},
+): TerminalGraphicsActivity {
+  let scrollIdleMs = normalizeTerminalGraphicsScrollIdleMs(options.scrollIdleMs);
+  const traceId = options.traceId ?? "TerminalGraphicsActivity";
+  const scrolling = ref(false);
+  const version = ref(0);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let scrollStartedAt = 0;
+
+  function bump(): void {
+    version.value++;
+  }
+
+  function clearTimer(): void {
+    if (!timer) return;
+    clearTimeout(timer);
+    timer = null;
+  }
+
+  function traceScroll(
+    type: "scroll-start" | "scroll-mark" | "scroll-idle",
+    durationMs?: number,
+  ): void {
+    if (options.trace !== true) return;
+
+    recordTerminalGraphicTrace({
+      type,
+      id: traceId,
+      key: traceId,
+      durationMs,
+    });
+  }
+
+  function finishScroll(): void {
+    if (!scrolling.value) return;
+
+    const endedAt = nowTerminalGraphicTraceTime();
+    const durationMs = scrollStartedAt > 0 ? endedAt - scrollStartedAt : undefined;
+    scrolling.value = false;
+    scrollStartedAt = 0;
+    traceScroll("scroll-idle", durationMs);
+    bump();
+  }
+
+  function markScroll(): void {
+    const started = !scrolling.value;
+
+    if (started) {
+      scrolling.value = true;
+      scrollStartedAt = nowTerminalGraphicTraceTime();
+      traceScroll("scroll-start");
+      bump();
+    } else {
+      traceScroll("scroll-mark");
+    }
+
+    clearTimer();
+    timer = setTimeout(() => {
+      timer = null;
+      finishScroll();
+    }, scrollIdleMs);
+  }
+
+  function setScrollIdleMs(value: number | undefined): void {
+    scrollIdleMs = normalizeTerminalGraphicsScrollIdleMs(value);
+    if (!scrolling.value) return;
+
+    clearTimer();
+    timer = setTimeout(() => {
+      timer = null;
+      finishScroll();
+    }, scrollIdleMs);
+  }
+
+  function dispose(): void {
+    clearTimer();
+    finishScroll();
+  }
+
+  return {
+    scrolling: readonly(scrolling) as Readonly<Ref<boolean>>,
+    version: readonly(version) as Readonly<Ref<number>>,
+    markScroll,
+    setScrollIdleMs,
+    dispose,
+  };
+}
+
+export function createCombinedTerminalGraphicsActivity(
+  parent: TerminalGraphicsActivity | null | undefined,
+  own: TerminalGraphicsActivity,
+): TerminalGraphicsActivity {
+  if (!parent) return own;
+
+  return {
+    scrolling: computed(() => parent.scrolling.value || own.scrolling.value),
+    version: computed(() => parent.version.value + own.version.value),
+    markScroll: own.markScroll,
+    setScrollIdleMs: own.setScrollIdleMs,
+    dispose: own.dispose,
+  };
+}
+
+function positiveFiniteInt(value: unknown, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+
+  const int = Math.floor(n);
+  return int > 0 ? int : fallback;
+}
+
+function normalizeTerminalGraphicsScrollIdleMs(value: number | undefined): number {
+  return Math.max(16, positiveFiniteInt(value, 96));
+}
