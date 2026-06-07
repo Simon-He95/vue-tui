@@ -4260,9 +4260,7 @@ describe("TAgentTerminalGraphic", () => {
               fallback: "fallback",
               renderer,
             }),
-            showOverlay.value
-              ? h(TText, { x: 0, y: 0, zIndex: 10, w: 3, value: "TOP" })
-              : null,
+            showOverlay.value ? h(TText, { x: 0, y: 0, zIndex: 10, w: 3, value: "TOP" }) : null,
           ]);
       },
     });

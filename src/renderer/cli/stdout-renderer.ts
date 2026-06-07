@@ -3471,10 +3471,7 @@ export function createStdoutRenderer(
         const nextSignature =
           nextPendingGraphicSignatures.get(payload.id) ?? terminalGraphicsPayloadSignature(payload);
 
-        if (
-          previous &&
-          (previousSignature !== nextSignature || !sameGraphicRect(previous, rect))
-        ) {
+        if (previous && (previousSignature !== nextSignature || !sameGraphicRect(previous, rect))) {
           const visiblePrevious = clipGraphicRectToViewport(previous, size);
           let wroteClear = false;
           if (visiblePrevious) {
@@ -3503,10 +3500,7 @@ export function createStdoutRenderer(
           protocol: payload.protocol,
           clearSequence: payload.clearSequence,
         });
-        nextActiveGraphicSignatures.set(
-          payload.id,
-          nextSignature,
-        );
+        nextActiveGraphicSignatures.set(payload.id, nextSignature);
         nextPendingGraphicSignatures.delete(payload.id);
       }
 
