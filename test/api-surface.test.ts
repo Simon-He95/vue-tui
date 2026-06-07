@@ -106,6 +106,7 @@ describe("public API surface", () => {
         "createTerminalRouter",
         "createTextRestrictionPlugin",
         "createTheme",
+        "isSimpleMermaidFlowchartSource",
         "linkifyTextSegments",
         "lintJsonText",
         "markMermaidRenderErrorFatal",
@@ -189,6 +190,7 @@ describe("public API surface", () => {
         "TMermaidText",
         "beautifulMermaidRenderer",
         "createBeautifulMermaidRenderer",
+        "isSimpleMermaidFlowchartSource",
         "markMermaidRenderErrorFatal",
       ]
     `);
@@ -203,6 +205,7 @@ describe("public API surface", () => {
         "TMermaidText",
         "beautifulMermaidRenderer",
         "createBeautifulMermaidRenderer",
+        "isSimpleMermaidFlowchartSource",
         "markMermaidRenderErrorFatal",
       ]
     `);

@@ -243,6 +243,8 @@
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
         "TMermaidCopyPayload",
+        "TMermaidRenderEligibility",
+        "TMermaidRenderEligibilityContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -299,12 +301,15 @@
         "TMermaidText",
         "beautifulMermaidRenderer",
         "createBeautifulMermaidRenderer",
+        "isSimpleMermaidFlowchartSource",
         "markMermaidRenderErrorFatal"
       ],
       "typeExports": [
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
         "TMermaidCopyPayload",
+        "TMermaidRenderEligibility",
+        "TMermaidRenderEligibilityContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -647,12 +652,15 @@
         "TMermaidText",
         "beautifulMermaidRenderer",
         "createBeautifulMermaidRenderer",
+        "isSimpleMermaidFlowchartSource",
         "markMermaidRenderErrorFatal"
       ],
       "typeExports": [
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
         "TMermaidCopyPayload",
+        "TMermaidRenderEligibility",
+        "TMermaidRenderEligibilityContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -815,6 +823,7 @@
         "createTerminalRouter",
         "createTextRestrictionPlugin",
         "createTheme",
+        "isSimpleMermaidFlowchartSource",
         "linkifyTextSegments",
         "lintJsonText",
         "markMermaidRenderErrorFatal",
@@ -887,6 +896,8 @@
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
         "TMermaidCopyPayload",
+        "TMermaidRenderEligibility",
+        "TMermaidRenderEligibilityContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -5868,6 +5879,12 @@
           "defaultValue": "undefined"
         },
         {
+          "name": "shouldRenderSource",
+          "type": "TMermaidRenderEligibility",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
           "name": "loadingText",
           "type": "string",
           "required": false,
@@ -6077,6 +6094,12 @@
         {
           "name": "isTransientError",
           "type": "TMermaidTransientErrorClassifier",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "shouldRenderSource",
+          "type": "TMermaidRenderEligibility",
           "required": false,
           "defaultValue": "undefined"
         },

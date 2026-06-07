@@ -37,6 +37,7 @@ import {
   TInputBox,
   TJsonEditor,
   markMermaidRenderErrorFatal,
+  isSimpleMermaidFlowchartSource,
   TMermaid,
   TMermaidText,
   TMultilineModal,
@@ -55,6 +56,8 @@ import {
   type TMermaidAsciiOptions,
   type TMermaidCopyPayload,
   type TMermaidRenderer,
+  type TMermaidRenderEligibility,
+  type TMermaidRenderEligibilityContext,
   type TMermaidTextProps as VueMermaidTextProps,
   type TMermaidTransientErrorClassifier,
   type TMermaidTransientErrorContext,
@@ -93,6 +96,8 @@ import {
   computeCommandPaletteMatchRanges,
   type TCommandPaletteItem as AgentTCommandPaletteItem,
   type TCommandPaletteMatchRange,
+  type TMermaidRenderEligibility as AgentMermaidRenderEligibility,
+  type TMermaidRenderEligibilityContext as AgentMermaidRenderEligibilityContext,
   type TMermaidTransientErrorClassifier as AgentMermaidTransientErrorClassifier,
   type TMermaidCopyPayload as AgentMermaidCopyPayload,
   type TMermaidTextProps as AgentMermaidTextProps,
@@ -108,8 +113,11 @@ import {
   TBeautifulMermaidText,
   beautifulMermaidRenderer,
   createBeautifulMermaidRenderer,
+  isSimpleMermaidFlowchartSource as isMermaidEntrySimpleMermaidFlowchartSource,
   markMermaidRenderErrorFatal as markMermaidEntryRenderErrorFatal,
   type TMermaidCopyPayload as MermaidEntryCopyPayload,
+  type TMermaidRenderEligibility as MermaidEntryRenderEligibility,
+  type TMermaidRenderEligibilityContext as MermaidEntryRenderEligibilityContext,
   type TMermaidTransientErrorContext as MermaidEntryTransientErrorContext,
   type TMermaidTextProps as MermaidEntryTextProps,
   type TMermaidTransientErrorClassifier as MermaidEntryTransientErrorClassifier,
@@ -118,8 +126,11 @@ import {
   TMermaid as AgentBeautifulMermaid,
   TMermaidText as AgentBeautifulMermaidText,
   beautifulMermaidRenderer as agentBeautifulMermaidRenderer,
+  isSimpleMermaidFlowchartSource as isAgentBeautifulMermaidSimpleMermaidFlowchartSource,
   markMermaidRenderErrorFatal as markAgentBeautifulMermaidRenderErrorFatal,
   type TMermaidCopyPayload as AgentBeautifulMermaidCopyPayload,
+  type TMermaidRenderEligibility as AgentBeautifulMermaidRenderEligibility,
+  type TMermaidRenderEligibilityContext as AgentBeautifulMermaidRenderEligibilityContext,
   type TMermaidTransientErrorClassifier as AgentBeautifulMermaidTransientErrorClassifier,
 } from "@simon_he/vue-tui/agent/mermaid";
 
@@ -176,23 +187,44 @@ const mermaidTransientErrorContext: TMermaidTransientErrorContext = {
   final: false,
   streaming: true,
 };
+const mermaidRenderEligibilityContext: TMermaidRenderEligibilityContext = {
+  code: "graph LR\n  A --> B",
+  final: true,
+  streaming: false,
+};
+const mermaidRenderEligibility: TMermaidRenderEligibility = (code, context) =>
+  code === context.code;
 const mermaidTransientErrorClassifier: TMermaidTransientErrorClassifier = (_error, context) =>
   context.streaming && !context.final;
 const mermaidCopyPayload: TMermaidCopyPayload = { text: "graph LR", ok: true };
 const mermaidTextProps: VueMermaidTextProps = { x: 0, y: 0, w: 12 };
 const agentMermaidTextProps: AgentMermaidTextProps = mermaidTextProps;
 const agentMermaidCopyPayload: AgentMermaidCopyPayload = mermaidCopyPayload;
+const agentMermaidRenderEligibilityContext: AgentMermaidRenderEligibilityContext =
+  mermaidRenderEligibilityContext;
+const agentMermaidRenderEligibility: AgentMermaidRenderEligibility = mermaidRenderEligibility;
 const agentMermaidTransientErrorClassifier: AgentMermaidTransientErrorClassifier =
   mermaidTransientErrorClassifier;
 const mermaidEntryTextProps: MermaidEntryTextProps = mermaidTextProps;
 const mermaidEntryCopyPayload: MermaidEntryCopyPayload = mermaidCopyPayload;
+const mermaidEntryRenderEligibilityContext: MermaidEntryRenderEligibilityContext =
+  mermaidRenderEligibilityContext;
+const mermaidEntryRenderEligibility: MermaidEntryRenderEligibility = mermaidRenderEligibility;
 const mermaidEntryTransientErrorContext: MermaidEntryTransientErrorContext =
   mermaidTransientErrorContext;
 const mermaidEntryTransientErrorClassifier: MermaidEntryTransientErrorClassifier =
   mermaidTransientErrorClassifier;
+const agentBeautifulMermaidRenderEligibilityContext: AgentBeautifulMermaidRenderEligibilityContext =
+  mermaidRenderEligibilityContext;
+const agentBeautifulMermaidRenderEligibility: AgentBeautifulMermaidRenderEligibility =
+  mermaidRenderEligibility;
 const agentBeautifulMermaidTransientErrorClassifier: AgentBeautifulMermaidTransientErrorClassifier =
   mermaidTransientErrorClassifier;
 const agentBeautifulMermaidCopyPayload: AgentBeautifulMermaidCopyPayload = mermaidCopyPayload;
+const simpleMermaidFromVue = isSimpleMermaidFlowchartSource("graph LR\n  A --> B");
+const simpleMermaidFromEntry = isMermaidEntrySimpleMermaidFlowchartSource("graph LR\n  A --> B");
+const simpleMermaidFromAgentEntry =
+  isAgentBeautifulMermaidSimpleMermaidFlowchartSource("graph LR\n  A --> B");
 const createdMermaidRenderer = createBeautifulMermaidRenderer();
 const fatalMermaidError = markMermaidRenderErrorFatal(new Error("fatal"));
 const fatalAgentMermaidError = markAgentMermaidRenderErrorFatal(new Error("fatal-agent"));
@@ -278,18 +310,29 @@ console.log(
   mermaidOptions,
   mermaidRenderer,
   mermaidTransientErrorContext,
+  mermaidRenderEligibilityContext,
+  mermaidRenderEligibility,
   mermaidTransientErrorClassifier,
   mermaidCopyPayload,
   mermaidTextProps,
   agentMermaidTextProps,
   agentMermaidCopyPayload,
+  agentMermaidRenderEligibilityContext,
+  agentMermaidRenderEligibility,
   agentMermaidTransientErrorClassifier,
   mermaidEntryTextProps,
   mermaidEntryCopyPayload,
+  mermaidEntryRenderEligibilityContext,
+  mermaidEntryRenderEligibility,
   mermaidEntryTransientErrorContext,
   mermaidEntryTransientErrorClassifier,
+  agentBeautifulMermaidRenderEligibilityContext,
+  agentBeautifulMermaidRenderEligibility,
   agentBeautifulMermaidTransientErrorClassifier,
   agentBeautifulMermaidCopyPayload,
+  simpleMermaidFromVue,
+  simpleMermaidFromEntry,
+  simpleMermaidFromAgentEntry,
   beautifulMermaidRenderer,
   agentBeautifulMermaidRenderer,
   createdMermaidRenderer,

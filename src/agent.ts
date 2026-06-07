@@ -73,6 +73,8 @@ export type {
   TMermaidAsciiTheme,
   TMermaidCopyPayload,
   TMermaidRenderer,
+  TMermaidRenderEligibility,
+  TMermaidRenderEligibilityContext,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
   TMermaidTransientErrorClassifier,

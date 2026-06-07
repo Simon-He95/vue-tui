@@ -857,6 +857,8 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 > 注意：`@simon_he/vue-tui/vue` 和 `@simon_he/vue-tui/agent` 导出的 `TMermaidText` 是 renderer-agnostic primitive，不会自动 import `beautiful-mermaid`。
 >
 > 需要安装依赖后零配置使用内置 renderer 时，请从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `TMermaidText` / `TMermaid`。
+>
+> 内置 `beautiful-mermaid` bridge 默认只渲染 `isSimpleMermaidFlowchartSource()` 接受的 simple flowchart；其他 Mermaid source 会保持源码显示。基础组件不会做这个限制，自定义 renderer 可通过 `shouldRenderSource` 自行决定。
 
 ## TMermaidText
 
@@ -928,6 +930,7 @@ const diagram = `graph TD
 - `ascii` `(boolean)`：使用纯 ASCII 而不是 Unicode box drawing
 - `options` `(TMermaidAsciiOptions?)`：传给 renderer 的 spacing/theme options；组件始终强制 `colorMode: "none"`
 - `renderer` `(TMermaidRenderer?)`：自定义 renderer，适合测试或替换 Mermaid engine
+- `shouldRenderSource` `(TMermaidRenderEligibility?)`：自定义 renderer eligibility；返回 `false` 时保持源码，不调用 renderer
 - `isTransientError` `(TMermaidTransientErrorClassifier?)`：自定义哪些 renderer error 可以在 `final=false` 时被忽略；optional peer 缺失这类集成错误应该返回 `false`
 - `markMermaidRenderErrorFatal(error)`：从 `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent` 导入，给自定义 renderer 标记缺依赖、renderer 初始化失败、wasm 加载失败等不应被当作 AI 中间态的 hard error
 - `streaming` `(boolean)`：streaming 更新时使用低优先级 frame task 合并重算

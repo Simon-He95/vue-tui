@@ -3,6 +3,8 @@ export type {
   TMermaidAsciiTheme,
   TMermaidCopyPayload,
   TMermaidRenderer,
+  TMermaidRenderEligibility,
+  TMermaidRenderEligibilityContext,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
   TMermaidTransientErrorClassifier,
@@ -12,6 +14,7 @@ export type {
 export {
   beautifulMermaidRenderer,
   createBeautifulMermaidRenderer,
+  isSimpleMermaidFlowchartSource,
   markMermaidRenderErrorFatal,
   TBeautifulMermaid,
   TBeautifulMermaidText,

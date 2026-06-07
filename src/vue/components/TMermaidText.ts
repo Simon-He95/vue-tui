@@ -90,6 +90,17 @@ export type TMermaidCopyPayload = Readonly<{
   error?: unknown;
 }>;
 
+export type TMermaidRenderEligibilityContext = Readonly<{
+  code: string;
+  final: boolean;
+  streaming: boolean;
+}>;
+
+export type TMermaidRenderEligibility = (
+  code: string,
+  context: TMermaidRenderEligibilityContext,
+) => boolean;
+
 const TUI_MERMAID_FATAL_RENDER_ERROR = "__vueTuiMermaidFatalRenderError" as const;
 const fatalMermaidRenderErrors = new WeakSet<object>();
 const DEFAULT_MERMAID_RENDER_TIMEOUT_MS = 2500;
@@ -97,11 +108,6 @@ const DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS = 20_000;
 const DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES = 400;
 const DEFAULT_MERMAID_COPIED_DURATION_MS = 1200;
 
-// Keep Mermaid rendering intentionally conservative. The renderer runs on the
-// main thread, so timeout guards cannot protect us from synchronous CPU-heavy
-// Mermaid layouts. Only simple graph/flowchart sources are eligible for
-// replacement rendering; unsupported, non-flowchart, or complex sources stay as
-// source text.
 const DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS = 120;
 const SIMPLE_MERMAID_DIRECTIVE_RE = /^(?:graph|flowchart)\s+(?:TB|TD|BT|LR|RL)\b/i;
 const MERMAID_INIT_DIRECTIVE_RE = /^%%\{/;
@@ -227,14 +233,14 @@ function countMermaidFlowStatementsUpTo(code: string, max: number): number {
   return statements;
 }
 
-function shouldSkipRenderForComplexity(code: string): boolean {
+export function isSimpleMermaidFlowchartSource(code: string): boolean {
   const first = firstMermaidStatement(code);
-  if (!first) return true;
-  if (!SIMPLE_MERMAID_DIRECTIVE_RE.test(first)) return true;
-  if (hasComplexMermaidFlowFeature(code)) return true;
+  if (!first) return false;
+  if (!SIMPLE_MERMAID_DIRECTIVE_RE.test(first)) return false;
+  if (hasComplexMermaidFlowFeature(code)) return false;
 
   return (
-    countMermaidFlowStatementsUpTo(code, DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS) >
+    countMermaidFlowStatementsUpTo(code, DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS) <=
     DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS
   );
 }
@@ -361,6 +367,10 @@ export const tMermaidTextProps = {
   },
   isTransientError: {
     type: Function as PropType<TMermaidTransientErrorClassifier>,
+    default: undefined,
+  },
+  shouldRenderSource: {
+    type: Function as PropType<TMermaidRenderEligibility>,
     default: undefined,
   },
   loadingText: {
@@ -516,7 +526,20 @@ export const TMermaidText = defineComponent({
     }
 
     function shouldSkipRender(code: string): boolean {
-      return shouldSkipRenderForSize(code) || shouldSkipRenderForComplexity(code);
+      if (shouldSkipRenderForSize(code)) return true;
+
+      const shouldRenderSource = props.shouldRenderSource;
+      if (!shouldRenderSource) return false;
+
+      try {
+        return !shouldRenderSource(code, {
+          code,
+          final: props.final,
+          streaming: props.streaming,
+        });
+      } catch {
+        return true;
+      }
     }
 
     async function renderWithTimeout(
@@ -683,6 +706,7 @@ export const TMermaidText = defineComponent({
         () => props.renderTimeoutMs,
         () => props.maxRenderSourceChars,
         () => props.maxRenderSourceLines,
+        () => props.shouldRenderSource,
       ],
       () => {
         scheduleRender();

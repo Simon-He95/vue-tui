@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { TMermaidText, type TMermaidRenderer } from "../src/vue.js";
+import { TMermaidText, isSimpleMermaidFlowchartSource, type TMermaidRenderer } from "../src/vue.js";
 import { isMissingBeautifulMermaid } from "../src/vue/mermaid/beautiful-mermaid.js";
 import {
   createTerminalApp,
@@ -374,9 +374,9 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("skips non-flowchart Mermaid diagram types and keeps source visible", async () => {
+  it("lets a custom renderer render non-flowchart Mermaid source", async () => {
     const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
-    const renderer: TMermaidRenderer = vi.fn(() => "should not render");
+    const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
 
     const mounted = await mountTerminal(
       () =>
@@ -384,58 +384,70 @@ describe("TMermaidText", () => {
           x: 0,
           y: 0,
           w: 40,
-          h: 4,
+          h: 1,
           box: false,
           content: source,
           renderer,
         }),
       48,
-      6,
+      3,
     );
 
     await settleMermaid(mounted);
 
-    expect(renderer).not.toHaveBeenCalled();
-    expect(rowText(mounted, 0)).toBe("sequenceDiagram");
-    expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
-    expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
-
-    mounted.unmount();
-  });
-
-  it("does not call renderer for non-flowchart Mermaid source", async () => {
-    const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
-    const renderer: TMermaidRenderer = vi.fn(() => {
-      throw new Error("unsupported sequence diagram");
-    });
-
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidText, {
-          x: 0,
-          y: 0,
-          w: 40,
-          h: 4,
-          box: false,
-          content: source,
-          renderer,
-        }),
-      48,
-      6,
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(renderer).toHaveBeenCalledWith(
+      source,
+      expect.objectContaining({
+        colorMode: "none",
+      }),
     );
-
-    await settleMermaid(mounted);
-
-    expect(renderer).not.toHaveBeenCalled();
-    expect(rowText(mounted, 0)).toBe("sequenceDiagram");
-    expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
-    expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
-    expect(rowText(mounted, 0)).not.toContain("unsupported sequence diagram");
+    expect(rowText(mounted, 0)).toBe("sequence rendered");
 
     mounted.unmount();
   });
 
-  it("skips complex flowchart features and keeps source visible", async () => {
+  it("keeps non-flowchart Mermaid source in the beautiful-mermaid wrapper", async () => {
+    vi.resetModules();
+
+    const renderMermaidASCII = vi.fn(() => "should not render");
+    vi.doMock("beautiful-mermaid", () => ({
+      renderMermaidASCII,
+    }));
+
+    try {
+      const { TMermaidText: TMermaidTextWithBeautifulRenderer } = await import("../src/mermaid.js");
+      const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
+
+      const mounted = await mountTerminal(
+        () =>
+          h(TMermaidTextWithBeautifulRenderer, {
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 3,
+            box: false,
+            content: source,
+          }),
+        48,
+        5,
+      );
+
+      await settleMermaid(mounted);
+
+      expect(renderMermaidASCII).not.toHaveBeenCalled();
+      expect(rowText(mounted, 0)).toBe("sequenceDiagram");
+      expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
+      expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
+
+      mounted.unmount();
+    } finally {
+      vi.doUnmock("beautiful-mermaid");
+      vi.resetModules();
+    }
+  });
+
+  it("uses shouldRenderSource to skip complex flowchart features", async () => {
     const renderer: TMermaidRenderer = vi.fn(() => "should not render");
 
     const mounted = await mountTerminal(
@@ -448,6 +460,7 @@ describe("TMermaidText", () => {
           box: false,
           content: ["graph LR", "  subgraph Cluster", "    A --> B", "  end"].join("\n"),
           renderer,
+          shouldRenderSource: isSimpleMermaidFlowchartSource,
         }),
       48,
       7,
@@ -464,7 +477,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("skips semicolon-delimited complex flowchart features and keeps source visible", async () => {
+  it("uses shouldRenderSource to skip semicolon-delimited complex flowchart features", async () => {
     const source = "graph LR; subgraph Cluster; A --> B; end";
     const renderer: TMermaidRenderer = vi.fn(() => "should not render");
 
@@ -478,6 +491,7 @@ describe("TMermaidText", () => {
           box: false,
           content: source,
           renderer,
+          shouldRenderSource: isSimpleMermaidFlowchartSource,
         }),
       90,
       3,
@@ -491,7 +505,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("counts semicolon-delimited flow statements before rendering", async () => {
+  it("uses shouldRenderSource to count semicolon-delimited flow statements before rendering", async () => {
     const source = [
       "graph LR",
       Array.from({ length: 121 }, (_, index) => `A${index} --> A${index + 1}`).join("; "),
@@ -508,6 +522,7 @@ describe("TMermaidText", () => {
           box: false,
           content: source,
           renderer,
+          shouldRenderSource: isSimpleMermaidFlowchartSource,
         }),
       130,
       3,

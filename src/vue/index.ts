@@ -100,12 +100,19 @@ export type {
 } from "./components/link/host.js";
 export { linkifyTextSegments } from "./linkify.js";
 export type { TLinkifyOptions, TLinkifyProtocol, TLinkifySegment } from "./linkify.js";
-export { markMermaidRenderErrorFatal, TMermaid, TMermaidText } from "./components/TMermaidText.js";
+export {
+  isSimpleMermaidFlowchartSource,
+  markMermaidRenderErrorFatal,
+  TMermaid,
+  TMermaidText,
+} from "./components/TMermaidText.js";
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
   TMermaidCopyPayload,
   TMermaidRenderer,
+  TMermaidRenderEligibility,
+  TMermaidRenderEligibilityContext,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
   TMermaidTransientErrorClassifier,
