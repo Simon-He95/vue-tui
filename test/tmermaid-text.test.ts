@@ -447,6 +447,63 @@ describe("TMermaidText", () => {
     }
   });
 
+  it("only treats plain id-to-id flowchart edges as simple Mermaid flowcharts", () => {
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B\nB --- C")).toBe(true);
+    expect(isSimpleMermaidFlowchartSource("flowchart TD; A --> B; B --- C")).toBe(true);
+
+    expect(isSimpleMermaidFlowchartSource("graph LR")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("sequenceDiagram\nAlice->>Bob: hi")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA[Start] --> B")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA -->|yes| B")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA -.-> B")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA ==> B")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B --> C")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA & B --> C")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B & C")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nsubgraph X\nA --> B\nend")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nstyle A fill:#f00")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("%%{init: {}}%%\ngraph LR\nA --> B")).toBe(false);
+  });
+
+  it("keeps labeled flowchart source in the beautiful-mermaid wrapper", async () => {
+    vi.resetModules();
+
+    const renderMermaidASCII = vi.fn(() => "should not render");
+    vi.doMock("beautiful-mermaid", () => ({
+      renderMermaidASCII,
+    }));
+
+    try {
+      const { TMermaidText: TMermaidTextWithBeautifulRenderer } = await import("../src/mermaid.js");
+      const source = "graph LR\nA[Start] --> B";
+
+      const mounted = await mountTerminal(
+        () =>
+          h(TMermaidTextWithBeautifulRenderer, {
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 4,
+            box: false,
+            content: source,
+          }),
+        48,
+        6,
+      );
+
+      await settleMermaid(mounted);
+
+      expect(renderMermaidASCII).not.toHaveBeenCalled();
+      expect(rowText(mounted, 0)).toBe("graph LR");
+      expect(rowText(mounted, 1)).toBe("A[Start] --> B");
+
+      mounted.unmount();
+    } finally {
+      vi.doUnmock("beautiful-mermaid");
+      vi.resetModules();
+    }
+  });
+
   it("uses shouldRenderSource to skip complex flowchart features", async () => {
     const renderer: TMermaidRenderer = vi.fn(() => "should not render");
 

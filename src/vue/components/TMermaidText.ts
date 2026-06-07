@@ -113,8 +113,12 @@ const SIMPLE_MERMAID_DIRECTIVE_RE = /^(?:graph|flowchart)\s+(?:TB|TD|BT|LR|RL)\b
 const MERMAID_INIT_DIRECTIVE_RE = /^%%\{/;
 const MERMAID_COMMENT_RE = /^%%/;
 const MERMAID_FRONTMATTER_DELIMITER_RE = /^---\s*$/;
+const SIMPLE_MERMAID_NODE_ID_RE_SOURCE = "[A-Za-z_][A-Za-z0-9_]*";
+const SIMPLE_MERMAID_FLOW_EDGE_RE = new RegExp(
+  `^${SIMPLE_MERMAID_NODE_ID_RE_SOURCE}\\s*(?:-->|---)\\s*${SIMPLE_MERMAID_NODE_ID_RE_SOURCE}$`,
+);
 const COMPLEX_MERMAID_FLOW_FEATURE_RE =
-  /^(?:subgraph|classDef|class|click|style|linkStyle|accTitle|accDescr)\b/i;
+  /^(?:subgraph|classDef|class|click|style|linkStyle|accTitle|accDescr|direction)\b/i;
 
 const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
@@ -192,57 +196,39 @@ function mermaidSourceStatements(code: string): readonly string[] {
   return statements;
 }
 
-function firstMermaidStatement(code: string): string {
-  for (const statement of mermaidSourceStatements(code)) {
-    if (MERMAID_INIT_DIRECTIVE_RE.test(statement)) return "";
-    if (MERMAID_FRONTMATTER_DELIMITER_RE.test(statement)) return "";
-    return statement;
-  }
-
-  return "";
+function isForbiddenMermaidFlowStatement(statement: string): boolean {
+  return (
+    MERMAID_INIT_DIRECTIVE_RE.test(statement) ||
+    MERMAID_FRONTMATTER_DELIMITER_RE.test(statement) ||
+    COMPLEX_MERMAID_FLOW_FEATURE_RE.test(statement)
+  );
 }
 
-function hasComplexMermaidFlowFeature(code: string): boolean {
-  for (const statement of mermaidSourceStatements(code)) {
-    if (MERMAID_INIT_DIRECTIVE_RE.test(statement)) return true;
-    if (MERMAID_FRONTMATTER_DELIMITER_RE.test(statement)) return true;
-    if (SIMPLE_MERMAID_DIRECTIVE_RE.test(statement)) continue;
-
-    if (COMPLEX_MERMAID_FLOW_FEATURE_RE.test(statement)) return true;
-  }
-
-  return false;
+function isSimpleMermaidFlowEdgeStatement(statement: string): boolean {
+  return SIMPLE_MERMAID_FLOW_EDGE_RE.test(statement);
 }
 
-function countMermaidFlowStatementsUpTo(code: string, max: number): number {
-  if (max <= 0) return 0;
-
-  let statements = 0;
+export function isSimpleMermaidFlowchartSource(code: string): boolean {
+  const statements = mermaidSourceStatements(code);
   let sawDirective = false;
+  let flowStatements = 0;
 
-  for (const statement of mermaidSourceStatements(code)) {
-    if (!sawDirective && SIMPLE_MERMAID_DIRECTIVE_RE.test(statement)) {
+  for (const statement of statements) {
+    if (!sawDirective) {
+      if (!SIMPLE_MERMAID_DIRECTIVE_RE.test(statement)) return false;
       sawDirective = true;
       continue;
     }
 
-    statements++;
-    if (statements > max) return statements;
+    if (SIMPLE_MERMAID_DIRECTIVE_RE.test(statement)) return false;
+    if (isForbiddenMermaidFlowStatement(statement)) return false;
+    if (!isSimpleMermaidFlowEdgeStatement(statement)) return false;
+
+    flowStatements++;
+    if (flowStatements > DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS) return false;
   }
 
-  return statements;
-}
-
-export function isSimpleMermaidFlowchartSource(code: string): boolean {
-  const first = firstMermaidStatement(code);
-  if (!first) return false;
-  if (!SIMPLE_MERMAID_DIRECTIVE_RE.test(first)) return false;
-  if (hasComplexMermaidFlowFeature(code)) return false;
-
-  return (
-    countMermaidFlowStatementsUpTo(code, DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS) <=
-    DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS
-  );
+  return sawDirective && flowStatements > 0;
 }
 
 function timeoutError(ms: number): Error & { code: string } {
