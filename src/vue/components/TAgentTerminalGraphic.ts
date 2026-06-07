@@ -873,6 +873,19 @@ export const TAgentTerminalGraphic = defineComponent({
       );
     }
 
+    function shouldRetryTemporaryRawFallback(rawCovered = rawCoveredByHigherRenderNode()): boolean {
+      return (
+        Boolean(props.renderer) &&
+        props.content.trim().length > 0 &&
+        graphic.value?.type === "text" &&
+        status.value !== "loading" &&
+        !lastRenderRawVisible &&
+        rawOutputCanRenderValue.value &&
+        !rawSuppressedByScroll.value &&
+        !rawCovered
+      );
+    }
+
     function setDeferredFallback(content: string): void {
       graphic.value = { type: "text", text: content.trim() ? fallbackText() : "" };
       lastRenderedContent = content;
@@ -1149,10 +1162,9 @@ export const TAgentTerminalGraphic = defineComponent({
           const fullY = Math.floor(full.y);
           const current = graphic.value;
           const output = graphicsOutput();
+          const rawCoveredForPaint = rawCoveredByHigherRenderNode(full);
           const rawCanQueueForPaint =
-            current?.type === "terminal" &&
-            rawCanQueue.value &&
-            !rawCoveredByHigherRenderNode(full);
+            current?.type === "terminal" && rawCanQueue.value && !rawCoveredForPaint;
           const out = rawCanQueueForPaint ? displayLines.value : resolveDisplayLines(false);
           const clearingRawGraphic =
             rawClearPendingRepaint.value != null || lastDrawnGraphic.value != null;
@@ -1202,6 +1214,9 @@ export const TAgentTerminalGraphic = defineComponent({
               traceRawSkipScrollOnce(isParentScrolling.value ? "scrolling" : "suspended");
             }
             queueClearLastGraphic({ markPendingRepaint: false });
+            if (!shouldDeferRender() && shouldRetryTemporaryRawFallback(rawCoveredForPaint)) {
+              scheduleRender({ clearLastGraphic: false });
+            }
           }
           if (clearingRawGraphic) rawClearPendingRepaint.value = null;
         });
@@ -1247,13 +1262,7 @@ export const TAgentTerminalGraphic = defineComponent({
 
         if (!visible.value || !rawCanQueue.value) queueClearLastGraphic();
 
-        const shouldRetryTemporaryFallback =
-          Boolean(props.renderer) &&
-          props.content.trim().length > 0 &&
-          graphic.value?.type === "text" &&
-          !lastRenderRawVisible &&
-          rawOutputCanRenderValue.value &&
-          !rawSuppressedByScroll.value;
+        const shouldRetryTemporaryFallback = shouldRetryTemporaryRawFallback();
         const shouldRerenderForOutputChange = shouldRerenderForGraphicsOutputChange();
 
         if (

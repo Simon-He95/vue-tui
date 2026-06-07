@@ -259,6 +259,100 @@ describe("TAgentTerminalGraphic", () => {
     }
   });
 
+  it("clears a same-rect Kitty graphic before drawing a different signature", () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const firstSequence = createKittyGraphicsSequence("QUJD", {
+      imageId: 123,
+      placementId: 456,
+    });
+    const firstClearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
+    const secondSequence = createKittyGraphicsSequence("REVG", {
+      imageId: 789,
+      placementId: 987,
+    });
+    const secondClearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 789,
+      placementId: 987,
+    });
+
+    try {
+      expect(
+        graphics?.queue({
+          id: "g1",
+          x: 1,
+          y: 1,
+          w: 4,
+          h: 2,
+          protocol: "kitty",
+          sequence: firstSequence,
+          clearSequence: firstClearSequence,
+        }),
+      ).toBe(true);
+      vi.advanceTimersByTime(16);
+      expect(writes.join("")).toContain(firstSequence);
+
+      writes.length = 0;
+      expect(graphics?.clear?.("g1")).toBe(true);
+      expect(
+        graphics?.queue({
+          id: "g1",
+          x: 1,
+          y: 1,
+          w: 4,
+          h: 2,
+          protocol: "kitty",
+          sequence: secondSequence,
+          clearSequence: secondClearSequence,
+        }),
+      ).toBe(true);
+
+      vi.advanceTimersByTime(16);
+      const outputText = writes.join("");
+      const clearIndex = outputText.indexOf(firstClearSequence);
+      const drawIndex = outputText.indexOf(secondSequence);
+      expect(clearIndex).toBeGreaterThanOrEqual(0);
+      expect(drawIndex).toBeGreaterThan(clearIndex);
+    } finally {
+      stdout.dispose();
+      app.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it("clears offscreen active terminal graphics on stdout dispose", () => {
     const writes: string[] = [];
     const output: CliOutput = {
@@ -4124,6 +4218,98 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("rerenders a temporary fallback after higher zIndex coverage is removed", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 16,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const firstSequence = createKittyGraphicsSequence("QUJD");
+    const secondSequence = createKittyGraphicsSequence("REVG");
+    const content = ref("first");
+    const showOverlay = ref(false);
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((value, context) => {
+      if (!context.rawVisible) {
+        return {
+          type: "text" as const,
+          text: `fallback-${value}`,
+        };
+      }
+
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence: value === "second" ? secondSequence : firstSequence,
+        fallback: `fallback-${value}`,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h("span", [
+            h(TAgentTerminalGraphic, {
+              x: 0,
+              y: 0,
+              w: 8,
+              h: 1,
+              content: content.value,
+              fallback: "fallback",
+              renderer,
+            }),
+            showOverlay.value
+              ? h(TText, { x: 0, y: 0, zIndex: 10, w: 3, value: "TOP" })
+              : null,
+          ]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 16, rows: 4, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(writes.join("")).toContain(firstSequence);
+
+    writes.length = 0;
+    showOverlay.value = true;
+    await settle(app);
+    content.value = "second";
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(rowText(app, 0)).toBe("TOPlback");
+    expect(writes.join("")).not.toContain(secondSequence);
+
+    writes.length = 0;
+    showOverlay.value = false;
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledTimes(3);
+    expect(writes.join("")).toContain(secondSequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it("records one queue metric per validated stdout graphics payload", async () => {
     resetTerminalGraphicTraceMetrics();
 
@@ -4902,6 +5088,12 @@ describe("TAgentTerminalGraphic", () => {
         stdoutIsTTY: true,
       }).preferredProtocol,
     ).toBe("iterm2");
+    expect(
+      detectTerminalGraphicsCapabilities({
+        env: { TERM_PROGRAM: "ghostty", TERM: "xterm-ghostty" },
+        stdoutIsTTY: true,
+      }).preferredProtocol,
+    ).toBe("kitty");
     expect(
       detectTerminalGraphicsCapabilities({
         env: { TERM: "xterm-sixel" },

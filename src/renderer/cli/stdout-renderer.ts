@@ -3465,7 +3465,16 @@ export function createStdoutRenderer(
           continue;
         }
 
-        if (previous && !sameGraphicRect(previous, rect)) {
+        const previousSignature = previous
+          ? nextActiveGraphicSignatures.get(payload.id)
+          : undefined;
+        const nextSignature =
+          nextPendingGraphicSignatures.get(payload.id) ?? terminalGraphicsPayloadSignature(payload);
+
+        if (
+          previous &&
+          (previousSignature !== nextSignature || !sameGraphicRect(previous, rect))
+        ) {
           const visiblePrevious = clipGraphicRectToViewport(previous, size);
           let wroteClear = false;
           if (visiblePrevious) {
@@ -3496,7 +3505,7 @@ export function createStdoutRenderer(
         });
         nextActiveGraphicSignatures.set(
           payload.id,
-          nextPendingGraphicSignatures.get(payload.id) ?? terminalGraphicsPayloadSignature(payload),
+          nextSignature,
         );
         nextPendingGraphicSignatures.delete(payload.id);
       }

@@ -236,7 +236,12 @@ function detectCandidates(env: Record<string, unknown>): TerminalGraphicsProtoco
   const termProgram = String(envString(env, "TERM_PROGRAM") ?? "").toLowerCase();
   const termProgramVersion = String(envString(env, "TERM_PROGRAM_VERSION") ?? "").toLowerCase();
 
-  if (envString(env, "KITTY_WINDOW_ID") || /(?:^|-)kitty(?:-|$)/i.test(term)) {
+  if (
+    envString(env, "KITTY_WINDOW_ID") ||
+    /(?:^|-)kitty(?:-|$)/i.test(term) ||
+    term.includes("ghostty") ||
+    termProgram.includes("ghostty")
+  ) {
     candidates.push("kitty");
   }
 
