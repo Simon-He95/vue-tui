@@ -97,6 +97,17 @@ const DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS = 20_000;
 const DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES = 400;
 const DEFAULT_MERMAID_COPIED_DURATION_MS = 1200;
 
+// Keep Mermaid rendering intentionally conservative. The renderer runs on the
+// main thread, so timeout guards cannot protect us from synchronous CPU-heavy
+// Mermaid layouts. Unsupported or complex sources should stay as source text.
+const DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS = 120;
+const SIMPLE_MERMAID_DIRECTIVE_RE = /^(?:graph|flowchart)\s+(?:TB|TD|BT|LR|RL)\b/i;
+const MERMAID_INIT_DIRECTIVE_RE = /^%%\{/;
+const MERMAID_COMMENT_RE = /^%%/;
+const MERMAID_FRONTMATTER_DELIMITER_RE = /^---\s*$/;
+const COMPLEX_MERMAID_FLOW_FEATURE_RE =
+  /^(?:subgraph|classDef|class|click|style|linkStyle|accTitle|accDescr)\b/i;
+
 const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
 const TERMINAL_ESCAPE_RE = new RegExp(
@@ -133,6 +144,75 @@ function countLinesUpTo(value: string, max: number): number {
     if (lines > max) return lines;
   }
   return lines;
+}
+
+function mermaidSourceLines(code: string): readonly string[] {
+  return String(code ?? "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n");
+}
+
+function firstMermaidStatement(code: string): string {
+  for (const rawLine of mermaidSourceLines(code)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    if (MERMAID_INIT_DIRECTIVE_RE.test(line)) return "";
+    if (MERMAID_FRONTMATTER_DELIMITER_RE.test(line)) return "";
+
+    if (MERMAID_COMMENT_RE.test(line)) continue;
+    return line;
+  }
+
+  return "";
+}
+
+function hasComplexMermaidFlowFeature(code: string): boolean {
+  for (const rawLine of mermaidSourceLines(code)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    if (MERMAID_INIT_DIRECTIVE_RE.test(line)) return true;
+    if (MERMAID_FRONTMATTER_DELIMITER_RE.test(line)) return true;
+    if (MERMAID_COMMENT_RE.test(line)) continue;
+
+    if (COMPLEX_MERMAID_FLOW_FEATURE_RE.test(line)) return true;
+  }
+
+  return false;
+}
+
+function countMermaidFlowStatementsUpTo(code: string, max: number): number {
+  if (max <= 0) return 0;
+
+  let statements = 0;
+  let sawDirective = false;
+
+  for (const rawLine of mermaidSourceLines(code)) {
+    const line = rawLine.trim();
+    if (!line || MERMAID_COMMENT_RE.test(line)) continue;
+
+    if (!sawDirective && SIMPLE_MERMAID_DIRECTIVE_RE.test(line)) {
+      sawDirective = true;
+      continue;
+    }
+
+    statements++;
+    if (statements > max) return statements;
+  }
+
+  return statements;
+}
+
+function shouldSkipRenderForComplexity(code: string): boolean {
+  const first = firstMermaidStatement(code);
+  if (!SIMPLE_MERMAID_DIRECTIVE_RE.test(first)) return true;
+  if (hasComplexMermaidFlowFeature(code)) return true;
+
+  return (
+    countMermaidFlowStatementsUpTo(code, DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS) >
+    DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS
+  );
 }
 
 function timeoutError(ms: number): Error & { code: string } {
@@ -411,6 +491,10 @@ export const TMermaidText = defineComponent({
       return false;
     }
 
+    function shouldSkipRender(code: string): boolean {
+      return shouldSkipRenderForSize(code) || shouldSkipRenderForComplexity(code);
+    }
+
     async function renderWithTimeout(
       renderer: TMermaidRenderer,
       code: string,
@@ -458,7 +542,7 @@ export const TMermaidText = defineComponent({
         return;
       }
 
-      if (shouldSkipRenderForSize(code)) {
+      if (shouldSkipRender(code)) {
         if (!alive || version !== renderVersion) return;
         renderedSnapshot.value = null;
         status.value = "idle";

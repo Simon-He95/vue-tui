@@ -374,6 +374,63 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("skips unsupported complex Mermaid diagram types and keeps source visible", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => "should not render");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 4,
+          box: false,
+          content: ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n"),
+          renderer,
+        }),
+      48,
+      6,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("sequenceDiagram");
+    expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
+    expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
+
+    mounted.unmount();
+  });
+
+  it("skips complex flowchart features and keeps source visible", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => "should not render");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 5,
+          box: false,
+          content: ["graph LR", "  subgraph Cluster", "    A --> B", "  end"].join("\n"),
+          renderer,
+        }),
+      48,
+      7,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 1)).toBe("  subgraph Cluster");
+    expect(rowText(mounted, 2)).toBe("    A --> B");
+    expect(rowText(mounted, 3)).toBe("  end");
+
+    mounted.unmount();
+  });
+
   it("keeps source when Mermaid rendering times out", async () => {
     vi.useFakeTimers();
 
