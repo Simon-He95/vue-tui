@@ -431,6 +431,93 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("skips semicolon-delimited complex flowchart features and keeps source visible", async () => {
+    const source = "graph LR; subgraph Cluster; A --> B; end";
+    const renderer: TMermaidRenderer = vi.fn(() => "should not render");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 80,
+          h: 1,
+          box: false,
+          content: source,
+          renderer,
+        }),
+      90,
+      3,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe(source);
+
+    mounted.unmount();
+  });
+
+  it("counts semicolon-delimited flow statements before rendering", async () => {
+    const source = [
+      "graph LR",
+      Array.from({ length: 121 }, (_, index) => `A${index} --> A${index + 1}`).join("; "),
+    ].join("; ");
+    const renderer: TMermaidRenderer = vi.fn(() => "should not render");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 120,
+          h: 1,
+          box: false,
+          content: source,
+          renderer,
+        }),
+      130,
+      3,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toContain("graph LR; A0 --> A1");
+
+    mounted.unmount();
+  });
+
+  it("applies the max line guard consistently for CR-only Mermaid source", async () => {
+    const source = "graph LR\r  A --> B\r  B --> C";
+    const renderer: TMermaidRenderer = vi.fn(() => "should not render");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 3,
+          box: false,
+          content: source,
+          renderer,
+          maxRenderSourceLines: 2,
+        }),
+      48,
+      5,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 1)).toBe("  A --> B");
+    expect(rowText(mounted, 2)).toBe("  B --> C");
+
+    mounted.unmount();
+  });
+
   it("keeps source when Mermaid rendering times out", async () => {
     vi.useFakeTimers();
 

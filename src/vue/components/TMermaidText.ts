@@ -139,10 +139,18 @@ function countLinesUpTo(value: string, max: number): number {
 
   let lines = 1;
   for (let index = 0; index < value.length; index++) {
-    if (value.charCodeAt(index) !== 10) continue;
+    const code = value.charCodeAt(index);
+    if (code !== 10 && code !== 13) continue;
+
     lines++;
+
+    if (code === 13 && value.charCodeAt(index + 1) === 10) {
+      index++;
+    }
+
     if (lines > max) return lines;
   }
+
   return lines;
 }
 
@@ -152,31 +160,47 @@ function mermaidSourceLines(code: string): readonly string[] {
     .split("\n");
 }
 
-function firstMermaidStatement(code: string): string {
+function mermaidSourceStatements(code: string): readonly string[] {
+  const statements: string[] = [];
+
   for (const rawLine of mermaidSourceLines(code)) {
     const line = rawLine.trim();
     if (!line) continue;
 
-    if (MERMAID_INIT_DIRECTIVE_RE.test(line)) return "";
-    if (MERMAID_FRONTMATTER_DELIMITER_RE.test(line)) return "";
+    if (MERMAID_INIT_DIRECTIVE_RE.test(line) || MERMAID_FRONTMATTER_DELIMITER_RE.test(line)) {
+      statements.push(line);
+      continue;
+    }
 
     if (MERMAID_COMMENT_RE.test(line)) continue;
-    return line;
+
+    for (const rawStatement of line.split(";")) {
+      const statement = rawStatement.trim();
+      if (!statement || MERMAID_COMMENT_RE.test(statement)) continue;
+      statements.push(statement);
+    }
+  }
+
+  return statements;
+}
+
+function firstMermaidStatement(code: string): string {
+  for (const statement of mermaidSourceStatements(code)) {
+    if (MERMAID_INIT_DIRECTIVE_RE.test(statement)) return "";
+    if (MERMAID_FRONTMATTER_DELIMITER_RE.test(statement)) return "";
+    return statement;
   }
 
   return "";
 }
 
 function hasComplexMermaidFlowFeature(code: string): boolean {
-  for (const rawLine of mermaidSourceLines(code)) {
-    const line = rawLine.trim();
-    if (!line) continue;
+  for (const statement of mermaidSourceStatements(code)) {
+    if (MERMAID_INIT_DIRECTIVE_RE.test(statement)) return true;
+    if (MERMAID_FRONTMATTER_DELIMITER_RE.test(statement)) return true;
+    if (SIMPLE_MERMAID_DIRECTIVE_RE.test(statement)) continue;
 
-    if (MERMAID_INIT_DIRECTIVE_RE.test(line)) return true;
-    if (MERMAID_FRONTMATTER_DELIMITER_RE.test(line)) return true;
-    if (MERMAID_COMMENT_RE.test(line)) continue;
-
-    if (COMPLEX_MERMAID_FLOW_FEATURE_RE.test(line)) return true;
+    if (COMPLEX_MERMAID_FLOW_FEATURE_RE.test(statement)) return true;
   }
 
   return false;
@@ -188,11 +212,8 @@ function countMermaidFlowStatementsUpTo(code: string, max: number): number {
   let statements = 0;
   let sawDirective = false;
 
-  for (const rawLine of mermaidSourceLines(code)) {
-    const line = rawLine.trim();
-    if (!line || MERMAID_COMMENT_RE.test(line)) continue;
-
-    if (!sawDirective && SIMPLE_MERMAID_DIRECTIVE_RE.test(line)) {
+  for (const statement of mermaidSourceStatements(code)) {
+    if (!sawDirective && SIMPLE_MERMAID_DIRECTIVE_RE.test(statement)) {
       sawDirective = true;
       continue;
     }
