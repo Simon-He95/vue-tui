@@ -100,6 +100,7 @@ export type RenderManager = Readonly<{
    * For rect-bound nodes, rows outside the node rect are ignored.
    */
   markDirtyRows: (id: string, rows: readonly number[]) => boolean;
+  /** For raw terminal graphics, covered means any overlap by a higher node. */
   isRectCoveredByHigherNode: (id: string, rect: RenderRect) => boolean;
   unregister: (id: string) => void;
   render: (options?: { activePlanes?: TerminalRenderPlanes | null }) => RenderStats | null;

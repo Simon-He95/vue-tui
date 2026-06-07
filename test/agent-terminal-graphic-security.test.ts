@@ -125,6 +125,31 @@ describe("terminal graphics capability detection", () => {
     expect(
       detectTerminalGraphicsCapabilities({
         stdoutIsTTY: true,
+        env: { KITTY_WINDOW_ID: "1", TMUX: "/tmp/tmux" },
+        protocol: "kitty",
+      }),
+    ).toMatchObject({
+      protocol: "unicode",
+      supported: false,
+      forced: false,
+      reason: "tmux-without-passthrough",
+    });
+
+    expect(
+      detectTerminalGraphicsCapabilities({
+        stdoutIsTTY: true,
+        env: { KITTY_WINDOW_ID: "1", TMUX: "/tmp/tmux", VUE_TUI_TERMINAL_GRAPHICS: "kitty" },
+      }),
+    ).toMatchObject({
+      protocol: "unicode",
+      supported: false,
+      forced: false,
+      reason: "tmux-without-passthrough",
+    });
+
+    expect(
+      detectTerminalGraphicsCapabilities({
+        stdoutIsTTY: true,
         env: {
           KITTY_WINDOW_ID: "1",
           TMUX: "/tmp/tmux",
@@ -171,8 +196,8 @@ describe("terminal graphics capability detection", () => {
     ).toMatchObject({
       protocol: "iterm2",
       supported: true,
-      reason: "forced-by-env",
-      forced: true,
+      reason: "selected-by-env",
+      forced: false,
     });
 
     expect(
@@ -202,11 +227,29 @@ describe("terminal graphics capability detection", () => {
         stdoutIsTTY: true,
         env: { KITTY_WINDOW_ID: "1", TMUX: "/tmp/tmux" },
         passthrough: true,
+        protocol: "kitty",
       }),
     ).toMatchObject({
       protocol: "kitty",
       supported: true,
       passthrough: true,
+      forced: false,
+      reason: "selected-by-option",
+    });
+
+    expect(
+      detectTerminalGraphicsCapabilities({
+        stdoutIsTTY: true,
+        env: { KITTY_WINDOW_ID: "1", TMUX: "/tmp/tmux" },
+        protocol: "kitty",
+        force: true,
+      }),
+    ).toMatchObject({
+      protocol: "kitty",
+      supported: true,
+      passthrough: false,
+      forced: true,
+      reason: "forced-by-option",
     });
 
     expect(

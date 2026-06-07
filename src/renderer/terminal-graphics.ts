@@ -328,8 +328,8 @@ export function detectTerminalGraphicsCapabilities(
       envString(env, "VUE_TUI_TERMINAL_GRAPHICS") ??
       envString(env, "VUE_TUI_GRAPHICS_PROTOCOL"),
   );
-  const forcedByMode = mode === "kitty" || mode === "iterm2" || mode === "sixel";
-  const force = options.force ?? (truthy(envString(env, "VUE_TUI_GRAPHICS_FORCE")) || forcedByMode);
+  const forceFromOption = options.force === true;
+  const force = options.force ?? truthy(envString(env, "VUE_TUI_GRAPHICS_FORCE"));
   const base = {
     stdoutIsTTY,
     insideTmux,
@@ -373,7 +373,13 @@ export function detectTerminalGraphicsCapabilities(
     return capabilitiesFor(mode, {
       ...base,
       candidates: [mode],
-      reason: protocolOptionProvided ? "forced-by-option" : "forced-by-env",
+      reason: force
+        ? forceFromOption
+          ? "forced-by-option"
+          : "forced-by-env"
+        : protocolOptionProvided
+          ? "selected-by-option"
+          : "selected-by-env",
     });
   }
 

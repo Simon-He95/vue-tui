@@ -4710,6 +4710,7 @@ describe("TAgentTerminalGraphic", () => {
       terminalGraphics: {
         env: { VUE_TUI_TERMINAL_GRAPHICS: "kitty" },
         isTTY: false,
+        force: true,
       },
     });
 
