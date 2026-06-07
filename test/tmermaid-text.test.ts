@@ -838,6 +838,84 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("does not expose copy hit node when explicit height is too small to draw the box", async () => {
+    const source = "graph LR\n  A --> B";
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const onCopy = vi.fn();
+
+    const cols = 32;
+    const rows = 4;
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 28,
+          h: 1,
+          content: source,
+          renderer,
+          onCopy,
+        }),
+      cols,
+      rows,
+      {
+        clipboard: {
+          supported: true,
+          readText: vi.fn(),
+          writeText,
+        },
+      },
+    );
+
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toBe("rendered diagram");
+
+    setDeterministicMetrics(mounted, cols, rows);
+    clickCell(mounted, 22, 0);
+    await settleMermaid(mounted);
+
+    expect(writeText).not.toHaveBeenCalled();
+    expect(onCopy).not.toHaveBeenCalled();
+
+    mounted.unmount();
+  });
+
+  it("adds parent event zIndex to the Mermaid copy hit node", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TView, { x: 0, y: 0, w: 28, h: 4, zIndex: 120 }, () =>
+          h(TMermaidText, {
+            x: 0,
+            y: 0,
+            w: 28,
+            zIndex: 3,
+            content: "graph LR\n  A --> B",
+            renderer,
+          }),
+        ),
+      32,
+      5,
+    );
+
+    await settleMermaid(mounted);
+
+    const events = mounted.events();
+    if (!events) throw new Error("expected terminal events");
+
+    const copyNode = events
+      .debugNodes()
+      .find((node) => node.visible && node.focusable && node.rect.y === 0 && node.rect.w > 0);
+
+    expect(copyNode).toBeDefined();
+    expect(copyNode?.zIndex).toBe(124);
+
+    mounted.unmount();
+  });
+
   it("makes the copy hit node inactive when the copy button is hidden", async () => {
     const copyButton = ref(true);
     const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");

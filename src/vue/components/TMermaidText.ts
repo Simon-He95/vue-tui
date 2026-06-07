@@ -10,11 +10,13 @@ import {
   defineComponent,
   getCurrentInstance,
   h,
+  inject,
   markRaw,
   onBeforeUnmount,
   shallowRef,
   watch,
 } from "vue";
+import { EventZIndexContextKey } from "../context.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
@@ -303,6 +305,7 @@ export const TMermaidText = defineComponent({
     const { terminal, defaultStyle, scheduler, widthProvider } = terminalContext;
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
+    const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
 
     const status = shallowRef<TMermaidStatus>("idle");
     const error = shallowRef("");
@@ -626,11 +629,29 @@ export const TMermaidText = defineComponent({
       return withTextWidthProvider(widthProvider, () => textCellWidth(value));
     }
 
+    function sliceCells(text: string, maxCells: number): string {
+      return withTextWidthProvider(widthProvider, () => sliceByCells(text, maxCells));
+    }
+
+    function sliceCellsRange(text: string, startCells: number, endCells: number): string {
+      return withTextWidthProvider(widthProvider, () =>
+        sliceByCellsRange(text, startCells, endCells),
+      );
+    }
+
+    function padCells(text: string, width: number): string {
+      return withTextWidthProvider(widthProvider, () => padEndByCells(text, width));
+    }
+
     type HeaderSegment = Readonly<{
       text: string;
       start: number;
       cells: number;
     }>;
+
+    function canDrawBox(width: number, height: number): boolean {
+      return hasBox.value && Math.floor(width) >= 2 && Math.floor(height) >= 2;
+    }
 
     function segmentCells(text: string): number {
       return cellWidth(text);
@@ -646,7 +667,7 @@ export const TMermaidText = defineComponent({
       if (!label) return null;
 
       const maxCells = Math.max(0, rowWidth - 2);
-      const text = sliceByCells(` ${label} `, maxCells);
+      const text = sliceCells(` ${label} `, maxCells);
       const cells = segmentCells(text);
       if (!text || cells <= 0) return null;
 
@@ -671,7 +692,7 @@ export const TMermaidText = defineComponent({
       const maxCells = Math.max(0, titleEnd - titleStart);
       if (maxCells <= 0) return null;
 
-      const text = sliceByCells(` ${title} `, maxCells);
+      const text = sliceCells(` ${title} `, maxCells);
       const cells = segmentCells(text);
       if (!text || cells <= 0) return null;
 
@@ -683,9 +704,11 @@ export const TMermaidText = defineComponent({
     }
 
     const copyHitRect = computed<Rect>(() => {
-      if (!visible.value || !hasBox.value || !props.copyButton) return { x: 0, y: 0, w: 0, h: 0 };
-
       const full = fullRect.value;
+      if (!visible.value || !props.copyButton || !canDrawBox(full.w, full.h)) {
+        return { x: 0, y: 0, w: 0, h: 0 };
+      }
+
       const copy = headerCopySegment(Math.max(0, Math.floor(full.w)));
       if (!copy) return { x: 0, y: 0, w: 0, h: 0 };
 
@@ -753,14 +776,19 @@ export const TMermaidText = defineComponent({
     }
 
     const copyNodeActive = computed(
-      () => visible.value && hasBox.value && props.copyButton && copyHitRect.value.w > 0,
+      () =>
+        visible.value &&
+        props.copyButton &&
+        copyHitRect.value.w > 0 &&
+        copyHitRect.value.h > 0,
     );
 
     useTerminalNode(() => ({
       rect: copyHitRect.value,
-      zIndex: props.zIndex + 1,
+      zIndex: (parentEventZ.value ?? 0) + props.zIndex + 1,
       visible: copyNodeActive.value,
       focusable: copyNodeActive.value,
+      selectable: false,
       handlers: copyNodeActive.value
         ? {
             click: onCopyClick,
@@ -775,24 +803,24 @@ export const TMermaidText = defineComponent({
       if (rowWidth <= 1 || start >= rowWidth - 1 || segment.cells <= 0) return row;
 
       const maxCells = Math.max(0, rowWidth - 1 - start);
-      const text = sliceByCells(segment.text, maxCells);
+      const text = sliceCells(segment.text, maxCells);
       const cells = segmentCells(text);
       if (!text || cells <= 0) return row;
 
-      return `${sliceByCells(row, start)}${text}${sliceByCellsRange(row, start + cells, rowWidth)}`;
+      return `${sliceCells(row, start)}${text}${sliceCellsRange(row, start + cells, rowWidth)}`;
     }
 
     function contentLine(rowIndex: number, width: number, pad: boolean): string {
       const src = displayLines.value[rowIndex] ?? "";
-      const clipped = sliceByCells(src, width);
-      return pad ? padEndByCells(clipped, width) : clipped;
+      const clipped = sliceCells(src, width);
+      return pad ? padCells(clipped, width) : clipped;
     }
 
     function boxRow(rowIndex: number, width: number, height: number): string {
       const rowWidth = Math.max(0, Math.floor(width));
       const rowHeight = Math.max(0, Math.floor(height));
 
-      if (!hasBox.value || rowWidth < 2 || rowHeight < 2) {
+      if (!canDrawBox(rowWidth, rowHeight)) {
         return contentLine(rowIndex, rowWidth, props.clear);
       }
 
@@ -858,8 +886,8 @@ export const TMermaidText = defineComponent({
             }
 
             const src = boxRow(rowIndex, fullW, fullH);
-            const clipped = dx > 0 ? sliceByCellsRange(src, dx, dx + r.w) : sliceByCells(src, r.w);
-            const value = props.clear ? padEndByCells(clipped, r.w) : clipped;
+            const clipped = dx > 0 ? sliceCellsRange(src, dx, dx + r.w) : sliceCells(src, r.w);
+            const value = props.clear ? padCells(clipped, r.w) : clipped;
             if (value || props.clear) {
               terminal.write(value, { x: r.x, y, style });
             }
