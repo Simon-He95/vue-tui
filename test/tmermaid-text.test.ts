@@ -374,8 +374,9 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("skips unsupported complex Mermaid diagram types and keeps source visible", async () => {
-    const renderer: TMermaidRenderer = vi.fn(() => "should not render");
+  it("lets non-flowchart Mermaid diagram types render when the renderer supports them", async () => {
+    const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered sequence");
 
     const mounted = await mountTerminal(
       () =>
@@ -385,7 +386,7 @@ describe("TMermaidText", () => {
           w: 40,
           h: 4,
           box: false,
-          content: ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n"),
+          content: source,
           renderer,
         }),
       48,
@@ -394,10 +395,47 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
 
-    expect(renderer).not.toHaveBeenCalled();
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(renderer).toHaveBeenCalledWith(
+      source,
+      expect.objectContaining({
+        colorMode: "none",
+        useAscii: false,
+      }),
+    );
+    expect(rowText(mounted, 0)).toBe("rendered sequence");
+
+    mounted.unmount();
+  });
+
+  it("keeps non-flowchart Mermaid source visible when rendering fails", async () => {
+    const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
+    const renderer: TMermaidRenderer = vi.fn(() => {
+      throw new Error("unsupported sequence diagram");
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 4,
+          box: false,
+          content: source,
+          renderer,
+        }),
+      48,
+      6,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
     expect(rowText(mounted, 0)).toBe("sequenceDiagram");
     expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
     expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
+    expect(rowText(mounted, 0)).not.toContain("unsupported sequence diagram");
 
     mounted.unmount();
   });

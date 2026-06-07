@@ -227,7 +227,8 @@ function countMermaidFlowStatementsUpTo(code: string, max: number): number {
 
 function shouldSkipRenderForComplexity(code: string): boolean {
   const first = firstMermaidStatement(code);
-  if (!SIMPLE_MERMAID_DIRECTIVE_RE.test(first)) return true;
+  if (!first) return true;
+  if (!SIMPLE_MERMAID_DIRECTIVE_RE.test(first)) return false;
   if (hasComplexMermaidFlowFeature(code)) return true;
 
   return (
