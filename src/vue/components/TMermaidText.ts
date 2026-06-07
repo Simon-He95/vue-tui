@@ -113,12 +113,10 @@ const SIMPLE_MERMAID_DIRECTIVE_RE = /^(?:graph|flowchart)\s+(?:TB|TD|BT|LR|RL)\b
 const MERMAID_INIT_DIRECTIVE_RE = /^%%\{/;
 const MERMAID_COMMENT_RE = /^%%/;
 const MERMAID_FRONTMATTER_DELIMITER_RE = /^---\s*$/;
-const SIMPLE_MERMAID_NODE_ID_RE_SOURCE = "[A-Za-z_][A-Za-z0-9_]*";
-const SIMPLE_MERMAID_FLOW_EDGE_RE = new RegExp(
-  `^${SIMPLE_MERMAID_NODE_ID_RE_SOURCE}\\s*(?:-->|---)\\s*${SIMPLE_MERMAID_NODE_ID_RE_SOURCE}$`,
-);
+const SIMPLE_MERMAID_FLOW_STATEMENT_START_RE = /^[A-Za-z_][A-Za-z0-9_-]*/;
+const SIMPLE_MERMAID_COMPLEX_TOKEN_RE = /:::[A-Za-z_][A-Za-z0-9_-]*|@\{/;
 const COMPLEX_MERMAID_FLOW_FEATURE_RE =
-  /^(?:subgraph|classDef|class|click|style|linkStyle|accTitle|accDescr|direction)\b/i;
+  /^(?:subgraph|end|classDef|class|click|style|linkStyle|accTitle|accDescr|direction)\b/i;
 
 const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
@@ -204,14 +202,17 @@ function isForbiddenMermaidFlowStatement(statement: string): boolean {
   );
 }
 
-function isSimpleMermaidFlowEdgeStatement(statement: string): boolean {
-  return SIMPLE_MERMAID_FLOW_EDGE_RE.test(statement);
+function isSimpleMermaidFlowStatement(statement: string): boolean {
+  if (SIMPLE_MERMAID_DIRECTIVE_RE.test(statement)) return false;
+  if (isForbiddenMermaidFlowStatement(statement)) return false;
+  if (SIMPLE_MERMAID_COMPLEX_TOKEN_RE.test(statement)) return false;
+  return SIMPLE_MERMAID_FLOW_STATEMENT_START_RE.test(statement);
 }
 
 export function isSimpleMermaidFlowchartSource(code: string): boolean {
   const statements = mermaidSourceStatements(code);
   let sawDirective = false;
-  let flowStatements = 0;
+  let renderableStatements = 0;
 
   for (const statement of statements) {
     if (!sawDirective) {
@@ -220,15 +221,13 @@ export function isSimpleMermaidFlowchartSource(code: string): boolean {
       continue;
     }
 
-    if (SIMPLE_MERMAID_DIRECTIVE_RE.test(statement)) return false;
-    if (isForbiddenMermaidFlowStatement(statement)) return false;
-    if (!isSimpleMermaidFlowEdgeStatement(statement)) return false;
+    if (!isSimpleMermaidFlowStatement(statement)) return false;
 
-    flowStatements++;
-    if (flowStatements > DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS) return false;
+    renderableStatements++;
+    if (renderableStatements > DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS) return false;
   }
 
-  return sawDirective && flowStatements > 0;
+  return sawDirective && renderableStatements > 0;
 }
 
 function timeoutError(ms: number): Error & { code: string } {
