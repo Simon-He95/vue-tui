@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { TMermaidText, type TMermaidRenderer } from "../src/vue.js";
 import { isMissingBeautifulMermaid } from "../src/vue/mermaid/beautiful-mermaid.js";
-import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
+import {
+  createTerminalApp,
+  defineComponent,
+  h,
+  mountTerminal,
+  nextTick,
+  ref,
+  TView,
+} from "./ui-regressions-support.js";
 
 type MountedTerminal = Awaited<ReturnType<typeof mountTerminal>>;
 
@@ -50,6 +58,15 @@ async function settleMermaid(mounted: MountedTerminal): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await nextTick();
     mounted.scheduler()?.flushNow();
+  }
+}
+
+async function settleTerminalApp(app: ReturnType<typeof createTerminalApp>): Promise<void> {
+  for (let i = 0; i < 8; i++) {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+    app.scheduler.flushNow();
   }
 }
 
@@ -439,6 +456,183 @@ describe("TMermaidText", () => {
     }
   });
 
+  it("uses the injected clipboard for copy", async () => {
+    const source = "graph LR\n  A --> B";
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const onCopy = vi.fn();
+    const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: {
+        writeText: vi.fn().mockRejectedValue(new Error("navigator should not be used")),
+      },
+      configurable: true,
+    });
+
+    try {
+      const cols = 32;
+      const rows = 5;
+      const mounted = await mountTerminal(
+        () =>
+          h(TMermaidText, {
+            x: 0,
+            y: 0,
+            w: 28,
+            content: source,
+            renderer,
+            onCopy,
+          }),
+        cols,
+        rows,
+        {
+          clipboard: {
+            supported: true,
+            readText: vi.fn(),
+            writeText,
+          },
+        },
+      );
+
+      await settleMermaid(mounted);
+
+      setDeterministicMetrics(mounted, cols, rows);
+      clickCell(mounted, 22, 0);
+      await settleMermaid(mounted);
+
+      expect(writeText).toHaveBeenCalledWith(source);
+      expect(onCopy).toHaveBeenCalledWith({ text: source, ok: true });
+
+      mounted.unmount();
+    } finally {
+      if (originalClipboard) {
+        Object.defineProperty(globalThis.navigator, "clipboard", originalClipboard);
+      } else {
+        delete (globalThis.navigator as any).clipboard;
+      }
+    }
+  });
+
+  it("uses the createTerminalApp clipboard for copy", async () => {
+    const source = "graph LR\n  A --> B";
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const onCopy = vi.fn();
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TMermaidText, {
+            x: 0,
+            y: 0,
+            w: 28,
+            content: source,
+            renderer,
+            onCopy,
+          });
+      },
+    });
+
+    const app = createTerminalApp({
+      cols: 32,
+      rows: 5,
+      component: App,
+      clipboard: {
+        supported: true,
+        readText: vi.fn(),
+        writeText,
+      },
+    });
+
+    try {
+      app.mount();
+      await settleTerminalApp(app);
+
+      app.events.dispatch({ type: "click", cellX: 22, cellY: 0, time: Date.now() } as any);
+      await settleTerminalApp(app);
+
+      expect(writeText).toHaveBeenCalledWith(source);
+      expect(onCopy).toHaveBeenCalledWith({ text: source, ok: true });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not expose the copy hit rect outside a clipped parent", async () => {
+    const source = "graph LR\n  A --> B";
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const onCopy = vi.fn();
+
+    const cols = 32;
+    const rows = 5;
+    const mounted = await mountTerminal(
+      () =>
+        h(TView, { x: 0, y: 1, w: 28, h: 2, scrollY: 1 }, () =>
+          h(TMermaidText, {
+            x: 0,
+            y: 0,
+            w: 28,
+            content: source,
+            renderer,
+            onCopy,
+          }),
+        ),
+      cols,
+      rows,
+      {
+        clipboard: {
+          supported: true,
+          readText: vi.fn(),
+          writeText,
+        },
+      },
+    );
+
+    await settleMermaid(mounted);
+
+    setDeterministicMetrics(mounted, cols, rows);
+    clickCell(mounted, 22, 0);
+    await settleMermaid(mounted);
+
+    expect(writeText).not.toHaveBeenCalled();
+    expect(onCopy).not.toHaveBeenCalled();
+
+    mounted.unmount();
+  });
+
+  it("does not pad unboxed content when clear is false", async () => {
+    const content = ref("graph LR\n  A --> B");
+    const renderer: TMermaidRenderer = vi.fn(() => content.value);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 8,
+          h: 1,
+          box: false,
+          clear: false,
+          content: content.value,
+          renderer,
+        }),
+      12,
+      3,
+    );
+
+    await settleMermaid(mounted);
+    expect(rowText(mounted, 0)).toBe("graph LR");
+
+    const writeSpy = vi.spyOn(mounted.terminal, "write");
+    content.value = "x";
+    await settleMermaid(mounted);
+
+    expect(writeSpy).toHaveBeenCalledWith("x", expect.objectContaining({ x: 0, y: 0 }));
+    expect(writeSpy).not.toHaveBeenCalledWith("x       ", expect.anything());
+
+    mounted.unmount();
+  });
+
   it("forwards copy events through the mermaid entry wrapper", async () => {
     vi.resetModules();
     vi.doMock("beautiful-mermaid", () => ({
@@ -498,7 +692,7 @@ describe("TMermaidText", () => {
     }
   });
 
-  it("treats explicit h as content height when the default mermaid box is enabled", async () => {
+  it("treats explicit h as the outer mermaid box height", async () => {
     const renderer: TMermaidRenderer = vi.fn(() => "diagram line 1\ndiagram line 2");
 
     const mounted = await mountTerminal(
@@ -507,7 +701,7 @@ describe("TMermaidText", () => {
           x: 0,
           y: 0,
           w: 28,
-          h: 2,
+          h: 4,
           content: "graph LR\n  A --> B",
           renderer,
         }),

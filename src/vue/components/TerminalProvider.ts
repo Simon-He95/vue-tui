@@ -304,6 +304,7 @@ export const TerminalProvider = defineComponent({
       events,
       scheduler: schedulerApi,
       runtime,
+      clipboard: selectionClipboard,
       observability: { trace, framePerf },
       selection: selectionContext,
       defaultStyle: toRef(props, "defaultStyle"),

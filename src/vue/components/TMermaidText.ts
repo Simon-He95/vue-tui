@@ -1,6 +1,10 @@
 import type { ExtractPublicPropTypes, PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import type { Rect, TerminalPointerEvent } from "../../events/manager/types.js";
+import type {
+  Rect,
+  TerminalKeyboardEvent,
+  TerminalPointerEvent,
+} from "../../events/manager/types.js";
 import {
   computed,
   defineComponent,
@@ -263,7 +267,8 @@ export const TMermaidText = defineComponent({
   },
   setup(props, { emit }) {
     const instance = getCurrentInstance();
-    const { terminal, defaultStyle, scheduler, widthProvider } = useTerminal();
+    const terminalContext = useTerminal();
+    const { terminal, defaultStyle, scheduler, widthProvider } = terminalContext;
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
 
@@ -474,14 +479,15 @@ export const TMermaidText = defineComponent({
       return props.style ?? defaultStyle.value;
     });
 
-    const contentHeight = computed(() => {
-      return Math.max(1, props.h ?? displayLines.value.length);
+    const fullHeight = computed(() => {
+      const autoContentHeight = Math.max(1, displayLines.value.length);
+      const autoHeight = hasBox.value ? autoContentHeight + 2 : autoContentHeight;
+      return Math.max(1, Math.floor(props.h ?? autoHeight));
     });
 
     const fullRect = computed<Rect>(() => {
-      const height = hasBox.value ? contentHeight.value + 2 : contentHeight.value;
       return translateRect(
-        { x: props.x, y: props.y, w: props.w, h: height },
+        { x: props.x, y: props.y, w: props.w, h: fullHeight.value },
         layout.originX,
         layout.originY,
       );
@@ -495,21 +501,50 @@ export const TMermaidText = defineComponent({
 
     const copyLabel = computed(() => (copied.value ? props.copiedText : props.copyText));
 
+    function cellWidth(value: string): number {
+      return withTextWidthProvider(widthProvider, () => textCellWidth(value));
+    }
+
     const copyHitRect = computed<Rect>(() => {
       if (!visible.value || !hasBox.value || !props.copyButton) return { x: 0, y: 0, w: 0, h: 0 };
       const full = fullRect.value;
       const fullW = Math.max(0, Math.floor(full.w));
       if (fullW < 4) return { x: 0, y: 0, w: 0, h: 0 };
-      const labelWidth = textCellWidth(sanitizeInlineText(copyLabel.value));
+      const label = sanitizeInlineText(copyLabel.value);
+      if (!label) return { x: 0, y: 0, w: 0, h: 0 };
+      const labelWidth = cellWidth(label);
       const hitWidth = Math.min(Math.max(0, fullW - 2), labelWidth + 2);
       if (hitWidth <= 0) return { x: 0, y: 0, w: 0, h: 0 };
-      return {
+      const raw = {
         x: Math.floor(full.x) + Math.max(1, fullW - hitWidth - 1),
         y: Math.floor(full.y),
         w: hitWidth,
         h: 1,
       };
+      if (!layout.clipRect) return raw;
+      return intersectRect(raw, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
+
+    async function writeClipboardText(text: string): Promise<void> {
+      const contextClipboard = terminalContext.clipboard;
+      if (contextClipboard?.supported) {
+        await contextClipboard.writeText(text);
+        return;
+      }
+
+      const navClipboard = (globalThis as any).navigator?.clipboard;
+      if (navClipboard && typeof navClipboard.writeText === "function") {
+        await navClipboard.writeText(text);
+        return;
+      }
+
+      if (contextClipboard) {
+        await contextClipboard.writeText(text);
+        return;
+      }
+
+      throw new Error("Clipboard not available");
+    }
 
     async function copySource(): Promise<void> {
       const text = source.value;
@@ -517,16 +552,13 @@ export const TMermaidText = defineComponent({
       let copyError: unknown;
 
       try {
-        const clipboard = (globalThis as any).navigator?.clipboard;
-        if (!clipboard || typeof clipboard.writeText !== "function") {
-          throw new Error("Clipboard not available");
-        }
-        await clipboard.writeText(text);
+        await writeClipboardText(text);
         ok = true;
       } catch (err) {
         copyError = err;
       }
 
+      if (!alive) return;
       copied.value = ok;
       bump();
       emit("copy", ok ? { text, ok } : { text, ok, error: copyError });
@@ -538,31 +570,47 @@ export const TMermaidText = defineComponent({
       void copySource();
     }
 
+    function onCopyKeydown(event: TerminalKeyboardEvent): void {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      event.stopPropagation();
+      void copySource();
+    }
+
     useTerminalNode(() => ({
       rect: copyHitRect.value,
       zIndex: props.zIndex + 1,
       visible: visible.value && hasBox.value && props.copyButton && copyHitRect.value.w > 0,
-      focusable: false,
+      focusable: true,
       handlers: {
         click: onCopyClick,
+        keydown: onCopyKeydown,
       },
     }));
 
     function overlayCells(row: string, text: string, start: number, width: number): string {
-      if (width <= 0 || start >= width) return row;
-      const clipped = sliceByCells(text, Math.max(0, width - start));
+      const rowWidth = Math.max(0, Math.floor(width));
+      const end = Math.max(0, rowWidth - 1);
+      const clampedStart = Math.max(0, Math.floor(start));
+      if (rowWidth <= 1 || clampedStart >= end) return row;
+      const clipped = sliceByCells(text, Math.max(0, end - clampedStart));
       if (!clipped) return row;
-      return `${sliceByCells(row, start)}${clipped}${sliceByCellsRange(row, start + textCellWidth(clipped), width)}`;
+      return `${sliceByCells(row, clampedStart)}${clipped}${sliceByCellsRange(
+        row,
+        clampedStart + cellWidth(clipped),
+        rowWidth,
+      )}`;
     }
 
-    function contentLine(rowIndex: number, width: number): string {
+    function contentLine(rowIndex: number, width: number, pad: boolean): string {
       const src = displayLines.value[rowIndex] ?? "";
-      return padEndByCells(sliceByCells(src, width), width);
+      const clipped = sliceByCells(src, width);
+      return pad ? padEndByCells(clipped, width) : clipped;
     }
 
     function boxRow(rowIndex: number, width: number, height: number): string {
       if (!hasBox.value || width < 2 || height < 2) {
-        return contentLine(rowIndex, width);
+        return contentLine(rowIndex, width, props.clear);
       }
 
       const innerW = Math.max(0, width - 2);
@@ -573,8 +621,8 @@ export const TMermaidText = defineComponent({
         if (props.copyButton) {
           const label = sanitizeInlineText(copyLabel.value);
           if (label) {
-            const copy = ` ${label} `;
-            const start = Math.max(1, width - textCellWidth(copy) - 1);
+            const copy = sliceByCells(` ${label} `, Math.max(0, width - 2));
+            const start = Math.max(1, width - cellWidth(copy) - 1);
             row = overlayCells(row, copy, start, width);
           }
         }
@@ -583,7 +631,7 @@ export const TMermaidText = defineComponent({
 
       if (rowIndex === height - 1) return `└${repeatChar("─", innerW)}┘`;
 
-      return `│${contentLine(rowIndex - 1, innerW)}│`;
+      return `│${contentLine(rowIndex - 1, innerW, true)}│`;
     }
 
     useRenderNode(() => ({

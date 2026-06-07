@@ -11,6 +11,7 @@ import type {
   TerminalSelectionRefreshOptions,
 } from "../selection/terminal-selection.js";
 import type { RendererCapabilities, TerminalRendererLike } from "../renderer/capabilities.js";
+import type { ClipboardApi } from "../runtime/index.js";
 import type { TraceStore } from "../observability/trace.js";
 import type { FramePerfReason } from "../observability/frame-perf.js";
 import type { FramePerfStore } from "../observability/frame-perf-store.js";
@@ -147,6 +148,7 @@ export type TerminalContext = Readonly<{
   events: Ref<EventManager | null>;
   scheduler: TerminalScheduler;
   runtime: TerminalRuntime;
+  clipboard?: ClipboardApi;
   observability: Readonly<{
     trace: TraceStore;
     framePerf: FramePerfStore;
