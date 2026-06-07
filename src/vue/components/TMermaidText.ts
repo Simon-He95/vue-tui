@@ -367,15 +367,18 @@ export const TMermaidText = defineComponent({
     }
 
     function showCopiedFeedback(): void {
-      setCopied(true);
       clearCopiedTimer();
 
       const duration = normalizeNonNegativeInt(
         props.copiedDurationMs,
         DEFAULT_MERMAID_COPIED_DURATION_MS,
       );
-      if (duration <= 0) return;
+      if (duration <= 0) {
+        setCopied(false);
+        return;
+      }
 
+      setCopied(true);
       copiedTimer = setTimeout(() => {
         copiedTimer = null;
         if (!alive) return;
@@ -436,7 +439,7 @@ export const TMermaidText = defineComponent({
         return;
       }
 
-      if (props.streaming && !props.final) {
+      if (!props.final) {
         if (!alive || version !== renderVersion) return;
         renderedSnapshot.value = null;
         status.value = "idle";
@@ -515,7 +518,7 @@ export const TMermaidText = defineComponent({
       const version = ++renderVersion;
       setCopied(false, false);
 
-      if (props.streaming && !props.final) {
+      if (!props.final) {
         builtOnce = true;
         scheduler.cancelFrameTask?.(frameTaskId);
         renderedSnapshot.value = null;
@@ -749,15 +752,21 @@ export const TMermaidText = defineComponent({
       void copySource();
     }
 
+    const copyNodeActive = computed(
+      () => visible.value && hasBox.value && props.copyButton && copyHitRect.value.w > 0,
+    );
+
     useTerminalNode(() => ({
       rect: copyHitRect.value,
       zIndex: props.zIndex + 1,
-      visible: visible.value && hasBox.value && props.copyButton && copyHitRect.value.w > 0,
-      focusable: true,
-      handlers: {
-        click: onCopyClick,
-        keydown: onCopyKeydown,
-      },
+      visible: copyNodeActive.value,
+      focusable: copyNodeActive.value,
+      handlers: copyNodeActive.value
+        ? {
+            click: onCopyClick,
+            keydown: onCopyKeydown,
+          }
+        : {},
     }));
 
     function overlayCells(row: string, segment: HeaderSegment, width: number): string {

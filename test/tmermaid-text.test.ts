@@ -454,6 +454,40 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("skips rendering whenever final is false even when streaming is not enabled", async () => {
+    const final = ref(false);
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 48,
+          h: 2,
+          box: false,
+          content: "graph LR\n  A --> B",
+          final: final.value,
+          renderer,
+        }),
+      64,
+      4,
+    );
+
+    await settleMermaid(mounted);
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 1)).toBe("  A --> B");
+
+    final.value = true;
+    await settleMermaid(mounted);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(rowText(mounted, 0)).toBe("rendered diagram");
+
+    mounted.unmount();
+  });
+
   it("keeps source when the renderer returns blank output", async () => {
     const renderer: TMermaidRenderer = vi.fn(() => "   \n\t");
 
@@ -580,6 +614,54 @@ describe("TMermaidText", () => {
     } finally {
       vi.useRealTimers();
       mounted?.unmount();
+      if (originalClipboard) {
+        Object.defineProperty(globalThis.navigator, "clipboard", originalClipboard);
+      } else {
+        delete (globalThis.navigator as any).clipboard;
+      }
+    }
+  });
+
+  it("does not leave copied feedback stuck when copiedDurationMs is zero", async () => {
+    const source = "graph LR\n  A --> B";
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    try {
+      const cols = 32;
+      const rows = 5;
+      const mounted = await mountTerminal(
+        () =>
+          h(TMermaidText, {
+            x: 0,
+            y: 0,
+            w: 28,
+            content: source,
+            renderer,
+            copiedDurationMs: 0,
+          }),
+        cols,
+        rows,
+      );
+
+      await settleMermaid(mounted);
+      setDeterministicMetrics(mounted, cols, rows);
+
+      clickCell(mounted, 22, 0);
+      await settleMermaid(mounted);
+
+      expect(writeText).toHaveBeenCalledWith(source);
+      expect(rowText(mounted, 0)).toContain("copy");
+      expect(rowText(mounted, 0)).not.toContain("copied");
+
+      mounted.unmount();
+    } finally {
       if (originalClipboard) {
         Object.defineProperty(globalThis.navigator, "clipboard", originalClipboard);
       } else {
@@ -752,6 +834,46 @@ describe("TMermaidText", () => {
 
     expect(writeText).not.toHaveBeenCalled();
     expect(onCopy).not.toHaveBeenCalled();
+
+    mounted.unmount();
+  });
+
+  it("makes the copy hit node inactive when the copy button is hidden", async () => {
+    const copyButton = ref(true);
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 28,
+          content: "graph LR\n  A --> B",
+          copyButton: copyButton.value,
+          renderer,
+        }),
+      32,
+      5,
+    );
+
+    await settleMermaid(mounted);
+
+    const events = mounted.events();
+    if (!events) throw new Error("expected terminal events");
+    const copyNode = events
+      .debugNodes()
+      .find((node) => node.visible && node.focusable && node.zIndex === 1 && node.rect.w > 0);
+
+    expect(copyNode).toBeDefined();
+
+    copyButton.value = false;
+    await settleMermaid(mounted);
+
+    const hiddenCopyNode = events.debugNodes().find((node) => node.id === copyNode!.id);
+    expect(hiddenCopyNode).toMatchObject({
+      visible: false,
+      focusable: false,
+    });
 
     mounted.unmount();
   });
