@@ -474,9 +474,12 @@ export const TMermaidText = defineComponent({
       return props.style ?? defaultStyle.value;
     });
 
+    const contentHeight = computed(() => {
+      return Math.max(1, props.h ?? displayLines.value.length);
+    });
+
     const fullRect = computed<Rect>(() => {
-      const contentHeight = Math.max(1, displayLines.value.length);
-      const height = props.h ?? (hasBox.value ? contentHeight + 2 : contentHeight);
+      const height = hasBox.value ? contentHeight.value + 2 : contentHeight.value;
       return translateRect(
         { x: props.x, y: props.y, w: props.w, h: height },
         layout.originX,

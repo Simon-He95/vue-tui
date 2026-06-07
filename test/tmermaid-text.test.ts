@@ -439,6 +439,92 @@ describe("TMermaidText", () => {
     }
   });
 
+  it("forwards copy events through the mermaid entry wrapper", async () => {
+    vi.resetModules();
+    vi.doMock("beautiful-mermaid", () => ({
+      renderMermaidASCII: vi.fn(() => "rendered diagram"),
+    }));
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const onCopy = vi.fn();
+    const source = "graph LR\n  A --> B";
+    const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    try {
+      const { TMermaidText: TMermaidTextWithBeautifulRenderer } = await import("../src/mermaid.js");
+
+      const cols = 32;
+      const rows = 5;
+      const mounted = await mountTerminal(
+        () =>
+          h(TMermaidTextWithBeautifulRenderer, {
+            x: 0,
+            y: 0,
+            w: 28,
+            content: source,
+            onCopy,
+          }),
+        cols,
+        rows,
+      );
+
+      await settleMermaid(mounted);
+
+      expect(rowText(mounted, 0)).toContain("mermaid");
+      expect(rowText(mounted, 0)).toContain("copy");
+      expect(rowText(mounted, 1)).toContain("rendered diagram");
+
+      setDeterministicMetrics(mounted, cols, rows);
+      clickCell(mounted, 22, 0);
+      await settleMermaid(mounted);
+
+      expect(writeText).toHaveBeenCalledWith(source);
+      expect(onCopy).toHaveBeenCalledWith({ text: source, ok: true });
+
+      mounted.unmount();
+    } finally {
+      if (originalClipboard) {
+        Object.defineProperty(globalThis.navigator, "clipboard", originalClipboard);
+      } else {
+        delete (globalThis.navigator as any).clipboard;
+      }
+      vi.doUnmock("beautiful-mermaid");
+      vi.resetModules();
+    }
+  });
+
+  it("treats explicit h as content height when the default mermaid box is enabled", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => "diagram line 1\ndiagram line 2");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 28,
+          h: 2,
+          content: "graph LR\n  A --> B",
+          renderer,
+        }),
+      32,
+      6,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toContain("mermaid");
+    expect(rowText(mounted, 1)).toContain("diagram line 1");
+    expect(rowText(mounted, 2)).toContain("diagram line 2");
+    expect(rowText(mounted, 3)).toContain("└");
+
+    mounted.unmount();
+  });
+
   it("the mermaid entry TMermaidText supplies the beautiful-mermaid renderer", async () => {
     vi.resetModules();
     vi.doMock("beautiful-mermaid", () => ({
