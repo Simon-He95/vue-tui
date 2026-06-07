@@ -858,7 +858,7 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 >
 > 需要安装依赖后零配置使用内置 renderer 时，请从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `TMermaidText` / `TMermaid`。
 >
-> 从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 使用默认内置 renderer 时，只会渲染 `isSimpleMermaidFlowchartSource()` 接受的 simple flowchart；其他 Mermaid source 会保持源码显示。传入自定义 `renderer` 时不会自动套这个限制，仍可通过 `shouldRenderSource` 显式控制 eligibility。
+> 默认只会渲染 `isSimpleMermaidFlowchartSource()` 接受的 simple flowchart；其他 Mermaid source 会保持源码显示。即使传入自定义 `renderer`，也默认套用这个限制；如果确实要渲染复杂 Mermaid source，请显式传入 `shouldRenderSource={() => true}`。
 
 ## TMermaidText
 

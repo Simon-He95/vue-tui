@@ -374,7 +374,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("lets a custom renderer render non-flowchart Mermaid source", async () => {
+  it("keeps non-flowchart Mermaid source by default even with a custom renderer", async () => {
     const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
     const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
 
@@ -384,7 +384,7 @@ describe("TMermaidText", () => {
           x: 0,
           y: 0,
           w: 40,
-          h: 1,
+          h: 3,
           box: false,
           content: source,
           renderer,
@@ -395,14 +395,10 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
 
-    expect(renderer).toHaveBeenCalledTimes(1);
-    expect(renderer).toHaveBeenCalledWith(
-      source,
-      expect.objectContaining({
-        colorMode: "none",
-      }),
-    );
-    expect(rowText(mounted, 0)).toBe("sequence rendered");
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("sequenceDiagram");
+    expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
+    expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
 
     mounted.unmount();
   });
@@ -447,7 +443,7 @@ describe("TMermaidText", () => {
     }
   });
 
-  it("does not apply the built-in simple-flowchart eligibility to a custom renderer in the mermaid entry wrapper", async () => {
+  it("allows an explicit shouldRenderSource opt-in for complex custom Mermaid rendering", async () => {
     vi.resetModules();
 
     try {
@@ -466,6 +462,7 @@ describe("TMermaidText", () => {
             box: false,
             content: source,
             renderer,
+            shouldRenderSource: () => true,
           }),
         48,
         3,
