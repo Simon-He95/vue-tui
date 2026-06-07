@@ -374,7 +374,36 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("lets the renderer-agnostic component render non-flowchart source with a custom renderer", async () => {
+  it("keeps non-flowchart Mermaid source by default even with a custom renderer", async () => {
+    const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
+    const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 3,
+          box: false,
+          content: source,
+          renderer,
+        }),
+      48,
+      5,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("sequenceDiagram");
+    expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
+    expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
+
+    mounted.unmount();
+  });
+
+  it("allows renderer-agnostic callers to explicitly render complex Mermaid source", async () => {
     const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
     const renderer: TMermaidRenderer = vi.fn((code) => `rendered:${code.split("\n")[0]}`);
 
@@ -388,6 +417,7 @@ describe("TMermaidText", () => {
           box: false,
           content: source,
           renderer,
+          shouldRenderSource: () => true,
         }),
       48,
       3,
@@ -403,36 +433,6 @@ describe("TMermaidText", () => {
       }),
     );
     expect(rowText(mounted, 0)).toBe("rendered:sequenceDiagram");
-
-    mounted.unmount();
-  });
-
-  it("allows renderer-agnostic callers to opt into simple-flowchart eligibility", async () => {
-    const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
-    const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
-
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidText, {
-          x: 0,
-          y: 0,
-          w: 40,
-          h: 3,
-          box: false,
-          content: source,
-          renderer,
-          shouldRenderSource: isSimpleMermaidFlowchartSource,
-        }),
-      48,
-      5,
-    );
-
-    await settleMermaid(mounted);
-
-    expect(renderer).not.toHaveBeenCalled();
-    expect(rowText(mounted, 0)).toBe("sequenceDiagram");
-    expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
-    expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
 
     mounted.unmount();
   });
