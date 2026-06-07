@@ -746,7 +746,7 @@ function validateIterm2Sequence(sequence: string, op: TerminalGraphicsOperation 
     const payload = body.slice(colon + 1);
 
     if (!/^[A-Za-z0-9_=;,.%+\-:]*$/.test(params)) return false;
-    if (!isBase64ish(payload)) return false;
+    if (!payload || !isBase64ish(payload)) return false;
 
     if (!validateIterm2Params(params)) return false;
 

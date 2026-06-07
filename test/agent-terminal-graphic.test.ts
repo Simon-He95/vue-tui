@@ -837,7 +837,7 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
-  it("uses content fallback only when fallback is omitted", async () => {
+  it("omits image content fallback when fallback is omitted", async () => {
     const App = defineComponent({
       setup() {
         return () =>
@@ -855,7 +855,31 @@ describe("TAgentTerminalGraphic", () => {
     app.mount();
     await settle(app);
 
-    expect(rowText(app, 0)).toBe("image.png");
+    expect(rowText(app, 0)).toBe("");
+
+    app.dispose();
+  });
+
+  it("uses math content fallback when fallback is omitted", async () => {
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 16,
+            h: 1,
+            kind: "math",
+            content: "\\frac{a}{b}",
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(rowText(app, 0)).toBe("\\frac{a}{b}");
 
     app.dispose();
   });
@@ -3308,6 +3332,63 @@ describe("TAgentTerminalGraphic", () => {
       timeoutSpy.mockRestore();
     }
   });
+
+  it.each([
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["zero", 0],
+    ["negative", -1],
+  ])(
+    "normalizes invalid virtual list terminal graphics idle delay %s to the default",
+    async (_label, nextIdleMs) => {
+      vi.useFakeTimers();
+      const idleMs = ref(200);
+      const onUpdateScrollTop = vi.fn();
+      const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
+      const App = defineComponent({
+        setup() {
+          return () =>
+            h(TVirtualList, {
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 2,
+              itemCount: 20,
+              itemVersion: 1,
+              scrollTop: 0,
+              terminalGraphicScrollIdleMs: idleMs.value,
+              getItem: (index: number) => `item-${index}`,
+              "onUpdate:scrollTop": onUpdateScrollTop,
+            });
+        },
+      });
+      const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+
+      try {
+        app.mount();
+        await nextTick();
+        app.scheduler.flushNow();
+        await nextTick();
+
+        app.events.dispatch({ type: "wheel", cellX: 0, cellY: 0, deltaY: 100, time: 1_000 });
+        app.scheduler.flushNow();
+        await nextTick();
+        expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 200);
+
+        timeoutSpy.mockClear();
+        idleMs.value = nextIdleMs;
+        await nextTick();
+        app.scheduler.flushNow();
+        await nextTick();
+
+        expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 96);
+      } finally {
+        app.dispose();
+        timeoutSpy.mockRestore();
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it("suspends controlled virtual row raw rendering while waiting for scrollTop writeback", async () => {
     const writes: string[] = [];

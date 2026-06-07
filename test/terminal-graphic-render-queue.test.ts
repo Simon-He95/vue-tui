@@ -290,6 +290,74 @@ describe("terminal graphic render queue", () => {
     expect(queue.stats().cacheEntries).toBe(1);
   });
 
+  it.each([
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["zero", 0],
+    ["negative", -1],
+  ])("normalizes invalid maxConcurrency %s to the default", async (_label, maxConcurrency) => {
+    const queue = createTerminalGraphicRenderQueue({ maxConcurrency });
+    const starts: string[] = [];
+    let releaseA!: () => void;
+    let releaseB!: () => void;
+    const gateA = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+    const gateB = new Promise<void>((resolve) => {
+      releaseB = resolve;
+    });
+
+    const first = queue.cached("a", undefined, async () => {
+      starts.push("a");
+      await gateA;
+      return "A";
+    });
+    const second = queue.cached("b", undefined, async () => {
+      starts.push("b");
+      await gateB;
+      return "B";
+    });
+    const third = queue.cached("c", undefined, async () => {
+      starts.push("c");
+      return "C";
+    });
+
+    await Promise.resolve();
+    expect(starts).toEqual(["a", "b"]);
+    expect(queue.stats()).toMatchObject({ active: 2, waiting: 1 });
+
+    releaseA();
+    await expect(first).resolves.toBe("A");
+    await Promise.resolve();
+    expect(starts).toEqual(["a", "b", "c"]);
+
+    releaseB();
+    await expect(second).resolves.toBe("B");
+    await expect(third).resolves.toBe("C");
+    expect(queue.stats()).toMatchObject({ active: 0, waiting: 0 });
+  });
+
+  it.each([
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["zero", 0],
+    ["negative", -1],
+  ])("normalizes invalid maxBytes %s to the default budget", async (_label, maxBytes) => {
+    const queue = createTerminalGraphicRenderQueue({ maxBytes });
+    const render = vi.fn(async () => "large-frame");
+    const oversizedDefaultBudget = 33 * 1024 * 1024;
+
+    await expect(
+      queue.cached("large", undefined, render, () => oversizedDefaultBudget),
+    ).resolves.toBe("large-frame");
+    expect(queue.stats()).toMatchObject({ cacheEntries: 0, cacheBytes: 0 });
+
+    await expect(
+      queue.cached("large", undefined, render, () => oversizedDefaultBudget),
+    ).resolves.toBe("large-frame");
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+
   it("removes the previous same-key cache entry when a later result is too large", async () => {
     const queue = createTerminalGraphicRenderQueue({
       maxConcurrency: 2,

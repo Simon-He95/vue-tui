@@ -70,6 +70,14 @@ function createAbortError(): Error {
   return error;
 }
 
+function positiveFiniteInt(value: unknown, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+
+  const int = Math.floor(n);
+  return int > 0 ? int : fallback;
+}
+
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw createAbortError();
 }
@@ -98,10 +106,10 @@ function raceAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
 export function createTerminalGraphicRenderQueue(
   options: TerminalGraphicRenderQueueOptions = {},
 ): TerminalGraphicRenderQueue {
-  const maxConcurrency = Math.max(1, Math.floor(options.maxConcurrency ?? 2));
-  const maxEntries = Math.max(1, Math.floor(options.maxEntries ?? 128));
-  const maxBytes = Math.max(1, Math.floor(options.maxBytes ?? 32 * 1024 * 1024));
-  const ttlMs = Math.max(1, Math.floor(options.ttlMs ?? 5 * 60_000));
+  const maxConcurrency = positiveFiniteInt(options.maxConcurrency, 2);
+  const maxEntries = positiveFiniteInt(options.maxEntries, 128);
+  const maxBytes = positiveFiniteInt(options.maxBytes, 32 * 1024 * 1024);
+  const ttlMs = positiveFiniteInt(options.ttlMs, 5 * 60_000);
   const dedupeInflight = options.dedupeInflight ?? false;
 
   let active = 0;

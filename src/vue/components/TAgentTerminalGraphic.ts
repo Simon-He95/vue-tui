@@ -391,7 +391,7 @@ export const TAgentTerminalGraphic = defineComponent({
     const unsubscribeTerminalResize = terminal.on("resize", () => {
       terminalSizeVersion.value++;
     });
-    const fallbackText = () => props.fallback ?? props.content;
+    const fallbackText = () => props.fallback ?? (props.kind === "math" ? props.content : "");
     const contentIdentity = computed(() => `${props.content.length}:${smallHash(props.content)}`);
     const stableGraphicKey = computed(() =>
       [

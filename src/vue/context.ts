@@ -280,6 +280,14 @@ export function createCombinedTerminalGraphicsActivity(
   };
 }
 
+function positiveFiniteInt(value: unknown, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+
+  const int = Math.floor(n);
+  return int > 0 ? int : fallback;
+}
+
 function normalizeTerminalGraphicsScrollIdleMs(value: number | undefined): number {
-  return Math.max(16, Math.floor(value ?? 96));
+  return Math.max(16, positiveFiniteInt(value, 96));
 }

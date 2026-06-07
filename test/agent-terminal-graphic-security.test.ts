@@ -368,6 +368,21 @@ describe("terminal graphics sequence validation", () => {
     }
   });
 
+  it("rejects raw iTerm2 sequences with empty payloads", () => {
+    const sequence = `${ESC}]1337;File=inline=1:${BEL}`;
+
+    expect(isSafeTerminalGraphicsSequence(sequence, "iterm2")).toBe(false);
+    expect(
+      validateTerminalGraphicFrame({
+        protocol: "iterm2",
+        sequence,
+        fallbackText: "fallback",
+        width: 4,
+        height: 2,
+      }),
+    ).toBeNull();
+  });
+
   it("omits invalid kitty numeric controls when creating public image sequences", () => {
     const sequence = createKittyGraphicsSequence("QUJD", {
       imageId: -1,
