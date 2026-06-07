@@ -442,7 +442,7 @@ export const TMermaidText = defineComponent({
         return;
       }
 
-      if (!props.final) {
+      if (props.streaming && !props.final) {
         if (!alive || version !== renderVersion) return;
         renderedSnapshot.value = null;
         status.value = "idle";
@@ -521,7 +521,7 @@ export const TMermaidText = defineComponent({
       const version = ++renderVersion;
       setCopied(false, false);
 
-      if (!props.final) {
+      if (props.streaming && !props.final) {
         builtOnce = true;
         scheduler.cancelFrameTask?.(frameTaskId);
         renderedSnapshot.value = null;
@@ -776,11 +776,7 @@ export const TMermaidText = defineComponent({
     }
 
     const copyNodeActive = computed(
-      () =>
-        visible.value &&
-        props.copyButton &&
-        copyHitRect.value.w > 0 &&
-        copyHitRect.value.h > 0,
+      () => visible.value && props.copyButton && copyHitRect.value.w > 0 && copyHitRect.value.h > 0,
     );
 
     useTerminalNode(() => ({
