@@ -714,6 +714,54 @@ describe("markdown layout", () => {
     expect(rows.some((row) => row.plainText.includes("    const a = 1"))).toBe(true);
   });
 
+  it("preserves fenced code language metadata", () => {
+    const blocks = markdownAstToBlocks(
+      [
+        {
+          type: "code_block",
+          raw: "",
+          code: "graph LR\n  A --> B",
+          info: "Mermaid title",
+        } as TuiMarkdownNode,
+      ],
+      DEFAULT_TUI_MARKDOWN_THEME,
+    );
+    const code = blocks[0];
+
+    expect(code?.type).toBe("code_block");
+    if (code?.type !== "code_block") throw new Error("expected code block");
+    expect(code.language).toBe("mermaid");
+  });
+
+  it("does not reuse cached code rows when only language changes", () => {
+    const first = layoutMarkdownBlocksCached(
+      [
+        {
+          type: "code_block",
+          key: "code",
+          language: "ts",
+          lines: ["const a = 1"],
+        },
+      ],
+      40,
+    );
+    const next = layoutMarkdownBlocksCached(
+      [
+        {
+          type: "code_block",
+          key: "code",
+          language: "js",
+          lines: ["const a = 1"],
+        },
+      ],
+      40,
+      first.cache,
+    );
+
+    expect(next.rows.map((row) => row.plainText)).toEqual(first.rows.map((row) => row.plainText));
+    expect(next.rows[0]).not.toBe(first.rows[0]);
+  });
+
   it("does not hang when list and blockquote prefixes are wider than width", () => {
     const parser = createTuiMarkdownParser();
     const listRows = buildMarkdownVisualRows("- a", 1, parser);

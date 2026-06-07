@@ -84,6 +84,16 @@ function sanitizeCodeBlockText(text: string, tabSize = 4): string {
   return sanitizeTextBlock(normalized);
 }
 
+function codeBlockLanguage(node: TuiMarkdownNode): string | undefined {
+  const raw =
+    stringProp(node, "lang") ||
+    stringProp(node, "language") ||
+    stringProp(node, "info") ||
+    stringProp(node, "meta");
+  const language = raw.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return language || undefined;
+}
+
 function inlineNodeSegments(
   nodes: readonly TuiMarkdownNode[],
   theme: TuiMarkdownTheme,
@@ -250,6 +260,7 @@ function blockFromCodeBlock(
   return {
     type: "code_block",
     key,
+    language: codeBlockLanguage(node),
     lines: sanitizeCodeBlockText(stringProp(node, "code")).split("\n"),
     style: theme.codeBlock,
     prefixSegments: context.prefixSegments,

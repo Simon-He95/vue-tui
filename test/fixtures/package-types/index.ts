@@ -53,6 +53,7 @@ import {
   type TFormHandle,
   type TInputPlugin,
   type TMermaidAsciiOptions,
+  type TMermaidCopyPayload,
   type TMermaidRenderer,
   type TMermaidTextProps as VueMermaidTextProps,
   type TMermaidTransientErrorClassifier,
@@ -93,6 +94,7 @@ import {
   type TCommandPaletteItem as AgentTCommandPaletteItem,
   type TCommandPaletteMatchRange,
   type TMermaidTransientErrorClassifier as AgentMermaidTransientErrorClassifier,
+  type TMermaidCopyPayload as AgentMermaidCopyPayload,
   type TMermaidTextProps as AgentMermaidTextProps,
   TThinkingView,
   TToolCallView,
@@ -107,6 +109,7 @@ import {
   beautifulMermaidRenderer,
   createBeautifulMermaidRenderer,
   markMermaidRenderErrorFatal as markMermaidEntryRenderErrorFatal,
+  type TMermaidCopyPayload as MermaidEntryCopyPayload,
   type TMermaidTransientErrorContext as MermaidEntryTransientErrorContext,
   type TMermaidTextProps as MermaidEntryTextProps,
   type TMermaidTransientErrorClassifier as MermaidEntryTransientErrorClassifier,
@@ -116,6 +119,7 @@ import {
   TMermaidText as AgentBeautifulMermaidText,
   beautifulMermaidRenderer as agentBeautifulMermaidRenderer,
   markMermaidRenderErrorFatal as markAgentBeautifulMermaidRenderErrorFatal,
+  type TMermaidCopyPayload as AgentBeautifulMermaidCopyPayload,
   type TMermaidTransientErrorClassifier as AgentBeautifulMermaidTransientErrorClassifier,
 } from "@simon_he/vue-tui/agent/mermaid";
 
@@ -174,17 +178,21 @@ const mermaidTransientErrorContext: TMermaidTransientErrorContext = {
 };
 const mermaidTransientErrorClassifier: TMermaidTransientErrorClassifier = (_error, context) =>
   context.streaming && !context.final;
+const mermaidCopyPayload: TMermaidCopyPayload = { text: "graph LR", ok: true };
 const mermaidTextProps: VueMermaidTextProps = { x: 0, y: 0, w: 12 };
 const agentMermaidTextProps: AgentMermaidTextProps = mermaidTextProps;
+const agentMermaidCopyPayload: AgentMermaidCopyPayload = mermaidCopyPayload;
 const agentMermaidTransientErrorClassifier: AgentMermaidTransientErrorClassifier =
   mermaidTransientErrorClassifier;
 const mermaidEntryTextProps: MermaidEntryTextProps = mermaidTextProps;
+const mermaidEntryCopyPayload: MermaidEntryCopyPayload = mermaidCopyPayload;
 const mermaidEntryTransientErrorContext: MermaidEntryTransientErrorContext =
   mermaidTransientErrorContext;
 const mermaidEntryTransientErrorClassifier: MermaidEntryTransientErrorClassifier =
   mermaidTransientErrorClassifier;
 const agentBeautifulMermaidTransientErrorClassifier: AgentBeautifulMermaidTransientErrorClassifier =
   mermaidTransientErrorClassifier;
+const agentBeautifulMermaidCopyPayload: AgentBeautifulMermaidCopyPayload = mermaidCopyPayload;
 const createdMermaidRenderer = createBeautifulMermaidRenderer();
 const fatalMermaidError = markMermaidRenderErrorFatal(new Error("fatal"));
 const fatalAgentMermaidError = markAgentMermaidRenderErrorFatal(new Error("fatal-agent"));
@@ -271,13 +279,17 @@ console.log(
   mermaidRenderer,
   mermaidTransientErrorContext,
   mermaidTransientErrorClassifier,
+  mermaidCopyPayload,
   mermaidTextProps,
   agentMermaidTextProps,
+  agentMermaidCopyPayload,
   agentMermaidTransientErrorClassifier,
   mermaidEntryTextProps,
+  mermaidEntryCopyPayload,
   mermaidEntryTransientErrorContext,
   mermaidEntryTransientErrorClassifier,
   agentBeautifulMermaidTransientErrorClassifier,
+  agentBeautifulMermaidCopyPayload,
   beautifulMermaidRenderer,
   agentBeautifulMermaidRenderer,
   createdMermaidRenderer,

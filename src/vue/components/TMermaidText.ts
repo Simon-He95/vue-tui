@@ -1,6 +1,6 @@
 import type { ExtractPublicPropTypes, PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import type { Rect } from "../../events/manager/types.js";
+import type { Rect, TerminalPointerEvent } from "../../events/manager/types.js";
 import {
   computed,
   defineComponent,
@@ -14,14 +14,18 @@ import {
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
+import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
 import {
   padEndByCells,
+  repeatChar,
+  sanitizeInlineText,
   sanitizeTextBlock,
   sliceByCells,
   sliceByCellsRange,
   spaces,
+  textCellWidth,
   withTextWidthProvider,
 } from "../utils/text.js";
 
@@ -68,6 +72,17 @@ export type TMermaidTransientErrorClassifier = (
 ) => boolean;
 
 type TMermaidStatus = "idle" | "loading" | "ready" | "incomplete" | "error";
+
+type TMermaidRenderSnapshot = Readonly<{
+  source: string;
+  lines: readonly string[];
+}>;
+
+export type TMermaidCopyPayload = Readonly<{
+  text: string;
+  ok: boolean;
+  error?: unknown;
+}>;
 
 const TUI_MERMAID_FATAL_RENDER_ERROR = "__vueTuiMermaidFatalRenderError" as const;
 const fatalMermaidRenderErrors = new WeakSet<object>();
@@ -231,6 +246,11 @@ export const tMermaidTextProps = {
     type: Boolean,
     default: true,
   },
+  box: { type: Boolean, default: true },
+  title: { type: String, default: "mermaid" },
+  copyButton: { type: Boolean, default: true },
+  copyText: { type: String, default: "copy" },
+  copiedText: { type: String, default: "copied" },
 } as const;
 
 export type TMermaidTextProps = ExtractPublicPropTypes<typeof tMermaidTextProps>;
@@ -238,7 +258,10 @@ export type TMermaidTextProps = ExtractPublicPropTypes<typeof tMermaidTextProps>
 export const TMermaidText = defineComponent({
   name: "TMermaidText",
   props: tMermaidTextProps,
-  setup(props) {
+  emits: {
+    copy: (_payload: TMermaidCopyPayload) => true,
+  },
+  setup(props, { emit }) {
     const instance = getCurrentInstance();
     const { terminal, defaultStyle, scheduler, widthProvider } = useTerminal();
     const layout = useLayout();
@@ -247,8 +270,9 @@ export const TMermaidText = defineComponent({
     const status = shallowRef<TMermaidStatus>("idle");
     const error = shallowRef("");
     const missingRenderer = shallowRef(false);
-    const lines = shallowRef<readonly string[]>(markRaw([""]));
+    const renderedSnapshot = shallowRef<TMermaidRenderSnapshot | null>(null);
     const documentVersion = shallowRef(0);
+    const copied = shallowRef(false);
 
     let builtOnce = false;
     let renderVersion = 0;
@@ -295,14 +319,25 @@ export const TMermaidText = defineComponent({
       const code = source.value;
       if (!code.trim()) {
         if (!alive || version !== renderVersion) return;
-        lines.value = markRaw([""]);
-        status.value = "ready";
+        renderedSnapshot.value = null;
+        status.value = "idle";
         error.value = "";
         missingRenderer.value = false;
         bump();
         return;
       }
 
+      if (props.streaming && !props.final) {
+        if (!alive || version !== renderVersion) return;
+        renderedSnapshot.value = null;
+        status.value = "idle";
+        error.value = "";
+        missingRenderer.value = false;
+        bump();
+        return;
+      }
+
+      renderedSnapshot.value = null;
       status.value = "loading";
       error.value = "";
       missingRenderer.value = false;
@@ -312,7 +347,7 @@ export const TMermaidText = defineComponent({
         const renderer = props.renderer;
         if (!renderer) {
           if (!alive || version !== renderVersion) return;
-          lines.value = markRaw([""]);
+          renderedSnapshot.value = null;
           missingRenderer.value = true;
           status.value = "error";
           bump();
@@ -322,18 +357,32 @@ export const TMermaidText = defineComponent({
         const rendered = await renderer(code, resolveAsciiOptions());
         if (!alive || version !== renderVersion) return;
 
-        lines.value = markRaw(splitRenderedOutput(rendered));
-        status.value = "ready";
+        const renderedLines = splitRenderedOutput(rendered);
+        if (hasVisibleRenderedOutput(renderedLines)) {
+          renderedSnapshot.value = markRaw({
+            source: code,
+            lines: markRaw(renderedLines),
+          });
+          status.value = "ready";
+          error.value = "";
+          missingRenderer.value = false;
+          bump();
+          return;
+        }
+
+        renderedSnapshot.value = null;
+        status.value = "error";
         error.value = "";
         missingRenderer.value = false;
         bump();
       } catch (err) {
         if (!alive || version !== renderVersion) return;
+        renderedSnapshot.value = null;
         missingRenderer.value = false;
         error.value = errorMessage(err);
 
         if (shouldTreatRenderErrorAsTransient(err, code)) {
-          status.value = hasVisibleRenderedOutput(lines.value) ? "ready" : "incomplete";
+          status.value = "incomplete";
           bump();
           return;
         }
@@ -345,6 +394,18 @@ export const TMermaidText = defineComponent({
 
     function scheduleRender(): void {
       const version = ++renderVersion;
+      copied.value = false;
+
+      if (props.streaming && !props.final) {
+        builtOnce = true;
+        scheduler.cancelFrameTask?.(frameTaskId);
+        renderedSnapshot.value = null;
+        status.value = "idle";
+        error.value = "";
+        missingRenderer.value = false;
+        bump();
+        return;
+      }
 
       if (!builtOnce || !props.streaming) {
         builtOnce = true;
@@ -393,40 +454,29 @@ export const TMermaidText = defineComponent({
       scheduler.cancelFrameTask?.(frameTaskId);
     });
 
-    const showingInitialLoadingText = computed(
-      () => status.value === "loading" && !hasVisibleRenderedOutput(lines.value),
-    );
+    const hasBox = computed(() => props.box !== false);
+
+    const sourceLines = computed<readonly string[]>(() => splitRenderedOutput(source.value));
 
     const displayLines = computed<readonly string[]>(() => {
-      if (status.value === "error") {
-        const detailText = missingRenderer.value ? props.missingDependencyText : error.value;
-        const detail = props.showErrorDetails && detailText ? `: ${detailText}` : "";
-        return splitRenderedOutput(`${props.errorText}${detail}`);
+      const snapshot = renderedSnapshot.value;
+      if (
+        snapshot &&
+        snapshot.source === source.value &&
+        hasVisibleRenderedOutput(snapshot.lines)
+      ) {
+        return snapshot.lines;
       }
-      if (status.value === "incomplete") {
-        return splitRenderedOutput(props.incompleteText);
-      }
-      if (showingInitialLoadingText.value) {
-        return splitRenderedOutput(props.loadingText);
-      }
-      return lines.value.length ? lines.value : [""];
+      return sourceLines.value;
     });
 
     const currentStyle = computed<Style>(() => {
-      if (status.value === "error") {
-        return props.errorStyle ?? props.style ?? defaultStyle.value;
-      }
-      if (status.value === "incomplete") {
-        return props.loadingStyle ?? props.style ?? defaultStyle.value;
-      }
-      if (showingInitialLoadingText.value) {
-        return props.loadingStyle ?? props.style ?? defaultStyle.value;
-      }
       return props.style ?? defaultStyle.value;
     });
 
     const fullRect = computed<Rect>(() => {
-      const height = props.h ?? Math.max(1, displayLines.value.length);
+      const contentHeight = Math.max(1, displayLines.value.length);
+      const height = props.h ?? (hasBox.value ? contentHeight + 2 : contentHeight);
       return translateRect(
         { x: props.x, y: props.y, w: props.w, h: height },
         layout.originX,
@@ -440,6 +490,99 @@ export const TMermaidText = defineComponent({
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
+    const copyLabel = computed(() => (copied.value ? props.copiedText : props.copyText));
+
+    const copyHitRect = computed<Rect>(() => {
+      if (!visible.value || !hasBox.value || !props.copyButton) return { x: 0, y: 0, w: 0, h: 0 };
+      const full = fullRect.value;
+      const fullW = Math.max(0, Math.floor(full.w));
+      if (fullW < 4) return { x: 0, y: 0, w: 0, h: 0 };
+      const labelWidth = textCellWidth(sanitizeInlineText(copyLabel.value));
+      const hitWidth = Math.min(Math.max(0, fullW - 2), labelWidth + 2);
+      if (hitWidth <= 0) return { x: 0, y: 0, w: 0, h: 0 };
+      return {
+        x: Math.floor(full.x) + Math.max(1, fullW - hitWidth - 1),
+        y: Math.floor(full.y),
+        w: hitWidth,
+        h: 1,
+      };
+    });
+
+    async function copySource(): Promise<void> {
+      const text = source.value;
+      let ok = false;
+      let copyError: unknown;
+
+      try {
+        const clipboard = (globalThis as any).navigator?.clipboard;
+        if (!clipboard || typeof clipboard.writeText !== "function") {
+          throw new Error("Clipboard not available");
+        }
+        await clipboard.writeText(text);
+        ok = true;
+      } catch (err) {
+        copyError = err;
+      }
+
+      copied.value = ok;
+      bump();
+      emit("copy", ok ? { text, ok } : { text, ok, error: copyError });
+    }
+
+    function onCopyClick(event: TerminalPointerEvent): void {
+      event.preventDefault();
+      event.stopPropagation();
+      void copySource();
+    }
+
+    useTerminalNode(() => ({
+      rect: copyHitRect.value,
+      zIndex: props.zIndex + 1,
+      visible: visible.value && hasBox.value && props.copyButton && copyHitRect.value.w > 0,
+      focusable: false,
+      handlers: {
+        click: onCopyClick,
+      },
+    }));
+
+    function overlayCells(row: string, text: string, start: number, width: number): string {
+      if (width <= 0 || start >= width) return row;
+      const clipped = sliceByCells(text, Math.max(0, width - start));
+      if (!clipped) return row;
+      return `${sliceByCells(row, start)}${clipped}${sliceByCellsRange(row, start + textCellWidth(clipped), width)}`;
+    }
+
+    function contentLine(rowIndex: number, width: number): string {
+      const src = displayLines.value[rowIndex] ?? "";
+      return padEndByCells(sliceByCells(src, width), width);
+    }
+
+    function boxRow(rowIndex: number, width: number, height: number): string {
+      if (!hasBox.value || width < 2 || height < 2) {
+        return contentLine(rowIndex, width);
+      }
+
+      const innerW = Math.max(0, width - 2);
+      if (rowIndex === 0) {
+        let row = `┌${repeatChar("─", innerW)}┐`;
+        const title = sanitizeInlineText(props.title);
+        if (title) row = overlayCells(row, ` ${title} `, 1, width);
+        if (props.copyButton) {
+          const label = sanitizeInlineText(copyLabel.value);
+          if (label) {
+            const copy = ` ${label} `;
+            const start = Math.max(1, width - textCellWidth(copy) - 1);
+            row = overlayCells(row, copy, start, width);
+          }
+        }
+        return row;
+      }
+
+      if (rowIndex === height - 1) return `└${repeatChar("─", innerW)}┘`;
+
+      return `│${contentLine(rowIndex - 1, innerW)}│`;
+    }
+
     useRenderNode(() => ({
       zIndex: props.zIndex,
       rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
@@ -452,6 +595,12 @@ export const TMermaidText = defineComponent({
         props.clear,
         status.value,
         error.value,
+        missingRenderer.value,
+        renderedSnapshot.value,
+        hasBox.value,
+        props.title,
+        props.copyButton,
+        copyLabel.value,
         documentVersion.value,
       ],
       paint: (dirtyRows) => {
@@ -463,21 +612,22 @@ export const TMermaidText = defineComponent({
           if (r.w <= 0 || r.h <= 0) return;
 
           const style = currentStyle.value;
-          const out = displayLines.value;
           const dx = Math.max(0, Math.floor(r.x - full.x));
           const fullY = Math.floor(full.y);
+          const fullW = Math.max(0, Math.floor(full.w));
+          const fullH = Math.max(0, Math.floor(full.h));
           const blank = props.clear ? spaces(r.w) : "";
 
           const paintRow = (y: number) => {
             if (y < r.y || y >= r.y + r.h) return;
 
             const rowIndex = y - fullY;
-            if (rowIndex < 0 || rowIndex >= out.length) {
+            if (rowIndex < 0 || rowIndex >= fullH) {
               if (props.clear) terminal.write(blank, { x: r.x, y, style });
               return;
             }
 
-            const src = out[rowIndex] ?? "";
+            const src = boxRow(rowIndex, fullW, fullH);
             const clipped = dx > 0 ? sliceByCellsRange(src, dx, dx + r.w) : sliceByCells(src, r.w);
             const value = props.clear ? padEndByCells(clipped, r.w) : clipped;
             if (value || props.clear) {

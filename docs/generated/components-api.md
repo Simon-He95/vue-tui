@@ -1466,10 +1466,17 @@ Import: `@simon_he/vue-tui/vue`
 | <code>missingDependencyText</code> | <code>string</code>                           | <code>&quot;Install the Mermaid renderer package and use TMermaidText from @simon_he/vue...</code> | 否   | —    |
 | <code>errorText</code>             | <code>string</code>                           | <code>&quot;Mermaid render failed&quot;</code>                                                     | 否   | —    |
 | <code>showErrorDetails</code>      | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>box</code>                   | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>title</code>                 | <code>string</code>                           | <code>&quot;mermaid&quot;</code>                                                                   | 否   | —    |
+| <code>copyButton</code>            | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>copyText</code>              | <code>string</code>                           | <code>&quot;copy&quot;</code>                                                                      | 否   | —    |
+| <code>copiedText</code>            | <code>string</code>                           | <code>&quot;copied&quot;</code>                                                                    | 否   | —    |
 
 ### Events
 
-—
+| 名称              | Payload                          | 说明 |
+| ----------------- | -------------------------------- | ---- |
+| <code>copy</code> | <code>TMermaidCopyPayload</code> | —    |
 
 ## TMermaidText
 
@@ -1508,10 +1515,17 @@ Import: `@simon_he/vue-tui/vue`
 | <code>missingDependencyText</code> | <code>string</code>                           | <code>&quot;Install the Mermaid renderer package and use TMermaidText from @simon_he/vue...</code> | 否   | —    |
 | <code>errorText</code>             | <code>string</code>                           | <code>&quot;Mermaid render failed&quot;</code>                                                     | 否   | —    |
 | <code>showErrorDetails</code>      | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>box</code>                   | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>title</code>                 | <code>string</code>                           | <code>&quot;mermaid&quot;</code>                                                                   | 否   | —    |
+| <code>copyButton</code>            | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>copyText</code>              | <code>string</code>                           | <code>&quot;copy&quot;</code>                                                                      | 否   | —    |
+| <code>copiedText</code>            | <code>string</code>                           | <code>&quot;copied&quot;</code>                                                                    | 否   | —    |
 
 ### Events
 
-—
+| 名称              | Payload                          | 说明 |
+| ----------------- | -------------------------------- | ---- |
+| <code>copy</code> | <code>TMermaidCopyPayload</code> | —    |
 
 ## TMultilineModal
 

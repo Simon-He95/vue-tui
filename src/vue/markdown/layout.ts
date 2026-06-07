@@ -520,6 +520,7 @@ function blockLayoutSignature(block: TuiMarkdownBlock): string {
     case "code_block":
       return [
         block.type,
+        block.language ?? "",
         block.lines.join("\u0002"),
         styleSignature(block.style),
         inlineSegmentsSignature(block.prefixSegments),

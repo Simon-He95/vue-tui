@@ -71,6 +71,7 @@ export {
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
+  TMermaidCopyPayload,
   TMermaidRenderer,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,

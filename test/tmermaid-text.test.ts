@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  markMermaidRenderErrorFatal,
-  TMermaidText,
-  type TMermaidRenderer,
-  type TMermaidTransientErrorClassifier,
-} from "../src/vue.js";
+import { TMermaidText, type TMermaidRenderer } from "../src/vue.js";
 import { isMissingBeautifulMermaid } from "../src/vue/mermaid/beautiful-mermaid.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
@@ -16,6 +11,37 @@ function rowText(mounted: MountedTerminal, y: number): string {
     .map((cell) => cell.ch)
     .join("")
     .trimEnd();
+}
+
+function clickCell(mounted: MountedTerminal, cellX: number, cellY: number): void {
+  mounted.container()?.dispatchEvent(
+    new MouseEvent("click", {
+      clientX: cellX * 10 + 1,
+      clientY: cellY * 20 + 1,
+      bubbles: true,
+    }),
+  );
+}
+
+function setDeterministicMetrics(mounted: MountedTerminal, cols: number, rows: number): void {
+  const container = mounted.container();
+  const events = mounted.events();
+  if (!container || !events) throw new Error("expected mounted terminal events");
+  const cellWidth = 10;
+  const cellHeight = 20;
+  events.setMetrics({ cellWidth, cellHeight });
+  container.getBoundingClientRect = () =>
+    ({
+      left: 0,
+      top: 0,
+      x: 0,
+      y: 0,
+      width: cols * cellWidth,
+      height: rows * cellHeight,
+      right: cols * cellWidth,
+      bottom: rows * cellHeight,
+      toJSON() {},
+    }) as any;
 }
 
 async function settleMermaid(mounted: MountedTerminal): Promise<void> {
@@ -45,6 +71,7 @@ describe("TMermaidText", () => {
           y: 1,
           w: 8,
           h: 3,
+          box: false,
           content: "graph LR\n  A --> B",
           code: "graph TD\n  X --> Y",
           ascii: true,
@@ -91,6 +118,7 @@ describe("TMermaidText", () => {
           y: 0,
           w: 20,
           h: 2,
+          box: false,
           content: "graph LR\n  A --> B",
           renderer,
         }),
@@ -118,6 +146,7 @@ describe("TMermaidText", () => {
           y: 0,
           w: 5,
           h: 3,
+          box: false,
           content: content.value,
           renderer,
         }),
@@ -142,7 +171,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("keeps existing one-line output style while re-rendering", async () => {
+  it("shows source while a new render is pending", async () => {
     const content = ref("graph LR\n  A --> B");
     const resolvers: Array<(value: string) => void> = [];
     const renderer: TMermaidRenderer = vi.fn(
@@ -159,6 +188,7 @@ describe("TMermaidText", () => {
           y: 0,
           w: 24,
           h: 1,
+          box: false,
           content: content.value,
           streaming: true,
           style: { fg: "greenBright" },
@@ -184,7 +214,7 @@ describe("TMermaidText", () => {
     }
 
     expect(resolvers).toHaveLength(2);
-    expect(rowText(mounted, 0)).toBe("ready");
+    expect(rowText(mounted, 0)).toBe("graph LR");
     expect(mounted.terminal.getCell(0, 0).style.fg).toBe("greenBright");
 
     resolvers[1]?.("next");
@@ -194,58 +224,27 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("renders renderer guidance when no renderer is provided", async () => {
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidText, {
-          x: 0,
-          y: 0,
-          w: 160,
-          h: 2,
-          content: "graph LR\n  A --> B",
-          errorText: "diagram error",
-          missingDependencyText: "Pass renderer or import @simon_he/vue-tui/mermaid.",
-        }),
-      120,
-      4,
-    );
-
-    await settleMermaid(mounted);
-
-    expect(rowText(mounted, 0)).toContain(
-      "diagram error: Pass renderer or import @simon_he/vue-tui/mermaid.",
-    );
-
-    mounted.unmount();
-  });
-
-  it("repaints custom missing-dependency text after entering error state", async () => {
-    const missingText = ref("install peer first");
-
+  it("keeps source when no renderer is provided", async () => {
     const mounted = await mountTerminal(
       () =>
         h(TMermaidText, {
           x: 0,
           y: 0,
           w: 80,
-          h: 1,
+          h: 2,
+          box: false,
           content: "graph LR\n  A --> B",
           errorText: "diagram error",
-          missingDependencyText: missingText.value,
+          missingDependencyText: "Pass renderer or import @simon_he/vue-tui/mermaid.",
         }),
-      80,
-      3,
+      100,
+      4,
     );
 
     await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("diagram error: install peer first");
 
-    missingText.value = "pass renderer or import @simon_he/vue-tui/mermaid";
-    await settleMermaid(mounted);
-
-    expect(rowText(mounted, 0)).toContain(
-      "diagram error: pass renderer or import @simon_he/vue-tui/mermaid",
-    );
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 1)).toBe("  A --> B");
 
     mounted.unmount();
   });
@@ -261,6 +260,7 @@ describe("TMermaidText", () => {
           y: 0,
           w: 24,
           h: 1,
+          box: false,
           content: content.value,
           streaming: true,
           renderer,
@@ -285,7 +285,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("does not classify normal render errors as missing dependency", async () => {
+  it("keeps source when final rendering fails", async () => {
     const renderer: TMermaidRenderer = vi.fn(() => {
       throw new Error("beautiful-mermaid parser rejected invalid graph syntax");
     });
@@ -297,6 +297,7 @@ describe("TMermaidText", () => {
           y: 0,
           w: 100,
           h: 2,
+          box: false,
           content: "graph LR\n  A -->",
           errorText: "diagram error",
           missingDependencyText: "Missing optional peer.",
@@ -308,22 +309,18 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
 
-    expect(rowText(mounted, 0)).toContain(
-      "diagram error: beautiful-mermaid parser rejected invalid graph syntax",
-    );
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 1)).toBe("  A -->");
+    expect(rowText(mounted, 0)).not.toContain("diagram error");
     expect(rowText(mounted, 0)).not.toContain("Missing optional peer.");
 
     mounted.unmount();
   });
 
-  it("keeps the last successful diagram while streaming source is temporarily invalid", async () => {
+  it("shows streaming source without calling the renderer until final", async () => {
     const content = ref("graph LR\n  A --> B");
-    const renderer: TMermaidRenderer = vi.fn((code) => {
-      if (code.includes("BROKEN")) {
-        throw new Error("Mermaid source is incomplete");
-      }
-      return `rendered:${code.split("\n")[1]?.trim() ?? ""}`;
-    });
+    const final = ref(false);
+    const renderer: TMermaidRenderer = vi.fn((code) => `rendered:${code.split("\n")[1]?.trim()}`);
 
     const mounted = await mountTerminal(
       () =>
@@ -331,39 +328,40 @@ describe("TMermaidText", () => {
           x: 0,
           y: 0,
           w: 48,
-          h: 1,
+          h: 2,
+          box: false,
           content: content.value,
-          final: false,
+          final: final.value,
           streaming: true,
+          incompleteText: "waiting for complete Mermaid source",
           renderer,
         }),
       64,
-      3,
+      4,
     );
 
     await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toBe("rendered:A --> B");
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 1)).toBe("  A --> B");
 
     content.value = "graph LR\n  BROKEN";
     await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toBe("rendered:A --> B");
-    expect(rowText(mounted, 0)).not.toContain("Mermaid source is incomplete");
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 1)).toBe("  BROKEN");
+    expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
 
+    final.value = true;
     content.value = "graph LR\n  A --> C";
     await settleMermaid(mounted);
+    expect(renderer).toHaveBeenCalledTimes(1);
     expect(rowText(mounted, 0)).toBe("rendered:A --> C");
 
     mounted.unmount();
   });
 
-  it("does not keep blank renderer output as the last successful streaming diagram", async () => {
-    const content = ref("graph LR\n  A --> B");
-    let mode: "blank" | "throw" = "blank";
-
-    const renderer: TMermaidRenderer = vi.fn(() => {
-      if (mode === "throw") throw new Error("Mermaid source is incomplete");
-      return "   \n\t";
-    });
+  it("keeps source when the renderer returns blank output", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => "   \n\t");
 
     const mounted = await mountTerminal(
       () =>
@@ -372,10 +370,8 @@ describe("TMermaidText", () => {
           y: 0,
           w: 80,
           h: 2,
-          content: content.value,
-          final: false,
-          streaming: true,
-          incompleteText: "waiting for complete Mermaid source",
+          box: false,
+          content: "graph LR\n  A --> B",
           renderer,
         }),
       100,
@@ -384,359 +380,63 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
 
-    mode = "throw";
-    content.value = "graph LR\n  A -->";
-    await settleMermaid(mounted);
-
-    expect(rowText(mounted, 0)).toContain("waiting for complete Mermaid source");
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 1)).toBe("  A --> B");
 
     mounted.unmount();
   });
 
-  it("shows an incomplete placeholder during streaming and a hard error after final", async () => {
-    const final = ref(false);
-    const renderer: TMermaidRenderer = vi.fn(() => {
-      throw new Error("expected node id after arrow");
+  it("draws the default mermaid box and copies source text", async () => {
+    const source = "graph LR\n  A --> B";
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const onCopy = vi.fn();
+    const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
     });
 
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidText, {
-          x: 0,
-          y: 0,
-          w: 96,
-          h: 2,
-          content: "graph LR\n  A -->",
-          final: final.value,
-          streaming: true,
-          incompleteText: "waiting for complete Mermaid source",
-          errorText: "diagram failed",
-          renderer,
-        }),
-      120,
-      4,
-    );
-
-    await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("waiting for complete Mermaid source");
-    expect(rowText(mounted, 0)).not.toContain("expected node id after arrow");
-
-    final.value = true;
-    await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("diagram failed: expected node id after arrow");
-
-    mounted.unmount();
-  });
-
-  it("re-renders when streaming error classification changes", async () => {
-    const streaming = ref(false);
-    const renderer: TMermaidRenderer = vi.fn(() => {
-      throw new Error("source incomplete");
-    });
-
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidText, {
-          x: 0,
-          y: 0,
-          w: 96,
-          h: 1,
-          content: "graph LR\n  A -->",
-          final: false,
-          streaming: streaming.value,
-          incompleteText: "waiting for complete Mermaid source",
-          errorText: "diagram failed",
-          renderer,
-        }),
-      120,
-      3,
-    );
-
-    await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("diagram failed: source incomplete");
-
-    streaming.value = true;
-    await settleMermaid(mounted);
-
-    expect(rowText(mounted, 0)).toContain("waiting for complete Mermaid source");
-    expect(rowText(mounted, 0)).not.toContain("source incomplete");
-    expect(renderer).toHaveBeenCalledTimes(2);
-
-    mounted.unmount();
-  });
-
-  it("does not hide fatal renderer integration errors during streaming", async () => {
-    const renderer: TMermaidRenderer = vi.fn(() => {
-      throw markMermaidRenderErrorFatal(new Error("Install beautiful-mermaid first"));
-    });
-
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidText, {
-          x: 0,
-          y: 0,
-          w: 96,
-          h: 2,
-          content: "graph LR\n  A --> B",
-          final: false,
-          streaming: true,
-          incompleteText: "waiting for complete Mermaid source",
-          errorText: "diagram failed",
-          renderer,
-        }),
-      120,
-      4,
-    );
-
-    await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("diagram failed: Install beautiful-mermaid first");
-    expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
-
-    mounted.unmount();
-  });
-
-  it("does not hide fatal renderer integration errors from causes during streaming", async () => {
-    const renderer: TMermaidRenderer = vi.fn(() => {
-      throw Object.assign(new Error("renderer wrapper failed"), {
-        cause: markMermaidRenderErrorFatal(new Error("missing renderer setup")),
-      });
-    });
-
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidText, {
-          x: 0,
-          y: 0,
-          w: 96,
-          h: 2,
-          content: "graph LR\n  A --> B",
-          final: false,
-          streaming: true,
-          incompleteText: "waiting for complete Mermaid source",
-          errorText: "diagram failed",
-          renderer,
-        }),
-      120,
-      4,
-    );
-
-    await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("diagram failed: renderer wrapper failed");
-    expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
-
-    mounted.unmount();
-  });
-
-  it("does not hide a missing beautiful-mermaid peer as a streaming transient error", async () => {
-    vi.resetModules();
-    vi.doMock("beautiful-mermaid", () => ({
-      renderMermaidASCII: vi.fn(() => {
-        throw Object.assign(
-          new Error("Cannot find package 'beautiful-mermaid' imported from /app"),
-          { code: "ERR_MODULE_NOT_FOUND" },
-        );
-      }),
-    }));
-
-    const { TMermaidText: TMermaidTextWithBeautifulRenderer } = await import("../src/mermaid.js");
-
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidTextWithBeautifulRenderer, {
-          x: 0,
-          y: 0,
-          w: 140,
-          h: 2,
-          content: "graph LR\n  A --> B",
-          final: false,
-          streaming: true,
-          incompleteText: "waiting for complete Mermaid source",
-          errorText: "diagram failed",
-        }),
-      160,
-      4,
-    );
-
-    await settleMermaid(mounted);
-
-    expect(rowText(mounted, 0)).toContain("diagram failed: Install beautiful-mermaid");
-    expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
-
-    mounted.unmount();
-    vi.doUnmock("beautiful-mermaid");
-    vi.resetModules();
-  });
-
-  it("does not hide coded renderer setup errors as streaming transient errors", async () => {
-    const renderer: TMermaidRenderer = vi.fn(() => {
-      throw Object.assign(new Error("renderer setup failed"), {
-        code: "VUE_TUI_MERMAID_RENDERER_SETUP",
-      });
-    });
-
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidText, {
-          x: 0,
-          y: 0,
-          w: 120,
-          h: 2,
-          content: "graph LR\n  A --> B",
-          final: false,
-          streaming: true,
-          errorText: "diagram failed",
-          renderer,
-        }),
-      140,
-      4,
-    );
-
-    await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("diagram failed: renderer setup failed");
-
-    mounted.unmount();
-  });
-
-  it("does not hide coded renderer setup errors from causes as streaming transient errors", async () => {
-    const renderer: TMermaidRenderer = vi.fn(() => {
-      throw Object.assign(new Error("renderer wrapper failed"), {
-        cause: Object.assign(new Error("renderer setup failed"), {
-          code: "VUE_TUI_MERMAID_RENDERER_SETUP",
-        }),
-      });
-    });
-
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidText, {
-          x: 0,
-          y: 0,
-          w: 120,
-          h: 2,
-          content: "graph LR\n  A --> B",
-          final: false,
-          streaming: true,
-          errorText: "diagram failed",
-          renderer,
-        }),
-      140,
-      4,
-    );
-
-    await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("diagram failed: renderer wrapper failed");
-
-    mounted.unmount();
-  });
-
-  it("can mark frozen renderer errors as fatal during non-final streaming", async () => {
-    const frozenError = Object.freeze(new Error("renderer setup failed"));
-    const renderer: TMermaidRenderer = vi.fn(() => {
-      throw markMermaidRenderErrorFatal(frozenError);
-    });
-
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidText, {
-          x: 0,
-          y: 0,
-          w: 96,
-          h: 2,
-          content: "graph LR\n  A --> B",
-          final: false,
-          streaming: true,
-          incompleteText: "waiting for complete Mermaid source",
-          errorText: "diagram failed",
-          renderer,
-        }),
-      120,
-      4,
-    );
-
-    await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("diagram failed: renderer setup failed");
-    expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
-
-    mounted.unmount();
-  });
-
-  it("allows callers to override transient Mermaid error classification", async () => {
-    const contexts: Parameters<TMermaidTransientErrorClassifier>[1][] = [];
-    const renderer: TMermaidRenderer = vi.fn(() => {
-      throw new Error("custom permanent Mermaid error");
-    });
-    const isTransientError: TMermaidTransientErrorClassifier = (_error, context) => {
-      contexts.push(context);
-      return false;
-    };
-
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidText, {
-          x: 0,
-          y: 0,
-          w: 96,
-          h: 2,
-          content: "graph LR\n  A --> B",
-          final: false,
-          streaming: true,
-          errorText: "diagram failed",
-          renderer,
-          isTransientError,
-        }),
-      120,
-      4,
-    );
-
-    await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("diagram failed: custom permanent Mermaid error");
-    expect(contexts).toEqual([
-      {
-        code: "graph LR\n  A --> B",
-        final: false,
-        streaming: true,
-      },
-    ]);
-
-    mounted.unmount();
-  });
-
-  it("does not hide beautiful-mermaid loader setup errors during streaming", async () => {
-    vi.resetModules();
-    vi.doMock("beautiful-mermaid", () => {
-      throw Object.assign(
-        new Error(
-          "Cannot find package 'elkjs' imported from /app/node_modules/beautiful-mermaid/dist/index.js",
-        ),
-        { code: "ERR_MODULE_NOT_FOUND" },
+    try {
+      const cols = 32;
+      const rows = 5;
+      const mounted = await mountTerminal(
+        () =>
+          h(TMermaidText, {
+            x: 0,
+            y: 0,
+            w: 28,
+            content: source,
+            renderer,
+            onCopy,
+          }),
+        cols,
+        rows,
       );
-    });
 
-    const { TMermaidText: TMermaidTextWithBeautifulRenderer } = await import("../src/mermaid.js");
-    const mounted = await mountTerminal(
-      () =>
-        h(TMermaidTextWithBeautifulRenderer, {
-          x: 0,
-          y: 0,
-          w: 120,
-          h: 2,
-          content: "graph LR\n  A -->",
-          final: false,
-          streaming: true,
-          incompleteText: "waiting for complete Mermaid source",
-          errorText: "diagram failed",
-        }),
-      140,
-      4,
-    );
+      await settleMermaid(mounted);
 
-    await settleMermaid(mounted);
-    expect(rowText(mounted, 0)).toContain("diagram failed:");
-    expect(rowText(mounted, 0)).not.toContain("waiting for complete Mermaid source");
+      expect(rowText(mounted, 0)).toContain("mermaid");
+      expect(rowText(mounted, 0)).toContain("copy");
+      expect(rowText(mounted, 1)).toContain("rendered diagram");
 
-    mounted.unmount();
-    vi.doUnmock("beautiful-mermaid");
-    vi.resetModules();
+      setDeterministicMetrics(mounted, cols, rows);
+      clickCell(mounted, 22, 0);
+      await settleMermaid(mounted);
+
+      expect(writeText).toHaveBeenCalledWith(source);
+      expect(onCopy).toHaveBeenCalledWith({ text: source, ok: true });
+      expect(rowText(mounted, 0)).toContain("copied");
+
+      mounted.unmount();
+    } finally {
+      if (originalClipboard) {
+        Object.defineProperty(globalThis.navigator, "clipboard", originalClipboard);
+      } else {
+        delete (globalThis.navigator as any).clipboard;
+      }
+    }
   });
 
   it("the mermaid entry TMermaidText supplies the beautiful-mermaid renderer", async () => {
@@ -756,6 +456,7 @@ describe("TMermaidText", () => {
           y: 0,
           w: 40,
           h: 1,
+          box: false,
           content: "graph LR\n  A --> B",
         }),
       40,
@@ -884,6 +585,7 @@ describe("TMermaidText", () => {
           y: 0,
           w: 12,
           h: 1,
+          box: false,
           content: content.value,
           renderer,
         }),

@@ -242,6 +242,7 @@
         "TLogViewVisualIndexStatus",
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidCopyPayload",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -303,6 +304,7 @@
       "typeExports": [
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidCopyPayload",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -650,6 +652,7 @@
       "typeExports": [
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidCopyPayload",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -883,6 +886,7 @@
         "TLinkifySegment",
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidCopyPayload",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -5892,9 +5896,44 @@
           "type": "boolean",
           "required": false,
           "defaultValue": "true"
+        },
+        {
+          "name": "box",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"mermaid\""
+        },
+        {
+          "name": "copyButton",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "copyText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"copy\""
+        },
+        {
+          "name": "copiedText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"copied\""
         }
       ],
-      "events": []
+      "events": [
+        {
+          "name": "copy",
+          "payload": "TMermaidCopyPayload"
+        }
+      ]
     },
     "TMermaidText": {
       "entrypoint": "@simon_he/vue-tui/vue",
@@ -6046,9 +6085,44 @@
           "type": "boolean",
           "required": false,
           "defaultValue": "true"
+        },
+        {
+          "name": "box",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"mermaid\""
+        },
+        {
+          "name": "copyButton",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "copyText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"copy\""
+        },
+        {
+          "name": "copiedText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"copied\""
         }
       ],
-      "events": []
+      "events": [
+        {
+          "name": "copy",
+          "payload": "TMermaidCopyPayload"
+        }
+      ]
     },
     "TMultilineModal": {
       "entrypoint": "@simon_he/vue-tui/vue",

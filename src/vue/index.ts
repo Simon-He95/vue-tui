@@ -104,6 +104,7 @@ export { markMermaidRenderErrorFatal, TMermaid, TMermaidText } from "./component
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
+  TMermaidCopyPayload,
   TMermaidRenderer,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
