@@ -1,4 +1,4 @@
-import type { Terminal } from "../core/types.js";
+import type { Terminal, TerminalSize } from "../core/types.js";
 import {
   nowTerminalGraphicTraceTime,
   recordTerminalGraphicTrace,
@@ -443,6 +443,29 @@ export function normalizeTerminalGraphicSize(
   if (w * h > MAX_TERMINAL_GRAPHIC_CELLS) return null;
 
   return { width: w, height: h };
+}
+
+export function canDrawTerminalGraphicRect(
+  rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+  size: TerminalSize,
+): boolean {
+  const x = Math.floor(rect.x);
+  const y = Math.floor(rect.y);
+  const graphicSize = normalizeTerminalGraphicSize(rect.w, rect.h);
+  const cols = Math.max(0, Math.floor(size.cols));
+  const rows = Math.max(0, Math.floor(size.rows));
+
+  return (
+    graphicSize != null &&
+    cols > 0 &&
+    rows > 0 &&
+    Number.isFinite(x) &&
+    Number.isFinite(y) &&
+    x >= 0 &&
+    y >= 0 &&
+    x + graphicSize.width <= cols &&
+    y + graphicSize.height <= rows
+  );
 }
 
 function withoutNestedEscapes(body: string): boolean {

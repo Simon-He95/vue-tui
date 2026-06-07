@@ -24,6 +24,7 @@ import {
   subscribeTerminalGraphicsOutput,
 } from "../../renderer/terminal-graphics.js";
 import {
+  canDrawTerminalGraphicRect,
   createKittyDeleteGraphicsSequence,
   stableTerminalGraphicNumericId,
   isTerminalGraphicsProtocol,
@@ -349,7 +350,7 @@ export const TAgentTerminalGraphic = defineComponent({
   props: tAgentTerminalGraphicProps,
   setup(props) {
     const instance = getCurrentInstance();
-    const { terminal, defaultStyle, scheduler, widthProvider } = useTerminal();
+    const { terminal, defaultStyle, scheduler, widthProvider, render } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const graphicsActivity = inject(TerminalGraphicsActivityKey, null);
@@ -373,6 +374,8 @@ export const TAgentTerminalGraphic = defineComponent({
     const rawClearPendingRepaint = shallowRef<LastDrawnGraphic | null>(null);
     const rawDrawRejectedKey = shallowRef<string | null>(null);
     const reservedTerminalGraphicSize = shallowRef<ReservedTerminalGraphicSize | null>(null);
+    const terminalSizeVersion = shallowRef(0);
+    const renderNodeId = shallowRef<string | null>(null);
     let lastRawSkipScrollKey = "";
     let lastDeferTraceKey = "";
 
@@ -384,6 +387,9 @@ export const TAgentTerminalGraphic = defineComponent({
     const graphicsOutputVersion = shallowRef(getTerminalGraphicsOutputVersion(terminal));
     const unsubscribeGraphicsOutput = subscribeTerminalGraphicsOutput(terminal, () => {
       graphicsOutputVersion.value = getTerminalGraphicsOutputVersion(terminal);
+    });
+    const unsubscribeTerminalResize = terminal.on("resize", () => {
+      terminalSizeVersion.value++;
     });
     const fallbackText = () => props.fallback ?? props.content;
     const contentIdentity = computed(() => `${props.content.length}:${smallHash(props.content)}`);
@@ -766,16 +772,25 @@ export const TAgentTerminalGraphic = defineComponent({
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
+    function rawRectFitsTerminalViewport(rect: Rect): boolean {
+      return canDrawTerminalGraphicRect(rect, terminal.size());
+    }
+
+    function rawCoveredByHigherRenderNode(rect: Rect = fullRect.value): boolean {
+      const id = renderNodeId.value;
+      return id != null && render.isRectCoveredByHigherNode(id, rect);
+    }
+
     const rawCanRender = computed(() => {
       void graphicsOutputVersion.value;
+      void terminalSizeVersion.value;
       const current = graphic.value;
       const output = graphicsOutput();
       const full = fullRect.value;
       const abs = absRect.value;
-      const size = normalizeTerminalGraphicSize(full.w, full.h);
       return (
         current?.type === "terminal" &&
-        size != null &&
+        rawRectFitsTerminalViewport(full) &&
         Boolean(output?.capabilities.supported) &&
         output?.capabilities.preferredProtocol === current.protocol &&
         abs.x === full.x &&
@@ -822,9 +837,8 @@ export const TAgentTerminalGraphic = defineComponent({
       const output = graphicsOutput();
       const full = fullRect.value;
       const abs = absRect.value;
-      const size = normalizeTerminalGraphicSize(full.w, full.h);
       return (
-        size != null &&
+        rawRectFitsTerminalViewport(full) &&
         hasPaintableRect() &&
         Boolean(output?.capabilities.supported) &&
         abs.x === full.x &&
@@ -870,7 +884,10 @@ export const TAgentTerminalGraphic = defineComponent({
     function resolveRendererContext(signal: AbortSignal): TAgentTerminalGraphicRendererContext {
       const capabilities = currentCapabilities();
       const visibleNow = hasPaintableRect();
-      const rawVisible = rawOutputCanRenderValue.value && !rawSuppressedByScroll.value;
+      const rawVisible =
+        rawOutputCanRenderValue.value &&
+        !rawSuppressedByScroll.value &&
+        !rawCoveredByHigherRenderNode();
       return {
         kind: props.kind,
         width: props.w,
@@ -1054,17 +1071,18 @@ export const TAgentTerminalGraphic = defineComponent({
     onBeforeUnmount(() => {
       alive = false;
       renderVersion++;
+      unsubscribeTerminalResize();
       unsubscribeGraphicsOutput();
       abortCurrentRender("unmount");
       scheduler.cancelFrameTask?.(frameTaskId);
       queueClearLastGraphic();
     });
 
-    const displayLines = computed<readonly string[]>(() => {
+    function resolveDisplayLines(rawPlaceholderAllowed: boolean): readonly string[] {
       if (showingInitialLoadingText.value) return splitTextOutput(props.loadingText);
       const current = graphic.value;
       if (!current) return splitTextOutput(fallbackText());
-      if (current.type === "terminal" && rawCanQueue.value) {
+      if (current.type === "terminal" && rawPlaceholderAllowed) {
         const clearSequence = resolveClearSequence(current);
         const drawKey = terminalDrawKey(current, fullRect.value, clearSequence);
         if (rawDrawRejectedKey.value !== drawKey) return markRaw([""]);
@@ -1074,6 +1092,10 @@ export const TAgentTerminalGraphic = defineComponent({
       return text.trim().length > 0 && !hasVisibleOutput(lines)
         ? splitTextOutput(fallbackText())
         : lines;
+    }
+
+    const displayLines = computed<readonly string[]>(() => {
+      return resolveDisplayLines(rawCanQueue.value);
     });
 
     const currentStyle = computed<Style>(() => {
@@ -1084,7 +1106,7 @@ export const TAgentTerminalGraphic = defineComponent({
       return props.style ?? defaultStyle.value;
     });
 
-    useRenderNode(() => ({
+    const renderNode = useRenderNode(() => ({
       zIndex: props.zIndex,
       rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
       deps: [
@@ -1106,6 +1128,7 @@ export const TAgentTerminalGraphic = defineComponent({
         isParentScrolling.value,
         graphicsActivityVersion.value,
         graphicsOutputVersion.value,
+        terminalSizeVersion.value,
       ],
       paint: (dirtyRows) => {
         withTextWidthProvider(widthProvider, () => {
@@ -1122,17 +1145,19 @@ export const TAgentTerminalGraphic = defineComponent({
           }
 
           const style = currentStyle.value;
-          const out = displayLines.value;
           const dx = Math.max(0, Math.floor(r.x - full.x));
           const fullY = Math.floor(full.y);
           const current = graphic.value;
           const output = graphicsOutput();
+          const rawCanQueueForPaint =
+            current?.type === "terminal" &&
+            rawCanQueue.value &&
+            !rawCoveredByHigherRenderNode(full);
+          const out = rawCanQueueForPaint ? displayLines.value : resolveDisplayLines(false);
           const clearingRawGraphic =
             rawClearPendingRepaint.value != null || lastDrawnGraphic.value != null;
           const clearOwnedRegion =
-            props.clear ||
-            clearingRawGraphic ||
-            (current?.type === "terminal" && rawCanQueue.value);
+            props.clear || clearingRawGraphic || Boolean(rawCanQueueForPaint);
           const blank = clearOwnedRegion ? spaces(r.w) : "";
 
           const paintRow = (y: number) => {
@@ -1160,7 +1185,7 @@ export const TAgentTerminalGraphic = defineComponent({
             current?.type === "terminal" &&
             output?.capabilities.supported &&
             output.capabilities.preferredProtocol === current.protocol &&
-            rawCanQueue.value
+            rawCanQueueForPaint
           ) {
             if (queueDrawGraphic(output, current, full)) {
               trace("raw-draw", {
@@ -1182,6 +1207,13 @@ export const TAgentTerminalGraphic = defineComponent({
         });
       },
     }));
+    watch(
+      renderNode.id,
+      (id) => {
+        renderNodeId.value = id;
+      },
+      { immediate: true },
+    );
 
     watch(
       [

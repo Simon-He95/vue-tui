@@ -3765,32 +3765,279 @@ describe("TAgentTerminalGraphic", () => {
     const sequence = createKittyGraphicsSequence("QUJD");
 
     writes.length = 0;
-    graphics?.queue({
-      id: "offscreen",
-      x: 99,
-      y: 0,
-      w: 4,
-      h: 1,
-      protocol: "kitty",
-      sequence,
-    });
+    expect(
+      graphics?.queue({
+        id: "active-then-offscreen",
+        x: 1,
+        y: 0,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+      }),
+    ).toBe(true);
+    expect(writes.join("")).toContain(sequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(1);
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "active-then-offscreen",
+        x: 99,
+        y: 0,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+      }),
+    ).toBe(false);
+    expect(writes.join("")).not.toContain(sequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "offscreen",
+        x: 99,
+        y: 0,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+      }),
+    ).toBe(false);
 
     expect(writes.join("")).not.toContain(sequence);
     expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
 
     writes.length = 0;
-    graphics?.queue({
-      id: "partially-visible",
-      x: -2,
-      y: 0,
-      w: 4,
-      h: 1,
-      protocol: "kitty",
-      sequence,
-    });
+    expect(
+      graphics?.queue({
+        id: "partially-visible-left",
+        x: -2,
+        y: 0,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+      }),
+    ).toBe(false);
 
     expect(writes.join("")).not.toContain(sequence);
     expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "partially-visible-right",
+        x: 8,
+        y: 0,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+      }),
+    ).toBe(false);
+
+    expect(writes.join("")).not.toContain(sequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "partially-visible-bottom",
+        x: 0,
+        y: 3,
+        w: 4,
+        h: 2,
+        protocol: "kitty",
+        sequence,
+      }),
+    ).toBe(false);
+
+    expect(writes.join("")).not.toContain(sequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it.each([
+    { name: "negative x", x: -1, y: 0, w: 4, h: 1, row: 0 },
+    { name: "right edge", x: 8, y: 0, w: 4, h: 1, row: 0 },
+    { name: "bottom edge", x: 0, y: 3, w: 4, h: 2, row: 3 },
+  ])("shows fallback when terminal graphic is partially visible at $name", async (entry) => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 10,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      fallback: "fb",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: entry.x,
+            y: entry.y,
+            w: entry.w,
+            h: entry.h,
+            content: "image.png",
+            fallback: "fb",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 10, rows: 4, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(writes.join("")).not.toContain(sequence);
+    expect(rowText(app, entry.row)).not.toBe("");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("shows fallback after resize makes an active terminal graphic partially visible", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 12,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      fallback: "fb",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 2,
+            y: 0,
+            w: 8,
+            h: 1,
+            content: "image.png",
+            fallback: "fb",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 12, rows: 4, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    app.terminal.resize(6, 4);
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(writes.join("")).not.toContain(sequence);
+    expect(rowText(app, 0)).toContain("fb");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("falls back when a higher zIndex render node overlaps a terminal graphic", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 16,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      fallback: "fallback",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h("span", [
+            h(TAgentTerminalGraphic, {
+              x: 0,
+              y: 0,
+              w: 8,
+              h: 1,
+              content: "image.png",
+              fallback: "fallback",
+              renderer,
+            }),
+            h(TText, { x: 0, y: 0, zIndex: 10, w: 3, value: "TOP" }),
+          ]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 16, rows: 4, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(writes.join("")).not.toContain(sequence);
+    expect(rowText(app, 0)).toBe("TOPlback");
 
     stdout.dispose();
     app.dispose();

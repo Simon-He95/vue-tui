@@ -100,6 +100,7 @@ export type RenderManager = Readonly<{
    * For rect-bound nodes, rows outside the node rect are ignored.
    */
   markDirtyRows: (id: string, rows: readonly number[]) => boolean;
+  isRectCoveredByHigherNode: (id: string, rect: RenderRect) => boolean;
   unregister: (id: string) => void;
   render: (options?: { activePlanes?: TerminalRenderPlanes | null }) => RenderStats | null;
   dispose: () => void;
@@ -158,6 +159,11 @@ function sameRect(a: RenderRect | null, b: RenderRect | null): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
   return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
+function rectsIntersect(a: RenderRect, b: RenderRect): boolean {
+  if (isEmptyRect(a) || isEmptyRect(b)) return false;
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 export function createRenderManager(
@@ -582,6 +588,26 @@ export function createRenderManager(
     return markRowsForNode(node, rows);
   }
 
+  function isRectCoveredByHigherNode(id: string, rect: RenderRect): boolean {
+    if (disposed || isEmptyRect(rect)) return false;
+    const owner = nodes.get(id);
+    if (!owner) return false;
+    const ownerPlaneIndex = TERMINAL_RENDER_PLANES.indexOf(owner.plane);
+    if (ownerPlaneIndex < 0) return false;
+
+    for (const candidate of nodes.values()) {
+      if (candidate.id === id || !candidate.rect || isEmptyRect(candidate.rect)) continue;
+      if (!rectsIntersect(rect, candidate.rect)) continue;
+
+      const candidatePlaneIndex = TERMINAL_RENDER_PLANES.indexOf(candidate.plane);
+      if (candidatePlaneIndex > ownerPlaneIndex) return true;
+      if (candidatePlaneIndex === ownerPlaneIndex && compareNodes(owner, candidate) < 0)
+        return true;
+    }
+
+    return false;
+  }
+
   function unregister(id: string): void {
     if (disposed) return;
     const prev = nodes.get(id);
@@ -864,6 +890,7 @@ export function createRenderManager(
     register,
     update,
     markDirtyRows,
+    isRectCoveredByHigherNode,
     unregister,
     render,
     dispose() {
