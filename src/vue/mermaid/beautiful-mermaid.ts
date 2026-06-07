@@ -194,19 +194,25 @@ export const TMermaidText = defineComponent({
     copy: (_payload: TMermaidCopyPayload) => true,
   },
   setup(props, { attrs, emit, slots }) {
-    return () =>
-      h(
+    return () => {
+      const renderer = props.renderer ?? beautifulMermaidRenderer;
+      const shouldRenderSource =
+        props.shouldRenderSource ??
+        (props.renderer ? undefined : isSimpleMermaidFlowchartSource);
+
+      return h(
         TBaseMermaidText,
         {
           ...attrs,
           ...props,
-          renderer: props.renderer ?? beautifulMermaidRenderer,
+          renderer,
           isTransientError: props.isTransientError ?? isTransientBeautifulMermaidRenderError,
-          shouldRenderSource: props.shouldRenderSource ?? isSimpleMermaidFlowchartSource,
+          shouldRenderSource,
           onCopy: (payload: TMermaidCopyPayload) => emit("copy", payload),
         },
         slots,
       );
+    };
   },
 });
 

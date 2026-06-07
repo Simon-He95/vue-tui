@@ -447,6 +447,47 @@ describe("TMermaidText", () => {
     }
   });
 
+  it("does not apply the built-in simple-flowchart eligibility to a custom renderer in the mermaid entry wrapper", async () => {
+    vi.resetModules();
+
+    try {
+      const { TMermaidText: TMermaidTextWithBeautifulRenderer } = await import("../src/mermaid.js");
+
+      const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
+      const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
+
+      const mounted = await mountTerminal(
+        () =>
+          h(TMermaidTextWithBeautifulRenderer, {
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 1,
+            box: false,
+            content: source,
+            renderer,
+          }),
+        48,
+        3,
+      );
+
+      await settleMermaid(mounted);
+
+      expect(renderer).toHaveBeenCalledTimes(1);
+      expect(renderer).toHaveBeenCalledWith(
+        source,
+        expect.objectContaining({
+          colorMode: "none",
+        }),
+      );
+      expect(rowText(mounted, 0)).toBe("sequence rendered");
+
+      mounted.unmount();
+    } finally {
+      vi.resetModules();
+    }
+  });
+
   it("only treats plain id-to-id flowchart edges as simple Mermaid flowcharts", () => {
     expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B\nB --- C")).toBe(true);
     expect(isSimpleMermaidFlowchartSource("flowchart TD; A --> B; B --- C")).toBe(true);
