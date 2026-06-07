@@ -374,7 +374,40 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("keeps non-flowchart Mermaid source by default even with a custom renderer", async () => {
+  it("lets the renderer-agnostic component render non-flowchart source with a custom renderer", async () => {
+    const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
+    const renderer: TMermaidRenderer = vi.fn((code) => `rendered:${code.split("\n")[0]}`);
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 1,
+          box: false,
+          content: source,
+          renderer,
+        }),
+      48,
+      3,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(renderer).toHaveBeenCalledWith(
+      source,
+      expect.objectContaining({
+        colorMode: "none",
+      }),
+    );
+    expect(rowText(mounted, 0)).toBe("rendered:sequenceDiagram");
+
+    mounted.unmount();
+  });
+
+  it("allows renderer-agnostic callers to opt into simple-flowchart eligibility", async () => {
     const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
     const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
 
@@ -388,9 +421,10 @@ describe("TMermaidText", () => {
           box: false,
           content: source,
           renderer,
+          shouldRenderSource: isSimpleMermaidFlowchartSource,
         }),
       48,
-      3,
+      5,
     );
 
     await settleMermaid(mounted);
