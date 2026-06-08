@@ -858,9 +858,9 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 >
 > 需要安装依赖后零配置使用内置 renderer 时，请从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `TMermaidText` / `TMermaid`。
 >
-> `@simon_he/vue-tui/mermaid` / `@simon_he/vue-tui/agent/mermaid` 默认使用 size guard + simple-flowchart-only guard；`final=true` 后仅对简单 flowchart 尝试内置 `beautiful-mermaid` 渲染。renderer 成功时原子替换为渲染结果；复杂 Mermaid、大 Mermaid、renderer 失败、超时或返回空白时保持源码显示。
+> Mermaid 组件默认使用 size guard + simple-flowchart-only guard；`final=true` 后仅对简单 flowchart 尝试渲染。renderer 成功时原子替换为渲染结果；复杂 Mermaid、大 Mermaid、renderer 失败、超时或返回空白时保持源码显示。
 >
-> `@simon_he/vue-tui/vue` 和 `@simon_he/vue-tui/agent` 导出的 renderer-agnostic `TMermaidText` 不会默认套 simple-flowchart guard；传入自定义 `renderer` 后会在 `final=true` 时尝试渲染。需要跳过复杂 source 时传入 `shouldRenderSource={isSimpleMermaidFlowchartSource}`。
+> 需要显式让自定义 renderer 尝试复杂 Mermaid 时，传入 `shouldRenderSource={() => true}`。
 >
 > 注意：Markdown 里的 `mermaid` code fence 当前只保留 `code_block.language` metadata，尚未自动走 `TMermaidText` 的 async render/cache 路径。
 

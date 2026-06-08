@@ -462,7 +462,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("lets an explicit custom renderer render complex Mermaid source by default", async () => {
+  it("keeps complex Mermaid source by default even with a custom renderer", async () => {
     const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
     const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
 
@@ -483,14 +483,10 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
 
-    expect(renderer).toHaveBeenCalledTimes(1);
-    expect(renderer).toHaveBeenCalledWith(
-      source,
-      expect.objectContaining({
-        colorMode: "none",
-      }),
-    );
-    expect(rowText(mounted, 0)).toBe("sequence rendered");
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("sequenceDiagram");
+    expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
+    expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
 
     mounted.unmount();
   });
@@ -599,7 +595,7 @@ describe("TMermaidText", () => {
     }
   });
 
-  it("lets a custom renderer in the mermaid wrapper render complex Mermaid by default", async () => {
+  it("keeps complex Mermaid source by default in the mermaid wrapper even with a custom renderer", async () => {
     vi.resetModules();
 
     try {
@@ -625,8 +621,10 @@ describe("TMermaidText", () => {
 
       await settleMermaid(mounted);
 
-      expect(renderer).toHaveBeenCalledTimes(1);
-      expect(rowText(mounted, 0)).toBe("sequence rendered");
+      expect(renderer).not.toHaveBeenCalled();
+      expect(rowText(mounted, 0)).toBe("sequenceDiagram");
+      expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
+      expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
 
       mounted.unmount();
     } finally {
@@ -1701,7 +1699,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("does not expose copy hit node when explicit height is too small to draw the box", async () => {
+  it("does not draw the box or expose copy hit node when explicit height has no content row", async () => {
     const source = "graph LR\n  A --> B";
     const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -1715,7 +1713,7 @@ describe("TMermaidText", () => {
           x: 0,
           y: 0,
           w: 28,
-          h: 1,
+          h: 2,
           content: source,
           renderer,
           onCopy,
@@ -1734,6 +1732,7 @@ describe("TMermaidText", () => {
     await settleMermaid(mounted);
 
     expect(rowText(mounted, 0)).toBe("rendered diagram");
+    expect(rowText(mounted, 1)).toBe("");
 
     setDeterministicMetrics(mounted, cols, rows);
     clickCell(mounted, 22, 0);

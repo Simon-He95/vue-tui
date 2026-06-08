@@ -195,11 +195,8 @@ export const TMermaidText = defineComponent({
   },
   setup(props, { attrs, emit, slots }) {
     return () => {
-      const usesDefaultBeautifulRenderer = props.renderer == null;
       const renderer = props.renderer ?? beautifulMermaidRenderer;
-      const shouldRenderSource =
-        props.shouldRenderSource ??
-        (usesDefaultBeautifulRenderer ? isSimpleMermaidFlowchartSource : undefined);
+      const shouldRenderSource = props.shouldRenderSource ?? isSimpleMermaidFlowchartSource;
 
       return h(
         TBaseMermaidText,

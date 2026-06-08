@@ -635,8 +635,7 @@ export const TMermaidText = defineComponent({
     function shouldSkipRender(code: string): boolean {
       if (shouldSkipRenderForSize(code)) return true;
 
-      const shouldRenderSource = props.shouldRenderSource;
-      if (!shouldRenderSource) return false;
+      const shouldRenderSource = props.shouldRenderSource ?? isSimpleMermaidFlowchartSource;
 
       try {
         return !shouldRenderSource(code, {
@@ -898,7 +897,7 @@ export const TMermaidText = defineComponent({
     }>;
 
     function canDrawBox(width: number, height: number): boolean {
-      return hasBox.value && Math.floor(width) >= 2 && Math.floor(height) >= 2;
+      return hasBox.value && Math.floor(width) >= 2 && Math.floor(height) >= 3;
     }
 
     function segmentCells(text: string): number {
