@@ -1,7 +1,6 @@
 import { defineComponent, h } from "vue";
 import {
   TMermaidText as TBaseMermaidText,
-  isSimpleMermaidFlowchartSource,
   markMermaidRenderErrorFatal,
   tMermaidTextProps,
   type TMermaidCopyPayload,
@@ -194,26 +193,18 @@ export const TMermaidText = defineComponent({
     copy: (_payload: TMermaidCopyPayload) => true,
   },
   setup(props, { attrs, emit, slots }) {
-    return () => {
-      const usesDefaultBeautifulRenderer = props.renderer == null;
-      const renderer = props.renderer ?? beautifulMermaidRenderer;
-      const shouldRenderSource =
-        props.shouldRenderSource ??
-        (usesDefaultBeautifulRenderer ? isSimpleMermaidFlowchartSource : undefined);
-
-      return h(
+    return () =>
+      h(
         TBaseMermaidText,
         {
           ...attrs,
           ...props,
-          renderer,
-          shouldRenderSource,
+          renderer: props.renderer ?? beautifulMermaidRenderer,
           isTransientError: props.isTransientError ?? isTransientBeautifulMermaidRenderError,
           onCopy: (payload: TMermaidCopyPayload) => emit("copy", payload),
         },
         slots,
       );
-    };
   },
 });
 

@@ -339,6 +339,7 @@ describe("public API surface", () => {
         "detectTerminalGraphicsCapabilities",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
+        "isSimpleMermaidFlowchartSource",
         "markMermaidRenderErrorFatal",
         "parseTLogAnnotatedText",
         "resolveTLogLinksPanelTheme",

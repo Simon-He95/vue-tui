@@ -61,28 +61,41 @@ function createUnsupportedClipboard(): ClipboardApi {
   };
 }
 
+function browserClipboard(): any {
+  return typeof navigator !== "undefined" ? (navigator as any).clipboard : undefined;
+}
+
 function createClipboard(kind: RuntimeEnv): ClipboardApi {
-  if (kind === "browser") {
-    const clipboard = typeof navigator !== "undefined" ? (navigator as any).clipboard : undefined;
-    const canRead = typeof clipboard?.readText === "function";
-    const canWrite = typeof clipboard?.writeText === "function";
+  if (kind !== "browser") return createUnsupportedClipboard();
 
-    return {
-      supported: canRead && canWrite,
-      canRead,
-      canWrite,
-      async readText() {
-        if (!canRead) throw new Error("Clipboard read not available in this runtime");
-        return clipboard.readText();
-      },
-      async writeText(text: string) {
-        if (!canWrite) throw new Error("Clipboard write not available in this runtime");
-        await clipboard.writeText(text);
-      },
-    };
-  }
-
-  return createUnsupportedClipboard();
+  return {
+    get supported() {
+      const clipboard = browserClipboard();
+      return (
+        typeof clipboard?.readText === "function" && typeof clipboard?.writeText === "function"
+      );
+    },
+    get canRead() {
+      return typeof browserClipboard()?.readText === "function";
+    },
+    get canWrite() {
+      return typeof browserClipboard()?.writeText === "function";
+    },
+    async readText() {
+      const clipboard = browserClipboard();
+      if (typeof clipboard?.readText !== "function") {
+        throw new Error("Clipboard read not available in this runtime");
+      }
+      return clipboard.readText();
+    },
+    async writeText(text: string) {
+      const clipboard = browserClipboard();
+      if (typeof clipboard?.writeText !== "function") {
+        throw new Error("Clipboard write not available in this runtime");
+      }
+      await clipboard.writeText(text);
+    },
+  };
 }
 
 function nowMs(): number {
