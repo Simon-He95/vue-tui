@@ -927,7 +927,7 @@ const diagram = `graph TD
 - `x`/`y`/`w` `(number, required)`：渲染区域左上角与宽度
 - `h` `(number?)`：固定高度；不传时按渲染行数自适应
 - `content` / `code` `(string?)`：Mermaid source；同时传入时 `code` 优先
-- `final` `(boolean)`：Mermaid source 是否已经结束；`final=false` 时只显示 source，不调用 renderer；`final=true` 后才尝试渲染并在成功时原子替换 source
+- `final` `(boolean)`：Mermaid source 是否已经结束；`streaming=true && final=false` 时只显示 source，不调用 renderer；非 streaming 或 `final=true` 时才尝试渲染并在成功时原子替换 source
 - `ascii` `(boolean)`：使用纯 ASCII 而不是 Unicode box drawing
 - `options` `(TMermaidAsciiOptions?)`：传给 renderer 的 spacing/theme options；组件始终强制 `colorMode: "none"`
 - `renderer` `(TMermaidRenderer?)`：自定义 renderer，适合测试或替换 Mermaid engine
@@ -939,7 +939,7 @@ const diagram = `graph TD
 
 ### Streaming error policy
 
-AI 输出 Mermaid fence 时经常会先产生不完整源码。`final=false` 下组件只显示源码，不调用 renderer。`final=true` 后：
+AI 输出 Mermaid fence 时经常会先产生不完整源码。`streaming=true && final=false` 下组件只显示源码，不调用 renderer。非 streaming 或 `final=true` 后：
 
 - 如果当前源码通过 size guard 和 eligibility guard，且 renderer 成功，则显示渲染结果。
 - 如果当前源码是复杂 Mermaid、超出 size guard、显式 eligibility 返回 `false`，或 renderer 失败/超时/返回空白，则保持源码显示。

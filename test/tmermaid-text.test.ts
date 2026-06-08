@@ -1055,7 +1055,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("keeps source while final is false even when streaming is not enabled", async () => {
+  it("renders when final is false but streaming is not enabled", async () => {
     const final = ref(false);
     const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
 
@@ -1078,20 +1078,13 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
 
-    expect(renderer).not.toHaveBeenCalled();
-    expect(rowText(mounted, 0)).toBe("graph LR");
-    expect(rowText(mounted, 1)).toBe("  A --> B");
-
-    final.value = true;
-    await settleMermaid(mounted);
-
     expect(renderer).toHaveBeenCalledTimes(1);
     expect(rowText(mounted, 0)).toBe("rendered diagram");
 
     mounted.unmount();
   });
 
-  it("skips renderer for any non-final Mermaid source", async () => {
+  it("skips renderer only while streaming Mermaid source is non-final", async () => {
     const final = ref(false);
     const streaming = ref(true);
     const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
@@ -1120,13 +1113,6 @@ describe("TMermaidText", () => {
     expect(rowText(mounted, 1)).toBe("  A --> B");
 
     streaming.value = false;
-    await settleMermaid(mounted);
-
-    expect(renderer).not.toHaveBeenCalled();
-    expect(rowText(mounted, 0)).toBe("graph LR");
-    expect(rowText(mounted, 1)).toBe("  A --> B");
-
-    final.value = true;
     await settleMermaid(mounted);
 
     expect(renderer).toHaveBeenCalledTimes(1);

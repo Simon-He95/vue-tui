@@ -557,6 +557,10 @@ export const TMermaidText = defineComponent({
 
     const source = computed(() => props.code ?? props.content ?? "");
 
+    const waitingForStreamingSourceToFinish = computed(
+      () => props.streaming && !props.final,
+    );
+
     function bump(): void {
       documentVersion.value++;
     }
@@ -700,7 +704,7 @@ export const TMermaidText = defineComponent({
         return;
       }
 
-      if (!props.final) {
+      if (waitingForStreamingSourceToFinish.value) {
         if (!alive || version !== renderVersion) return;
         clearRenderState();
         bump();
@@ -752,7 +756,7 @@ export const TMermaidText = defineComponent({
       // until the queued low-priority frame task runs.
       const snapshotCleared = clearRenderedSnapshot();
 
-      if (!props.final) {
+      if (waitingForStreamingSourceToFinish.value) {
         builtOnce = true;
         scheduler.cancelFrameTask?.(frameTaskId);
         if (copiedWasVisible || snapshotCleared) bump();
