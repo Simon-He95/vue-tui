@@ -858,9 +858,9 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 >
 > 需要安装依赖后零配置使用内置 renderer 时，请从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `TMermaidText` / `TMermaid`。
 >
-> Mermaid 组件默认使用 size guard + simple-flowchart-only guard；`final=true` 后仅对简单 flowchart 尝试渲染。renderer 成功时原子替换为渲染结果；复杂 Mermaid、大 Mermaid、renderer 失败、超时或返回空白时保持源码显示。
+> `@simon_he/vue-tui/mermaid` 和 `@simon_he/vue-tui/agent/mermaid` 的内置 beautiful-mermaid wrapper 默认使用 size guard + simple-flowchart-only guard；`final=true` 后仅对简单 flowchart 尝试渲染。renderer 成功时原子替换为渲染结果；复杂 Mermaid、大 Mermaid、renderer 失败、超时或返回空白时保持源码显示。
 >
-> 需要显式让自定义 renderer 尝试复杂 Mermaid 时，传入 `shouldRenderSource={() => true}`。
+> `@simon_he/vue-tui/vue` 和 `@simon_he/vue-tui/agent` 导出的 renderer-agnostic primitive 不会默认拦截复杂 Mermaid；如果需要限制 custom renderer，只传入 `shouldRenderSource={isSimpleMermaidFlowchartSource}` 或自定义 guard。
 >
 > 注意：Markdown 里的 `mermaid` code fence 当前只保留 `code_block.language` metadata，尚未自动走 `TMermaidText` 的 async render/cache 路径。
 
@@ -933,7 +933,7 @@ const diagram = `graph TD
 - `ascii` `(boolean)`：使用纯 ASCII 而不是 Unicode box drawing
 - `options` `(TMermaidAsciiOptions?)`：传给 renderer 的 spacing/theme options；组件始终强制 `colorMode: "none"`
 - `renderer` `(TMermaidRenderer?)`：自定义 renderer，适合测试或替换 Mermaid engine
-- `shouldRenderSource` `(TMermaidRenderEligibility?)`：可选 renderer eligibility guard；返回 `false` 时保持源码，不调用 renderer。不传时默认使用 `isSimpleMermaidFlowchartSource`，即只尝试简单 flowchart。需要强制尝试复杂 Mermaid 时可传 `() => true`。
+- `shouldRenderSource` `(TMermaidRenderEligibility?)`：可选 renderer eligibility guard；返回 `false` 时保持源码，不调用 renderer。primitive 不传时不额外限制；beautiful-mermaid wrapper 不传时默认使用 `isSimpleMermaidFlowchartSource`，即只尝试简单 flowchart。
 - `isTransientError` `(TMermaidTransientErrorClassifier?)`：保留的 renderer error 分类 prop；source-first 渲染失败/超时时保持源码显示，不再根据分类显示 `incompleteText` / `errorText`
 - `markMermaidRenderErrorFatal(error)`：从 `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent` 导入；source-first 渲染失败时仍保持源码显示
 - `streaming` `(boolean)`：streaming 更新时使用低优先级 frame task 合并重算
