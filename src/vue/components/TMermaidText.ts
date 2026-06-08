@@ -663,7 +663,8 @@ export const TMermaidText = defineComponent({
     function shouldSkipRender(code: string): boolean {
       if (shouldSkipRenderForSize(code)) return true;
 
-      const shouldRenderSource = props.shouldRenderSource ?? isSimpleMermaidFlowchartSource;
+      const shouldRenderSource = props.shouldRenderSource;
+      if (!shouldRenderSource) return false;
 
       try {
         return !shouldRenderSource(code, {
@@ -857,6 +858,13 @@ export const TMermaidText = defineComponent({
 
     const hasBox = computed(() => props.box !== false);
 
+    const normalizedWidth = computed(() => {
+      const width = Math.floor(Number(props.w));
+      return Number.isFinite(width) ? Math.max(0, width) : 0;
+    });
+
+    const reservesBoxRows = computed(() => hasBox.value && normalizedWidth.value >= 2);
+
     const boxChars = computed<TMermaidBoxChars>(() =>
       props.ascii ? ASCII_MERMAID_BOX_CHARS : UNICODE_MERMAID_BOX_CHARS,
     );
@@ -886,7 +894,7 @@ export const TMermaidText = defineComponent({
       }
 
       const autoContentHeight = Math.max(1, displayLines.value.length);
-      return hasBox.value ? autoContentHeight + 2 : autoContentHeight;
+      return reservesBoxRows.value ? autoContentHeight + 2 : autoContentHeight;
     });
 
     const fullRect = computed<Rect>(() => {

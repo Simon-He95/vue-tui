@@ -8,6 +8,7 @@ import {
   mountTerminal,
   nextTick,
   ref,
+  TText,
   TView,
 } from "./ui-regressions-support.js";
 
@@ -374,9 +375,9 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("keeps complex Mermaid source by default even with a renderer-agnostic custom renderer", async () => {
+  it("lets renderer-agnostic custom renderers handle complex Mermaid by default", async () => {
     const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
-    const renderer: TMermaidRenderer = vi.fn(() => "should not render");
+    const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
 
     const mounted = await mountTerminal(
       () =>
@@ -384,7 +385,7 @@ describe("TMermaidText", () => {
           x: 0,
           y: 0,
           w: 40,
-          h: 3,
+          h: 1,
           box: false,
           content: source,
           renderer,
@@ -395,10 +396,14 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
 
-    expect(renderer).not.toHaveBeenCalled();
-    expect(rowText(mounted, 0)).toBe("sequenceDiagram");
-    expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
-    expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(renderer).toHaveBeenCalledWith(
+      source,
+      expect.objectContaining({
+        colorMode: "none",
+      }),
+    );
+    expect(rowText(mounted, 0)).toBe("sequence rendered");
 
     mounted.unmount();
   });
@@ -544,14 +549,14 @@ describe("TMermaidText", () => {
     }
   });
 
-  it("keeps complex Mermaid source by default even with a mermaid wrapper custom renderer", async () => {
+  it("lets mermaid entry custom renderers handle complex Mermaid by default", async () => {
     vi.resetModules();
 
     try {
       const { TMermaidText: TMermaidTextWithBeautifulRenderer } = await import("../src/mermaid.js");
 
       const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
-      const renderer: TMermaidRenderer = vi.fn(() => "should not render");
+      const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
 
       const mounted = await mountTerminal(
         () =>
@@ -559,7 +564,7 @@ describe("TMermaidText", () => {
             x: 0,
             y: 0,
             w: 40,
-            h: 3,
+            h: 1,
             box: false,
             content: source,
             renderer,
@@ -570,10 +575,14 @@ describe("TMermaidText", () => {
 
       await settleMermaid(mounted);
 
-      expect(renderer).not.toHaveBeenCalled();
-      expect(rowText(mounted, 0)).toBe("sequenceDiagram");
-      expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
-      expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
+      expect(renderer).toHaveBeenCalledTimes(1);
+      expect(renderer).toHaveBeenCalledWith(
+        source,
+        expect.objectContaining({
+          colorMode: "none",
+        }),
+      );
+      expect(rowText(mounted, 0)).toBe("sequence rendered");
 
       mounted.unmount();
     } finally {
@@ -1107,6 +1116,32 @@ describe("TMermaidText", () => {
     expect(rowText(mounted, 1)).toContain("rendered diagram");
     expect(rowText(mounted, 2).startsWith("+")).toBe(true);
     expect(rowText(mounted, 2).endsWith("+")).toBe(true);
+
+    mounted.unmount();
+  });
+
+  it("does not reserve box rows when auto-sized width is too narrow to draw the box", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => "R");
+
+    const mounted = await mountTerminal(
+      () => [
+        h(TText, { x: 0, y: 1, zIndex: -1, value: "below", w: 8 }),
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 1,
+          content: "graph LR\n  A --> B",
+          renderer,
+        }),
+      ],
+      12,
+      4,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toBe("R");
+    expect(rowText(mounted, 1)).toBe("below");
 
     mounted.unmount();
   });
