@@ -98,7 +98,6 @@ export type TMermaidCopyPayload = Readonly<{
 }>;
 
 export type TMermaidRenderEligibilityContext = Readonly<{
-  code: string;
   final: boolean;
   streaming: boolean;
 }>;
@@ -134,7 +133,7 @@ const ASCII_MERMAID_BOX_CHARS: TMermaidBoxChars = Object.freeze({
 });
 
 const DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS = 120;
-const SIMPLE_MERMAID_DIRECTIVE_RE = /^(?:graph|flowchart)\s+(?:TB|TD|BT|LR|RL)\b/i;
+const SIMPLE_MERMAID_DIRECTIVE_RE = /^(?:graph|flowchart)\s+(?:TB|TD|BT|LR|RL)\s*$/i;
 const MERMAID_INIT_DIRECTIVE_RE = /^%%\{/;
 const MERMAID_COMMENT_RE = /^%%/;
 const MERMAID_FRONTMATTER_DELIMITER_RE = /^---\s*$/;
@@ -425,9 +424,7 @@ function clipboardCanWrite(api: { supported: boolean; canWrite?: boolean }): boo
   return api.canWrite ?? api.supported;
 }
 
-function timeoutError(ms: number): Error {
-  return new Error(`Mermaid render timed out after ${ms}ms`);
-}
+const MERMAID_RENDER_TIMEOUT = Symbol("MERMAID_RENDER_TIMEOUT");
 
 type TMermaidFatalRenderError = Error & {
   [TUI_MERMAID_FATAL_RENDER_ERROR]?: true;
@@ -488,6 +485,9 @@ export const tMermaidTextProps = {
     type: Function as PropType<TMermaidRenderer>,
     default: undefined,
   },
+  // Deprecated source-first compatibility props.
+  // Source-first Mermaid never paints loading/incomplete/error placeholders;
+  // renderer failure keeps source visible. These props remain for source compatibility.
   isTransientError: {
     type: Function as PropType<TMermaidTransientErrorClassifier>,
     default: undefined,
@@ -496,6 +496,8 @@ export const tMermaidTextProps = {
     type: Function as PropType<TMermaidRenderEligibility>,
     default: undefined,
   },
+  // Deprecated source-first compatibility text props.
+  // Kept so existing callers do not break, but not used by the source-first renderer.
   loadingText: {
     type: String,
     default: "Rendering Mermaid diagram...",
@@ -643,7 +645,6 @@ export const TMermaidText = defineComponent({
 
       try {
         return !shouldRenderSource(code, {
-          code,
           final: props.final,
           streaming: props.streaming,
         });
@@ -669,7 +670,7 @@ export const TMermaidText = defineComponent({
         return await Promise.race([
           Promise.resolve().then(() => renderer(code, options)),
           new Promise<string>((_resolve, reject) => {
-            timer = setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs);
+            timer = setTimeout(() => reject(MERMAID_RENDER_TIMEOUT), timeoutMs);
           }),
         ]);
       } finally {

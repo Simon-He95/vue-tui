@@ -749,6 +749,12 @@ describe("TMermaidText", () => {
     expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B; classDef hot fill:#f00")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nA:::hot --> B")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nA@{ shape: rect } --> B")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR @{ shape: rect }\nA --> B")).toBe(false);
+    expect(
+      isSimpleMermaidFlowchartSource('graph LR click A href "https://example.com"\nA --> B'),
+    ).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR whatever\nA --> B")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("flowchart TD extra\nA --> B")).toBe(false);
     expect(isSimpleMermaidFlowchartSource('graph LR\nclick A href "https://example.com"')).toBe(
       false,
     );

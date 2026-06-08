@@ -934,10 +934,11 @@ const diagram = `graph TD
 - `options` `(TMermaidAsciiOptions?)`：传给 renderer 的 spacing/theme options；组件始终强制 `colorMode: "none"`
 - `renderer` `(TMermaidRenderer?)`：自定义 renderer，适合测试或替换 Mermaid engine
 - `shouldRenderSource` `(TMermaidRenderEligibility?)`：可选 renderer eligibility guard；返回 `false` 时保持源码，不调用 renderer。primitive 不传时不额外限制；beautiful-mermaid wrapper 不传时默认使用 `isSimpleMermaidFlowchartSource`，即只尝试简单 flowchart。
-- `isTransientError` `(TMermaidTransientErrorClassifier?)`：保留的 renderer error 分类 prop；source-first 渲染失败/超时时保持源码显示，不再根据分类显示 `incompleteText` / `errorText`
+- `isTransientError` `(TMermaidTransientErrorClassifier?)`：source-first 兼容遗留 prop；当前不会影响显示，渲染失败/超时时始终保持 source 显示
 - `markMermaidRenderErrorFatal(error)`：从 `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent` 导入；source-first 渲染失败时仍保持源码显示
 - `streaming` `(boolean)`：streaming 更新时使用低优先级 frame task 合并重算
-- `incompleteText` `(string)`：保留的文案 prop；当前渲染路径在未完成或失败时保持 source 显示
+- `loadingText` / `incompleteText` / `missingDependencyText` / `errorText` `(string)`：source-first 兼容遗留 prop；当前不会影响显示，失败/未完成时始终保持 source 显示
+- `showErrorDetails` `(boolean)`：source-first 兼容遗留 prop；当前渲染路径不会绘制错误详情
 
 ### Streaming error policy
 

@@ -189,12 +189,11 @@ const mermaidTransientErrorContext: TMermaidTransientErrorContext = {
   streaming: true,
 };
 const mermaidRenderEligibilityContext: TMermaidRenderEligibilityContext = {
-  code: "graph LR\n  A --> B",
   final: true,
   streaming: false,
 };
 const mermaidRenderEligibility: TMermaidRenderEligibility = (code, context) =>
-  code === context.code;
+  code === "graph LR\n  A --> B" && context.final && !context.streaming;
 const mermaidTransientErrorClassifier: TMermaidTransientErrorClassifier = (_error, context) =>
   context.streaming && !context.final;
 const mermaidCopyPayload: TMermaidCopyPayload = { text: "graph LR", ok: true };
