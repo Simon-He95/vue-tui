@@ -538,10 +538,7 @@ describe("TMermaidText", () => {
       await settleMermaid(mounted);
 
       expect(renderer).toHaveBeenCalledTimes(1);
-      expect(renderer).toHaveBeenCalledWith(
-        source,
-        expect.objectContaining({ colorMode: "none" }),
-      );
+      expect(renderer).toHaveBeenCalledWith(source, expect.objectContaining({ colorMode: "none" }));
       expect(rowText(mounted, 0)).toBe("sequence rendered");
 
       mounted.unmount();

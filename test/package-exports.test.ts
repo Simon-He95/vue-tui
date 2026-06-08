@@ -464,6 +464,7 @@ describe("package exports", () => {
       "detectTerminalGraphicsCapabilities",
       "dispatchTLogPluginLinkAction",
       "getTLogPluginMetadata",
+      "isSimpleMermaidFlowchartSource",
       "markMermaidRenderErrorFatal",
       "parseTLogAnnotatedText",
       "resolveTLogLinksPanelTheme",
@@ -618,6 +619,7 @@ describe("package exports", () => {
     expect(agent.TVirtualMarkdown).toBe(markdown.TVirtualMarkdown);
     expect(agent.createMarkdownBlockSource).toBe(markdown.createMarkdownBlockSource);
     expect(agent.TMermaidText).toBe(vue.TMermaidText);
+    expect(agent.isSimpleMermaidFlowchartSource).toBe(vue.isSimpleMermaidFlowchartSource);
     expect(agent.markMermaidRenderErrorFatal).toBe(vue.markMermaidRenderErrorFatal);
     expect(mermaid.TMermaidText).toBe(mermaid.TBeautifulMermaidText);
     expect(mermaid.TMermaid).toBe(mermaid.TBeautifulMermaid);
@@ -1055,6 +1057,7 @@ describe("package exports", () => {
     expect(agent.TToolCallView).toBeTruthy();
     expect(agent.TToolLogView).toBe(experimental.TLogView);
     expect(agent.TUserMessageView).toBeTruthy();
+    expect(agent.isSimpleMermaidFlowchartSource).toBeTruthy();
     expect(mermaid.TBeautifulMermaidText).toBeTruthy();
     expect(mermaid.TMermaidText).toBe(mermaid.TBeautifulMermaidText);
     expect(mermaid.TMermaid).toBe(mermaid.TBeautifulMermaid);

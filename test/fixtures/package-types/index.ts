@@ -94,6 +94,7 @@ import {
   TMermaid as AgentMermaid,
   TMermaidText as AgentMermaidText,
   computeCommandPaletteMatchRanges,
+  isSimpleMermaidFlowchartSource as isAgentSimpleMermaidFlowchartSource,
   type TCommandPaletteItem as AgentTCommandPaletteItem,
   type TCommandPaletteMatchRange,
   type TMermaidRenderEligibility as AgentMermaidRenderEligibility,
@@ -225,6 +226,7 @@ const simpleMermaidFromVue = isSimpleMermaidFlowchartSource("graph LR\n  A --> B
 const simpleMermaidFromEntry = isMermaidEntrySimpleMermaidFlowchartSource("graph LR\n  A --> B");
 const simpleMermaidFromAgentEntry =
   isAgentBeautifulMermaidSimpleMermaidFlowchartSource("graph LR\n  A --> B");
+const simpleMermaidFromAgent = isAgentSimpleMermaidFlowchartSource("graph LR\n  A --> B");
 const createdMermaidRenderer = createBeautifulMermaidRenderer();
 const fatalMermaidError = markMermaidRenderErrorFatal(new Error("fatal"));
 const fatalAgentMermaidError = markAgentMermaidRenderErrorFatal(new Error("fatal-agent"));
@@ -333,6 +335,7 @@ console.log(
   simpleMermaidFromVue,
   simpleMermaidFromEntry,
   simpleMermaidFromAgentEntry,
+  simpleMermaidFromAgent,
   beautifulMermaidRenderer,
   agentBeautifulMermaidRenderer,
   createdMermaidRenderer,

@@ -258,6 +258,10 @@ function clampPointToRect(point: TerminalSelectionPoint, rect: Rect): TerminalSe
   };
 }
 
+function clipboardCanWrite(api: ClipboardApi): boolean {
+  return api.canWrite ?? api.supported;
+}
+
 export function createTerminalSelectionController(
   options: CreateTerminalSelectionControllerOptions,
 ): TerminalSelectionController {
@@ -535,7 +539,7 @@ export function createTerminalSelectionController(
       const text = state.value.text || selectedText();
       if (!text) return false;
       setResolvedText(text);
-      if (!options.clipboard.supported) {
+      if (!clipboardCanWrite(options.clipboard)) {
         options.onCopy?.(copyPayload(text, false, new Error("Clipboard unavailable")));
         return false;
       }

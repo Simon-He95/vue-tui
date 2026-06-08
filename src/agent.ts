@@ -37,6 +37,7 @@ export { TLogVirtualSearchResults } from "./vue/components/TLogVirtualSearchResu
 export { TLogVirtualLinksPanel } from "./vue/components/TLogVirtualLinksPanel.js";
 export { TVirtualMarkdown } from "./vue/components/TVirtualMarkdown.js";
 export {
+  isSimpleMermaidFlowchartSource,
   markMermaidRenderErrorFatal,
   TMermaid,
   TMermaidText,
