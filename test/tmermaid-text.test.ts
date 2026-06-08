@@ -736,9 +736,12 @@ describe("TMermaidText", () => {
     expect(isSimpleMermaidFlowchartSource("graph LR\nA -->|100%% ready| B")).toBe(true);
     expect(isSimpleMermaidFlowchartSource("graph LR\nA -->|foo:::bar| B")).toBe(true);
     expect(isSimpleMermaidFlowchartSource("graph LR\nA -->|shape @{text}| B")).toBe(true);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA(user@example.com) --> B")).toBe(true);
 
     expect(isSimpleMermaidFlowchartSource("graph LR")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("sequenceDiagram\nAlice->>Bob: hi")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA e1@--> B")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B@{ shape: rect }")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nsubgraph X\nA --> B\nend")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nsubgraph X; A --> B; end")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nstyle A fill:#f00")).toBe(false);

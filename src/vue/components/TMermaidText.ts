@@ -378,7 +378,10 @@ function hasTopLevelMermaidComplexToken(statement: string): boolean {
     const ch = statement[index] ?? "";
 
     if (scannerAtTopLevel(state)) {
-      if (statement.startsWith("@{", index)) return true;
+      // Top-level `@` is used by newer / richer flowchart syntax such as
+      // shape metadata and edge ids. Labels like `|user@example.com|` remain
+      // allowed because the scanner is not at top level inside pipe labels.
+      if (ch === "@") return true;
       if (statement.startsWith(":::", index) && /[A-Za-z_]/.test(statement[index + 3] ?? "")) {
         return true;
       }
