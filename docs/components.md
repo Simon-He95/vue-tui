@@ -858,7 +858,7 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 >
 > 需要安装依赖后零配置使用内置 renderer 时，请从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `TMermaidText` / `TMermaid`。
 >
-> 默认只会尝试渲染 `isSimpleMermaidFlowchartSource()` 接受的 simple flowchart；其他 Mermaid source 会保持源码显示。显式传入自定义 `renderer` 时也遵循同一个默认 guard；如果确实要让自定义 renderer 接管复杂 Mermaid，请传入 `shouldRenderSource={() => true}` 或更精细的自定义 guard。
+> 默认只做 size guard；`final=true` 后会把源码交给 renderer 尝试渲染。renderer 成功时原子替换为渲染结果；renderer 失败、超时、返回空白，或显式 `shouldRenderSource` 返回 `false` 时保持源码显示。需要 simple-flowchart-only 策略时，可显式传入 `shouldRenderSource={isSimpleMermaidFlowchartSource}`。
 
 ## TMermaidText
 
@@ -929,7 +929,7 @@ const diagram = `graph TD
 - `ascii` `(boolean)`：使用纯 ASCII 而不是 Unicode box drawing
 - `options` `(TMermaidAsciiOptions?)`：传给 renderer 的 spacing/theme options；组件始终强制 `colorMode: "none"`
 - `renderer` `(TMermaidRenderer?)`：自定义 renderer，适合测试或替换 Mermaid engine
-- `shouldRenderSource` `(TMermaidRenderEligibility?)`：自定义 renderer eligibility；返回 `false` 时保持源码，不调用 renderer。默认使用 `isSimpleMermaidFlowchartSource`，所以复杂 Mermaid 默认保持源码；需要强制渲染时可传 `() => true`。
+- `shouldRenderSource` `(TMermaidRenderEligibility?)`：可选 renderer eligibility guard；返回 `false` 时保持源码，不调用 renderer。不传时仅应用 size guard，并让 renderer 判断当前 Mermaid source 能否渲染。需要 simple-flowchart-only 策略时可传 `isSimpleMermaidFlowchartSource`。
 - `isTransientError` `(TMermaidTransientErrorClassifier?)`：自定义 renderer error 分类；`final=false` 时组件不调用 renderer，optional peer 缺失这类集成错误应该返回 `false`
 - `markMermaidRenderErrorFatal(error)`：从 `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent` 导入，给自定义 renderer 标记缺依赖、renderer 初始化失败、wasm 加载失败等不应被当作 AI 中间态的 hard error
 - `streaming` `(boolean)`：streaming 更新时使用低优先级 frame task 合并重算
@@ -940,7 +940,7 @@ const diagram = `graph TD
 AI 输出 Mermaid fence 时经常会先产生不完整源码。`final=false` 下组件只显示源码，不调用 renderer。`final=true` 后：
 
 - 如果当前源码能渲染，则显示渲染结果。
-- 如果当前源码不符合传入的 eligibility、超出 size guard，或 renderer 失败，则保持源码显示。
+- 如果当前源码超出 size guard、显式 eligibility 返回 `false`，或 renderer 失败/超时/返回空白，则保持源码显示。
 - 缺少 renderer、optional peer 或 renderer setup failure 属于集成错误，不作为流式中间态吞掉。
 
 ## TVirtualMarkdown
