@@ -1461,7 +1461,7 @@ Import: `@simon_he/vue-tui/vue`
 | <code>options</code>               | <code>TMermaidAsciiOptions</code>             | <code>undefined</code>                                                                             | 否   | —    |
 | <code>renderer</code>              | <code>TMermaidRenderer</code>                 | <code>undefined</code>                                                                             | 否   | —    |
 | <code>isTransientError</code>      | <code>TMermaidTransientErrorClassifier</code> | <code>undefined</code>                                                                             | 否   | —    |
-| <code>shouldRenderSource</code>    | <code>TMermaidRenderEligibility</code>        | <code>isSimpleMermaidFlowchartSource</code>                                                        | 否   | —    |
+| <code>shouldRenderSource</code>    | <code>TMermaidRenderEligibility</code>        | <code>undefined</code>                                                                             | 否   | —    |
 | <code>loadingText</code>           | <code>string</code>                           | <code>&quot;Rendering Mermaid diagram...&quot;</code>                                              | 否   | —    |
 | <code>incompleteText</code>        | <code>string</code>                           | <code>&quot;Waiting for complete Mermaid diagram...&quot;</code>                                   | 否   | —    |
 | <code>missingDependencyText</code> | <code>string</code>                           | <code>&quot;Install the Mermaid renderer package and use TMermaidText from @simon_he/vue...</code> | 否   | —    |
@@ -1515,7 +1515,7 @@ Import: `@simon_he/vue-tui/vue`
 | <code>options</code>               | <code>TMermaidAsciiOptions</code>             | <code>undefined</code>                                                                             | 否   | —    |
 | <code>renderer</code>              | <code>TMermaidRenderer</code>                 | <code>undefined</code>                                                                             | 否   | —    |
 | <code>isTransientError</code>      | <code>TMermaidTransientErrorClassifier</code> | <code>undefined</code>                                                                             | 否   | —    |
-| <code>shouldRenderSource</code>    | <code>TMermaidRenderEligibility</code>        | <code>isSimpleMermaidFlowchartSource</code>                                                        | 否   | —    |
+| <code>shouldRenderSource</code>    | <code>TMermaidRenderEligibility</code>        | <code>undefined</code>                                                                             | 否   | —    |
 | <code>loadingText</code>           | <code>string</code>                           | <code>&quot;Rendering Mermaid diagram...&quot;</code>                                              | 否   | —    |
 | <code>incompleteText</code>        | <code>string</code>                           | <code>&quot;Waiting for complete Mermaid diagram...&quot;</code>                                   | 否   | —    |
 | <code>missingDependencyText</code> | <code>string</code>                           | <code>&quot;Install the Mermaid renderer package and use TMermaidText from @simon_he/vue...</code> | 否   | —    |

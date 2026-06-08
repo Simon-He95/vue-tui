@@ -479,7 +479,7 @@ export const tMermaidTextProps = {
   },
   shouldRenderSource: {
     type: Function as PropType<TMermaidRenderEligibility>,
-    default: isSimpleMermaidFlowchartSource,
+    default: undefined,
   },
   loadingText: {
     type: String,

@@ -5882,7 +5882,7 @@
           "name": "shouldRenderSource",
           "type": "TMermaidRenderEligibility",
           "required": false,
-          "defaultValue": "isSimpleMermaidFlowchartSource"
+          "defaultValue": "undefined"
         },
         {
           "name": "loadingText",
@@ -6101,7 +6101,7 @@
           "name": "shouldRenderSource",
           "type": "TMermaidRenderEligibility",
           "required": false,
-          "defaultValue": "isSimpleMermaidFlowchartSource"
+          "defaultValue": "undefined"
         },
         {
           "name": "loadingText",
