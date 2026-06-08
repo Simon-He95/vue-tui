@@ -1077,6 +1077,40 @@ describe("TMermaidText", () => {
     }
   });
 
+  it("uses ASCII border characters for the outer Mermaid box when ascii is true", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 28,
+          ascii: true,
+          content: "graph LR\n  A --> B",
+          renderer,
+        }),
+      32,
+      5,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toContain("mermaid");
+    expect(rowText(mounted, 0)).toContain("copy");
+    expect(rowText(mounted, 0).startsWith("+")).toBe(true);
+    expect(rowText(mounted, 0).endsWith("+")).toBe(true);
+    expect(rowText(mounted, 0)).not.toContain("┌");
+    expect(rowText(mounted, 0)).not.toContain("─");
+
+    expect(rowText(mounted, 1).startsWith("|")).toBe(true);
+    expect(rowText(mounted, 1)).toContain("rendered diagram");
+    expect(rowText(mounted, 2).startsWith("+")).toBe(true);
+    expect(rowText(mounted, 2).endsWith("+")).toBe(true);
+
+    mounted.unmount();
+  });
+
   it("resets copied label after copiedDurationMs", async () => {
     const source = "graph LR\n  A --> B";
     const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
@@ -1551,6 +1585,48 @@ describe("TMermaidText", () => {
     expect(rowText(mounted, 0)).toBe("rendered diagram");
 
     setDeterministicMetrics(mounted, cols, rows);
+    clickCell(mounted, 22, 0);
+    await settleMermaid(mounted);
+
+    expect(writeText).not.toHaveBeenCalled();
+    expect(onCopy).not.toHaveBeenCalled();
+
+    mounted.unmount();
+  });
+
+  it("respects explicit zero Mermaid height", async () => {
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const onCopy = vi.fn();
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 28,
+          h: 0,
+          content: "graph LR\n  A --> B",
+          renderer,
+          onCopy,
+        }),
+      32,
+      4,
+      {
+        clipboard: {
+          supported: true,
+          readText: vi.fn(),
+          writeText,
+        },
+      },
+    );
+
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toBe("");
+    expect(rowText(mounted, 1)).toBe("");
+
+    setDeterministicMetrics(mounted, 32, 4);
     clickCell(mounted, 22, 0);
     await settleMermaid(mounted);
 

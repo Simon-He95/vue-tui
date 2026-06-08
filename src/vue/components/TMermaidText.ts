@@ -79,6 +79,15 @@ export type TMermaidTransientErrorClassifier = (
 
 type TMermaidStatus = "idle" | "loading" | "ready" | "incomplete" | "error";
 
+type TMermaidBoxChars = Readonly<{
+  tl: string;
+  tr: string;
+  bl: string;
+  br: string;
+  h: string;
+  v: string;
+}>;
+
 type TMermaidRenderSnapshot = Readonly<{
   source: string;
   lines: readonly string[];
@@ -107,6 +116,24 @@ const DEFAULT_MERMAID_RENDER_TIMEOUT_MS = 2500;
 const DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS = 20_000;
 const DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES = 400;
 const DEFAULT_MERMAID_COPIED_DURATION_MS = 1200;
+
+const UNICODE_MERMAID_BOX_CHARS: TMermaidBoxChars = Object.freeze({
+  tl: "┌",
+  tr: "┐",
+  bl: "└",
+  br: "┘",
+  h: "─",
+  v: "│",
+});
+
+const ASCII_MERMAID_BOX_CHARS: TMermaidBoxChars = Object.freeze({
+  tl: "+",
+  tr: "+",
+  bl: "+",
+  br: "+",
+  h: "-",
+  v: "|",
+});
 
 const DEFAULT_MERMAID_MAX_RENDER_FLOW_STATEMENTS = 120;
 const SIMPLE_MERMAID_DIRECTIVE_RE = /^(?:graph|flowchart)\s+(?:TB|TD|BT|LR|RL)\b/i;
@@ -830,6 +857,10 @@ export const TMermaidText = defineComponent({
 
     const hasBox = computed(() => props.box !== false);
 
+    const boxChars = computed<TMermaidBoxChars>(() =>
+      props.ascii ? ASCII_MERMAID_BOX_CHARS : UNICODE_MERMAID_BOX_CHARS,
+    );
+
     const sourceLines = computed<readonly string[]>(() => splitRenderedOutput(source.value));
 
     const displayLines = computed<readonly string[]>(() => {
@@ -849,9 +880,13 @@ export const TMermaidText = defineComponent({
     });
 
     const fullHeight = computed(() => {
+      if (props.h != null) {
+        const h = Math.floor(Number(props.h));
+        return Number.isFinite(h) ? Math.max(0, h) : 0;
+      }
+
       const autoContentHeight = Math.max(1, displayLines.value.length);
-      const autoHeight = hasBox.value ? autoContentHeight + 2 : autoContentHeight;
-      return Math.max(1, Math.floor(props.h ?? autoHeight));
+      return hasBox.value ? autoContentHeight + 2 : autoContentHeight;
     });
 
     const fullRect = computed<Rect>(() => {
@@ -1069,9 +1104,11 @@ export const TMermaidText = defineComponent({
         return contentLine(rowIndex, rowWidth, props.clear);
       }
 
+      const chars = boxChars.value;
       const innerW = Math.max(0, rowWidth - 2);
+
       if (rowIndex === 0) {
-        let row = `┌${repeatChar("─", innerW)}┐`;
+        let row = `${chars.tl}${repeatChar(chars.h, innerW)}${chars.tr}`;
         const copy = headerCopySegment(rowWidth);
         const title = headerTitleSegment(rowWidth, copy);
 
@@ -1081,9 +1118,11 @@ export const TMermaidText = defineComponent({
         return row;
       }
 
-      if (rowIndex === rowHeight - 1) return `└${repeatChar("─", innerW)}┘`;
+      if (rowIndex === rowHeight - 1) {
+        return `${chars.bl}${repeatChar(chars.h, innerW)}${chars.br}`;
+      }
 
-      return `│${contentLine(rowIndex - 1, innerW, true)}│`;
+      return `${chars.v}${contentLine(rowIndex - 1, innerW, true)}${chars.v}`;
     }
 
     useRenderNode(() => ({
@@ -1101,6 +1140,7 @@ export const TMermaidText = defineComponent({
         missingRenderer.value,
         renderedSnapshot.value,
         hasBox.value,
+        boxChars.value,
         props.title,
         props.copyButton,
         copyLabel.value,
