@@ -858,9 +858,9 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 >
 > 需要安装依赖后零配置使用内置 renderer 时，请从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入 `TMermaidText` / `TMermaid`。
 >
-> 内置 `beautiful-mermaid` wrapper 默认只会尝试渲染 `isSimpleMermaidFlowchartSource()` 接受的 simple flowchart；其他 Mermaid source 会保持源码显示。
+> `TMermaidText` 默认只会尝试渲染 `isSimpleMermaidFlowchartSource()` 接受的 simple flowchart；其他 Mermaid source 会保持源码显示。
 >
-> renderer-agnostic primitive 或显式自定义 renderer 默认不做语法 guard；如果想让自定义 renderer 也跳过复杂 Mermaid，请显式传入 `shouldRenderSource={isSimpleMermaidFlowchartSource}` 或自己的判定函数。
+> 显式自定义 renderer 也会走同一 eligibility guard；如果确实要让自定义 renderer 渲染复杂 Mermaid，请显式传入 `shouldRenderSource={() => true}` 或自己的判定函数。
 
 ## TMermaidText
 
@@ -919,7 +919,6 @@ const diagram = `graph TD
   :content="diagram"
   :streaming="message.streaming"
   :final="message.final"
-  incompleteText="waiting for complete diagram"
 />
 ```
 
@@ -928,24 +927,22 @@ const diagram = `graph TD
 - `x`/`y`/`w` `(number, required)`：渲染区域左上角与宽度
 - `h` `(number?)`：固定高度；不传时按渲染行数自适应
 - `content` / `code` `(string?)`：Mermaid source；同时传入时 `code` 优先
-- `final` `(boolean)`：AI 流式 Mermaid source 是否已经结束；`streaming=true && final=false` 时，渲染错误默认视为中间态，不会覆盖最后一次成功图
+- `final` `(boolean)`：Mermaid source 是否已经结束；`final=false` 时只显示 source，不调用 renderer；`final=true` 后才尝试渲染并在成功时原子替换 source
 - `ascii` `(boolean)`：使用纯 ASCII 而不是 Unicode box drawing
 - `options` `(TMermaidAsciiOptions?)`：传给 renderer 的 spacing/theme options；组件始终强制 `colorMode: "none"`
 - `renderer` `(TMermaidRenderer?)`：自定义 renderer，适合测试或替换 Mermaid engine
-- `shouldRenderSource` `(TMermaidRenderEligibility?)`：自定义 renderer eligibility；返回 `false` 时保持源码，不调用 renderer。内置 `beautiful-mermaid` wrapper 默认使用 `isSimpleMermaidFlowchartSource`
-- `isTransientError` `(TMermaidTransientErrorClassifier?)`：自定义哪些 renderer error 可以在 `final=false` 时被忽略；optional peer 缺失这类集成错误应该返回 `false`
+- `shouldRenderSource` `(TMermaidRenderEligibility?)`：自定义 renderer eligibility；返回 `false` 时保持源码，不调用 renderer。默认使用 `isSimpleMermaidFlowchartSource`
+- `isTransientError` `(TMermaidTransientErrorClassifier?)`：自定义 renderer error 分类；`final=false` 时组件不调用 renderer，optional peer 缺失这类集成错误应该返回 `false`
 - `markMermaidRenderErrorFatal(error)`：从 `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent` 导入，给自定义 renderer 标记缺依赖、renderer 初始化失败、wasm 加载失败等不应被当作 AI 中间态的 hard error
 - `streaming` `(boolean)`：streaming 更新时使用低优先级 frame task 合并重算
-- `incompleteText` `(string)`：流式中间态且还没有任何成功渲染时显示的占位文本
+- `incompleteText` `(string)`：保留的文案 prop；当前渲染路径在未完成或失败时保持 source 显示
 
 ### Streaming error policy
 
-AI 输出 Mermaid fence 时经常会先产生不完整源码。`streaming=true && final=false` 下：
+AI 输出 Mermaid fence 时经常会先产生不完整源码。`final=false` 下组件只显示源码，不调用 renderer。`final=true` 后：
 
-- 如果当前源码能渲染，则立即显示并缓存为最后一次成功图。
-- 如果当前源码暂时不能渲染，但之前有成功图，则继续显示最后一次成功图。
-- 如果当前源码暂时不能渲染，且之前没有成功图，则显示 `incompleteText`。
-- 当 `final=true` 后仍然渲染失败，才显示 `errorText` 和错误详情。
+- 如果当前源码能渲染，则显示渲染结果。
+- 如果当前源码不符合默认 eligibility、超出 size guard，或 renderer 失败，则保持源码显示。
 - 缺少 renderer、optional peer 或 renderer setup failure 属于集成错误，不作为流式中间态吞掉。
 
 ## TVirtualMarkdown
