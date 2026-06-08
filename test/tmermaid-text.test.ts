@@ -541,9 +541,7 @@ describe("TMermaidText", () => {
     expect(isSimpleMermaidFlowchartSource("graph LR\nsubgraph X; A --> B; end")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nstyle A fill:#f00")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nclassDef hot fill:#f00")).toBe(false);
-    expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B; classDef hot fill:#f00")).toBe(
-      false,
-    );
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B; classDef hot fill:#f00")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nA:::hot --> B")).toBe(false);
     expect(isSimpleMermaidFlowchartSource('graph LR\nclick A href "https://example.com"')).toBe(
       false,
@@ -651,6 +649,39 @@ describe("TMermaidText", () => {
     expect(rowText(mounted, 1)).toBe("  subgraph Cluster");
     expect(rowText(mounted, 2)).toBe("    A --> B");
     expect(rowText(mounted, 3)).toBe("  end");
+
+    mounted.unmount();
+  });
+
+  it("keeps styled flowchart source by default instead of attempting a complex Mermaid render", async () => {
+    const source = [
+      "graph LR",
+      "  A[Start] --> B[Done]",
+      "  classDef hot fill:#f00,color:#fff",
+      "  class A hot",
+    ].join("\n");
+    const renderer: TMermaidRenderer = vi.fn(() => "should not render");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 56,
+          h: 4,
+          box: false,
+          content: source,
+          renderer,
+        }),
+      64,
+      6,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 2)).toBe("  classDef hot fill:#f00,color:#fff");
 
     mounted.unmount();
   });

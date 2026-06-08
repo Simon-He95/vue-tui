@@ -185,10 +185,7 @@ function createMermaidScannerState(): MermaidScannerState {
 
 function scannerAtTopLevel(state: MermaidScannerState): boolean {
   return (
-    !state.quote &&
-    state.squareDepth === 0 &&
-    state.parenDepth === 0 &&
-    state.braceDepth === 0
+    !state.quote && state.squareDepth === 0 && state.parenDepth === 0 && state.braceDepth === 0
   );
 }
 
