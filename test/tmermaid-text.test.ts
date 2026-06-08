@@ -250,6 +250,56 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("clears a same-source rendered snapshot before a queued streaming re-render", async () => {
+    const source = "graph LR\n  A --> B";
+    const renderAllowed = ref(true);
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 48,
+          h: 2,
+          box: false,
+          content: source,
+          final: true,
+          streaming: true,
+          renderer,
+          shouldRenderSource: renderAllowed.value ? () => true : () => false,
+        }),
+      64,
+      4,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(rowText(mounted, 0)).toBe("rendered diagram");
+
+    const scheduler = mounted.scheduler();
+    const originalQueueFrameTask = scheduler?.queueFrameTask.bind(scheduler);
+
+    try {
+      // Simulate an accepted low-priority frame task that has not run yet.
+      // The component must still repaint source immediately.
+      (scheduler as any).queueFrameTask = () => true;
+
+      renderAllowed.value = false;
+      await settleMermaidMicrotasks(mounted);
+
+      expect(renderer).toHaveBeenCalledTimes(1);
+      expect(rowText(mounted, 0)).toBe("graph LR");
+      expect(rowText(mounted, 1)).toBe("  A --> B");
+    } finally {
+      if (originalQueueFrameTask) {
+        (scheduler as any).queueFrameTask = originalQueueFrameTask;
+      }
+      mounted.unmount();
+    }
+  });
+
   it("keeps source when no renderer is provided", async () => {
     const mounted = await mountTerminal(
       () =>

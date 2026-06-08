@@ -624,6 +624,12 @@ export const TMermaidText = defineComponent({
       setCopied(false, repaint);
     }
 
+    function clearRenderedSnapshot(): boolean {
+      if (renderedSnapshot.value == null) return false;
+      renderedSnapshot.value = null;
+      return true;
+    }
+
     function showCopiedFeedback(): void {
       clearCopiedTimer();
 
@@ -790,12 +796,20 @@ export const TMermaidText = defineComponent({
 
     function scheduleRender(): void {
       const version = ++renderVersion;
+      const copiedWasVisible = copied.value;
+
       resetCopyFeedback(false);
+
+      // Source-first invariant:
+      // any new render attempt, even for the exact same source, must immediately
+      // invalidate the previously rendered diagram. Otherwise same-source changes
+      // such as renderer/options/ascii/eligibility can keep showing a stale diagram
+      // until the queued low-priority frame task runs.
+      const snapshotCleared = clearRenderedSnapshot();
 
       if (!props.final) {
         builtOnce = true;
         scheduler.cancelFrameTask?.(frameTaskId);
-        renderedSnapshot.value = null;
         status.value = "idle";
         error.value = "";
         missingRenderer.value = false;
@@ -807,6 +821,12 @@ export const TMermaidText = defineComponent({
         builtOnce = true;
         void renderNow(version);
         return;
+      }
+
+      // When the render work is queued, paint the source/copy-label reset now
+      // instead of waiting for the low-priority frame task.
+      if (copiedWasVisible || snapshotCleared) {
+        bump();
       }
 
       const accepted = scheduler.queueFrameTask({
