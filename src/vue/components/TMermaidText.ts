@@ -77,8 +77,6 @@ export type TMermaidTransientErrorClassifier = (
   context: TMermaidTransientErrorContext,
 ) => boolean;
 
-type TMermaidStatus = "idle" | "loading" | "ready" | "incomplete" | "error";
-
 type TMermaidBoxChars = Readonly<{
   tl: string;
   tr: string;
@@ -160,10 +158,6 @@ const TERMINAL_ESCAPE_RE = new RegExp(
 
 function stripTerminalEscapes(value: string): string {
   return value.replace(TERMINAL_ESCAPE_RE, "");
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function normalizeNonNegativeInt(value: unknown, fallback: number): number {
@@ -383,10 +377,8 @@ function clipboardCanWrite(api: { supported: boolean; canWrite?: boolean }): boo
   return api.canWrite ?? api.supported;
 }
 
-function timeoutError(ms: number): Error & { code: string } {
-  const error = new Error(`Mermaid render timed out after ${ms}ms`) as Error & { code: string };
-  error.code = "VUE_TUI_MERMAID_RENDER_TIMEOUT";
-  return error;
+function timeoutError(ms: number): Error {
+  return new Error(`Mermaid render timed out after ${ms}ms`);
 }
 
 type TMermaidFatalRenderError = Error & {
@@ -408,61 +400,6 @@ export function markMermaidRenderErrorFatal(error: unknown): Error {
     } catch {}
   }
   return normalized;
-}
-
-function errorCode(error: unknown): string {
-  if (!error || typeof error !== "object") return "";
-  const value = (error as { code?: unknown }).code;
-  return typeof value === "string" ? value : "";
-}
-
-function errorCause(error: unknown): unknown {
-  if (!error || typeof error !== "object") return undefined;
-  return (error as { cause?: unknown }).cause;
-}
-
-const PERMANENT_MERMAID_RENDER_ERROR_CODES = new Set([
-  "VUE_TUI_MISSING_BEAUTIFUL_MERMAID",
-  "VUE_TUI_INVALID_BEAUTIFUL_MERMAID_EXPORT",
-  "VUE_TUI_MERMAID_RENDERER_SETUP",
-  "VUE_TUI_MISSING_MERMAID_RENDERER",
-]);
-
-function hasErrorCode(
-  error: unknown,
-  codes: ReadonlySet<string>,
-  seen = new WeakSet<object>(),
-): boolean {
-  if (!error || typeof error !== "object") return false;
-  if (seen.has(error)) return false;
-  seen.add(error);
-
-  if (codes.has(errorCode(error))) return true;
-
-  const cause = errorCause(error);
-  return cause !== undefined && hasErrorCode(cause, codes, seen);
-}
-
-function isMermaidRenderErrorFatal(error: unknown, seen = new WeakSet<object>()): boolean {
-  if (!error || typeof error !== "object") return false;
-  if (seen.has(error)) return false;
-  seen.add(error);
-
-  if (
-    fatalMermaidRenderErrors.has(error) ||
-    (error as TMermaidFatalRenderError)[TUI_MERMAID_FATAL_RENDER_ERROR] === true
-  ) {
-    return true;
-  }
-
-  const cause = errorCause(error);
-  return cause !== undefined && isMermaidRenderErrorFatal(cause, seen);
-}
-
-function isPermanentMermaidRenderError(error: unknown): boolean {
-  return (
-    isMermaidRenderErrorFatal(error) || hasErrorCode(error, PERMANENT_MERMAID_RENDER_ERROR_CODES)
-  );
 }
 
 function splitRenderedOutput(value: string): readonly string[] {
@@ -559,9 +496,6 @@ export const TMermaidText = defineComponent({
     const { visible, rootProps } = useVisibility();
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
 
-    const status = shallowRef<TMermaidStatus>("idle");
-    const error = shallowRef("");
-    const missingRenderer = shallowRef(false);
     const renderedSnapshot = shallowRef<TMermaidRenderSnapshot | null>(null);
     const documentVersion = shallowRef(0);
     const copied = shallowRef(false);
@@ -589,24 +523,6 @@ export const TMermaidText = defineComponent({
         boxBorderPadding: props.boxBorderPadding ?? base.boxBorderPadding,
         colorMode: "none",
       };
-    }
-
-    function shouldTreatRenderErrorAsTransient(err: unknown, code: string): boolean {
-      if (!props.streaming || props.final || isPermanentMermaidRenderError(err)) return false;
-
-      const context: TMermaidTransientErrorContext = {
-        code,
-        final: props.final,
-        streaming: props.streaming,
-      };
-
-      if (!props.isTransientError) return true;
-
-      try {
-        return props.isTransientError(err, context);
-      } catch {
-        return false;
-      }
     }
 
     function clearCopiedTimer(): void {
@@ -710,51 +626,55 @@ export const TMermaidText = defineComponent({
       }
     }
 
+    function clearRenderState(): void {
+      renderedSnapshot.value = null;
+    }
+
+    function acceptRenderedSnapshot(code: string, rendered: string): void {
+      const renderedLines = splitRenderedOutput(rendered);
+      if (!hasVisibleRenderedOutput(renderedLines)) {
+        renderedSnapshot.value = null;
+        return;
+      }
+
+      renderedSnapshot.value = markRaw({
+        source: code,
+        lines: markRaw(renderedLines),
+      });
+    }
+
     async function renderNow(version: number): Promise<void> {
       const code = source.value;
       if (!code.trim()) {
         if (!alive || version !== renderVersion) return;
-        renderedSnapshot.value = null;
-        status.value = "idle";
-        error.value = "";
-        missingRenderer.value = false;
+        clearRenderState();
         bump();
         return;
       }
 
       if (!props.final) {
         if (!alive || version !== renderVersion) return;
-        renderedSnapshot.value = null;
-        status.value = "idle";
-        error.value = "";
-        missingRenderer.value = false;
+        clearRenderState();
         bump();
         return;
       }
 
       if (shouldSkipRender(code)) {
         if (!alive || version !== renderVersion) return;
-        renderedSnapshot.value = null;
-        status.value = "idle";
-        error.value = "";
-        missingRenderer.value = false;
+        clearRenderState();
         bump();
         return;
       }
 
+      // Source-first invariant: while renderer is pending, screen must keep showing source.
       renderedSnapshot.value = null;
-      status.value = "loading";
-      error.value = "";
-      missingRenderer.value = false;
       bump();
 
       try {
         const renderer = props.renderer;
         if (!renderer) {
           if (!alive || version !== renderVersion) return;
-          renderedSnapshot.value = null;
-          missingRenderer.value = true;
-          status.value = "error";
+          clearRenderState();
           bump();
           return;
         }
@@ -762,37 +682,11 @@ export const TMermaidText = defineComponent({
         const rendered = await renderWithTimeout(renderer, code, resolveAsciiOptions());
         if (!alive || version !== renderVersion) return;
 
-        const renderedLines = splitRenderedOutput(rendered);
-        if (hasVisibleRenderedOutput(renderedLines)) {
-          renderedSnapshot.value = markRaw({
-            source: code,
-            lines: markRaw(renderedLines),
-          });
-          status.value = "ready";
-          error.value = "";
-          missingRenderer.value = false;
-          bump();
-          return;
-        }
-
-        renderedSnapshot.value = null;
-        status.value = "error";
-        error.value = "";
-        missingRenderer.value = false;
+        acceptRenderedSnapshot(code, rendered);
         bump();
-      } catch (err) {
+      } catch {
         if (!alive || version !== renderVersion) return;
-        renderedSnapshot.value = null;
-        missingRenderer.value = false;
-        error.value = errorMessage(err);
-
-        if (shouldTreatRenderErrorAsTransient(err, code)) {
-          status.value = "incomplete";
-          bump();
-          return;
-        }
-
-        status.value = "error";
+        clearRenderState();
         bump();
       }
     }
@@ -813,10 +707,7 @@ export const TMermaidText = defineComponent({
       if (!props.final) {
         builtOnce = true;
         scheduler.cancelFrameTask?.(frameTaskId);
-        status.value = "idle";
-        error.value = "";
-        missingRenderer.value = false;
-        bump();
+        if (copiedWasVisible || snapshotCleared) bump();
         return;
       }
 
@@ -859,7 +750,6 @@ export const TMermaidText = defineComponent({
         () => props.options,
         () => props.streaming,
         () => props.final,
-        () => props.isTransientError,
         () => props.renderTimeoutMs,
         () => props.maxRenderSourceChars,
         () => props.maxRenderSourceLines,
@@ -1165,9 +1055,6 @@ export const TMermaidText = defineComponent({
         displayLines.value,
         currentStyle.value,
         props.clear,
-        status.value,
-        error.value,
-        missingRenderer.value,
         renderedSnapshot.value,
         hasBox.value,
         boxChars.value,

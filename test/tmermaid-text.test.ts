@@ -393,6 +393,43 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
+  it("never paints loading/error/incomplete text in source-first mode", async () => {
+    const final = ref(true);
+    const renderer: TMermaidRenderer = vi.fn(() => {
+      throw new Error("renderer exploded");
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 80,
+          h: 2,
+          box: false,
+          content: "graph LR\n  A --> B",
+          final: final.value,
+          streaming: true,
+          loadingText: "LOADING SHOULD NOT PAINT",
+          errorText: "ERROR SHOULD NOT PAINT",
+          incompleteText: "INCOMPLETE SHOULD NOT PAINT",
+          renderer,
+        }),
+      100,
+      4,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(rowText(mounted, 0)).toBe("graph LR");
+    expect(rowText(mounted, 1)).toBe("  A --> B");
+    expect(rowText(mounted, 0)).not.toContain("LOADING");
+    expect(rowText(mounted, 0)).not.toContain("ERROR");
+    expect(rowText(mounted, 0)).not.toContain("INCOMPLETE");
+
+    mounted.unmount();
+  });
+
   it("skips renderer for oversized Mermaid source and keeps source visible", async () => {
     const source = [
       "graph LR",
