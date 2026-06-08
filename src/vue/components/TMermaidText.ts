@@ -418,9 +418,6 @@ export function isSimpleMermaidFlowchartSource(code: string): boolean {
   return sawDirective && renderableStatements > 0;
 }
 
-const defaultShouldRenderMermaidSource: TMermaidRenderEligibility = (code) =>
-  isSimpleMermaidFlowchartSource(code);
-
 function clipboardCanWrite(api: { supported: boolean; canWrite?: boolean }): boolean {
   return api.canWrite ?? api.supported;
 }
@@ -557,9 +554,7 @@ export const TMermaidText = defineComponent({
 
     const source = computed(() => props.code ?? props.content ?? "");
 
-    const waitingForStreamingSourceToFinish = computed(
-      () => props.streaming && !props.final,
-    );
+    const waitingForStreamingSourceToFinish = computed(() => props.streaming && !props.final);
 
     function bump(): void {
       documentVersion.value++;
@@ -640,7 +635,8 @@ export const TMermaidText = defineComponent({
     function shouldSkipRender(code: string): boolean {
       if (shouldSkipRenderForSize(code)) return true;
 
-      const shouldRenderSource = props.shouldRenderSource ?? defaultShouldRenderMermaidSource;
+      const shouldRenderSource = props.shouldRenderSource;
+      if (!shouldRenderSource) return false;
 
       try {
         return !shouldRenderSource(code, {
