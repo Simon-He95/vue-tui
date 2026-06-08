@@ -1699,7 +1699,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("does not draw the box or expose copy hit node when explicit height has no content row", async () => {
+  it("draws a compact two-row Mermaid box and keeps copy active when explicit height has no content row", async () => {
     const source = "graph LR\n  A --> B";
     const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -1731,15 +1731,21 @@ describe("TMermaidText", () => {
 
     await settleMermaid(mounted);
 
-    expect(rowText(mounted, 0)).toBe("rendered diagram");
-    expect(rowText(mounted, 1)).toBe("");
+    expect(rowText(mounted, 0)).toContain("mermaid");
+    expect(rowText(mounted, 0)).toContain("copy");
+    expect(rowText(mounted, 0).startsWith("┌")).toBe(true);
+    expect(rowText(mounted, 0).endsWith("┐")).toBe(true);
+    expect(rowText(mounted, 1).startsWith("└")).toBe(true);
+    expect(rowText(mounted, 1).endsWith("┘")).toBe(true);
+    expect(rowText(mounted, 0)).not.toContain("rendered diagram");
+    expect(rowText(mounted, 1)).not.toContain("rendered diagram");
 
     setDeterministicMetrics(mounted, cols, rows);
     clickCell(mounted, 22, 0);
     await settleMermaid(mounted);
 
-    expect(writeText).not.toHaveBeenCalled();
-    expect(onCopy).not.toHaveBeenCalled();
+    expect(writeText).toHaveBeenCalledWith(source);
+    expect(onCopy).toHaveBeenCalledWith({ text: source, ok: true });
 
     mounted.unmount();
   });

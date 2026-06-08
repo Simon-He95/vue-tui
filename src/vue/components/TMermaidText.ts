@@ -897,7 +897,10 @@ export const TMermaidText = defineComponent({
     }>;
 
     function canDrawBox(width: number, height: number): boolean {
-      return hasBox.value && Math.floor(width) >= 2 && Math.floor(height) >= 3;
+      // `h` is the outer box height. A 2-row box is still valid chrome:
+      // row 0 = header, row 1 = bottom border. It just has no content row.
+      // Only h < 2 should degrade to raw content.
+      return hasBox.value && Math.floor(width) >= 2 && Math.floor(height) >= 2;
     }
 
     function segmentCells(text: string): number {
