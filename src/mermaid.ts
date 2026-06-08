@@ -1,14 +1,20 @@
 export type {
   TMermaidAsciiOptions,
   TMermaidAsciiTheme,
+  TMermaidCopyPayload,
   TMermaidRenderer,
+  TMermaidRenderEligibility,
+  TMermaidRenderEligibilityContext,
   TMermaidResolvedAsciiOptions,
   TMermaidTextProps,
   TMermaidTransientErrorClassifier,
   TMermaidTransientErrorContext,
 } from "./vue/components/TMermaidText.js";
 
-export { markMermaidRenderErrorFatal } from "./vue/components/TMermaidText.js";
+export {
+  isSimpleMermaidFlowchartSource,
+  markMermaidRenderErrorFatal,
+} from "./vue/components/TMermaidText.js";
 
 export {
   beautifulMermaidRenderer,

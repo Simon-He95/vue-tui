@@ -1461,15 +1461,27 @@ Import: `@simon_he/vue-tui/vue`
 | <code>options</code>               | <code>TMermaidAsciiOptions</code>             | <code>undefined</code>                                                                             | 否   | —    |
 | <code>renderer</code>              | <code>TMermaidRenderer</code>                 | <code>undefined</code>                                                                             | 否   | —    |
 | <code>isTransientError</code>      | <code>TMermaidTransientErrorClassifier</code> | <code>undefined</code>                                                                             | 否   | —    |
+| <code>shouldRenderSource</code>    | <code>TMermaidRenderEligibility</code>        | <code>undefined</code>                                                                             | 否   | —    |
 | <code>loadingText</code>           | <code>string</code>                           | <code>&quot;Rendering Mermaid diagram...&quot;</code>                                              | 否   | —    |
 | <code>incompleteText</code>        | <code>string</code>                           | <code>&quot;Waiting for complete Mermaid diagram...&quot;</code>                                   | 否   | —    |
 | <code>missingDependencyText</code> | <code>string</code>                           | <code>&quot;Install the Mermaid renderer package and use TMermaidText from @simon_he/vue...</code> | 否   | —    |
 | <code>errorText</code>             | <code>string</code>                           | <code>&quot;Mermaid render failed&quot;</code>                                                     | 否   | —    |
 | <code>showErrorDetails</code>      | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>box</code>                   | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>title</code>                 | <code>string</code>                           | <code>&quot;mermaid&quot;</code>                                                                   | 否   | —    |
+| <code>copyButton</code>            | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>copyText</code>              | <code>string</code>                           | <code>&quot;copy&quot;</code>                                                                      | 否   | —    |
+| <code>copiedText</code>            | <code>string</code>                           | <code>&quot;copied&quot;</code>                                                                    | 否   | —    |
+| <code>renderTimeoutMs</code>       | <code>number</code>                           | <code>DEFAULT_MERMAID_RENDER_TIMEOUT_MS</code>                                                     | 否   | —    |
+| <code>maxRenderSourceChars</code>  | <code>number</code>                           | <code>DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS</code>                                               | 否   | —    |
+| <code>maxRenderSourceLines</code>  | <code>number</code>                           | <code>DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES</code>                                               | 否   | —    |
+| <code>copiedDurationMs</code>      | <code>number</code>                           | <code>DEFAULT_MERMAID_COPIED_DURATION_MS</code>                                                    | 否   | —    |
 
 ### Events
 
-—
+| 名称              | Payload                          | 说明 |
+| ----------------- | -------------------------------- | ---- |
+| <code>copy</code> | <code>TMermaidCopyPayload</code> | —    |
 
 ## TMermaidText
 
@@ -1503,15 +1515,27 @@ Import: `@simon_he/vue-tui/vue`
 | <code>options</code>               | <code>TMermaidAsciiOptions</code>             | <code>undefined</code>                                                                             | 否   | —    |
 | <code>renderer</code>              | <code>TMermaidRenderer</code>                 | <code>undefined</code>                                                                             | 否   | —    |
 | <code>isTransientError</code>      | <code>TMermaidTransientErrorClassifier</code> | <code>undefined</code>                                                                             | 否   | —    |
+| <code>shouldRenderSource</code>    | <code>TMermaidRenderEligibility</code>        | <code>undefined</code>                                                                             | 否   | —    |
 | <code>loadingText</code>           | <code>string</code>                           | <code>&quot;Rendering Mermaid diagram...&quot;</code>                                              | 否   | —    |
 | <code>incompleteText</code>        | <code>string</code>                           | <code>&quot;Waiting for complete Mermaid diagram...&quot;</code>                                   | 否   | —    |
 | <code>missingDependencyText</code> | <code>string</code>                           | <code>&quot;Install the Mermaid renderer package and use TMermaidText from @simon_he/vue...</code> | 否   | —    |
 | <code>errorText</code>             | <code>string</code>                           | <code>&quot;Mermaid render failed&quot;</code>                                                     | 否   | —    |
 | <code>showErrorDetails</code>      | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>box</code>                   | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>title</code>                 | <code>string</code>                           | <code>&quot;mermaid&quot;</code>                                                                   | 否   | —    |
+| <code>copyButton</code>            | <code>boolean</code>                          | <code>true</code>                                                                                  | 否   | —    |
+| <code>copyText</code>              | <code>string</code>                           | <code>&quot;copy&quot;</code>                                                                      | 否   | —    |
+| <code>copiedText</code>            | <code>string</code>                           | <code>&quot;copied&quot;</code>                                                                    | 否   | —    |
+| <code>renderTimeoutMs</code>       | <code>number</code>                           | <code>DEFAULT_MERMAID_RENDER_TIMEOUT_MS</code>                                                     | 否   | —    |
+| <code>maxRenderSourceChars</code>  | <code>number</code>                           | <code>DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS</code>                                               | 否   | —    |
+| <code>maxRenderSourceLines</code>  | <code>number</code>                           | <code>DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES</code>                                               | 否   | —    |
+| <code>copiedDurationMs</code>      | <code>number</code>                           | <code>DEFAULT_MERMAID_COPIED_DURATION_MS</code>                                                    | 否   | —    |
 
 ### Events
 
-—
+| 名称              | Payload                          | 说明 |
+| ----------------- | -------------------------------- | ---- |
+| <code>copy</code> | <code>TMermaidCopyPayload</code> | —    |
 
 ## TMultilineModal
 

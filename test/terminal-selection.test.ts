@@ -206,6 +206,37 @@ describe("terminal selection", () => {
     expect(copies).toMatchObject([{ text: "abc", ok: false }]);
   });
 
+  it("copies selections through write-only clipboard", async () => {
+    const terminal = createTerminal({ cols: 6, rows: 1 });
+    terminal.write("abcdef", { x: 0, y: 0 });
+    const writes: string[] = [];
+    const copies: unknown[] = [];
+    const clipboard: ClipboardApi = {
+      supported: false,
+      canRead: false,
+      canWrite: true,
+      async readText() {
+        return writes[writes.length - 1] ?? "";
+      },
+      async writeText(text) {
+        writes.push(text);
+      },
+    };
+    const selection = createTerminalSelectionController({
+      terminal,
+      overlayTerminal: getPlaneTerminal(terminal, "overlay"),
+      clipboard,
+      onCopy: (payload) => copies.push(payload),
+    });
+
+    selection.start({ x: 0, y: 0 });
+    selection.update({ x: 2, y: 0 });
+    await selection.finish();
+
+    expect(writes).toEqual(["abc"]);
+    expect(copies).toMatchObject([{ text: "abc", ok: true }]);
+  });
+
   it("paints and clears the overlay rows", () => {
     const terminal = createTerminal({ cols: 6, rows: 1 });
     terminal.write("abcdef", { x: 0, y: 0, style: { fg: "whiteBright" } });

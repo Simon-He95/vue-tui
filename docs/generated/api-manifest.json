@@ -151,6 +151,7 @@
         "detectTerminalGraphicsCapabilities",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
+        "isSimpleMermaidFlowchartSource",
         "markMermaidRenderErrorFatal",
         "parseTLogAnnotatedText",
         "resolveTLogLinksPanelTheme",
@@ -242,6 +243,9 @@
         "TLogViewVisualIndexStatus",
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidCopyPayload",
+        "TMermaidRenderEligibility",
+        "TMermaidRenderEligibilityContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -298,11 +302,15 @@
         "TMermaidText",
         "beautifulMermaidRenderer",
         "createBeautifulMermaidRenderer",
+        "isSimpleMermaidFlowchartSource",
         "markMermaidRenderErrorFatal"
       ],
       "typeExports": [
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidCopyPayload",
+        "TMermaidRenderEligibility",
+        "TMermaidRenderEligibilityContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -645,11 +653,15 @@
         "TMermaidText",
         "beautifulMermaidRenderer",
         "createBeautifulMermaidRenderer",
+        "isSimpleMermaidFlowchartSource",
         "markMermaidRenderErrorFatal"
       ],
       "typeExports": [
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidCopyPayload",
+        "TMermaidRenderEligibility",
+        "TMermaidRenderEligibilityContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -812,6 +824,7 @@
         "createTerminalRouter",
         "createTextRestrictionPlugin",
         "createTheme",
+        "isSimpleMermaidFlowchartSource",
         "linkifyTextSegments",
         "lintJsonText",
         "markMermaidRenderErrorFatal",
@@ -883,6 +896,9 @@
         "TLinkifySegment",
         "TMermaidAsciiOptions",
         "TMermaidAsciiTheme",
+        "TMermaidCopyPayload",
+        "TMermaidRenderEligibility",
+        "TMermaidRenderEligibilityContext",
         "TMermaidRenderer",
         "TMermaidResolvedAsciiOptions",
         "TMermaidTextProps",
@@ -5864,6 +5880,12 @@
           "defaultValue": "undefined"
         },
         {
+          "name": "shouldRenderSource",
+          "type": "TMermaidRenderEligibility",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
           "name": "loadingText",
           "type": "string",
           "required": false,
@@ -5892,9 +5914,68 @@
           "type": "boolean",
           "required": false,
           "defaultValue": "true"
+        },
+        {
+          "name": "box",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"mermaid\""
+        },
+        {
+          "name": "copyButton",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "copyText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"copy\""
+        },
+        {
+          "name": "copiedText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"copied\""
+        },
+        {
+          "name": "renderTimeoutMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_RENDER_TIMEOUT_MS"
+        },
+        {
+          "name": "maxRenderSourceChars",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS"
+        },
+        {
+          "name": "maxRenderSourceLines",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES"
+        },
+        {
+          "name": "copiedDurationMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_COPIED_DURATION_MS"
         }
       ],
-      "events": []
+      "events": [
+        {
+          "name": "copy",
+          "payload": "TMermaidCopyPayload"
+        }
+      ]
     },
     "TMermaidText": {
       "entrypoint": "@simon_he/vue-tui/vue",
@@ -6018,6 +6099,12 @@
           "defaultValue": "undefined"
         },
         {
+          "name": "shouldRenderSource",
+          "type": "TMermaidRenderEligibility",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
           "name": "loadingText",
           "type": "string",
           "required": false,
@@ -6046,9 +6133,68 @@
           "type": "boolean",
           "required": false,
           "defaultValue": "true"
+        },
+        {
+          "name": "box",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"mermaid\""
+        },
+        {
+          "name": "copyButton",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "copyText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"copy\""
+        },
+        {
+          "name": "copiedText",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"copied\""
+        },
+        {
+          "name": "renderTimeoutMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_RENDER_TIMEOUT_MS"
+        },
+        {
+          "name": "maxRenderSourceChars",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_MAX_RENDER_SOURCE_CHARS"
+        },
+        {
+          "name": "maxRenderSourceLines",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_MAX_RENDER_SOURCE_LINES"
+        },
+        {
+          "name": "copiedDurationMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MERMAID_COPIED_DURATION_MS"
         }
       ],
-      "events": []
+      "events": [
+        {
+          "name": "copy",
+          "payload": "TMermaidCopyPayload"
+        }
+      ]
     },
     "TMultilineModal": {
       "entrypoint": "@simon_he/vue-tui/vue",

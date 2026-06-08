@@ -331,6 +331,7 @@ describe("package exports", () => {
       "createTerminalRouter",
       "createTextRestrictionPlugin",
       "createTheme",
+      "isSimpleMermaidFlowchartSource",
       "linkifyTextSegments",
       "lintJsonText",
       "markMermaidRenderErrorFatal",
@@ -463,6 +464,7 @@ describe("package exports", () => {
       "detectTerminalGraphicsCapabilities",
       "dispatchTLogPluginLinkAction",
       "getTLogPluginMetadata",
+      "isSimpleMermaidFlowchartSource",
       "markMermaidRenderErrorFatal",
       "parseTLogAnnotatedText",
       "resolveTLogLinksPanelTheme",
@@ -496,6 +498,7 @@ describe("package exports", () => {
       "TMermaidText",
       "beautifulMermaidRenderer",
       "createBeautifulMermaidRenderer",
+      "isSimpleMermaidFlowchartSource",
       "markMermaidRenderErrorFatal",
     ]);
     expect(Object.keys(agentMermaid).sort()).toEqual(Object.keys(mermaid).sort());
@@ -616,14 +619,19 @@ describe("package exports", () => {
     expect(agent.TVirtualMarkdown).toBe(markdown.TVirtualMarkdown);
     expect(agent.createMarkdownBlockSource).toBe(markdown.createMarkdownBlockSource);
     expect(agent.TMermaidText).toBe(vue.TMermaidText);
+    expect(agent.isSimpleMermaidFlowchartSource).toBe(vue.isSimpleMermaidFlowchartSource);
     expect(agent.markMermaidRenderErrorFatal).toBe(vue.markMermaidRenderErrorFatal);
     expect(mermaid.TMermaidText).toBe(mermaid.TBeautifulMermaidText);
     expect(mermaid.TMermaid).toBe(mermaid.TBeautifulMermaid);
     expect(mermaid.createBeautifulMermaidRenderer).toBeTruthy();
+    expect(mermaid.isSimpleMermaidFlowchartSource).toBe(vue.isSimpleMermaidFlowchartSource);
     expect(mermaid.markMermaidRenderErrorFatal).toBe(vue.markMermaidRenderErrorFatal);
     expect(agentMermaid.TMermaidText).toBe(mermaid.TMermaidText);
     expect(agentMermaid.TMermaid).toBe(mermaid.TMermaid);
     expect(agentMermaid.beautifulMermaidRenderer).toBe(mermaid.beautifulMermaidRenderer);
+    expect(agentMermaid.isSimpleMermaidFlowchartSource).toBe(
+      mermaid.isSimpleMermaidFlowchartSource,
+    );
     expect(agentMermaid.markMermaidRenderErrorFatal).toBe(mermaid.markMermaidRenderErrorFatal);
   });
 
@@ -1049,19 +1057,25 @@ describe("package exports", () => {
     expect(agent.TToolCallView).toBeTruthy();
     expect(agent.TToolLogView).toBe(experimental.TLogView);
     expect(agent.TUserMessageView).toBeTruthy();
+    expect(agent.isSimpleMermaidFlowchartSource).toBeTruthy();
     expect(mermaid.TBeautifulMermaidText).toBeTruthy();
     expect(mermaid.TMermaidText).toBe(mermaid.TBeautifulMermaidText);
     expect(mermaid.TMermaid).toBe(mermaid.TBeautifulMermaid);
     expect(mermaid.createBeautifulMermaidRenderer).toBeTruthy();
+    expect(mermaid.isSimpleMermaidFlowchartSource).toBeTruthy();
     expect(mermaid.markMermaidRenderErrorFatal).toBeTruthy();
     expect(agentMermaid.TMermaidText).toBe(mermaid.TMermaidText);
     expect(agentMermaid.TMermaid).toBe(mermaid.TMermaid);
     expect(agentMermaid.beautifulMermaidRenderer).toBe(mermaid.beautifulMermaidRenderer);
+    expect(agentMermaid.isSimpleMermaidFlowchartSource).toBe(
+      mermaid.isSimpleMermaidFlowchartSource,
+    );
     expect(agentMermaid.markMermaidRenderErrorFatal).toBe(mermaid.markMermaidRenderErrorFatal);
     expect(mermaidCjs.TBeautifulMermaidText).toBeTruthy();
     expect(mermaidCjs.TMermaidText).toBe(mermaidCjs.TBeautifulMermaidText);
     expect(mermaidCjs.TMermaid).toBe(mermaidCjs.TBeautifulMermaid);
     expect(mermaidCjs.createBeautifulMermaidRenderer).toBeTruthy();
+    expect(mermaidCjs.isSimpleMermaidFlowchartSource).toBeTruthy();
     expect(mermaidCjs.markMermaidRenderErrorFatal).toBeTruthy();
     expect(agentMermaidCjs.TMermaidText).toBeTruthy();
     expect(agentMermaidCjs.TMermaidText).toBe(agentMermaidCjs.TBeautifulMermaidText);

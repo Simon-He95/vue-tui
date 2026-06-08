@@ -65,6 +65,32 @@ describe("runtime (terminal/node)", () => {
     expect(writes).toEqual(["selected text"]);
   });
 
+  it("supports write-only browser clipboard for copy operations", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        clipboard: {
+          writeText,
+        },
+      },
+      configurable: true,
+    });
+
+    const r = createRuntime("browser");
+
+    expect(r.clipboard.supported).toBe(false);
+    expect(r.clipboard.canRead).toBe(false);
+    expect(r.clipboard.canWrite).toBe(true);
+
+    await r.clipboard.writeText("graph LR\n  A --> B");
+    expect(writeText).toHaveBeenCalledWith("graph LR\n  A --> B");
+
+    await expect(r.clipboard.readText()).rejects.toThrow(
+      "Clipboard read not available in this runtime",
+    );
+  });
+
   it("writes OSC52 clipboard sequences when explicitly configured", async () => {
     const writes: string[] = [];
     const clipboard = createOsc52ClipboardProvider({
@@ -77,7 +103,13 @@ describe("runtime (terminal/node)", () => {
     await clipboard.writeText("copy me");
 
     expect(clipboard.supported).toBe(true);
+    expect(clipboard.canRead).toBe(false);
+    expect(clipboard.canWrite).toBe(true);
     expect(writes).toEqual(["\u001B]52;c;Y29weSBtZQ==\u0007"]);
+
+    await expect(clipboard.readText()).rejects.toThrow(
+      "Clipboard read not available in this runtime",
+    );
   });
 
   it("rejects oversized OSC52 clipboard payloads", async () => {

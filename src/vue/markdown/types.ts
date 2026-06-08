@@ -32,6 +32,7 @@ export type TuiMarkdownBlock =
       type: "code_block";
       key: string;
       lines: readonly string[];
+      language?: string;
       style?: Style;
       prefixSegments?: readonly TuiMarkdownInlineSegment[];
       continuationPrefixSegments?: readonly TuiMarkdownInlineSegment[];

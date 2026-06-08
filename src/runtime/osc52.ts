@@ -51,17 +51,20 @@ export function createOsc52ClipboardProvider(options: Osc52ClipboardOptions = {}
     ((sequence: string) => {
       stdout?.write?.(sequence);
     });
-  const supported = options.supported ?? Boolean(options.write || (stdout?.write && stdout.isTTY));
+  const canWrite = options.supported ?? Boolean(options.write || (stdout?.write && stdout.isTTY));
+  const canRead = typeof options.readText === "function";
   const target = normalizeOsc52Target(options.target);
 
   return {
-    supported,
+    supported: canWrite,
+    canRead,
+    canWrite,
     async readText() {
-      if (!options.readText) throw new Error("Clipboard read not available in this runtime");
+      if (!canRead) throw new Error("Clipboard read not available in this runtime");
       return options.readText();
     },
     async writeText(text: string) {
-      if (!supported) throw new Error("Clipboard not available in this runtime");
+      if (!canWrite) throw new Error("Clipboard not available in this runtime");
       const bytes = encodeTextBytes(text);
       const maxBytes = resolveMaxBytes(options.maxBytes, 100 * 1024);
       if (bytes.byteLength > maxBytes)

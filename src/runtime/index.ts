@@ -14,6 +14,8 @@ export type RafApi = Readonly<{
 
 export type ClipboardApi = Readonly<{
   supported: boolean;
+  canRead?: boolean;
+  canWrite?: boolean;
   readText: () => Promise<string>;
   writeText: (text: string) => Promise<void>;
 }>;
@@ -48,6 +50,8 @@ function detectEnv(): RuntimeEnv {
 function createUnsupportedClipboard(): ClipboardApi {
   return {
     supported: false,
+    canRead: false,
+    canWrite: false,
     async readText() {
       throw new Error("Clipboard not available in this runtime");
     },
@@ -57,26 +61,41 @@ function createUnsupportedClipboard(): ClipboardApi {
   };
 }
 
-function createClipboard(kind: RuntimeEnv): ClipboardApi {
-  if (kind === "browser") {
-    const supported =
-      typeof navigator !== "undefined" &&
-      !!(navigator as any).clipboard?.writeText &&
-      !!(navigator as any).clipboard?.readText;
-    return {
-      supported,
-      async readText() {
-        if (!supported) throw new Error("Clipboard not available in this runtime");
-        return (navigator as any).clipboard.readText();
-      },
-      async writeText(text: string) {
-        if (!supported) throw new Error("Clipboard not available in this runtime");
-        await (navigator as any).clipboard.writeText(text);
-      },
-    };
-  }
+function browserClipboard(): any {
+  return typeof navigator !== "undefined" ? (navigator as any).clipboard : undefined;
+}
 
-  return createUnsupportedClipboard();
+function createClipboard(kind: RuntimeEnv): ClipboardApi {
+  if (kind !== "browser") return createUnsupportedClipboard();
+
+  return {
+    get supported() {
+      const clipboard = browserClipboard();
+      return (
+        typeof clipboard?.readText === "function" && typeof clipboard?.writeText === "function"
+      );
+    },
+    get canRead() {
+      return typeof browserClipboard()?.readText === "function";
+    },
+    get canWrite() {
+      return typeof browserClipboard()?.writeText === "function";
+    },
+    async readText() {
+      const clipboard = browserClipboard();
+      if (typeof clipboard?.readText !== "function") {
+        throw new Error("Clipboard read not available in this runtime");
+      }
+      return clipboard.readText();
+    },
+    async writeText(text: string) {
+      const clipboard = browserClipboard();
+      if (typeof clipboard?.writeText !== "function") {
+        throw new Error("Clipboard write not available in this runtime");
+      }
+      await clipboard.writeText(text);
+    },
+  };
 }
 
 function nowMs(): number {

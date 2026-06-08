@@ -117,6 +117,8 @@ function resolveSelectionConfig(
 
 const unsupportedClipboard: ClipboardApi = {
   supported: false,
+  canRead: false,
+  canWrite: false,
   async readText() {
     return "";
   },
@@ -124,6 +126,14 @@ const unsupportedClipboard: ClipboardApi = {
     throw new Error("Clipboard unavailable");
   },
 };
+
+function clipboardCanRead(api: ClipboardApi): boolean {
+  return api.canRead ?? api.supported;
+}
+
+function clipboardCanWrite(api: ClipboardApi): boolean {
+  return api.canWrite ?? api.supported;
+}
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   if (!v || typeof v !== "object") return false;
@@ -583,6 +593,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       return handle;
     },
   };
+  const clipboard = options.clipboard ?? unsupportedClipboard;
 
   const rootLayout = shallowReactive<LayoutContext>({
     originX: 0,
@@ -617,7 +628,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   const selection = createTerminalSelectionController({
     terminal,
     overlayTerminal: selectionOverlay,
-    clipboard: options.clipboard ?? unsupportedClipboard,
+    clipboard,
     getRow: (y) => readTerminalRowForPlanes(terminal, y, selectionReadPlanes),
     getTextProviders: () => Array.from(selectionTextProviders.values()),
     getOptions: () => {
@@ -819,17 +830,17 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
             ...createDefaultTInputHostAdapter(),
             isTerminalLike: true,
             async readClipboardText() {
-              if (!options.clipboard?.supported) return "";
+              if (!clipboardCanRead(clipboard)) return "";
               try {
-                return await options.clipboard.readText();
+                return await clipboard.readText();
               } catch {
                 return "";
               }
             },
             async writeClipboardText(text: string) {
-              if (!text || !options.clipboard?.supported) return false;
+              if (!text || !clipboardCanWrite(clipboard)) return false;
               try {
-                await options.clipboard.writeText(text);
+                await clipboard.writeText(text);
                 return true;
               } catch {
                 return false;
@@ -870,6 +881,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     events: shallowRef(events as any),
     scheduler: schedulerApi,
     runtime,
+    clipboard,
     observability: { trace, framePerf },
     selection: selectionContext,
     defaultStyle: ref(options.defaultStyle ?? {}),
