@@ -374,7 +374,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("keeps non-flowchart Mermaid source by default even when a custom renderer is supplied", async () => {
+  it("lets renderer-agnostic custom renderer handle non-flowchart Mermaid source by default", async () => {
     const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
     const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
 
@@ -384,21 +384,25 @@ describe("TMermaidText", () => {
           x: 0,
           y: 0,
           w: 40,
-          h: 3,
+          h: 1,
           box: false,
           content: source,
           renderer,
         }),
       48,
-      5,
+      3,
     );
 
     await settleMermaid(mounted);
 
-    expect(renderer).not.toHaveBeenCalled();
-    expect(rowText(mounted, 0)).toBe("sequenceDiagram");
-    expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
-    expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(renderer).toHaveBeenCalledWith(
+      source,
+      expect.objectContaining({
+        colorMode: "none",
+      }),
+    );
+    expect(rowText(mounted, 0)).toBe("sequence rendered");
 
     mounted.unmount();
   });
@@ -467,7 +471,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("keeps non-flowchart Mermaid source in the beautiful-mermaid wrapper", async () => {
+  it("keeps complex Mermaid source by default when the mermaid wrapper uses the built-in renderer", async () => {
     vi.resetModules();
 
     const renderMermaidASCII = vi.fn(() => "should not render");
@@ -507,44 +511,7 @@ describe("TMermaidText", () => {
     }
   });
 
-  it("keeps complex Mermaid source by default when the mermaid wrapper receives a custom renderer", async () => {
-    vi.resetModules();
-
-    try {
-      const { TMermaidText: TMermaidTextWithBeautifulRenderer } = await import("../src/mermaid.js");
-
-      const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
-      const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
-
-      const mounted = await mountTerminal(
-        () =>
-          h(TMermaidTextWithBeautifulRenderer, {
-            x: 0,
-            y: 0,
-            w: 40,
-            h: 3,
-            box: false,
-            content: source,
-            renderer,
-          }),
-        48,
-        5,
-      );
-
-      await settleMermaid(mounted);
-
-      expect(renderer).not.toHaveBeenCalled();
-      expect(rowText(mounted, 0)).toBe("sequenceDiagram");
-      expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
-      expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
-
-      mounted.unmount();
-    } finally {
-      vi.resetModules();
-    }
-  });
-
-  it("allows the mermaid wrapper custom renderer to explicitly opt into complex Mermaid rendering", async () => {
+  it("lets the mermaid wrapper custom renderer handle complex Mermaid source by default", async () => {
     vi.resetModules();
 
     try {
@@ -563,7 +530,6 @@ describe("TMermaidText", () => {
             box: false,
             content: source,
             renderer,
-            shouldRenderSource: () => true,
           }),
         48,
         3,
@@ -574,9 +540,7 @@ describe("TMermaidText", () => {
       expect(renderer).toHaveBeenCalledTimes(1);
       expect(renderer).toHaveBeenCalledWith(
         source,
-        expect.objectContaining({
-          colorMode: "none",
-        }),
+        expect.objectContaining({ colorMode: "none" }),
       );
       expect(rowText(mounted, 0)).toBe("sequence rendered");
 

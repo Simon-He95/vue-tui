@@ -636,7 +636,8 @@ export const TMermaidText = defineComponent({
     function shouldSkipRender(code: string): boolean {
       if (shouldSkipRenderForSize(code)) return true;
 
-      const shouldRenderSource = props.shouldRenderSource ?? isSimpleMermaidFlowchartSource;
+      const shouldRenderSource = props.shouldRenderSource;
+      if (!shouldRenderSource) return false;
 
       try {
         return !shouldRenderSource(code, {
