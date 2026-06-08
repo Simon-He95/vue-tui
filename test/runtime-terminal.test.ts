@@ -103,7 +103,13 @@ describe("runtime (terminal/node)", () => {
     await clipboard.writeText("copy me");
 
     expect(clipboard.supported).toBe(true);
+    expect(clipboard.canRead).toBe(false);
+    expect(clipboard.canWrite).toBe(true);
     expect(writes).toEqual(["\u001B]52;c;Y29weSBtZQ==\u0007"]);
+
+    await expect(clipboard.readText()).rejects.toThrow(
+      "Clipboard read not available in this runtime",
+    );
   });
 
   it("rejects oversized OSC52 clipboard payloads", async () => {
