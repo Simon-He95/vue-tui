@@ -425,7 +425,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("renders complex Mermaid source by default when the renderer succeeds", async () => {
+  it("keeps complex Mermaid source by default without calling the renderer", async () => {
     const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
     const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
 
@@ -439,6 +439,36 @@ describe("TMermaidText", () => {
           box: false,
           content: source,
           renderer,
+        }),
+      48,
+      5,
+    );
+
+    await settleMermaid(mounted);
+
+    expect(renderer).not.toHaveBeenCalled();
+    expect(rowText(mounted, 0)).toBe("sequenceDiagram");
+    expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
+    expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
+
+    mounted.unmount();
+  });
+
+  it("allows callers to opt into rendering complex Mermaid source", async () => {
+    const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
+    const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 40,
+          h: 3,
+          box: false,
+          content: source,
+          renderer,
+          shouldRenderSource: () => true,
         }),
       48,
       5,
@@ -488,7 +518,7 @@ describe("TMermaidText", () => {
     mounted.unmount();
   });
 
-  it("tries complex Mermaid source by default in the beautiful-mermaid wrapper", async () => {
+  it("keeps complex Mermaid source by default in the beautiful-mermaid wrapper", async () => {
     vi.resetModules();
 
     const renderMermaidASCII = vi.fn(() => "sequence rendered");
@@ -516,14 +546,10 @@ describe("TMermaidText", () => {
 
       await settleMermaid(mounted);
 
-      expect(renderMermaidASCII).toHaveBeenCalledTimes(1);
-      expect(renderMermaidASCII).toHaveBeenCalledWith(
-        source,
-        expect.objectContaining({
-          colorMode: "none",
-        }),
-      );
-      expect(rowText(mounted, 0)).toBe("sequence rendered");
+      expect(renderMermaidASCII).not.toHaveBeenCalled();
+      expect(rowText(mounted, 0)).toBe("sequenceDiagram");
+      expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
+      expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
 
       mounted.unmount();
     } finally {
@@ -532,7 +558,7 @@ describe("TMermaidText", () => {
     }
   });
 
-  it("lets the mermaid wrapper custom renderer render complex Mermaid by default", async () => {
+  it("keeps complex Mermaid source by default even with a custom renderer in the wrapper", async () => {
     vi.resetModules();
 
     try {
@@ -551,6 +577,44 @@ describe("TMermaidText", () => {
             box: false,
             content: source,
             renderer,
+          }),
+        48,
+        3,
+      );
+
+      await settleMermaid(mounted);
+
+      expect(renderer).not.toHaveBeenCalled();
+      expect(rowText(mounted, 0)).toBe("sequenceDiagram");
+      expect(rowText(mounted, 1)).toBe("  Alice->>Bob: Hello");
+      expect(rowText(mounted, 2)).toBe("  Bob-->>Alice: Hi");
+
+      mounted.unmount();
+    } finally {
+      vi.resetModules();
+    }
+  });
+
+  it("lets the mermaid wrapper custom renderer render complex Mermaid when explicitly opted in", async () => {
+    vi.resetModules();
+
+    try {
+      const { TMermaidText: TMermaidTextWithBeautifulRenderer } = await import("../src/mermaid.js");
+
+      const source = ["sequenceDiagram", "  Alice->>Bob: Hello", "  Bob-->>Alice: Hi"].join("\n");
+      const renderer: TMermaidRenderer = vi.fn(() => "sequence rendered");
+
+      const mounted = await mountTerminal(
+        () =>
+          h(TMermaidTextWithBeautifulRenderer, {
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 3,
+            box: false,
+            content: source,
+            renderer,
+            shouldRenderSource: () => true,
           }),
         48,
         3,
