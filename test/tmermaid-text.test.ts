@@ -727,6 +727,11 @@ describe("TMermaidText", () => {
     expect(isSimpleMermaidFlowchartSource('graph LR\nA["subgraph; end"] --> B')).toBe(true);
     expect(isSimpleMermaidFlowchartSource('graph LR\nA["a;b;c"] --> B')).toBe(true);
     expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B %% inline comment")).toBe(true);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA -->|yes; no| B")).toBe(true);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA -->|subgraph; end| B")).toBe(true);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA -->|100%% ready| B")).toBe(true);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA -->|foo:::bar| B")).toBe(true);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA -->|shape @{text}| B")).toBe(true);
 
     expect(isSimpleMermaidFlowchartSource("graph LR")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("sequenceDiagram\nAlice->>Bob: hi")).toBe(false);
@@ -736,6 +741,7 @@ describe("TMermaidText", () => {
     expect(isSimpleMermaidFlowchartSource("graph LR\nclassDef hot fill:#f00")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B; classDef hot fill:#f00")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nA:::hot --> B")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA@{ shape: rect } --> B")).toBe(false);
     expect(isSimpleMermaidFlowchartSource('graph LR\nclick A href "https://example.com"')).toBe(
       false,
     );

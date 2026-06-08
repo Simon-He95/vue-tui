@@ -140,7 +140,6 @@ const MERMAID_COMMENT_RE = /^%%/;
 const MERMAID_FRONTMATTER_DELIMITER_RE = /^---\s*$/;
 const SIMPLE_MERMAID_FLOW_STATEMENT_START_RE =
   /^(?:"[^"]+"|'[^']+'|`[^`]+`|[A-Za-z0-9_][A-Za-z0-9_-]*)/;
-const SIMPLE_MERMAID_COMPLEX_TOKEN_RE = /:::[A-Za-z_][A-Za-z0-9_-]*|@\{/;
 const COMPLEX_MERMAID_FLOW_FEATURE_RE =
   /^(?:subgraph|end|classDef|class|click|style|linkStyle|accTitle|accDescr|direction)\b/i;
 
@@ -192,6 +191,7 @@ type MermaidScannerState = {
   squareDepth: number;
   parenDepth: number;
   braceDepth: number;
+  pipeLabel: boolean;
 };
 
 function createMermaidScannerState(): MermaidScannerState {
@@ -201,16 +201,39 @@ function createMermaidScannerState(): MermaidScannerState {
     squareDepth: 0,
     parenDepth: 0,
     braceDepth: 0,
+    pipeLabel: false,
   };
 }
 
 function scannerAtTopLevel(state: MermaidScannerState): boolean {
   return (
-    !state.quote && state.squareDepth === 0 && state.parenDepth === 0 && state.braceDepth === 0
+    !state.quote &&
+    !state.pipeLabel &&
+    state.squareDepth === 0 &&
+    state.parenDepth === 0 &&
+    state.braceDepth === 0
   );
 }
 
 function advanceMermaidScannerState(state: MermaidScannerState, ch: string): void {
+  if (state.pipeLabel) {
+    if (state.escaped) {
+      state.escaped = false;
+      return;
+    }
+
+    if (ch === "\\") {
+      state.escaped = true;
+      return;
+    }
+
+    if (ch === "|") {
+      state.pipeLabel = false;
+    }
+
+    return;
+  }
+
   if (state.quote) {
     if (state.escaped) {
       state.escaped = false;
@@ -231,6 +254,12 @@ function advanceMermaidScannerState(state: MermaidScannerState, ch: string): voi
 
   if (ch === '"' || ch === "'" || ch === "`") {
     state.quote = ch;
+    state.escaped = false;
+    return;
+  }
+
+  if (ch === "|" && scannerAtTopLevel(state)) {
+    state.pipeLabel = true;
     state.escaped = false;
     return;
   }
@@ -342,10 +371,29 @@ function isForbiddenMermaidFlowStatement(statement: string): boolean {
   );
 }
 
+function hasTopLevelMermaidComplexToken(statement: string): boolean {
+  const state = createMermaidScannerState();
+
+  for (let index = 0; index < statement.length; index++) {
+    const ch = statement[index] ?? "";
+
+    if (scannerAtTopLevel(state)) {
+      if (statement.startsWith("@{", index)) return true;
+      if (statement.startsWith(":::", index) && /[A-Za-z_]/.test(statement[index + 3] ?? "")) {
+        return true;
+      }
+    }
+
+    advanceMermaidScannerState(state, ch);
+  }
+
+  return false;
+}
+
 function isSimpleMermaidFlowStatement(statement: string): boolean {
   if (SIMPLE_MERMAID_DIRECTIVE_RE.test(statement)) return false;
   if (isForbiddenMermaidFlowStatement(statement)) return false;
-  if (SIMPLE_MERMAID_COMPLEX_TOKEN_RE.test(statement)) return false;
+  if (hasTopLevelMermaidComplexToken(statement)) return false;
   return SIMPLE_MERMAID_FLOW_STATEMENT_START_RE.test(statement);
 }
 
