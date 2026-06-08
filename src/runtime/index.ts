@@ -14,6 +14,8 @@ export type RafApi = Readonly<{
 
 export type ClipboardApi = Readonly<{
   supported: boolean;
+  canRead?: boolean;
+  canWrite?: boolean;
   readText: () => Promise<string>;
   writeText: (text: string) => Promise<void>;
 }>;
@@ -48,6 +50,8 @@ function detectEnv(): RuntimeEnv {
 function createUnsupportedClipboard(): ClipboardApi {
   return {
     supported: false,
+    canRead: false,
+    canWrite: false,
     async readText() {
       throw new Error("Clipboard not available in this runtime");
     },
@@ -64,7 +68,9 @@ function createClipboard(kind: RuntimeEnv): ClipboardApi {
     const canWrite = typeof clipboard?.writeText === "function";
 
     return {
-      supported: canRead || canWrite,
+      supported: canRead && canWrite,
+      canRead,
+      canWrite,
       async readText() {
         if (!canRead) throw new Error("Clipboard read not available in this runtime");
         return clipboard.readText();

@@ -113,7 +113,8 @@ const SIMPLE_MERMAID_DIRECTIVE_RE = /^(?:graph|flowchart)\s+(?:TB|TD|BT|LR|RL)\b
 const MERMAID_INIT_DIRECTIVE_RE = /^%%\{/;
 const MERMAID_COMMENT_RE = /^%%/;
 const MERMAID_FRONTMATTER_DELIMITER_RE = /^---\s*$/;
-const SIMPLE_MERMAID_FLOW_STATEMENT_START_RE = /^[A-Za-z_][A-Za-z0-9_-]*/;
+const SIMPLE_MERMAID_FLOW_STATEMENT_START_RE =
+  /^(?:"[^"]+"|'[^']+'|`[^`]+`|[A-Za-z0-9_][A-Za-z0-9_-]*)/;
 const SIMPLE_MERMAID_COMPLEX_TOKEN_RE = /:::[A-Za-z_][A-Za-z0-9_-]*|@\{/;
 const COMPLEX_MERMAID_FLOW_FEATURE_RE =
   /^(?:subgraph|end|classDef|class|click|style|linkStyle|accTitle|accDescr|direction)\b/i;
@@ -164,6 +165,127 @@ function countLinesUpTo(value: string, max: number): number {
   return lines;
 }
 
+type MermaidScannerState = {
+  quote: '"' | "'" | "`" | "";
+  escaped: boolean;
+  squareDepth: number;
+  parenDepth: number;
+  braceDepth: number;
+};
+
+function createMermaidScannerState(): MermaidScannerState {
+  return {
+    quote: "",
+    escaped: false,
+    squareDepth: 0,
+    parenDepth: 0,
+    braceDepth: 0,
+  };
+}
+
+function scannerAtTopLevel(state: MermaidScannerState): boolean {
+  return (
+    !state.quote &&
+    state.squareDepth === 0 &&
+    state.parenDepth === 0 &&
+    state.braceDepth === 0
+  );
+}
+
+function advanceMermaidScannerState(state: MermaidScannerState, ch: string): void {
+  if (state.quote) {
+    if (state.escaped) {
+      state.escaped = false;
+      return;
+    }
+
+    if (ch === "\\") {
+      state.escaped = true;
+      return;
+    }
+
+    if (ch === state.quote) {
+      state.quote = "";
+    }
+
+    return;
+  }
+
+  if (ch === '"' || ch === "'" || ch === "`") {
+    state.quote = ch;
+    state.escaped = false;
+    return;
+  }
+
+  if (ch === "[") {
+    state.squareDepth++;
+    return;
+  }
+
+  if (ch === "]") {
+    state.squareDepth = Math.max(0, state.squareDepth - 1);
+    return;
+  }
+
+  if (ch === "(") {
+    state.parenDepth++;
+    return;
+  }
+
+  if (ch === ")") {
+    state.parenDepth = Math.max(0, state.parenDepth - 1);
+    return;
+  }
+
+  if (ch === "{") {
+    state.braceDepth++;
+    return;
+  }
+
+  if (ch === "}") {
+    state.braceDepth = Math.max(0, state.braceDepth - 1);
+  }
+}
+
+function splitMermaidLineStatements(line: string): readonly string[] {
+  const out: string[] = [];
+  const state = createMermaidScannerState();
+  let start = 0;
+
+  for (let index = 0; index < line.length; index++) {
+    const ch = line[index] ?? "";
+
+    if (ch === ";" && scannerAtTopLevel(state)) {
+      const statement = line.slice(start, index).trim();
+      if (statement) out.push(statement);
+      start = index + 1;
+      continue;
+    }
+
+    advanceMermaidScannerState(state, ch);
+  }
+
+  const tail = line.slice(start).trim();
+  if (tail) out.push(tail);
+  return out;
+}
+
+function stripTopLevelMermaidComment(statement: string): string {
+  const state = createMermaidScannerState();
+
+  for (let index = 0; index < statement.length; index++) {
+    const ch = statement[index] ?? "";
+
+    if (ch === "%" && statement[index + 1] === "%" && scannerAtTopLevel(state)) {
+      return statement.slice(0, index).trim();
+    }
+
+    advanceMermaidScannerState(state, ch);
+  }
+
+  return statement.trim();
+}
+
 function mermaidSourceLines(code: string): readonly string[] {
   return String(code ?? "")
     .replace(/\r\n?/g, "\n")
@@ -184,8 +306,8 @@ function mermaidSourceStatements(code: string): readonly string[] {
 
     if (MERMAID_COMMENT_RE.test(line)) continue;
 
-    for (const rawStatement of line.split(";")) {
-      const statement = rawStatement.trim();
+    for (const rawStatement of splitMermaidLineStatements(line)) {
+      const statement = stripTopLevelMermaidComment(rawStatement);
       if (!statement || MERMAID_COMMENT_RE.test(statement)) continue;
       statements.push(statement);
     }
@@ -228,6 +350,10 @@ export function isSimpleMermaidFlowchartSource(code: string): boolean {
   }
 
   return sawDirective && renderableStatements > 0;
+}
+
+function clipboardCanWrite(api: { supported: boolean; canWrite?: boolean }): boolean {
+  return api.canWrite ?? api.supported;
 }
 
 function timeoutError(ms: number): Error & { code: string } {
@@ -850,8 +976,8 @@ export const TMermaidText = defineComponent({
       const contextClipboard = terminalContext.clipboard;
 
       if (contextClipboard) {
-        if (!contextClipboard.supported) {
-          throw new Error("Clipboard not available in this runtime");
+        if (!clipboardCanWrite(contextClipboard)) {
+          throw new Error("Clipboard write not available in this runtime");
         }
         await contextClipboard.writeText(text);
         return;
@@ -863,7 +989,7 @@ export const TMermaidText = defineComponent({
         return;
       }
 
-      throw new Error("Clipboard not available");
+      throw new Error("Clipboard write not available in this runtime");
     }
 
     async function copySource(): Promise<void> {

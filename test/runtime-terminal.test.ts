@@ -79,7 +79,9 @@ describe("runtime (terminal/node)", () => {
 
     const r = createRuntime("browser");
 
-    expect(r.clipboard.supported).toBe(true);
+    expect(r.clipboard.supported).toBe(false);
+    expect(r.clipboard.canRead).toBe(false);
+    expect(r.clipboard.canWrite).toBe(true);
 
     await r.clipboard.writeText("graph LR\n  A --> B");
     expect(writeText).toHaveBeenCalledWith("graph LR\n  A --> B");

@@ -531,12 +531,19 @@ describe("TMermaidText", () => {
     expect(isSimpleMermaidFlowchartSource("graph LR\nA & B --> C")).toBe(true);
     expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B & C")).toBe(true);
     expect(isSimpleMermaidFlowchartSource("graph LR\nA[Start] -->|ok| B{Done}")).toBe(true);
+    expect(isSimpleMermaidFlowchartSource('graph LR\nA["subgraph; end"] --> B')).toBe(true);
+    expect(isSimpleMermaidFlowchartSource('graph LR\nA["a;b;c"] --> B')).toBe(true);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B %% inline comment")).toBe(true);
 
     expect(isSimpleMermaidFlowchartSource("graph LR")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("sequenceDiagram\nAlice->>Bob: hi")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nsubgraph X\nA --> B\nend")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nsubgraph X; A --> B; end")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nstyle A fill:#f00")).toBe(false);
     expect(isSimpleMermaidFlowchartSource("graph LR\nclassDef hot fill:#f00")).toBe(false);
+    expect(isSimpleMermaidFlowchartSource("graph LR\nA --> B; classDef hot fill:#f00")).toBe(
+      false,
+    );
     expect(isSimpleMermaidFlowchartSource("graph LR\nA:::hot --> B")).toBe(false);
     expect(isSimpleMermaidFlowchartSource('graph LR\nclick A href "https://example.com"')).toBe(
       false,
@@ -1158,6 +1165,49 @@ describe("TMermaidText", () => {
         delete (globalThis.navigator as any).clipboard;
       }
     }
+  });
+
+  it("uses write-only runtime clipboard for Mermaid copy without changing aggregate support", async () => {
+    const source = "graph LR\n  A --> B";
+    const renderer: TMermaidRenderer = vi.fn(() => "rendered diagram");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const onCopy = vi.fn();
+
+    const cols = 32;
+    const rows = 5;
+    const mounted = await mountTerminal(
+      () =>
+        h(TMermaidText, {
+          x: 0,
+          y: 0,
+          w: 28,
+          content: source,
+          renderer,
+          onCopy,
+        }),
+      cols,
+      rows,
+      {
+        clipboard: {
+          supported: false,
+          canRead: false,
+          canWrite: true,
+          readText: vi.fn(),
+          writeText,
+        },
+      },
+    );
+
+    await settleMermaid(mounted);
+    setDeterministicMetrics(mounted, cols, rows);
+
+    clickCell(mounted, 22, 0);
+    await settleMermaid(mounted);
+
+    expect(writeText).toHaveBeenCalledWith(source);
+    expect(onCopy).toHaveBeenCalledWith({ text: source, ok: true });
+
+    mounted.unmount();
   });
 
   it("does not bypass an explicitly unsupported injected clipboard", async () => {

@@ -117,6 +117,8 @@ function resolveSelectionConfig(
 
 const unsupportedClipboard: ClipboardApi = {
   supported: false,
+  canRead: false,
+  canWrite: false,
   async readText() {
     return "";
   },
@@ -124,6 +126,14 @@ const unsupportedClipboard: ClipboardApi = {
     throw new Error("Clipboard unavailable");
   },
 };
+
+function clipboardCanRead(api: ClipboardApi): boolean {
+  return api.canRead ?? api.supported;
+}
+
+function clipboardCanWrite(api: ClipboardApi): boolean {
+  return api.canWrite ?? api.supported;
+}
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   if (!v || typeof v !== "object") return false;
@@ -820,7 +830,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
             ...createDefaultTInputHostAdapter(),
             isTerminalLike: true,
             async readClipboardText() {
-              if (!clipboard.supported) return "";
+              if (!clipboardCanRead(clipboard)) return "";
               try {
                 return await clipboard.readText();
               } catch {
@@ -828,7 +838,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
               }
             },
             async writeClipboardText(text: string) {
-              if (!text || !clipboard.supported) return false;
+              if (!text || !clipboardCanWrite(clipboard)) return false;
               try {
                 await clipboard.writeText(text);
                 return true;

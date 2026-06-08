@@ -81,6 +81,14 @@ export type {
   TerminalProviderSelectionOptions,
 } from "./terminal-provider/selection-config.js";
 
+function clipboardCanRead(api: ClipboardApi): boolean {
+  return api.canRead ?? api.supported;
+}
+
+function clipboardCanWrite(api: ClipboardApi): boolean {
+  return api.canWrite ?? api.supported;
+}
+
 export const TerminalProvider = defineComponent({
   name: "TerminalProvider",
   props: {
@@ -206,15 +214,22 @@ export const TerminalProvider = defineComponent({
     const invalidate = schedulerApi.invalidate;
 
     const platformRuntime = createRuntime();
+    const activeClipboard = computed(() => props.clipboard ?? platformRuntime.clipboard);
     const selectionClipboard: ClipboardApi = {
       get supported() {
-        return props.clipboard?.supported ?? platformRuntime.clipboard.supported;
+        return activeClipboard.value.supported;
+      },
+      get canRead() {
+        return clipboardCanRead(activeClipboard.value);
+      },
+      get canWrite() {
+        return clipboardCanWrite(activeClipboard.value);
       },
       readText() {
-        return (props.clipboard ?? platformRuntime.clipboard).readText();
+        return activeClipboard.value.readText();
       },
       writeText(text: string) {
-        return (props.clipboard ?? platformRuntime.clipboard).writeText(text);
+        return activeClipboard.value.writeText(text);
       },
     };
     const selectionTextProviders = new Map<string, SelectionTextProvider>();
