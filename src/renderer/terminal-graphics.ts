@@ -102,9 +102,26 @@ export const MAX_TERMINAL_GRAPHICS_SEQUENCE_CHARS = 2 * 1024 * 1024;
 export const MAX_TERMINAL_GRAPHICS_FALLBACK_CHARS = 16_384;
 export const MAX_TERMINAL_GRAPHIC_CELLS = 10_000;
 
-const terminalGraphicsOutputs = new WeakMap<Terminal, TerminalGraphicsOutput>();
-const terminalGraphicsOutputVersions = new WeakMap<Terminal, number>();
-const terminalGraphicsOutputListeners = new WeakMap<Terminal, Set<() => void>>();
+type TerminalGraphicsRegistry = Readonly<{
+  outputs: WeakMap<Terminal, TerminalGraphicsOutput>;
+  outputVersions: WeakMap<Terminal, number>;
+  outputListeners: WeakMap<Terminal, Set<() => void>>;
+}>;
+
+const TERMINAL_GRAPHICS_REGISTRY = Symbol.for("@simon_he/vue-tui:v1:terminal-graphics");
+const terminalGraphicsGlobal = globalThis as typeof globalThis & Record<PropertyKey, unknown>;
+const terminalGraphicsRegistry = (terminalGraphicsGlobal[TERMINAL_GRAPHICS_REGISTRY] as
+  | TerminalGraphicsRegistry
+  | undefined) ?? {
+  outputs: new WeakMap<Terminal, TerminalGraphicsOutput>(),
+  outputVersions: new WeakMap<Terminal, number>(),
+  outputListeners: new WeakMap<Terminal, Set<() => void>>(),
+};
+terminalGraphicsGlobal[TERMINAL_GRAPHICS_REGISTRY] = terminalGraphicsRegistry;
+
+const terminalGraphicsOutputs = terminalGraphicsRegistry.outputs;
+const terminalGraphicsOutputVersions = terminalGraphicsRegistry.outputVersions;
+const terminalGraphicsOutputListeners = terminalGraphicsRegistry.outputListeners;
 
 function notifyTerminalGraphicsOutputChange(terminal: Terminal): void {
   const version = (terminalGraphicsOutputVersions.get(terminal) ?? 0) + 1;

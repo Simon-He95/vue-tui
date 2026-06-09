@@ -68,6 +68,9 @@ export {
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
   detectTerminalGraphicsCapabilities,
+  getTerminalGraphicsOutput,
+  getTerminalGraphicsOutputVersion,
+  subscribeTerminalGraphicsOutput,
 } from "./renderer/terminal-graphics.js";
 export type {
   TMermaidAsciiOptions,
