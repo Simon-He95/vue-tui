@@ -151,6 +151,8 @@
         "detectTerminalGraphicsCapabilities",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
+        "getTerminalGraphicsOutput",
+        "getTerminalGraphicsOutputVersion",
         "isSimpleMermaidFlowchartSource",
         "markMermaidRenderErrorFatal",
         "parseTLogAnnotatedText",
@@ -165,6 +167,7 @@
         "resolveTToolCallViewModel",
         "resolveTUserMessageViewModel",
         "stripTLogAnsiText",
+        "subscribeTerminalGraphicsOutput",
         "tlogDarkPreset",
         "tlogDarkTheme",
         "tlogDefaultPreset",
@@ -284,6 +287,7 @@
         "TuiMarkdownBlockSource",
         "TuiMarkdownBlockSourceOptions",
         "TuiMarkdownBlockSourceSnapshot",
+        "TuiMarkdownGraphicSegment",
         "TuiMarkdownInlineSegment",
         "TuiMarkdownNode",
         "TuiMarkdownTableCell",
@@ -630,6 +634,7 @@
         "TuiMarkdownBlockSource",
         "TuiMarkdownBlockSourceOptions",
         "TuiMarkdownBlockSourceSnapshot",
+        "TuiMarkdownGraphicSegment",
         "TuiMarkdownInlineSegment",
         "TuiMarkdownLayoutOptions",
         "TuiMarkdownNode",
@@ -946,6 +951,7 @@
         "TerminalSchedulerConfig",
         "TerminalSchedulerInvalidateOptions",
         "TerminalSelectionContext",
+        "TuiMarkdownGraphicSegment",
         "TuiMarkdownTheme",
         "TuiMarkdownThemeOverrides",
         "TuiTheme",
@@ -5754,6 +5760,14 @@
           "defaultValue": "undefined",
           "description": "Markdown theme token overrides for parsed blocks and inline segments.",
           "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageRenderer",
+          "type": "((image: TuiMarkdownGraphicSegment) => string | null | undefined)",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Optional resolver for markdown image payloads before terminal graphics rendering.",
+          "descriptionSource": "component-default"
         }
       ],
       "events": []
@@ -9426,6 +9440,14 @@
           "required": false,
           "defaultValue": "undefined",
           "description": "Markdown theme token overrides for parsed blocks and inline segments.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageRenderer",
+          "type": "((image: TuiMarkdownGraphicSegment) => string | null | undefined)",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Optional resolver for markdown image payloads before terminal graphics rendering.",
           "descriptionSource": "component-default"
         }
       ],

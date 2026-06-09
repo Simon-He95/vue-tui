@@ -39,6 +39,7 @@ function toVisualSegment(segment: TuiMarkdownInlineSegment): TuiMarkdownVisualSe
     text: segment.text,
     style: segment.style,
     cells,
+    ...(segment.graphic ? { graphic: segment.graphic } : {}),
   };
 }
 
@@ -81,7 +82,10 @@ function clipInlineSegmentsToWidth(
     const piece = sliceByCellsRange(segment.text, 0, remaining);
     const cells = textCellWidth(piece);
     if (!piece || cells <= 0) continue;
-    out.push(segment.style ? { text: piece, style: segment.style } : { text: piece });
+    const clipped = segment.style ? { text: piece, style: segment.style } : { text: piece };
+    out.push(
+      piece === segment.text && segment.graphic ? { ...clipped, graphic: segment.graphic } : clipped,
+    );
     remaining -= cells;
   }
   return out;
@@ -104,7 +108,12 @@ function clipVisualSegmentsToWidth(
     const text = sliceByCellsRange(segment.text, 0, remaining);
     const cells = textCellWidth(text);
     if (!text || cells <= 0) continue;
-    out.push({ text, style: segment.style, cells });
+    out.push({
+      text,
+      style: segment.style,
+      cells,
+      ...(text === segment.text && segment.graphic ? { graphic: segment.graphic } : {}),
+    });
     remaining -= cells;
   }
   return out;
@@ -174,8 +183,10 @@ function wrapLineSegments(
   const rowHasBody = () => row.segments.length > prefixLengthForRow();
 
   for (const segment of source) {
+    const layoutSegment: TuiMarkdownInlineSegment =
+      segment.graphic && textCellWidth(segment.text) > 1 ? { ...segment, text: " " } : segment;
     let aborted = false;
-    forEachTextCellSegment(segment.text, (piece) => {
+    forEachTextCellSegment(layoutSegment.text, (piece) => {
       while (true) {
         if (row.remaining <= 0) {
           pushRow();
@@ -198,10 +209,16 @@ function wrapLineSegments(
           aborted = true;
           return false;
         }
+        const shouldAttachGraphic =
+          segment.graphic != null &&
+          piece.start === 0 &&
+          piece.end === layoutSegment.text.length &&
+          row.remaining >= piece.cells;
         row.segments.push({
           text: piece.text,
           style: segment.style,
           cells: piece.cells,
+          ...(shouldAttachGraphic ? { graphic: segment.graphic } : {}),
         });
         row.remaining -= piece.cells;
         return undefined;
@@ -351,12 +368,13 @@ function appendVisualSegment(
   segments: TuiMarkdownVisualSegment[],
   text: string,
   style?: Style,
+  graphic?: TuiMarkdownVisualSegment["graphic"],
 ): void {
   if (!text) return;
   const cells = textCellWidth(text);
   if (cells <= 0) return;
   const prev = segments[segments.length - 1];
-  if (prev && prev.style === style) {
+  if (prev && prev.style === style && !prev.graphic && !graphic) {
     segments[segments.length - 1] = {
       text: `${prev.text}${text}`,
       style,
@@ -364,7 +382,7 @@ function appendVisualSegment(
     };
     return;
   }
-  segments.push({ text, style, cells });
+  segments.push({ text, style, cells, ...(graphic ? { graphic } : {}) });
 }
 
 function appendInlineVisualSegments(
@@ -376,7 +394,7 @@ function appendInlineVisualSegments(
       appendVisualSegment(out, " ");
       continue;
     }
-    appendVisualSegment(out, segment.text, segment.style);
+    appendVisualSegment(out, segment.text, segment.style, segment.graphic);
   }
 }
 
@@ -499,7 +517,12 @@ function styleSignature(style?: Style): string {
 }
 
 function inlineSegmentSignature(segment: TuiMarkdownInlineSegment): string {
-  return [segment.text, segment.hardBreak ? "1" : "0", styleSignature(segment.style)].join(
+  const graphic = segment.graphic
+    ? [segment.graphic.kind, segment.graphic.src, segment.graphic.alt ?? "", segment.graphic.mime ?? "", segment.graphic.base64 ?? ""].join(
+        "\u0006",
+      )
+    : "";
+  return [segment.text, segment.hardBreak ? "1" : "0", styleSignature(segment.style), graphic].join(
     "\u0002",
   );
 }

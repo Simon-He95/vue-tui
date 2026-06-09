@@ -198,6 +198,7 @@ export type {
 } from "./vue/markdown/block-source.js";
 export type {
   TuiMarkdownBlock,
+  TuiMarkdownGraphicSegment,
   TuiMarkdownInlineSegment,
   TuiMarkdownNode,
   TuiMarkdownTableCell,

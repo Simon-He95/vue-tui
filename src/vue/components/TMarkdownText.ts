@@ -2,6 +2,10 @@ import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import type { Rect } from "../../events/manager/types.js";
 import {
+  getTerminalGraphicsOutputVersion,
+  subscribeTerminalGraphicsOutput,
+} from "../../renderer/terminal-graphics.js";
+import {
   computed,
   defineComponent,
   getCurrentInstance,
@@ -13,9 +17,9 @@ import {
 } from "vue";
 import { buildMarkdownVisualRows } from "../markdown/document.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
-import { paintMarkdownVisualRow } from "../markdown/render.js";
+import { clearMarkdownImageGraphics, paintMarkdownVisualRow } from "../markdown/render.js";
 import { markdownThemeSignature, type TuiMarkdownThemeOverrides } from "../markdown/theme.js";
-import type { TuiMarkdownVisualRow } from "../markdown/types.js";
+import type { TuiMarkdownGraphicSegment, TuiMarkdownVisualRow } from "../markdown/types.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
@@ -44,6 +48,12 @@ export const TMarkdownText = defineComponent({
       type: Object as PropType<TuiMarkdownThemeOverrides>,
       default: undefined,
     },
+    imageRenderer: {
+      type: Function as PropType<
+        ((image: TuiMarkdownGraphicSegment) => string | null | undefined)
+      >,
+      default: undefined,
+    },
   },
   setup(props) {
     const instance = getCurrentInstance();
@@ -63,6 +73,10 @@ export const TMarkdownText = defineComponent({
         }),
       ),
     );
+    const graphicsOutputVersion = shallowRef(getTerminalGraphicsOutputVersion(terminal));
+    const unsubscribeGraphicsOutput = subscribeTerminalGraphicsOutput(terminal, () => {
+      graphicsOutputVersion.value = getTerminalGraphicsOutputVersion(terminal);
+    });
 
     watch(
       () => `${props.streaming ? 1 : 0}:${(props.customHtmlTags ?? []).join("\u0000")}`,
@@ -82,6 +96,7 @@ export const TMarkdownText = defineComponent({
           buildMarkdownVisualRows(props.content, props.w, parser.value, {
             final: props.final,
             theme: props.theme,
+            imageResolver: props.imageRenderer,
           }),
         ),
       );
@@ -117,6 +132,7 @@ export const TMarkdownText = defineComponent({
         () => props.w,
         () => parser.value,
         () => props.final,
+        () => props.imageRenderer,
         () => markdownThemeSignature(props.theme),
       ],
       () => {
@@ -128,6 +144,8 @@ export const TMarkdownText = defineComponent({
     onBeforeUnmount(() => {
       alive = false;
       rebuildVersion++;
+      unsubscribeGraphicsOutput();
+      clearMarkdownImageGraphics(terminal, fullRect.value);
     });
 
     const fullRect = computed<Rect>(() => {
@@ -155,6 +173,7 @@ export const TMarkdownText = defineComponent({
         props.style,
         props.clear,
         documentVersion.value,
+        graphicsOutputVersion.value,
         defaultStyle.value,
       ],
       paint: (dirtyRows) => {

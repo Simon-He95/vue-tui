@@ -361,6 +361,7 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
     streaming: "Coalesces rapid content updates into frame-scheduled markdown rebuilds.",
     customHtmlTags: "Additional HTML tag names accepted by the markdown parser.",
     theme: "Markdown theme token overrides for parsed blocks and inline segments.",
+    imageRenderer: "Optional resolver for markdown image payloads before terminal graphics rendering.",
   },
   TList: {
     ...pickSharedPublicPropDescriptions("itemVersion", "modelValue"),
@@ -459,6 +460,7 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
       "Controls whether native terminal text selection may start inside the markdown viewport.",
     customHtmlTags: "Additional HTML tag names accepted by the markdown parser.",
     theme: "Markdown theme token overrides for parsed blocks and inline segments.",
+    imageRenderer: "Optional resolver for markdown image payloads before terminal graphics rendering.",
   },
 };
 

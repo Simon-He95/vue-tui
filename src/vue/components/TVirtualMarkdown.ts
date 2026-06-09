@@ -1,5 +1,6 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
+import type { TuiMarkdownGraphicSegment } from "../markdown/types.js";
 import type {
   Rect,
   TerminalKeyboardEvent,
@@ -29,9 +30,13 @@ import {
   terminalSelectionRowSpans,
   terminalSelectionVisibleRowSpans,
 } from "../../selection/terminal-selection.js";
+import {
+  getTerminalGraphicsOutputVersion,
+  subscribeTerminalGraphicsOutput,
+} from "../../renderer/terminal-graphics.js";
 import { layoutMarkdownBlocksCached, type TuiMarkdownLayoutCache } from "../markdown/layout.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
-import { paintMarkdownVisualRow } from "../markdown/render.js";
+import { clearMarkdownImageGraphics, paintMarkdownVisualRow } from "../markdown/render.js";
 import { markdownThemeSignature, type TuiMarkdownThemeOverrides } from "../markdown/theme.js";
 import type { TuiMarkdownBlock, TuiMarkdownVisualRow } from "../markdown/types.js";
 import { useLayout } from "../composables/use-layout.js";
@@ -74,7 +79,7 @@ function markdownRowSignature(row: TuiMarkdownVisualRow | undefined): string {
     row.segments
       .map(
         (segment) =>
-          `${segment.text}\u0001${segment.cells}\u0001${markdownStyleSignature(segment.style)}`,
+          `${segment.text}\u0001${segment.cells}\u0001${markdownStyleSignature(segment.style)}\u0001${segment.graphic?.src ?? ""}\u0001${segment.graphic?.base64 ?? ""}`,
       )
       .join("\u0002"),
   ].join("\u0003");
@@ -98,6 +103,17 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
   if (deltaMode === 1) return { deltaY, mode: "line" };
   if (deltaMode === 0) return { deltaY, mode: "pixel" };
   return { deltaY, mode: "auto" };
+}
+
+function rowGraphicSignature(row: TuiMarkdownVisualRow | undefined): string {
+  if (!row) return "";
+  return row.segments
+    .map((segment) =>
+      segment.graphic
+        ? `${segment.graphic.kind}\u0001${segment.graphic.src}\u0001${segment.graphic.base64 ?? ""}`
+        : "",
+    )
+    .join("\u0002");
 }
 
 export const TVirtualMarkdown = defineComponent({
@@ -127,6 +143,12 @@ export const TVirtualMarkdown = defineComponent({
       type: Object as PropType<TuiMarkdownThemeOverrides>,
       default: undefined,
     },
+    imageRenderer: {
+      type: Function as PropType<
+        ((image: TuiMarkdownGraphicSegment) => string | null | undefined)
+      >,
+      default: undefined,
+    },
   },
   emits: ["update:scrollTop", "scroll", "focus", "blur", "keydown"],
   setup(props, { emit }) {
@@ -153,6 +175,10 @@ export const TVirtualMarkdown = defineComponent({
         }),
       ),
     );
+    const graphicsOutputVersion = shallowRef(getTerminalGraphicsOutputVersion(terminal));
+    const unsubscribeGraphicsOutput = subscribeTerminalGraphicsOutput(terminal, () => {
+      graphicsOutputVersion.value = getTerminalGraphicsOutputVersion(terminal);
+    });
 
     watch(
       () => `${props.streaming ? 1 : 0}:${(props.customHtmlTags ?? []).join("\u0000")}`,
@@ -169,12 +195,14 @@ export const TVirtualMarkdown = defineComponent({
     function rebuildRows(): void {
       const prevScrollTop = internalScrollTop.value;
       const prevVisibleRows = visibleRowSignatures(rows.value, prevScrollTop);
+      const prevVisibleGraphics = visibleRowGraphics(rows.value, prevScrollTop);
       const nextLayout = withTextWidthProvider(widthProvider, () => {
         const blocks =
           props.blocks ??
           buildMarkdownBlocks(props.content, parser.value, {
             final: props.final,
             theme: props.theme,
+            imageResolver: props.imageRenderer,
           }).blocks;
         return layoutMarkdownBlocksCached(blocks, props.w, layoutCache);
       });
@@ -184,9 +212,11 @@ export const TVirtualMarkdown = defineComponent({
       reconcileScrollTop();
       const nextScrollTop = internalScrollTop.value;
       const nextVisibleRows = visibleRowSignatures(nextRows, nextScrollTop);
+      const nextVisibleGraphics = visibleRowGraphics(nextRows, nextScrollTop);
       const visibleChanged =
         prevVisibleRows.length !== nextVisibleRows.length ||
-        prevVisibleRows.some((row, index) => row !== nextVisibleRows[index]);
+        prevVisibleRows.some((row, index) => row !== nextVisibleRows[index]) ||
+        prevVisibleGraphics.some((row, index) => row !== nextVisibleGraphics[index]);
       if (!builtOnce || prevScrollTop !== nextScrollTop || visibleChanged) {
         documentVersion.value++;
         selection.refresh();
@@ -264,6 +294,19 @@ export const TVirtualMarkdown = defineComponent({
       const out: string[] = [];
       for (let index = start; index < end; index++)
         out.push(markdownRowSignature(sourceRows[index]));
+      return out;
+    }
+
+    function visibleRowGraphics(
+      sourceRows: readonly TuiMarkdownVisualRow[],
+      scrollTop: number,
+    ): readonly string[] {
+      const clip = normalizedRect();
+      const { y: clipY } = clipOffsets();
+      const start = Math.max(0, scrollTop + clipY);
+      const end = Math.max(start, start + clip.h);
+      const out: string[] = [];
+      for (let index = start; index < end; index++) out.push(rowGraphicSignature(sourceRows[index]));
       return out;
     }
 
@@ -352,6 +395,7 @@ export const TVirtualMarkdown = defineComponent({
         () => props.w,
         () => parser.value,
         () => props.final,
+        () => props.imageRenderer,
         () => markdownThemeSignature(props.theme),
       ],
       () => {
@@ -563,6 +607,8 @@ export const TVirtualMarkdown = defineComponent({
     onBeforeUnmount(() => {
       alive = false;
       rebuildVersion++;
+      unsubscribeGraphicsOutput();
+      clearMarkdownImageGraphics(terminal, fullRect.value);
     });
 
     useRenderNode(() => ({
@@ -576,6 +622,7 @@ export const TVirtualMarkdown = defineComponent({
         props.style,
         defaultStyle.value,
         documentVersion.value,
+        graphicsOutputVersion.value,
       ],
       paint: (dirtyRows) => {
         withTextWidthProvider(widthProvider, () => {

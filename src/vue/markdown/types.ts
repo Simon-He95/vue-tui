@@ -7,10 +7,19 @@ export type TuiMarkdownNode = Readonly<{
   [key: string]: unknown;
 }>;
 
+export type TuiMarkdownGraphicSegment = Readonly<{
+  kind: "image";
+  src: string;
+  alt?: string;
+  mime?: string;
+  base64?: string;
+}>;
+
 export type TuiMarkdownInlineSegment = Readonly<{
   text: string;
   style?: Style;
   hardBreak?: boolean;
+  graphic?: TuiMarkdownGraphicSegment;
 }>;
 
 export type TuiMarkdownTableCellAlign = "left" | "center" | "right";
@@ -61,6 +70,7 @@ export type TuiMarkdownVisualSegment = Readonly<{
   text: string;
   style?: Style;
   cells: number;
+  graphic?: TuiMarkdownGraphicSegment;
 }>;
 
 export type TuiMarkdownVisualRow = Readonly<{

@@ -164,6 +164,7 @@ export { useTerminalRuntime } from "./composables/use-runtime.js";
 export { useTerminalNode } from "./composables/use-terminal-node.js";
 export { useTerminal } from "./composables/use-terminal.js";
 export { useVisibility } from "./composables/use-visibility.js";
+export type { TuiMarkdownGraphicSegment } from "./markdown/types.js";
 export type { TuiMarkdownTheme, TuiMarkdownThemeOverrides } from "./markdown/theme.js";
 export { createTheme, tuiDefaultTheme } from "./theme.js";
 export { createOverlayFocusStack, resolveOverlayPlacement } from "./overlay.js";

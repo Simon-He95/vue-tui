@@ -1,8 +1,11 @@
 import { sanitizeInlineText, sanitizeTextBlock, spaces, textCellWidth } from "../utils/text.js";
+import { sanitizeMarkdownImageSource } from "./image.js";
+import { renderMarkdownInlineMath } from "./math.js";
 import { sanitizeMarkdownLink } from "./parser.js";
 import { type TuiMarkdownTheme } from "./theme.js";
 import type {
   TuiMarkdownBlock,
+  TuiMarkdownGraphicSegment,
   TuiMarkdownInlineSegment,
   TuiMarkdownNode,
   TuiMarkdownTableCell,
@@ -12,6 +15,7 @@ import type {
 type BlockContext = Readonly<{
   prefixSegments: readonly TuiMarkdownInlineSegment[];
   continuationPrefixSegments: readonly TuiMarkdownInlineSegment[];
+  imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
 }>;
 
 const EMPTY_PREFIX: readonly TuiMarkdownInlineSegment[] = Object.freeze([]);
@@ -64,6 +68,7 @@ function pushTextSegments(
   out: TuiMarkdownInlineSegment[],
   text: string,
   style?: TuiMarkdownInlineSegment["style"],
+  graphic?: TuiMarkdownInlineSegment["graphic"],
 ): void {
   if (!text) return;
   const normalized = sanitizeTextBlock(text);
@@ -71,7 +76,13 @@ function pushTextSegments(
   const parts = normalized.split("\n");
   for (let i = 0; i < parts.length; i++) {
     const part = sanitizeInlineText(parts[i] ?? "");
-    if (part) out.push(style ? { text: part, style } : { text: part });
+    if (part) {
+      out.push({
+        text: part,
+        ...(style ? { style } : {}),
+        ...(i === 0 && graphic ? { graphic } : {}),
+      });
+    }
     if (i < parts.length - 1) out.push(HARD_BREAK_SEGMENT);
   }
 }
@@ -98,6 +109,9 @@ function inlineNodeSegments(
   nodes: readonly TuiMarkdownNode[],
   theme: TuiMarkdownTheme,
   inheritedStyle?: TuiMarkdownInlineSegment["style"],
+  options: Readonly<{
+    imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
+  }> = {},
 ): TuiMarkdownInlineSegment[] {
   const out: TuiMarkdownInlineSegment[] = [];
   for (const node of nodes) {
@@ -110,7 +124,7 @@ function inlineNodeSegments(
       case "heading":
       case "list_item":
       case "blockquote":
-        out.push(...inlineNodeSegments(nodeChildren(node), theme, inheritedStyle));
+        out.push(...inlineNodeSegments(nodeChildren(node), theme, inheritedStyle, options));
         break;
       case "strong":
         out.push(
@@ -118,6 +132,7 @@ function inlineNodeSegments(
             nodeChildren(node),
             theme,
             mergeStyle(inheritedStyle, theme.strong),
+            options,
           ),
         );
         break;
@@ -127,6 +142,7 @@ function inlineNodeSegments(
             nodeChildren(node),
             theme,
             mergeStyle(inheritedStyle, theme.emphasis),
+            options,
           ),
         );
         break;
@@ -136,6 +152,7 @@ function inlineNodeSegments(
             nodeChildren(node),
             theme,
             mergeStyle(inheritedStyle, theme.strikethrough),
+            options,
           ),
         );
         break;
@@ -143,7 +160,7 @@ function inlineNodeSegments(
       case "insert":
       case "subscript":
       case "superscript":
-        out.push(...inlineNodeSegments(nodeChildren(node), theme, inheritedStyle));
+        out.push(...inlineNodeSegments(nodeChildren(node), theme, inheritedStyle, options));
         break;
       case "inline_code":
         pushTextSegments(
@@ -162,17 +179,38 @@ function inlineNodeSegments(
           ? mergeStyle(inheritedStyle, { ...theme.link, href: safeHref })
           : inheritedStyle;
         const children = nodeChildren(node);
-        if (children.length) out.push(...inlineNodeSegments(children, theme, linkStyle));
+        if (children.length) out.push(...inlineNodeSegments(children, theme, linkStyle, options));
         else pushTextSegments(out, stringProp(node, "text"), linkStyle);
         break;
       }
-      case "image":
-        pushTextSegments(
-          out,
-          stringProp(node, "alt") || stringProp(node, "src"),
-          mergeStyle(inheritedStyle, theme.link),
-        );
+      case "image": {
+        const source = sanitizeMarkdownImageSource(stringProp(node, "src"));
+        const alt = stringProp(node, "alt") || stringProp(node, "raw") || source?.src || "image";
+        if (source) {
+          const graphic = {
+            kind: "image",
+            src: source.src,
+            alt,
+            ...(source.mime ? { mime: source.mime } : {}),
+            ...(source.base64 ? { base64: source.base64 } : {}),
+          } satisfies TuiMarkdownGraphicSegment;
+          const resolvedBase64 = options.imageResolver?.(graphic)?.replace(/\s+/g, "");
+          const base64 = resolvedBase64 || source.base64;
+          if (base64) {
+            pushTextSegments(
+              out,
+              alt,
+              mergeStyle(inheritedStyle, theme.link),
+              { ...graphic, base64 },
+            );
+          } else {
+            pushTextSegments(out, alt, mergeStyle(inheritedStyle, theme.link));
+          }
+        } else {
+          pushTextSegments(out, alt, mergeStyle(inheritedStyle, theme.link));
+        }
         break;
+      }
       case "checkbox":
       case "checkbox_input":
         pushTextSegments(out, booleanProp(node, "checked") ? "[x]" : "[ ]", inheritedStyle);
@@ -187,7 +225,7 @@ function inlineNodeSegments(
       case "math_inline":
         pushTextSegments(
           out,
-          stringProp(node, "content"),
+          renderMarkdownInlineMath(stringProp(node, "content")),
           mergeStyle(inheritedStyle, theme.inlineCode),
         );
         break;
@@ -204,7 +242,7 @@ function inlineNodeSegments(
         break;
       default:
         if (nodeChildren(node).length) {
-          out.push(...inlineNodeSegments(nodeChildren(node), theme, inheritedStyle));
+          out.push(...inlineNodeSegments(nodeChildren(node), theme, inheritedStyle, options));
           break;
         }
         pushTextSegments(out, stringProp(node, "raw"), inheritedStyle);
@@ -234,7 +272,13 @@ function blockFromParagraph(
   context: BlockContext,
   theme: TuiMarkdownTheme,
 ): TuiMarkdownBlock {
-  return inlineBlock(key, inlineNodeSegments(nodeChildren(node), theme), context);
+  return inlineBlock(
+    key,
+    inlineNodeSegments(nodeChildren(node), theme, undefined, {
+      imageResolver: context.imageResolver,
+    }),
+    context,
+  );
 }
 
 function blockFromHeading(
@@ -246,7 +290,9 @@ function blockFromHeading(
   const level = Math.min(6, Math.max(1, Math.floor(numberProp(node, "level") ?? 1)));
   return inlineBlock(
     key,
-    inlineNodeSegments(nodeChildren(node), theme, theme.heading[level - 1]),
+    inlineNodeSegments(nodeChildren(node), theme, theme.heading[level - 1], {
+      imageResolver: context.imageResolver,
+    }),
     context,
   );
 }
@@ -285,6 +331,8 @@ function blockFromHtmlBlock(
         },
       ],
       theme,
+      undefined,
+      { imageResolver: context.imageResolver },
     ),
     context,
   );
@@ -316,12 +364,16 @@ function blockFromTable(
   const header: TuiMarkdownTableCell[] = tableCells(
     headerRow ?? ({ type: "table_row" } as const),
   ).map((cell) => ({
-    segments: inlineNodeSegments(nodeChildren(cell), theme, theme.strong),
+    segments: inlineNodeSegments(nodeChildren(cell), theme, theme.strong, {
+      imageResolver: context.imageResolver,
+    }),
     align: tableCellAlign(cell),
   }));
   const rows = tableRows(node, "rows").map((row) =>
     tableCells(row).map((cell) => ({
-      segments: inlineNodeSegments(nodeChildren(cell), theme),
+      segments: inlineNodeSegments(nodeChildren(cell), theme, undefined, {
+        imageResolver: context.imageResolver,
+      }),
       align: tableCellAlign(cell),
     })),
   );
@@ -487,6 +539,7 @@ function nodeToBlocks(
       const quoteContext: BlockContext = {
         prefixSegments: [...context.prefixSegments, quoteSegment],
         continuationPrefixSegments: [...context.continuationPrefixSegments, quoteSegment],
+        imageResolver: context.imageResolver,
       };
       return childSequenceToBlocks(nodeChildren(node), quoteContext, theme, keyPrefix);
     }
@@ -497,21 +550,44 @@ function nodeToBlocks(
     case "table":
       return [blockFromTable(node, keyPrefix, context, theme)];
     case "inline":
-      return [inlineBlock(keyPrefix, inlineNodeSegments(nodeChildren(node), theme), context)];
+      return [
+        inlineBlock(
+          keyPrefix,
+          inlineNodeSegments(nodeChildren(node), theme, undefined, {
+            imageResolver: context.imageResolver,
+          }),
+          context,
+        ),
+      ];
     case "html_block":
       if ("content" in node) return [blockFromHtmlBlock(node, keyPrefix, context, theme)];
       break;
     case "text":
-      return [inlineBlock(keyPrefix, inlineNodeSegments([node], theme), context)];
+      return [
+        inlineBlock(
+          keyPrefix,
+          inlineNodeSegments([node], theme, undefined, { imageResolver: context.imageResolver }),
+          context,
+        ),
+      ];
   }
   if (nodeChildren(node).length)
     return childSequenceToBlocks(nodeChildren(node), context, theme, keyPrefix);
-  return [inlineBlock(keyPrefix, inlineNodeSegments([node], theme), context)];
+  return [
+    inlineBlock(
+      keyPrefix,
+      inlineNodeSegments([node], theme, undefined, { imageResolver: context.imageResolver }),
+      context,
+    ),
+  ];
 }
 
 export function markdownAstToBlocks(
   nodes: readonly TuiMarkdownNode[],
   theme: TuiMarkdownTheme,
+  options: Readonly<{
+    imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
+  }> = {},
 ): readonly TuiMarkdownBlock[] {
   const blocks = trimBlockArray(
     childSequenceToBlocks(
@@ -519,6 +595,7 @@ export function markdownAstToBlocks(
       {
         prefixSegments: EMPTY_PREFIX,
         continuationPrefixSegments: EMPTY_PREFIX,
+        imageResolver: options.imageResolver,
       },
       theme,
       "md",

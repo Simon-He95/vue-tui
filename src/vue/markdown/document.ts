@@ -1,3 +1,4 @@
+import type { TuiMarkdownGraphicSegment } from "./types.js";
 import { markdownAstToBlocks } from "./ast.js";
 import { layoutMarkdownBlocks } from "./layout.js";
 import { type TuiMarkdownParser } from "./parser.js";
@@ -16,6 +17,7 @@ export function buildMarkdownBlocks(
   options?: Readonly<{
     final?: boolean;
     theme?: TuiMarkdownThemeOverrides;
+    imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
   }>,
 ): Readonly<{
   nodes: readonly TuiMarkdownNode[];
@@ -24,7 +26,7 @@ export function buildMarkdownBlocks(
   const theme = resolveTuiMarkdownTheme(options?.theme);
   try {
     const nodes = parser.parse(content, options?.final ?? true);
-    const blocks = markdownAstToBlocks(nodes, theme);
+    const blocks = markdownAstToBlocks(nodes, theme, { imageResolver: options?.imageResolver });
     return { nodes, blocks };
   } catch (error) {
     console.warn("[vue-tui] Markdown parse failed; falling back to plain text rendering.", error);
@@ -43,6 +45,7 @@ export function buildMarkdownVisualRows(
     final?: boolean;
     theme?: TuiMarkdownThemeOverrides;
     widthProvider?: WidthProvider;
+    imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
   }>,
 ): readonly TuiMarkdownVisualRow[] {
   const { blocks } = buildMarkdownBlocks(content, parser, options);

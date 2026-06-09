@@ -296,6 +296,7 @@
     "bench:stdout-column-diff": "tsx scripts/bench-stdout-column-diff.ts"
   },
   "dependencies": {
+    "katex": "^0.16.47",
     "stream-markdown-parser": "1.0.2"
   },
   "devDependencies": {
