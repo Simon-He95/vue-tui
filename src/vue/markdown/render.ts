@@ -38,7 +38,9 @@ function markdownImageGraphicId(
   segment: NonNullable<TuiMarkdownVisualRow["segments"][number]["graphic"]>,
   rect: Readonly<{ x: number; y: number }>,
 ): string {
-  return `md-image:${stableTerminalGraphicNumericId(`${segment.src}:${rect.x}:${rect.y}`)}`;
+  return `md-image:${stableTerminalGraphicNumericId(
+    `${segment.src}:${rect.x}:${rect.y}:${segment.displayWidth ?? 0}:${segment.displayHeight ?? 0}:${segment.base64 ?? ""}`,
+  )}`;
 }
 
 function rememberMarkdownImageGraphic(
@@ -181,6 +183,57 @@ export function paintMarkdownVisualRow(
     if (segmentEnd <= clipStart || segmentStart >= clipEnd) continue;
 
     const segmentStyle = mergeStyle(options.baseStyle, segment.style);
+
+    // Graphic segments must be rendered atomically — their placeholder text
+    // (spaces) must never be split by forEachTextCellSegment, otherwise the
+    // graphic is not queued.
+    if (segment.graphic) {
+      const visibleStart = Math.max(segmentStart, clipStart);
+      const visibleEnd = Math.min(segmentEnd, clipEnd);
+      const visibleCells = visibleEnd - visibleStart;
+      if (visibleCells <= 0) continue;
+
+      const expectedUsed = visibleStart - clipStart;
+      if (expectedUsed > used) {
+        const pad = Math.min(expectedUsed - used, options.w - used);
+        terminal.write(spaces(pad), { x: options.x + used, y: options.y, style: options.baseStyle });
+        used += pad;
+      }
+
+      const cellX = options.x + used;
+      const queuedGraphic =
+        visibleStart === segmentStart &&
+        visibleCells > 0 &&
+        queueMarkdownImageGraphic(terminal, segment.graphic, {
+          x: cellX,
+          y: options.y,
+          w: visibleCells,
+        });
+
+      if (queuedGraphic) {
+        queuedGraphics.add(markdownImageGraphicId(segment.graphic, { x: cellX, y: options.y }));
+      }
+
+      terminal.write(
+        queuedGraphic
+          ? spaces(visibleCells)
+          : sliceByCellsRange(
+              segment.fallbackText ?? segment.graphic.alt ?? "image",
+              0,
+              visibleCells,
+            ) || spaces(visibleCells),
+        {
+          x: cellX,
+          y: options.y,
+          style: segmentStyle,
+        },
+      );
+
+      used += visibleCells;
+      continue;
+    }
+
+    // Text segments: normal grapheme-based rendering.
     let pieceStart = segmentStart;
     forEachTextCellSegment(segment.text, (piece) => {
       if (used >= options.w) return false;
@@ -202,64 +255,23 @@ export function paintMarkdownVisualRow(
       }
 
       if (visibleStart === pieceStart - piece.cells && visibleEnd === pieceEnd) {
-        const cellX = options.x + used;
-        const graphicCandidate =
-          segment.graphic && piece.start === 0 && piece.end === segment.text.length
-            ? segment.graphic
-            : undefined;
-        const queuedGraphic = graphicCandidate
-          ? queueMarkdownImageGraphic(terminal, graphicCandidate, {
-              x: cellX,
-              y: options.y,
-              w: Math.max(0, options.w - used),
-            })
-          : false;
-        if (queuedGraphic && graphicCandidate) {
-          queuedGraphics.add(markdownImageGraphicId(graphicCandidate, { x: cellX, y: options.y }));
-        }
-        terminal.write(
-          queuedGraphic
-            ? spaces(piece.cells)
-            : segment.graphic
-              ? sliceByCellsRange(segment.fallbackText ?? segment.graphic.alt ?? segment.text, 0, piece.cells) || spaces(1)
-              : piece.text,
-          {
-            x: cellX,
-            y: options.y,
-            style: segmentStyle,
-          },
-        );
+        terminal.write(piece.text, {
+          x: options.x + used,
+          y: options.y,
+          style: segmentStyle,
+        });
         used += piece.cells;
         return;
       }
 
       const pad = Math.min(visibleEnd - visibleStart, options.w - used);
       if (pad > 0) {
-        const graphicCandidate =
-          segment.graphic && piece.start === 0 && piece.end === segment.text.length
-            ? segment.graphic
-            : undefined;
-        const queuedGraphic = graphicCandidate
-          ? queueMarkdownImageGraphic(terminal, graphicCandidate, {
-              x: options.x + used,
-              y: options.y,
-              w: pad,
-            })
-          : false;
-        const fallbackSource = graphicCandidate
-          ? (segment.fallbackText ?? segment.graphic?.alt ?? piece.text)
-          : piece.text;
         const fallback = sliceByCellsRange(
-          fallbackSource,
+          piece.text,
           visibleStart - (pieceStart - piece.cells),
           visibleEnd - (pieceStart - piece.cells),
         );
-        if (queuedGraphic && graphicCandidate) {
-          queuedGraphics.add(
-            markdownImageGraphicId(graphicCandidate, { x: options.x + used, y: options.y }),
-          );
-        }
-        terminal.write(queuedGraphic ? spaces(pad) : fallback || spaces(pad), {
+        terminal.write(fallback || spaces(pad), {
           x: options.x + used,
           y: options.y,
           style: segmentStyle,

@@ -345,4 +345,89 @@ describe("markdown image fallback and sizing", () => {
       mounted.unmount();
     }
   });
+
+  it("sized image graphic survives layout (minWidth / maxWidth)", async () => {
+    // Regression: when displayWidth > 1, the graphic must not be lost
+    // during layout. Verify via buildMarkdownVisualRows directly.
+    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import(
+      "../src/markdown.js"
+    );
+    const parser = createTuiMarkdownParser({ streaming: false });
+    const rows = buildMarkdownVisualRows(
+      `![data image](${TINY_PNG_DATA_URL})`,
+      80,
+      parser,
+      {
+        imageSize: { minWidth: 20, maxWidth: 40 },
+      },
+    );
+
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    const graphicSegment = rows[0]?.segments.find((s) => s.graphic);
+    expect(graphicSegment).toBeDefined();
+    expect(graphicSegment!.cells).toBeGreaterThanOrEqual(20);
+    expect(graphicSegment!.cells).toBeLessThanOrEqual(40);
+    expect(graphicSegment!.graphic).toBeDefined();
+    expect(graphicSegment!.fallbackText).toBe("data image");
+  });
+
+  it("sized image renders kitty graphic when graphics enabled", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        const mounted = await mountTerminal(
+          () =>
+            h(TMarkdownText, {
+              x: 0,
+              y: 0,
+              w: 80,
+              h: 6,
+              content: `![data image](${TINY_PNG_DATA_URL})`,
+              imageMinWidth: 20,
+              imageMaxWidth: 40,
+              imageMinHeight: 1,
+              imageMaxHeight: 4,
+            }),
+          80,
+          8,
+        );
+
+        let stdout = "";
+        const renderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            isTTY: true,
+            write(chunk: string) {
+              stdout += chunk;
+            },
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+
+          // Kitty graphics sequence must be present.
+          expect(stdout).toContain("\u001B_G");
+          expect(stdout).toContain("\u001B\\");
+          // Alt text must not leak as visible text.
+          expect(rowText(mounted, 0)).not.toContain("data image");
+        } finally {
+          renderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
 });

@@ -184,15 +184,43 @@ function wrapLineSegments(
   const rowHasBody = () => row.segments.length > prefixLengthForRow();
 
   for (const segment of source) {
-    const layoutSegment: TuiMarkdownInlineSegment =
-      segment.graphic && textCellWidth(segment.text) > 1
-        ? {
-            ...segment,
-            text: spaces(Math.max(1, Math.floor(segment.graphic.displayWidth ?? 1))),
-          }
-        : segment;
+    // Graphic segments must be treated atomically — a single visual segment
+    // whose text (placeholder spaces) must never be split across pieces via
+    // forEachTextCellSegment, otherwise the graphic is lost.
+    if (segment.graphic) {
+      const displayCells = Math.max(1, Math.floor(segment.graphic.displayWidth ?? 1));
+
+      while (displayCells > row.remaining) {
+        if (rowHasBody()) {
+          pushRow();
+          continue;
+        }
+        if (!row.useContinuation) {
+          rows.push(row.segments);
+          row = openDegradedRow();
+          continue;
+        }
+        // Degraded continuation row cannot fit the graphic — clip to available width.
+        break;
+      }
+
+      const cells = Math.min(displayCells, Math.max(1, row.remaining || width));
+
+      row.segments.push({
+        text: spaces(cells),
+        style: segment.style,
+        cells,
+        graphic: segment.graphic,
+        fallbackText: segment.text,
+      });
+
+      row.remaining -= cells;
+      continue;
+    }
+
+    // Text segments: normal grapheme-based wrapping.
     let aborted = false;
-    forEachTextCellSegment(layoutSegment.text, (piece) => {
+    forEachTextCellSegment(segment.text, (piece) => {
       while (true) {
         if (row.remaining <= 0) {
           pushRow();
@@ -215,23 +243,10 @@ function wrapLineSegments(
           aborted = true;
           return false;
         }
-        const shouldAttachGraphic =
-          segment.graphic != null &&
-          piece.start === 0 &&
-          piece.end === layoutSegment.text.length &&
-          row.remaining >= piece.cells;
         row.segments.push({
           text: piece.text,
           style: segment.style,
           cells: piece.cells,
-          ...(shouldAttachGraphic
-            ? {
-                graphic: segment.graphic,
-                ...(layoutSegment.text !== segment.text
-                  ? { fallbackText: segment.text }
-                  : {}),
-              }
-            : {}),
         });
         row.remaining -= piece.cells;
         return undefined;
