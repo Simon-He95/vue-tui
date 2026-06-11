@@ -7,12 +7,22 @@ export type TuiMarkdownNode = Readonly<{
   [key: string]: unknown;
 }>;
 
+export type TuiMarkdownImageSize = Readonly<{
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
+  preserveAspectRatio?: boolean;
+}>;
+
 export type TuiMarkdownGraphicSegment = Readonly<{
   kind: "image";
   src: string;
   alt?: string;
   mime?: string;
   base64?: string;
+  displayWidth?: number;
+  displayHeight?: number;
 }>;
 
 export type TuiMarkdownInlineSegment = Readonly<{
@@ -71,6 +81,7 @@ export type TuiMarkdownVisualSegment = Readonly<{
   style?: Style;
   cells: number;
   graphic?: TuiMarkdownGraphicSegment;
+  fallbackText?: string;
 }>;
 
 export type TuiMarkdownVisualRow = Readonly<{

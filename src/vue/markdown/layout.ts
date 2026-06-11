@@ -3,6 +3,7 @@ import {
   forEachTextCellSegment,
   repeatChar,
   sliceByCellsRange,
+  spaces,
   textCellWidth,
   withTextWidthProvider,
 } from "../utils/text.js";
@@ -44,7 +45,7 @@ function toVisualSegment(segment: TuiMarkdownInlineSegment): TuiMarkdownVisualSe
 }
 
 function segmentsPlainText(segments: readonly TuiMarkdownVisualSegment[]): string {
-  return segments.map((segment) => segment.text).join("");
+  return segments.map((segment) => segment.fallbackText ?? segment.text).join("");
 }
 
 function segmentsCellWidth(segments: readonly TuiMarkdownInlineSegment[]): number {
@@ -184,7 +185,12 @@ function wrapLineSegments(
 
   for (const segment of source) {
     const layoutSegment: TuiMarkdownInlineSegment =
-      segment.graphic && textCellWidth(segment.text) > 1 ? { ...segment, text: " " } : segment;
+      segment.graphic && textCellWidth(segment.text) > 1
+        ? {
+            ...segment,
+            text: spaces(Math.max(1, Math.floor(segment.graphic.displayWidth ?? 1))),
+          }
+        : segment;
     let aborted = false;
     forEachTextCellSegment(layoutSegment.text, (piece) => {
       while (true) {
@@ -218,7 +224,14 @@ function wrapLineSegments(
           text: piece.text,
           style: segment.style,
           cells: piece.cells,
-          ...(shouldAttachGraphic ? { graphic: segment.graphic } : {}),
+          ...(shouldAttachGraphic
+            ? {
+                graphic: segment.graphic,
+                ...(layoutSegment.text !== segment.text
+                  ? { fallbackText: segment.text }
+                  : {}),
+              }
+            : {}),
         });
         row.remaining -= piece.cells;
         return undefined;

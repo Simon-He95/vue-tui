@@ -6,6 +6,7 @@ import { type TuiMarkdownTheme } from "./theme.js";
 import type {
   TuiMarkdownBlock,
   TuiMarkdownGraphicSegment,
+  TuiMarkdownImageSize,
   TuiMarkdownInlineSegment,
   TuiMarkdownNode,
   TuiMarkdownTableCell,
@@ -16,6 +17,7 @@ type BlockContext = Readonly<{
   prefixSegments: readonly TuiMarkdownInlineSegment[];
   continuationPrefixSegments: readonly TuiMarkdownInlineSegment[];
   imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
+  imageSize?: TuiMarkdownImageSize;
 }>;
 
 const EMPTY_PREFIX: readonly TuiMarkdownInlineSegment[] = Object.freeze([]);
@@ -111,6 +113,7 @@ function inlineNodeSegments(
   inheritedStyle?: TuiMarkdownInlineSegment["style"],
   options: Readonly<{
     imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
+    imageSize?: TuiMarkdownImageSize;
   }> = {},
 ): TuiMarkdownInlineSegment[] {
   const out: TuiMarkdownInlineSegment[] = [];
@@ -187,12 +190,23 @@ function inlineNodeSegments(
         const source = sanitizeMarkdownImageSource(stringProp(node, "src"));
         const alt = stringProp(node, "alt") || stringProp(node, "raw") || source?.src || "image";
         if (source) {
+          const size = options.imageSize;
           const graphic = {
             kind: "image",
             src: source.src,
             alt,
             ...(source.mime ? { mime: source.mime } : {}),
             ...(source.base64 ? { base64: source.base64 } : {}),
+            ...(size?.minWidth != null || size?.maxWidth != null || size?.minHeight != null || size?.maxHeight != null
+              ? {
+                  displayWidth: size.maxWidth != null
+                    ? Math.min(size.maxWidth, Math.max(size.minWidth ?? 1, textCellWidth(alt)))
+                    : Math.max(size.minWidth ?? 1, textCellWidth(alt)),
+                  displayHeight: size.maxHeight != null
+                    ? Math.min(size.maxHeight, Math.max(size.minHeight ?? 1, 1))
+                    : Math.max(size.minHeight ?? 1, 1),
+                }
+              : {}),
           } satisfies TuiMarkdownGraphicSegment;
           const resolvedBase64 = options.imageResolver?.(graphic)?.replace(/\s+/g, "");
           const base64 = resolvedBase64 || source.base64;
@@ -276,6 +290,7 @@ function blockFromParagraph(
     key,
     inlineNodeSegments(nodeChildren(node), theme, undefined, {
       imageResolver: context.imageResolver,
+      imageSize: context.imageSize,
     }),
     context,
   );
@@ -292,6 +307,7 @@ function blockFromHeading(
     key,
     inlineNodeSegments(nodeChildren(node), theme, theme.heading[level - 1], {
       imageResolver: context.imageResolver,
+      imageSize: context.imageSize,
     }),
     context,
   );
@@ -366,6 +382,7 @@ function blockFromTable(
   ).map((cell) => ({
     segments: inlineNodeSegments(nodeChildren(cell), theme, theme.strong, {
       imageResolver: context.imageResolver,
+      imageSize: context.imageSize,
     }),
     align: tableCellAlign(cell),
   }));
@@ -373,6 +390,7 @@ function blockFromTable(
     tableCells(row).map((cell) => ({
       segments: inlineNodeSegments(nodeChildren(cell), theme, undefined, {
         imageResolver: context.imageResolver,
+      imageSize: context.imageSize,
       }),
       align: tableCellAlign(cell),
     })),
@@ -540,6 +558,7 @@ function nodeToBlocks(
         prefixSegments: [...context.prefixSegments, quoteSegment],
         continuationPrefixSegments: [...context.continuationPrefixSegments, quoteSegment],
         imageResolver: context.imageResolver,
+      imageSize: context.imageSize,
       };
       return childSequenceToBlocks(nodeChildren(node), quoteContext, theme, keyPrefix);
     }
@@ -555,6 +574,7 @@ function nodeToBlocks(
           keyPrefix,
           inlineNodeSegments(nodeChildren(node), theme, undefined, {
             imageResolver: context.imageResolver,
+      imageSize: context.imageSize,
           }),
           context,
         ),
@@ -587,6 +607,7 @@ export function markdownAstToBlocks(
   theme: TuiMarkdownTheme,
   options: Readonly<{
     imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
+    imageSize?: TuiMarkdownImageSize;
   }> = {},
 ): readonly TuiMarkdownBlock[] {
   const blocks = trimBlockArray(
@@ -596,6 +617,7 @@ export function markdownAstToBlocks(
         prefixSegments: EMPTY_PREFIX,
         continuationPrefixSegments: EMPTY_PREFIX,
         imageResolver: options.imageResolver,
+        imageSize: options.imageSize,
       },
       theme,
       "md",

@@ -106,8 +106,8 @@ function queueMarkdownImageGraphic(
   const protocol = output?.capabilities.preferredProtocol;
   if (!output?.capabilities.supported || !isTerminalGraphicsProtocol(protocol)) return false;
 
-  const width = Math.max(1, Math.floor(rect.w));
-  const height = 1;
+  const width = Math.max(1, Math.floor(segment.displayWidth ?? rect.w));
+  const height = Math.max(1, Math.floor(segment.displayHeight ?? 1));
   const id = markdownImageGraphicId(segment, rect);
   const imageId = stableTerminalGraphicNumericId(`image:${id}`);
   const placementId = stableTerminalGraphicNumericId(`placement:${id}`);
@@ -217,11 +217,18 @@ export function paintMarkdownVisualRow(
         if (queuedGraphic && graphicCandidate) {
           queuedGraphics.add(markdownImageGraphicId(graphicCandidate, { x: cellX, y: options.y }));
         }
-        terminal.write(queuedGraphic ? spaces(piece.cells) : piece.text, {
-          x: cellX,
-          y: options.y,
-          style: segmentStyle,
-        });
+        terminal.write(
+          queuedGraphic
+            ? spaces(piece.cells)
+            : segment.graphic
+              ? sliceByCellsRange(segment.fallbackText ?? segment.graphic.alt ?? segment.text, 0, piece.cells) || spaces(1)
+              : piece.text,
+          {
+            x: cellX,
+            y: options.y,
+            style: segmentStyle,
+          },
+        );
         used += piece.cells;
         return;
       }
@@ -239,8 +246,11 @@ export function paintMarkdownVisualRow(
               w: pad,
             })
           : false;
+        const fallbackSource = graphicCandidate
+          ? (segment.fallbackText ?? segment.graphic?.alt ?? piece.text)
+          : piece.text;
         const fallback = sliceByCellsRange(
-          piece.text,
+          fallbackSource,
           visibleStart - (pieceStart - piece.cells),
           visibleEnd - (pieceStart - piece.cells),
         );

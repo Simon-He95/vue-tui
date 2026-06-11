@@ -54,6 +54,11 @@ export const TMarkdownText = defineComponent({
       >,
       default: undefined,
     },
+    imageMinWidth: { type: Number, default: undefined },
+    imageMaxWidth: { type: Number, default: undefined },
+    imageMinHeight: { type: Number, default: undefined },
+    imageMaxHeight: { type: Number, default: undefined },
+    imagePreserveAspectRatio: { type: Boolean, default: true },
   },
   setup(props) {
     const instance = getCurrentInstance();
@@ -97,6 +102,13 @@ export const TMarkdownText = defineComponent({
             final: props.final,
             theme: props.theme,
             imageResolver: props.imageRenderer,
+            imageSize: {
+              minWidth: props.imageMinWidth,
+              maxWidth: props.imageMaxWidth,
+              minHeight: props.imageMinHeight,
+              maxHeight: props.imageMaxHeight,
+              preserveAspectRatio: props.imagePreserveAspectRatio,
+            },
           }),
         ),
       );
@@ -134,6 +146,11 @@ export const TMarkdownText = defineComponent({
         () => props.final,
         () => props.imageRenderer,
         () => markdownThemeSignature(props.theme),
+        () => props.imageMinWidth,
+        () => props.imageMaxWidth,
+        () => props.imageMinHeight,
+        () => props.imageMaxHeight,
+        () => props.imagePreserveAspectRatio,
       ],
       () => {
         scheduleRebuild();

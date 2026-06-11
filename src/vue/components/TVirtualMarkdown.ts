@@ -79,7 +79,7 @@ function markdownRowSignature(row: TuiMarkdownVisualRow | undefined): string {
     row.segments
       .map(
         (segment) =>
-          `${segment.text}\u0001${segment.cells}\u0001${markdownStyleSignature(segment.style)}\u0001${segment.graphic?.src ?? ""}\u0001${segment.graphic?.base64 ?? ""}`,
+          `${segment.text}\u0001${segment.cells}\u0001${markdownStyleSignature(segment.style)}\u0001${segment.graphic?.src ?? ""}\u0001${segment.graphic?.base64 ?? ""}\u0001${segment.fallbackText ?? ""}`,
       )
       .join("\u0002"),
   ].join("\u0003");
@@ -149,6 +149,11 @@ export const TVirtualMarkdown = defineComponent({
       >,
       default: undefined,
     },
+    imageMinWidth: { type: Number, default: undefined },
+    imageMaxWidth: { type: Number, default: undefined },
+    imageMinHeight: { type: Number, default: undefined },
+    imageMaxHeight: { type: Number, default: undefined },
+    imagePreserveAspectRatio: { type: Boolean, default: true },
   },
   emits: ["update:scrollTop", "scroll", "focus", "blur", "keydown"],
   setup(props, { emit }) {
@@ -203,6 +208,13 @@ export const TVirtualMarkdown = defineComponent({
             final: props.final,
             theme: props.theme,
             imageResolver: props.imageRenderer,
+            imageSize: {
+              minWidth: props.imageMinWidth,
+              maxWidth: props.imageMaxWidth,
+              minHeight: props.imageMinHeight,
+              maxHeight: props.imageMaxHeight,
+              preserveAspectRatio: props.imagePreserveAspectRatio,
+            },
           }).blocks;
         return layoutMarkdownBlocksCached(blocks, props.w, layoutCache);
       });
@@ -397,6 +409,11 @@ export const TVirtualMarkdown = defineComponent({
         () => props.final,
         () => props.imageRenderer,
         () => markdownThemeSignature(props.theme),
+        () => props.imageMinWidth,
+        () => props.imageMaxWidth,
+        () => props.imageMinHeight,
+        () => props.imageMaxHeight,
+        () => props.imagePreserveAspectRatio,
       ],
       () => {
         scheduleRebuild();
