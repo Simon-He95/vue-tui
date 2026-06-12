@@ -65,6 +65,12 @@ function imageSourceFromRaw(raw: string): string {
   return destination.split(/\s+/u)[0] ?? "";
 }
 
+function imageFallbackText(raw: string, rawSource: string, sourceSrc: string | undefined): string {
+  if (raw) return raw;
+  const src = rawSource || sourceSrc;
+  return src ? `![](${src})` : "image";
+}
+
 function booleanProp(node: TuiMarkdownNode, key: string): boolean {
   return (node as Record<string, unknown>)[key] === true;
 }
@@ -264,9 +270,13 @@ function inlineNodeSegments(
         const raw = stringProp(node, "raw");
         const rawSource = stringProp(node, "src") || imageSourceFromRaw(raw);
         const source = sanitizeMarkdownImageSource(rawSource);
-        const alt = stringProp(node, "alt") || raw || source?.src || "image";
+        const alt = stringProp(node, "alt") || imageFallbackText(raw, rawSource, source?.src);
         if (source) {
           const size = options.imageSize;
+          const imageLinkStyle = mergeStyle(inheritedStyle, {
+            ...theme.link,
+            href: source.src,
+          });
           const sourceDimensions = readMarkdownImageDimensions(source.base64);
           const graphicBase = {
             kind: "image",
@@ -305,11 +315,11 @@ function inlineNodeSegments(
             pushTextSegments(
               out,
               alt,
-              mergeStyle(inheritedStyle, theme.link),
+              imageLinkStyle,
               graphic,
             );
           } else {
-            pushTextSegments(out, alt, mergeStyle(inheritedStyle, theme.link));
+            pushTextSegments(out, alt, imageLinkStyle);
           }
         } else {
           pushTextSegments(out, alt, mergeStyle(inheritedStyle, theme.link));

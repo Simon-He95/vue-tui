@@ -639,6 +639,7 @@
         "TuiMarkdownImageSize",
         "TuiMarkdownInlineSegment",
         "TuiMarkdownLayoutOptions",
+        "TuiMarkdownLinkActionPayload",
         "TuiMarkdownNode",
         "TuiMarkdownParseConfig",
         "TuiMarkdownParser",
@@ -5812,12 +5813,32 @@
           "required": false,
           "defaultValue": "false",
           "descriptionSource": "missing"
+        },
+        {
+          "name": "linkActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imageOcclusionRects",
+          "type": "readonly Rect[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "descriptionSource": "missing"
         }
       ],
       "events": [
         {
           "name": "imageAction",
           "payload": "TuiMarkdownImageActionPayload",
+          "payloadSource": "emits-signature",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "linkAction",
+          "payload": "TuiMarkdownLinkActionPayload",
           "payloadSource": "emits-signature",
           "descriptionSource": "missing"
         }
@@ -9542,6 +9563,20 @@
           "required": false,
           "defaultValue": "false",
           "descriptionSource": "missing"
+        },
+        {
+          "name": "linkActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imageOcclusionRects",
+          "type": "readonly Rect[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "descriptionSource": "missing"
         }
       ],
       "events": [
@@ -9583,6 +9618,12 @@
         {
           "name": "imageAction",
           "payload": "TuiMarkdownImageActionPayload",
+          "payloadSource": "emits-signature",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "linkAction",
+          "payload": "TuiMarkdownLinkActionPayload",
           "payloadSource": "emits-signature",
           "descriptionSource": "missing"
         }

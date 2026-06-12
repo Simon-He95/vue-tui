@@ -18,6 +18,7 @@ import {
 } from "vue";
 import { buildMarkdownVisualRows } from "../markdown/document.js";
 import { findMarkdownImageActionAt } from "../markdown/image-actions.js";
+import { findMarkdownLinkActionAt } from "../markdown/link-actions.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
 import {
   clearMarkdownImageGraphics,
@@ -28,6 +29,7 @@ import { markdownThemeSignature, type TuiMarkdownThemeOverrides } from "../markd
 import type {
   TuiMarkdownGraphicSegment,
   TuiMarkdownImageActionPayload,
+  TuiMarkdownLinkActionPayload,
   TuiMarkdownVisualRow,
 } from "../markdown/types.js";
 import { useLayout } from "../composables/use-layout.js";
@@ -72,9 +74,15 @@ export const TMarkdownText = defineComponent({
     imageMaxHeight: { type: Number, default: undefined },
     imagePreserveAspectRatio: { type: Boolean, default: true },
     imageActions: { type: Boolean, default: false },
+    linkActions: { type: Boolean, default: false },
+    imageOcclusionRects: {
+      type: Array as PropType<readonly Rect[]>,
+      default: undefined,
+    },
   },
   emits: {
     imageAction: (_payload: TuiMarkdownImageActionPayload) => true,
+    linkAction: (_payload: TuiMarkdownLinkActionPayload) => true,
   },
   setup(props, { emit }) {
     const instance = getCurrentInstance();
@@ -212,18 +220,41 @@ export const TMarkdownText = defineComponent({
       );
     }
 
+    function linkActionAt(event: TerminalPointerEvent) {
+      const r = absRect.value;
+      const full = fullRect.value;
+      return findMarkdownLinkActionAt(
+        rows.value,
+        { cellX: event.cellX, cellY: event.cellY },
+        {
+          screenRect: r,
+          rowOffset: Math.max(0, Math.floor(r.y - full.y)),
+          clipStart: Math.max(0, Math.floor(r.x - full.x)),
+        },
+      );
+    }
+
     useTerminalNode(() => ({
       rect: absRect.value,
       zIndex: eventZ.value,
-      visible: visible.value && props.imageActions,
+      visible: visible.value && (props.imageActions || props.linkActions),
       focusable: false,
       selectable: false,
       handlers: {
         click: (event: TerminalPointerEvent) => {
-          const hit = imageActionAt(event);
-          if (!hit) return;
+          if (props.imageActions) {
+            const hit = imageActionAt(event);
+            if (hit) {
+              event.preventDefault();
+              emit("imageAction", hit);
+              return;
+            }
+          }
+          if (!props.linkActions) return;
+          const link = linkActionAt(event);
+          if (!link) return;
           event.preventDefault();
-          emit("imageAction", hit);
+          emit("linkAction", link);
         },
       },
     }));
@@ -240,6 +271,7 @@ export const TMarkdownText = defineComponent({
         documentVersion.value,
         graphicsOutputVersion.value,
         defaultStyle.value,
+        props.imageOcclusionRects,
       ],
       paint: (dirtyRows) => {
         withTextWidthProvider(widthProvider, () => {
@@ -250,6 +282,11 @@ export const TMarkdownText = defineComponent({
           const baseStyle = props.style ?? defaultStyle.value;
           const clipStart = Math.max(0, Math.floor(r.x - full.x));
           const rowOffset = Math.max(0, Math.floor(r.y - full.y));
+          const isGraphicCovered = (
+            rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+          ) => {
+            return props.imageOcclusionRects?.some((item) => intersectRect(rect, item)) === true;
+          };
           const keepGraphicIds = collectVisibleMarkdownImageGraphicIds(rows.value, {
             x: r.x,
             y: r.y,
@@ -257,6 +294,7 @@ export const TMarkdownText = defineComponent({
             h: r.h,
             rowOffset,
             clipStart,
+            isGraphicCovered,
           });
           const paintRow = (y: number) => {
             if (y < r.y || y >= r.y + r.h) return;
@@ -271,6 +309,7 @@ export const TMarkdownText = defineComponent({
               baseStyle,
               clear: props.clear,
               keepGraphicIds,
+              isGraphicCovered,
             });
           };
           if (dirtyRows?.length) {

@@ -849,6 +849,42 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("emits linkAction instead of imageAction when fallback alt image is clicked", async () => {
+    const imageActions: unknown[] = [];
+    const linkActions: unknown[] = [];
+    const url = "http://localhost:19999/missing.png";
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 2,
+          y: 1,
+          w: 48,
+          h: 4,
+          content: `broken: ![copy fallback url](${url})`,
+          imageActions: true,
+          linkActions: true,
+          imageRenderer: () => null,
+          onImageAction: (payload: unknown) => imageActions.push(payload),
+          onLinkAction: (payload: unknown) => linkActions.push(payload),
+        }),
+      56,
+      8,
+    );
+
+    await nextTick();
+    clickCell(mounted, 12, 1);
+
+    expect(imageActions).toHaveLength(0);
+    expect(linkActions).toHaveLength(1);
+    expect(linkActions[0]).toMatchObject({
+      cellX: 12,
+      cellY: 1,
+      href: url,
+      text: "copy fallback url",
+    });
+    mounted.unmount();
+  });
+
   it("emits imageAction for visible TVirtualMarkdown images after scrolling", async () => {
     const actions: unknown[] = [];
     const mounted = await mountTerminal(

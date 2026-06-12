@@ -46,7 +46,8 @@ export function findMarkdownImageActionAt(
       const segmentStart = logicalX;
       const segmentEnd = logicalX + segment.cells;
       logicalX = segmentEnd;
-      if (!segment.graphic) continue;
+      const image = segment.graphic;
+      if (!image) continue;
       if (segmentEnd <= clipStart || segmentStart >= clipEnd) continue;
 
       const imageX = r.x + segmentStart - clipStart;
@@ -71,7 +72,7 @@ export function findMarkdownImageActionAt(
       }
 
       return {
-        image: segment.graphic,
+        image,
         rect: imageRect,
         cellX: point.cellX,
         cellY: point.cellY,

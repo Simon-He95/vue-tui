@@ -931,12 +931,25 @@ describe("markdown layout", () => {
       });
       expect(cleared).toHaveLength(0);
 
+      const coveredGraphicIds = collectVisibleMarkdownImageGraphicIds(
+        [imageRow, blankRow, blankRow],
+        {
+          x: 0,
+          y: 1,
+          w: 8,
+          h: 3,
+          rowOffset: 0,
+          clipStart: 0,
+          isGraphicCovered: () => true,
+        },
+      );
+      expect(coveredGraphicIds.size).toBe(0);
       paintMarkdownVisualRow(terminal, blankRow, {
         x: 0,
         y: 2,
         w: 8,
         baseStyle,
-        keepGraphicIds: new Set(),
+        keepGraphicIds: coveredGraphicIds,
       });
 
       expect(cleared).toHaveLength(1);

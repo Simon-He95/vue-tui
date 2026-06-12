@@ -31,7 +31,11 @@ import {
   createTerminalApp,
   installTerminalCleanup,
 } from "../src/cli.js";
-import { TMarkdownText, type TuiMarkdownImageActionPayload } from "../src/markdown.js";
+import {
+  TMarkdownText,
+  type TuiMarkdownImageActionPayload,
+  type TuiMarkdownLinkActionPayload,
+} from "../src/markdown.js";
 import { detectTerminalGraphicsCapabilities } from "../src/renderer/terminal-graphics.js";
 import { TBox, TText, TView, useTerminal } from "../src/vue.js";
 
@@ -277,6 +281,17 @@ const App = defineComponent({
       scheduler.flushNow();
     }
 
+    async function copyLink(payload: TuiMarkdownLinkActionPayload): Promise<void> {
+      try {
+        await clipboard.writeText(payload.href);
+        setStatus("Copied image URL");
+      } catch {
+        setStatus("Clipboard unavailable");
+      }
+      menu.value = null;
+      scheduler.flushNow();
+    }
+
     function saveImage(): void {
       const item = menu.value;
       if (!item) return;
@@ -294,7 +309,14 @@ const App = defineComponent({
         content: CONTENT,
         final: true,
         imageActions: true,
+        linkActions: true,
+        imageOcclusionRects: menu.value
+          ? [{ x: menu.value.x, y: menu.value.y, w: MENU_W, h: MENU_H }]
+          : undefined,
         onImageAction: openMenu,
+        onLinkAction: (payload) => {
+          void copyLink(payload);
+        },
         imageRenderer(image) {
           return imageBase64Cache.get(image.src) ?? null;
         },

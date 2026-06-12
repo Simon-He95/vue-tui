@@ -194,6 +194,7 @@ export function collectVisibleMarkdownImageGraphicIds(
     h: number;
     rowOffset: number;
     clipStart: number;
+    isGraphicCovered?: (rect: Readonly<{ x: number; y: number; w: number; h: number }>) => boolean;
   }>,
 ): ReadonlySet<string> {
   const keepIds = new Set<string>();
@@ -215,10 +216,17 @@ export function collectVisibleMarkdownImageGraphicIds(
       if (!segment.graphic) continue;
       if (segmentEnd <= clipStart || segmentStart >= clipEnd) continue;
       if (Math.max(segmentStart, clipStart) !== segmentStart) continue;
+      const rect = {
+        x: options.x + segmentStart - clipStart,
+        y: options.y + rowIndex - firstRow,
+        w: Math.max(1, Math.floor(segment.graphic.displayWidth ?? segment.cells)),
+        h: Math.max(1, Math.floor(segment.graphic.displayHeight ?? 1)),
+      };
+      if (options.isGraphicCovered?.(rect)) continue;
       keepIds.add(
         markdownImageGraphicId(segment.graphic, {
-          x: options.x + segmentStart - clipStart,
-          y: options.y + rowIndex - firstRow,
+          x: rect.x,
+          y: rect.y,
         }),
       );
     }
@@ -238,6 +246,7 @@ export function paintMarkdownVisualRow(
     baseStyle: Style;
     clear?: boolean;
     keepGraphicIds?: ReadonlySet<string>;
+    isGraphicCovered?: (rect: Readonly<{ x: number; y: number; w: number; h: number }>) => boolean;
   }>,
 ): void {
   const clipStart = Math.max(0, Math.floor(options.clipStart ?? 0));
@@ -282,7 +291,15 @@ export function paintMarkdownVisualRow(
       }
 
       const cellX = options.x + used;
+      const graphicRect = {
+        x: cellX,
+        y: options.y,
+        w: Math.max(1, Math.floor(segment.graphic.displayWidth ?? visibleCells)),
+        h: Math.max(1, Math.floor(segment.graphic.displayHeight ?? 1)),
+      };
+      const graphicCovered = options.isGraphicCovered?.(graphicRect) === true;
       const queueResult =
+        !graphicCovered &&
         visibleStart === segmentStart &&
         visibleCells > 0 &&
         queueMarkdownImageGraphic(terminal, segment.graphic, {

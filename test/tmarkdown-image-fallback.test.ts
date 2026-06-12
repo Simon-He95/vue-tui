@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createStdoutRenderer } from "../src/cli.js";
 import { TMarkdownText } from "../src/markdown.js";
 import { sanitizeMarkdownImageSource } from "../src/vue/markdown/image.js";
-import { h, mountTerminal, nextTick } from "./ui-regressions-support.js";
+import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
 type MountedTerminal = Awaited<ReturnType<typeof mountTerminal>>;
 
@@ -91,6 +91,34 @@ describe("markdown image fallback and sizing", () => {
     try {
       await nextTick();
       expect(rowText(mounted, 0)).toContain("broken image fallback");
+      expect(mounted.terminal.getCell(0, 0).style.href).toBe(
+        "http://localhost:19999/nonexistent.png",
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  it("shows raw markdown image text and href when alt is missing", async () => {
+    const url = "http://localhost:19999/nonexistent.png";
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 64,
+          h: 4,
+          content: `![](${url})`,
+          imageRenderer: () => null,
+        }),
+      64,
+      6,
+    );
+
+    try {
+      await nextTick();
+      expect(rowText(mounted, 0)).toContain(`![](${url})`);
+      expect(mounted.terminal.getCell(0, 0).style.href).toBe(url);
     } finally {
       mounted.unmount();
     }
@@ -494,6 +522,70 @@ describe("markdown image fallback and sizing", () => {
           expect(
             placeholderCells.some((cell) => cell.style.underline || cell.style.href),
           ).toBe(false);
+        } finally {
+          renderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
+
+  it("clears image graphics when an occlusion rect covers them", async () => {
+    await withEnv(
+      {
+        TERM: "xterm-kitty",
+        KITTY_WINDOW_ID: "1",
+      },
+      async () => {
+        let stdout = "";
+        const occlusionRects = ref<readonly { x: number; y: number; w: number; h: number }[]>();
+        const mounted = await mountTerminal(
+          () =>
+            h(TMarkdownText, {
+              x: 0,
+              y: 0,
+              w: 40,
+              h: 4,
+              content: `![data image](${TINY_PNG_DATA_URL})`,
+              imageMinWidth: 10,
+              imageMaxWidth: 10,
+              imageMinHeight: 2,
+              imageMaxHeight: 2,
+              imagePreserveAspectRatio: false,
+              imageOcclusionRects: occlusionRects.value,
+            }),
+          40,
+          6,
+        );
+        const renderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            write(chunk: string) {
+              stdout += chunk;
+            },
+            isTTY: true,
+            columns: 40,
+            rows: 6,
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+          expect(stdout).toContain("\u001B_Ga=T");
+
+          stdout = "";
+          occlusionRects.value = [{ x: 0, y: 0, w: 10, h: 2 }];
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+
+          expect(stdout).toContain("\u001B_Ga=d");
+          expect(stdout).not.toContain("\u001B_Ga=T");
         } finally {
           renderer.dispose();
           mounted.unmount();

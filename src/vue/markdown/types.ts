@@ -36,6 +36,16 @@ export type TuiMarkdownImageActionPayload = Readonly<{
   segmentIndex: number;
 }>;
 
+export type TuiMarkdownLinkActionPayload = Readonly<{
+  href: string;
+  text: string;
+  rect: Readonly<{ x: number; y: number; w: number; h: number }>;
+  cellX: number;
+  cellY: number;
+  rowIndex: number;
+  segmentIndex: number;
+}>;
+
 export type TuiMarkdownInlineSegment = Readonly<{
   text: string;
   style?: Style;

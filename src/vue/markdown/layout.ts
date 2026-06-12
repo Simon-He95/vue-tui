@@ -92,7 +92,10 @@ function clipInlineSegmentsToWidth(
     const piece = sliceByCellsRange(segment.text, 0, remaining);
     const cells = textCellWidth(piece);
     if (!piece || cells <= 0) continue;
-    const clipped = segment.style ? { text: piece, style: segment.style } : { text: piece };
+    const clipped = {
+      text: piece,
+      ...(segment.style ? { style: segment.style } : {}),
+    };
     out.push(
       piece === segment.text && segment.graphic ? { ...clipped, graphic: segment.graphic } : clipped,
     );
@@ -430,7 +433,12 @@ function appendVisualSegment(
     };
     return;
   }
-  segments.push({ text, style, cells, ...(graphic ? { graphic } : {}) });
+  segments.push({
+    text,
+    style,
+    cells,
+    ...(graphic ? { graphic } : {}),
+  });
 }
 
 function appendInlineVisualSegments(
@@ -576,9 +584,12 @@ function inlineSegmentSignature(segment: TuiMarkdownInlineSegment): string {
         segment.graphic.displayHeight ?? "",
       ].join("\u0006")
     : "";
-  return [segment.text, segment.hardBreak ? "1" : "0", styleSignature(segment.style), graphic].join(
-    "\u0002",
-  );
+  return [
+    segment.text,
+    segment.hardBreak ? "1" : "0",
+    styleSignature(segment.style),
+    graphic,
+  ].join("\u0002");
 }
 
 function inlineSegmentsSignature(segments?: readonly TuiMarkdownInlineSegment[]): string {
