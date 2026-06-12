@@ -7,10 +7,83 @@ export type TuiMarkdownNode = Readonly<{
   [key: string]: unknown;
 }>;
 
+export type TuiMarkdownImageSize = Readonly<{
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
+  preserveAspectRatio?: boolean;
+}>;
+
+export type TuiMarkdownGraphicSegment = Readonly<{
+  kind: "image";
+  src: string;
+  alt?: string;
+  mime?: string;
+  base64?: string;
+  originalBase64?: string;
+  originalMime?: string;
+  naturalWidth?: number;
+  naturalHeight?: number;
+  displayWidth?: number;
+  displayHeight?: number;
+}>;
+
+export type TuiMarkdownImageResolverResult =
+  | string
+  | null
+  | undefined
+  | Readonly<{
+      base64: string;
+      originalBase64?: string;
+      mime?: string;
+      originalMime?: string;
+    }>;
+
+export type TuiMarkdownImageResolver = (
+  image: TuiMarkdownGraphicSegment,
+) => TuiMarkdownImageResolverResult;
+
+export type TuiMarkdownImageActionPayload = Readonly<{
+  image: TuiMarkdownGraphicSegment;
+  rect: Readonly<{ x: number; y: number; w: number; h: number }>;
+  cellX: number;
+  cellY: number;
+  rowIndex: number;
+  segmentIndex: number;
+}>;
+
+export type TuiMarkdownLinkActionPayload = Readonly<{
+  href: string;
+  text: string;
+  rect: Readonly<{ x: number; y: number; w: number; h: number }>;
+  cellX: number;
+  cellY: number;
+  rowIndex: number;
+  segmentIndex: number;
+}>;
+
+export type TuiMarkdownMathSegment = Readonly<{
+  source: string;
+  raw: string;
+  rendered: boolean;
+}>;
+
+export type TuiMarkdownMathActionPayload = Readonly<{
+  math: TuiMarkdownMathSegment;
+  rect: Readonly<{ x: number; y: number; w: number; h: number }>;
+  cellX: number;
+  cellY: number;
+  rowIndex: number;
+  segmentIndex: number;
+}>;
+
 export type TuiMarkdownInlineSegment = Readonly<{
   text: string;
   style?: Style;
   hardBreak?: boolean;
+  graphic?: TuiMarkdownGraphicSegment;
+  mathAction?: TuiMarkdownMathSegment;
 }>;
 
 export type TuiMarkdownTableCellAlign = "left" | "center" | "right";
@@ -61,6 +134,9 @@ export type TuiMarkdownVisualSegment = Readonly<{
   text: string;
   style?: Style;
   cells: number;
+  graphic?: TuiMarkdownGraphicSegment;
+  mathAction?: TuiMarkdownMathSegment;
+  fallbackText?: string;
 }>;
 
 export type TuiMarkdownVisualRow = Readonly<{

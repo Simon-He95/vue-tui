@@ -12,7 +12,15 @@ export type {
 export type { TuiMarkdownLayoutOptions } from "./vue/markdown/layout.js";
 export type {
   TuiMarkdownBlock,
+  TuiMarkdownGraphicSegment,
+  TuiMarkdownImageActionPayload,
+  TuiMarkdownImageResolver,
+  TuiMarkdownImageResolverResult,
+  TuiMarkdownImageSize,
   TuiMarkdownInlineSegment,
+  TuiMarkdownLinkActionPayload,
+  TuiMarkdownMathActionPayload,
+  TuiMarkdownMathSegment,
   TuiMarkdownNode,
   TuiMarkdownTableCell,
   TuiMarkdownTableCellAlign,

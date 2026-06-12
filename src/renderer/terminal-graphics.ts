@@ -70,6 +70,7 @@ export type TerminalGraphicsPayload = Readonly<{
   h?: number;
   protocol: TerminalGraphicsProtocol;
   sequence: string;
+  resizeSequence?: string;
   op?: TerminalGraphicsOperation;
   order?: number;
   fallbackText?: string;
@@ -491,8 +492,8 @@ export function canDrawTerminalGraphicRect(
     Number.isFinite(y) &&
     x >= 0 &&
     y >= 0 &&
-    x + graphicSize.width <= cols &&
-    y + graphicSize.height <= rows
+    x < cols &&
+    y < rows
   );
 }
 
@@ -680,6 +681,13 @@ function validateKittySequence(sequence: string, op: TerminalGraphicsOperation =
   const first = packets[0]!;
   if (!kittyControlsUseOnly(first.controls, KITTY_DRAW_FIRST_CONTROL_KEYS)) return false;
   if (!validateKittySharedSafeControls(first.controls)) return false;
+  if (first.controls.get("a") === "p") {
+    if (packets.length !== 1) return false;
+    if (first.payload) return false;
+    if (!first.controls.has("i") && !first.controls.has("I")) return false;
+    return true;
+  }
+
   if (first.controls.get("a") !== "T") return false;
   if (!first.payload) return false;
 
@@ -990,6 +998,36 @@ export type CreateKittyGraphicsSequenceOptions = Readonly<{
   noCursorMove?: boolean;
   chunkSize?: number;
 }>;
+
+export type CreateKittyPlacementSequenceOptions = Readonly<{
+  imageId: number;
+  imageNumber?: number;
+  placementId?: number;
+  columns?: number;
+  rows?: number;
+  zIndex?: number;
+  quiet?: boolean;
+  noCursorMove?: boolean;
+}>;
+
+export function createKittyPlacementSequence(options: CreateKittyPlacementSequenceOptions): string {
+  const imageId = uint32Control("i", options.imageId);
+  const imageNumber = uint32Control("I", options.imageNumber);
+  if (!imageId && !imageNumber) return "";
+
+  const controls = [
+    "a=p",
+    options.quiet === false ? "" : "q=2",
+    options.noCursorMove === false ? "" : "C=1",
+    imageId,
+    imageNumber,
+    uint32Control("p", options.placementId),
+    ...kittyGraphicCellControls(options.columns, options.rows),
+    int32Control("z", options.zIndex),
+  ].filter(Boolean);
+
+  return `${ESC}_G${controls.join(",")}${ST}`;
+}
 
 export function createKittyGraphicsSequence(
   base64Png: string,

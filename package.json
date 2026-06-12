@@ -238,6 +238,9 @@
     "run:tlog-view-lab": "pnpm run build && VT_INTERACTIVE=1 tsx examples/tlog-view-lab.ts",
     "run:component:terminal": "tsx scripts/run-component-terminal.ts",
     "run:component:terminal:list": "tsx scripts/run-component-terminal.ts --list",
+    "run:image-showcase:terminal": "tsx examples/image-showcase.ts",
+    "run:katex-showcase:terminal": "tsx examples/katex-showcase.ts",
+    "trace:terminal-resize": "node scripts/trace-terminal-resize.mjs",
     "test:component-terminal:smoke": "VT_SMOKE=1 tsx scripts/run-component-terminal.ts --all",
     "docs:gen": "tsx scripts/generate-component-api-docs.ts",
     "docs:check-public-descriptions": "tsx scripts/check-public-api-docs.ts",
@@ -286,6 +289,7 @@
     "typecheck": "tsc -p tsconfig.runtime.json --noEmit && tsc -p tsconfig.json --noEmit",
     "e2e": "playwright test --project=smoke",
     "e2e:smoke": "playwright test --project=smoke",
+    "e2e:terminal-resize": "tsx scripts/e2e-terminal-resize.ts",
     "e2e:browser-regressions": "playwright test --project=browser-regressions-chromium --project=browser-regressions-firefox --project=browser-regressions-webkit",
     "bench:vfor": "tsx scripts/bench-vfor.ts",
     "bench:dom-renderer": "tsx scripts/bench-dom-renderer.ts",
@@ -296,6 +300,7 @@
     "bench:stdout-column-diff": "tsx scripts/bench-stdout-column-diff.ts"
   },
   "dependencies": {
+    "katex": "^0.16.47",
     "stream-markdown-parser": "1.0.2"
   },
   "devDependencies": {

@@ -1,5 +1,6 @@
 import { getMarkdown, parseMarkdownToStructure, type ParseOptions } from "stream-markdown-parser";
 import { sanitizeDomHref } from "../../core/hyperlink.js";
+import { sanitizeMarkdownImageSource } from "./image.js";
 import type { TuiMarkdownNode } from "./types.js";
 
 export interface TuiMarkdownParseConfig {
@@ -20,6 +21,10 @@ export function sanitizeMarkdownLink(url: string): string | null {
 
 export function isSafeMarkdownLink(url: string): boolean {
   return sanitizeMarkdownLink(url) != null;
+}
+
+function isSafeMarkdownDestination(url: string): boolean {
+  return isSafeMarkdownLink(url) || sanitizeMarkdownImageSource(url) != null;
 }
 
 function normalizeCustomHtmlTags(config?: TuiMarkdownParseConfig): readonly string[] {
@@ -61,7 +66,7 @@ export function createTuiMarkdownParser(config?: TuiMarkdownParseConfig): TuiMar
       final,
       customHtmlTags,
       requireClosingStrong: final || !config?.streaming,
-      validateLink: isSafeMarkdownLink,
+      validateLink: isSafeMarkdownDestination,
     } satisfies ParseOptions) as TuiMarkdownNode[];
   }
 

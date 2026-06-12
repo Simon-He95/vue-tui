@@ -24,6 +24,104 @@ describe("render-manager", () => {
     terminal.dispose();
   });
 
+  it("clears newly visible rows without repainting stable nodes on height growth", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 4 });
+    const rm = createRenderManager(terminal);
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("target"),
+    });
+
+    rm.render();
+    paints.length = 0;
+    terminal.resize(10, 6);
+
+    expect(rm.render()?.rows).toBe(2);
+    expect(paints).toEqual([]);
+  });
+
+  it("paints nodes intersecting newly visible rows on height growth", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 4 });
+    const rm = createRenderManager(terminal);
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 2, w: 10, h: 4 },
+      paint: (dirtyRows) => paints.push(dirtyRows ? dirtyRows.join(",") : "all"),
+    });
+
+    rm.render();
+    paints.length = 0;
+    terminal.resize(10, 6);
+
+    expect(rm.render()?.rows).toBe(2);
+    expect(paints).toEqual(["4,5"]);
+  });
+
+  it("does not force stable nodes to repaint on column resize", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 4 });
+    const rm = createRenderManager(terminal);
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 1 },
+      paint: () => paints.push("target"),
+    });
+
+    rm.render();
+    paints.length = 0;
+    terminal.resize(12, 4);
+
+    expect(rm.render()).toBeNull();
+    expect(paints).toEqual([]);
+  });
+
+  it("marks only tail rows when a node rect changes height", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 8 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 5 },
+      paint: (dirtyRows) => paints.push(dirtyRows ? dirtyRows.join(",") : "all"),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    rm.update(node.id, { rect: { x: 0, y: 1, w: 10, h: 3 } });
+    expect(rm.render()?.rows).toBe(2);
+    expect(paints).toEqual([]);
+
+    rm.update(node.id, { rect: { x: 0, y: 1, w: 10, h: 5 } });
+    expect(rm.render()?.rows).toBe(2);
+    expect(paints).toEqual(["4,5"]);
+  });
+
+  it("repaints overlapping rows when paint changes with rect height", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 8 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 5 },
+      paint: (dirtyRows) => paints.push(`old:${dirtyRows ? dirtyRows.join(",") : "all"}`),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    rm.update(node.id, {
+      rect: { x: 0, y: 1, w: 10, h: 3 },
+      paint: (dirtyRows) => paints.push(`new:${dirtyRows ? dirtyRows.join(",") : "all"}`),
+    });
+
+    expect(rm.render()?.rows).toBe(5);
+    expect(paints).toEqual(["new:1,2,3,4,5"]);
+  });
+
   it("skips empty rect nodes on full repaint", () => {
     const paints: string[] = [];
 

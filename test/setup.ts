@@ -26,6 +26,13 @@ if (!(globalThis as any).document) {
   setGlobal("getComputedStyle", window.getComputedStyle.bind(window));
 }
 
+if (typeof document !== "undefined" && document.compatMode !== "CSS1Compat") {
+  Object.defineProperty(document, "compatMode", {
+    value: "CSS1Compat",
+    configurable: true,
+  });
+}
+
 if (!(globalThis as any).requestAnimationFrame) {
   setGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
     cb(0);

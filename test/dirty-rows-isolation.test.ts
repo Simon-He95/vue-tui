@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createApp, defineComponent, h, nextTick, ref } from "vue";
 import { TerminalProvider, TBox, TText } from "../src/index.js";
+import { useRenderNode } from "../src/vue/composables/use-render-node.js";
 import { useTerminal } from "../src/vue.js";
 
 // Make rAF deterministic (TerminalProvider scheduler uses it).
@@ -132,6 +133,53 @@ describe("dirty-row rendering", () => {
 
     expect(s2).toContain("HEADER");
     expect(s2).toContain("Should stay");
+
+    app.unmount();
+    root.remove();
+  });
+
+  it("does not repaint a render node when rect and deps are unchanged", async () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+
+    const tick = ref(0);
+    let paints = 0;
+
+    const Probe = defineComponent({
+      name: "StableRenderNodeProbe",
+      setup() {
+        useRenderNode(() => ({
+          rect: { x: 0, y: 0, w: 4, h: 1 },
+          deps: ["stable"],
+          paint: () => {
+            paints++;
+          },
+        }));
+        return () => null;
+      },
+    });
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(
+            TerminalProvider,
+            { cols: 10, rows: 4 },
+            {
+              default: () => [h(Probe), h("span", String(tick.value))],
+            },
+          );
+      },
+    });
+
+    const app = createApp(App);
+    app.mount(root);
+    await nextTick();
+    expect(paints).toBe(1);
+
+    tick.value++;
+    await nextTick();
+    expect(paints).toBe(1);
 
     app.unmount();
     root.remove();

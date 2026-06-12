@@ -151,6 +151,8 @@
         "detectTerminalGraphicsCapabilities",
         "dispatchTLogPluginLinkAction",
         "getTLogPluginMetadata",
+        "getTerminalGraphicsOutput",
+        "getTerminalGraphicsOutputVersion",
         "isSimpleMermaidFlowchartSource",
         "markMermaidRenderErrorFatal",
         "parseTLogAnnotatedText",
@@ -165,6 +167,7 @@
         "resolveTToolCallViewModel",
         "resolveTUserMessageViewModel",
         "stripTLogAnsiText",
+        "subscribeTerminalGraphicsOutput",
         "tlogDarkPreset",
         "tlogDarkTheme",
         "tlogDefaultPreset",
@@ -284,6 +287,9 @@
         "TuiMarkdownBlockSource",
         "TuiMarkdownBlockSourceOptions",
         "TuiMarkdownBlockSourceSnapshot",
+        "TuiMarkdownGraphicSegment",
+        "TuiMarkdownImageResolver",
+        "TuiMarkdownImageResolverResult",
         "TuiMarkdownInlineSegment",
         "TuiMarkdownNode",
         "TuiMarkdownTableCell",
@@ -630,8 +636,16 @@
         "TuiMarkdownBlockSource",
         "TuiMarkdownBlockSourceOptions",
         "TuiMarkdownBlockSourceSnapshot",
+        "TuiMarkdownGraphicSegment",
+        "TuiMarkdownImageActionPayload",
+        "TuiMarkdownImageResolver",
+        "TuiMarkdownImageResolverResult",
+        "TuiMarkdownImageSize",
         "TuiMarkdownInlineSegment",
         "TuiMarkdownLayoutOptions",
+        "TuiMarkdownLinkActionPayload",
+        "TuiMarkdownMathActionPayload",
+        "TuiMarkdownMathSegment",
         "TuiMarkdownNode",
         "TuiMarkdownParseConfig",
         "TuiMarkdownParser",
@@ -946,6 +960,9 @@
         "TerminalSchedulerConfig",
         "TerminalSchedulerInvalidateOptions",
         "TerminalSelectionContext",
+        "TuiMarkdownGraphicSegment",
+        "TuiMarkdownImageResolver",
+        "TuiMarkdownImageResolverResult",
         "TuiMarkdownTheme",
         "TuiMarkdownThemeOverrides",
         "TuiTheme",
@@ -5754,9 +5771,111 @@
           "defaultValue": "undefined",
           "description": "Markdown theme token overrides for parsed blocks and inline segments.",
           "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageRenderer",
+          "type": "TuiMarkdownImageResolver",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Optional resolver for markdown image payloads before terminal graphics rendering.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageMinWidth",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Minimum markdown image render width in terminal cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageMaxWidth",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Maximum markdown image render width in terminal cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageMinHeight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Minimum markdown image render height in terminal cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageMaxHeight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Maximum markdown image render height in terminal cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imagePreserveAspectRatio",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Preserves markdown image aspect ratio while fitting width and height bounds.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables pointer actions for rendered markdown images.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables pointer actions for rendered markdown math blocks.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "linkActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables pointer actions for rendered markdown links.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageOcclusionRects",
+          "type": "readonly Rect[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Terminal rectangles that markdown image layout treats as unavailable for graphics placement.",
+          "descriptionSource": "component-default"
         }
       ],
-      "events": []
+      "events": [
+        {
+          "name": "imageAction",
+          "payload": "TuiMarkdownImageActionPayload",
+          "payloadSource": "emits-signature",
+          "description": "Emitted when imageActions is enabled and a markdown image action is selected.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathAction",
+          "payload": "TuiMarkdownMathActionPayload",
+          "payloadSource": "emits-signature",
+          "description": "Emitted when mathActions is enabled and a markdown math action is selected.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "linkAction",
+          "payload": "TuiMarkdownLinkActionPayload",
+          "payloadSource": "emits-signature",
+          "description": "Emitted when linkActions is enabled and a markdown link action is selected.",
+          "descriptionSource": "component-default"
+        }
+      ]
     },
     "TMermaid": {
       "entrypoint": "@simon_he/vue-tui/vue",
@@ -9427,20 +9546,100 @@
           "defaultValue": "undefined",
           "description": "Markdown theme token overrides for parsed blocks and inline segments.",
           "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageRenderer",
+          "type": "TuiMarkdownImageResolver",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Optional resolver for markdown image payloads before terminal graphics rendering.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageMinWidth",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Minimum markdown image render width in terminal cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageMaxWidth",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Maximum markdown image render width in terminal cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageMinHeight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Minimum markdown image render height in terminal cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageMaxHeight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Maximum markdown image render height in terminal cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imagePreserveAspectRatio",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Preserves markdown image aspect ratio while fitting width and height bounds.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables pointer actions for rendered markdown images.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables pointer actions for rendered markdown math blocks.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "linkActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Enables pointer actions for rendered markdown links.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageOcclusionRects",
+          "type": "readonly Rect[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Terminal rectangles that markdown image layout treats as unavailable for graphics placement.",
+          "descriptionSource": "component-default"
         }
       ],
       "events": [
         {
           "name": "update:scrollTop",
           "payload": "number",
-          "payloadSource": "update-prop",
+          "payloadSource": "emits-signature",
           "description": "Emitted when the top visible row offset should change.",
           "descriptionSource": "shared-default"
         },
         {
           "name": "scroll",
           "payload": "number",
-          "payloadSource": "component-default",
+          "payloadSource": "emits-signature",
           "description": "Emitted when the visible scroll offset changes.",
           "descriptionSource": "shared-default"
         },
@@ -9461,9 +9660,30 @@
         {
           "name": "keydown",
           "payload": "TerminalKeyboardEvent",
-          "payloadSource": "shared-default",
+          "payloadSource": "emits-signature",
           "description": "Emitted for keydown events.",
           "descriptionSource": "shared-default"
+        },
+        {
+          "name": "imageAction",
+          "payload": "TuiMarkdownImageActionPayload",
+          "payloadSource": "emits-signature",
+          "description": "Emitted when imageActions is enabled and a markdown image action is selected.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathAction",
+          "payload": "TuiMarkdownMathActionPayload",
+          "payloadSource": "emits-signature",
+          "description": "Emitted when mathActions is enabled and a markdown math action is selected.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "linkAction",
+          "payload": "TuiMarkdownLinkActionPayload",
+          "payloadSource": "emits-signature",
+          "description": "Emitted when linkActions is enabled and a markdown link action is selected.",
+          "descriptionSource": "component-default"
         }
       ]
     }

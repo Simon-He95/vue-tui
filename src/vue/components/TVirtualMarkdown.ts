@@ -25,15 +25,33 @@ import {
   watchEffect,
 } from "vue";
 import { buildMarkdownBlocks } from "../markdown/document.js";
+import { findMarkdownImageActionAt } from "../markdown/image-actions.js";
+import { findMarkdownLinkActionAt } from "../markdown/link-actions.js";
+import { findMarkdownMathActionAt } from "../markdown/math-actions.js";
 import {
   terminalSelectionRowSpans,
   terminalSelectionVisibleRowSpans,
 } from "../../selection/terminal-selection.js";
+import {
+  getTerminalGraphicsOutputVersion,
+  subscribeTerminalGraphicsOutput,
+} from "../../renderer/terminal-graphics.js";
 import { layoutMarkdownBlocksCached, type TuiMarkdownLayoutCache } from "../markdown/layout.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
-import { paintMarkdownVisualRow } from "../markdown/render.js";
+import {
+  clearMarkdownImageGraphics,
+  collectVisibleMarkdownImageGraphicIds,
+  paintMarkdownVisualRow,
+} from "../markdown/render.js";
 import { markdownThemeSignature, type TuiMarkdownThemeOverrides } from "../markdown/theme.js";
-import type { TuiMarkdownBlock, TuiMarkdownVisualRow } from "../markdown/types.js";
+import type {
+  TuiMarkdownBlock,
+  TuiMarkdownImageActionPayload,
+  TuiMarkdownImageResolver,
+  TuiMarkdownLinkActionPayload,
+  TuiMarkdownMathActionPayload,
+  TuiMarkdownVisualRow,
+} from "../markdown/types.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminalNode } from "../composables/use-terminal-node.js";
@@ -74,7 +92,7 @@ function markdownRowSignature(row: TuiMarkdownVisualRow | undefined): string {
     row.segments
       .map(
         (segment) =>
-          `${segment.text}\u0001${segment.cells}\u0001${markdownStyleSignature(segment.style)}`,
+          `${segment.text}\u0001${segment.cells}\u0001${markdownStyleSignature(segment.style)}\u0001${segment.graphic?.src ?? ""}\u0001${segment.graphic?.base64 ?? ""}\u0001${segment.fallbackText ?? ""}`,
       )
       .join("\u0002"),
   ].join("\u0003");
@@ -98,6 +116,17 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
   if (deltaMode === 1) return { deltaY, mode: "line" };
   if (deltaMode === 0) return { deltaY, mode: "pixel" };
   return { deltaY, mode: "auto" };
+}
+
+function rowGraphicSignature(row: TuiMarkdownVisualRow | undefined): string {
+  if (!row) return "";
+  return row.segments
+    .map((segment) =>
+      segment.graphic
+        ? `${segment.graphic.kind}\u0001${segment.graphic.src}\u0001${segment.graphic.base64 ?? ""}`
+        : "",
+    )
+    .join("\u0002");
 }
 
 export const TVirtualMarkdown = defineComponent({
@@ -127,8 +156,33 @@ export const TVirtualMarkdown = defineComponent({
       type: Object as PropType<TuiMarkdownThemeOverrides>,
       default: undefined,
     },
+    imageRenderer: {
+      type: Function as PropType<TuiMarkdownImageResolver>,
+      default: undefined,
+    },
+    imageMinWidth: { type: Number, default: undefined },
+    imageMaxWidth: { type: Number, default: undefined },
+    imageMinHeight: { type: Number, default: undefined },
+    imageMaxHeight: { type: Number, default: undefined },
+    imagePreserveAspectRatio: { type: Boolean, default: true },
+    imageActions: { type: Boolean, default: false },
+    mathActions: { type: Boolean, default: false },
+    linkActions: { type: Boolean, default: false },
+    imageOcclusionRects: {
+      type: Array as PropType<readonly Rect[]>,
+      default: undefined,
+    },
   },
-  emits: ["update:scrollTop", "scroll", "focus", "blur", "keydown"],
+  emits: {
+    "update:scrollTop": (_value: number) => true,
+    scroll: (_value: number) => true,
+    focus: () => true,
+    blur: () => true,
+    keydown: (_event: TerminalKeyboardEvent) => true,
+    imageAction: (_payload: TuiMarkdownImageActionPayload) => true,
+    mathAction: (_payload: TuiMarkdownMathActionPayload) => true,
+    linkAction: (_payload: TuiMarkdownLinkActionPayload) => true,
+  },
   setup(props, { emit }) {
     const instance = getCurrentInstance();
     const { terminal, defaultStyle, events, scheduler, selection, widthProvider } = useTerminal();
@@ -153,6 +207,10 @@ export const TVirtualMarkdown = defineComponent({
         }),
       ),
     );
+    const graphicsOutputVersion = shallowRef(getTerminalGraphicsOutputVersion(terminal));
+    const unsubscribeGraphicsOutput = subscribeTerminalGraphicsOutput(terminal, () => {
+      graphicsOutputVersion.value = getTerminalGraphicsOutputVersion(terminal);
+    });
 
     watch(
       () => `${props.streaming ? 1 : 0}:${(props.customHtmlTags ?? []).join("\u0000")}`,
@@ -169,12 +227,21 @@ export const TVirtualMarkdown = defineComponent({
     function rebuildRows(): void {
       const prevScrollTop = internalScrollTop.value;
       const prevVisibleRows = visibleRowSignatures(rows.value, prevScrollTop);
+      const prevVisibleGraphics = visibleRowGraphics(rows.value, prevScrollTop);
       const nextLayout = withTextWidthProvider(widthProvider, () => {
         const blocks =
           props.blocks ??
           buildMarkdownBlocks(props.content, parser.value, {
             final: props.final,
             theme: props.theme,
+            imageResolver: props.imageRenderer,
+            imageSize: {
+              minWidth: props.imageMinWidth,
+              maxWidth: props.imageMaxWidth,
+              minHeight: props.imageMinHeight,
+              maxHeight: props.imageMaxHeight,
+              preserveAspectRatio: props.imagePreserveAspectRatio,
+            },
           }).blocks;
         return layoutMarkdownBlocksCached(blocks, props.w, layoutCache);
       });
@@ -184,9 +251,11 @@ export const TVirtualMarkdown = defineComponent({
       reconcileScrollTop();
       const nextScrollTop = internalScrollTop.value;
       const nextVisibleRows = visibleRowSignatures(nextRows, nextScrollTop);
+      const nextVisibleGraphics = visibleRowGraphics(nextRows, nextScrollTop);
       const visibleChanged =
         prevVisibleRows.length !== nextVisibleRows.length ||
-        prevVisibleRows.some((row, index) => row !== nextVisibleRows[index]);
+        prevVisibleRows.some((row, index) => row !== nextVisibleRows[index]) ||
+        prevVisibleGraphics.some((row, index) => row !== nextVisibleGraphics[index]);
       if (!builtOnce || prevScrollTop !== nextScrollTop || visibleChanged) {
         documentVersion.value++;
         selection.refresh();
@@ -264,6 +333,20 @@ export const TVirtualMarkdown = defineComponent({
       const out: string[] = [];
       for (let index = start; index < end; index++)
         out.push(markdownRowSignature(sourceRows[index]));
+      return out;
+    }
+
+    function visibleRowGraphics(
+      sourceRows: readonly TuiMarkdownVisualRow[],
+      scrollTop: number,
+    ): readonly string[] {
+      const clip = normalizedRect();
+      const { y: clipY } = clipOffsets();
+      const start = Math.max(0, scrollTop + clipY);
+      const end = Math.max(start, start + clip.h);
+      const out: string[] = [];
+      for (let index = start; index < end; index++)
+        out.push(rowGraphicSignature(sourceRows[index]));
       return out;
     }
 
@@ -352,7 +435,13 @@ export const TVirtualMarkdown = defineComponent({
         () => props.w,
         () => parser.value,
         () => props.final,
+        () => props.imageRenderer,
         () => markdownThemeSignature(props.theme),
+        () => props.imageMinWidth,
+        () => props.imageMaxWidth,
+        () => props.imageMinHeight,
+        () => props.imageMaxHeight,
+        () => props.imagePreserveAspectRatio,
       ],
       () => {
         scheduleRebuild();
@@ -517,7 +606,48 @@ export const TVirtualMarkdown = defineComponent({
       selectable: props.selectable,
       selectionScrollBy: scrollSelectionBy,
       handlers: {
-        click: (_event: TerminalPointerEvent) => {},
+        click: (event: TerminalPointerEvent) => {
+          const r = normalizedRect();
+          const { x: clipX, y: clipY } = clipOffsets();
+          const hitOptions = {
+            screenRect: r,
+            rowOffset: internalScrollTop.value + clipY,
+            clipStart: clipX,
+          };
+          if (props.imageActions) {
+            const hit = findMarkdownImageActionAt(
+              rows.value,
+              { cellX: event.cellX, cellY: event.cellY },
+              hitOptions,
+            );
+            if (hit) {
+              event.preventDefault();
+              emit("imageAction", hit);
+              return;
+            }
+          }
+          if (props.mathActions) {
+            const math = findMarkdownMathActionAt(
+              rows.value,
+              { cellX: event.cellX, cellY: event.cellY },
+              hitOptions,
+            );
+            if (math) {
+              event.preventDefault();
+              emit("mathAction", math);
+              return;
+            }
+          }
+          if (!props.linkActions) return;
+          const link = findMarkdownLinkActionAt(
+            rows.value,
+            { cellX: event.cellX, cellY: event.cellY },
+            hitOptions,
+          );
+          if (!link) return;
+          event.preventDefault();
+          emit("linkAction", link);
+        },
         wheel: (event: any) => {
           const { deltaY, mode } = getWheelScrollInput(event);
           if (!deltaY) return;
@@ -563,6 +693,8 @@ export const TVirtualMarkdown = defineComponent({
     onBeforeUnmount(() => {
       alive = false;
       rebuildVersion++;
+      unsubscribeGraphicsOutput();
+      clearMarkdownImageGraphics(terminal, fullRect.value);
     });
 
     useRenderNode(() => ({
@@ -576,6 +708,8 @@ export const TVirtualMarkdown = defineComponent({
         props.style,
         defaultStyle.value,
         documentVersion.value,
+        graphicsOutputVersion.value,
+        props.imageOcclusionRects,
       ],
       paint: (dirtyRows) => {
         withTextWidthProvider(widthProvider, () => {
@@ -584,6 +718,20 @@ export const TVirtualMarkdown = defineComponent({
           if (r.w <= 0 || r.h <= 0) return;
           const baseStyle = props.style ?? defaultStyle.value;
           const { x: clipX, y: clipY } = clipOffsets();
+          const isGraphicCovered = (
+            rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+          ) => {
+            return props.imageOcclusionRects?.some((item) => intersectRect(rect, item)) === true;
+          };
+          const keepGraphicIds = collectVisibleMarkdownImageGraphicIds(rows.value, {
+            x: r.x,
+            y: r.y,
+            w: r.w,
+            h: r.h,
+            rowOffset: internalScrollTop.value + clipY,
+            clipStart: clipX,
+            isGraphicCovered,
+          });
           const paintRow = (y: number) => {
             if (y < r.y || y >= r.y + r.h) return;
             const visualIndex = internalScrollTop.value + clipY + (y - r.y);
@@ -594,6 +742,8 @@ export const TVirtualMarkdown = defineComponent({
               clipStart: clipX,
               baseStyle,
               clear: true,
+              keepGraphicIds,
+              isGraphicCovered,
             });
           };
           if (dirtyRows?.length) {
