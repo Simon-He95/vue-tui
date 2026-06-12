@@ -182,6 +182,8 @@ function markPlaneCoverageForPut(
   ch: string,
   prevCell: Cell | null,
 ): void {
+  if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) return;
+  if (x < 0 || x >= state.buffer.cols || y < 0 || y >= state.buffer.rows) return;
   const row = state.coverage[y];
   if (!row) return;
   if (prevCell?.continuation && x > 0) row[x - 1] = 1;
@@ -365,10 +367,14 @@ export function createTerminal(opts: TerminalOptions): Terminal {
     style?: Style,
   ): void {
     const state = getPlaneState(plane);
-    if (y < 0 || y >= state.buffer.rows || x < 0 || x >= state.buffer.cols) return;
-    const prevCell = getBufferCell(state.buffer, x, y);
-    putCell(state.buffer, x, y, ch, style);
-    markPlaneCoverageForPut(state, x, y, ch, prevCell);
+    if (typeof x !== "number" || typeof y !== "number") return;
+    const cellX = Math.floor(x);
+    const cellY = Math.floor(y);
+    if (!Number.isFinite(cellX) || !Number.isFinite(cellY)) return;
+    if (cellY < 0 || cellY >= state.buffer.rows || cellX < 0 || cellX >= state.buffer.cols) return;
+    const prevCell = getBufferCell(state.buffer, cellX, cellY);
+    putCell(state.buffer, cellX, cellY, ch, style);
+    markPlaneCoverageForPut(state, cellX, cellY, ch, prevCell);
   }
 
   function writeAtForPlane(

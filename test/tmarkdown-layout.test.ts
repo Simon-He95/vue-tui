@@ -28,7 +28,7 @@ describe("markdown layout", () => {
   it("maps headings, links, and unsafe links into terminal blocks", () => {
     const parser = createTuiMarkdownParser();
     const nodes = parser.parse(
-      "# Hello\n\nA **bold** [safe](https://example.com) [unsafe](javascript:alert(1))",
+      "# Hello\n\nA **bold** [safe](https://example.com) [unsafe-js](javascript:alert(1)) [unsafe-data](data:text/html,boom) [unsafe-vb](vbscript:msgbox(1))",
       true,
     );
     const blocks = markdownAstToBlocks(nodes, DEFAULT_TUI_MARKDOWN_THEME);
@@ -42,9 +42,10 @@ describe("markdown layout", () => {
     expect(
       paragraph.segments.some((segment) => segment.style?.href === "https://example.com/"),
     ).toBe(true);
-    expect(
-      paragraph.segments.some((segment) => segment.style?.href?.startsWith("javascript:")),
-    ).toBe(false);
+    const hrefs = paragraph.segments.map((segment) => segment.style?.href).filter(Boolean);
+    expect(hrefs).not.toContain("javascript:alert(1)");
+    expect(hrefs).not.toContain("data:text/html,boom");
+    expect(hrefs).not.toContain("vbscript:msgbox(1)");
   });
 
   it("rejects markdown links with control characters and unsupported protocols", () => {

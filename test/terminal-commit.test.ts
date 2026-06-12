@@ -24,4 +24,16 @@ describe("terminal commits", () => {
 
     terminal.dispose();
   });
+
+  it("ignores non-numeric put coordinates from JavaScript consumers", () => {
+    const terminal = createTerminal({ cols: 4, rows: 1 }) as any;
+
+    expect(() => terminal.put("__proto__", 0, "x")).not.toThrow();
+    expect(() => terminal.put(0, "__proto__", "x")).not.toThrow();
+    expect(() => terminal.put(Number.POSITIVE_INFINITY, 0, "x")).not.toThrow();
+    expect(() => terminal.put(0, Number.NaN, "x")).not.toThrow();
+
+    expect(terminal.snapshot().lines[0]).toBe("    ");
+    terminal.dispose();
+  });
 });
