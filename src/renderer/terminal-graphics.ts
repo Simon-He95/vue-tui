@@ -1010,9 +1010,7 @@ export type CreateKittyPlacementSequenceOptions = Readonly<{
   noCursorMove?: boolean;
 }>;
 
-export function createKittyPlacementSequence(
-  options: CreateKittyPlacementSequenceOptions,
-): string {
+export function createKittyPlacementSequence(options: CreateKittyPlacementSequenceOptions): string {
   const imageId = uint32Control("i", options.imageId);
   const imageNumber = uint32Control("I", options.imageNumber);
   if (!imageId && !imageNumber) return "";

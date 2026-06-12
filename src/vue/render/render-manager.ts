@@ -591,6 +591,7 @@ export function createRenderManager(
     const nextPlane = next.plane ?? prev.plane;
     const planeChanged = nextPlane !== prev.plane;
     const hasRect = Object.prototype.hasOwnProperty.call(next, "rect");
+    const paintChanged = Object.prototype.hasOwnProperty.call(next, "paint");
     const nextRect = hasRect ? (next.rect ?? null) : prev.rect;
     const rectChanged = !sameRect(prev.rect, nextRect);
     const bucketChanged = planeChanged || rectChanged;
@@ -608,6 +609,7 @@ export function createRenderManager(
       markRowsForNode(prev, dirtyRowsHint);
     } else if (
       rectChanged &&
+      !paintChanged &&
       !sortChanged &&
       !planeChanged &&
       markRectHeightDelta(prev.plane, prev.rect, nextRect)

@@ -82,9 +82,7 @@ function normalizeImageResolverResult(
   if (!result) return {};
   return {
     base64: result.base64.replace(/\s+/g, ""),
-    ...(result.originalBase64
-      ? { originalBase64: result.originalBase64.replace(/\s+/g, "") }
-      : {}),
+    ...(result.originalBase64 ? { originalBase64: result.originalBase64.replace(/\s+/g, "") } : {}),
     ...(result.mime ? { mime: result.mime } : {}),
     ...(result.originalMime ? { originalMime: result.originalMime } : {}),
   };
@@ -135,7 +133,7 @@ function resolveImageDisplaySize(
     naturalWidth > 0 &&
     naturalHeight > 0
   ) {
-    const cellRatio = (naturalWidth / naturalHeight) / TERMINAL_CELL_WIDTH_TO_HEIGHT_RATIO;
+    const cellRatio = naturalWidth / naturalHeight / TERMINAL_CELL_WIDTH_TO_HEIGHT_RATIO;
     let width = minWidth;
     let height = Math.max(minHeight, Math.ceil(width / cellRatio));
     width = Math.max(width, Math.ceil(height * cellRatio));
@@ -336,12 +334,7 @@ function inlineNodeSegments(
                 : {}),
               ...resolveImageDisplaySize(alt, size, dimensions?.width, dimensions?.height),
             } satisfies TuiMarkdownGraphicSegment;
-            pushTextSegments(
-              out,
-              alt,
-              imageLinkStyle,
-              graphic,
-            );
+            pushTextSegments(out, alt, imageLinkStyle, graphic);
           } else {
             pushTextSegments(out, alt, imageLinkStyle);
           }
@@ -526,7 +519,7 @@ function blockFromTable(
     tableCells(row).map((cell) => ({
       segments: inlineNodeSegments(nodeChildren(cell), theme, undefined, {
         imageResolver: context.imageResolver,
-      imageSize: context.imageSize,
+        imageSize: context.imageSize,
       }),
       align: tableCellAlign(cell),
     })),
@@ -694,7 +687,7 @@ function nodeToBlocks(
         prefixSegments: [...context.prefixSegments, quoteSegment],
         continuationPrefixSegments: [...context.continuationPrefixSegments, quoteSegment],
         imageResolver: context.imageResolver,
-      imageSize: context.imageSize,
+        imageSize: context.imageSize,
       };
       return childSequenceToBlocks(nodeChildren(node), quoteContext, theme, keyPrefix);
     }
@@ -710,7 +703,7 @@ function nodeToBlocks(
           keyPrefix,
           inlineNodeSegments(nodeChildren(node), theme, undefined, {
             imageResolver: context.imageResolver,
-      imageSize: context.imageSize,
+            imageSize: context.imageSize,
           }),
           context,
         ),

@@ -56,9 +56,9 @@ const BLOB_URL = "blob:https://vue-tui.local/showcase.png";
 const BROKEN_URL = `http://localhost:${PORT}/does-not-exist.png`;
 
 function isPngBuffer(buffer: Buffer): boolean {
-  return buffer.subarray(0, 8).equals(
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  );
+  return buffer
+    .subarray(0, 8)
+    .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
 }
 
 function readPngBase64(path: string): string | null {
@@ -91,9 +91,7 @@ async function startup(): Promise<{
 
   // 2. Populate the cache
   if (thumbnailBase64) {
-    console.error(
-      `[showcase] Loaded thumbnail PNG (${thumbnailBase64.length} chars base64)`,
-    );
+    console.error(`[showcase] Loaded thumbnail PNG (${thumbnailBase64.length} chars base64)`);
   } else {
     console.error("[showcase] Could not load thumbnail PNG, using fallback");
   }
@@ -491,10 +489,7 @@ if (process.stdout.isTTY) process.stdout.on("resize", onResize);
 
 driver = createStdinDriver({
   dispatch: (event) => {
-    if (
-      event.type === "keydown" &&
-      (event.key === "q" || (event.key === "c" && event.ctrl))
-    ) {
+    if (event.type === "keydown" && (event.key === "q" || (event.key === "c" && event.ctrl))) {
       cleanupHandle.uninstall();
       cleanup();
       process.exit(0);

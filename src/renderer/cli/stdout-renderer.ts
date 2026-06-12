@@ -3549,9 +3549,8 @@ export function createStdoutRenderer(
         frameParts.push(rowClearToEol[size.rows + i]!);
       }
     }
-    const nextLastRenderedRows = !rowsToRender || rowsToRender.length === 0
-      ? size.rows
-      : lastRenderedRows;
+    const nextLastRenderedRows =
+      !rowsToRender || rowsToRender.length === 0 ? size.rows : lastRenderedRows;
     const graphicsOnlyFrame =
       Boolean(rowsToRender && rowsToRender.length === 0) &&
       !scrollHandled &&
@@ -4509,8 +4508,7 @@ export function createStdoutRenderer(
   const off = terminal.on("commit", ({ dirtyRows, scrollOperations, sync }) => {
     if (suppressNextResizeCommitRender) return;
     const deferRowsOnlyResizeCommit =
-      rowsOnlyResizeRepaintTimer &&
-      (dirtyRows == null || dirtyRows.length >= terminal.size().rows);
+      rowsOnlyResizeRepaintTimer && (dirtyRows == null || dirtyRows.length >= terminal.size().rows);
     if (deferRowsOnlyResizeCommit) {
       if (isDebugEnabled()) {
         getDebugLog().render(

@@ -99,7 +99,9 @@ function clipInlineSegmentsToWidth(
       ...(segment.mathAction ? { mathAction: segment.mathAction } : {}),
     };
     out.push(
-      piece === segment.text && segment.graphic ? { ...clipped, graphic: segment.graphic } : clipped,
+      piece === segment.text && segment.graphic
+        ? { ...clipped, graphic: segment.graphic }
+        : clipped,
     );
     remaining -= cells;
   }
@@ -585,8 +587,11 @@ function inlineSegmentSignature(segment: TuiMarkdownInlineSegment): string {
       ].join("\u0006")
     : "";
   const mathAction = segment.mathAction
-    ? [segment.mathAction.source, segment.mathAction.raw, segment.mathAction.rendered ? "1" : "0"]
-        .join("\u0006")
+    ? [
+        segment.mathAction.source,
+        segment.mathAction.raw,
+        segment.mathAction.rendered ? "1" : "0",
+      ].join("\u0006")
     : "";
   return [
     segment.text,

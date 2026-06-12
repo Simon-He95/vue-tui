@@ -345,7 +345,8 @@ export const TVirtualMarkdown = defineComponent({
       const start = Math.max(0, scrollTop + clipY);
       const end = Math.max(start, start + clip.h);
       const out: string[] = [];
-      for (let index = start; index < end; index++) out.push(rowGraphicSignature(sourceRows[index]));
+      for (let index = start; index < end; index++)
+        out.push(rowGraphicSignature(sourceRows[index]));
       return out;
     }
 

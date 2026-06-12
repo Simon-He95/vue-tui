@@ -2,11 +2,7 @@ import { EventEmitter } from "node:events";
 import { appendFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { defineComponent, h, nextTick } from "vue";
-import {
-  createStdoutRenderer,
-  createTerminalApp,
-  type CliOutput,
-} from "../src/cli.js";
+import { createStdoutRenderer, createTerminalApp, type CliOutput } from "../src/cli.js";
 import { TMarkdownText } from "../src/markdown.js";
 
 const traceDir = process.env.VUE_TUI_TERMINAL_RESIZE_E2E_DIR || "/tmp/vue-tui-terminal-resize-e2e";
@@ -161,7 +157,11 @@ try {
 
   const log = readFileSync(renderLogPath, "utf8");
   const resizeLog = log.slice(log.indexOf("[E2E] resize-start"));
-  assertNotContains(resizeLog, "resizeRedraw=false", "resize graphics draws must be resize redraws");
+  assertNotContains(
+    resizeLog,
+    "resizeRedraw=false",
+    "resize graphics draws must be resize redraws",
+  );
 
   const coords = markdownImageCoords(log);
   assert(coords.size > 0, "expected resize trace to capture markdown image coordinates");

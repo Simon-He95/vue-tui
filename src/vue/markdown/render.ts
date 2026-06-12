@@ -42,7 +42,10 @@ type ActiveMarkdownImageGraphic = Readonly<{
 
 type MarkdownImageGraphicQueueResult = "queued" | "unavailable" | "rejected";
 
-const activeMarkdownImageGraphics = new WeakMap<Terminal, Map<string, ActiveMarkdownImageGraphic>>();
+const activeMarkdownImageGraphics = new WeakMap<
+  Terminal,
+  Map<string, ActiveMarkdownImageGraphic>
+>();
 
 export function markdownImageGraphicId(
   segment: NonNullable<TuiMarkdownVisualRow["segments"][number]["graphic"]>,
@@ -309,7 +312,11 @@ export function paintMarkdownVisualRow(
       const expectedUsed = visibleStart - clipStart;
       if (expectedUsed > used) {
         const pad = Math.min(expectedUsed - used, options.w - used);
-        terminal.write(spaces(pad), { x: options.x + used, y: options.y, style: options.baseStyle });
+        terminal.write(spaces(pad), {
+          x: options.x + used,
+          y: options.y,
+          style: options.baseStyle,
+        });
         used += pad;
       }
 

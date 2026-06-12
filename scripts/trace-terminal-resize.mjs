@@ -3,7 +3,8 @@ import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const traceDir = process.env.VUE_TUI_TERMINAL_RESIZE_TRACE_DIR || "/tmp/vue-tui-terminal-resize-trace";
+const traceDir =
+  process.env.VUE_TUI_TERMINAL_RESIZE_TRACE_DIR || "/tmp/vue-tui-terminal-resize-trace";
 
 const targets = {
   showcase: ["pnpm", ["run", "showcase:terminal"]],

@@ -83,7 +83,7 @@ function u24le(bytes: Uint8Array, offset: number): number {
 
 function u32be(bytes: Uint8Array, offset: number): number {
   return (
-    ((bytes[offset] ?? 0) * 0x1000000) +
+    (bytes[offset] ?? 0) * 0x1000000 +
     (((bytes[offset + 1] ?? 0) << 16) | ((bytes[offset + 2] ?? 0) << 8) | (bytes[offset + 3] ?? 0))
   );
 }
@@ -150,7 +150,12 @@ export function readMarkdownImageDimensions(
     bytes[10] === 0x42 &&
     bytes[11] === 0x50
   ) {
-    const format = String.fromCharCode(bytes[12] ?? 0, bytes[13] ?? 0, bytes[14] ?? 0, bytes[15] ?? 0);
+    const format = String.fromCharCode(
+      bytes[12] ?? 0,
+      bytes[13] ?? 0,
+      bytes[14] ?? 0,
+      bytes[15] ?? 0,
+    );
     if (format === "VP8X" && bytes.length >= 30) {
       return validDimensions(u24le(bytes, 24) + 1, u24le(bytes, 27) + 1);
     }

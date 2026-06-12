@@ -218,9 +218,7 @@ describe("markdown image fallback and sizing", () => {
 
           expect(stdout).toContain("\u001B_G");
           expect(stdout).toContain("\u001B\\");
-          const visible = [0, 1, 2, 3, 4]
-            .map((y) => rowText(mounted, y))
-            .join("\n");
+          const visible = [0, 1, 2, 3, 4].map((y) => rowText(mounted, y)).join("\n");
           expect(visible).toContain("item before");
           expect(visible).toContain("item after");
           expect(visible).not.toContain("list image");
@@ -277,9 +275,7 @@ describe("markdown image fallback and sizing", () => {
 
           expect(stdout).toContain("\u001B_G");
           expect(stdout).toContain("\u001B\\");
-          const visible = [0, 1, 2, 3, 4]
-            .map((y) => rowText(mounted, y))
-            .join("\n");
+          const visible = [0, 1, 2, 3, 4].map((y) => rowText(mounted, y)).join("\n");
           expect(visible).toContain("first");
           expect(visible).toContain("third");
           expect(visible).not.toContain("ordered image");
@@ -336,9 +332,7 @@ describe("markdown image fallback and sizing", () => {
 
           expect(stdout).toContain("\u001B_G");
           expect(stdout).toContain("\u001B\\");
-          const visible = [0, 1, 2, 3, 4]
-            .map((y) => rowText(mounted, y))
-            .join("\n");
+          const visible = [0, 1, 2, 3, 4].map((y) => rowText(mounted, y)).join("\n");
           expect(visible).toContain("parent");
           expect(visible).toContain("nested item");
           expect(visible).not.toContain("nested image");
@@ -368,9 +362,7 @@ describe("markdown image fallback and sizing", () => {
 
     try {
       await nextTick();
-      const visible = [0, 1, 2, 3, 4]
-        .map((y) => rowText(mounted, y))
-        .join("\n");
+      const visible = [0, 1, 2, 3, 4].map((y) => rowText(mounted, y)).join("\n");
       expect(visible).toContain("list fallback");
       expect(visible).toContain("before");
       expect(visible).toContain("after");
@@ -382,18 +374,11 @@ describe("markdown image fallback and sizing", () => {
   it("sized image graphic survives layout (minWidth / maxWidth)", async () => {
     // Regression: when displayWidth > 1, the graphic must not be lost
     // during layout. Verify via buildMarkdownVisualRows directly.
-    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import(
-      "../src/markdown.js"
-    );
+    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import("../src/markdown.js");
     const parser = createTuiMarkdownParser({ streaming: false });
-    const rows = buildMarkdownVisualRows(
-      `![data image](${TINY_PNG_DATA_URL})`,
-      80,
-      parser,
-      {
-        imageSize: { minWidth: 20, maxWidth: 40 },
-      },
-    );
+    const rows = buildMarkdownVisualRows(`![data image](${TINY_PNG_DATA_URL})`, 80, parser, {
+      imageSize: { minWidth: 20, maxWidth: 40 },
+    });
 
     expect(rows.length).toBeGreaterThanOrEqual(1);
     const graphicSegment = rows[0]?.segments.find((s) => s.graphic);
@@ -405,9 +390,7 @@ describe("markdown image fallback and sizing", () => {
   });
 
   it("reserves rows for sized image graphics", async () => {
-    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import(
-      "../src/markdown.js"
-    );
+    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import("../src/markdown.js");
     const parser = createTuiMarkdownParser({ streaming: false });
     const rows = buildMarkdownVisualRows(
       `data URL: ![data image](${TINY_PNG_DATA_URL})\n\nnext line`,
@@ -431,9 +414,7 @@ describe("markdown image fallback and sizing", () => {
   });
 
   it("clips inline image graphics horizontally instead of wrapping them", async () => {
-    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import(
-      "../src/markdown.js"
-    );
+    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import("../src/markdown.js");
     const parser = createTuiMarkdownParser({ streaming: false });
     const rows = buildMarkdownVisualRows(
       `data URL: ![data image](${TINY_PNG_DATA_URL})\n\nnext line`,
@@ -458,9 +439,7 @@ describe("markdown image fallback and sizing", () => {
   });
 
   it("preserves image aspect ratio from source dimensions", async () => {
-    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import(
-      "../src/markdown.js"
-    );
+    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import("../src/markdown.js");
     const remoteUrl = "http://localhost:19999/wide.png";
     const rows = buildMarkdownVisualRows(
       [
@@ -546,9 +525,9 @@ describe("markdown image fallback and sizing", () => {
           // Alt text must not leak as visible text.
           expect(rowText(mounted, 0)).not.toContain("data image");
           const placeholderCells = mounted.terminal.getRow(0).slice(0, 20);
-          expect(
-            placeholderCells.some((cell) => cell.style.underline || cell.style.href),
-          ).toBe(false);
+          expect(placeholderCells.some((cell) => cell.style.underline || cell.style.href)).toBe(
+            false,
+          );
         } finally {
           renderer.dispose();
           mounted.unmount();
@@ -702,9 +681,7 @@ describe("markdown image fallback and sizing", () => {
 
   it("allows blob and file image sources to be resolved by imageRenderer", async () => {
     const seen: string[] = [];
-    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import(
-      "../src/markdown.js"
-    );
+    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import("../src/markdown.js");
     const rows = buildMarkdownVisualRows(
       [
         "![blob image](blob:https://example.com/1234)",
@@ -724,9 +701,7 @@ describe("markdown image fallback and sizing", () => {
 
     expect(seen).toEqual(["blob:https://example.com/1234", "file:///tmp/demo.png"]);
     expect(rows.filter((row) => row.segments.some((segment) => segment.graphic)).length).toBe(2);
-    expect(sanitizeMarkdownImageSource("file:///tmp/demo.png")?.src).toBe(
-      "file:///tmp/demo.png",
-    );
+    expect(sanitizeMarkdownImageSource("file:///tmp/demo.png")?.src).toBe("file:///tmp/demo.png");
   });
 
   it("does not show fallback text when a supported graphic is clipped", async () => {

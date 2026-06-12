@@ -80,6 +80,17 @@ export const sharedPublicPropDescriptions: Record<string, string> = {
   protocols: "URL protocols accepted by linkification.",
   allowRelative: "Allows relative hrefs in detected link segments.",
   maxUrlLength: "Maximum detected URL length.",
+  imageMinWidth: "Minimum markdown image render width in terminal cells.",
+  imageMaxWidth: "Maximum markdown image render width in terminal cells.",
+  imageMinHeight: "Minimum markdown image render height in terminal cells.",
+  imageMaxHeight: "Maximum markdown image render height in terminal cells.",
+  imagePreserveAspectRatio:
+    "Preserves markdown image aspect ratio while fitting width and height bounds.",
+  imageActions: "Enables pointer actions for rendered markdown images.",
+  mathActions: "Enables pointer actions for rendered markdown math blocks.",
+  linkActions: "Enables pointer actions for rendered markdown links.",
+  imageOcclusionRects:
+    "Terminal rectangles that markdown image layout treats as unavailable for graphics placement.",
   columns: "Table column definitions.",
   minWidth:
     "Minimum column width in terminal cells; treated as a soft minimum when space is constrained.",
@@ -361,7 +372,19 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
     streaming: "Coalesces rapid content updates into frame-scheduled markdown rebuilds.",
     customHtmlTags: "Additional HTML tag names accepted by the markdown parser.",
     theme: "Markdown theme token overrides for parsed blocks and inline segments.",
-    imageRenderer: "Optional resolver for markdown image payloads before terminal graphics rendering.",
+    imageRenderer:
+      "Optional resolver for markdown image payloads before terminal graphics rendering.",
+    ...pickSharedPublicPropDescriptions(
+      "imageMinWidth",
+      "imageMaxWidth",
+      "imageMinHeight",
+      "imageMaxHeight",
+      "imagePreserveAspectRatio",
+      "imageActions",
+      "mathActions",
+      "linkActions",
+      "imageOcclusionRects",
+    ),
   },
   TList: {
     ...pickSharedPublicPropDescriptions("itemVersion", "modelValue"),
@@ -460,7 +483,19 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
       "Controls whether native terminal text selection may start inside the markdown viewport.",
     customHtmlTags: "Additional HTML tag names accepted by the markdown parser.",
     theme: "Markdown theme token overrides for parsed blocks and inline segments.",
-    imageRenderer: "Optional resolver for markdown image payloads before terminal graphics rendering.",
+    imageRenderer:
+      "Optional resolver for markdown image payloads before terminal graphics rendering.",
+    ...pickSharedPublicPropDescriptions(
+      "imageMinWidth",
+      "imageMaxWidth",
+      "imageMinHeight",
+      "imageMaxHeight",
+      "imagePreserveAspectRatio",
+      "imageActions",
+      "mathActions",
+      "linkActions",
+      "imageOcclusionRects",
+    ),
   },
 };
 
@@ -601,6 +636,18 @@ export const componentPublicEventDescriptions: Record<string, string> = {
   "TSelect.confirm": "Emitted when multi-select commits the current selection.",
   "TSelect.loadError":
     "Emitted when the async option provider rejects; aborted stale requests do not emit.",
+  "TMarkdownText.imageAction":
+    "Emitted when imageActions is enabled and a markdown image action is selected.",
+  "TMarkdownText.mathAction":
+    "Emitted when mathActions is enabled and a markdown math action is selected.",
+  "TMarkdownText.linkAction":
+    "Emitted when linkActions is enabled and a markdown link action is selected.",
+  "TVirtualMarkdown.imageAction":
+    "Emitted when imageActions is enabled and a markdown image action is selected.",
+  "TVirtualMarkdown.mathAction":
+    "Emitted when mathActions is enabled and a markdown math action is selected.",
+  "TVirtualMarkdown.linkAction":
+    "Emitted when linkActions is enabled and a markdown link action is selected.",
 };
 
 export const publicEventPayloads: Record<string, string> = {
@@ -647,6 +694,12 @@ export const componentEventPayloads: Record<string, string> = {
   "TTable.rowClick": "TTableRowClickPayload",
   "TTree.select": "TTreeSelectPayload",
   "TTree.toggle": "TTreeTogglePayload",
+  "TMarkdownText.imageAction": "TuiMarkdownImageActionPayload",
+  "TMarkdownText.mathAction": "TuiMarkdownMathActionPayload",
+  "TMarkdownText.linkAction": "TuiMarkdownLinkActionPayload",
+  "TVirtualMarkdown.imageAction": "TuiMarkdownImageActionPayload",
+  "TVirtualMarkdown.mathAction": "TuiMarkdownMathActionPayload",
+  "TVirtualMarkdown.linkAction": "TuiMarkdownLinkActionPayload",
   "TVirtualMarkdown.scroll": "number",
   "TerminalProvider.selectionCopy": "TerminalSelectionCopyPayload",
 };

@@ -126,9 +126,7 @@ driver = createStdinDriver({
   dispatch: (event) => {
     if (
       event.type === "keydown" &&
-      (event.key === "q" ||
-        event.key === "Escape" ||
-        (event.key === "c" && event.ctrl))
+      (event.key === "q" || event.key === "Escape" || (event.key === "c" && event.ctrl))
     ) {
       cleanupHandle.uninstall();
       cleanup();

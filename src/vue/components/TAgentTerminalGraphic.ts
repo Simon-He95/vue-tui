@@ -834,10 +834,7 @@ export const TAgentTerminalGraphic = defineComponent({
     function rawOutputCanRender(): boolean {
       const output = graphicsOutput();
       const full = fullRect.value;
-      return (
-        rawRectFitsTerminalViewport(full) &&
-        Boolean(output?.capabilities.supported)
-      );
+      return rawRectFitsTerminalViewport(full) && Boolean(output?.capabilities.supported);
     }
 
     function renderDeferReason(): string | null {

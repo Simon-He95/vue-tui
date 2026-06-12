@@ -100,6 +100,28 @@ describe("render-manager", () => {
     expect(paints).toEqual(["4,5"]);
   });
 
+  it("repaints overlapping rows when paint changes with rect height", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 8 });
+    const rm = createRenderManager(terminal);
+    const node = rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 1, w: 10, h: 5 },
+      paint: (dirtyRows) => paints.push(`old:${dirtyRows ? dirtyRows.join(",") : "all"}`),
+    });
+
+    rm.render();
+    paints.length = 0;
+
+    rm.update(node.id, {
+      rect: { x: 0, y: 1, w: 10, h: 3 },
+      paint: (dirtyRows) => paints.push(`new:${dirtyRows ? dirtyRows.join(",") : "all"}`),
+    });
+
+    expect(rm.render()?.rows).toBe(5);
+    expect(paints).toEqual(["new:1,2,3,4,5"]);
+  });
+
   it("skips empty rect nodes on full repaint", () => {
     const paints: string[] = [];
 

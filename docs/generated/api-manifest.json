@@ -288,6 +288,8 @@
         "TuiMarkdownBlockSourceOptions",
         "TuiMarkdownBlockSourceSnapshot",
         "TuiMarkdownGraphicSegment",
+        "TuiMarkdownImageResolver",
+        "TuiMarkdownImageResolverResult",
         "TuiMarkdownInlineSegment",
         "TuiMarkdownNode",
         "TuiMarkdownTableCell",
@@ -636,6 +638,8 @@
         "TuiMarkdownBlockSourceSnapshot",
         "TuiMarkdownGraphicSegment",
         "TuiMarkdownImageActionPayload",
+        "TuiMarkdownImageResolver",
+        "TuiMarkdownImageResolverResult",
         "TuiMarkdownImageSize",
         "TuiMarkdownInlineSegment",
         "TuiMarkdownLayoutOptions",
@@ -957,6 +961,8 @@
         "TerminalSchedulerInvalidateOptions",
         "TerminalSelectionContext",
         "TuiMarkdownGraphicSegment",
+        "TuiMarkdownImageResolver",
+        "TuiMarkdownImageResolverResult",
         "TuiMarkdownTheme",
         "TuiMarkdownThemeOverrides",
         "TuiTheme",
@@ -5768,7 +5774,7 @@
         },
         {
           "name": "imageRenderer",
-          "type": "((image: TuiMarkdownGraphicSegment) => string | null | undefined)",
+          "type": "TuiMarkdownImageResolver",
           "required": false,
           "defaultValue": "undefined",
           "description": "Optional resolver for markdown image payloads before terminal graphics rendering.",
@@ -5779,63 +5785,72 @@
           "type": "number",
           "required": false,
           "defaultValue": "undefined",
-          "descriptionSource": "missing"
+          "description": "Minimum markdown image render width in terminal cells.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imageMaxWidth",
           "type": "number",
           "required": false,
           "defaultValue": "undefined",
-          "descriptionSource": "missing"
+          "description": "Maximum markdown image render width in terminal cells.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imageMinHeight",
           "type": "number",
           "required": false,
           "defaultValue": "undefined",
-          "descriptionSource": "missing"
+          "description": "Minimum markdown image render height in terminal cells.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imageMaxHeight",
           "type": "number",
           "required": false,
           "defaultValue": "undefined",
-          "descriptionSource": "missing"
+          "description": "Maximum markdown image render height in terminal cells.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imagePreserveAspectRatio",
           "type": "boolean",
           "required": false,
           "defaultValue": "true",
-          "descriptionSource": "missing"
+          "description": "Preserves markdown image aspect ratio while fitting width and height bounds.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imageActions",
           "type": "boolean",
           "required": false,
           "defaultValue": "false",
-          "descriptionSource": "missing"
+          "description": "Enables pointer actions for rendered markdown images.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "mathActions",
           "type": "boolean",
           "required": false,
           "defaultValue": "false",
-          "descriptionSource": "missing"
+          "description": "Enables pointer actions for rendered markdown math blocks.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "linkActions",
           "type": "boolean",
           "required": false,
           "defaultValue": "false",
-          "descriptionSource": "missing"
+          "description": "Enables pointer actions for rendered markdown links.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imageOcclusionRects",
           "type": "readonly Rect[]",
           "required": false,
           "defaultValue": "undefined",
-          "descriptionSource": "missing"
+          "description": "Terminal rectangles that markdown image layout treats as unavailable for graphics placement.",
+          "descriptionSource": "component-default"
         }
       ],
       "events": [
@@ -5843,19 +5858,22 @@
           "name": "imageAction",
           "payload": "TuiMarkdownImageActionPayload",
           "payloadSource": "emits-signature",
-          "descriptionSource": "missing"
+          "description": "Emitted when imageActions is enabled and a markdown image action is selected.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "mathAction",
           "payload": "TuiMarkdownMathActionPayload",
           "payloadSource": "emits-signature",
-          "descriptionSource": "missing"
+          "description": "Emitted when mathActions is enabled and a markdown math action is selected.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "linkAction",
           "payload": "TuiMarkdownLinkActionPayload",
           "payloadSource": "emits-signature",
-          "descriptionSource": "missing"
+          "description": "Emitted when linkActions is enabled and a markdown link action is selected.",
+          "descriptionSource": "component-default"
         }
       ]
     },
@@ -9531,7 +9549,7 @@
         },
         {
           "name": "imageRenderer",
-          "type": "((image: TuiMarkdownGraphicSegment) => string | null | undefined)",
+          "type": "TuiMarkdownImageResolver",
           "required": false,
           "defaultValue": "undefined",
           "description": "Optional resolver for markdown image payloads before terminal graphics rendering.",
@@ -9542,63 +9560,72 @@
           "type": "number",
           "required": false,
           "defaultValue": "undefined",
-          "descriptionSource": "missing"
+          "description": "Minimum markdown image render width in terminal cells.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imageMaxWidth",
           "type": "number",
           "required": false,
           "defaultValue": "undefined",
-          "descriptionSource": "missing"
+          "description": "Maximum markdown image render width in terminal cells.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imageMinHeight",
           "type": "number",
           "required": false,
           "defaultValue": "undefined",
-          "descriptionSource": "missing"
+          "description": "Minimum markdown image render height in terminal cells.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imageMaxHeight",
           "type": "number",
           "required": false,
           "defaultValue": "undefined",
-          "descriptionSource": "missing"
+          "description": "Maximum markdown image render height in terminal cells.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imagePreserveAspectRatio",
           "type": "boolean",
           "required": false,
           "defaultValue": "true",
-          "descriptionSource": "missing"
+          "description": "Preserves markdown image aspect ratio while fitting width and height bounds.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imageActions",
           "type": "boolean",
           "required": false,
           "defaultValue": "false",
-          "descriptionSource": "missing"
+          "description": "Enables pointer actions for rendered markdown images.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "mathActions",
           "type": "boolean",
           "required": false,
           "defaultValue": "false",
-          "descriptionSource": "missing"
+          "description": "Enables pointer actions for rendered markdown math blocks.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "linkActions",
           "type": "boolean",
           "required": false,
           "defaultValue": "false",
-          "descriptionSource": "missing"
+          "description": "Enables pointer actions for rendered markdown links.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "imageOcclusionRects",
           "type": "readonly Rect[]",
           "required": false,
           "defaultValue": "undefined",
-          "descriptionSource": "missing"
+          "description": "Terminal rectangles that markdown image layout treats as unavailable for graphics placement.",
+          "descriptionSource": "component-default"
         }
       ],
       "events": [
@@ -9641,19 +9668,22 @@
           "name": "imageAction",
           "payload": "TuiMarkdownImageActionPayload",
           "payloadSource": "emits-signature",
-          "descriptionSource": "missing"
+          "description": "Emitted when imageActions is enabled and a markdown image action is selected.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "mathAction",
           "payload": "TuiMarkdownMathActionPayload",
           "payloadSource": "emits-signature",
-          "descriptionSource": "missing"
+          "description": "Emitted when mathActions is enabled and a markdown math action is selected.",
+          "descriptionSource": "component-default"
         },
         {
           "name": "linkAction",
           "payload": "TuiMarkdownLinkActionPayload",
           "payloadSource": "emits-signature",
-          "descriptionSource": "missing"
+          "description": "Emitted when linkActions is enabled and a markdown link action is selected.",
+          "descriptionSource": "component-default"
         }
       ]
     }

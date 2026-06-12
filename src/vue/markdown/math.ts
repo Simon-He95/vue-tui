@@ -121,7 +121,11 @@ function approximateTexToUnicode(tex: string): string {
 function canRenderTerminalMath(tex: string): boolean {
   const source = String(tex ?? "").trim();
   if (!source || source.length > 160) return false;
-  if (/\\(?:begin|end|left|right|matrix|cases|array|align|color|href|html|includegraphics|class|style|tag|text|operatorname)\b/.test(source)) {
+  if (
+    /\\(?:begin|end|left|right|matrix|cases|array|align|color|href|html|includegraphics|class|style|tag|text|operatorname)\b/.test(
+      source,
+    )
+  ) {
     return false;
   }
 
