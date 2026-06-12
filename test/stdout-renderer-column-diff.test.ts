@@ -2712,6 +2712,48 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("keeps line wrap disabled throughout alt-screen TUI frames", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 16, rows: 1 });
+      const chunks: string[] = [];
+      const output: CliOutput & { take: () => string } = {
+        isTTY: true,
+        write(chunk: string) {
+          chunks.push(String(chunk));
+        },
+        take() {
+          const out = chunks.join("");
+          chunks.length = 0;
+          return out;
+        },
+      };
+
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: true,
+        useSyncOutput: false,
+        dirtyRowPatchMode: "span",
+      });
+
+      try {
+        expect(output.take()).toContain("\x1B[?7l");
+
+        terminal.write("abcdef", { x: 0, y: 0 });
+        terminal.commit({ sync: true });
+        const frame = output.take();
+
+        expect(frame).not.toContain("\x1B[?7h");
+
+        renderer.dispose();
+        expect(output.take()).toContain("\x1B[?7h");
+      } finally {
+        terminal.dispose();
+      }
+    });
+  });
+
   it("does not advance the stdout diff baseline when ghostty chunked writes fail", () => {
     withTerminalEnv({ GHOSTTY_RESOURCES_DIR: "/tmp/ghostty-test" }, () => {
       const terminal = createTerminal({ cols: 16, rows: 1 });

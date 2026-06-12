@@ -207,15 +207,6 @@ export function createRenderManager(
     terminalRows = rows;
     allRows = Array.from({ length: terminalRows }, (_, index) => index);
     for (const state of planeDirtyStates.values()) {
-      if (colsChanged) {
-        state.allRowsDirty = true;
-        state.dirtyRowBits = new Uint8Array(terminalRows);
-        state.dirtyRowCount = 0;
-        state.dirtyMinY = Number.POSITIVE_INFINITY;
-        state.dirtyMaxY = -1;
-        continue;
-      }
-
       const prevBits = state.dirtyRowBits;
       state.dirtyRowBits = new Uint8Array(terminalRows);
       state.dirtyRowCount = 0;

@@ -51,7 +51,6 @@ import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { firstNonEmptyEnv } from "../../utils/env.js";
 import { STDOUT_RENDERER_CAPABILITIES } from "../capabilities.js";
 import {
-  canDrawTerminalGraphicRect,
   detectTerminalGraphicsCapabilities,
   hashTerminalGraphicsString,
   isSafeTerminalGraphicsSequence,
@@ -253,6 +252,7 @@ export function createStdoutRenderer(
   const clear = options?.clear ?? true;
   const hideCursor = options?.hideCursor ?? true;
   const altScreen = options?.altScreen ?? outputIsTTY;
+  const keepLineWrapDisabled = altScreen && outputIsTTY;
   let defaultBg: string | undefined =
     options?.defaultBg == null || options?.defaultBg === "transparent"
       ? undefined
@@ -695,64 +695,17 @@ export function createStdoutRenderer(
     }
     for (const [id, active] of activeGraphics) {
       pendingGraphics.delete(`${id}:draw`);
-
-      if (!canDrawTerminalGraphicRect(active, size)) {
-        if (active.clearSequence) {
-          pendingGraphics.set(`${id}:clear`, {
-            id,
-            x: active.x,
-            y: active.y,
-            w: active.w,
-            h: active.h,
-            protocol: active.protocol,
-            sequence: active.clearSequence,
-            op: "clear",
-            order: nextGraphicsOrder++,
-          });
-        } else {
-          pendingGraphicClears.add(id);
-        }
-        pendingGraphicSignatures.delete(id);
-        continue;
+      if (isDebugEnabled()) {
+        getDebugLog().render(
+          `terminal graphic resize active: id=${id}, x=${active.x}, y=${active.y}, w=${active.w}, h=${active.h}, viewport=${size.cols}x${size.rows}, anchored=${anchoredGraphicRectInViewport(active, size) ? "true" : "false"}`,
+        );
       }
-
-      pendingGraphicClears.delete(id);
-      pendingGraphics.delete(`${id}:clear`);
-      pendingGraphics.set(`${id}:draw`, {
-        id,
-        x: active.x,
-        y: active.y,
-        w: active.w,
-        h: active.h,
-        protocol: active.protocol,
-        sequence: active.resizeSequence ?? active.sequence,
-        resizeSequence: active.resizeSequence,
-        clearSequence: active.clearSequence,
-        op: "draw",
-        order: nextGraphicsOrder++,
-        resizeRedraw: true,
-      });
-      pendingGraphicSignatures.set(
-        id,
-        activeGraphicSignatures.get(id) ??
-          terminalGraphicsPayloadSignature({
-            id,
-            x: active.x,
-            y: active.y,
-            w: active.w,
-            h: active.h,
-            protocol: active.protocol,
-            sequence: active.sequence,
-            resizeSequence: active.resizeSequence,
-            clearSequence: active.clearSequence,
-        }),
-      );
     }
     for (const [id, retained] of retainedGraphics) {
       if (activeGraphics.has(id)) continue;
 
       const { active, signature } = retained;
-      if (!canDrawTerminalGraphicRect(active, size)) continue;
+      if (!anchoredGraphicRectInViewport(active, size)) continue;
 
       retainedGraphics.delete(id);
       activeGraphics.set(id, active);
@@ -776,7 +729,7 @@ export function createStdoutRenderer(
       pendingGraphicSignatures.set(id, signature);
       if (isDebugEnabled()) {
         getDebugLog().render(
-          `terminal graphic retained resize redraw: id=${id}, bytes=${(active.resizeSequence ?? active.sequence).length}`,
+          `terminal graphic retained resize redraw: id=${id}, x=${active.x}, y=${active.y}, w=${active.w}, h=${active.h}, bytes=${(active.resizeSequence ?? active.sequence).length}`,
         );
       }
     }
@@ -818,12 +771,24 @@ export function createStdoutRenderer(
           height: normalized.h ?? 1,
         });
         if (!frame) return false;
+        if (isDebugEnabled()) {
+          const size = terminal.size();
+          getDebugLog().render(
+            `terminal graphic queue draw request: id=${frame.id}, x=${normalized.x}, y=${normalized.y}, w=${frame.width}, h=${frame.height}, viewport=${size.cols}x${size.rows}`,
+          );
+        }
         if (
           !anchoredGraphicRectInViewport(
             { x: normalized.x, y: normalized.y, w: frame.width, h: frame.height },
             terminal.size(),
           )
         ) {
+          if (isDebugEnabled()) {
+            const size = terminal.size();
+            getDebugLog().render(
+              `terminal graphic queue draw rejected offscreen: id=${frame.id}, x=${normalized.x}, y=${normalized.y}, w=${frame.width}, h=${frame.height}, viewport=${size.cols}x${size.rows}`,
+            );
+          }
           queueTerminalGraphicClear(frame.id);
           return false;
         }
@@ -862,6 +827,11 @@ export function createStdoutRenderer(
             id: frame.id,
             protocol: normalized.protocol,
           });
+          if (isDebugEnabled()) {
+            getDebugLog().render(
+              `terminal graphic queue draw dedupe: id=${frame.id}, x=${normalized.x}, y=${normalized.y}, w=${frame.width}, h=${frame.height}`,
+            );
+          }
           return true;
         }
 
@@ -871,6 +841,11 @@ export function createStdoutRenderer(
             id: frame.id,
             protocol: normalized.protocol,
           });
+          if (isDebugEnabled()) {
+            getDebugLog().render(
+              `terminal graphic queue draw canceled clear: id=${frame.id}, x=${normalized.x}, y=${normalized.y}, w=${frame.width}, h=${frame.height}`,
+            );
+          }
           return true;
         }
 
@@ -898,7 +873,7 @@ export function createStdoutRenderer(
           pendingGraphicSignatures.set(frame.id, signature);
           if (isDebugEnabled()) {
             getDebugLog().render(
-              `terminal graphic retained resize redraw: id=${frame.id}, bytes=${resizeSequence.length}`,
+              `terminal graphic retained resize redraw: id=${frame.id}, x=${retained.active.x}, y=${retained.active.y}, w=${retained.active.w}, h=${retained.active.h}, bytes=${resizeSequence.length}`,
             );
           }
           recordTerminalGraphicTrace({
@@ -923,6 +898,11 @@ export function createStdoutRenderer(
           fallbackText: frame.fallbackText,
         });
         pendingGraphicSignatures.set(frame.id, signature);
+        if (isDebugEnabled()) {
+          getDebugLog().render(
+            `terminal graphic queue draw accepted: id=${frame.id}, x=${normalized.x}, y=${normalized.y}, w=${frame.width}, h=${frame.height}, bytes=${frame.sequence.length}`,
+          );
+        }
         recordTerminalGraphicTrace({
           type: "queue",
           id: frame.id,
@@ -943,6 +923,11 @@ export function createStdoutRenderer(
         w: normalized.w,
         h: normalized.h,
       });
+      if (isDebugEnabled()) {
+        getDebugLog().render(
+          `terminal graphic queue clear accepted: id=${normalized.id}, x=${normalized.x}, y=${normalized.y}, w=${normalized.w ?? 1}, h=${normalized.h ?? 1}`,
+        );
+      }
       recordTerminalGraphicTrace({
         type: "clear",
         id: normalized.id,
@@ -2771,7 +2756,7 @@ export function createStdoutRenderer(
     // NOTE: In ghostty, we avoid SYNC_START/END and use chunked writes instead.
     const frameParts: string[] = [];
     frameParts.push(!isGhostty && useSyncOutput ? SYNC_START : "");
-    frameParts.push(allowGraphicsOnlyWithoutBaseline ? "" : "\u001B[?7l");
+    frameParts.push(allowGraphicsOnlyWithoutBaseline || keepLineWrapDisabled ? "" : "\u001B[?7l");
     // Reset once at the start so we can avoid repeated resets for common style changes.
     frameParts.push(SGR_RESET, bgSeq);
     if (hideCursor && !getImeAnchor) frameParts.push(CURSOR_HOME);
@@ -3665,6 +3650,11 @@ export function createStdoutRenderer(
         const active = nextActiveGraphics.get(id);
         if (!active) continue;
         const visibleRect = clipGraphicRectToViewport(active, size);
+        if (isDebugEnabled()) {
+          getDebugLog().render(
+            `terminal graphic render active clear: id=${id}, x=${active.x}, y=${active.y}, w=${active.w}, h=${active.h}, visible=${visibleRect ? `${visibleRect.x},${visibleRect.y},${visibleRect.w},${visibleRect.h}` : "none"}`,
+          );
+        }
         let wroteClear = false;
         if (visibleRect) {
           const clearRect = clearGraphicRectForRowsNotPainted(visibleRect);
@@ -3675,7 +3665,7 @@ export function createStdoutRenderer(
         }
         wroteClear = appendActiveGraphicProtocolClear(active, visibleRect) || wroteClear;
         if (wroteClear) terminalGraphicsClears++;
-        retainTerminalGraphic(id, active, nextActiveGraphicSignatures.get(id));
+        retainedGraphics.delete(id);
         nextActiveGraphics.delete(id);
         nextActiveGraphicSignatures.delete(id);
         nextPendingGraphicSignatures.delete(id);
@@ -3693,6 +3683,11 @@ export function createStdoutRenderer(
             },
             size,
           );
+          if (isDebugEnabled()) {
+            getDebugLog().render(
+              `terminal graphic render payload clear: id=${payload.id}, x=${active?.x ?? payload.x}, y=${active?.y ?? payload.y}, w=${active?.w ?? payload.w ?? 1}, h=${active?.h ?? payload.h ?? 1}, visible=${rect ? `${rect.x},${rect.y},${rect.w},${rect.h}` : "none"}`,
+            );
+          }
           const clearRect = rect ? clearGraphicRectForRowsNotPainted(rect) : "";
           let wroteClear = false;
           if (clearRect) {
@@ -3711,7 +3706,7 @@ export function createStdoutRenderer(
             ) || wroteClear;
           if (wroteClear) terminalGraphicsClears++;
           if (active) {
-            retainTerminalGraphic(payload.id, active, nextActiveGraphicSignatures.get(payload.id));
+            retainedGraphics.delete(payload.id);
           } else {
             retainedGraphics.delete(payload.id);
           }
@@ -3756,16 +3751,17 @@ export function createStdoutRenderer(
           : undefined;
         const nextSignature =
           nextPendingGraphicSignatures.get(payload.id) ?? terminalGraphicsPayloadSignature(payload);
+        const resizeRedrawNeedsClear =
+          previous &&
+          payload.resizeRedraw &&
+          Boolean(previous.clearSequence) &&
+          !canReplaceKittyPlacementWithoutClear(previous, payload);
 
-        const replaceKittyPlacementWithoutClear =
-          previous && canReplaceKittyPlacementWithoutClear(previous, payload);
         if (
           previous &&
           (previousSignature !== nextSignature ||
             !sameGraphicRect(previous, rect) ||
-            (payload.resizeRedraw &&
-              Boolean(previous.clearSequence) &&
-              !replaceKittyPlacementWithoutClear))
+            resizeRedrawNeedsClear)
         ) {
           const visiblePrevious = clipGraphicRectToViewport(previous, size);
           let wroteClear = false;
@@ -3781,8 +3777,15 @@ export function createStdoutRenderer(
         }
 
         const visibleRect = clipGraphicRectToViewport(rect, size);
+        if (isDebugEnabled()) {
+          getDebugLog().render(
+            `terminal graphic render draw: id=${payload.id}, x=${rect.x}, y=${rect.y}, w=${rect.w}, h=${rect.h}, visible=${visibleRect ? `${visibleRect.x},${visibleRect.y},${visibleRect.w},${visibleRect.h}` : "none"}, resizeRedraw=${payload.resizeRedraw ? "true" : "false"}, previous=${previous ? `${previous.x},${previous.y},${previous.w},${previous.h}` : "none"}`,
+          );
+        }
         const clearRect =
-          visibleRect && !payload.resizeRedraw ? clearGraphicRectForRowsNotPainted(visibleRect) : "";
+          visibleRect && (!payload.resizeRedraw || resizeRedrawNeedsClear)
+            ? clearGraphicRectForRowsNotPainted(visibleRect)
+            : "";
         const cursor = `\u001B[${rect.y + 1};${rect.x + 1}H`;
         const sequence = maybeWrapTerminalGraphic(payload.sequence);
         frameParts.push(
@@ -3868,8 +3871,10 @@ export function createStdoutRenderer(
     if (enableOsc8Links && activeStyle.href) frameParts.push(OSC8_CLOSE);
     frameParts.push(SGR_RESET);
     if (hideCursor && !getImeAnchor) frameParts.push(CURSOR_HOME);
-    // Re-enable line wrap and end synchronized output (if enabled and not ghostty)
-    frameParts.push(allowGraphicsOnlyWithoutBaseline ? "" : "\u001B[?7h");
+    // Re-enable line wrap and end synchronized output (if enabled and not ghostty).
+    // Alt-screen TUI sessions keep autowrap disabled between frames so terminal
+    // window resizes clip existing content instead of reflowing it.
+    frameParts.push(allowGraphicsOnlyWithoutBaseline || keepLineWrapDisabled ? "" : "\u001B[?7h");
     frameParts.push(!isGhostty && useSyncOutput ? SYNC_END : "");
 
     const frame = frameParts.join("");
@@ -4433,6 +4438,7 @@ export function createStdoutRenderer(
 
   // Initial setup - these are one-time writes, not part of render loop
   if (altScreen && outputIsTTY) out.write("\u001B[?1049h");
+  if (keepLineWrapDisabled) out.write("\u001B[?7l");
   if (hideCursor) out.write("\u001B[?25l");
   if (clear) {
     out.write(`${SGR_RESET}${openBg(defaultBg)}\u001B[2J\u001B[H${SGR_RESET}`);
@@ -4454,7 +4460,7 @@ export function createStdoutRenderer(
     const rowsChanged = rows !== terminalResizeRows;
     terminalResizeCols = cols;
     terminalResizeRows = rows;
-    if (!rowsChanged) return;
+    if (!colsChanged && !rowsChanged) return;
     if (pendingRender) {
       pendingRender = false;
       if (renderTimer) {
@@ -4465,11 +4471,15 @@ export function createStdoutRenderer(
         getDebugLog().render("pending stdout render canceled until resize commit");
       }
     }
-    deferGraphicsFlushUntilResizeCommit = true;
     queueTerminalGraphicsForResizeRedraw({ cols, rows });
     if (!colsChanged) {
-      allowNextGraphicsOnlyRenderWithoutBaseline = true;
+      consumeResizeDirtyState();
       preserveNextRowsOnlyResizeBaseline = true;
+    }
+    if (hasPendingTerminalGraphics()) {
+      deferGraphicsFlushUntilResizeCommit = false;
+      allowNextGraphicsOnlyRenderWithoutBaseline = true;
+      render([], true);
     }
   });
 
@@ -4623,6 +4633,7 @@ export function createStdoutRenderer(
       }
     }
     try {
+      if (keepLineWrapDisabled) out.write("\u001B[?7h");
       if (hideCursor) out.write("\u001B[?25h");
       if (altScreen && outputIsTTY) out.write("\u001B[?1049l");
     } catch (err) {

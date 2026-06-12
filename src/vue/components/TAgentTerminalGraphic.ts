@@ -772,6 +772,10 @@ export const TAgentTerminalGraphic = defineComponent({
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
 
+    const renderRect = computed<Rect>(() =>
+      graphic.value?.type === "terminal" ? fullRect.value : absRect.value,
+    );
+
     function rawRectFitsTerminalViewport(rect: Rect): boolean {
       return canDrawTerminalGraphicRect(rect, terminal.size());
     }
@@ -783,20 +787,14 @@ export const TAgentTerminalGraphic = defineComponent({
 
     const rawCanRender = computed(() => {
       void graphicsOutputVersion.value;
-      void terminalSizeVersion.value;
       const current = graphic.value;
       const output = graphicsOutput();
       const full = fullRect.value;
-      const abs = absRect.value;
       return (
         current?.type === "terminal" &&
         rawRectFitsTerminalViewport(full) &&
         Boolean(output?.capabilities.supported) &&
-        output?.capabilities.preferredProtocol === current.protocol &&
-        abs.x === full.x &&
-        abs.y === full.y &&
-        abs.w === full.w &&
-        abs.h === full.h
+        output?.capabilities.preferredProtocol === current.protocol
       );
     });
 
@@ -836,15 +834,9 @@ export const TAgentTerminalGraphic = defineComponent({
     function rawOutputCanRender(): boolean {
       const output = graphicsOutput();
       const full = fullRect.value;
-      const abs = absRect.value;
       return (
         rawRectFitsTerminalViewport(full) &&
-        hasPaintableRect() &&
-        Boolean(output?.capabilities.supported) &&
-        abs.x === full.x &&
-        abs.y === full.y &&
-        abs.w === full.w &&
-        abs.h === full.h
+        Boolean(output?.capabilities.supported)
       );
     }
 
@@ -1121,10 +1113,10 @@ export const TAgentTerminalGraphic = defineComponent({
 
     const renderNode = useRenderNode(() => ({
       zIndex: props.zIndex,
-      rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
+      rect: visible.value ? renderRect.value : { x: 0, y: 0, w: 0, h: 0 },
       deps: [
         visible.value,
-        absRect.value,
+        renderRect.value,
         fullRect.value,
         displayLines.value,
         currentStyle.value,
@@ -1141,7 +1133,6 @@ export const TAgentTerminalGraphic = defineComponent({
         isParentScrolling.value,
         graphicsActivityVersion.value,
         graphicsOutputVersion.value,
-        terminalSizeVersion.value,
       ],
       paint: (dirtyRows) => {
         withTextWidthProvider(widthProvider, () => {
@@ -1240,10 +1231,10 @@ export const TAgentTerminalGraphic = defineComponent({
         isParentScrolling,
         graphicsActivityVersion,
         graphicsOutputVersion,
-        () => absRect.value.x,
-        () => absRect.value.y,
-        () => absRect.value.w,
-        () => absRect.value.h,
+        () => renderRect.value.x,
+        () => renderRect.value.y,
+        () => renderRect.value.w,
+        () => renderRect.value.h,
         () => fullRect.value.x,
         () => fullRect.value.y,
         () => fullRect.value.w,

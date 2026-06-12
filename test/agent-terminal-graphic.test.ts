@@ -30,6 +30,7 @@ import {
   getTerminalGraphicTraceMetrics,
   resetTerminalGraphicTraceMetrics,
 } from "../src/renderer/terminal-graphics-trace.js";
+import { getPlaneTerminal } from "../src/core/terminal/create-terminal.js";
 import { TVirtualList } from "../src/vue/components/TVirtualList.js";
 import { TVirtualRows } from "../src/vue/components/TVirtualRows.js";
 import { createTerminalGraphicsActivity, TerminalGraphicsActivityKey } from "../src/vue/context.js";
@@ -173,7 +174,7 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
-  it("redraws active Kitty placements on tracked height resize without clearing stable placement", () => {
+  it("keeps active Kitty placements on tracked height resize without redrawing stable placement", () => {
     const writes: string[] = [];
     const resize = { listener: null as (() => void) | null };
     let outputColumns = 20;
@@ -274,7 +275,7 @@ describe("TAgentTerminalGraphic", () => {
     resize.listener?.();
     expect(writes.join("")).not.toContain(clearSequence);
     expect(writes.join("")).not.toContain("a=d");
-    expect(writes.join("")).toContain(`\x1B[2;3H${resizeSequence}`);
+    expect(writes.join("")).not.toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     writes.length = 0;
@@ -287,7 +288,7 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
-  it("redraws active terminal graphics on external terminal height resize", () => {
+  it("keeps active terminal graphics on external terminal height resize", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -354,14 +355,14 @@ describe("TAgentTerminalGraphic", () => {
 
     expect(writes.join("")).not.toContain(clearSequence);
     expect(writes.join("")).not.toContain("a=d");
-    expect(writes.join("")).toContain(`\x1B[2;3H${resizeSequence}`);
+    expect(writes.join("")).not.toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
     app.dispose();
   });
 
-  it("redraws active terminal graphics at the same anchor on rows-only shrink while still visible", () => {
+  it("keeps active terminal graphics at the same anchor on rows-only shrink while still visible", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -427,14 +428,14 @@ describe("TAgentTerminalGraphic", () => {
     app.terminal.commit({ sync: true });
 
     expect(writes.join("")).not.toContain(clearSequence);
-    expect(writes.join("")).toContain(`\x1B[2;3H${resizeSequence}`);
+    expect(writes.join("")).not.toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
     app.dispose();
   });
 
-  it("clears and redraws active Kitty graphics without placement id when the anchor re-enters", () => {
+  it("keeps active Kitty graphics without placement id across clipped resize", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -495,7 +496,7 @@ describe("TAgentTerminalGraphic", () => {
     app.terminal.resize(20, 4);
     app.terminal.commit({ sync: true });
 
-    expect(writes.join("")).toContain(clearSequence);
+    expect(writes.join("")).not.toContain(clearSequence);
     expect(writes.join("")).not.toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
@@ -516,15 +517,15 @@ describe("TAgentTerminalGraphic", () => {
     ).toBe(true);
     app.terminal.commit({ sync: true });
 
-    expect(writes.join("")).toContain(clearSequence);
-    expect(writes.join("")).toContain(`\x1B[5;3H${resizeSequence}`);
+    expect(writes.join("")).not.toContain(clearSequence);
+    expect(writes.join("")).not.toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
     app.dispose();
   });
 
-  it("defers graphics-only flushes queued during external height resize until commit", () => {
+  it("does not redraw active graphics during external height resize", () => {
     vi.useFakeTimers();
     const writes: string[] = [];
     const output: CliOutput = {
@@ -579,6 +580,9 @@ describe("TAgentTerminalGraphic", () => {
       writes.length = 0;
       vi.advanceTimersByTime(20);
       app.terminal.resize(20, 8);
+      expect(writes.join("")).toBe("");
+
+      writes.length = 0;
       expect(
         graphics?.queue({
           id: "external-resize-defer-image",
@@ -590,9 +594,6 @@ describe("TAgentTerminalGraphic", () => {
           sequence: nextSequence,
         }),
       ).toBe(true);
-      expect(writes.join("")).toBe("");
-
-      app.terminal.commit({ sync: true });
       expect(writes.join("")).toContain(nextSequence);
     } finally {
       stdout.dispose();
@@ -659,7 +660,47 @@ describe("TAgentTerminalGraphic", () => {
     }
   });
 
-  it("clears active terminal graphics when external height resize clips the rect", () => {
+  it("does not repaint text for clean rows-only external resize", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = createStdoutRenderer(app.terminal, {
+      output,
+      clear: false,
+      altScreen: false,
+      hideCursor: false,
+      trackResize: false,
+    });
+    getPlaneTerminal(app.terminal, "transcript").write("t", { x: 0, y: 0 });
+    getPlaneTerminal(app.terminal, "chrome").write("c", { x: 1, y: 0 });
+    getPlaneTerminal(app.terminal, "overlay").write("o", { x: 2, y: 0 });
+
+    try {
+      flushStdout(stdout);
+      writes.length = 0;
+
+      app.terminal.resize(20, 8);
+      app.scheduler.flushNow();
+
+      expect(writes.join("")).toBe("");
+    } finally {
+      stdout.dispose();
+      app.dispose();
+    }
+  });
+
+  it("keeps active terminal graphics untouched when external height resize clips the rect", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -722,9 +763,8 @@ describe("TAgentTerminalGraphic", () => {
 
     writes.length = 0;
     app.terminal.resize(20, 3);
-    app.terminal.commit({ sync: true });
 
-    expect(writes.join("")).toContain(clearSequence);
+    expect(writes.join("")).not.toContain(clearSequence);
     expect(writes.join("")).not.toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
@@ -732,7 +772,79 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
-  it("reuses retained Kitty image data when a clipped graphic re-enters the viewport", () => {
+  it("keeps active terminal graphics untouched when external width resize clips the rect", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const resizeSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 4,
+      rows: 3,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "external-width-resize-clipped-image",
+        x: 2,
+        y: 1,
+        w: 4,
+        h: 3,
+        protocol: "kitty",
+        sequence,
+        resizeSequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    app.terminal.resize(4, 6);
+
+    expect(writes.join("")).not.toContain(clearSequence);
+    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).not.toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("keeps active Kitty image placement when a clipped graphic re-enters the viewport", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -796,13 +908,89 @@ describe("TAgentTerminalGraphic", () => {
     writes.length = 0;
     app.terminal.resize(20, 3);
     app.terminal.commit({ sync: true });
-    expect(writes.join("")).toContain(clearSequence);
+    expect(writes.join("")).not.toContain(clearSequence);
 
     writes.length = 0;
     app.terminal.resize(20, 6);
     app.terminal.commit({ sync: true });
 
-    expect(writes.join("")).toContain(`\x1B[5;3H${resizeSequence}`);
+    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).not.toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("does not retain explicitly cleared Kitty graphics across resize", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const resizeSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 4,
+      rows: 1,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "explicit-clear-image",
+        x: 2,
+        y: 1,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+        resizeSequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    expect(graphics?.clear?.("explicit-clear-image")).toBe(true);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(clearSequence);
+
+    writes.length = 0;
+    app.terminal.resize(21, 6);
+    app.terminal.commit({ sync: true });
+    expect(writes.join("")).not.toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
@@ -990,7 +1178,7 @@ describe("TAgentTerminalGraphic", () => {
     }
   });
 
-  it("clears offscreen active terminal graphics on stdout dispose", () => {
+  it("keeps offscreen active terminal graphics during resize and clears them on stdout dispose", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: false,
@@ -1040,7 +1228,10 @@ describe("TAgentTerminalGraphic", () => {
     ).toBe(true);
     expect(writes.join("")).toContain(sequence);
 
+    writes.length = 0;
     app.terminal.resize(4, 2);
+    expect(writes.join("")).not.toContain(clearSequence);
+
     writes.length = 0;
     stdout.dispose();
     expect(writes.join("")).toContain(clearSequence);
@@ -2417,7 +2608,7 @@ describe("TAgentTerminalGraphic", () => {
     },
   );
 
-  it("rerenders PNG graphics after a clipped viewport becomes fully raw-visible", async () => {
+  it("keeps PNG graphics raw when the viewport clips the rect", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -2473,9 +2664,9 @@ describe("TAgentTerminalGraphic", () => {
     await settle(app);
     flushStdout(stdout);
 
-    expect(toPngBase64).not.toHaveBeenCalled();
-    expect(rowText(app, 0)).toBe("text");
-    expect(writes.join("")).not.toContain("QUJD");
+    expect(toPngBase64).toHaveBeenCalledTimes(1);
+    expect(rowText(app, 0)).toBe("");
+    expect(writes.join("")).toContain("QUJD");
 
     writes.length = 0;
     clipWidth.value = 10;
@@ -2483,7 +2674,7 @@ describe("TAgentTerminalGraphic", () => {
     flushStdout(stdout);
 
     expect(toPngBase64).toHaveBeenCalledTimes(1);
-    expect(writes.join("")).toContain("QUJD");
+    expect(writes.join("")).not.toContain("QUJD");
     expect(rowText(app, 0)).toBe("");
 
     stdout.dispose();
@@ -4677,11 +4868,66 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("shows fallback when terminal graphic starts before the viewport", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 10,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(() => ({
+      type: "sequence" as const,
+      protocol: "kitty" as const,
+      sequence,
+      fallback: "fb",
+    }));
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: -1,
+            y: 0,
+            w: 4,
+            h: 1,
+            content: "image.png",
+            fallback: "fb",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 10, rows: 4, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+
+    expect(writes.join("")).not.toContain(sequence);
+    expect(rowText(app, 0)).not.toBe("");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it.each([
-    { name: "negative x", x: -1, y: 0, w: 4, h: 1, row: 0 },
     { name: "right edge", x: 8, y: 0, w: 4, h: 1, row: 0 },
     { name: "bottom edge", x: 0, y: 3, w: 4, h: 2, row: 3 },
-  ])("shows fallback when terminal graphic is partially visible at $name", async (entry) => {
+  ])("keeps terminal graphic raw when clipped at $name", async (entry) => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -4730,14 +4976,14 @@ describe("TAgentTerminalGraphic", () => {
     await settle(app);
     flushStdout(stdout);
 
-    expect(writes.join("")).not.toContain(sequence);
-    expect(rowText(app, entry.row)).not.toBe("");
+    expect(writes.join("")).toContain(sequence);
+    expect(rowText(app, entry.row)).toBe("");
 
     stdout.dispose();
     app.dispose();
   });
 
-  it("shows fallback after resize makes an active terminal graphic partially visible", async () => {
+  it("keeps an active terminal graphic raw after resize clips it", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -4793,7 +5039,8 @@ describe("TAgentTerminalGraphic", () => {
     flushStdout(stdout);
 
     expect(writes.join("")).not.toContain(sequence);
-    expect(rowText(app, 0)).toContain("fb");
+    expect(writes.join("")).not.toContain("a=d");
+    expect(rowText(app, 0)).not.toContain("fb");
 
     stdout.dispose();
     app.dispose();

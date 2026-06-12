@@ -14,6 +14,8 @@ export type {
   TuiMarkdownBlock,
   TuiMarkdownGraphicSegment,
   TuiMarkdownImageActionPayload,
+  TuiMarkdownImageResolver,
+  TuiMarkdownImageResolverResult,
   TuiMarkdownImageSize,
   TuiMarkdownInlineSegment,
   TuiMarkdownLinkActionPayload,

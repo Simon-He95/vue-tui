@@ -492,8 +492,8 @@ export function canDrawTerminalGraphicRect(
     Number.isFinite(y) &&
     x >= 0 &&
     y >= 0 &&
-    x + graphicSize.width <= cols &&
-    y + graphicSize.height <= rows
+    x < cols &&
+    y < rows
   );
 }
 

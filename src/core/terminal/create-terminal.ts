@@ -1104,7 +1104,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
         const rows = collectAndClearDirtyRows(state.buffer);
         if (rows === null) {
           composeAllRows = true;
-          break;
+          continue;
         }
         for (const y of rows) dirtyRows.add(y);
       }

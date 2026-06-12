@@ -205,18 +205,11 @@ function wrapLineSegments(
     if (segment.graphic) {
       const displayCells = Math.max(1, Math.floor(segment.graphic.displayWidth ?? 1));
 
-      while (displayCells > row.remaining) {
-        if (rowHasBody()) {
-          pushRow();
-          continue;
-        }
+      if (row.remaining <= 0 && !rowHasBody()) {
         if (!row.useContinuation) {
           rows.push(row.segments);
           row = openDegradedRow();
-          continue;
         }
-        // Degraded continuation row cannot fit the graphic — clip to available width.
-        break;
       }
 
       const cells = Math.min(displayCells, Math.max(1, row.remaining || width));

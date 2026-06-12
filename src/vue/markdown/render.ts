@@ -1,4 +1,5 @@
 import type { Style, Terminal } from "../../core/types.js";
+import { createDebugLogger, isDebugEnabled } from "../../core/debug-logger.js";
 import { isTerminalGraphicsProtocol } from "../../renderer/terminal-graphics.js";
 import {
   createKittyDeleteGraphicsSequence,
@@ -12,6 +13,11 @@ import { forEachTextCellSegment, sliceByCellsRange, spaces } from "../utils/text
 import type { TuiMarkdownVisualRow } from "./types.js";
 
 const mergedStyleCache = new WeakMap<Style, WeakMap<Style, Style>>();
+const markdownImageDebugLog = createDebugLogger(isDebugEnabled());
+const markdownImageDebug = (...parts: readonly string[]) => {
+  if (!isDebugEnabled()) return;
+  markdownImageDebugLog.render(`markdown image ${parts.join(" ")}`);
+};
 
 function mergeStyle(base: Style, overlay?: Style): Style {
   if (!overlay) return base;
@@ -179,6 +185,17 @@ function queueMarkdownImageGraphic(
     clearSequence,
     fallbackText: segment.alt ?? "image",
   });
+  markdownImageDebug(
+    `queue id=${id}`,
+    `accepted=${accepted ? "true" : "false"}`,
+    `x=${rect.x}`,
+    `y=${rect.y}`,
+    `w=${width}`,
+    `h=${height}`,
+    `visibleW=${rect.w}`,
+    `displayW=${segment.displayWidth ?? ""}`,
+    `displayH=${segment.displayHeight ?? ""}`,
+  );
   if (accepted) {
     rememberMarkdownImageGraphic(terminal, id, { x: rect.x, y: rect.y, w: width, h: height });
   }
@@ -202,10 +219,14 @@ export function collectVisibleMarkdownImageGraphicIds(
 
   const clipStart = Math.max(0, Math.floor(options.clipStart));
   const clipEnd = clipStart + options.w;
-  const firstRow = Math.max(0, Math.floor(options.rowOffset));
+  const firstRow = Math.min(rows.length, Math.max(0, Math.floor(options.rowOffset)));
   const lastRow = Math.min(rows.length, firstRow + Math.max(0, Math.floor(options.h)));
+  let scanStart = firstRow;
+  while (scanStart > 0 && (rows[scanStart]?.segments.length ?? 0) === 0) {
+    scanStart--;
+  }
 
-  for (let rowIndex = firstRow; rowIndex < lastRow; rowIndex++) {
+  for (let rowIndex = scanStart; rowIndex < lastRow; rowIndex++) {
     const row = rows[rowIndex];
     if (!row) continue;
     let logicalX = 0;
@@ -216,11 +237,13 @@ export function collectVisibleMarkdownImageGraphicIds(
       if (!segment.graphic) continue;
       if (segmentEnd <= clipStart || segmentStart >= clipEnd) continue;
       if (Math.max(segmentStart, clipStart) !== segmentStart) continue;
+      const height = Math.max(1, Math.floor(segment.graphic.displayHeight ?? 1));
+      if (rowIndex + height <= firstRow || rowIndex >= lastRow) continue;
       const rect = {
         x: options.x + segmentStart - clipStart,
         y: options.y + rowIndex - firstRow,
         w: Math.max(1, Math.floor(segment.graphic.displayWidth ?? segment.cells)),
-        h: Math.max(1, Math.floor(segment.graphic.displayHeight ?? 1)),
+        h: height,
       };
       if (options.isGraphicCovered?.(rect)) continue;
       keepIds.add(

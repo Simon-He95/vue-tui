@@ -33,6 +33,7 @@ const CONTENT = [
 ].join("\n");
 
 const clipboard = createOsc52ClipboardProvider();
+const MARKDOWN_W = 96;
 
 const App = defineComponent({
   setup() {
@@ -56,7 +57,7 @@ const App = defineComponent({
       h(TMarkdownText, {
         x: 1,
         y: 1,
-        w: Math.max(40, cols.value - 2),
+        w: MARKDOWN_W,
         content: CONTENT,
         final: true,
         mathActions: true,

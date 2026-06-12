@@ -1,4 +1,4 @@
-import type { TuiMarkdownGraphicSegment, TuiMarkdownImageSize } from "./types.js";
+import type { TuiMarkdownImageResolver, TuiMarkdownImageSize } from "./types.js";
 import { markdownAstToBlocks } from "./ast.js";
 import { layoutMarkdownBlocks } from "./layout.js";
 import { type TuiMarkdownParser } from "./parser.js";
@@ -17,7 +17,7 @@ export function buildMarkdownBlocks(
   options?: Readonly<{
     final?: boolean;
     theme?: TuiMarkdownThemeOverrides;
-    imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
+    imageResolver?: TuiMarkdownImageResolver;
     imageSize?: TuiMarkdownImageSize;
   }>,
 ): Readonly<{
@@ -49,7 +49,7 @@ export function buildMarkdownVisualRows(
     final?: boolean;
     theme?: TuiMarkdownThemeOverrides;
     widthProvider?: WidthProvider;
-    imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
+    imageResolver?: TuiMarkdownImageResolver;
     imageSize?: TuiMarkdownImageSize;
   }>,
 ): readonly TuiMarkdownVisualRow[] {

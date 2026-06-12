@@ -28,8 +28,8 @@ import {
 } from "../markdown/render.js";
 import { markdownThemeSignature, type TuiMarkdownThemeOverrides } from "../markdown/theme.js";
 import type {
-  TuiMarkdownGraphicSegment,
   TuiMarkdownImageActionPayload,
+  TuiMarkdownImageResolver,
   TuiMarkdownLinkActionPayload,
   TuiMarkdownMathActionPayload,
   TuiMarkdownVisualRow,
@@ -65,9 +65,7 @@ export const TMarkdownText = defineComponent({
       default: undefined,
     },
     imageRenderer: {
-      type: Function as PropType<
-        ((image: TuiMarkdownGraphicSegment) => string | null | undefined)
-      >,
+      type: Function as PropType<TuiMarkdownImageResolver>,
       default: undefined,
     },
     imageMinWidth: { type: Number, default: undefined },
@@ -286,17 +284,12 @@ export const TMarkdownText = defineComponent({
     }));
 
     useRenderNode(() => {
-      const r = absRect.value;
       const full = fullRect.value;
       return {
         zIndex: props.zIndex,
-        rect: visible.value ? r : { x: 0, y: 0, w: 0, h: 0 },
+        rect: visible.value ? full : { x: 0, y: 0, w: 0, h: 0 },
         deps: [
           visible.value,
-          r.x,
-          r.y,
-          r.w,
-          r.h,
           full.x,
           full.y,
           full.w,

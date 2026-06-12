@@ -4,7 +4,7 @@
  * Run: bun run run:image-showcase:terminal
  *
  * Demos:
- *   1. Cat PNG from robohash.org (fetched at startup, cached as base64)
+ *   1. Local promo PNG (cached as base64)
  *   2. base64 data:image/png inline (graphics protocol)
  *   3. HTTP URL resolved via imageRenderer cache
  *   4. blob URL resolved via imageRenderer cache
@@ -35,21 +35,22 @@ import {
   TMarkdownText,
   type TuiMarkdownGraphicSegment,
   type TuiMarkdownImageActionPayload,
+  type TuiMarkdownImageResolverResult,
   type TuiMarkdownLinkActionPayload,
 } from "../src/markdown.js";
 import { detectTerminalGraphicsCapabilities } from "../src/renderer/terminal-graphics.js";
 import { TBox, TText, TView, useLayout, useTerminal } from "../src/vue.js";
 
-// ---- Pre-fetch cache for imageRenderer ----
+// ---- Image cache for imageRenderer ----
 const imageBase64Cache = new Map<string, string | null>();
+const originalImageBase64Cache = new Map<string, string>();
 
-// ---- Small red PNG fallback when the remote cat cannot be fetched ----
+// ---- Small red PNG fallback when the local promo image cannot be loaded ----
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAABgAAAAMCAYAAAB4MH11AAAAG0lEQVR4nGP4r6Dwn5aYYdSCUQtGLRi1gDAGAG0Qhd9FkVPQAAAAAElFTkSuQmCC";
 
 // ---- Local HTTP server for remote-image demo ----
 const PORT = 19876;
-const CAT_HTTP_URL = `http://localhost:${PORT}/cat.png`;
 const SHOWCASE_HTTP_URL = `http://localhost:${PORT}/showcase.png`;
 const BLOB_URL = "blob:https://vue-tui.local/showcase.png";
 const BROKEN_URL = `http://localhost:${PORT}/does-not-exist.png`;
@@ -60,18 +61,9 @@ function isPngBuffer(buffer: Buffer): boolean {
   );
 }
 
-/** Fetch a remote PNG and return its base64 (without the data: prefix). */
-async function fetchPngBase64(url: string): Promise<string | null> {
+function readPngBase64(path: string): string | null {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10_000);
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { Accept: "image/png" },
-    });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
+    const buf = readFileSync(path);
     if (!isPngBuffer(buf)) return null;
     return buf.toString("base64");
   } catch {
@@ -82,34 +74,43 @@ async function fetchPngBase64(url: string): Promise<string | null> {
 async function startup(): Promise<{
   server: Server;
   stop: () => void;
-  catBase64: string | null;
   dataUrl: string;
   fileUrl: string;
 }> {
-  // 1. Try to fetch a PNG cat image. Kitty f=100 expects PNG bytes.
-  const catBase64 = await fetchPngBase64(
-    "https://robohash.org/vue-tui-cat.png?size=200x100&set=set4",
-  );
-  const showcaseBase64 = catBase64 ?? TINY_PNG_BASE64;
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const thumbnailPath = resolve(__dirname, "shared/terminal-fashion-showcase.png");
+  const originalPath = resolve(__dirname, "shared/terminal-fashion-showcase-original.png");
+  const thumbnailBase64 = readPngBase64(thumbnailPath);
+  const originalBase64 = readPngBase64(originalPath);
+  const showcaseBase64 = thumbnailBase64 ?? TINY_PNG_BASE64;
+  const showcaseOriginalBase64 = originalBase64 ?? showcaseBase64;
   const dataUrl = `data:image/png;base64,${showcaseBase64}`;
   const tempFilePath = resolve(tmpdir(), `vue-tui-image-showcase-${process.pid}.png`);
   writeFileSync(tempFilePath, Buffer.from(showcaseBase64, "base64"));
   const fileUrl = pathToFileURL(tempFilePath).href;
 
   // 2. Populate the cache
-  if (catBase64) {
-    imageBase64Cache.set(CAT_HTTP_URL, catBase64);
-    console.error(`[showcase] Fetched cat PNG (${catBase64.length} chars base64)`);
+  if (thumbnailBase64) {
+    console.error(
+      `[showcase] Loaded thumbnail PNG (${thumbnailBase64.length} chars base64)`,
+    );
   } else {
-    console.error("[showcase] Could not fetch cat PNG, will show alt text");
+    console.error("[showcase] Could not load thumbnail PNG, using fallback");
+  }
+  if (originalBase64) {
+    console.error(`[showcase] Loaded original PNG (${originalBase64.length} chars base64)`);
   }
   imageBase64Cache.set(SHOWCASE_HTTP_URL, showcaseBase64);
   imageBase64Cache.set(BLOB_URL, showcaseBase64);
   imageBase64Cache.set(fileUrl, showcaseBase64);
+  imageBase64Cache.set(dataUrl, showcaseBase64);
+  originalImageBase64Cache.set(SHOWCASE_HTTP_URL, showcaseOriginalBase64);
+  originalImageBase64Cache.set(BLOB_URL, showcaseOriginalBase64);
+  originalImageBase64Cache.set(fileUrl, showcaseOriginalBase64);
+  originalImageBase64Cache.set(dataUrl, showcaseOriginalBase64);
   imageBase64Cache.set(BROKEN_URL, null);
 
   // 3. Start local HTTP server
-  const __dirname = dirname(fileURLToPath(import.meta.url));
   const pngPath = resolve(__dirname, "../test/fixtures/tiny.png");
   let pngBuffer: Buffer;
   try {
@@ -119,11 +120,6 @@ async function startup(): Promise<{
   }
 
   const server = createServer((req, res) => {
-    if (req.url === "/cat.png" && catBase64) {
-      res.writeHead(200, { "Content-Type": "image/png" });
-      res.end(Buffer.from(catBase64, "base64"));
-      return;
-    }
     if (req.url === "/showcase.png") {
       res.writeHead(200, { "Content-Type": "image/png" });
       res.end(Buffer.from(showcaseBase64, "base64"));
@@ -144,13 +140,12 @@ async function startup(): Promise<{
         // ignore
       }
     },
-    catBase64,
     dataUrl,
     fileUrl,
   };
 }
 
-const { stop: stopServer, catBase64, dataUrl, fileUrl } = await startup();
+const { stop: stopServer, dataUrl, fileUrl } = await startup();
 
 // ---- Build showcase content ----
 const diagnostics = detectTerminalGraphicsCapabilities({
@@ -164,14 +159,12 @@ const diagLines = [
   `TTY: ${diagnostics.stdoutIsTTY}`,
 ];
 
-const catImageLine = catBase64
-  ? `Cat photo: ![🐱 A cute cat](${CAT_HTTP_URL})`
-  : `Cat photo: ![🐱 Cat unavailable — check network](${CAT_HTTP_URL})`;
+const heroImageLine = `Hero image: ![terminal graphics fashion showcase](${SHOWCASE_HTTP_URL})`;
 
 const CONTENT = [
   ...diagLines,
   ``,
-  catImageLine,
+  heroImageLine,
   ``,
   `---`,
   ``,
@@ -191,21 +184,31 @@ const CONTENT = [
   `broken URL: ![this is fallback alt text](${BROKEN_URL})`,
   ``,
   // sizing demo
-  `sized (minW=20 maxW=40): ![sized showcase](${dataUrl})`,
+  `sized (minW=24 maxW=72 maxH=36): ![sized showcase](${dataUrl})`,
   ``,
   `Press q / Escape / Ctrl+C to exit.`,
 ].join("\n");
 
 const MENU_W = 34;
 const MENU_H = 5;
+const MARKDOWN_W = 96;
 const clipboard = createOsc52ClipboardProvider();
 
-function renderCachedImage(image: TuiMarkdownGraphicSegment): string | null {
-  return imageBase64Cache.get(image.src) ?? null;
+function renderCachedImage(image: TuiMarkdownGraphicSegment): TuiMarkdownImageResolverResult {
+  const base64 = imageBase64Cache.get(image.src) ?? null;
+  if (!base64) return null;
+  const originalBase64 = originalImageBase64Cache.get(image.src);
+  if (!originalBase64 || originalBase64 === base64) return base64;
+  return {
+    base64,
+    originalBase64,
+    mime: "image/png",
+    originalMime: "image/png",
+  };
 }
 
 function imageExtension(image: TuiMarkdownImageActionPayload["image"]): string {
-  const mime = image.mime?.toLowerCase();
+  const mime = (image.originalMime ?? image.mime)?.toLowerCase();
   if (mime?.includes("jpeg")) return ".jpg";
   if (mime?.includes("png")) return ".png";
   if (mime?.includes("gif")) return ".gif";
@@ -222,7 +225,12 @@ function imageExtension(image: TuiMarkdownImageActionPayload["image"]): string {
 }
 
 function downloadImage(image: TuiMarkdownImageActionPayload["image"]): string | null {
-  const base64 = image.base64 ?? imageBase64Cache.get(image.src) ?? null;
+  const base64 =
+    image.originalBase64 ??
+    originalImageBase64Cache.get(image.src) ??
+    image.base64 ??
+    imageBase64Cache.get(image.src) ??
+    null;
   if (!base64) return null;
   const dir = resolve(homedir(), "Downloads");
   mkdirSync(dir, { recursive: true });
@@ -312,7 +320,7 @@ const App = defineComponent({
       h(TMarkdownText, {
         x: 1,
         y: 1,
-        w: 60,
+        w: MARKDOWN_W,
         content: CONTENT,
         final: true,
         imageActions: true,
@@ -328,10 +336,10 @@ const App = defineComponent({
         // Image sizing: applies to ALL images in this block.
         // Without minHeight, displayHeight defaults to 1 (a thin line).
         // Set minHeight ≥ 3 to make images visible.
-        imageMinWidth: 10,
-        imageMaxWidth: 40,
-        imageMinHeight: 4,
-        imageMaxHeight: 12,
+        imageMinWidth: 24,
+        imageMaxWidth: 72,
+        imageMinHeight: 12,
+        imageMaxHeight: 36,
         imagePreserveAspectRatio: true,
       }),
       status.value

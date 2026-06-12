@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { TMarkdownText, TVirtualMarkdown } from "../src/markdown.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
-const TINY_PNG_DATA_URL =
-  "data:image/png;base64," +
+const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+const TINY_PNG_DATA_URL = `data:image/png;base64,${TINY_PNG_BASE64}`;
 
 function rowText(mounted: Awaited<ReturnType<typeof mountTerminal>>, y: number): string {
   return mounted.terminal
@@ -845,6 +845,51 @@ describe("markdown components", () => {
       cellX: 10,
       cellY: 2,
       image: { src: TINY_PNG_DATA_URL, displayWidth: 6, displayHeight: 3 },
+    });
+    mounted.unmount();
+  });
+
+  it("emits imageAction with imageRenderer original bytes", async () => {
+    const actions: unknown[] = [];
+    const url = "http://localhost:19999/large.png";
+    const originalBase64 = "b3JpZ2luYWwtaW1hZ2U=";
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 2,
+          y: 1,
+          w: 32,
+          h: 8,
+          content: `image: ![large](${url})`,
+          imageActions: true,
+          imageRenderer: () => ({
+            base64: TINY_PNG_BASE64,
+            originalBase64,
+            mime: "image/png",
+            originalMime: "image/png",
+          }),
+          imageMinWidth: 6,
+          imageMaxWidth: 6,
+          imageMinHeight: 3,
+          imageMaxHeight: 3,
+          imagePreserveAspectRatio: false,
+          onImageAction: (payload: unknown) => actions.push(payload),
+        }),
+      40,
+      10,
+    );
+
+    clickCell(mounted, 10, 2);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      image: {
+        src: url,
+        base64: TINY_PNG_BASE64,
+        originalBase64,
+        mime: "image/png",
+        originalMime: "image/png",
+      },
     });
     mounted.unmount();
   });

@@ -1,6 +1,5 @@
 import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import type { TuiMarkdownGraphicSegment } from "../markdown/types.js";
 import type {
   Rect,
   TerminalKeyboardEvent,
@@ -48,6 +47,7 @@ import { markdownThemeSignature, type TuiMarkdownThemeOverrides } from "../markd
 import type {
   TuiMarkdownBlock,
   TuiMarkdownImageActionPayload,
+  TuiMarkdownImageResolver,
   TuiMarkdownLinkActionPayload,
   TuiMarkdownMathActionPayload,
   TuiMarkdownVisualRow,
@@ -157,9 +157,7 @@ export const TVirtualMarkdown = defineComponent({
       default: undefined,
     },
     imageRenderer: {
-      type: Function as PropType<
-        ((image: TuiMarkdownGraphicSegment) => string | null | undefined)
-      >,
+      type: Function as PropType<TuiMarkdownImageResolver>,
       default: undefined,
     },
     imageMinWidth: { type: Number, default: undefined },

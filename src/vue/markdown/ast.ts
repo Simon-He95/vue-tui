@@ -6,6 +6,8 @@ import { type TuiMarkdownTheme } from "./theme.js";
 import type {
   TuiMarkdownBlock,
   TuiMarkdownGraphicSegment,
+  TuiMarkdownImageResolver,
+  TuiMarkdownImageResolverResult,
   TuiMarkdownImageSize,
   TuiMarkdownInlineSegment,
   TuiMarkdownNode,
@@ -16,7 +18,7 @@ import type {
 type BlockContext = Readonly<{
   prefixSegments: readonly TuiMarkdownInlineSegment[];
   continuationPrefixSegments: readonly TuiMarkdownInlineSegment[];
-  imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
+  imageResolver?: TuiMarkdownImageResolver;
   imageSize?: TuiMarkdownImageSize;
 }>;
 
@@ -69,6 +71,23 @@ function imageFallbackText(raw: string, rawSource: string, sourceSrc: string | u
   if (raw) return raw;
   const src = rawSource || sourceSrc;
   return src ? `![](${src})` : "image";
+}
+
+function normalizeImageResolverResult(
+  result: TuiMarkdownImageResolverResult,
+): Pick<TuiMarkdownGraphicSegment, "base64" | "originalBase64" | "mime" | "originalMime"> {
+  if (typeof result === "string") {
+    return { base64: result.replace(/\s+/g, "") };
+  }
+  if (!result) return {};
+  return {
+    base64: result.base64.replace(/\s+/g, ""),
+    ...(result.originalBase64
+      ? { originalBase64: result.originalBase64.replace(/\s+/g, "") }
+      : {}),
+    ...(result.mime ? { mime: result.mime } : {}),
+    ...(result.originalMime ? { originalMime: result.originalMime } : {}),
+  };
 }
 
 function booleanProp(node: TuiMarkdownNode, key: string): boolean {
@@ -194,7 +213,7 @@ function inlineNodeSegments(
   theme: TuiMarkdownTheme,
   inheritedStyle?: TuiMarkdownInlineSegment["style"],
   options: Readonly<{
-    imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
+    imageResolver?: TuiMarkdownImageResolver;
     imageSize?: TuiMarkdownImageSize;
   }> = {},
 ): TuiMarkdownInlineSegment[] {
@@ -299,13 +318,16 @@ function inlineNodeSegments(
               sourceDimensions?.height,
             ),
           } satisfies TuiMarkdownGraphicSegment;
-          const resolvedBase64 = options.imageResolver?.(graphicBase)?.replace(/\s+/g, "");
-          const base64 = resolvedBase64 || source.base64;
+          const resolved = normalizeImageResolverResult(options.imageResolver?.(graphicBase));
+          const base64 = resolved.base64 || source.base64;
           if (base64) {
             const dimensions = readMarkdownImageDimensions(base64) ?? sourceDimensions;
             const graphic = {
               ...graphicBase,
               base64,
+              ...(resolved.originalBase64 ? { originalBase64: resolved.originalBase64 } : {}),
+              ...(resolved.mime ? { mime: resolved.mime } : {}),
+              ...(resolved.originalMime ? { originalMime: resolved.originalMime } : {}),
               ...(dimensions
                 ? {
                     naturalWidth: dimensions.width,
@@ -720,7 +742,7 @@ export function markdownAstToBlocks(
   nodes: readonly TuiMarkdownNode[],
   theme: TuiMarkdownTheme,
   options: Readonly<{
-    imageResolver?: (image: TuiMarkdownGraphicSegment) => string | null | undefined;
+    imageResolver?: TuiMarkdownImageResolver;
     imageSize?: TuiMarkdownImageSize;
   }> = {},
 ): readonly TuiMarkdownBlock[] {

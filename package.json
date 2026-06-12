@@ -289,6 +289,7 @@
     "typecheck": "tsc -p tsconfig.runtime.json --noEmit && tsc -p tsconfig.json --noEmit",
     "e2e": "playwright test --project=smoke",
     "e2e:smoke": "playwright test --project=smoke",
+    "e2e:terminal-resize": "tsx scripts/e2e-terminal-resize.ts",
     "e2e:browser-regressions": "playwright test --project=browser-regressions-chromium --project=browser-regressions-firefox --project=browser-regressions-webkit",
     "bench:vfor": "tsx scripts/bench-vfor.ts",
     "bench:dom-renderer": "tsx scripts/bench-dom-renderer.ts",

@@ -430,6 +430,33 @@ describe("markdown image fallback and sizing", () => {
     ]);
   });
 
+  it("clips inline image graphics horizontally instead of wrapping them", async () => {
+    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import(
+      "../src/markdown.js"
+    );
+    const parser = createTuiMarkdownParser({ streaming: false });
+    const rows = buildMarkdownVisualRows(
+      `data URL: ![data image](${TINY_PNG_DATA_URL})\n\nnext line`,
+      14,
+      parser,
+      {
+        imageSize: {
+          minWidth: 12,
+          maxWidth: 12,
+          minHeight: 3,
+          maxHeight: 3,
+          preserveAspectRatio: false,
+        },
+      },
+    );
+
+    expect(rows[0]?.plainText.startsWith("data URL:")).toBe(true);
+    expect(rows[0]?.segments.some((segment) => segment.graphic)).toBe(true);
+    expect(rows[1]?.plainText).toBe("");
+    expect(rows[2]?.plainText).toBe("");
+    expect(rows.findIndex((row) => row.plainText.includes("next line"))).toBeGreaterThan(2);
+  });
+
   it("preserves image aspect ratio from source dimensions", async () => {
     const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import(
       "../src/markdown.js"
@@ -756,7 +783,7 @@ describe("markdown image fallback and sizing", () => {
     );
   });
 
-  it("does not clear or fallback when resize clips a supported markdown image", async () => {
+  it("keeps a supported markdown image active when resize clips it horizontally", async () => {
     await withEnv(
       {
         KITTY_WINDOW_ID: "vue-tui-test",
@@ -811,6 +838,75 @@ describe("markdown image fallback and sizing", () => {
           (renderer as any).render(undefined, true);
 
           expect(stdout).not.toContain("a=d");
+          expect(stdout).not.toContain("a=p");
+          expect(stdout).not.toContain("a=T");
+          expect(rowText(mounted, 0)).toContain("Cat photo:");
+          expect(rowText(mounted, 0)).not.toContain("cat fallback");
+        } finally {
+          renderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
+
+  it("keeps drawing a supported markdown image when resize vertically clips it", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        const mounted = await mountTerminal(
+          () =>
+            h(TMarkdownText, {
+              x: 0,
+              y: 0,
+              w: 40,
+              h: 6,
+              content: `Cat photo: ![cat fallback](${TINY_PNG_DATA_URL})`,
+              imageMinWidth: 20,
+              imageMaxWidth: 20,
+              imageMinHeight: 4,
+              imageMaxHeight: 4,
+            }),
+          40,
+          6,
+        );
+
+        let stdout = "";
+        const renderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            isTTY: true,
+            write(chunk: string) {
+              stdout += chunk;
+            },
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+          expect(stdout).toContain("\u001B_G");
+
+          stdout = "";
+          mounted.terminal.resize(40, 2);
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+
+          expect(stdout).not.toContain("a=d");
+          expect(stdout).not.toContain("a=p");
+          expect(stdout).not.toContain("a=T");
           expect(rowText(mounted, 0)).toContain("Cat photo:");
           expect(rowText(mounted, 0)).not.toContain("cat fallback");
         } finally {

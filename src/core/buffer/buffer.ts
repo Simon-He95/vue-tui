@@ -578,12 +578,15 @@ export function resizeBuffer(buffer: GridBuffer, cols: number, rows: number): vo
 
   if (nextCols === buffer.cols && nextRows === buffer.rows) return;
 
+  const prevRows = buffer.rows;
+  const prevDirtyAll = buffer.dirtyAll;
+  const prevDirtyBits = buffer.dirtyBits;
   const blank = createBlankCell();
   const nextGrid: Cell[][] = Array.from({ length: nextRows }, () =>
     Array.from({ length: nextCols }, () => blank),
   );
 
-  const copyRows = Math.min(buffer.rows, nextRows);
+  const copyRows = Math.min(prevRows, nextRows);
   const copyCols = Math.min(buffer.cols, nextCols);
   for (let y = 0; y < copyRows; y++) {
     const src = getBufferRow(buffer, y);
@@ -617,10 +620,23 @@ export function resizeBuffer(buffer: GridBuffer, cols: number, rows: number): vo
   buffer.cols = nextCols;
   buffer.rows = nextRows;
   buffer.dirtyBits = new Uint8Array(nextRows);
-  buffer.dirtyCount = nextRows || 0;
-  buffer.dirtyMin = nextRows ? 0 : Number.POSITIVE_INFINITY;
-  buffer.dirtyMax = nextRows ? nextRows - 1 : -1;
-  buffer.dirtyAll = nextRows > 0;
+  buffer.dirtyCount = 0;
+  buffer.dirtyMin = Number.POSITIVE_INFINITY;
+  buffer.dirtyMax = -1;
+  buffer.dirtyAll = prevDirtyAll && nextRows > 0;
+  if (buffer.dirtyAll) {
+    buffer.dirtyCount = nextRows;
+    buffer.dirtyMin = 0;
+    buffer.dirtyMax = nextRows - 1;
+  } else {
+    for (let y = 0; y < copyRows; y++) {
+      if (prevDirtyBits[y] !== 1) continue;
+      buffer.dirtyBits[y] = 1;
+      buffer.dirtyCount++;
+      if (y < buffer.dirtyMin) buffer.dirtyMin = y;
+      if (y > buffer.dirtyMax) buffer.dirtyMax = y;
+    }
+  }
   buffer.cursorX = clamp(buffer.cursorX, 0, Math.max(0, nextCols));
   buffer.cursorY = clamp(buffer.cursorY, 0, Math.max(0, nextRows - 1));
 

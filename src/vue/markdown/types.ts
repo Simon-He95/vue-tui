@@ -21,11 +21,28 @@ export type TuiMarkdownGraphicSegment = Readonly<{
   alt?: string;
   mime?: string;
   base64?: string;
+  originalBase64?: string;
+  originalMime?: string;
   naturalWidth?: number;
   naturalHeight?: number;
   displayWidth?: number;
   displayHeight?: number;
 }>;
+
+export type TuiMarkdownImageResolverResult =
+  | string
+  | null
+  | undefined
+  | Readonly<{
+      base64: string;
+      originalBase64?: string;
+      mime?: string;
+      originalMime?: string;
+    }>;
+
+export type TuiMarkdownImageResolver = (
+  image: TuiMarkdownGraphicSegment,
+) => TuiMarkdownImageResolverResult;
 
 export type TuiMarkdownImageActionPayload = Readonly<{
   image: TuiMarkdownGraphicSegment;

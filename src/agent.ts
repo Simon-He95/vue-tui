@@ -199,6 +199,8 @@ export type {
 export type {
   TuiMarkdownBlock,
   TuiMarkdownGraphicSegment,
+  TuiMarkdownImageResolver,
+  TuiMarkdownImageResolverResult,
   TuiMarkdownInlineSegment,
   TuiMarkdownNode,
   TuiMarkdownTableCell,

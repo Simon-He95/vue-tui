@@ -931,6 +931,26 @@ describe("markdown layout", () => {
       });
       expect(cleared).toHaveLength(0);
 
+      const topClippedKeepGraphicIds = collectVisibleMarkdownImageGraphicIds(
+        [imageRow, blankRow, blankRow],
+        {
+          x: 0,
+          y: 2,
+          w: 8,
+          h: 2,
+          rowOffset: 1,
+          clipStart: 0,
+        },
+      );
+      paintMarkdownVisualRow(terminal, blankRow, {
+        x: 0,
+        y: 2,
+        w: 8,
+        baseStyle,
+        keepGraphicIds: topClippedKeepGraphicIds,
+      });
+      expect(cleared).toHaveLength(0);
+
       const coveredGraphicIds = collectVisibleMarkdownImageGraphicIds(
         [imageRow, blankRow, blankRow],
         {

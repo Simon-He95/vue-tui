@@ -42,7 +42,7 @@ describe("render-manager", () => {
     expect(paints).toEqual([]);
   });
 
-  it("forces repaint on column resize", () => {
+  it("does not force stable nodes to repaint on column resize", () => {
     const paints: string[] = [];
     const terminal = createTerminal({ cols: 10, rows: 4 });
     const rm = createRenderManager(terminal);
@@ -56,8 +56,8 @@ describe("render-manager", () => {
     paints.length = 0;
     terminal.resize(12, 4);
 
-    expect(rm.render()?.rows).toBe(4);
-    expect(paints).toEqual(["target"]);
+    expect(rm.render()).toBeNull();
+    expect(paints).toEqual([]);
   });
 
   it("marks only tail rows when a node rect changes height", () => {
