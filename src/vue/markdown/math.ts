@@ -92,15 +92,53 @@ function decodeXmlEntities(value: string): string {
   });
 }
 
+function mathmlTagName(tag: string): string {
+  const start = tag.startsWith("/") ? 1 : 0;
+  let end = start;
+  while (end < tag.length) {
+    const ch = tag[end];
+    if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r" || ch === "/") break;
+    end++;
+  }
+  return tag.slice(start, end).toLowerCase();
+}
+
 function textFromKatexMathml(html: string): string {
-  const withoutAnnotations = html.replace(/<annotation\b[\s\S]*?<\/annotation>/gi, "");
-  const readable = withoutAnnotations
-    .replace(/<mfrac\b[^>]*>/gi, "(")
-    .replace(/<\/mfrac>/gi, ")")
-    .replace(/<mspace\b[^>]*\/>/gi, " ")
-    .replace(/<\/m(?:row|style|sqrt|sup|sub|subsup|over|under|underover)>/gi, "")
-    .replace(/<[^>]+>/g, "");
-  const text = sanitizeInlineText(decodeXmlEntities(readable).replace(/\s+/g, " ").trim());
+  let readable = "";
+  let offset = 0;
+  const lowerHtml = html.toLowerCase();
+
+  while (offset < html.length) {
+    const tagStart = html.indexOf("<", offset);
+    if (tagStart < 0) {
+      readable += html.slice(offset);
+      break;
+    }
+    readable += html.slice(offset, tagStart);
+
+    const tagEnd = html.indexOf(">", tagStart + 1);
+    if (tagEnd < 0) break;
+
+    const tag = html.slice(tagStart + 1, tagEnd).trim();
+    const tagName = mathmlTagName(tag);
+    const closing = tag.startsWith("/");
+
+    if (!closing && tagName === "annotation") {
+      const annotationEnd = lowerHtml.indexOf("</annotation>", tagEnd + 1);
+      offset = annotationEnd < 0 ? tagEnd + 1 : annotationEnd + "</annotation>".length;
+      continue;
+    }
+
+    if (!closing && tagName === "mfrac") readable += "(";
+    else if (closing && tagName === "mfrac") readable += ")";
+    else if (!closing && tagName === "mspace") readable += " ";
+
+    offset = tagEnd + 1;
+  }
+
+  const text = sanitizeInlineText(
+    decodeXmlEntities(readable).replace(/[<>]/g, "").replace(/\s+/g, " ").trim(),
+  );
   return text;
 }
 
@@ -115,7 +153,7 @@ function approximateTexToUnicode(tex: string): string {
   out = out.replace(/\\([^A-Za-z])/g, "$1");
   out = out.replace(/[{}]/g, "");
   out = out.replace(/\s+/g, " ").trim();
-  return sanitizeInlineText(out);
+  return sanitizeInlineText(out.replace(/[<>]/g, ""));
 }
 
 function canRenderTerminalMath(tex: string): boolean {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createStdoutRenderer } from "../src/cli.js";
 import { TMarkdownText, TVirtualMarkdown } from "../src/markdown.js";
+import { renderMarkdownInlineMathSegment } from "../src/vue/markdown/math.js";
 import { h, mountTerminal, nextTick } from "./ui-regressions-support.js";
 
 type MountedTerminal = Awaited<ReturnType<typeof mountTerminal>>;
@@ -118,6 +119,17 @@ describe("markdown kitty image and KaTeX rendering", () => {
     } finally {
       mounted.unmount();
     }
+  });
+
+  it("does not emit html-like text from rendered KaTeX", () => {
+    const rendered = renderMarkdownInlineMathSegment("x<script");
+    const fraction = renderMarkdownInlineMathSegment("\\frac{<script}{b}");
+
+    expect(rendered.supported).toBe(true);
+    expect(rendered.text.toLowerCase()).not.toContain("<script");
+    expect(rendered.text).toBe("xscript");
+    expect(fraction.supported).toBe(true);
+    expect(fraction.text.toLowerCase()).not.toContain("<script");
   });
 
   it("keeps unsupported KaTeX as raw text", async () => {
