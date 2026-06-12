@@ -695,9 +695,35 @@ export function createStdoutRenderer(
     }
     for (const [id, active] of activeGraphics) {
       pendingGraphics.delete(`${id}:draw`);
+      const anchored = anchoredGraphicRectInViewport(active, size);
+      if (anchored && !active.resizeSequence) {
+        if (isDebugEnabled()) {
+          getDebugLog().render(
+            `terminal graphic resize active: id=${id}, x=${active.x}, y=${active.y}, w=${active.w}, h=${active.h}, viewport=${size.cols}x${size.rows}, anchored=true, skipped=no-resize-sequence`,
+          );
+        }
+        continue;
+      }
+      const signature = activeGraphicSignatures.get(id);
+      const sequence = active.resizeSequence ?? active.sequence;
+      pendingGraphics.set(`${id}:draw`, {
+        id,
+        x: active.x,
+        y: active.y,
+        w: active.w,
+        h: active.h,
+        protocol: active.protocol,
+        sequence,
+        resizeSequence: active.resizeSequence,
+        clearSequence: active.clearSequence,
+        op: "draw",
+        order: nextGraphicsOrder++,
+        resizeRedraw: true,
+      });
+      if (signature) pendingGraphicSignatures.set(id, signature);
       if (isDebugEnabled()) {
         getDebugLog().render(
-          `terminal graphic resize active: id=${id}, x=${active.x}, y=${active.y}, w=${active.w}, h=${active.h}, viewport=${size.cols}x${size.rows}, anchored=${anchoredGraphicRectInViewport(active, size) ? "true" : "false"}`,
+          `terminal graphic resize active: id=${id}, x=${active.x}, y=${active.y}, w=${active.w}, h=${active.h}, viewport=${size.cols}x${size.rows}, anchored=${anchored ? "true" : "false"}, bytes=${sequence.length}`,
         );
       }
     }
@@ -4475,6 +4501,12 @@ export function createStdoutRenderer(
     if (!colsChanged) {
       consumeResizeDirtyState();
       preserveNextRowsOnlyResizeBaseline = true;
+      const dirtyRows = Array.from({ length: Math.max(0, rows) }, (_, y) => y);
+      accumulatedDirtyRowsRequireRepaint = true;
+      deferGraphicsFlushUntilResizeCommit = false;
+      allowNextGraphicsOnlyRenderWithoutBaseline = false;
+      render(dirtyRows, true);
+      return;
     }
     if (hasPendingTerminalGraphics()) {
       deferGraphicsFlushUntilResizeCommit = false;

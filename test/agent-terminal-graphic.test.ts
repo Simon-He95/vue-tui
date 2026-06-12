@@ -174,7 +174,7 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
-  it("keeps active Kitty placements on tracked height resize without redrawing stable placement", () => {
+  it("re-places active Kitty placements on tracked height resize without redrawing image data", () => {
     const writes: string[] = [];
     const resize = { listener: null as (() => void) | null };
     let outputColumns = 20;
@@ -275,7 +275,7 @@ describe("TAgentTerminalGraphic", () => {
     resize.listener?.();
     expect(writes.join("")).not.toContain(clearSequence);
     expect(writes.join("")).not.toContain("a=d");
-    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     writes.length = 0;
@@ -288,7 +288,7 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
-  it("keeps active terminal graphics on external terminal height resize", () => {
+  it("re-places active terminal graphics on external terminal height resize", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -355,7 +355,7 @@ describe("TAgentTerminalGraphic", () => {
 
     expect(writes.join("")).not.toContain(clearSequence);
     expect(writes.join("")).not.toContain("a=d");
-    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
@@ -428,14 +428,14 @@ describe("TAgentTerminalGraphic", () => {
     app.terminal.commit({ sync: true });
 
     expect(writes.join("")).not.toContain(clearSequence);
-    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
     app.dispose();
   });
 
-  it("keeps active Kitty graphics without placement id across clipped resize", () => {
+  it("re-places active Kitty graphics without placement id across clipped resize", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -496,7 +496,7 @@ describe("TAgentTerminalGraphic", () => {
     app.terminal.resize(20, 4);
     app.terminal.commit({ sync: true });
 
-    expect(writes.join("")).not.toContain(clearSequence);
+    expect(writes.join("")).toContain(clearSequence);
     expect(writes.join("")).not.toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
@@ -517,8 +517,8 @@ describe("TAgentTerminalGraphic", () => {
     ).toBe(true);
     app.terminal.commit({ sync: true });
 
-    expect(writes.join("")).not.toContain(clearSequence);
-    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).toContain(clearSequence);
+    expect(writes.join("")).toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
@@ -580,7 +580,7 @@ describe("TAgentTerminalGraphic", () => {
       writes.length = 0;
       vi.advanceTimersByTime(20);
       app.terminal.resize(20, 8);
-      expect(writes.join("")).toBe("");
+      expect(writes.join("")).not.toContain(sequence);
 
       writes.length = 0;
       expect(
@@ -594,6 +594,7 @@ describe("TAgentTerminalGraphic", () => {
           sequence: nextSequence,
         }),
       ).toBe(true);
+      vi.advanceTimersByTime(20);
       expect(writes.join("")).toContain(nextSequence);
     } finally {
       stdout.dispose();
@@ -649,7 +650,7 @@ describe("TAgentTerminalGraphic", () => {
       app.terminal.resize(20, 8);
       app.terminal.write("after-resize", { x: 0, y: 7 });
       vi.advanceTimersByTime(20);
-      expect(writes.join("")).toBe("");
+      expect(writes.join("")).not.toContain("after-resize");
 
       app.terminal.commit({ sync: true });
       expect(writes.join("")).toContain("after-resize");
@@ -660,7 +661,7 @@ describe("TAgentTerminalGraphic", () => {
     }
   });
 
-  it("does not repaint text for clean rows-only external resize", () => {
+  it("repaints text for clean rows-only external resize", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -693,14 +694,14 @@ describe("TAgentTerminalGraphic", () => {
       app.terminal.resize(20, 8);
       app.scheduler.flushNow();
 
-      expect(writes.join("")).toBe("");
+      expect(writes.join("")).toContain("tco");
     } finally {
       stdout.dispose();
       app.dispose();
     }
   });
 
-  it("keeps active terminal graphics untouched when external height resize clips the rect", () => {
+  it("re-places active terminal graphics when external height resize clips the rect", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -765,14 +766,14 @@ describe("TAgentTerminalGraphic", () => {
     app.terminal.resize(20, 3);
 
     expect(writes.join("")).not.toContain(clearSequence);
-    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
     app.dispose();
   });
 
-  it("keeps active terminal graphics untouched when external width resize clips the rect", () => {
+  it("re-places active terminal graphics when external width resize clips the rect", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -837,7 +838,7 @@ describe("TAgentTerminalGraphic", () => {
     app.terminal.resize(4, 6);
 
     expect(writes.join("")).not.toContain(clearSequence);
-    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
@@ -908,13 +909,15 @@ describe("TAgentTerminalGraphic", () => {
     writes.length = 0;
     app.terminal.resize(20, 3);
     app.terminal.commit({ sync: true });
-    expect(writes.join("")).not.toContain(clearSequence);
+    expect(writes.join("")).toContain(clearSequence);
+    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).not.toContain(sequence);
 
     writes.length = 0;
     app.terminal.resize(20, 6);
     app.terminal.commit({ sync: true });
 
-    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
@@ -1178,7 +1181,7 @@ describe("TAgentTerminalGraphic", () => {
     }
   });
 
-  it("keeps offscreen active terminal graphics during resize and clears them on stdout dispose", () => {
+  it("clears offscreen active terminal graphics during resize", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: false,
@@ -1230,11 +1233,11 @@ describe("TAgentTerminalGraphic", () => {
 
     writes.length = 0;
     app.terminal.resize(4, 2);
-    expect(writes.join("")).not.toContain(clearSequence);
+    expect(writes.join("")).toContain(clearSequence);
 
     writes.length = 0;
     stdout.dispose();
-    expect(writes.join("")).toContain(clearSequence);
+    expect(writes.join("")).not.toContain(clearSequence);
 
     app.dispose();
   });

@@ -838,7 +838,7 @@ describe("markdown image fallback and sizing", () => {
           (renderer as any).render(undefined, true);
 
           expect(stdout).not.toContain("a=d");
-          expect(stdout).not.toContain("a=p");
+          expect(stdout).toContain("a=p");
           expect(stdout).not.toContain("a=T");
           expect(rowText(mounted, 0)).toContain("Cat photo:");
           expect(rowText(mounted, 0)).not.toContain("cat fallback");
@@ -905,7 +905,7 @@ describe("markdown image fallback and sizing", () => {
           (renderer as any).render(undefined, true);
 
           expect(stdout).not.toContain("a=d");
-          expect(stdout).not.toContain("a=p");
+          expect(stdout).toContain("a=p");
           expect(stdout).not.toContain("a=T");
           expect(rowText(mounted, 0)).toContain("Cat photo:");
           expect(rowText(mounted, 0)).not.toContain("cat fallback");

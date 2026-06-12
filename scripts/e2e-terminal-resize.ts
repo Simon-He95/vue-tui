@@ -71,6 +71,10 @@ function assertNotContains(haystack: string, needle: string, message: string): v
   assert(!haystack.includes(needle), message);
 }
 
+function assertContains(haystack: string, needle: string, message: string): void {
+  assert(haystack.includes(needle), message);
+}
+
 async function settle(app: ReturnType<typeof createTerminalApp>): Promise<void> {
   for (let i = 0; i < 4; i++) {
     await nextTick();
@@ -147,18 +151,13 @@ try {
 
   const resizeOutput = chunks.join("");
   assertNotContains(resizeOutput, "\x1B[?7h", "resize output must not re-enable autowrap");
-  assertNotContains(resizeOutput, "a=d", "resize output must not delete kitty graphics");
-  assertNotContains(resizeOutput, "a=p", "resize output must not re-place kitty graphics");
+  assertNotContains(resizeOutput, "\x1B[2J", "resize output must not clear the screen");
+  assertNotContains(resizeOutput, "a=T", "resize output must not resend full kitty images");
+  assertContains(resizeOutput, "a=p", "resize output must re-place kitty graphics");
 
   const log = readFileSync(renderLogPath, "utf8");
   const resizeLog = log.slice(log.indexOf("[E2E] resize-start"));
-  assertNotContains(resizeLog, " Full render:", "resize must not full repaint stdout content");
-  assertNotContains(
-    resizeLog,
-    "terminal graphic render payload clear",
-    "resize must not clear terminal graphics",
-  );
-  assertNotContains(resizeLog, "terminal graphic render draw", "resize must not redraw terminal graphics");
+  assertNotContains(resizeLog, "resizeRedraw=false", "resize graphics draws must be resize redraws");
 
   const coords = markdownImageCoords(log);
   assert(coords.size > 0, "expected resize trace to capture markdown image coordinates");
@@ -207,7 +206,27 @@ try {
       await settle(trackedApp);
     }
 
-    assert(trackedChunks.join("") === "", "tracked stdout resize must not write output");
+    const trackedResizeOutput = trackedChunks.join("");
+    assertNotContains(
+      trackedResizeOutput,
+      "\x1B[?7h",
+      "tracked stdout resize must not re-enable autowrap",
+    );
+    assertNotContains(
+      trackedResizeOutput,
+      "\x1B[2J",
+      "tracked stdout resize must not clear the screen",
+    );
+    assertNotContains(
+      trackedResizeOutput,
+      "a=T",
+      "tracked stdout resize must not resend full kitty images",
+    );
+    assertContains(
+      trackedResizeOutput,
+      "a=p",
+      "tracked stdout resize must re-place kitty graphics",
+    );
   } finally {
     trackedStdout.dispose();
     trackedApp.dispose();
