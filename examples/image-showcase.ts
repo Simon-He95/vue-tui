@@ -23,7 +23,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { defineComponent, h, ref } from "vue";
+import { computed, defineComponent, h, ref } from "vue";
 import {
   createOsc52ClipboardProvider,
   createStdinDriver,
@@ -33,11 +33,12 @@ import {
 } from "../src/cli.js";
 import {
   TMarkdownText,
+  type TuiMarkdownGraphicSegment,
   type TuiMarkdownImageActionPayload,
   type TuiMarkdownLinkActionPayload,
 } from "../src/markdown.js";
 import { detectTerminalGraphicsCapabilities } from "../src/renderer/terminal-graphics.js";
-import { TBox, TText, TView, useTerminal } from "../src/vue.js";
+import { TBox, TText, TView, useLayout, useTerminal } from "../src/vue.js";
 
 // ---- Pre-fetch cache for imageRenderer ----
 const imageBase64Cache = new Map<string, string | null>();
@@ -199,6 +200,10 @@ const MENU_W = 34;
 const MENU_H = 5;
 const clipboard = createOsc52ClipboardProvider();
 
+function renderCachedImage(image: TuiMarkdownGraphicSegment): string | null {
+  return imageBase64Cache.get(image.src) ?? null;
+}
+
 function imageExtension(image: TuiMarkdownImageActionPayload["image"]): string {
   const mime = image.mime?.toLowerCase();
   if (mime?.includes("jpeg")) return ".jpg";
@@ -231,6 +236,9 @@ function downloadImage(image: TuiMarkdownImageActionPayload["image"]): string | 
 const App = defineComponent({
   setup() {
     const { scheduler } = useTerminal();
+    const layout = useLayout();
+    const cols = computed(() => Math.max(1, layout.clipRect?.w ?? 80));
+    const rows = computed(() => Math.max(1, layout.clipRect?.h ?? 24));
     const menu = ref<{
       image: TuiMarkdownImageActionPayload["image"];
       x: number;
@@ -244,8 +252,7 @@ const App = defineComponent({
     }
 
     function openMenu(payload: TuiMarkdownImageActionPayload): void {
-      const columns = Math.max(1, Number(process.stdout.columns) || 80);
-      const rows = Math.max(1, Number(process.stdout.rows) || 24);
+      const columns = cols.value;
       const rightX = payload.rect.x + payload.rect.w + 2;
       const leftX = payload.rect.x - MENU_W - 2;
       const x =
@@ -257,7 +264,7 @@ const App = defineComponent({
       menu.value = {
         image: payload.image,
         x,
-        y: Math.min(Math.max(1, payload.rect.y), Math.max(1, rows - MENU_H - 1)),
+        y: Math.min(Math.max(1, payload.rect.y), Math.max(1, rows.value - MENU_H - 1)),
       };
       scheduler.invalidate();
     }
@@ -317,9 +324,7 @@ const App = defineComponent({
         onLinkAction: (payload) => {
           void copyLink(payload);
         },
-        imageRenderer(image) {
-          return imageBase64Cache.get(image.src) ?? null;
-        },
+        imageRenderer: renderCachedImage,
         // Image sizing: applies to ALL images in this block.
         // Without minHeight, displayHeight defaults to 1 (a thin line).
         // Set minHeight ≥ 3 to make images visible.
@@ -332,8 +337,8 @@ const App = defineComponent({
       status.value
         ? h(TText, {
             x: 1,
-            y: Math.max(1, (Number(process.stdout.rows) || 24) - 2),
-            w: Math.max(1, (Number(process.stdout.columns) || 80) - 2),
+            y: Math.max(1, rows.value - 2),
+            w: Math.max(1, cols.value - 2),
             value: status.value,
             style: { fg: "cyan" },
           })
@@ -343,8 +348,8 @@ const App = defineComponent({
             h(TView, {
               x: 0,
               y: 0,
-              w: Math.max(1, Number(process.stdout.columns) || 80),
-              h: Math.max(1, Number(process.stdout.rows) || 24),
+              w: cols.value,
+              h: rows.value,
               zIndex: 20,
               focusable: true,
               selectable: false,
@@ -448,12 +453,22 @@ const stdout = createStdoutRenderer(app.terminal, {
   clear: true,
   hideCursor: true,
   altScreen: true,
-  trackResize: true,
+  trackResize: false,
 });
 
 let driver: ReturnType<typeof createStdinDriver> | null = null;
+let disposed = false;
+
+const onResize = () => {
+  const nextCols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : cols;
+  const nextRows = Number.isFinite(process.stdout.rows) ? process.stdout.rows : rows;
+  app.terminal.resize(nextCols, nextRows);
+};
 
 function cleanup(): void {
+  if (disposed) return;
+  disposed = true;
+  if (process.stdout.isTTY) process.stdout.off("resize", onResize);
   driver?.dispose();
   stdout.dispose();
   app.dispose();
@@ -463,6 +478,8 @@ function cleanup(): void {
 const cleanupHandle = installTerminalCleanup(cleanup, { signalPolicy: "exit" });
 
 app.scheduler.flushNow();
+
+if (process.stdout.isTTY) process.stdout.on("resize", onResize);
 
 driver = createStdinDriver({
   dispatch: (event) => {

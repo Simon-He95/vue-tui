@@ -51,6 +51,7 @@ import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { firstNonEmptyEnv } from "../../utils/env.js";
 import { STDOUT_RENDERER_CAPABILITIES } from "../capabilities.js";
 import {
+  canDrawTerminalGraphicRect,
   detectTerminalGraphicsCapabilities,
   hashTerminalGraphicsString,
   isSafeTerminalGraphicsSequence,
@@ -501,6 +502,7 @@ export function createStdoutRenderer(
   let accumulatedScrollOperations: TerminalScrollOperation[] | null = null;
   let allowNextGraphicsOnlyRenderWithoutBaseline = false;
   let preserveNextRowsOnlyResizeBaseline = false;
+  let deferGraphicsFlushUntilResizeCommit = false;
   type QueuedTerminalGraphicsPayload = TerminalGraphicsPayload &
     Readonly<{
       op: TerminalGraphicsOperation;
@@ -517,6 +519,10 @@ export function createStdoutRenderer(
     resizeSequence?: string;
     clearSequence?: string;
   }>;
+  type RetainedTerminalGraphic = Readonly<{
+    active: ActiveTerminalGraphic;
+    signature: string;
+  }>;
 
   const graphicsCapabilities = resolveTerminalGraphicsCapabilities(options, env, outputIsTTY);
   const pendingGraphics = new Map<string, QueuedTerminalGraphicsPayload>();
@@ -524,6 +530,7 @@ export function createStdoutRenderer(
   const activeGraphics = new Map<string, ActiveTerminalGraphic>();
   const pendingGraphicSignatures = new Map<string, string>();
   const activeGraphicSignatures = new Map<string, string>();
+  const retainedGraphics = new Map<string, RetainedTerminalGraphic>();
   let nextGraphicsOrder = 0;
   const hasPendingTerminalGraphics = (): boolean =>
     pendingGraphics.size > 0 || pendingGraphicClears.size > 0;
@@ -539,6 +546,12 @@ export function createStdoutRenderer(
   }
   function requestTerminalGraphicsFlush(): void {
     if (disposed) return;
+    if (deferGraphicsFlushUntilResizeCommit) {
+      if (isDebugEnabled()) {
+        getDebugLog().render("terminal graphics flush deferred until resize commit");
+      }
+      return;
+    }
     render([], false);
   }
   function terminalGraphicsPayloadSignature(
@@ -566,6 +579,73 @@ export function createStdoutRenderer(
       hashTerminalGraphicsString(payload.clearSequence ?? ""),
     ].join(":");
   }
+  function kittyClearSequenceKeepsImageData(sequence: string): boolean {
+    let index = 0;
+    while (index < sequence.length) {
+      const start = sequence.indexOf("\u001B_G", index);
+      if (start < 0) return false;
+      const end = sequence.indexOf("\u001B\\", start + 3);
+      if (end < 0) return false;
+      const body = sequence.slice(start + 3, end);
+      const controls = body.slice(0, body.indexOf(";") < 0 ? body.length : body.indexOf(";"));
+      const parts = controls.split(",");
+      if (parts.includes("a=d") && parts.includes("d=i")) return true;
+      index = end + 2;
+    }
+    return false;
+  }
+  function retainTerminalGraphic(
+    id: string,
+    active: ActiveTerminalGraphic,
+    signature: string | undefined,
+  ): void {
+    if (
+      !signature ||
+      active.protocol !== "kitty" ||
+      !active.resizeSequence ||
+      !active.clearSequence ||
+      !kittyClearSequenceKeepsImageData(active.clearSequence)
+    ) {
+      retainedGraphics.delete(id);
+      return;
+    }
+    retainedGraphics.set(id, { active, signature });
+  }
+  function kittyPlacementKey(sequence: string | undefined): string | null {
+    if (!sequence) return null;
+
+    const start = sequence.indexOf("\u001B_G");
+    if (start < 0) return null;
+    const end = sequence.indexOf("\u001B\\", start + 3);
+    if (end < 0) return null;
+
+    const body = sequence.slice(start + 3, end);
+    const controlsRaw = body.slice(0, body.indexOf(";") < 0 ? body.length : body.indexOf(";"));
+    const controls = new Map<string, string>();
+    for (const part of controlsRaw.split(",")) {
+      const eq = part.indexOf("=");
+      if (eq <= 0) continue;
+      controls.set(part.slice(0, eq), part.slice(eq + 1));
+    }
+
+    const imageId = controls.get("i");
+    const placementId = controls.get("p");
+    if (controls.get("a") !== "p" || !imageId || !placementId) return null;
+    if (imageId === "0" || placementId === "0") return null;
+    return `${imageId}:${placementId}`;
+  }
+  function canReplaceKittyPlacementWithoutClear(
+    previous: ActiveTerminalGraphic,
+    payload: QueuedTerminalGraphicsPayload,
+  ): boolean {
+    if (!payload.resizeRedraw || previous.protocol !== "kitty" || payload.protocol !== "kitty") {
+      return false;
+    }
+
+    const nextKey = kittyPlacementKey(payload.sequence);
+    if (!nextKey) return false;
+    return kittyPlacementKey(previous.resizeSequence ?? previous.sequence) === nextKey;
+  }
   function queueTerminalGraphicClear(id: string): boolean {
     if (disposed) return false;
 
@@ -573,7 +653,10 @@ export function createStdoutRenderer(
     pendingGraphicSignatures.delete(id);
 
     const active = activeGraphics.get(id);
-    if (!active) return removedPendingDraw;
+    if (!active) {
+      retainedGraphics.delete(id);
+      return removedPendingDraw;
+    }
 
     if (active.clearSequence) {
       const payload: QueuedTerminalGraphicsPayload = {
@@ -605,10 +688,15 @@ export function createStdoutRenderer(
   function queueTerminalGraphicsForResizeRedraw(
     size: Readonly<{ cols: number; rows: number }>,
   ): void {
+    if (isDebugEnabled()) {
+      getDebugLog().render(
+        `graphics resize redraw queue: size=${size.cols}x${size.rows}, activeGraphics=${activeGraphics.size}, pendingGraphics=${pendingGraphics.size}, pendingClears=${pendingGraphicClears.size}`,
+      );
+    }
     for (const [id, active] of activeGraphics) {
       pendingGraphics.delete(`${id}:draw`);
 
-      if (!anchoredGraphicRectInViewport(active, size)) {
+      if (!canDrawTerminalGraphicRect(active, size)) {
         if (active.clearSequence) {
           pendingGraphics.set(`${id}:clear`, {
             id,
@@ -657,8 +745,40 @@ export function createStdoutRenderer(
             sequence: active.sequence,
             resizeSequence: active.resizeSequence,
             clearSequence: active.clearSequence,
-          }),
+        }),
       );
+    }
+    for (const [id, retained] of retainedGraphics) {
+      if (activeGraphics.has(id)) continue;
+
+      const { active, signature } = retained;
+      if (!canDrawTerminalGraphicRect(active, size)) continue;
+
+      retainedGraphics.delete(id);
+      activeGraphics.set(id, active);
+      activeGraphicSignatures.set(id, signature);
+      pendingGraphicClears.delete(id);
+      pendingGraphics.delete(`${id}:clear`);
+      pendingGraphics.set(`${id}:draw`, {
+        id,
+        x: active.x,
+        y: active.y,
+        w: active.w,
+        h: active.h,
+        protocol: active.protocol,
+        sequence: active.resizeSequence ?? active.sequence,
+        resizeSequence: active.resizeSequence,
+        clearSequence: active.clearSequence,
+        op: "draw",
+        order: nextGraphicsOrder++,
+        resizeRedraw: true,
+      });
+      pendingGraphicSignatures.set(id, signature);
+      if (isDebugEnabled()) {
+        getDebugLog().render(
+          `terminal graphic retained resize redraw: id=${id}, bytes=${(active.resizeSequence ?? active.sequence).length}`,
+        );
+      }
     }
   }
 
@@ -754,6 +874,44 @@ export function createStdoutRenderer(
           return true;
         }
 
+        const retained = retainedGraphics.get(frame.id);
+        if (
+          !canceledPendingClear &&
+          retained &&
+          retained.signature === signature &&
+          resizeSequence
+        ) {
+          activeGraphics.set(frame.id, retained.active);
+          activeGraphicSignatures.set(frame.id, retained.signature);
+          retainedGraphics.delete(frame.id);
+          pendingGraphics.set(`${frame.id}:draw`, {
+            ...normalized,
+            id: frame.id,
+            w: frame.width,
+            h: frame.height,
+            sequence: resizeSequence,
+            resizeSequence,
+            clearSequence,
+            fallbackText: frame.fallbackText,
+            resizeRedraw: true,
+          });
+          pendingGraphicSignatures.set(frame.id, signature);
+          if (isDebugEnabled()) {
+            getDebugLog().render(
+              `terminal graphic retained resize redraw: id=${frame.id}, bytes=${resizeSequence.length}`,
+            );
+          }
+          recordTerminalGraphicTrace({
+            type: "queue",
+            id: frame.id,
+            protocol: normalized.protocol,
+            bytes: resizeSequence.length,
+          });
+          requestTerminalGraphicsFlush();
+          return true;
+        }
+
+        retainedGraphics.delete(frame.id);
         pendingGraphics.set(`${frame.id}:draw`, {
           ...normalized,
           id: frame.id,
@@ -779,6 +937,7 @@ export function createStdoutRenderer(
 
       pendingGraphics.delete(`${normalized.id}:draw`);
       pendingGraphicSignatures.delete(normalized.id);
+      retainedGraphics.delete(normalized.id);
       pendingGraphics.set(`${normalized.id}:clear`, {
         ...normalized,
         w: normalized.w,
@@ -2421,6 +2580,11 @@ export function createStdoutRenderer(
       !scrollOperations?.length &&
       (graphicsClearsToRender.length > 0 || graphicsToRender.length > 0);
     allowNextGraphicsOnlyRenderWithoutBaseline = false;
+    if (isDebugEnabled()) {
+      getDebugLog().render(
+        `doRender state: size=${size.cols}x${size.rows}, dirtyRows=${dirtyRows?.length ?? "null"}, scrollOps=${scrollOperations?.length ?? 0}, rowsOnlyBaseline=${rowsOnlyResizeBaseline ? "true" : "false"}, allowGraphicsOnlyWithoutBaseline=${allowGraphicsOnlyWithoutBaseline ? "true" : "false"}, activeGraphics=${activeGraphics.size}, pendingGraphics=${graphicsToRender.length}, pendingGraphicClears=${graphicsClearsToRender.length}`,
+      );
+    }
     let terminalGraphicsBlockScrollRegions = false;
     ensureRowEscapes(Math.max(size.rows, lastRenderedRows));
     ensureFingerprints(size.cols, size.rows);
@@ -3358,10 +3522,10 @@ export function createStdoutRenderer(
       }
     }
 
-    // If terminal shrank, we need to clear the old extra rows.
+    // If rendered content shrank, clear the old extra rows.
     // But instead of using \u001B[J which causes flash, we fill with empty lines.
-    // Only do this when the terminal actually shrank.
-    if (!rowsToRender && lastRenderedRows > size.rows) {
+    // Do not write below the viewport during a rows-only terminal resize.
+    if (!rowsToRender && lastRenderedRows > size.rows && !rowsOnlyResizeBaseline) {
       const extraRows = lastRenderedRows - size.rows;
       if (activeStyleKey !== bgKey) {
         frameParts.push(SGR_RESET, bgSeq);
@@ -3511,6 +3675,7 @@ export function createStdoutRenderer(
         }
         wroteClear = appendActiveGraphicProtocolClear(active, visibleRect) || wroteClear;
         if (wroteClear) terminalGraphicsClears++;
+        retainTerminalGraphic(id, active, nextActiveGraphicSignatures.get(id));
         nextActiveGraphics.delete(id);
         nextActiveGraphicSignatures.delete(id);
         nextPendingGraphicSignatures.delete(id);
@@ -3545,6 +3710,11 @@ export function createStdoutRenderer(
               clearSequenceNeedsVisibleCell(payload.sequence, payload.protocol),
             ) || wroteClear;
           if (wroteClear) terminalGraphicsClears++;
+          if (active) {
+            retainTerminalGraphic(payload.id, active, nextActiveGraphicSignatures.get(payload.id));
+          } else {
+            retainedGraphics.delete(payload.id);
+          }
           nextActiveGraphics.delete(payload.id);
           nextActiveGraphicSignatures.delete(payload.id);
           nextPendingGraphicSignatures.delete(payload.id);
@@ -3569,6 +3739,11 @@ export function createStdoutRenderer(
             }
             wroteClear = appendActiveGraphicProtocolClear(previous, visiblePrevious) || wroteClear;
             if (wroteClear) terminalGraphicsClears++;
+            retainTerminalGraphic(
+              payload.id,
+              previous,
+              nextActiveGraphicSignatures.get(payload.id),
+            );
             nextActiveGraphics.delete(payload.id);
             nextActiveGraphicSignatures.delete(payload.id);
           }
@@ -3582,7 +3757,16 @@ export function createStdoutRenderer(
         const nextSignature =
           nextPendingGraphicSignatures.get(payload.id) ?? terminalGraphicsPayloadSignature(payload);
 
-        if (previous && (previousSignature !== nextSignature || !sameGraphicRect(previous, rect))) {
+        const replaceKittyPlacementWithoutClear =
+          previous && canReplaceKittyPlacementWithoutClear(previous, payload);
+        if (
+          previous &&
+          (previousSignature !== nextSignature ||
+            !sameGraphicRect(previous, rect) ||
+            (payload.resizeRedraw &&
+              Boolean(previous.clearSequence) &&
+              !replaceKittyPlacementWithoutClear))
+        ) {
           const visiblePrevious = clipGraphicRectToViewport(previous, size);
           let wroteClear = false;
           if (visiblePrevious) {
@@ -3649,6 +3833,11 @@ export function createStdoutRenderer(
         bytes: terminalGraphicsBytes,
         active: nextActiveGraphics.size,
       };
+      if (isDebugEnabled()) {
+        getDebugLog().render(
+          `terminal graphics frame: draws=${terminalGraphicsDraws}, clears=${terminalGraphicsClears}, bytes=${terminalGraphicsBytes}, activeNext=${nextActiveGraphics.size}`,
+        );
+      }
     }
 
     // Include cursor position in the same frame if getImeAnchor is provided
@@ -4064,6 +4253,9 @@ export function createStdoutRenderer(
     scrollOperations?: readonly TerminalScrollOperation[] | null,
   ): void {
     if (disposed) return;
+    if (dirtyRows == null || sync) {
+      deferGraphicsFlushUntilResizeCommit = false;
+    }
 
     if (isDebugEnabled()) {
       getDebugLog().render(
@@ -4255,6 +4447,31 @@ export function createStdoutRenderer(
     }
     render(dirtyRows, sync, scrollOperations);
   });
+  let terminalResizeCols = terminal.size().cols;
+  let terminalResizeRows = terminal.size().rows;
+  const offTerminalResize = terminal.on("resize", ({ cols, rows }) => {
+    const colsChanged = cols !== terminalResizeCols;
+    const rowsChanged = rows !== terminalResizeRows;
+    terminalResizeCols = cols;
+    terminalResizeRows = rows;
+    if (!rowsChanged) return;
+    if (pendingRender) {
+      pendingRender = false;
+      if (renderTimer) {
+        clearTimeout(renderTimer);
+        renderTimer = null;
+      }
+      if (isDebugEnabled()) {
+        getDebugLog().render("pending stdout render canceled until resize commit");
+      }
+    }
+    deferGraphicsFlushUntilResizeCommit = true;
+    queueTerminalGraphicsForResizeRedraw({ cols, rows });
+    if (!colsChanged) {
+      allowNextGraphicsOnlyRenderWithoutBaseline = true;
+      preserveNextRowsOnlyResizeBaseline = true;
+    }
+  });
 
   const resizeSource: any = (options?.output as any) ?? process.stdout;
   const canTrackResize = Boolean(
@@ -4265,6 +4482,11 @@ export function createStdoutRenderer(
     const rows = Number(resizeSource?.rows);
     if (!Number.isFinite(cols) || !Number.isFinite(rows)) return;
     const size = terminal.size();
+    if (isDebugEnabled()) {
+      getDebugLog().render(
+        `stdout resize event: output=${cols}x${rows}, terminal=${size.cols}x${size.rows}, trackResize=${trackResize ? "true" : "false"}`,
+      );
+    }
     if (cols === size.cols && rows === size.rows) return;
     const colsChanged = cols !== size.cols;
     const rowsChanged = rows !== size.rows;
@@ -4275,10 +4497,15 @@ export function createStdoutRenderer(
     }
     terminal.resize(cols, rows);
     consumeResizeDirtyState();
-    if (rowsChanged) queueTerminalGraphicsForResizeRedraw({ cols, rows });
-    if (!colsChanged && rowsChanged) {
-      allowNextGraphicsOnlyRenderWithoutBaseline = true;
-      preserveNextRowsOnlyResizeBaseline = true;
+    if (isDebugEnabled()) {
+      getDebugLog().render(
+        `stdout resize consumed: target=${cols}x${rows}, colsChanged=${colsChanged ? "true" : "false"}, rowsChanged=${rowsChanged ? "true" : "false"}`,
+      );
+    }
+    if (isDebugEnabled()) {
+      getDebugLog().render(
+        `stdout resize render request: dirtyRows=${colsChanged ? "all" : "0"}, sync=true`,
+      );
     }
     render(colsChanged ? undefined : [], true);
   };
@@ -4331,6 +4558,7 @@ export function createStdoutRenderer(
     pendingGraphics.clear();
     pendingGraphicClears.clear();
     pendingGraphicSignatures.clear();
+    retainedGraphics.clear();
     try {
       if (activeGraphics.size > 0) {
         const size = terminal.size();
@@ -4379,6 +4607,7 @@ export function createStdoutRenderer(
     }
     unregisterGraphicsOutput();
     off();
+    offTerminalResize();
     releaseFingerprintFn();
     if (canTrackResize && typeof resizeSource?.off === "function") {
       try {

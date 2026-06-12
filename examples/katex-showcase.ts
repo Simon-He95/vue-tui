@@ -3,7 +3,7 @@
  *
  * Run: pnpm run run:katex-showcase:terminal
  */
-import { defineComponent, h, ref } from "vue";
+import { computed, defineComponent, h, ref } from "vue";
 import {
   createOsc52ClipboardProvider,
   createStdinDriver,
@@ -12,7 +12,7 @@ import {
   installTerminalCleanup,
 } from "../src/cli.js";
 import { TMarkdownText, type TuiMarkdownMathActionPayload } from "../src/markdown.js";
-import { TText, useTerminal } from "../src/vue.js";
+import { TText, useLayout, useTerminal } from "../src/vue.js";
 
 const CONTENT = [
   "KaTeX terminal text rendering",
@@ -37,6 +37,9 @@ const clipboard = createOsc52ClipboardProvider();
 const App = defineComponent({
   setup() {
     const { scheduler } = useTerminal();
+    const layout = useLayout();
+    const cols = computed(() => Math.max(1, layout.clipRect?.w ?? 80));
+    const rows = computed(() => Math.max(1, layout.clipRect?.h ?? 24));
     const status = ref("");
 
     async function copyMath(payload: TuiMarkdownMathActionPayload): Promise<void> {
@@ -53,7 +56,7 @@ const App = defineComponent({
       h(TMarkdownText, {
         x: 1,
         y: 1,
-        w: Math.max(40, (Number(process.stdout.columns) || 80) - 2),
+        w: Math.max(40, cols.value - 2),
         content: CONTENT,
         final: true,
         mathActions: true,
@@ -64,8 +67,8 @@ const App = defineComponent({
       status.value
         ? h(TText, {
             x: 1,
-            y: Math.max(1, (Number(process.stdout.rows) || 24) - 2),
-            w: Math.max(1, (Number(process.stdout.columns) || 80) - 2),
+            y: Math.max(1, rows.value - 2),
+            w: Math.max(1, cols.value - 2),
             value: status.value,
             style: { fg: "cyan" },
           })
@@ -74,9 +77,12 @@ const App = defineComponent({
   },
 });
 
+const initialCols = Math.max(64, Number(process.stdout.columns) || 64);
+const initialRows = Math.max(24, Number(process.stdout.rows) || 24);
+
 const app = createTerminalApp({
-  cols: Math.max(64, Number(process.stdout.columns) || 64),
-  rows: Math.max(24, Number(process.stdout.rows) || 24),
+  cols: initialCols,
+  rows: initialRows,
   component: App,
   defaultStyle: { fg: "white" },
   clipboard,
@@ -88,12 +94,22 @@ const stdout = createStdoutRenderer(app.terminal, {
   clear: true,
   hideCursor: true,
   altScreen: true,
-  trackResize: true,
+  trackResize: false,
 });
 
 let driver: ReturnType<typeof createStdinDriver> | null = null;
+let disposed = false;
+
+const onResize = () => {
+  const nextCols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : initialCols;
+  const nextRows = Number.isFinite(process.stdout.rows) ? process.stdout.rows : initialRows;
+  app.terminal.resize(nextCols, nextRows);
+};
 
 function cleanup(): void {
+  if (disposed) return;
+  disposed = true;
+  if (process.stdout.isTTY) process.stdout.off("resize", onResize);
   driver?.dispose();
   stdout.dispose();
   app.dispose();
@@ -102,6 +118,8 @@ function cleanup(): void {
 const cleanupHandle = installTerminalCleanup(cleanup, { signalPolicy: "exit" });
 
 app.scheduler.flushNow();
+
+if (process.stdout.isTTY) process.stdout.on("resize", onResize);
 
 driver = createStdinDriver({
   dispatch: (event) => {

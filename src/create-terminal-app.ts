@@ -35,6 +35,7 @@ import {
   shouldInstallFileWriters,
 } from "./cli/node-file-writers.js";
 import { createNodePathPickerProvider } from "./cli/path-provider.js";
+import { createDebugLogger, isDebugEnabled } from "./core/debug-logger.js";
 import { createTerminal } from "./core/index.js";
 import { getPlaneTerminal, readTerminalRowForPlanes } from "./core/terminal/create-terminal.js";
 import { createCliEventManager } from "./events/index.js";
@@ -196,6 +197,8 @@ export type CreateTerminalAppOptions = Readonly<{
 export function createTerminalApp(options: CreateTerminalAppOptions): TerminalApp {
   const env = (process?.env ?? {}) as Record<string, unknown>;
   if (shouldInstallFileWriters(env)) installNodeFileWriters();
+  const debugEnabled = isDebugEnabled();
+  const debugLog = createDebugLogger(debugEnabled);
   const widthProvider = options.widthProvider ?? "default";
   const profileEnabled = envFlag(env, "VUE_TUI_PROFILE", "DIMCODE_PROFILE_TUI");
   const profileLogPath = envString(env, "VUE_TUI_PROFILE_LOG_PATH", "DIMCODE_PROFILE_TUI_LOG_PATH");
@@ -252,6 +255,12 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     },
   });
   const offCommit = terminal.on("commit", ({ dirtyRows, planes, sync }) => {
+    if (debugEnabled) {
+      const size = terminal.size();
+      debugLog.render(
+        `app commit: size=${size.cols}x${size.rows}, dirtyRows=${dirtyRows?.length ?? "null"}, planes=${planes?.join(",") ?? "all"}${sync ? ", sync" : ""}`,
+      );
+    }
     latency?.recordCommit({ dirtyRows, planes, sync });
     if (!trace.enabled.value) return;
     trace.push({
@@ -362,6 +371,12 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     flushing = true;
 
     const activePlanes = takeActivePlanes();
+    if (debugEnabled) {
+      const size = terminal.size();
+      debugLog.render(
+        `app flush start: size=${size.cols}x${size.rows}, activePlanes=${activePlanes?.join(",") ?? "all"}, sync=${sync ? "true" : "false"}, frameTasks=${frameTasks.frameTaskCount}`,
+      );
+    }
     latency?.recordFlushStart({ sync, activePlanes });
     if (!framePerf.enabled.value) {
       try {
@@ -494,6 +509,12 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   function invalidate(options?: TerminalSchedulerInvalidateOptions): void {
     if (disposed) return;
     const priority = options?.priority ?? "normal";
+    if (debugEnabled) {
+      const size = terminal.size();
+      debugLog.render(
+        `app invalidate: size=${size.cols}x${size.rows}, reason=${options?.reason ?? "unknown"}, priority=${priority}, plane=${options?.plane ?? "all"}, scheduled=${scheduled}, flushing=${flushing}, queueDepth=${queueDepth()}`,
+      );
+    }
     noteFrameReason(options?.reason);
     latency?.recordSchedulerInvalidate({
       priority,
@@ -851,6 +872,11 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       : [defaultTInputHostPlugin]);
   const linkOpener = ref(normalizeTerminalLinkOpener(options.linkOpener));
   const offResize = terminal.on("resize", ({ cols, rows }) => {
+    if (debugEnabled) {
+      debugLog.render(
+        `app resize event: size=${cols}x${rows}, scheduled=${scheduled}, flushing=${flushing}, queueDepth=${queueDepth()}`,
+      );
+    }
     rootLayout.clipRect = { x: 0, y: 0, w: cols, h: rows };
     selection.clear();
     if (selectionRenderNodeId) {

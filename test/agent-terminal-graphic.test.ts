@@ -173,7 +173,7 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
-  it("redraws active terminal graphics on tracked height resize without clearing", () => {
+  it("redraws active Kitty placements on tracked height resize without clearing stable placement", () => {
     const writes: string[] = [];
     const resize = { listener: null as (() => void) | null };
     let outputColumns = 20;
@@ -222,6 +222,10 @@ describe("TAgentTerminalGraphic", () => {
       columns: 4,
       rows: 1,
     });
+    const clearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
 
     writes.length = 0;
     expect(
@@ -234,6 +238,7 @@ describe("TAgentTerminalGraphic", () => {
         protocol: "kitty",
         sequence,
         resizeSequence,
+        clearSequence,
       }),
     ).toBe(true);
     flushStdout(stdout);
@@ -257,6 +262,7 @@ describe("TAgentTerminalGraphic", () => {
         protocol: "kitty",
         sequence,
         resizeSequence,
+        clearSequence,
       }),
     ).toBe(true);
     flushStdout(stdout);
@@ -266,22 +272,538 @@ describe("TAgentTerminalGraphic", () => {
     writes.length = 0;
     outputRows = 8;
     resize.listener?.();
-    expect(writes.join("")).toMatch(/^\x1B\[H/);
-    expect(writes.join("")).toContain(`\x1B[2;3H${resizeSequence}`);
-    expect(writes.join("")).toContain("\x1B7");
-    expect(writes.join("")).toContain("\x1B8");
-    expect(writes.join("")).toContain("\x1B[H");
-    expect(writes.join("")).not.toContain(sequence);
-    expect(writes.join("")).not.toContain("\x1B[1;1H");
-    expect(writes.join("")).not.toContain("\x1B[?7l");
-    expect(writes.join("")).not.toContain("\x1B[?7h");
+    expect(writes.join("")).not.toContain(clearSequence);
     expect(writes.join("")).not.toContain("a=d");
+    expect(writes.join("")).toContain(`\x1B[2;3H${resizeSequence}`);
+    expect(writes.join("")).not.toContain(sequence);
 
     writes.length = 0;
     app.terminal.write("x", { x: 0, y: 0 });
     app.terminal.commit({ sync: true });
     expect(writes.join("")).toContain("x");
     expect(writes.join("")).not.toContain("\r\n");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("redraws active terminal graphics on external terminal height resize", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const resizeSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 4,
+      rows: 1,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "external-resize-image",
+        x: 2,
+        y: 1,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+        resizeSequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    app.terminal.resize(20, 8);
+    app.terminal.commit({ sync: true });
+
+    expect(writes.join("")).not.toContain(clearSequence);
+    expect(writes.join("")).not.toContain("a=d");
+    expect(writes.join("")).toContain(`\x1B[2;3H${resizeSequence}`);
+    expect(writes.join("")).not.toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("redraws active terminal graphics at the same anchor on rows-only shrink while still visible", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 8,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const resizeSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 4,
+      rows: 1,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "shrink-stable-image",
+        x: 2,
+        y: 1,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+        resizeSequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    app.terminal.resize(20, 6);
+    app.terminal.commit({ sync: true });
+
+    expect(writes.join("")).not.toContain(clearSequence);
+    expect(writes.join("")).toContain(`\x1B[2;3H${resizeSequence}`);
+    expect(writes.join("")).not.toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("clears and redraws active Kitty graphics without placement id when the anchor re-enters", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const resizeSequence = createKittyPlacementSequence({
+      imageId: 123,
+      columns: 4,
+      rows: 1,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({ imageId: 123 });
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "external-resize-image-without-placement-id",
+        x: 2,
+        y: 4,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+        resizeSequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    app.terminal.resize(20, 4);
+    app.terminal.commit({ sync: true });
+
+    expect(writes.join("")).toContain(clearSequence);
+    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).not.toContain(sequence);
+
+    writes.length = 0;
+    app.terminal.resize(20, 6);
+    expect(
+      graphics?.queue({
+        id: "external-resize-image-without-placement-id",
+        x: 2,
+        y: 4,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+        resizeSequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    app.terminal.commit({ sync: true });
+
+    expect(writes.join("")).toContain(clearSequence);
+    expect(writes.join("")).toContain(`\x1B[5;3H${resizeSequence}`);
+    expect(writes.join("")).not.toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("defers graphics-only flushes queued during external height resize until commit", () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const nextSequence = createKittyGraphicsSequence("REVG");
+
+    try {
+      writes.length = 0;
+      expect(
+        graphics?.queue({
+          id: "external-resize-defer-image",
+          x: 2,
+          y: 1,
+          w: 4,
+          h: 1,
+          protocol: "kitty",
+          sequence,
+        }),
+      ).toBe(true);
+      flushStdout(stdout);
+      expect(writes.join("")).toContain(sequence);
+
+      writes.length = 0;
+      vi.advanceTimersByTime(20);
+      app.terminal.resize(20, 8);
+      expect(
+        graphics?.queue({
+          id: "external-resize-defer-image",
+          x: 2,
+          y: 1,
+          w: 4,
+          h: 1,
+          protocol: "kitty",
+          sequence: nextSequence,
+        }),
+      ).toBe(true);
+      expect(writes.join("")).toBe("");
+
+      app.terminal.commit({ sync: true });
+      expect(writes.join("")).toContain(nextSequence);
+    } finally {
+      stdout.dispose();
+      app.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels pending stdout renders during external height resize until commit", () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    try {
+      flushStdout(stdout);
+      writes.length = 0;
+
+      (stdout.render as (dirtyRows?: readonly number[] | null, sync?: boolean) => void)(
+        null,
+        false,
+      );
+      expect(writes.join("")).toBe("");
+
+      vi.advanceTimersByTime(8);
+      app.terminal.resize(20, 8);
+      app.terminal.write("after-resize", { x: 0, y: 7 });
+      vi.advanceTimersByTime(20);
+      expect(writes.join("")).toBe("");
+
+      app.terminal.commit({ sync: true });
+      expect(writes.join("")).toContain("after-resize");
+    } finally {
+      stdout.dispose();
+      app.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears active terminal graphics when external height resize clips the rect", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const resizeSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 4,
+      rows: 3,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "external-resize-clipped-image",
+        x: 2,
+        y: 1,
+        w: 4,
+        h: 3,
+        protocol: "kitty",
+        sequence,
+        resizeSequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    app.terminal.resize(20, 3);
+    app.terminal.commit({ sync: true });
+
+    expect(writes.join("")).toContain(clearSequence);
+    expect(writes.join("")).not.toContain(resizeSequence);
+    expect(writes.join("")).not.toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("reuses retained Kitty image data when a clipped graphic re-enters the viewport", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const resizeSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 4,
+      rows: 1,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "retained-resize-image",
+        x: 2,
+        y: 4,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+        resizeSequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    app.terminal.resize(20, 3);
+    app.terminal.commit({ sync: true });
+    expect(writes.join("")).toContain(clearSequence);
+
+    writes.length = 0;
+    app.terminal.resize(20, 6);
+    app.terminal.commit({ sync: true });
+
+    expect(writes.join("")).toContain(`\x1B[5;3H${resizeSequence}`);
+    expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
     app.dispose();

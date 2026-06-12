@@ -1909,6 +1909,37 @@ describe("stdout renderer column diff", () => {
     });
   });
 
+  it("does not clear rows below the viewport after rows-only terminal shrink", () => {
+    withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
+      const terminal = createTerminal({ cols: 8, rows: 6 });
+      const output = createBufferedOutput(false);
+      const renderer = createStdoutRenderer(terminal, {
+        output,
+        clear: false,
+        hideCursor: false,
+        altScreen: false,
+        useSyncOutput: false,
+      });
+
+      for (let y = 0; y < 6; y++) {
+        terminal.write(`row${y}`, { x: 0, y });
+      }
+      terminal.commit({ sync: true });
+      output.take();
+
+      terminal.resize(8, 3);
+      terminal.commit({ sync: true });
+
+      const frame = output.take();
+      expect(frame).not.toContain("\x1B[4;1H\x1B[K");
+      expect(frame).not.toContain("\x1B[5;1H\x1B[K");
+      expect(frame).not.toContain("\x1B[6;1H\x1B[K");
+
+      renderer.dispose();
+      terminal.dispose();
+    });
+  });
+
   it("honors dirtyRowPatchMode=row by repainting the dirty row", () => {
     withTerminalEnv({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" }, () => {
       const middle = " unchanged middle should be repainted ";

@@ -240,6 +240,7 @@
     "run:component:terminal:list": "tsx scripts/run-component-terminal.ts --list",
     "run:image-showcase:terminal": "tsx examples/image-showcase.ts",
     "run:katex-showcase:terminal": "tsx examples/katex-showcase.ts",
+    "trace:terminal-resize": "node scripts/trace-terminal-resize.mjs",
     "test:component-terminal:smoke": "VT_SMOKE=1 tsx scripts/run-component-terminal.ts --all",
     "docs:gen": "tsx scripts/generate-component-api-docs.ts",
     "docs:check-public-descriptions": "tsx scripts/check-public-api-docs.ts",

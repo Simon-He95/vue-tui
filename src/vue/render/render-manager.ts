@@ -177,6 +177,7 @@ export function createRenderManager(
   const nodes = new Map<string, RenderNode>();
   const planeDirtyStates = new Map<TerminalRenderPlane, DirtyPlaneState>();
   const initialSize = terminal.size();
+  let terminalCols = initialSize.cols;
   let terminalRows = initialSize.rows;
   let allRows = Array.from({ length: terminalRows }, (_, index) => index);
   let sortedNodes: RenderNode[] = [];
@@ -199,19 +200,38 @@ export function createRenderManager(
   const stackPathCache = new WeakMap<RenderStack, readonly PathSegment[]>();
   const profiler = createTuiProfiler("render-manager", options.profiler);
 
-  const offResize = terminal.on("resize", ({ rows }) => {
+  const offResize = terminal.on("resize", ({ cols, rows }) => {
     if (disposed) return;
+    const colsChanged = cols !== terminalCols;
+    terminalCols = cols;
     terminalRows = rows;
     allRows = Array.from({ length: terminalRows }, (_, index) => index);
     for (const state of planeDirtyStates.values()) {
-      state.allRowsDirty = true;
+      if (colsChanged) {
+        state.allRowsDirty = true;
+        state.dirtyRowBits = new Uint8Array(terminalRows);
+        state.dirtyRowCount = 0;
+        state.dirtyMinY = Number.POSITIVE_INFINITY;
+        state.dirtyMaxY = -1;
+        continue;
+      }
+
+      const prevBits = state.dirtyRowBits;
       state.dirtyRowBits = new Uint8Array(terminalRows);
       state.dirtyRowCount = 0;
       state.dirtyMinY = Number.POSITIVE_INFINITY;
       state.dirtyMaxY = -1;
+      const limit = Math.min(terminalRows, prevBits.length);
+      for (let y = 0; y < limit; y++) {
+        if (prevBits[y] !== 1) continue;
+        state.dirtyRowBits[y] = 1;
+        state.dirtyRowCount++;
+        if (y < state.dirtyMinY) state.dirtyMinY = y;
+        if (y > state.dirtyMaxY) state.dirtyMaxY = y;
+      }
     }
     rebuildRowBuckets();
-    clearTextCaches();
+    if (colsChanged) clearTextCaches();
   });
 
   const rootStack: RenderStack = Object.freeze({
@@ -450,6 +470,40 @@ export function createRenderManager(
     }
   }
 
+  function markRowRange(plane: TerminalRenderPlane, startY: number, endY: number): void {
+    const state = getDirtyState(plane);
+    const start = Math.max(0, Math.min(terminalRows, Math.floor(startY)));
+    const end = Math.max(start, Math.min(terminalRows, Math.floor(endY)));
+
+    for (let y = start; y < end; y++) {
+      if (state.dirtyRowBits[y] === 1) continue;
+      state.dirtyRowBits[y] = 1;
+      state.dirtyRowCount++;
+      if (y < state.dirtyMinY) state.dirtyMinY = y;
+      if (y > state.dirtyMaxY) state.dirtyMaxY = y;
+    }
+  }
+
+  function markRectHeightDelta(
+    plane: TerminalRenderPlane,
+    prev: RenderRect | null,
+    next: RenderRect | null,
+  ): boolean {
+    if (!prev || !next) return false;
+    if (prev.x !== next.x || prev.y !== next.y || prev.w !== next.w) return false;
+
+    const prevBounds = rectToYBounds(prev);
+    const nextBounds = rectToYBounds(next);
+    if (prevBounds.y0 !== nextBounds.y0) return false;
+
+    if (nextBounds.y1 > prevBounds.y1) {
+      markRowRange(plane, prevBounds.y1, nextBounds.y1);
+    } else if (prevBounds.y1 > nextBounds.y1) {
+      markRowRange(plane, nextBounds.y1, prevBounds.y1);
+    }
+    return true;
+  }
+
   function markRowsForNode(node: RenderNode, rows: readonly number[]): boolean {
     if (!rows.length) return false;
     warnIfRowsLookLocal(node, rows);
@@ -553,6 +607,13 @@ export function createRenderManager(
       dirtyRowsHint.length > 0;
     if (canUseDirtyRowsHint) {
       markRowsForNode(prev, dirtyRowsHint);
+    } else if (
+      rectChanged &&
+      !sortChanged &&
+      !planeChanged &&
+      markRectHeightDelta(prev.plane, prev.rect, nextRect)
+    ) {
+      // Only the clipped bottom changed; repaint/clear the tail rows, not the stable overlap.
     } else {
       markRect(prev.plane, prev.rect);
       markRect(nextPlane, nextRect);

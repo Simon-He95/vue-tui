@@ -46,7 +46,13 @@ out = createStdoutRenderer(
         altScreen: false,
         ...rendererTheme,
       }
-    : { output: process.stdout, hideCursor: true, allowFileUrls: true, ...rendererTheme },
+    : {
+        output: process.stdout,
+        hideCursor: true,
+        allowFileUrls: true,
+        trackResize: false,
+        ...rendererTheme,
+      },
 );
 
 // Keep cursor position updated (even while hidden) so terminals that need it for composition
@@ -70,7 +76,7 @@ const onResize = () => {
   const nextCols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : cols;
   const nextRows = Number.isFinite(process.stdout.rows) ? process.stdout.rows : rows;
   app.terminal.resize(nextCols, nextRows);
-  app.scheduler.flush();
+  // Resize invalidation flushes on the scheduler's next frame after Vue layout effects update.
 };
 
 const cleanup = () => {

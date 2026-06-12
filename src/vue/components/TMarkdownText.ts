@@ -285,67 +285,77 @@ export const TMarkdownText = defineComponent({
       },
     }));
 
-    useRenderNode(() => ({
-      zIndex: props.zIndex,
-      rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
-      deps: [
-        visible.value,
-        absRect.value,
-        fullRect.value,
-        props.style,
-        props.clear,
-        documentVersion.value,
-        graphicsOutputVersion.value,
-        defaultStyle.value,
-        props.imageOcclusionRects,
-      ],
-      paint: (dirtyRows) => {
-        withTextWidthProvider(widthProvider, () => {
-          if (!visible.value) return;
-          const r = absRect.value;
-          const full = fullRect.value;
-          if (r.w <= 0 || r.h <= 0) return;
-          const baseStyle = props.style ?? defaultStyle.value;
-          const clipStart = Math.max(0, Math.floor(r.x - full.x));
-          const rowOffset = Math.max(0, Math.floor(r.y - full.y));
-          const isGraphicCovered = (
-            rect: Readonly<{ x: number; y: number; w: number; h: number }>,
-          ) => {
-            return props.imageOcclusionRects?.some((item) => intersectRect(rect, item)) === true;
-          };
-          const keepGraphicIds = collectVisibleMarkdownImageGraphicIds(rows.value, {
-            x: r.x,
-            y: r.y,
-            w: r.w,
-            h: r.h,
-            rowOffset,
-            clipStart,
-            isGraphicCovered,
-          });
-          const paintRow = (y: number) => {
-            if (y < r.y || y >= r.y + r.h) return;
-            const rowIndex = Math.floor(y - full.y);
-            const row = rows.value[rowIndex];
-            if (!row && !props.clear) return;
-            paintMarkdownVisualRow(terminal, row, {
+    useRenderNode(() => {
+      const r = absRect.value;
+      const full = fullRect.value;
+      return {
+        zIndex: props.zIndex,
+        rect: visible.value ? r : { x: 0, y: 0, w: 0, h: 0 },
+        deps: [
+          visible.value,
+          r.x,
+          r.y,
+          r.w,
+          r.h,
+          full.x,
+          full.y,
+          full.w,
+          full.h,
+          props.style,
+          props.clear,
+          documentVersion.value,
+          graphicsOutputVersion.value,
+          defaultStyle.value,
+          props.imageOcclusionRects,
+        ],
+        paint: (dirtyRows) => {
+          withTextWidthProvider(widthProvider, () => {
+            if (!visible.value) return;
+            const r = absRect.value;
+            const full = fullRect.value;
+            if (r.w <= 0 || r.h <= 0) return;
+            const baseStyle = props.style ?? defaultStyle.value;
+            const clipStart = Math.max(0, Math.floor(r.x - full.x));
+            const rowOffset = Math.max(0, Math.floor(r.y - full.y));
+            const isGraphicCovered = (
+              rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+            ) => {
+              return props.imageOcclusionRects?.some((item) => intersectRect(rect, item)) === true;
+            };
+            const keepGraphicIds = collectVisibleMarkdownImageGraphicIds(rows.value, {
               x: r.x,
-              y,
+              y: r.y,
               w: r.w,
+              h: r.h,
+              rowOffset,
               clipStart,
-              baseStyle,
-              clear: props.clear,
-              keepGraphicIds,
               isGraphicCovered,
             });
-          };
-          if (dirtyRows?.length) {
-            for (const y of dirtyRows) paintRow(y);
-            return;
-          }
-          for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
-        });
-      },
-    }));
+            const paintRow = (y: number) => {
+              if (y < r.y || y >= r.y + r.h) return;
+              const rowIndex = Math.floor(y - full.y);
+              const row = rows.value[rowIndex];
+              if (!row && !props.clear) return;
+              paintMarkdownVisualRow(terminal, row, {
+                x: r.x,
+                y,
+                w: r.w,
+                clipStart,
+                baseStyle,
+                clear: props.clear,
+                keepGraphicIds,
+                isGraphicCovered,
+              });
+            };
+            if (dirtyRows?.length) {
+              for (const y of dirtyRows) paintRow(y);
+              return;
+            }
+            for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+          });
+        },
+      };
+    });
 
     return () => h("span", rootProps);
   },

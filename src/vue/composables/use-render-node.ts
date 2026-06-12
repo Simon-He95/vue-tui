@@ -76,6 +76,22 @@ function requestBatchedInvalidate(
   });
 }
 
+function sameRenderRect(a: RenderRect | null | undefined, b: RenderRect | null | undefined) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
+function sameDeps(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (!Object.is(a[i], b[i])) return false;
+  }
+  return true;
+}
+
 export function useRenderNode(getOptions: () => RenderNodeOptions): {
   id: Ref<string | null>;
 } {
@@ -84,6 +100,12 @@ export function useRenderNode(getOptions: () => RenderNodeOptions): {
   const plane = inject(RenderPlaneContextKey, ref("default")) as Ref<TerminalRenderPlane>;
   const id = ref<string | null>(null);
   const lastPlane = ref<TerminalRenderPlane>(plane.value);
+  let lastStack: RenderStack | null = null;
+  let lastZIndex = 0;
+  let lastHasRect = false;
+  let lastRect: RenderRect | null = null;
+  let lastDeps: unknown;
+  let lastHasDeps = false;
 
   const options = computed(() => withTextWidthProvider(widthProvider, getOptions));
 
@@ -92,31 +114,61 @@ export function useRenderNode(getOptions: () => RenderNodeOptions): {
     void opt.deps;
     const stack = opt.stack ?? parentStack.value;
     const nextPlane = plane.value;
+    const hasRect = Object.prototype.hasOwnProperty.call(opt, "rect");
+    const nextRect = hasRect ? (opt.rect ?? null) : null;
+    const nextZIndex = opt.zIndex ?? 0;
+    const hasDeps = Object.prototype.hasOwnProperty.call(opt, "deps");
     if (!stack) return;
     if (!id.value) {
       const node: RenderNode = render.register({
         stack,
-        zIndex: opt.zIndex,
-        rect: opt.rect,
+        zIndex: nextZIndex,
+        rect: hasRect ? nextRect : undefined,
         plane: nextPlane,
         paint: opt.paint,
       });
       id.value = node.id;
       lastPlane.value = nextPlane;
+      lastStack = stack;
+      lastZIndex = nextZIndex;
+      lastHasRect = hasRect;
+      lastRect = nextRect;
+      lastHasDeps = hasDeps;
+      lastDeps = opt.deps;
       requestBatchedInvalidate(scheduler, nextPlane, opt.priority ?? "normal");
       return;
     }
     const prevPlane = lastPlane.value;
+    if (
+      hasDeps &&
+      lastHasDeps &&
+      !opt.dirtyRowsHint?.length &&
+      lastStack === stack &&
+      lastZIndex === nextZIndex &&
+      prevPlane === nextPlane &&
+      lastHasRect === hasRect &&
+      (!hasRect || sameRenderRect(lastRect, nextRect)) &&
+      sameDeps(lastDeps, opt.deps)
+    ) {
+      return;
+    }
+
     const updatePayload: Parameters<typeof render.update>[1] = {
       stack,
-      zIndex: opt.zIndex ?? 0,
+      zIndex: nextZIndex,
       dirtyRowsHint: opt.dirtyRowsHint,
       plane: nextPlane,
       paint: opt.paint,
     };
-    if (Object.prototype.hasOwnProperty.call(opt, "rect")) updatePayload.rect = opt.rect ?? null;
+    if (hasRect) updatePayload.rect = nextRect;
     render.update(id.value, updatePayload);
     lastPlane.value = nextPlane;
+    lastStack = stack;
+    lastZIndex = nextZIndex;
+    lastHasRect = hasRect;
+    lastRect = nextRect;
+    lastHasDeps = hasDeps;
+    lastDeps = opt.deps;
     const priority = opt.priority ?? "normal";
     requestBatchedInvalidate(scheduler, prevPlane, priority);
     if (prevPlane !== nextPlane) requestBatchedInvalidate(scheduler, nextPlane, priority);
