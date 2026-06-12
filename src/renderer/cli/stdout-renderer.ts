@@ -4500,11 +4500,6 @@ export function createStdoutRenderer(
     if (cols === size.cols && rows === size.rows) return;
     const colsChanged = cols !== size.cols;
     const rowsChanged = rows !== size.rows;
-    if (hideCursor && !getImeAnchor) {
-      out.write(CURSOR_HOME);
-      lastCursorX = 0;
-      lastCursorY = 0;
-    }
     terminal.resize(cols, rows);
     consumeResizeDirtyState();
     if (isDebugEnabled()) {
@@ -4512,12 +4507,6 @@ export function createStdoutRenderer(
         `stdout resize consumed: target=${cols}x${rows}, colsChanged=${colsChanged ? "true" : "false"}, rowsChanged=${rowsChanged ? "true" : "false"}`,
       );
     }
-    if (isDebugEnabled()) {
-      getDebugLog().render(
-        `stdout resize render request: dirtyRows=${colsChanged ? "all" : "0"}, sync=true`,
-      );
-    }
-    render(colsChanged ? undefined : [], true);
   };
   if (canTrackResize) {
     try {

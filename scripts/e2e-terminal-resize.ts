@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { appendFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { defineComponent, h, nextTick } from "vue";
@@ -163,6 +164,53 @@ try {
   assert(coords.size > 0, "expected resize trace to capture markdown image coordinates");
   for (const [id, seen] of coords) {
     assert(seen.size === 1, `image ${id} changed coordinates: ${Array.from(seen).join(" -> ")}`);
+  }
+
+  const trackedChunks: string[] = [];
+  const trackedOutput = Object.assign(new EventEmitter(), {
+    isTTY: true,
+    columns: 146,
+    rows: 57,
+    write(chunk: string) {
+      trackedChunks.push(String(chunk));
+    },
+  });
+  const trackedApp = createTerminalApp({
+    cols: 146,
+    rows: 57,
+    component: App,
+    defaultStyle: { fg: "white" },
+  });
+  trackedApp.mount();
+  const trackedStdout = createStdoutRenderer(trackedApp.terminal, {
+    output: trackedOutput,
+    clear: true,
+    hideCursor: true,
+    altScreen: true,
+    trackResize: true,
+    terminalGraphics: { protocol: "kitty", force: true },
+  });
+  try {
+    await settle(trackedApp);
+    trackedChunks.length = 0;
+    appendFileSync(renderLogPath, "[E2E] tracked-resize-start\n");
+
+    for (const [cols, rows] of [
+      [120, 57],
+      [90, 45],
+      [90, 34],
+      [146, 57],
+    ] as const) {
+      trackedOutput.columns = cols;
+      trackedOutput.rows = rows;
+      trackedOutput.emit("resize");
+      await settle(trackedApp);
+    }
+
+    assert(trackedChunks.join("") === "", "tracked stdout resize must not write output");
+  } finally {
+    trackedStdout.dispose();
+    trackedApp.dispose();
   }
 
   chunks.length = 0;
