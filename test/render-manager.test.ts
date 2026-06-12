@@ -24,7 +24,7 @@ describe("render-manager", () => {
     terminal.dispose();
   });
 
-  it("does not force stable nodes to repaint on height-only resize", () => {
+  it("clears newly visible rows without repainting stable nodes on height growth", () => {
     const paints: string[] = [];
     const terminal = createTerminal({ cols: 10, rows: 4 });
     const rm = createRenderManager(terminal);
@@ -38,8 +38,26 @@ describe("render-manager", () => {
     paints.length = 0;
     terminal.resize(10, 6);
 
-    expect(rm.render()).toBeNull();
+    expect(rm.render()?.rows).toBe(2);
     expect(paints).toEqual([]);
+  });
+
+  it("paints nodes intersecting newly visible rows on height growth", () => {
+    const paints: string[] = [];
+    const terminal = createTerminal({ cols: 10, rows: 4 });
+    const rm = createRenderManager(terminal);
+    rm.register({
+      stack: rm.rootStack,
+      rect: { x: 0, y: 2, w: 10, h: 4 },
+      paint: (dirtyRows) => paints.push(dirtyRows ? dirtyRows.join(",") : "all"),
+    });
+
+    rm.render();
+    paints.length = 0;
+    terminal.resize(10, 6);
+
+    expect(rm.render()?.rows).toBe(2);
+    expect(paints).toEqual(["4,5"]);
   });
 
   it("does not force stable nodes to repaint on column resize", () => {

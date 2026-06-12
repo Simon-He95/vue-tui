@@ -169,6 +169,49 @@ try {
     assert(seen.size === 1, `image ${id} changed coordinates: ${Array.from(seen).join(" -> ")}`);
   }
 
+  const smallStartChunks: string[] = [];
+  const smallStartOutput: CliOutput = {
+    isTTY: true,
+    columns: 146,
+    rows: 16,
+    write(chunk) {
+      smallStartChunks.push(String(chunk));
+    },
+  };
+  const smallStartApp = createTerminalApp({
+    cols: 146,
+    rows: 16,
+    component: App,
+    defaultStyle: { fg: "white" },
+  });
+  smallStartApp.mount();
+  const smallStartStdout = createStdoutRenderer(smallStartApp.terminal, {
+    output: smallStartOutput,
+    clear: true,
+    hideCursor: true,
+    altScreen: true,
+    trackResize: false,
+    terminalGraphics: { protocol: "kitty", force: true },
+  });
+  try {
+    await settle(smallStartApp);
+    smallStartChunks.length = 0;
+    appendFileSync(renderLogPath, "[E2E] small-start-grow-start\n");
+
+    smallStartApp.terminal.resize(146, 57);
+    await settle(smallStartApp);
+
+    const smallStartGrowOutput = smallStartChunks.join("");
+    assertContains(
+      smallStartGrowOutput,
+      "http URL",
+      "small-start height growth must repaint newly visible lower content",
+    );
+  } finally {
+    smallStartStdout.dispose();
+    smallStartApp.dispose();
+  }
+
   const trackedChunks: string[] = [];
   const trackedOutput = Object.assign(new EventEmitter(), {
     isTTY: true,

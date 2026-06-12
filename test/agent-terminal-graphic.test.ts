@@ -661,8 +661,7 @@ describe("TAgentTerminalGraphic", () => {
     }
   });
 
-  it("defers clean rows-only external resize text repaint until resize settles", () => {
-    vi.useFakeTimers();
+  it("repaints clean rows-only height growth immediately", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -695,6 +694,47 @@ describe("TAgentTerminalGraphic", () => {
       app.terminal.resize(20, 8);
       app.scheduler.flushNow();
 
+      expect(writes.join("")).toContain("tco");
+    } finally {
+      stdout.dispose();
+      app.dispose();
+    }
+  });
+
+  it("defers clean rows-only height shrink text repaint until resize settles", () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 8,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 8,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = createStdoutRenderer(app.terminal, {
+      output,
+      clear: false,
+      altScreen: false,
+      hideCursor: false,
+      trackResize: false,
+    });
+    getPlaneTerminal(app.terminal, "transcript").write("t", { x: 0, y: 0 });
+    getPlaneTerminal(app.terminal, "chrome").write("c", { x: 1, y: 0 });
+    getPlaneTerminal(app.terminal, "overlay").write("o", { x: 2, y: 0 });
+
+    try {
+      flushStdout(stdout);
+      writes.length = 0;
+
+      app.terminal.resize(20, 6);
+      app.scheduler.flushNow();
+
       expect(writes.join("")).not.toContain("tco");
 
       vi.advanceTimersByTime(499);
@@ -715,14 +755,14 @@ describe("TAgentTerminalGraphic", () => {
     const output: CliOutput = {
       isTTY: true,
       columns: 20,
-      rows: 6,
+      rows: 8,
       write(chunk) {
         writes.push(chunk);
       },
     };
     const app = createTerminalApp({
       cols: 20,
-      rows: 6,
+      rows: 8,
       component: defineComponent({ setup: () => () => null }),
     });
     const stdout = createStdoutRenderer(app.terminal, {
@@ -740,9 +780,9 @@ describe("TAgentTerminalGraphic", () => {
       flushStdout(stdout);
       writes.length = 0;
 
-      app.terminal.resize(20, 8);
-      vi.advanceTimersByTime(300);
       app.terminal.resize(20, 7);
+      vi.advanceTimersByTime(300);
+      app.terminal.resize(20, 6);
 
       vi.advanceTimersByTime(499);
       expect(writes.join("")).not.toContain("tco");
@@ -762,14 +802,14 @@ describe("TAgentTerminalGraphic", () => {
     const output: CliOutput = {
       isTTY: true,
       columns: 20,
-      rows: 6,
+      rows: 8,
       write(chunk) {
         writes.push(chunk);
       },
     };
     const app = createTerminalApp({
       cols: 20,
-      rows: 6,
+      rows: 8,
       component: defineComponent({ setup: () => () => null }),
     });
     const stdout = createStdoutRenderer(app.terminal, {
@@ -784,7 +824,7 @@ describe("TAgentTerminalGraphic", () => {
       flushStdout(stdout);
       writes.length = 0;
 
-      app.terminal.resize(20, 8);
+      app.terminal.resize(20, 6);
       app.terminal.clear();
       app.terminal.write("during", { x: 0, y: 1 });
       app.terminal.commit({ sync: true });

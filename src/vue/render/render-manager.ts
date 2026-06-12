@@ -203,6 +203,7 @@ export function createRenderManager(
   const offResize = terminal.on("resize", ({ cols, rows }) => {
     if (disposed) return;
     const colsChanged = cols !== terminalCols;
+    const prevRows = terminalRows;
     terminalCols = cols;
     terminalRows = rows;
     allRows = Array.from({ length: terminalRows }, (_, index) => index);
@@ -215,6 +216,13 @@ export function createRenderManager(
       const limit = Math.min(terminalRows, prevBits.length);
       for (let y = 0; y < limit; y++) {
         if (prevBits[y] !== 1) continue;
+        state.dirtyRowBits[y] = 1;
+        state.dirtyRowCount++;
+        if (y < state.dirtyMinY) state.dirtyMinY = y;
+        if (y > state.dirtyMaxY) state.dirtyMaxY = y;
+      }
+      for (let y = prevRows; y < terminalRows; y++) {
+        if (state.dirtyRowBits[y] === 1) continue;
         state.dirtyRowBits[y] = 1;
         state.dirtyRowCount++;
         if (y < state.dirtyMinY) state.dirtyMinY = y;

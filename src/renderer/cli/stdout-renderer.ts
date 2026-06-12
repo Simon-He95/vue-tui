@@ -4532,6 +4532,7 @@ export function createStdoutRenderer(
   const offTerminalResize = terminal.on("resize", ({ cols, rows }) => {
     const colsChanged = cols !== terminalResizeCols;
     const rowsChanged = rows !== terminalResizeRows;
+    const rowsIncreased = rows > terminalResizeRows;
     terminalResizeCols = cols;
     terminalResizeRows = rows;
     if (!colsChanged && !rowsChanged) return;
@@ -4549,6 +4550,11 @@ export function createStdoutRenderer(
     if (!colsChanged) {
       consumeResizeDirtyState();
       preserveNextRowsOnlyResizeBaseline = true;
+      if (rowsIncreased) {
+        clearRowsOnlyResizeRepaintTimer();
+        repaintRowsAfterRowsOnlyResize();
+        return;
+      }
       scheduleRowsOnlyResizeRepaint();
       if (hasPendingTerminalGraphics()) {
         deferGraphicsFlushUntilResizeCommit = false;
