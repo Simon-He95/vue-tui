@@ -488,6 +488,7 @@ export function createStdoutRenderer(
   let lastFrameTime = 0;
   let pendingRender = false;
   let renderTimer: ReturnType<typeof setTimeout> | null = null;
+  let rowsOnlyResizeRepaintTimer: ReturnType<typeof setTimeout> | null = null;
   let writeEmaMs = 0;
   let lastCursorX: number | null = null;
   let lastCursorY: number | null = null;
@@ -970,6 +971,7 @@ export function createStdoutRenderer(
   // Minimum frame interval for stdout rendering (16ms = ~60fps max).
   // For non-TTY outputs (tests/logs), render immediately for determinism.
   const MIN_FRAME_MS = outputIsTTY ? 16 : 0;
+  const ROWS_ONLY_RESIZE_REPAINT_DELAY_MS = 500;
 
   function clampCellToViewport(
     cell: Readonly<{ cellX: number; cellY: number }>,
@@ -4462,6 +4464,40 @@ export function createStdoutRenderer(
     }
   }
 
+  function clearRowsOnlyResizeRepaintTimer(): void {
+    if (!rowsOnlyResizeRepaintTimer) return;
+    clearTimeout(rowsOnlyResizeRepaintTimer);
+    rowsOnlyResizeRepaintTimer = null;
+  }
+
+  function repaintRowsAfterRowsOnlyResize(): void {
+    if (disposed) return;
+    const { rows } = terminal.size();
+    if (rows <= 0) return;
+    if (isDebugEnabled()) {
+      getDebugLog().render(`rows-only resize repaint: rows=${rows}`);
+    }
+    preserveNextRowsOnlyResizeBaseline = true;
+    const dirtyRows = Array.from({ length: rows }, (_, y) => y);
+    accumulatedDirtyRowsRequireRepaint = true;
+    deferGraphicsFlushUntilResizeCommit = false;
+    allowNextGraphicsOnlyRenderWithoutBaseline = false;
+    render(dirtyRows, true);
+  }
+
+  function scheduleRowsOnlyResizeRepaint(): void {
+    clearRowsOnlyResizeRepaintTimer();
+    if (isDebugEnabled()) {
+      getDebugLog().render(
+        `rows-only resize repaint scheduled: delay=${ROWS_ONLY_RESIZE_REPAINT_DELAY_MS}ms`,
+      );
+    }
+    rowsOnlyResizeRepaintTimer = setTimeout(() => {
+      rowsOnlyResizeRepaintTimer = null;
+      repaintRowsAfterRowsOnlyResize();
+    }, ROWS_ONLY_RESIZE_REPAINT_DELAY_MS);
+  }
+
   // Initial setup - these are one-time writes, not part of render loop
   if (altScreen && outputIsTTY) out.write("\u001B[?1049h");
   if (keepLineWrapDisabled) out.write("\u001B[?7l");
@@ -4472,6 +4508,18 @@ export function createStdoutRenderer(
 
   const off = terminal.on("commit", ({ dirtyRows, scrollOperations, sync }) => {
     if (suppressNextResizeCommitRender) return;
+    const deferRowsOnlyResizeCommit =
+      rowsOnlyResizeRepaintTimer &&
+      (dirtyRows == null || dirtyRows.length >= terminal.size().rows);
+    if (deferRowsOnlyResizeCommit) {
+      if (isDebugEnabled()) {
+        getDebugLog().render(
+          `rows-only resize commit deferred: dirtyRows=${dirtyRows?.length ?? "null"}${sync ? " (sync)" : ""}`,
+        );
+      }
+      scheduleRowsOnlyResizeRepaint();
+      return;
+    }
     if (isDebugEnabled()) {
       getDebugLog().render(
         `Commit event: dirtyRows=${dirtyRows?.length ?? "null"}, rows=${dirtyRows?.join(",") ?? "all"}${scrollOperations?.length ? `, scrollOps=${scrollOperations.map((op) => `${op.startY}-${op.endY - 1}:${op.delta}`).join("|")}` : ""}${sync ? " (sync)" : ""}`,
@@ -4501,13 +4549,15 @@ export function createStdoutRenderer(
     if (!colsChanged) {
       consumeResizeDirtyState();
       preserveNextRowsOnlyResizeBaseline = true;
-      const dirtyRows = Array.from({ length: Math.max(0, rows) }, (_, y) => y);
-      accumulatedDirtyRowsRequireRepaint = true;
-      deferGraphicsFlushUntilResizeCommit = false;
-      allowNextGraphicsOnlyRenderWithoutBaseline = false;
-      render(dirtyRows, true);
+      scheduleRowsOnlyResizeRepaint();
+      if (hasPendingTerminalGraphics()) {
+        deferGraphicsFlushUntilResizeCommit = false;
+        allowNextGraphicsOnlyRenderWithoutBaseline = true;
+        render([], true);
+      }
       return;
     }
+    clearRowsOnlyResizeRepaintTimer();
     if (hasPendingTerminalGraphics()) {
       deferGraphicsFlushUntilResizeCommit = false;
       allowNextGraphicsOnlyRenderWithoutBaseline = true;
@@ -4580,6 +4630,7 @@ export function createStdoutRenderer(
       clearTimeout(renderTimer);
       renderTimer = null;
     }
+    clearRowsOnlyResizeRepaintTimer();
     accumulatedAllRows = false;
     accumulatedDirtyBits = null;
     accumulatedDirtyCount = 0;

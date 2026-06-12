@@ -82,6 +82,10 @@ async function settle(app: ReturnType<typeof createTerminalApp>): Promise<void> 
   }
 }
 
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function markdownImageCoords(log: string): Map<string, Set<string>> {
   const coords = new Map<string, Set<string>>();
   const re =
@@ -191,6 +195,36 @@ try {
   });
   try {
     await settle(trackedApp);
+    trackedChunks.length = 0;
+    appendFileSync(renderLogPath, "[E2E] tracked-rows-only-resize-start\n");
+
+    for (const rows of [54, 48, 40, 34] as const) {
+      trackedOutput.columns = 146;
+      trackedOutput.rows = rows;
+      trackedOutput.emit("resize");
+      await settle(trackedApp);
+    }
+
+    const trackedRowsOnlyDuringOutput = trackedChunks.join("");
+    assertContains(
+      trackedRowsOnlyDuringOutput,
+      "a=p",
+      "tracked rows-only resize must re-place kitty graphics during drag",
+    );
+    assertNotContains(
+      trackedRowsOnlyDuringOutput,
+      "Terminal: graphics supported",
+      "tracked rows-only resize must not repaint text before resize settles",
+    );
+
+    await delay(520);
+    await settle(trackedApp);
+    assertContains(
+      trackedChunks.join(""),
+      "Terminal: graphics supported",
+      "tracked rows-only resize must repaint text after resize settles",
+    );
+
     trackedChunks.length = 0;
     appendFileSync(renderLogPath, "[E2E] tracked-resize-start\n");
 
