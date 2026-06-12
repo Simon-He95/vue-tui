@@ -1,6 +1,6 @@
 import { sanitizeInlineText, sanitizeTextBlock, spaces, textCellWidth } from "../utils/text.js";
 import { readMarkdownImageDimensions, sanitizeMarkdownImageSource } from "./image.js";
-import { renderMarkdownInlineMath } from "./math.js";
+import { renderMarkdownInlineMathSegment } from "./math.js";
 import { sanitizeMarkdownLink } from "./parser.js";
 import { type TuiMarkdownTheme } from "./theme.js";
 import type {
@@ -151,6 +151,7 @@ function pushTextSegments(
   text: string,
   style?: TuiMarkdownInlineSegment["style"],
   graphic?: TuiMarkdownInlineSegment["graphic"],
+  mathAction?: TuiMarkdownInlineSegment["mathAction"],
 ): void {
   if (!text) return;
   const normalized = sanitizeTextBlock(text);
@@ -163,6 +164,7 @@ function pushTextSegments(
         text: part,
         ...(style ? { style } : {}),
         ...(i === 0 && graphic ? { graphic } : {}),
+        ...(mathAction ? { mathAction } : {}),
       });
     }
     if (i < parts.length - 1) out.push(HARD_BREAK_SEGMENT);
@@ -338,11 +340,22 @@ function inlineNodeSegments(
         );
         break;
       case "math_inline":
-        pushTextSegments(
-          out,
-          renderMarkdownInlineMath(stringProp(node, "content")),
-          mergeStyle(inheritedStyle, theme.inlineCode),
-        );
+        {
+          const source = stringProp(node, "content");
+          const raw = stringProp(node, "raw") || `$${source}$`;
+          const rendered = renderMarkdownInlineMathSegment(source);
+          pushTextSegments(
+            out,
+            rendered.supported ? rendered.text : raw,
+            mergeStyle(inheritedStyle, theme.inlineCode),
+            undefined,
+            {
+              source,
+              raw,
+              rendered: rendered.supported,
+            },
+          );
+        }
         break;
       case "reference":
       case "footnote_reference":

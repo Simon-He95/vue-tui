@@ -1431,6 +1431,7 @@ Import: `@simon_he/vue-tui/markdown`
 | <code>imageMaxHeight</code>           | <code>number</code>                                                                         | <code>undefined</code> | 否   | —                                                                                 |
 | <code>imagePreserveAspectRatio</code> | <code>boolean</code>                                                                        | <code>true</code>      | 否   | —                                                                                 |
 | <code>imageActions</code>             | <code>boolean</code>                                                                        | <code>false</code>     | 否   | —                                                                                 |
+| <code>mathActions</code>              | <code>boolean</code>                                                                        | <code>false</code>     | 否   | —                                                                                 |
 | <code>linkActions</code>              | <code>boolean</code>                                                                        | <code>false</code>     | 否   | —                                                                                 |
 | <code>imageOcclusionRects</code>      | <code>readonly Rect[]</code>                                                                | <code>undefined</code> | 否   | —                                                                                 |
 
@@ -1439,6 +1440,7 @@ Import: `@simon_he/vue-tui/markdown`
 | 名称                     | Payload                                    | 说明 |
 | ------------------------ | ------------------------------------------ | ---- |
 | <code>imageAction</code> | <code>TuiMarkdownImageActionPayload</code> | —    |
+| <code>mathAction</code>  | <code>TuiMarkdownMathActionPayload</code>  | —    |
 | <code>linkAction</code>  | <code>TuiMarkdownLinkActionPayload</code>  | —    |
 
 ## TMermaid
@@ -2576,6 +2578,7 @@ Import: `@simon_he/vue-tui/markdown`
 | <code>imageMaxHeight</code>           | <code>number</code>                                                                         | <code>undefined</code>    | 否   | —                                                                                       |
 | <code>imagePreserveAspectRatio</code> | <code>boolean</code>                                                                        | <code>true</code>         | 否   | —                                                                                       |
 | <code>imageActions</code>             | <code>boolean</code>                                                                        | <code>false</code>        | 否   | —                                                                                       |
+| <code>mathActions</code>              | <code>boolean</code>                                                                        | <code>false</code>        | 否   | —                                                                                       |
 | <code>linkActions</code>              | <code>boolean</code>                                                                        | <code>false</code>        | 否   | —                                                                                       |
 | <code>imageOcclusionRects</code>      | <code>readonly Rect[]</code>                                                                | <code>undefined</code>    | 否   | —                                                                                       |
 
@@ -2589,4 +2592,5 @@ Import: `@simon_he/vue-tui/markdown`
 | <code>blur</code>             | <code>void</code>                          | Emitted when the component loses focus.                |
 | <code>keydown</code>          | <code>TerminalKeyboardEvent</code>         | Emitted for keydown events.                            |
 | <code>imageAction</code>      | <code>TuiMarkdownImageActionPayload</code> | —                                                      |
+| <code>mathAction</code>       | <code>TuiMarkdownMathActionPayload</code>  | —                                                      |
 | <code>linkAction</code>       | <code>TuiMarkdownLinkActionPayload</code>  | —                                                      |

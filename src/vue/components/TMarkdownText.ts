@@ -19,6 +19,7 @@ import {
 import { buildMarkdownVisualRows } from "../markdown/document.js";
 import { findMarkdownImageActionAt } from "../markdown/image-actions.js";
 import { findMarkdownLinkActionAt } from "../markdown/link-actions.js";
+import { findMarkdownMathActionAt } from "../markdown/math-actions.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
 import {
   clearMarkdownImageGraphics,
@@ -30,6 +31,7 @@ import type {
   TuiMarkdownGraphicSegment,
   TuiMarkdownImageActionPayload,
   TuiMarkdownLinkActionPayload,
+  TuiMarkdownMathActionPayload,
   TuiMarkdownVisualRow,
 } from "../markdown/types.js";
 import { useLayout } from "../composables/use-layout.js";
@@ -74,6 +76,7 @@ export const TMarkdownText = defineComponent({
     imageMaxHeight: { type: Number, default: undefined },
     imagePreserveAspectRatio: { type: Boolean, default: true },
     imageActions: { type: Boolean, default: false },
+    mathActions: { type: Boolean, default: false },
     linkActions: { type: Boolean, default: false },
     imageOcclusionRects: {
       type: Array as PropType<readonly Rect[]>,
@@ -82,6 +85,7 @@ export const TMarkdownText = defineComponent({
   },
   emits: {
     imageAction: (_payload: TuiMarkdownImageActionPayload) => true,
+    mathAction: (_payload: TuiMarkdownMathActionPayload) => true,
     linkAction: (_payload: TuiMarkdownLinkActionPayload) => true,
   },
   setup(props, { emit }) {
@@ -234,10 +238,24 @@ export const TMarkdownText = defineComponent({
       );
     }
 
+    function mathActionAt(event: TerminalPointerEvent) {
+      const r = absRect.value;
+      const full = fullRect.value;
+      return findMarkdownMathActionAt(
+        rows.value,
+        { cellX: event.cellX, cellY: event.cellY },
+        {
+          screenRect: r,
+          rowOffset: Math.max(0, Math.floor(r.y - full.y)),
+          clipStart: Math.max(0, Math.floor(r.x - full.x)),
+        },
+      );
+    }
+
     useTerminalNode(() => ({
       rect: absRect.value,
       zIndex: eventZ.value,
-      visible: visible.value && (props.imageActions || props.linkActions),
+      visible: visible.value && (props.imageActions || props.mathActions || props.linkActions),
       focusable: false,
       selectable: false,
       handlers: {
@@ -247,6 +265,14 @@ export const TMarkdownText = defineComponent({
             if (hit) {
               event.preventDefault();
               emit("imageAction", hit);
+              return;
+            }
+          }
+          if (props.mathActions) {
+            const math = mathActionAt(event);
+            if (math) {
+              event.preventDefault();
+              emit("mathAction", math);
               return;
             }
           }

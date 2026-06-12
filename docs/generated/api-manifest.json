@@ -640,6 +640,8 @@
         "TuiMarkdownInlineSegment",
         "TuiMarkdownLayoutOptions",
         "TuiMarkdownLinkActionPayload",
+        "TuiMarkdownMathActionPayload",
+        "TuiMarkdownMathSegment",
         "TuiMarkdownNode",
         "TuiMarkdownParseConfig",
         "TuiMarkdownParser",
@@ -5815,6 +5817,13 @@
           "descriptionSource": "missing"
         },
         {
+          "name": "mathActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "descriptionSource": "missing"
+        },
+        {
           "name": "linkActions",
           "type": "boolean",
           "required": false,
@@ -5833,6 +5842,12 @@
         {
           "name": "imageAction",
           "payload": "TuiMarkdownImageActionPayload",
+          "payloadSource": "emits-signature",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "mathAction",
+          "payload": "TuiMarkdownMathActionPayload",
           "payloadSource": "emits-signature",
           "descriptionSource": "missing"
         },
@@ -9565,6 +9580,13 @@
           "descriptionSource": "missing"
         },
         {
+          "name": "mathActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "descriptionSource": "missing"
+        },
+        {
           "name": "linkActions",
           "type": "boolean",
           "required": false,
@@ -9618,6 +9640,12 @@
         {
           "name": "imageAction",
           "payload": "TuiMarkdownImageActionPayload",
+          "payloadSource": "emits-signature",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "mathAction",
+          "payload": "TuiMarkdownMathActionPayload",
           "payloadSource": "emits-signature",
           "descriptionSource": "missing"
         },

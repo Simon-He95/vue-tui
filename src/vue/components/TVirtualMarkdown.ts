@@ -28,6 +28,7 @@ import {
 import { buildMarkdownBlocks } from "../markdown/document.js";
 import { findMarkdownImageActionAt } from "../markdown/image-actions.js";
 import { findMarkdownLinkActionAt } from "../markdown/link-actions.js";
+import { findMarkdownMathActionAt } from "../markdown/math-actions.js";
 import {
   terminalSelectionRowSpans,
   terminalSelectionVisibleRowSpans,
@@ -48,6 +49,7 @@ import type {
   TuiMarkdownBlock,
   TuiMarkdownImageActionPayload,
   TuiMarkdownLinkActionPayload,
+  TuiMarkdownMathActionPayload,
   TuiMarkdownVisualRow,
 } from "../markdown/types.js";
 import { useLayout } from "../composables/use-layout.js";
@@ -166,6 +168,7 @@ export const TVirtualMarkdown = defineComponent({
     imageMaxHeight: { type: Number, default: undefined },
     imagePreserveAspectRatio: { type: Boolean, default: true },
     imageActions: { type: Boolean, default: false },
+    mathActions: { type: Boolean, default: false },
     linkActions: { type: Boolean, default: false },
     imageOcclusionRects: {
       type: Array as PropType<readonly Rect[]>,
@@ -179,6 +182,7 @@ export const TVirtualMarkdown = defineComponent({
     blur: () => true,
     keydown: (_event: TerminalKeyboardEvent) => true,
     imageAction: (_payload: TuiMarkdownImageActionPayload) => true,
+    mathAction: (_payload: TuiMarkdownMathActionPayload) => true,
     linkAction: (_payload: TuiMarkdownLinkActionPayload) => true,
   },
   setup(props, { emit }) {
@@ -620,6 +624,18 @@ export const TVirtualMarkdown = defineComponent({
             if (hit) {
               event.preventDefault();
               emit("imageAction", hit);
+              return;
+            }
+          }
+          if (props.mathActions) {
+            const math = findMarkdownMathActionAt(
+              rows.value,
+              { cellX: event.cellX, cellY: event.cellY },
+              hitOptions,
+            );
+            if (math) {
+              event.preventDefault();
+              emit("mathAction", math);
               return;
             }
           }

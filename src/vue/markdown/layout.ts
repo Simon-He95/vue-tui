@@ -41,6 +41,7 @@ function toVisualSegment(segment: TuiMarkdownInlineSegment): TuiMarkdownVisualSe
     style: segment.style,
     cells,
     ...(segment.graphic ? { graphic: segment.graphic } : {}),
+    ...(segment.mathAction ? { mathAction: segment.mathAction } : {}),
   };
 }
 
@@ -95,6 +96,7 @@ function clipInlineSegmentsToWidth(
     const clipped = {
       text: piece,
       ...(segment.style ? { style: segment.style } : {}),
+      ...(segment.mathAction ? { mathAction: segment.mathAction } : {}),
     };
     out.push(
       piece === segment.text && segment.graphic ? { ...clipped, graphic: segment.graphic } : clipped,
@@ -126,6 +128,7 @@ function clipVisualSegmentsToWidth(
       style: segment.style,
       cells,
       ...(text === segment.text && segment.graphic ? { graphic: segment.graphic } : {}),
+      ...(segment.mathAction ? { mathAction: segment.mathAction } : {}),
     });
     remaining -= cells;
   }
@@ -259,6 +262,7 @@ function wrapLineSegments(
           text: piece.text,
           style: segment.style,
           cells: piece.cells,
+          ...(segment.mathAction ? { mathAction: segment.mathAction } : {}),
         });
         row.remaining -= piece.cells;
         return undefined;
@@ -420,16 +424,18 @@ function appendVisualSegment(
   text: string,
   style?: Style,
   graphic?: TuiMarkdownVisualSegment["graphic"],
+  mathAction?: TuiMarkdownVisualSegment["mathAction"],
 ): void {
   if (!text) return;
   const cells = textCellWidth(text);
   if (cells <= 0) return;
   const prev = segments[segments.length - 1];
-  if (prev && prev.style === style && !prev.graphic && !graphic) {
+  if (prev && prev.style === style && prev.mathAction === mathAction && !prev.graphic && !graphic) {
     segments[segments.length - 1] = {
       text: `${prev.text}${text}`,
       style,
       cells: prev.cells + cells,
+      ...(mathAction ? { mathAction } : {}),
     };
     return;
   }
@@ -438,6 +444,7 @@ function appendVisualSegment(
     style,
     cells,
     ...(graphic ? { graphic } : {}),
+    ...(mathAction ? { mathAction } : {}),
   });
 }
 
@@ -450,7 +457,7 @@ function appendInlineVisualSegments(
       appendVisualSegment(out, " ");
       continue;
     }
-    appendVisualSegment(out, segment.text, segment.style, segment.graphic);
+    appendVisualSegment(out, segment.text, segment.style, segment.graphic, segment.mathAction);
   }
 }
 
@@ -584,11 +591,16 @@ function inlineSegmentSignature(segment: TuiMarkdownInlineSegment): string {
         segment.graphic.displayHeight ?? "",
       ].join("\u0006")
     : "";
+  const mathAction = segment.mathAction
+    ? [segment.mathAction.source, segment.mathAction.raw, segment.mathAction.rendered ? "1" : "0"]
+        .join("\u0006")
+    : "";
   return [
     segment.text,
     segment.hardBreak ? "1" : "0",
     styleSignature(segment.style),
     graphic,
+    mathAction,
   ].join("\u0002");
 }
 

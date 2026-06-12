@@ -120,6 +120,28 @@ describe("markdown kitty image and KaTeX rendering", () => {
     }
   });
 
+  it("keeps unsupported KaTeX as raw text", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 0,
+          y: 0,
+          w: 72,
+          h: 4,
+          content: "Matrix $\\begin{bmatrix}1&2\\\\3&4\\end{bmatrix}$ stays raw",
+        }),
+      72,
+      6,
+    );
+
+    try {
+      const visible = [0, 1, 2, 3].map((y) => rowText(mounted, y)).join("\n");
+      expect(visible).toContain("$\\begin{bmatrix}1&2\\\\3&4\\end{bmatrix}$");
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   it("renders KaTeX and images after virtual markdown viewport updates", async () => {
     await withEnv(
       {

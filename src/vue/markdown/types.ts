@@ -46,11 +46,27 @@ export type TuiMarkdownLinkActionPayload = Readonly<{
   segmentIndex: number;
 }>;
 
+export type TuiMarkdownMathSegment = Readonly<{
+  source: string;
+  raw: string;
+  rendered: boolean;
+}>;
+
+export type TuiMarkdownMathActionPayload = Readonly<{
+  math: TuiMarkdownMathSegment;
+  rect: Readonly<{ x: number; y: number; w: number; h: number }>;
+  cellX: number;
+  cellY: number;
+  rowIndex: number;
+  segmentIndex: number;
+}>;
+
 export type TuiMarkdownInlineSegment = Readonly<{
   text: string;
   style?: Style;
   hardBreak?: boolean;
   graphic?: TuiMarkdownGraphicSegment;
+  mathAction?: TuiMarkdownMathSegment;
 }>;
 
 export type TuiMarkdownTableCellAlign = "left" | "center" | "right";
@@ -102,6 +118,7 @@ export type TuiMarkdownVisualSegment = Readonly<{
   style?: Style;
   cells: number;
   graphic?: TuiMarkdownGraphicSegment;
+  mathAction?: TuiMarkdownMathSegment;
   fallbackText?: string;
 }>;
 

@@ -17,6 +17,8 @@ export type {
   TuiMarkdownImageSize,
   TuiMarkdownInlineSegment,
   TuiMarkdownLinkActionPayload,
+  TuiMarkdownMathActionPayload,
+  TuiMarkdownMathSegment,
   TuiMarkdownNode,
   TuiMarkdownTableCell,
   TuiMarkdownTableCellAlign,

@@ -885,6 +885,44 @@ describe("markdown components", () => {
     mounted.unmount();
   });
 
+  it("emits mathAction with original KaTeX text when formula is clicked", async () => {
+    const actions: unknown[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 2,
+          y: 1,
+          w: 48,
+          h: 4,
+          content: "formula: $\\frac{a}{b}$ and $\\operatorname{softmax}(x)$",
+          mathActions: true,
+          onMathAction: (payload: unknown) => actions.push(payload),
+        }),
+      56,
+      8,
+    );
+
+    await nextTick();
+    clickCell(mounted, 12, 1);
+    clickCell(mounted, 25, 1);
+
+    expect(actions).toHaveLength(2);
+    expect(actions[0]).toMatchObject({
+      cellX: 12,
+      cellY: 1,
+      math: { raw: "$\\frac{a}{b}$", source: "\\frac{a}{b}", rendered: true },
+    });
+    expect(actions[1]).toMatchObject({
+      cellY: 1,
+      math: {
+        raw: "$\\operatorname{softmax}(x)$",
+        source: "\\operatorname{softmax}(x)",
+        rendered: false,
+      },
+    });
+    mounted.unmount();
+  });
+
   it("emits imageAction for visible TVirtualMarkdown images after scrolling", async () => {
     const actions: unknown[] = [];
     const mounted = await mountTerminal(
