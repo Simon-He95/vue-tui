@@ -26,6 +26,7 @@ import {
   watchEffect,
 } from "vue";
 import { buildMarkdownBlocks } from "../markdown/document.js";
+import { findMarkdownImageActionAt } from "../markdown/image-actions.js";
 import {
   terminalSelectionRowSpans,
   terminalSelectionVisibleRowSpans,
@@ -36,9 +37,17 @@ import {
 } from "../../renderer/terminal-graphics.js";
 import { layoutMarkdownBlocksCached, type TuiMarkdownLayoutCache } from "../markdown/layout.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
-import { clearMarkdownImageGraphics, paintMarkdownVisualRow } from "../markdown/render.js";
+import {
+  clearMarkdownImageGraphics,
+  collectVisibleMarkdownImageGraphicIds,
+  paintMarkdownVisualRow,
+} from "../markdown/render.js";
 import { markdownThemeSignature, type TuiMarkdownThemeOverrides } from "../markdown/theme.js";
-import type { TuiMarkdownBlock, TuiMarkdownVisualRow } from "../markdown/types.js";
+import type {
+  TuiMarkdownBlock,
+  TuiMarkdownImageActionPayload,
+  TuiMarkdownVisualRow,
+} from "../markdown/types.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminalNode } from "../composables/use-terminal-node.js";
@@ -154,8 +163,16 @@ export const TVirtualMarkdown = defineComponent({
     imageMinHeight: { type: Number, default: undefined },
     imageMaxHeight: { type: Number, default: undefined },
     imagePreserveAspectRatio: { type: Boolean, default: true },
+    imageActions: { type: Boolean, default: false },
   },
-  emits: ["update:scrollTop", "scroll", "focus", "blur", "keydown"],
+  emits: {
+    "update:scrollTop": (_value: number) => true,
+    scroll: (_value: number) => true,
+    focus: () => true,
+    blur: () => true,
+    keydown: (_event: TerminalKeyboardEvent) => true,
+    imageAction: (_payload: TuiMarkdownImageActionPayload) => true,
+  },
   setup(props, { emit }) {
     const instance = getCurrentInstance();
     const { terminal, defaultStyle, events, scheduler, selection, widthProvider } = useTerminal();
@@ -578,7 +595,23 @@ export const TVirtualMarkdown = defineComponent({
       selectable: props.selectable,
       selectionScrollBy: scrollSelectionBy,
       handlers: {
-        click: (_event: TerminalPointerEvent) => {},
+        click: (event: TerminalPointerEvent) => {
+          if (!props.imageActions) return;
+          const r = normalizedRect();
+          const { x: clipX, y: clipY } = clipOffsets();
+          const hit = findMarkdownImageActionAt(
+            rows.value,
+            { cellX: event.cellX, cellY: event.cellY },
+            {
+              screenRect: r,
+              rowOffset: internalScrollTop.value + clipY,
+              clipStart: clipX,
+            },
+          );
+          if (!hit) return;
+          event.preventDefault();
+          emit("imageAction", hit);
+        },
         wheel: (event: any) => {
           const { deltaY, mode } = getWheelScrollInput(event);
           if (!deltaY) return;
@@ -648,6 +681,14 @@ export const TVirtualMarkdown = defineComponent({
           if (r.w <= 0 || r.h <= 0) return;
           const baseStyle = props.style ?? defaultStyle.value;
           const { x: clipX, y: clipY } = clipOffsets();
+          const keepGraphicIds = collectVisibleMarkdownImageGraphicIds(rows.value, {
+            x: r.x,
+            y: r.y,
+            w: r.w,
+            h: r.h,
+            rowOffset: internalScrollTop.value + clipY,
+            clipStart: clipX,
+          });
           const paintRow = (y: number) => {
             if (y < r.y || y >= r.y + r.h) return;
             const visualIndex = internalScrollTop.value + clipY + (y - r.y);
@@ -658,6 +699,7 @@ export const TVirtualMarkdown = defineComponent({
               clipStart: clipX,
               baseStyle,
               clear: true,
+              keepGraphicIds,
             });
           };
           if (dirtyRows?.length) {

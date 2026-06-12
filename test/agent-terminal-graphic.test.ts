@@ -22,6 +22,7 @@ import {
   type CliOutput,
 } from "../src/cli.js";
 import {
+  createKittyPlacementSequence,
   getTerminalGraphicsOutput,
   registerTerminalGraphicsOutput,
 } from "../src/renderer/terminal-graphics.js";
@@ -167,6 +168,120 @@ describe("TAgentTerminalGraphic", () => {
       }),
     ).toBe(false);
     expect(writes.join("")).not.toContain(sequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("redraws active terminal graphics on tracked height resize without clearing", () => {
+    const writes: string[] = [];
+    const resize = { listener: null as (() => void) | null };
+    let outputColumns = 20;
+    let outputRows = 6;
+    const output: CliOutput = {
+      isTTY: true,
+      get columns() {
+        return outputColumns;
+      },
+      get rows() {
+        return outputRows;
+      },
+      write(chunk) {
+        writes.push(chunk);
+      },
+      on(event, listener) {
+        if (event === "resize") resize.listener = listener;
+      },
+      off() {},
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: true,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const resizeSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 4,
+      rows: 1,
+    });
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "resize-image",
+        x: 2,
+        y: 1,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+        resizeSequence,
+      }),
+    ).toBe(true);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(sequence);
+
+    writes.length = 0;
+    outputColumns = 30;
+    outputRows = 6;
+    resize.listener?.();
+    expect(writes.join("")).not.toContain("a=d");
+    expect(writes.join("")).not.toContain("d=A");
+
+    writes.length = 0;
+    expect(
+      graphics?.queue({
+        id: "resize-image",
+        x: 2,
+        y: 1,
+        w: 4,
+        h: 1,
+        protocol: "kitty",
+        sequence,
+        resizeSequence,
+      }),
+    ).toBe(true);
+    flushStdout(stdout);
+    expect(writes.join("")).not.toContain(sequence);
+    expect(writes.join("")).not.toContain("a=d");
+
+    writes.length = 0;
+    outputRows = 8;
+    resize.listener?.();
+    expect(writes.join("")).toMatch(/^\x1B\[H/);
+    expect(writes.join("")).toContain(`\x1B[2;3H${resizeSequence}`);
+    expect(writes.join("")).toContain("\x1B7");
+    expect(writes.join("")).toContain("\x1B8");
+    expect(writes.join("")).toContain("\x1B[H");
+    expect(writes.join("")).not.toContain(sequence);
+    expect(writes.join("")).not.toContain("\x1B[1;1H");
+    expect(writes.join("")).not.toContain("\x1B[?7l");
+    expect(writes.join("")).not.toContain("\x1B[?7h");
+    expect(writes.join("")).not.toContain("a=d");
+
+    writes.length = 0;
+    app.terminal.write("x", { x: 0, y: 0 });
+    app.terminal.commit({ sync: true });
+    expect(writes.join("")).toContain("x");
+    expect(writes.join("")).not.toContain("\r\n");
 
     stdout.dispose();
     app.dispose();
@@ -4012,10 +4127,12 @@ describe("TAgentTerminalGraphic", () => {
         protocol: "kitty",
         sequence,
       }),
-    ).toBe(false);
+    ).toBe(true);
 
-    expect(writes.join("")).not.toContain(sequence);
-    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
+    expect(writes.join("")).toContain("\x1B[1;9H");
+    expect(writes.join("")).toContain(sequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(1);
+    expect(graphics?.clear?.("partially-visible-right")).toBe(true);
 
     writes.length = 0;
     expect(
@@ -4028,10 +4145,11 @@ describe("TAgentTerminalGraphic", () => {
         protocol: "kitty",
         sequence,
       }),
-    ).toBe(false);
+    ).toBe(true);
 
-    expect(writes.join("")).not.toContain(sequence);
-    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
+    expect(writes.join("")).toContain("\x1B[4;1H");
+    expect(writes.join("")).toContain(sequence);
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(1);
 
     stdout.dispose();
     app.dispose();

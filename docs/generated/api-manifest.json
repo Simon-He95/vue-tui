@@ -635,6 +635,8 @@
         "TuiMarkdownBlockSourceOptions",
         "TuiMarkdownBlockSourceSnapshot",
         "TuiMarkdownGraphicSegment",
+        "TuiMarkdownImageActionPayload",
+        "TuiMarkdownImageSize",
         "TuiMarkdownInlineSegment",
         "TuiMarkdownLayoutOptions",
         "TuiMarkdownNode",
@@ -5768,9 +5770,58 @@
           "defaultValue": "undefined",
           "description": "Optional resolver for markdown image payloads before terminal graphics rendering.",
           "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageMinWidth",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imageMaxWidth",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imageMinHeight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imageMaxHeight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imagePreserveAspectRatio",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imageActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "descriptionSource": "missing"
         }
       ],
-      "events": []
+      "events": [
+        {
+          "name": "imageAction",
+          "payload": "TuiMarkdownImageActionPayload",
+          "payloadSource": "emits-signature",
+          "descriptionSource": "missing"
+        }
+      ]
     },
     "TMermaid": {
       "entrypoint": "@simon_he/vue-tui/vue",
@@ -9449,20 +9500,62 @@
           "defaultValue": "undefined",
           "description": "Optional resolver for markdown image payloads before terminal graphics rendering.",
           "descriptionSource": "component-default"
+        },
+        {
+          "name": "imageMinWidth",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imageMaxWidth",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imageMinHeight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imageMaxHeight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imagePreserveAspectRatio",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "descriptionSource": "missing"
+        },
+        {
+          "name": "imageActions",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "descriptionSource": "missing"
         }
       ],
       "events": [
         {
           "name": "update:scrollTop",
           "payload": "number",
-          "payloadSource": "update-prop",
+          "payloadSource": "emits-signature",
           "description": "Emitted when the top visible row offset should change.",
           "descriptionSource": "shared-default"
         },
         {
           "name": "scroll",
           "payload": "number",
-          "payloadSource": "component-default",
+          "payloadSource": "emits-signature",
           "description": "Emitted when the visible scroll offset changes.",
           "descriptionSource": "shared-default"
         },
@@ -9483,9 +9576,15 @@
         {
           "name": "keydown",
           "payload": "TerminalKeyboardEvent",
-          "payloadSource": "shared-default",
+          "payloadSource": "emits-signature",
           "description": "Emitted for keydown events.",
           "descriptionSource": "shared-default"
+        },
+        {
+          "name": "imageAction",
+          "payload": "TuiMarkdownImageActionPayload",
+          "payloadSource": "emits-signature",
+          "descriptionSource": "missing"
         }
       ]
     }

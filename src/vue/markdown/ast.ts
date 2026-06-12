@@ -1,5 +1,5 @@
 import { sanitizeInlineText, sanitizeTextBlock, spaces, textCellWidth } from "../utils/text.js";
-import { sanitizeMarkdownImageSource } from "./image.js";
+import { readMarkdownImageDimensions, sanitizeMarkdownImageSource } from "./image.js";
 import { renderMarkdownInlineMath } from "./math.js";
 import { sanitizeMarkdownLink } from "./parser.js";
 import { type TuiMarkdownTheme } from "./theme.js";
@@ -25,6 +25,7 @@ const HARD_BREAK_SEGMENT = Object.freeze({
   text: "",
   hardBreak: true,
 } satisfies TuiMarkdownInlineSegment);
+const TERMINAL_CELL_WIDTH_TO_HEIGHT_RATIO = 0.5;
 
 function mergeStyle(
   base: TuiMarkdownInlineSegment["style"],
@@ -52,6 +53,18 @@ function stringProp(node: TuiMarkdownNode, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
+function imageSourceFromRaw(raw: string): string {
+  if (!raw.startsWith("![")) return "";
+  const marker = raw.indexOf("](");
+  if (marker < 0 || !raw.endsWith(")")) return "";
+  const destination = raw.slice(marker + 2, -1).trim();
+  if (destination.startsWith("<")) {
+    const end = destination.indexOf(">");
+    return end > 1 ? destination.slice(1, end) : "";
+  }
+  return destination.split(/\s+/u)[0] ?? "";
+}
+
 function booleanProp(node: TuiMarkdownNode, key: string): boolean {
   return (node as Record<string, unknown>)[key] === true;
 }
@@ -64,6 +77,67 @@ function numberProp(node: TuiMarkdownNode, key: string): number | null {
 function nodeItems(node: TuiMarkdownNode): readonly TuiMarkdownNode[] {
   const value = (node as Record<string, unknown>).items;
   return Array.isArray(value) ? (value as readonly TuiMarkdownNode[]) : [];
+}
+
+function clampImageCells(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function resolveImageDisplaySize(
+  alt: string,
+  size: TuiMarkdownImageSize | undefined,
+  naturalWidth: number | undefined,
+  naturalHeight: number | undefined,
+): Pick<TuiMarkdownGraphicSegment, "displayWidth" | "displayHeight"> {
+  if (
+    size?.minWidth == null &&
+    size?.maxWidth == null &&
+    size?.minHeight == null &&
+    size?.maxHeight == null
+  ) {
+    return {};
+  }
+
+  const minWidth = Math.max(1, Math.floor(size?.minWidth ?? 1));
+  const maxWidth = Math.max(minWidth, Math.floor(size?.maxWidth ?? Number.MAX_SAFE_INTEGER));
+  const minHeight = Math.max(1, Math.floor(size?.minHeight ?? 1));
+  const maxHeight = Math.max(minHeight, Math.floor(size?.maxHeight ?? Number.MAX_SAFE_INTEGER));
+
+  if (
+    size?.preserveAspectRatio !== false &&
+    naturalWidth != null &&
+    naturalHeight != null &&
+    naturalWidth > 0 &&
+    naturalHeight > 0
+  ) {
+    const cellRatio = (naturalWidth / naturalHeight) / TERMINAL_CELL_WIDTH_TO_HEIGHT_RATIO;
+    let width = minWidth;
+    let height = Math.max(minHeight, Math.ceil(width / cellRatio));
+    width = Math.max(width, Math.ceil(height * cellRatio));
+
+    if (width > maxWidth) {
+      width = maxWidth;
+      height = Math.max(minHeight, Math.ceil(width / cellRatio));
+    }
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = Math.max(minWidth, Math.floor(height * cellRatio));
+    }
+
+    return {
+      displayWidth: clampImageCells(width, minWidth, maxWidth),
+      displayHeight: clampImageCells(height, minHeight, maxHeight),
+    };
+  }
+
+  return {
+    displayWidth:
+      size?.maxWidth != null
+        ? Math.min(maxWidth, Math.max(minWidth, textCellWidth(alt)))
+        : Math.max(minWidth, textCellWidth(alt)),
+    displayHeight:
+      size?.maxHeight != null ? Math.min(maxHeight, Math.max(minHeight, 1)) : minHeight,
+  };
 }
 
 function pushTextSegments(
@@ -187,35 +261,52 @@ function inlineNodeSegments(
         break;
       }
       case "image": {
-        const source = sanitizeMarkdownImageSource(stringProp(node, "src"));
-        const alt = stringProp(node, "alt") || stringProp(node, "raw") || source?.src || "image";
+        const raw = stringProp(node, "raw");
+        const rawSource = stringProp(node, "src") || imageSourceFromRaw(raw);
+        const source = sanitizeMarkdownImageSource(rawSource);
+        const alt = stringProp(node, "alt") || raw || source?.src || "image";
         if (source) {
           const size = options.imageSize;
-          const graphic = {
+          const sourceDimensions = readMarkdownImageDimensions(source.base64);
+          const graphicBase = {
             kind: "image",
             src: source.src,
             alt,
             ...(source.mime ? { mime: source.mime } : {}),
             ...(source.base64 ? { base64: source.base64 } : {}),
-            ...(size?.minWidth != null || size?.maxWidth != null || size?.minHeight != null || size?.maxHeight != null
+            ...(sourceDimensions
               ? {
-                  displayWidth: size.maxWidth != null
-                    ? Math.min(size.maxWidth, Math.max(size.minWidth ?? 1, textCellWidth(alt)))
-                    : Math.max(size.minWidth ?? 1, textCellWidth(alt)),
-                  displayHeight: size.maxHeight != null
-                    ? Math.min(size.maxHeight, Math.max(size.minHeight ?? 1, 1))
-                    : Math.max(size.minHeight ?? 1, 1),
+                  naturalWidth: sourceDimensions.width,
+                  naturalHeight: sourceDimensions.height,
                 }
               : {}),
+            ...resolveImageDisplaySize(
+              alt,
+              size,
+              sourceDimensions?.width,
+              sourceDimensions?.height,
+            ),
           } satisfies TuiMarkdownGraphicSegment;
-          const resolvedBase64 = options.imageResolver?.(graphic)?.replace(/\s+/g, "");
+          const resolvedBase64 = options.imageResolver?.(graphicBase)?.replace(/\s+/g, "");
           const base64 = resolvedBase64 || source.base64;
           if (base64) {
+            const dimensions = readMarkdownImageDimensions(base64) ?? sourceDimensions;
+            const graphic = {
+              ...graphicBase,
+              base64,
+              ...(dimensions
+                ? {
+                    naturalWidth: dimensions.width,
+                    naturalHeight: dimensions.height,
+                  }
+                : {}),
+              ...resolveImageDisplaySize(alt, size, dimensions?.width, dimensions?.height),
+            } satisfies TuiMarkdownGraphicSegment;
             pushTextSegments(
               out,
               alt,
               mergeStyle(inheritedStyle, theme.link),
-              { ...graphic, base64 },
+              graphic,
             );
           } else {
             pushTextSegments(out, alt, mergeStyle(inheritedStyle, theme.link));

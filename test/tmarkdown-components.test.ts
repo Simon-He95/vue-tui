@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { TMarkdownText, TVirtualMarkdown } from "../src/markdown.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
+const TINY_PNG_DATA_URL =
+  "data:image/png;base64," +
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+
 function rowText(mounted: Awaited<ReturnType<typeof mountTerminal>>, y: number): string {
   return mounted.terminal
     .getRow(y)
@@ -27,6 +31,16 @@ function dispatchTimedWheel(container: HTMLElement, timeStamp: number): void {
     timeStamp: { value: timeStamp },
   });
   container.dispatchEvent(wheel);
+}
+
+function clickCell(
+  mounted: Awaited<ReturnType<typeof mountTerminal>>,
+  cellX: number,
+  cellY: number,
+): void {
+  mounted
+    .container()
+    ?.dispatchEvent(new MouseEvent("click", { clientX: cellX, clientY: cellY, bubbles: true }));
 }
 
 function complexEmojiTable(): { content: string; icons: readonly string[] } {
@@ -798,6 +812,80 @@ describe("markdown components", () => {
 
     expect(rowText(mounted, 0)).toBe("top-b");
     expect([2, 3, 4].map((y) => rowText(mounted, y))).toEqual(["- next-0", "- next-1", "- next-2"]);
+    mounted.unmount();
+  });
+
+  it("emits imageAction when a TMarkdownText image is clicked", async () => {
+    const actions: unknown[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TMarkdownText, {
+          x: 2,
+          y: 1,
+          w: 32,
+          h: 8,
+          content: `image: ![tiny](${TINY_PNG_DATA_URL})`,
+          imageActions: true,
+          imageMinWidth: 6,
+          imageMaxWidth: 6,
+          imageMinHeight: 3,
+          imageMaxHeight: 3,
+          imagePreserveAspectRatio: false,
+          onImageAction: (payload: unknown) => actions.push(payload),
+        }),
+      40,
+      10,
+    );
+
+    clickCell(mounted, 10, 2);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      rect: { x: 9, y: 1, w: 6, h: 3 },
+      cellX: 10,
+      cellY: 2,
+      image: { src: TINY_PNG_DATA_URL, displayWidth: 6, displayHeight: 3 },
+    });
+    mounted.unmount();
+  });
+
+  it("emits imageAction for visible TVirtualMarkdown images after scrolling", async () => {
+    const actions: unknown[] = [];
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 3,
+          content: ["before", "", `![tiny](${TINY_PNG_DATA_URL})`, "", "after", "", "tail"].join(
+            "\n",
+          ),
+          scrollTop: 2,
+          imageActions: true,
+          imageMinWidth: 5,
+          imageMaxWidth: 5,
+          imageMinHeight: 2,
+          imageMaxHeight: 2,
+          imagePreserveAspectRatio: false,
+          onImageAction: (payload: unknown) => actions.push(payload),
+        }),
+      32,
+      8,
+    );
+
+    await nextTick();
+    clickCell(mounted, 2, 1);
+    clickCell(mounted, 20, 1);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      rect: { x: 0, y: 0, w: 5, h: 2 },
+      cellX: 2,
+      cellY: 1,
+      rowIndex: 2,
+      image: { src: TINY_PNG_DATA_URL, displayWidth: 5, displayHeight: 2 },
+    });
     mounted.unmount();
   });
 });

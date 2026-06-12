@@ -4,11 +4,13 @@
  * Run: bun run run:image-showcase:terminal
  *
  * Demos:
- *   1. Real cat photo from cataas.com (fetched at startup, cached as base64)
- *   2. base64 data:image/png inline — red pixel PNG (graphics protocol)
+ *   1. Cat PNG from robohash.org (fetched at startup, cached as base64)
+ *   2. base64 data:image/png inline (graphics protocol)
  *   3. HTTP URL resolved via imageRenderer cache
- *   4. Broken URL — fallback to alt text
- *   5. Sizing constraints with imageMinWidth / imageMaxWidth
+ *   4. blob URL resolved via imageRenderer cache
+ *   5. file URL resolved via imageRenderer cache
+ *   6. Broken URL — fallback to alt text
+ *   7. Sizing constraints with imageMinWidth / imageMaxWidth
  *
  * On kitty / iTerm2 / WezTerm / Ghostty (with graphics protocol support):
  *   images render as terminal graphics.
@@ -17,62 +19,88 @@
  *   alt text fallback is displayed instead of blank space.
  */
 import { createServer, type Server } from "node:http";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-import { defineComponent, h } from "vue";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { dirname, extname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { defineComponent, h, ref } from "vue";
 import {
+  createOsc52ClipboardProvider,
   createStdinDriver,
   createStdoutRenderer,
   createTerminalApp,
   installTerminalCleanup,
 } from "../src/cli.js";
-import { TMarkdownText } from "../src/markdown.js";
+import { TMarkdownText, type TuiMarkdownImageActionPayload } from "../src/markdown.js";
 import { detectTerminalGraphicsCapabilities } from "../src/renderer/terminal-graphics.js";
+import { TBox, TText, TView, useTerminal } from "../src/vue.js";
 
 // ---- Pre-fetch cache for imageRenderer ----
 const imageBase64Cache = new Map<string, string | null>();
 
-// ---- 1×1 red pixel PNG for the tiny image demos ----
+// ---- Small red PNG fallback when the remote cat cannot be fetched ----
 const TINY_PNG_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
-const TINY_DATA_URL = `data:image/png;base64,${TINY_PNG_BASE64}`;
+  "iVBORw0KGgoAAAANSUhEUgAAABgAAAAMCAYAAAB4MH11AAAAG0lEQVR4nGP4r6Dwn5aYYdSCUQtGLRi1gDAGAG0Qhd9FkVPQAAAAAElFTkSuQmCC";
 
 // ---- Local HTTP server for remote-image demo ----
 const PORT = 19876;
 const CAT_HTTP_URL = `http://localhost:${PORT}/cat.png`;
-const TINY_HTTP_URL = `http://localhost:${PORT}/tiny.png`;
+const SHOWCASE_HTTP_URL = `http://localhost:${PORT}/showcase.png`;
+const BLOB_URL = "blob:https://vue-tui.local/showcase.png";
 const BROKEN_URL = `http://localhost:${PORT}/does-not-exist.png`;
 
-/** Fetch a remote image and return its base64 (without the data: prefix). */
-async function fetchImageBase64(url: string): Promise<string | null> {
+function isPngBuffer(buffer: Buffer): boolean {
+  return buffer.subarray(0, 8).equals(
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  );
+}
+
+/** Fetch a remote PNG and return its base64 (without the data: prefix). */
+async function fetchPngBase64(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10_000);
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: "image/png" },
+    });
     clearTimeout(timer);
     if (!res.ok) return null;
     const buf = Buffer.from(await res.arrayBuffer());
+    if (!isPngBuffer(buf)) return null;
     return buf.toString("base64");
   } catch {
     return null;
   }
 }
 
-async function startup(): Promise<{ server: Server; stop: () => void; catBase64: string | null }> {
-  // 1. Try to fetch a real cat photo
-  const catBase64 = await fetchImageBase64(
-    "https://cataas.com/cat?width=200&height=100",
+async function startup(): Promise<{
+  server: Server;
+  stop: () => void;
+  catBase64: string | null;
+  dataUrl: string;
+  fileUrl: string;
+}> {
+  // 1. Try to fetch a PNG cat image. Kitty f=100 expects PNG bytes.
+  const catBase64 = await fetchPngBase64(
+    "https://robohash.org/vue-tui-cat.png?size=200x100&set=set4",
   );
+  const showcaseBase64 = catBase64 ?? TINY_PNG_BASE64;
+  const dataUrl = `data:image/png;base64,${showcaseBase64}`;
+  const tempFilePath = resolve(tmpdir(), `vue-tui-image-showcase-${process.pid}.png`);
+  writeFileSync(tempFilePath, Buffer.from(showcaseBase64, "base64"));
+  const fileUrl = pathToFileURL(tempFilePath).href;
 
   // 2. Populate the cache
   if (catBase64) {
     imageBase64Cache.set(CAT_HTTP_URL, catBase64);
-    console.error(`[showcase] Fetched cat photo (${catBase64.length} chars base64)`);
+    console.error(`[showcase] Fetched cat PNG (${catBase64.length} chars base64)`);
   } else {
-    console.error("[showcase] Could not fetch cat photo, will show alt text");
+    console.error("[showcase] Could not fetch cat PNG, will show alt text");
   }
-  imageBase64Cache.set(TINY_HTTP_URL, TINY_PNG_BASE64);
+  imageBase64Cache.set(SHOWCASE_HTTP_URL, showcaseBase64);
+  imageBase64Cache.set(BLOB_URL, showcaseBase64);
+  imageBase64Cache.set(fileUrl, showcaseBase64);
   imageBase64Cache.set(BROKEN_URL, null);
 
   // 3. Start local HTTP server
@@ -91,15 +119,33 @@ async function startup(): Promise<{ server: Server; stop: () => void; catBase64:
       res.end(Buffer.from(catBase64, "base64"));
       return;
     }
+    if (req.url === "/showcase.png") {
+      res.writeHead(200, { "Content-Type": "image/png" });
+      res.end(Buffer.from(showcaseBase64, "base64"));
+      return;
+    }
     res.writeHead(200, { "Content-Type": "image/png" });
     res.end(pngBuffer);
   });
   await new Promise<void>((resolve) => server.listen(PORT, resolve));
 
-  return { server, stop: () => server.close(), catBase64 };
+  return {
+    server,
+    stop: () => {
+      server.close();
+      try {
+        rmSync(tempFilePath);
+      } catch {
+        // ignore
+      }
+    },
+    catBase64,
+    dataUrl,
+    fileUrl,
+  };
 }
 
-const { server, stop: stopServer, catBase64 } = await startup();
+const { stop: stopServer, catBase64, dataUrl, fileUrl } = await startup();
 
 // ---- Build showcase content ----
 const diagnostics = detectTerminalGraphicsCapabilities({
@@ -125,30 +171,130 @@ const CONTENT = [
   `---`,
   ``,
   // base64 image — data URL with embedded base64 works without imageRenderer
-  `data URL: ![red pixel data url](${TINY_DATA_URL})`,
+  `data URL: ![showcase data url](${dataUrl})`,
   ``,
   // remote image — resolved via imageRenderer cache
-  `http URL: ![red pixel http](${TINY_HTTP_URL})`,
+  `http URL: ![showcase http](${SHOWCASE_HTTP_URL})`,
+  ``,
+  // blob image — resolved via imageRenderer cache
+  `blob URL: ![showcase blob](${BLOB_URL})`,
+  ``,
+  // file image — resolved via imageRenderer cache
+  `file URL: ![showcase file](${fileUrl})`,
   ``,
   // broken URL — imageRenderer returns null → fallback to alt text
   `broken URL: ![this is fallback alt text](${BROKEN_URL})`,
   ``,
   // sizing demo
-  `sized (minW=20 maxW=40): ![sized red pixel](${TINY_DATA_URL})`,
+  `sized (minW=20 maxW=40): ![sized showcase](${dataUrl})`,
   ``,
   `Press q / Escape / Ctrl+C to exit.`,
 ].join("\n");
 
+const MENU_W = 34;
+const MENU_H = 5;
+const clipboard = createOsc52ClipboardProvider();
+
+function imageExtension(image: TuiMarkdownImageActionPayload["image"]): string {
+  const mime = image.mime?.toLowerCase();
+  if (mime?.includes("jpeg")) return ".jpg";
+  if (mime?.includes("png")) return ".png";
+  if (mime?.includes("gif")) return ".gif";
+  if (mime?.includes("webp")) return ".webp";
+  try {
+    const pathname = image.src.startsWith("file:")
+      ? fileURLToPath(image.src)
+      : new URL(image.src).pathname;
+    const ext = extname(pathname);
+    return ext || ".png";
+  } catch {
+    return ".png";
+  }
+}
+
+function downloadImage(image: TuiMarkdownImageActionPayload["image"]): string | null {
+  const base64 = image.base64 ?? imageBase64Cache.get(image.src) ?? null;
+  if (!base64) return null;
+  const dir = resolve(homedir(), "Downloads");
+  mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const path = resolve(dir, `vue-tui-image-${stamp}${imageExtension(image)}`);
+  writeFileSync(path, Buffer.from(base64, "base64"));
+  return path;
+}
+
 // ---- Vue App ----
 const App = defineComponent({
   setup() {
-    return () =>
+    const { scheduler } = useTerminal();
+    const menu = ref<{
+      image: TuiMarkdownImageActionPayload["image"];
+      x: number;
+      y: number;
+    } | null>(null);
+    const status = ref("");
+
+    function setStatus(value: string): void {
+      status.value = value;
+      scheduler.invalidate();
+    }
+
+    function openMenu(payload: TuiMarkdownImageActionPayload): void {
+      const columns = Math.max(1, Number(process.stdout.columns) || 80);
+      const rows = Math.max(1, Number(process.stdout.rows) || 24);
+      const rightX = payload.rect.x + payload.rect.w + 2;
+      const leftX = payload.rect.x - MENU_W - 2;
+      const x =
+        rightX + MENU_W < columns
+          ? rightX
+          : leftX > 0
+            ? leftX
+            : Math.min(Math.max(1, payload.rect.x), Math.max(1, columns - MENU_W - 1));
+      menu.value = {
+        image: payload.image,
+        x,
+        y: Math.min(Math.max(1, payload.rect.y), Math.max(1, rows - MENU_H - 1)),
+      };
+      scheduler.invalidate();
+    }
+
+    function closeMenu(): void {
+      if (!menu.value) return;
+      menu.value = null;
+      scheduler.invalidate();
+    }
+
+    async function copyUrl(): Promise<void> {
+      const item = menu.value;
+      if (!item) return;
+      try {
+        await clipboard.writeText(item.image.src);
+        setStatus("Copied image URL");
+      } catch {
+        setStatus("Clipboard unavailable");
+      }
+      menu.value = null;
+      scheduler.flushNow();
+    }
+
+    function saveImage(): void {
+      const item = menu.value;
+      if (!item) return;
+      const path = downloadImage(item.image);
+      setStatus(path ? `Downloaded ${path}` : "No image bytes available");
+      menu.value = null;
+      scheduler.flushNow();
+    }
+
+    return () => [
       h(TMarkdownText, {
         x: 1,
         y: 1,
         w: 60,
         content: CONTENT,
         final: true,
+        imageActions: true,
+        onImageAction: openMenu,
         imageRenderer(image) {
           return imageBase64Cache.get(image.src) ?? null;
         },
@@ -160,7 +306,106 @@ const App = defineComponent({
         imageMinHeight: 4,
         imageMaxHeight: 12,
         imagePreserveAspectRatio: true,
-      });
+      }),
+      status.value
+        ? h(TText, {
+            x: 1,
+            y: Math.max(1, (Number(process.stdout.rows) || 24) - 2),
+            w: Math.max(1, (Number(process.stdout.columns) || 80) - 2),
+            value: status.value,
+            style: { fg: "cyan" },
+          })
+        : null,
+      menu.value
+        ? [
+            h(TView, {
+              x: 0,
+              y: 0,
+              w: Math.max(1, Number(process.stdout.columns) || 80),
+              h: Math.max(1, Number(process.stdout.rows) || 24),
+              zIndex: 20,
+              focusable: true,
+              selectable: false,
+              autoFocus: true,
+              onClick: closeMenu,
+              onKeydown: (event: { key?: string; preventDefault?: () => void }) => {
+                if (event.key !== "Escape") return;
+                event.preventDefault?.();
+                closeMenu();
+              },
+            }),
+            h(
+              TBox,
+              {
+                x: menu.value.x,
+                y: menu.value.y,
+                w: MENU_W,
+                h: MENU_H,
+                zIndex: 30,
+                title: " Image ",
+                padding: 0,
+                style: { fg: "gray", bg: "black" },
+                titleStyle: { fg: "cyan", bg: "black", bold: true },
+              },
+              () => [
+                h(
+                  TView,
+                  {
+                    x: 0,
+                    y: 0,
+                    w: MENU_W - 2,
+                    h: 1,
+                    zIndex: 1,
+                    selectable: false,
+                    onClick: (event: { preventDefault?: () => void }) => {
+                      event.preventDefault?.();
+                      void copyUrl();
+                    },
+                  },
+                  () =>
+                    h(TText, {
+                      x: 0,
+                      y: 0,
+                      w: MENU_W - 2,
+                      value: "  Copy URL",
+                      style: { fg: "white", bg: "black" },
+                    }),
+                ),
+                h(
+                  TView,
+                  {
+                    x: 0,
+                    y: 1,
+                    w: MENU_W - 2,
+                    h: 1,
+                    zIndex: 1,
+                    selectable: false,
+                    onClick: (event: { preventDefault?: () => void }) => {
+                      event.preventDefault?.();
+                      saveImage();
+                    },
+                  },
+                  () =>
+                    h(TText, {
+                      x: 0,
+                      y: 0,
+                      w: MENU_W - 2,
+                      value: "  Download image",
+                      style: { fg: "white", bg: "black" },
+                    }),
+                ),
+                h(TText, {
+                  x: 0,
+                  y: 2,
+                  w: MENU_W - 2,
+                  value: "  Esc closes",
+                  style: { fg: "gray", bg: "black", dim: true },
+                }),
+              ],
+            ),
+          ]
+        : null,
+    ];
   },
 });
 
@@ -172,6 +417,7 @@ const app = createTerminalApp({
   rows,
   component: App,
   defaultStyle: { fg: "white" },
+  clipboard,
 });
 app.mount();
 
@@ -200,8 +446,17 @@ driver = createStdinDriver({
   dispatch: (event) => {
     if (
       event.type === "keydown" &&
-      (event.key === "q" || event.key === "Escape" || (event.key === "c" && event.ctrl))
+      (event.key === "q" || (event.key === "c" && event.ctrl))
     ) {
+      cleanupHandle.uninstall();
+      cleanup();
+      process.exit(0);
+      return true;
+    }
+    if (event.type === "keydown" && event.key === "Escape" && app.events.dispatch(event)) {
+      return true;
+    }
+    if (event.type === "keydown" && event.key === "Escape") {
       cleanupHandle.uninstall();
       cleanup();
       process.exit(0);

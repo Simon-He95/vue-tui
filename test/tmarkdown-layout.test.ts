@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTerminal, type Style, type Terminal } from "../src/index.js";
+import {
+  detectTerminalGraphicsCapabilities,
+  registerTerminalGraphicsOutput,
+} from "../src/renderer/terminal-graphics.js";
 import { markdownAstToBlocks } from "../src/vue/markdown/ast.js";
 import { buildMarkdownBlocks, buildMarkdownVisualRows } from "../src/vue/markdown/document.js";
 import { layoutMarkdownBlocks, layoutMarkdownBlocksCached } from "../src/vue/markdown/layout.js";
@@ -8,7 +12,10 @@ import {
   isSafeMarkdownLink,
   type TuiMarkdownParser,
 } from "../src/vue/markdown/parser.js";
-import { paintMarkdownVisualRow } from "../src/vue/markdown/render.js";
+import {
+  collectVisibleMarkdownImageGraphicIds,
+  paintMarkdownVisualRow,
+} from "../src/vue/markdown/render.js";
 import { DEFAULT_TUI_MARKDOWN_THEME } from "../src/vue/markdown/theme.js";
 import type { TuiMarkdownNode } from "../src/vue/markdown/types.js";
 import { withTextWidthProvider } from "../src/vue/utils/text.js";
@@ -859,5 +866,83 @@ describe("markdown layout", () => {
       href: "https://example.com",
     });
     expect(writes[1]?.style).toBe(writes[0]?.style);
+  });
+
+  it("clears stale multi-row markdown images when a covered row repaints", () => {
+    const terminal = createTerminal({ cols: 20, rows: 6 });
+    const cleared: string[] = [];
+    const unregister = registerTerminalGraphicsOutput(terminal, {
+      capabilities: detectTerminalGraphicsCapabilities({
+        stdoutIsTTY: true,
+        protocol: "kitty",
+        force: true,
+      }),
+      queue: () => true,
+      clear: (id) => {
+        cleared.push(id);
+        return true;
+      },
+      isActive: () => true,
+    });
+    const baseStyle = Object.freeze({ fg: "white" });
+    const image = {
+      kind: "image" as const,
+      src: "data:image/png;base64,QUJD",
+      base64: "QUJD",
+      displayWidth: 4,
+      displayHeight: 3,
+    };
+    const imageRow = {
+      key: "image-row",
+      blockKey: "block",
+      rowInBlock: 0,
+      plainText: "",
+      segments: [{ text: "    ", cells: 4, graphic: image, fallbackText: "image" }],
+    };
+    const blankRow = {
+      key: "blank-row",
+      blockKey: "block",
+      rowInBlock: 1,
+      plainText: "",
+      segments: [],
+    };
+
+    try {
+      paintMarkdownVisualRow(terminal, imageRow, {
+        x: 0,
+        y: 1,
+        w: 8,
+        baseStyle,
+      });
+      const keepGraphicIds = collectVisibleMarkdownImageGraphicIds([imageRow, blankRow, blankRow], {
+        x: 0,
+        y: 1,
+        w: 8,
+        h: 3,
+        rowOffset: 0,
+        clipStart: 0,
+      });
+      paintMarkdownVisualRow(terminal, blankRow, {
+        x: 0,
+        y: 2,
+        w: 8,
+        baseStyle,
+        keepGraphicIds,
+      });
+      expect(cleared).toHaveLength(0);
+
+      paintMarkdownVisualRow(terminal, blankRow, {
+        x: 0,
+        y: 2,
+        w: 8,
+        baseStyle,
+        keepGraphicIds: new Set(),
+      });
+
+      expect(cleared).toHaveLength(1);
+    } finally {
+      unregister();
+      terminal.dispose();
+    }
   });
 });

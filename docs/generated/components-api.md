@@ -1410,25 +1410,33 @@ Import: `@simon_he/vue-tui/markdown`
 
 ### Props
 
-| 名称                        | 类型                                                                                        | 默认值                 | 必填 | 说明                                                                              |
-| --------------------------- | ------------------------------------------------------------------------------------------- | ---------------------- | ---- | --------------------------------------------------------------------------------- |
-| <code>x</code>              | <code>number</code>                                                                         | —                      | 是   | Left position in terminal cells.                                                  |
-| <code>y</code>              | <code>number</code>                                                                         | —                      | 是   | Top position in terminal cells.                                                   |
-| <code>zIndex</code>         | <code>number</code>                                                                         | <code>0</code>         | 否   | Render and event ordering within the current plane.                               |
-| <code>content</code>        | <code>string</code>                                                                         | —                      | 是   | Markdown source rendered into terminal visual rows.                               |
-| <code>w</code>              | <code>number</code>                                                                         | —                      | 是   | Width in terminal cells.                                                          |
-| <code>h</code>              | <code>number</code>                                                                         | <code>undefined</code> | 否   | Height in terminal cells.                                                         |
-| <code>style</code>          | <code>Style</code>                                                                          | <code>undefined</code> | 否   | Base terminal cell style override.                                                |
-| <code>final</code>          | <code>boolean</code>                                                                        | <code>true</code>      | 否   | Parses the markdown as a complete document when enabled.                          |
-| <code>streaming</code>      | <code>boolean</code>                                                                        | <code>false</code>     | 否   | Coalesces rapid content updates into frame-scheduled markdown rebuilds.           |
-| <code>clear</code>          | <code>boolean</code>                                                                        | <code>true</code>      | 否   | Clears the component rectangle before drawing content.                            |
-| <code>customHtmlTags</code> | <code>readonly string[]</code>                                                              | <code>undefined</code> | 否   | Additional HTML tag names accepted by the markdown parser.                        |
-| <code>theme</code>          | <code>TuiMarkdownThemeOverrides</code>                                                      | <code>undefined</code> | 否   | Markdown theme token overrides for parsed blocks and inline segments.             |
-| <code>imageRenderer</code>  | <code>((image: TuiMarkdownGraphicSegment) =&gt; string &#124; null &#124; undefined)</code> | <code>undefined</code> | 否   | Optional resolver for markdown image payloads before terminal graphics rendering. |
+| 名称                                  | 类型                                                                                        | 默认值                 | 必填 | 说明                                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------- | ---- | --------------------------------------------------------------------------------- |
+| <code>x</code>                        | <code>number</code>                                                                         | —                      | 是   | Left position in terminal cells.                                                  |
+| <code>y</code>                        | <code>number</code>                                                                         | —                      | 是   | Top position in terminal cells.                                                   |
+| <code>zIndex</code>                   | <code>number</code>                                                                         | <code>0</code>         | 否   | Render and event ordering within the current plane.                               |
+| <code>content</code>                  | <code>string</code>                                                                         | —                      | 是   | Markdown source rendered into terminal visual rows.                               |
+| <code>w</code>                        | <code>number</code>                                                                         | —                      | 是   | Width in terminal cells.                                                          |
+| <code>h</code>                        | <code>number</code>                                                                         | <code>undefined</code> | 否   | Height in terminal cells.                                                         |
+| <code>style</code>                    | <code>Style</code>                                                                          | <code>undefined</code> | 否   | Base terminal cell style override.                                                |
+| <code>final</code>                    | <code>boolean</code>                                                                        | <code>true</code>      | 否   | Parses the markdown as a complete document when enabled.                          |
+| <code>streaming</code>                | <code>boolean</code>                                                                        | <code>false</code>     | 否   | Coalesces rapid content updates into frame-scheduled markdown rebuilds.           |
+| <code>clear</code>                    | <code>boolean</code>                                                                        | <code>true</code>      | 否   | Clears the component rectangle before drawing content.                            |
+| <code>customHtmlTags</code>           | <code>readonly string[]</code>                                                              | <code>undefined</code> | 否   | Additional HTML tag names accepted by the markdown parser.                        |
+| <code>theme</code>                    | <code>TuiMarkdownThemeOverrides</code>                                                      | <code>undefined</code> | 否   | Markdown theme token overrides for parsed blocks and inline segments.             |
+| <code>imageRenderer</code>            | <code>((image: TuiMarkdownGraphicSegment) =&gt; string &#124; null &#124; undefined)</code> | <code>undefined</code> | 否   | Optional resolver for markdown image payloads before terminal graphics rendering. |
+| <code>imageMinWidth</code>            | <code>number</code>                                                                         | <code>undefined</code> | 否   | —                                                                                 |
+| <code>imageMaxWidth</code>            | <code>number</code>                                                                         | <code>undefined</code> | 否   | —                                                                                 |
+| <code>imageMinHeight</code>           | <code>number</code>                                                                         | <code>undefined</code> | 否   | —                                                                                 |
+| <code>imageMaxHeight</code>           | <code>number</code>                                                                         | <code>undefined</code> | 否   | —                                                                                 |
+| <code>imagePreserveAspectRatio</code> | <code>boolean</code>                                                                        | <code>true</code>      | 否   | —                                                                                 |
+| <code>imageActions</code>             | <code>boolean</code>                                                                        | <code>false</code>     | 否   | —                                                                                 |
 
 ### Events
 
-—
+| 名称                     | Payload                                    | 说明 |
+| ------------------------ | ------------------------------------------ | ---- |
+| <code>imageAction</code> | <code>TuiMarkdownImageActionPayload</code> | —    |
 
 ## TMermaid
 
@@ -2541,31 +2549,38 @@ Import: `@simon_he/vue-tui/markdown`
 
 ### Props
 
-| 名称                        | 类型                                                                                        | 默认值                    | 必填 | 说明                                                                                    |
-| --------------------------- | ------------------------------------------------------------------------------------------- | ------------------------- | ---- | --------------------------------------------------------------------------------------- |
-| <code>x</code>              | <code>number</code>                                                                         | —                         | 是   | Left position in terminal cells.                                                        |
-| <code>y</code>              | <code>number</code>                                                                         | —                         | 是   | Top position in terminal cells.                                                         |
-| <code>w</code>              | <code>number</code>                                                                         | —                         | 是   | Width in terminal cells.                                                                |
-| <code>h</code>              | <code>number</code>                                                                         | —                         | 是   | Height in terminal cells.                                                               |
-| <code>zIndex</code>         | <code>number</code>                                                                         | <code>0</code>            | 否   | Render and event ordering within the current plane.                                     |
-| <code>content</code>        | <code>string</code>                                                                         | <code>&quot;&quot;</code> | 否   | Markdown source rendered when external blocks are not provided.                         |
-| <code>blocks</code>         | <code>readonly TuiMarkdownBlock[]</code>                                                    | <code>undefined</code>    | 否   | Prebuilt markdown blocks used instead of parsing content.                               |
-| <code>scrollTop</code>      | <code>number</code>                                                                         | <code>0</code>            | 否   | Controlled top visual-row offset within the markdown viewport.                          |
-| <code>style</code>          | <code>Style</code>                                                                          | <code>undefined</code>    | 否   | Base terminal cell style override.                                                      |
-| <code>final</code>          | <code>boolean</code>                                                                        | <code>true</code>         | 否   | Parses the markdown as a complete document when enabled.                                |
-| <code>streaming</code>      | <code>boolean</code>                                                                        | <code>false</code>        | 否   | Coalesces rapid content updates into frame-scheduled markdown rebuilds.                 |
-| <code>autoFocus</code>      | <code>boolean</code>                                                                        | <code>false</code>        | 否   | Requests focus when the component becomes visible.                                      |
-| <code>selectable</code>     | <code>boolean</code>                                                                        | <code>true</code>         | 否   | Controls whether native terminal text selection may start inside the markdown viewport. |
-| <code>customHtmlTags</code> | <code>readonly string[]</code>                                                              | <code>undefined</code>    | 否   | Additional HTML tag names accepted by the markdown parser.                              |
-| <code>theme</code>          | <code>TuiMarkdownThemeOverrides</code>                                                      | <code>undefined</code>    | 否   | Markdown theme token overrides for parsed blocks and inline segments.                   |
-| <code>imageRenderer</code>  | <code>((image: TuiMarkdownGraphicSegment) =&gt; string &#124; null &#124; undefined)</code> | <code>undefined</code>    | 否   | Optional resolver for markdown image payloads before terminal graphics rendering.       |
+| 名称                                  | 类型                                                                                        | 默认值                    | 必填 | 说明                                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------- | ---- | --------------------------------------------------------------------------------------- |
+| <code>x</code>                        | <code>number</code>                                                                         | —                         | 是   | Left position in terminal cells.                                                        |
+| <code>y</code>                        | <code>number</code>                                                                         | —                         | 是   | Top position in terminal cells.                                                         |
+| <code>w</code>                        | <code>number</code>                                                                         | —                         | 是   | Width in terminal cells.                                                                |
+| <code>h</code>                        | <code>number</code>                                                                         | —                         | 是   | Height in terminal cells.                                                               |
+| <code>zIndex</code>                   | <code>number</code>                                                                         | <code>0</code>            | 否   | Render and event ordering within the current plane.                                     |
+| <code>content</code>                  | <code>string</code>                                                                         | <code>&quot;&quot;</code> | 否   | Markdown source rendered when external blocks are not provided.                         |
+| <code>blocks</code>                   | <code>readonly TuiMarkdownBlock[]</code>                                                    | <code>undefined</code>    | 否   | Prebuilt markdown blocks used instead of parsing content.                               |
+| <code>scrollTop</code>                | <code>number</code>                                                                         | <code>0</code>            | 否   | Controlled top visual-row offset within the markdown viewport.                          |
+| <code>style</code>                    | <code>Style</code>                                                                          | <code>undefined</code>    | 否   | Base terminal cell style override.                                                      |
+| <code>final</code>                    | <code>boolean</code>                                                                        | <code>true</code>         | 否   | Parses the markdown as a complete document when enabled.                                |
+| <code>streaming</code>                | <code>boolean</code>                                                                        | <code>false</code>        | 否   | Coalesces rapid content updates into frame-scheduled markdown rebuilds.                 |
+| <code>autoFocus</code>                | <code>boolean</code>                                                                        | <code>false</code>        | 否   | Requests focus when the component becomes visible.                                      |
+| <code>selectable</code>               | <code>boolean</code>                                                                        | <code>true</code>         | 否   | Controls whether native terminal text selection may start inside the markdown viewport. |
+| <code>customHtmlTags</code>           | <code>readonly string[]</code>                                                              | <code>undefined</code>    | 否   | Additional HTML tag names accepted by the markdown parser.                              |
+| <code>theme</code>                    | <code>TuiMarkdownThemeOverrides</code>                                                      | <code>undefined</code>    | 否   | Markdown theme token overrides for parsed blocks and inline segments.                   |
+| <code>imageRenderer</code>            | <code>((image: TuiMarkdownGraphicSegment) =&gt; string &#124; null &#124; undefined)</code> | <code>undefined</code>    | 否   | Optional resolver for markdown image payloads before terminal graphics rendering.       |
+| <code>imageMinWidth</code>            | <code>number</code>                                                                         | <code>undefined</code>    | 否   | —                                                                                       |
+| <code>imageMaxWidth</code>            | <code>number</code>                                                                         | <code>undefined</code>    | 否   | —                                                                                       |
+| <code>imageMinHeight</code>           | <code>number</code>                                                                         | <code>undefined</code>    | 否   | —                                                                                       |
+| <code>imageMaxHeight</code>           | <code>number</code>                                                                         | <code>undefined</code>    | 否   | —                                                                                       |
+| <code>imagePreserveAspectRatio</code> | <code>boolean</code>                                                                        | <code>true</code>         | 否   | —                                                                                       |
+| <code>imageActions</code>             | <code>boolean</code>                                                                        | <code>false</code>        | 否   | —                                                                                       |
 
 ### Events
 
-| 名称                          | Payload                            | 说明                                                   |
-| ----------------------------- | ---------------------------------- | ------------------------------------------------------ |
-| <code>update:scrollTop</code> | <code>number</code>                | Emitted when the top visible row offset should change. |
-| <code>scroll</code>           | <code>number</code>                | Emitted when the visible scroll offset changes.        |
-| <code>focus</code>            | <code>void</code>                  | Emitted when the component receives focus.             |
-| <code>blur</code>             | <code>void</code>                  | Emitted when the component loses focus.                |
-| <code>keydown</code>          | <code>TerminalKeyboardEvent</code> | Emitted for keydown events.                            |
+| 名称                          | Payload                                    | 说明                                                   |
+| ----------------------------- | ------------------------------------------ | ------------------------------------------------------ |
+| <code>update:scrollTop</code> | <code>number</code>                        | Emitted when the top visible row offset should change. |
+| <code>scroll</code>           | <code>number</code>                        | Emitted when the visible scroll offset changes.        |
+| <code>focus</code>            | <code>void</code>                          | Emitted when the component receives focus.             |
+| <code>blur</code>             | <code>void</code>                          | Emitted when the component loses focus.                |
+| <code>keydown</code>          | <code>TerminalKeyboardEvent</code>         | Emitted for keydown events.                            |
+| <code>imageAction</code>      | <code>TuiMarkdownImageActionPayload</code> | —                                                      |

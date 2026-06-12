@@ -21,8 +21,19 @@ export type TuiMarkdownGraphicSegment = Readonly<{
   alt?: string;
   mime?: string;
   base64?: string;
+  naturalWidth?: number;
+  naturalHeight?: number;
   displayWidth?: number;
   displayHeight?: number;
+}>;
+
+export type TuiMarkdownImageActionPayload = Readonly<{
+  image: TuiMarkdownGraphicSegment;
+  rect: Readonly<{ x: number; y: number; w: number; h: number }>;
+  cellX: number;
+  cellY: number;
+  rowIndex: number;
+  segmentIndex: number;
 }>;
 
 export type TuiMarkdownInlineSegment = Readonly<{

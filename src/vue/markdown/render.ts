@@ -1,8 +1,10 @@
 import type { Style, Terminal } from "../../core/types.js";
 import { isTerminalGraphicsProtocol } from "../../renderer/terminal-graphics.js";
 import {
+  createKittyDeleteGraphicsSequence,
   createIterm2InlineImageSequence,
   createKittyGraphicsSequence,
+  createKittyPlacementSequence,
   getTerminalGraphicsOutput,
   stableTerminalGraphicNumericId,
 } from "../../renderer/terminal-graphics.js";
@@ -32,9 +34,11 @@ type ActiveMarkdownImageGraphic = Readonly<{
   h: number;
 }>;
 
+type MarkdownImageGraphicQueueResult = "queued" | "unavailable" | "rejected";
+
 const activeMarkdownImageGraphics = new WeakMap<Terminal, Map<string, ActiveMarkdownImageGraphic>>();
 
-function markdownImageGraphicId(
+export function markdownImageGraphicId(
   segment: NonNullable<TuiMarkdownVisualRow["segments"][number]["graphic"]>,
   rect: Readonly<{ x: number; y: number }>,
 ): string {
@@ -69,13 +73,25 @@ function clearStaleMarkdownImageGraphicsForRow(
   terminal: Terminal,
   y: number,
   keepIds: ReadonlySet<string>,
+  keepVisibleIds?: ReadonlySet<string>,
 ): void {
   const active = activeMarkdownImageGraphics.get(terminal);
   if (!active?.size) return;
   for (const [id, rect] of active) {
-    if (rect.y !== y || keepIds.has(id)) continue;
+    const intersectsRow = keepVisibleIds ? y >= rect.y && y < rect.y + rect.h : rect.y === y;
+    if (!intersectsRow || keepIds.has(id) || keepVisibleIds?.has(id)) continue;
     clearTrackedMarkdownImageGraphic(terminal, id);
   }
+}
+
+function canAttemptMarkdownImageGraphic(
+  terminal: Terminal,
+  segment: NonNullable<TuiMarkdownVisualRow["segments"][number]["graphic"]>,
+): boolean {
+  if (segment.kind !== "image" || !segment.base64) return false;
+  const output = getTerminalGraphicsOutput(terminal);
+  const protocol = output?.capabilities.preferredProtocol;
+  return Boolean(output?.capabilities.supported && isTerminalGraphicsProtocol(protocol));
 }
 
 export function clearMarkdownImageGraphics(
@@ -102,11 +118,13 @@ function queueMarkdownImageGraphic(
   terminal: Terminal,
   segment: NonNullable<TuiMarkdownVisualRow["segments"][number]["graphic"]>,
   rect: Readonly<{ x: number; y: number; w: number }>,
-): boolean {
-  if (segment.kind !== "image" || !segment.base64) return false;
+): MarkdownImageGraphicQueueResult {
+  if (segment.kind !== "image" || !segment.base64) return "unavailable";
   const output = getTerminalGraphicsOutput(terminal);
   const protocol = output?.capabilities.preferredProtocol;
-  if (!output?.capabilities.supported || !isTerminalGraphicsProtocol(protocol)) return false;
+  if (!output?.capabilities.supported || !isTerminalGraphicsProtocol(protocol)) {
+    return "unavailable";
+  }
 
   const width = Math.max(1, Math.floor(segment.displayWidth ?? rect.w));
   const height = Math.max(1, Math.floor(segment.displayHeight ?? 1));
@@ -120,6 +138,7 @@ function queueMarkdownImageGraphic(
           placementId,
           columns: width,
           rows: height,
+          zIndex: -1,
         })
       : protocol === "iterm2"
         ? createIterm2InlineImageSequence(segment.base64, {
@@ -129,7 +148,24 @@ function queueMarkdownImageGraphic(
             doNotMoveCursor: true,
           })
         : "";
-  if (!sequence) return false;
+  if (!sequence) return "unavailable";
+  const clearSequence =
+    protocol === "kitty"
+      ? createKittyDeleteGraphicsSequence({
+          imageId,
+          placementId,
+        })
+      : undefined;
+  const resizeSequence =
+    protocol === "kitty"
+      ? createKittyPlacementSequence({
+          imageId,
+          placementId,
+          columns: width,
+          rows: height,
+          zIndex: -1,
+        })
+      : undefined;
 
   const accepted = output.queue({
     id,
@@ -139,12 +175,56 @@ function queueMarkdownImageGraphic(
     h: height,
     protocol,
     sequence,
+    resizeSequence,
+    clearSequence,
     fallbackText: segment.alt ?? "image",
   });
   if (accepted) {
     rememberMarkdownImageGraphic(terminal, id, { x: rect.x, y: rect.y, w: width, h: height });
   }
-  return accepted;
+  return accepted ? "queued" : "rejected";
+}
+
+export function collectVisibleMarkdownImageGraphicIds(
+  rows: readonly TuiMarkdownVisualRow[],
+  options: Readonly<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    rowOffset: number;
+    clipStart: number;
+  }>,
+): ReadonlySet<string> {
+  const keepIds = new Set<string>();
+  if (options.w <= 0 || options.h <= 0) return keepIds;
+
+  const clipStart = Math.max(0, Math.floor(options.clipStart));
+  const clipEnd = clipStart + options.w;
+  const firstRow = Math.max(0, Math.floor(options.rowOffset));
+  const lastRow = Math.min(rows.length, firstRow + Math.max(0, Math.floor(options.h)));
+
+  for (let rowIndex = firstRow; rowIndex < lastRow; rowIndex++) {
+    const row = rows[rowIndex];
+    if (!row) continue;
+    let logicalX = 0;
+    for (const segment of row.segments) {
+      const segmentStart = logicalX;
+      const segmentEnd = logicalX + segment.cells;
+      logicalX = segmentEnd;
+      if (!segment.graphic) continue;
+      if (segmentEnd <= clipStart || segmentStart >= clipEnd) continue;
+      if (Math.max(segmentStart, clipStart) !== segmentStart) continue;
+      keepIds.add(
+        markdownImageGraphicId(segment.graphic, {
+          x: options.x + segmentStart - clipStart,
+          y: options.y + rowIndex - firstRow,
+        }),
+      );
+    }
+  }
+
+  return keepIds;
 }
 
 export function paintMarkdownVisualRow(
@@ -157,6 +237,7 @@ export function paintMarkdownVisualRow(
     clipStart?: number;
     baseStyle: Style;
     clear?: boolean;
+    keepGraphicIds?: ReadonlySet<string>;
   }>,
 ): void {
   const clipStart = Math.max(0, Math.floor(options.clipStart ?? 0));
@@ -164,7 +245,7 @@ export function paintMarkdownVisualRow(
   if (!row) {
     if (options.clear !== false) {
       terminal.write(spaces(options.w), { x: options.x, y: options.y, style: options.baseStyle });
-      clearStaleMarkdownImageGraphicsForRow(terminal, options.y, new Set());
+      clearStaleMarkdownImageGraphicsForRow(terminal, options.y, new Set(), options.keepGraphicIds);
     }
     return;
   }
@@ -201,7 +282,7 @@ export function paintMarkdownVisualRow(
       }
 
       const cellX = options.x + used;
-      const queuedGraphic =
+      const queueResult =
         visibleStart === segmentStart &&
         visibleCells > 0 &&
         queueMarkdownImageGraphic(terminal, segment.graphic, {
@@ -209,13 +290,18 @@ export function paintMarkdownVisualRow(
           y: options.y,
           w: visibleCells,
         });
+      const graphicAvailable =
+        queueResult || canAttemptMarkdownImageGraphic(terminal, segment.graphic);
+      const queuedGraphic = queueResult === "queued";
+      const suppressFallback =
+        queuedGraphic || queueResult === "rejected" || graphicAvailable === true;
 
       if (queuedGraphic) {
         queuedGraphics.add(markdownImageGraphicId(segment.graphic, { x: cellX, y: options.y }));
       }
 
       terminal.write(
-        queuedGraphic
+        suppressFallback
           ? spaces(visibleCells)
           : sliceByCellsRange(
               segment.fallbackText ?? segment.graphic.alt ?? "image",
@@ -225,7 +311,7 @@ export function paintMarkdownVisualRow(
         {
           x: cellX,
           y: options.y,
-          style: segmentStyle,
+          style: suppressFallback ? options.baseStyle : segmentStyle,
         },
       );
 
@@ -280,7 +366,12 @@ export function paintMarkdownVisualRow(
       }
     });
   }
-  clearStaleMarkdownImageGraphicsForRow(terminal, options.y, queuedGraphics);
+  clearStaleMarkdownImageGraphicsForRow(
+    terminal,
+    options.y,
+    queuedGraphics,
+    options.keepGraphicIds,
+  );
   if (used < options.w && options.clear !== false) {
     terminal.write(spaces(options.w - used), {
       x: options.x + used,

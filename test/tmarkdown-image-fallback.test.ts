@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createStdoutRenderer } from "../src/cli.js";
 import { TMarkdownText } from "../src/markdown.js";
+import { sanitizeMarkdownImageSource } from "../src/vue/markdown/image.js";
 import { h, mountTerminal, nextTick } from "./ui-regressions-support.js";
 
 type MountedTerminal = Awaited<ReturnType<typeof mountTerminal>>;
@@ -39,6 +40,10 @@ const TINY_PNG_DATA_URL =
 
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+
+const WIDE_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAABgAAAAMCAYAAAB4MH11AAAAG0lEQVR4nGP4r6Dwn5aYYdSCUQtGLRi1gDAGAG0Qhd9FkVPQAAAAAElFTkSuQmCC";
+const WIDE_PNG_DATA_URL = `data:image/png;base64,${WIDE_PNG_BASE64}`;
 
 describe("markdown image fallback and sizing", () => {
   it("shows alt text fallback when terminal graphics are not supported", async () => {
@@ -371,6 +376,67 @@ describe("markdown image fallback and sizing", () => {
     expect(graphicSegment!.fallbackText).toBe("data image");
   });
 
+  it("reserves rows for sized image graphics", async () => {
+    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import(
+      "../src/markdown.js"
+    );
+    const parser = createTuiMarkdownParser({ streaming: false });
+    const rows = buildMarkdownVisualRows(
+      `data URL: ![data image](${TINY_PNG_DATA_URL})\n\nnext line`,
+      80,
+      parser,
+      {
+        imageSize: { minWidth: 20, maxWidth: 40, minHeight: 4, maxHeight: 4 },
+      },
+    );
+
+    const imageRowIndex = rows.findIndex((row) => row.segments.some((segment) => segment.graphic));
+    const nextRowIndex = rows.findIndex((row) => row.plainText.includes("next line"));
+
+    expect(imageRowIndex).toBeGreaterThanOrEqual(0);
+    expect(nextRowIndex - imageRowIndex).toBeGreaterThanOrEqual(4);
+    expect(rows.slice(imageRowIndex + 1, imageRowIndex + 4).map((row) => row.plainText)).toEqual([
+      "",
+      "",
+      "",
+    ]);
+  });
+
+  it("preserves image aspect ratio from source dimensions", async () => {
+    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import(
+      "../src/markdown.js"
+    );
+    const remoteUrl = "http://localhost:19999/wide.png";
+    const rows = buildMarkdownVisualRows(
+      [
+        `data URL: ![short](${WIDE_PNG_DATA_URL})`,
+        "",
+        `http URL: ![a much longer remote alt label](${remoteUrl})`,
+      ].join("\n"),
+      80,
+      createTuiMarkdownParser({ streaming: false }),
+      {
+        imageResolver: (image) => (image.src === remoteUrl ? WIDE_PNG_BASE64 : null),
+        imageSize: { minWidth: 10, maxWidth: 40, minHeight: 4, maxHeight: 12 },
+      },
+    );
+
+    const graphics = rows
+      .flatMap((row) => row.segments)
+      .map((segment) => segment.graphic)
+      .filter((graphic): graphic is NonNullable<typeof graphic> => Boolean(graphic));
+
+    expect(graphics).toHaveLength(2);
+    expect(graphics.map((graphic) => [graphic.naturalWidth, graphic.naturalHeight])).toEqual([
+      [24, 12],
+      [24, 12],
+    ]);
+    expect(graphics.map((graphic) => [graphic.displayWidth, graphic.displayHeight])).toEqual([
+      [16, 4],
+      [16, 4],
+    ]);
+  });
+
   it("sized image renders kitty graphic when graphics enabled", async () => {
     await withEnv(
       {
@@ -420,9 +486,241 @@ describe("markdown image fallback and sizing", () => {
 
           // Kitty graphics sequence must be present.
           expect(stdout).toContain("\u001B_G");
+          expect(stdout).toContain("z=-1");
           expect(stdout).toContain("\u001B\\");
           // Alt text must not leak as visible text.
           expect(rowText(mounted, 0)).not.toContain("data image");
+          const placeholderCells = mounted.terminal.getRow(0).slice(0, 20);
+          expect(
+            placeholderCells.some((cell) => cell.style.underline || cell.style.href),
+          ).toBe(false);
+        } finally {
+          renderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
+
+  it("renders data URL and imageRenderer-resolved URL graphics in the same markdown block", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        const remoteUrl = "http://localhost:19999/tiny.png";
+        const blobUrl = "blob:https://example.com/tiny.png";
+        const fileUrl = "file:///tmp/tiny.png";
+        const mounted = await mountTerminal(
+          () =>
+            h(TMarkdownText, {
+              x: 0,
+              y: 0,
+              w: 80,
+              h: 16,
+              content: [
+                `data URL: ![data image](${TINY_PNG_DATA_URL})`,
+                "",
+                `http URL: ![http image](${remoteUrl})`,
+                "",
+                `blob URL: ![blob image](${blobUrl})`,
+                "",
+                `file URL: ![file image](${fileUrl})`,
+              ].join("\n"),
+              imageRenderer: (image) =>
+                image.src === remoteUrl || image.src === blobUrl || image.src === fileUrl
+                  ? TINY_PNG_BASE64
+                  : null,
+              imageMinWidth: 10,
+              imageMaxWidth: 20,
+              imageMinHeight: 2,
+              imageMaxHeight: 2,
+            }),
+          80,
+          18,
+        );
+
+        let stdout = "";
+        const renderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            isTTY: true,
+            write(chunk: string) {
+              stdout += chunk;
+            },
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+
+          expect(stdout.match(/\u001B_Ga=T/g)?.length).toBe(4);
+          expect(rowText(mounted, 0)).toContain("data URL:");
+          expect(rowText(mounted, 3)).toContain("http URL:");
+          expect(rowText(mounted, 6)).toContain("blob URL:");
+          expect(rowText(mounted, 9)).toContain("file URL:");
+          expect(rowText(mounted, 0)).not.toContain("data image");
+          expect(rowText(mounted, 3)).not.toContain("http image");
+          expect(rowText(mounted, 6)).not.toContain("blob image");
+          expect(rowText(mounted, 9)).not.toContain("file image");
+        } finally {
+          renderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
+
+  it("allows blob and file image sources to be resolved by imageRenderer", async () => {
+    const seen: string[] = [];
+    const { buildMarkdownVisualRows, createTuiMarkdownParser } = await import(
+      "../src/markdown.js"
+    );
+    const rows = buildMarkdownVisualRows(
+      [
+        "![blob image](blob:https://example.com/1234)",
+        "",
+        "![file image](file:///tmp/demo.png)",
+      ].join("\n"),
+      80,
+      createTuiMarkdownParser({ streaming: false }),
+      {
+        imageResolver: (image) => {
+          seen.push(image.src);
+          return TINY_PNG_BASE64;
+        },
+        imageSize: { minWidth: 4, maxWidth: 8, minHeight: 1, maxHeight: 1 },
+      },
+    );
+
+    expect(seen).toEqual(["blob:https://example.com/1234", "file:///tmp/demo.png"]);
+    expect(rows.filter((row) => row.segments.some((segment) => segment.graphic)).length).toBe(2);
+    expect(sanitizeMarkdownImageSource("file:///tmp/demo.png")?.src).toBe(
+      "file:///tmp/demo.png",
+    );
+  });
+
+  it("does not show fallback text when a supported graphic is clipped", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        const mounted = await mountTerminal(
+          () =>
+            h(TMarkdownText, {
+              x: 0,
+              y: 0,
+              w: 40,
+              h: 4,
+              content: `Cat photo: ![cat fallback](${TINY_PNG_DATA_URL})`,
+              imageMinWidth: 20,
+              imageMaxWidth: 20,
+              imageMinHeight: 2,
+              imageMaxHeight: 2,
+            }),
+          24,
+          6,
+        );
+
+        const renderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            isTTY: true,
+            write() {},
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+
+          expect(rowText(mounted, 0)).toContain("Cat photo:");
+          expect(rowText(mounted, 0)).not.toContain("cat fallback");
+        } finally {
+          renderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
+
+  it("does not clear or fallback when resize clips a supported markdown image", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        const mounted = await mountTerminal(
+          () =>
+            h(TMarkdownText, {
+              x: 0,
+              y: 0,
+              w: 40,
+              h: 4,
+              content: `Cat photo: ![cat fallback](${TINY_PNG_DATA_URL})`,
+              imageMinWidth: 20,
+              imageMaxWidth: 20,
+              imageMinHeight: 2,
+              imageMaxHeight: 2,
+            }),
+          40,
+          6,
+        );
+
+        let stdout = "";
+        const renderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            isTTY: true,
+            write(chunk: string) {
+              stdout += chunk;
+            },
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+          expect(stdout).toContain("\u001B_G");
+
+          stdout = "";
+          mounted.terminal.resize(24, 6);
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+
+          expect(stdout).not.toContain("a=d");
+          expect(rowText(mounted, 0)).toContain("Cat photo:");
+          expect(rowText(mounted, 0)).not.toContain("cat fallback");
         } finally {
           renderer.dispose();
           mounted.unmount();

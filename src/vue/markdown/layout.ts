@@ -48,6 +48,15 @@ function segmentsPlainText(segments: readonly TuiMarkdownVisualSegment[]): strin
   return segments.map((segment) => segment.fallbackText ?? segment.text).join("");
 }
 
+function segmentsVisualHeight(segments: readonly TuiMarkdownVisualSegment[]): number {
+  let height = 1;
+  for (const segment of segments) {
+    if (!segment.graphic) continue;
+    height = Math.max(height, Math.max(1, Math.floor(segment.graphic.displayHeight ?? 1)));
+  }
+  return height;
+}
+
 function segmentsCellWidth(segments: readonly TuiMarkdownInlineSegment[]): number {
   let cells = 0;
   for (const segment of segments) {
@@ -279,6 +288,17 @@ function inlineBlockRows(
         segments: visualSegments,
       });
       rowInBlock++;
+      const height = segmentsVisualHeight(visualSegments);
+      for (let extra = 1; extra < height; extra++) {
+        rows.push({
+          key: `${block.key}:${rowInBlock}`,
+          blockKey: block.key,
+          rowInBlock,
+          plainText: "",
+          segments: [],
+        });
+        rowInBlock++;
+      }
     }
   }
   return rows.length
@@ -546,9 +566,15 @@ function styleSignature(style?: Style): string {
 
 function inlineSegmentSignature(segment: TuiMarkdownInlineSegment): string {
   const graphic = segment.graphic
-    ? [segment.graphic.kind, segment.graphic.src, segment.graphic.alt ?? "", segment.graphic.mime ?? "", segment.graphic.base64 ?? ""].join(
-        "\u0006",
-      )
+    ? [
+        segment.graphic.kind,
+        segment.graphic.src,
+        segment.graphic.alt ?? "",
+        segment.graphic.mime ?? "",
+        segment.graphic.base64 ?? "",
+        segment.graphic.displayWidth ?? "",
+        segment.graphic.displayHeight ?? "",
+      ].join("\u0006")
     : "";
   return [segment.text, segment.hardBreak ? "1" : "0", styleSignature(segment.style), graphic].join(
     "\u0002",
