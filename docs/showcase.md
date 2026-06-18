@@ -15,6 +15,22 @@ import DocsShowcaseTerminal from './.vitepress/components/DocsShowcaseTerminal.v
   <DocsShowcaseTerminal />
 </ClientOnly>
 
+浏览器 examples 入口 `pnpm run showcase` 另外提供 `dark` / `light` / `matrix` / `plum` 四套宣传主题，可用于截图、视频和发布素材；这些主题定义在 `examples/basic/src/showcase-theme.ts`，不改变组件内部默认样式。
+
+## 主题截图
+
+这些截图来自真实 `examples/basic` 页面，素材路径在 `docs/public/showcase-themes/`：
+
+![Showcase theme switch GIF](/showcase-themes/showcase-themes.gif)
+
+| Dark                                                       | Light                                                        |
+| ---------------------------------------------------------- | ------------------------------------------------------------ |
+| ![Dark showcase theme](/showcase-themes/showcase-dark.png) | ![Light showcase theme](/showcase-themes/showcase-light.png) |
+
+| Matrix                                                         | Plum                                                       |
+| -------------------------------------------------------------- | ---------------------------------------------------------- |
+| ![Matrix showcase theme](/showcase-themes/showcase-matrix.png) | ![Plum showcase theme](/showcase-themes/showcase-plum.png) |
+
 ## 这页覆盖了什么
 
 - `Layout + copy`

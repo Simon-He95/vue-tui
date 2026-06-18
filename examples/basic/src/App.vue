@@ -3,52 +3,16 @@ import { computed, ref, watchEffect } from "vue";
 import { TerminalProvider } from "@simon_he/vue-tui";
 import { showcaseDemos } from "./showcase-demos";
 import {
+  showcaseThemeModes,
   showcaseAnsiPalette,
   showcaseTerminalStyle,
+  showcaseThemePresets,
+  showcaseTuiTheme,
   type ShowcaseThemeMode,
 } from "./showcase-theme";
 
 const themeMode = ref<ShowcaseThemeMode>("dark");
-
-const terminalTheme = computed(() =>
-  themeMode.value === "dark"
-    ? {
-        colors: {
-          link: "cyanBright",
-          success: "greenBright",
-          warning: "yellowBright",
-          danger: "redBright",
-          info: "blueBright",
-          muted: "white",
-          accent: "magentaBright",
-        },
-        components: {
-          TTable: {
-            headerStyle: { fg: "cyanBright", bold: true },
-            borderStyle: { fg: "blueBright", dim: true },
-            activeStyle: { fg: "#111827", bg: "#5eead4", bold: true },
-          },
-        },
-      }
-    : {
-        colors: {
-          link: "blueBright",
-          success: "green",
-          warning: "yellow",
-          danger: "redBright",
-          info: "cyan",
-          muted: "white",
-          accent: "magenta",
-        },
-        components: {
-          TTable: {
-            headerStyle: { fg: "blueBright", bold: true },
-            borderStyle: { fg: "cyan", dim: true },
-            activeStyle: { fg: "#ffffff", bg: "#4f46e5", bold: true },
-          },
-        },
-      },
-);
+const terminalTheme = computed(() => showcaseTuiTheme(themeMode.value));
 
 const firstDemo = showcaseDemos[0]!;
 const activeId = ref(firstDemo.id);
@@ -88,20 +52,14 @@ watchEffect(() => {
         <code>pnpm run showcase</code>
         <div class="theme-switch" role="group" aria-label="Theme">
           <button
+            v-for="mode in showcaseThemeModes"
+            :key="mode"
             type="button"
-            :class="{ active: themeMode === 'dark' }"
-            :aria-pressed="themeMode === 'dark'"
-            @click="themeMode = 'dark'"
+            :class="{ active: themeMode === mode }"
+            :aria-pressed="themeMode === mode"
+            @click="themeMode = mode"
           >
-            Dark
-          </button>
-          <button
-            type="button"
-            :class="{ active: themeMode === 'light' }"
-            :aria-pressed="themeMode === 'light'"
-            @click="themeMode = 'light'"
-          >
-            Light
+            {{ showcaseThemePresets[mode].label }}
           </button>
         </div>
       </div>

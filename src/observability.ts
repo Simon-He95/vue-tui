@@ -1,9 +1,12 @@
 export type {
+  FramePerfDirtyRowsStats,
+  FramePerfMetricStats,
   FramePerfReason,
   FramePerfRowBucketFallback,
   FramePerfSample,
+  FramePerfSummary,
 } from "./observability/frame-perf.js";
-export { framePerfNow } from "./observability/frame-perf.js";
+export { framePerfNow, summarizeFramePerf } from "./observability/frame-perf.js";
 export type { FramePerfStore } from "./observability/frame-perf-store.js";
 export { createFramePerfStore } from "./observability/frame-perf-store.js";
 export type {

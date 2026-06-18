@@ -21,6 +21,24 @@ const theme = createTheme({
 });
 ```
 
+## Showcase Presets
+
+`examples/basic/src/showcase-theme.ts` 提供 showcase 专用主题 preset，用来展示组件库的视觉弹性，不作为组件内部默认主题：
+
+- `dark`: 默认深色工程界面，适合日志、dashboard 和 agent console
+- `light`: 浅色产品界面，适合 docs/demo 截图
+- `matrix`: 高对比绿色终端风格，适合 CLI 宣传图
+- `plum`: 紫色产品风格，适合更偏 consumer 的演示
+
+每套 preset 同时提供：
+
+- terminal `defaultStyle`
+- DOM/CLI ANSI palette
+- `TerminalProvider.theme` token overrides
+- showcase 外壳 chrome styles
+
+这保证 browser showcase、terminal showcase 和后续截图/视频素材使用同一套视觉来源，而不是在组件里硬编码审美。
+
 ### Spacing
 
 - `space.0 = 0`

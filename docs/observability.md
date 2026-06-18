@@ -62,10 +62,14 @@ VUE_TUI_PROFILE_COMPONENTS=1
 
 CLI runtime 还会把 frame samples 写成 JSONL。默认路径是系统临时目录下的 `vue-tui-frame-perf.jsonl`；也可以用 `VUE_TUI_FRAME_PERF_LOG_PATH` 或 legacy `DIMCODE_TUI_PERF_LOG` 指定。若 `VUE_TUI_PROFILE_LOG_PATH` 以 `.jsonl` 结尾，frame JSONL 会复用该路径，聚合 profiler 也会自动输出 JSON 行，避免同一个文件混入文本日志。
 
-应用内也可以直接接入 sink：
+应用内也可以直接接入 sink，并按当前窗口生成对外指标：
 
 ```ts
-import { createFramePerfStore, createJsonlPerfSink } from "@simon_he/vue-tui/observability";
+import {
+  createFramePerfStore,
+  createJsonlPerfSink,
+  summarizeFramePerf,
+} from "@simon_he/vue-tui/observability";
 
 const sink = createJsonlPerfSink({
   write: (line) => console.log(line),
@@ -76,6 +80,9 @@ const framePerf = createFramePerfStore(120, {
   enabled: true,
   sink,
 });
+
+const summary = framePerf.summary();
+const sameSummary = summarizeFramePerf(framePerf.list());
 ```
 
 对 plane/compositor 改动来说，最有用的不是总 render 次数，而是：
@@ -107,6 +114,18 @@ const framePerf = createFramePerfStore(120, {
 - `droppedUpdates`
 - `liveReasons`
 - `queueDepth`
+
+`FramePerfStore.summary()` / `summarizeFramePerf(samples)` 会把最近样本汇总成适合对外展示或上报的指标：
+
+- `durationMs` / `renderManagerMs` / `commitMs` / `domFlushMs` / `stdoutFlushMs`: `avg`、`max`、`min`
+- `dirtyRows`: `avg`、`max`、`sampledFrames`、`fullFrames`
+- `scannedNodes` / `paintedNodes`: `avg`、`max`、`min`
+- `coalescedInvalidates` / `coalescedFrameTasks` / `droppedUpdates`
+- `maxQueueDepth`
+- `rowBucketFallbacks`
+- `reasons` 和 `activePlanes` 计数
+
+建议产品面板展示 summary，排查具体交互时再展开 raw samples。`dirtyRows.fullFrames` 表示该帧是全屏/全 plane dirty，不能和具体 dirty row 数混在一起求平均。
 
 `coalescedInvalidates` 只统计 scheduler invalidate coalescing；`coalescedFrameTasks` 统计 scheduler 层同 id frame task 合并；`droppedUpdates` 统计 producer/mailbox 层没有被单独 apply 的 payload 数。对于 latest-only mailbox，它们是真正被丢弃的中间状态；对于 merge mailbox，它们可能被折叠进最终 apply 的 payload。`droppedUpdates` 是 rendered-frame metric，不是全局 mailbox counter；没有 invalidate 的 mailbox run 可能不会产生 framePerf sample。
 

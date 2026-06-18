@@ -5,13 +5,22 @@ import { createDomRenderer } from "../src/renderer-dom.js";
 import {
   createFramePerfStore,
   createJsonlPerfSink,
+  summarizeFramePerf,
+  type FramePerfSample,
   type FramePerfStore,
 } from "../src/observability.js";
-import { TerminalProvider, TList, TText, useTerminal, type TerminalScheduler } from "../src/vue.js";
+import {
+  TerminalProvider,
+  TList,
+  TText,
+  useLayout,
+  useTerminal,
+  type TerminalScheduler,
+} from "../src/vue.js";
 import { createTerminalApp } from "../src/cli.js";
 import { TVirtualList } from "../src/experimental.js";
 
-function sample(frameId: number) {
+function sample(frameId: number, overrides: Partial<FramePerfSample> = {}): FramePerfSample {
   return {
     frameId,
     reason: "unknown" as const,
@@ -31,6 +40,7 @@ function sample(frameId: number) {
     remainingFrameTasks: 0,
     droppedUpdates: 0,
     queueDepth: 0,
+    ...overrides,
   };
 }
 
@@ -44,9 +54,15 @@ describe("FramePerfStore", () => {
 
     expect(store.list().map((s) => s.frameId)).toEqual([2, 3]);
     expect(store.latest()?.frameId).toBe(3);
+    expect(store.summary()).toMatchObject({
+      frames: 2,
+      firstFrameId: 2,
+      latestFrameId: 3,
+    });
 
     store.clear();
     expect(store.list()).toEqual([]);
+    expect(store.summary().frames).toBe(0);
   });
 
   it("does not collect samples while disabled", () => {
@@ -141,6 +157,76 @@ describe("FramePerfStore", () => {
       expect.objectContaining({ type: "component", name: "TVirtualList", phase: "render" }),
       expect.objectContaining({ type: "event", eventType: "scroll", component: "TVirtualList" }),
     ]);
+  });
+
+  it("summarizes frame perf samples into public metrics", () => {
+    const summary = summarizeFramePerf([
+      sample(1, {
+        reason: "resize",
+        durationMs: 4,
+        renderManagerMs: 1,
+        commitMs: 2,
+        domFlushMs: 3,
+        dirtyRows: null,
+        activePlanes: null,
+        scannedNodes: 4,
+        paintedNodes: 2,
+        coalescedInvalidates: 1,
+        coalescedFrameTasks: 2,
+        droppedUpdates: 3,
+        queueDepth: 1,
+        rowBucketFallbacks: [
+          { plane: "default", reason: "dirty-ratio", dirtyRows: 20, planeNodes: 5 },
+        ],
+      }),
+      sample(2, {
+        reason: "input",
+        durationMs: 2,
+        renderManagerMs: 0.5,
+        commitMs: 0.5,
+        stdoutFlushMs: 1.5,
+        dirtyRows: 3,
+        activePlanes: ["default", "overlay"],
+        scannedNodes: 2,
+        paintedNodes: 1,
+        queueDepth: 4,
+      }),
+    ]);
+
+    expect(summary).toMatchObject({
+      frames: 2,
+      firstFrameId: 1,
+      latestFrameId: 2,
+      windowMs: 1,
+      durationMs: { avg: 3, max: 4, min: 2 },
+      renderManagerMs: { avg: 0.75, max: 1, min: 0.5 },
+      commitMs: { avg: 1.25, max: 2, min: 0.5 },
+      domFlushMs: { avg: 3, max: 3, min: 3 },
+      stdoutFlushMs: { avg: 1.5, max: 1.5, min: 1.5 },
+      dirtyRows: { avg: 3, max: 3, sampledFrames: 1, fullFrames: 1 },
+      scannedNodes: { avg: 3, max: 4, min: 2 },
+      paintedNodes: { avg: 1.5, max: 2, min: 1 },
+      coalescedInvalidates: 1,
+      coalescedFrameTasks: 2,
+      droppedUpdates: 3,
+      maxQueueDepth: 4,
+      rowBucketFallbacks: 1,
+      reasons: { resize: 1, input: 1 },
+      activePlanes: { all: 1, default: 1, overlay: 1 },
+    });
+  });
+
+  it("returns zeroed frame perf summary for empty samples", () => {
+    expect(summarizeFramePerf([])).toMatchObject({
+      frames: 0,
+      firstFrameId: null,
+      latestFrameId: null,
+      windowMs: 0,
+      durationMs: { avg: 0, max: 0, min: 0 },
+      dirtyRows: { avg: 0, max: 0, sampledFrames: 0, fullFrames: 0 },
+      reasons: {},
+      activePlanes: {},
+    });
   });
 });
 
@@ -307,6 +393,48 @@ describe("frame perf sampling", () => {
       app.scheduler.flushNow();
 
       expect(framePerf!.latest()?.reason).toBe("scroll");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("records resize frame perf while responsive layout updates", async () => {
+    let framePerf: FramePerfStore | null = null;
+
+    const App = defineComponent({
+      name: "FramePerfResizeResponsiveApp",
+      setup() {
+        const ctx = useTerminal();
+        const layout = useLayout();
+        framePerf = ctx.observability.framePerf;
+        framePerf.enabled.value = true;
+        return () => {
+          const width = layout.clipRect?.w ?? 0;
+          return h(TText, { x: 0, y: 0, w: width, value: `w=${width}` });
+        };
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App as any });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      framePerf!.clear();
+
+      app.terminal.resize(30, 6);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(app.terminal.snapshot().lines[0]!.trim()).toBe("w=30");
+      expect(framePerf!.latest()).toMatchObject({
+        reason: "resize",
+      });
+      expect(framePerf!.latest()!.paintedNodes).toBeLessThanOrEqual(3);
+      expect(framePerf!.latest()!.scannedNodes).toBeLessThanOrEqual(4);
+      const dirtyRows = framePerf!.latest()!.dirtyRows;
+      expect(dirtyRows === null || dirtyRows <= 6).toBe(true);
+      expect(framePerf!.summary().reasons.resize).toBe(1);
     } finally {
       app.dispose();
     }

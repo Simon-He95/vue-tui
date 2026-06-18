@@ -65,6 +65,33 @@ describe("ui regressions dialog", () => {
     mounted.unmount();
   });
 
+  it("lets TBox titleStyle set an independent title background", async () => {
+    const mounted = await mountTerminal(() =>
+      h(TBox, {
+        x: 0,
+        y: 0,
+        w: 18,
+        h: 4,
+        border: true,
+        title: "Title",
+        padding: 0,
+        style: { fg: "greenBright", bg: "black" },
+        titleStyle: { fg: "black", bg: "yellowBright", bold: true },
+      }),
+    );
+
+    expect(mounted.terminal.getCell(0, 0).style).toMatchObject({
+      fg: "greenBright",
+      bg: "black",
+    });
+    expect(mounted.terminal.getCell(2, 0).style).toMatchObject({
+      fg: "black",
+      bg: "yellowBright",
+      bold: true,
+    });
+    mounted.unmount();
+  });
+
   it("closes dialog on Escape from an empty focused input", async () => {
     const open = ref(true);
     const value = ref("");
@@ -730,6 +757,82 @@ describe("ui regressions dialog", () => {
 
     expect(mounted.terminal.getCell(applyX, buttonY).style.underline).not.toBe(true);
     expect(mounted.terminal.getCell(cancelX, buttonY).style.underline).toBe(true);
+    mounted.unmount();
+  });
+
+  it("applies custom TDialog footer button backgrounds", async () => {
+    const open = ref(true);
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TDialog as any,
+          {
+            modelValue: open.value,
+            "onUpdate:modelValue": (v: boolean) => (open.value = v),
+            w: 34,
+            h: 7,
+            title: "Confirm",
+            placement: "center",
+            teleport: true,
+            contentStyle: { bg: "black" },
+            buttons: [
+              {
+                label: "Apply",
+                value: "apply",
+                default: true,
+                style: { fg: "whiteBright", bg: "blue" },
+                selectedStyle: { fg: "black", bg: "yellowBright", bold: true },
+              },
+              {
+                label: "Cancel",
+                value: "cancel",
+                style: { fg: "whiteBright", bg: "black" },
+                selectedStyle: { fg: "black", bg: "cyanBright", bold: true },
+              },
+            ],
+          },
+          () => h(TText, { x: 0, y: 0, w: 28, value: "Hi" }),
+        ),
+      48,
+      12,
+    );
+
+    const container = mounted.container()!;
+    await nextTick();
+    await nextTick();
+
+    const initialLines = mounted.terminal.snapshot().lines;
+    const buttonY = initialLines.findIndex((line) => line.includes("[ Apply ]"));
+    const applyX = initialLines[buttonY]!.indexOf("[ Apply ]") + 2;
+    const cancelX = initialLines[buttonY]!.indexOf("[ Cancel ]") + 2;
+    expect(mounted.terminal.getCell(applyX, buttonY).style).toMatchObject({
+      fg: "black",
+      bg: "yellowBright",
+      bold: true,
+    });
+    expect(mounted.terminal.getCell(cancelX, buttonY).style).toMatchObject({
+      fg: "whiteBright",
+      bg: "black",
+    });
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        code: "ArrowRight",
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    expect(mounted.terminal.getCell(applyX, buttonY).style).toMatchObject({
+      fg: "whiteBright",
+      bg: "blue",
+    });
+    expect(mounted.terminal.getCell(cancelX, buttonY).style).toMatchObject({
+      fg: "black",
+      bg: "cyanBright",
+      bold: true,
+    });
     mounted.unmount();
   });
 

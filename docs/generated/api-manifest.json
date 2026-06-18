@@ -691,16 +691,20 @@
         "createJsonlPerfSink",
         "createTraceStore",
         "framePerfNow",
-        "installTuiPerf"
+        "installTuiPerf",
+        "summarizeFramePerf"
       ],
       "typeExports": [
         "ComponentPerf",
         "CreateJsonlPerfSinkOptions",
         "FramePerf",
+        "FramePerfDirtyRowsStats",
+        "FramePerfMetricStats",
         "FramePerfReason",
         "FramePerfRowBucketFallback",
         "FramePerfSample",
         "FramePerfStore",
+        "FramePerfSummary",
         "InstallTuiPerfOptions",
         "TraceRecord",
         "TraceStore",

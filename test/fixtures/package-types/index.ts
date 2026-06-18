@@ -31,6 +31,11 @@ import {
 } from "@simon_he/vue-tui/renderer/dom";
 import { createRuntime, type TerminalEventRecord } from "@simon_he/vue-tui/runtime";
 import {
+  summarizeFramePerf,
+  type FramePerfSample,
+  type FramePerfSummary,
+} from "@simon_he/vue-tui/observability";
+import {
   TAnchor,
   TDebugOverlay,
   TFlow,
@@ -153,6 +158,27 @@ const formHandle: TFormHandle = {
 void formHandle;
 const terminal: Terminal = createTerminal({ cols: 80, rows: 24 });
 const runtime = createRuntime();
+const frameSample: FramePerfSample = {
+  frameId: 1,
+  reason: "data",
+  startedAt: 1,
+  durationMs: 1,
+  renderManagerMs: 0,
+  commitMs: 1,
+  dirtyRows: 1,
+  activePlanes: ["default"],
+  scannedNodes: 1,
+  paintedNodes: 1,
+  coalescedInvalidates: 0,
+  frameTaskCount: 0,
+  coalescedFrameTasks: 0,
+  frameTaskQueueDepthBeforeRun: 0,
+  frameTaskQueueDepthAfterRun: 0,
+  remainingFrameTasks: 0,
+  droppedUpdates: 0,
+  queueDepth: 0,
+};
+const frameSummary: FramePerfSummary = summarizeFramePerf([frameSample]);
 const plugin: TInputPlugin = { name: "test", install: () => {} };
 const hostAdapter: TInputHostAdapter = {
   isTerminalLike: false,
@@ -295,6 +321,7 @@ console.log(
   linkConfig,
   terminal,
   runtime,
+  frameSummary,
   plugin,
   hostPlugin,
   linkified,

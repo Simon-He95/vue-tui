@@ -1,7 +1,8 @@
 import type { Ref } from "vue";
-import type { FramePerfSample } from "./frame-perf.js";
+import type { FramePerfSample, FramePerfSummary } from "./frame-perf.js";
 import type { ComponentPerf, TuiPerfEvent, TuiPerfSink } from "./perf-sink.js";
 import { computed, ref } from "vue";
+import { summarizeFramePerf } from "./frame-perf.js";
 import { getInstalledTuiPerf } from "./perf-sink.js";
 
 export type FramePerfStore = Readonly<{
@@ -13,6 +14,7 @@ export type FramePerfStore = Readonly<{
   addSink: (sink: TuiPerfSink) => () => void;
   latest: () => FramePerfSample | null;
   list: () => FramePerfSample[];
+  summary: () => FramePerfSummary;
   clear: () => void;
 }>;
 
@@ -94,9 +96,24 @@ export function createFramePerfStore(
     return samples.slice();
   }
 
+  function summary(): FramePerfSummary {
+    return summarizeFramePerf(samples);
+  }
+
   function clear(): void {
     samples.length = 0;
   }
 
-  return { enabled, acquire, push, recordComponent, recordEvent, addSink, latest, list, clear };
+  return {
+    enabled,
+    acquire,
+    push,
+    recordComponent,
+    recordEvent,
+    addSink,
+    latest,
+    list,
+    summary,
+    clear,
+  };
 }

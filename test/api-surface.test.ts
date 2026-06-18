@@ -227,6 +227,7 @@ describe("public API surface", () => {
         "createTraceStore",
         "framePerfNow",
         "installTuiPerf",
+        "summarizeFramePerf",
       ]
     `);
   });

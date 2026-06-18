@@ -4,7 +4,12 @@ import { computed, ref, watchEffect } from "vue";
 import { TText, TView } from "@simon_he/vue-tui";
 import { useLayout, useTerminal } from "@simon_he/vue-tui/vue";
 import { showcaseDemos } from "./showcase-demos";
-import { showcaseTerminalStyle, type ShowcaseThemeMode } from "./showcase-theme";
+import {
+  nextShowcaseThemeMode,
+  showcaseChromeTheme,
+  showcaseTerminalStyle,
+  type ShowcaseThemeMode,
+} from "./showcase-theme";
 
 const props = defineProps<{
   onThemeChange?: (mode: ShowcaseThemeMode) => void;
@@ -28,23 +33,7 @@ const activeIndex = computed(() =>
 const activeDemo = computed(() => showcaseDemos[activeIndex.value] ?? firstDemo);
 const providerKey = computed(() => `${themeMode.value}:${activeDemo.value.id}`);
 
-const theme = computed(() =>
-  themeMode.value === "dark"
-    ? {
-        base: { fg: "whiteBright", bg: "black" } satisfies Style,
-        muted: { fg: "white", bg: "black", dim: true } satisfies Style,
-        accent: { fg: "cyanBright", bg: "black", bold: true } satisfies Style,
-        active: { fg: "#111827", bg: "#5eead4", bold: true } satisfies Style,
-        inactive: { fg: "whiteBright", bg: "black" } satisfies Style,
-      }
-    : {
-        base: { fg: "whiteBright", bg: "black" } satisfies Style,
-        muted: { fg: "white", bg: "black", dim: true } satisfies Style,
-        accent: { fg: "blueBright", bg: "black", bold: true } satisfies Style,
-        active: { fg: "#ffffff", bg: "#4f46e5", bold: true } satisfies Style,
-        inactive: { fg: "whiteBright", bg: "black" } satisfies Style,
-      },
-);
+const theme = computed(() => showcaseChromeTheme(themeMode.value));
 
 const appDefaultStyle = computed<Style>(() => ({
   ...showcaseTerminalStyle(themeMode.value),
@@ -109,7 +98,7 @@ function onKeydown(event: any) {
   } else if (event?.ctrlKey && key.toLowerCase() === "t") {
     event.preventDefault?.();
     event.stopPropagation?.();
-    themeMode.value = themeMode.value === "dark" ? "light" : "dark";
+    themeMode.value = nextShowcaseThemeMode(themeMode.value);
   }
 }
 </script>

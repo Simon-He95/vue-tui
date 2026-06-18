@@ -5,9 +5,11 @@
   "keywords": [
     "agent-console",
     "agent-ui",
+    "ai-agent",
     "ansi",
     "ansi-renderer",
     "browser-terminal",
+    "chat-ui",
     "cli",
     "cli-ui",
     "component-library",
@@ -30,6 +32,7 @@
     "virtual-list",
     "vue",
     "vue-cli-ui",
+    "vue-component-library",
     "vue-terminal",
     "vue-tui",
     "vue3"
