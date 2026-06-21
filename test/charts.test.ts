@@ -83,6 +83,27 @@ describe("terminal charts", () => {
     mounted.unmount();
   });
 
+  it("renders finite line values at numeric extremes", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 5,
+          h: 3,
+          values: [-Number.MAX_VALUE, Number.MAX_VALUE],
+          showAxes: false,
+        }),
+      8,
+      4,
+    );
+
+    expect(mounted.terminal.getCell(0, 2).ch).not.toBe(" ");
+    expect(mounted.terminal.getCell(4, 0).ch).not.toBe(" ");
+
+    mounted.unmount();
+  });
+
   it("renders a single finite line point at its original x position", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -271,6 +292,34 @@ describe("terminal charts", () => {
     mounted.unmount();
   });
 
+  it("renders finite candlestick values at numeric extremes", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TCandlestickChart, {
+          x: 0,
+          y: 0,
+          w: 1,
+          h: 3,
+          showAxes: false,
+          candles: [
+            {
+              open: -Number.MAX_VALUE,
+              high: Number.MAX_VALUE,
+              low: -Number.MAX_VALUE,
+              close: Number.MAX_VALUE,
+            },
+          ],
+        }),
+      4,
+      4,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe("█");
+    expect(mounted.terminal.getCell(0, 2).ch).toBe("█");
+
+    mounted.unmount();
+  });
+
   it("applies lineStyle only to plotted glyphs", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -425,6 +474,30 @@ describe("terminal charts", () => {
     const lines = mounted.terminal.snapshot().lines;
     expect(lines[0]).toContain("prompt 2 67%");
     expect(lines[1]).toContain("output 1 33%");
+
+    mounted.unmount();
+  });
+
+  it("normalizes large pie weights before computing percentages", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TPieChart, {
+          x: 0,
+          y: 0,
+          w: 80,
+          h: 6,
+          values: [Number.MAX_VALUE, Number.MAX_VALUE],
+          labels: ["a", "b"],
+          segmentStyles: [{ fg: "cyan" }, { fg: "magenta" }],
+        }),
+      84,
+      7,
+    );
+
+    const text = mounted.terminal.snapshot().lines.join("\n");
+    expect(text.match(/ 50%/gu)).toHaveLength(2);
+    expect(mounted.terminal.getCell(28, 2).style.fg).toBe("cyan");
+    expect(mounted.terminal.getCell(20, 2).style.fg).toBe("magenta");
 
     mounted.unmount();
   });

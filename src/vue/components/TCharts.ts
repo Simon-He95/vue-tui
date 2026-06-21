@@ -281,14 +281,20 @@ function valueToY(value: number, min: number, max: number, height: number): numb
     if (value > max) return 0;
     return Math.floor((height - 1) / 2);
   }
-  const ratio = (value - min) / (max - min);
+  const scale = Math.max(Math.abs(min), Math.abs(max), Math.abs(value), 1);
+  const scaledMin = min / scale;
+  const scaledMax = max / scale;
+  const ratio = (value / scale - scaledMin) / (scaledMax - scaledMin);
   return Math.max(0, Math.min(height - 1, Math.round((1 - ratio) * (height - 1))));
 }
 
 function yToValue(y: number, min: number, max: number, height: number): number {
   if (height <= 1 || max === min) return max;
   const ratio = 1 - Math.max(0, Math.min(height - 1, y)) / (height - 1);
-  return min + ratio * (max - min);
+  const scale = Math.max(Math.abs(min), Math.abs(max), 1);
+  const scaledMin = min / scale;
+  const scaledMax = max / scale;
+  return (scaledMin + ratio * (scaledMax - scaledMin)) * scale;
 }
 
 function emptyChartRows(height: number): ChartCell[][] {
@@ -474,6 +480,7 @@ function putLineGlyph(
   width: number,
   height: number,
 ): void {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
   if (x < 0 || x >= width || y < 0 || y >= height) return;
   cells.push({ x, y, ch, style });
 }
@@ -760,6 +767,7 @@ function createSurface(
 ): ChartSurface {
   const rows = emptyChartRows(height);
   for (const cell of cells) {
+    if (!Number.isFinite(cell.x) || !Number.isFinite(cell.y)) continue;
     if (cell.y < 0 || cell.y >= height || cell.x < 0 || cell.x >= width) continue;
     rows[cell.y]!.push(cell);
   }
@@ -1541,16 +1549,18 @@ export const TPieChart = defineComponent({
         const n = Number(value);
         return Number.isFinite(n) ? Math.max(0, n) : 0;
       });
-      const total = values.reduce((sum, value) => sum + value, 0);
+      const scale = maxPositive(values);
+      const normalizedValues = scale > 0 ? values.map((value) => value / scale) : values;
+      const total = normalizedValues.reduce((sum, value) => sum + value, 0);
       const cells: ChartCell[] = [];
       const glyph = chartGlyph(props.cell, "█");
       const segmentStyles = props.segmentStyles.map((style) => mergeStyle(baseStyle.value, style));
       const visibleSegments = values
-        .map((value, index) => ({ value, index }))
+        .map((value, index) => ({ value, normalizedValue: normalizedValues[index] ?? 0, index }))
         .filter((segment) => segment.value > 0);
       const legendItems = visibleSegments.map((segment) => {
         const label = props.labels?.[segment.index] ?? `S${segment.index + 1}`;
-        const percent = total > 0 ? Math.round((segment.value / total) * 100) : 0;
+        const percent = total > 0 ? Math.round((segment.normalizedValue / total) * 100) : 0;
         const text = `${label} ${formatChartValue(segment.value)} ${percent}%`;
         return { ...segment, text };
       });
@@ -1576,8 +1586,8 @@ export const TPieChart = defineComponent({
       if (plotWidth > 0 && plotHeight > 0 && total > 0) {
         const segments: Array<{ end: number; index: number; style: Style }> = [];
         let cursor = 0;
-        for (let i = 0; i < values.length; i++) {
-          const value = values[i]!;
+        for (let i = 0; i < normalizedValues.length; i++) {
+          const value = normalizedValues[i]!;
           if (value <= 0) continue;
           cursor += (value / total) * Math.PI * 2;
           segments.push({

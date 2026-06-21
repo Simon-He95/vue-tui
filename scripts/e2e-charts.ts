@@ -2,7 +2,6 @@ import type { Component } from "vue";
 import type { Cell, Style, Terminal } from "../src/core/types.js";
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { performance } from "node:perf_hooks";
 import assert from "node:assert/strict";
 import { computed, defineComponent, h, nextTick, ref } from "vue";
 import { createTerminalApp } from "../src/create-terminal-app.js";
@@ -579,7 +578,7 @@ async function captureResize(): Promise<void> {
   }
 }
 
-async function measurePerformance(): Promise<Record<string, number>> {
+async function checkChartRepaints(): Promise<Record<string, number>> {
   const values = ref(Array.from({ length: 120_000 }, (_, index) => index % 37));
   let contributionFrame = values.value;
   const contributionFrames = Array.from({ length: 50 }, () => {
@@ -607,27 +606,23 @@ async function measurePerformance(): Promise<Record<string, number>> {
   });
 
   try {
-    const frameDurations: number[] = [];
     for (const nextValues of contributionFrames) {
-      const start = performance.now();
       values.value = nextValues;
       await settle(app);
-      frameDurations.push(performance.now() - start);
     }
-    const totalMs = frameDurations.reduce((sum, value) => sum + value, 0);
-    const avgMs = totalMs / frameDurations.length;
-    const maxMs = Math.max(...frameDurations);
+    assert.equal(
+      dirtyRowCounts.length,
+      contributionFrames.length,
+      "contribution updates must repaint once per value update",
+    );
     assert.ok(
       dirtyRowCounts.length > 0 && dirtyRowCounts.every((count) => count <= 7),
       "contribution updates must stay within chart dirty rows",
     );
     return {
-      frames: frameDurations.length,
-      totalMs: Number(totalMs.toFixed(2)),
-      avgMs: Number(avgMs.toFixed(2)),
-      maxMs: Number(maxMs.toFixed(2)),
+      updates: contributionFrames.length,
       maxDirtyRows: Math.max(...dirtyRowCounts),
-      ...(await measureLinePerformance()),
+      ...(await checkLineRepaints()),
     };
   } finally {
     off();
@@ -635,7 +630,7 @@ async function measurePerformance(): Promise<Record<string, number>> {
   }
 }
 
-async function measureLinePerformance(): Promise<Record<string, number>> {
+async function checkLineRepaints(): Promise<Record<string, number>> {
   const values = ref(Array.from({ length: 120_000 }, (_, index) => index % 97));
   let lineFrame = values.value;
   const lineFrames = Array.from({ length: 20 }, () => {
@@ -669,16 +664,15 @@ async function measureLinePerformance(): Promise<Record<string, number>> {
   });
 
   try {
-    const frameDurations: number[] = [];
     for (const nextValues of lineFrames) {
-      const start = performance.now();
       values.value = nextValues;
       await settle(app);
-      frameDurations.push(performance.now() - start);
     }
-    const totalMs = frameDurations.reduce((sum, value) => sum + value, 0);
-    const avgMs = totalMs / frameDurations.length;
-    const maxMs = Math.max(...frameDurations);
+    assert.equal(
+      dirtyRowCounts.length,
+      lineFrames.length,
+      "line updates must repaint once per value update",
+    );
     assert.ok(
       dirtyRowCounts.length > 0 && dirtyRowCounts.every((count) => count <= 7),
       "line updates must stay within chart dirty rows",
@@ -697,10 +691,7 @@ async function measureLinePerformance(): Promise<Record<string, number>> {
     assert.equal(dirtyRowCounts.length, afterFirstHover, "same-cell line hover must not repaint");
 
     return {
-      lineFrames: frameDurations.length,
-      lineTotalMs: Number(totalMs.toFixed(2)),
-      lineAvgMs: Number(avgMs.toFixed(2)),
-      lineMaxMs: Number(maxMs.toFixed(2)),
+      lineUpdates: lineFrames.length,
       lineMaxDirtyRows: maxDirtyRows,
     };
   } finally {
@@ -718,15 +709,15 @@ async function main(): Promise<void> {
   await captureLineHover();
   await captureCandlestickHover();
   await captureResize();
-  const perf = await measurePerformance();
+  const repaint = await checkChartRepaints();
   await writePngShots();
-  writeFileSync(join(outDir, "summary.json"), `${JSON.stringify({ outDir, perf }, null, 2)}\n`);
+  writeFileSync(join(outDir, "summary.json"), `${JSON.stringify({ outDir, repaint }, null, 2)}\n`);
   console.log(`chart e2e screenshots: ${outDir}`);
   console.log(
-    `chart perf: avg=${perf.avgMs}ms max=${perf.maxMs}ms dirtyRows<=${perf.maxDirtyRows}`,
+    `chart repaint checks: updates=${repaint.updates} dirtyRows<=${repaint.maxDirtyRows}`,
   );
   console.log(
-    `line chart perf: avg=${perf.lineAvgMs}ms max=${perf.lineMaxMs}ms dirtyRows<=${perf.lineMaxDirtyRows}`,
+    `line chart repaint checks: updates=${repaint.lineUpdates} dirtyRows<=${repaint.lineMaxDirtyRows}`,
   );
 }
 
