@@ -157,11 +157,15 @@ type LinePoint = Readonly<{
   originalIndex: number;
 }>;
 
+type LineRun = Readonly<{
+  points: readonly LinePoint[];
+}>;
+
 type LineLayout = Readonly<{
   width: number;
   height: number;
   layout: AxisLayout;
-  points: readonly LinePoint[];
+  runs: readonly LineRun[];
   sourceLength: number;
   min: number;
   max: number;
@@ -211,21 +215,43 @@ function domainFromValues(
   const range = finiteRange(values);
   const fallbackMin = range?.min ?? 0;
   const fallbackMax = range?.max ?? 0;
-  const min = Number.isFinite(Number(minValue)) ? Number(minValue) : fallbackMin;
-  const max = Number.isFinite(Number(maxValue)) ? Number(maxValue) : fallbackMax;
+  const hasMin = Number.isFinite(Number(minValue));
+  const hasMax = Number.isFinite(Number(maxValue));
+  const min = hasMin ? Number(minValue) : fallbackMin;
+  const max = hasMax ? Number(maxValue) : fallbackMax;
+  if (max < min) {
+    if (hasMin && !hasMax) return { min, max: min };
+    if (!hasMin && hasMax) return { min: max, max };
+  }
   return max >= min ? { min, max } : { min: max, max: min };
 }
 
-function finiteLinePoints(values: readonly number[]): LinePoint[] {
-  return values.flatMap((raw, originalIndex) => {
+function finiteLineRuns(values: readonly number[]): LineRun[] {
+  const runs: LineRun[] = [];
+  let points: LinePoint[] = [];
+  for (let originalIndex = 0; originalIndex < values.length; originalIndex++) {
+    const raw = values[originalIndex];
     const value = Number(raw);
-    return Number.isFinite(value) ? [{ value, originalIndex }] : [];
-  });
+    if (Number.isFinite(value)) {
+      points.push({ value, originalIndex });
+      continue;
+    }
+    if (points.length > 0) {
+      runs.push({ points });
+      points = [];
+    }
+  }
+  if (points.length > 0) runs.push({ points });
+  return runs;
 }
 
 function valueToY(value: number, min: number, max: number, height: number): number {
   if (height <= 1) return 0;
-  if (max === min) return Math.floor((height - 1) / 2);
+  if (max === min) {
+    if (value < min) return height - 1;
+    if (value > max) return 0;
+    return Math.floor((height - 1) / 2);
+  }
   const ratio = (value - min) / (max - min);
   return Math.max(0, Math.min(height - 1, Math.round((1 - ratio) * (height - 1))));
 }
@@ -282,6 +308,36 @@ function lineValueAtPosition(points: readonly LinePoint[], position: number): nu
   return previous.value * (1 - ratio) + current.value * ratio;
 }
 
+function lowerBoundLineRun(runs: readonly LineRun[], position: number): number {
+  let low = 0;
+  let high = runs.length;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    const points = runs[mid]!.points;
+    if (points[points.length - 1]!.originalIndex < position) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
+function lineRunAtPosition(runs: readonly LineRun[], position: number): LineRun | null {
+  const run = runs[lowerBoundLineRun(runs, position)];
+  if (!run) return null;
+  const first = run.points[0]!;
+  const last = run.points[run.points.length - 1]!;
+  return position >= first.originalIndex && position <= last.originalIndex ? run : null;
+}
+
+function lineValueAtRunsPosition(
+  runs: readonly LineRun[],
+  position: number,
+): { run: LineRun; value: number } | null {
+  const run = lineRunAtPosition(runs, position);
+  if (!run || run.points.length < 2) return null;
+  const value = lineValueAtPosition(run.points, position);
+  return value == null ? null : { run, value };
+}
+
 function nearestLinePoint(points: readonly LinePoint[], position: number): LinePoint | null {
   if (!points.length) return null;
   const index = lowerBoundLinePoint(points, position);
@@ -290,6 +346,27 @@ function nearestLinePoint(points: readonly LinePoint[], position: number): LineP
   const previous = points[index - 1]!;
   const current = points[index]!;
   return position - previous.originalIndex <= current.originalIndex - position ? previous : current;
+}
+
+function nearestLinePointInRuns(
+  runs: readonly LineRun[],
+  position: number,
+  plotX: number,
+  plotW: number,
+  sourceLength: number,
+): LinePoint | null {
+  const index = lowerBoundLineRun(runs, position);
+  const run = lineRunAtPosition(runs, position);
+  if (run && run.points.length > 1) return nearestLinePoint(run.points, position);
+
+  const singlePointRuns = [runs[index], runs[index - 1], runs[index + 1]];
+  for (const candidate of singlePointRuns) {
+    if (!candidate || candidate.points.length !== 1) continue;
+    const point = candidate.points[0]!;
+    const x = lineXForOriginalIndex(point.originalIndex, 0, plotW, sourceLength);
+    if (x === plotX) return point;
+  }
+  return null;
 }
 
 function putLineGlyph(
@@ -912,24 +989,24 @@ export const TLineChart = defineComponent({
     const lineLayout = computed<LineLayout>(() => {
       const width = cellCount(props.w, 0);
       const height = cellCount(props.h, 0);
-      const points = finiteLinePoints(props.values);
+      const runs = finiteLineRuns(props.values);
       const sourceLength = props.values.length;
       const { min, max } = domainFromValues(props.values, props.min, props.max);
       const layout = resolveAxisLayout(width, height, min, max, props.showAxes);
-      return { width, height, layout, points, sourceLength, min, max };
+      return { width, height, layout, runs, sourceLength, min, max };
     });
     const visibleRect = useChartVisibleRect(props, lineLayout);
 
     function hitLine(localX: number, localY: number): LineHover | null {
       const current = lineLayout.value;
-      const { layout, points, sourceLength, min, max } = current;
-      if (!points.length || layout.plotW <= 0 || layout.plotH <= 0) return null;
+      const { layout, runs, sourceLength, min, max } = current;
+      if (!runs.length || layout.plotW <= 0 || layout.plotH <= 0) return null;
       const plotX = localX - layout.plotX;
       const plotY = localY - layout.plotY;
       if (plotX < 0 || plotX >= layout.plotW || plotY < 0 || plotY >= layout.plotH) return null;
 
       const position = samplePositionAtX(plotX, layout.plotW, sourceLength);
-      const point = nearestLinePoint(points, position);
+      const point = nearestLinePointInRuns(runs, position, plotX, layout.plotW, sourceLength);
       if (!point) return null;
       const value = point.value;
       const x = lineXForOriginalIndex(
@@ -944,14 +1021,52 @@ export const TLineChart = defineComponent({
     }
 
     const surface = computed<ChartSurface>(() => {
-      const { width, height, layout, points, sourceLength, min, max } = lineLayout.value;
+      const { width, height, layout, runs, sourceLength, min, max } = lineLayout.value;
       const cells: ChartCell[] = [];
 
-      if (layout.plotW > 0 && layout.plotH > 0 && points.length > 0) {
+      if (layout.plotW > 0 && layout.plotH > 0 && runs.length > 0) {
         let prevX: number | null = null;
         let prevY: number | null = null;
-        if (points.length === 1) {
-          const point = points[0]!;
+        let prevRun: LineRun | null = null;
+        for (let x = 0; x < layout.plotW; x++) {
+          const position = samplePositionAtX(x, layout.plotW, sourceLength);
+          const sample = lineValueAtRunsPosition(runs, position);
+          if (!sample) {
+            prevX = null;
+            prevY = null;
+            prevRun = null;
+            continue;
+          }
+          const y = valueToY(sample.value, min, max, layout.plotH);
+          if (prevX == null || prevY == null || prevRun !== sample.run) {
+            putLineGlyph(
+              cells,
+              layout.plotX + x,
+              layout.plotY + y,
+              "●",
+              lineStyle.value,
+              width,
+              height,
+            );
+          } else {
+            drawSteppedLineSegment(
+              cells,
+              layout.plotX + prevX,
+              layout.plotY + prevY,
+              layout.plotX + x,
+              layout.plotY + y,
+              lineStyle.value,
+              width,
+              height,
+            );
+          }
+          prevX = x;
+          prevY = y;
+          prevRun = sample.run;
+        }
+        for (const run of runs) {
+          if (run.points.length !== 1) continue;
+          const point = run.points[0]!;
           const x = lineXForOriginalIndex(
             point.originalIndex,
             layout.plotX,
@@ -960,41 +1075,6 @@ export const TLineChart = defineComponent({
           );
           const y = layout.plotY + valueToY(point.value, min, max, layout.plotH);
           putLineGlyph(cells, x, y, "●", lineStyle.value, width, height);
-        } else {
-          for (let x = 0; x < layout.plotW; x++) {
-            const position = samplePositionAtX(x, layout.plotW, sourceLength);
-            const value = lineValueAtPosition(points, position);
-            if (value == null) {
-              prevX = null;
-              prevY = null;
-              continue;
-            }
-            const y = valueToY(value, min, max, layout.plotH);
-            if (prevX == null || prevY == null) {
-              putLineGlyph(
-                cells,
-                layout.plotX + x,
-                layout.plotY + y,
-                "●",
-                lineStyle.value,
-                width,
-                height,
-              );
-            } else {
-              drawSteppedLineSegment(
-                cells,
-                layout.plotX + prevX,
-                layout.plotY + prevY,
-                layout.plotX + x,
-                layout.plotY + y,
-                lineStyle.value,
-                width,
-                height,
-              );
-            }
-            prevX = x;
-            prevY = y;
-          }
         }
       }
 

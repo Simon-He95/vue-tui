@@ -104,6 +104,28 @@ describe("terminal charts", () => {
     mounted.unmount();
   });
 
+  it("does not connect line segments across non-finite samples", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 5,
+          h: 3,
+          values: [0, Number.NaN, 10],
+          showAxes: false,
+        }),
+      8,
+      4,
+    );
+
+    expect(mounted.terminal.getCell(0, 2).ch).toBe("●");
+    expect(mounted.terminal.getCell(2, 1).ch).toBe(" ");
+    expect(mounted.terminal.getCell(4, 0).ch).toBe("●");
+
+    mounted.unmount();
+  });
+
   it("renders line axes and labels when there is enough space", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -124,6 +146,54 @@ describe("terminal charts", () => {
     expect(lines[0]?.slice(0, 5)).toBe("10│to");
     expect(mounted.terminal.getCell(2, 4).ch).toBe("└");
     expect(lines[5]).toContain("turn");
+
+    mounted.unmount();
+  });
+
+  it("keeps an explicit line min when it is above all data values", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 6,
+          values: [0, 10],
+          min: 20,
+        }),
+      22,
+      7,
+    );
+
+    const lines = mounted.terminal.snapshot().lines;
+    expect(lines[0]?.slice(0, 3)).toBe("20│");
+    expect(lines[3]?.slice(0, 3)).toBe("20│");
+    expect(mounted.terminal.getCell(3, 3).ch).toBe("●");
+
+    mounted.unmount();
+  });
+
+  it("keeps an explicit candlestick max when it is below all data values", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TCandlestickChart, {
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 6,
+          max: -5,
+          candles: [
+            { open: 0, high: 10, low: 0, close: 10 },
+            { open: 2, high: 8, low: 2, close: 6 },
+          ],
+        }),
+      22,
+      7,
+    );
+
+    const lines = mounted.terminal.snapshot().lines;
+    expect(lines[0]?.slice(0, 3)).toBe("-5│");
+    expect(lines[3]?.slice(0, 3)).toBe("-5│");
 
     mounted.unmount();
   });
@@ -551,6 +621,44 @@ describe("terminal charts", () => {
       const text = app.terminal.snapshot().lines.join("\n");
       expect(text).toContain("c x=3 y=3");
       expect(text).not.toContain("missing");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("does not show line hover tooltip in non-finite leading or trailing blank regions", async () => {
+    const App = defineComponent({
+      setup: () => () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 30,
+          h: 5,
+          values: [Number.NaN, 1, Number.NaN],
+          labels: ["left", "middle", "right"],
+          showAxes: false,
+        }),
+    });
+    const app = createTerminalApp({ cols: 34, rows: 7, component: App as any });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointermove", cellX: 0, cellY: 2, time: 1_000 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(app.terminal.snapshot().lines.join("\n")).not.toContain("middle");
+
+      app.events.dispatch({ type: "pointermove", cellX: 15, cellY: 2, time: 1_001 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(app.terminal.snapshot().lines.join("\n")).toContain("middle x=2 y=1");
+
+      app.events.dispatch({ type: "pointermove", cellX: 29, cellY: 2, time: 1_002 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(app.terminal.snapshot().lines.join("\n")).not.toContain("middle");
     } finally {
       app.dispose();
     }
