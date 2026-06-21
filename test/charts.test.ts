@@ -171,6 +171,35 @@ describe("terminal charts", () => {
     mounted.unmount();
   });
 
+  it("connects finite line runs across bucket-only endpoints", async () => {
+    const values = [
+      ...Array(10).fill(Number.NaN),
+      ...Array(3).fill(0),
+      ...Array(28).fill(100),
+      ...Array(59).fill(Number.NaN),
+    ];
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 5,
+          h: 5,
+          values,
+          showAxes: false,
+        }),
+      8,
+      6,
+    );
+
+    expect(mounted.terminal.getCell(0, 4).ch).not.toBe(" ");
+    for (let y = 0; y < 5; y++) expect(mounted.terminal.getCell(1, y).ch).not.toBe(" ");
+    expect(mounted.terminal.getCell(2, 0).ch).not.toBe(" ");
+
+    mounted.unmount();
+  });
+
   it("renders line axes and labels when there is enough space", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -478,6 +507,28 @@ describe("terminal charts", () => {
     mounted.unmount();
   });
 
+  it("keeps small non-zero pie legend values visible", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TPieChart, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 5,
+          values: [0.001, 0.001],
+          labels: ["A", "B"],
+        }),
+      28,
+      6,
+    );
+
+    const text = mounted.terminal.snapshot().lines.join("\n");
+    expect(text).toContain("A 0.001 50%");
+    expect(text).toContain("B 0.001 50%");
+
+    mounted.unmount();
+  });
+
   it("normalizes large pie weights before computing percentages", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -736,6 +787,38 @@ describe("terminal charts", () => {
         fg: "whiteBright",
         bold: true,
       });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keeps small non-zero line hover values visible", async () => {
+    const App = defineComponent({
+      setup: () => () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 30,
+          h: 5,
+          values: [0.001, -0.001],
+          showAxes: false,
+        }),
+    });
+    const app = createTerminalApp({ cols: 40, rows: 7, component: App as any });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointermove", cellX: 0, cellY: 0, time: 1_000 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(app.terminal.snapshot().lines.join("\n")).toContain("#1 x=1 y=0.001");
+
+      app.events.dispatch({ type: "pointermove", cellX: 29, cellY: 4, time: 1_001 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(app.terminal.snapshot().lines.join("\n")).toContain("#2 x=2 y=-0.001");
     } finally {
       app.dispose();
     }

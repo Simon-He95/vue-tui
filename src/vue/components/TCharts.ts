@@ -165,6 +165,15 @@ type LineBucket = Readonly<{
   x: number;
   minValue: number;
   maxValue: number;
+  firstIndex: number;
+  firstValue: number;
+  lastIndex: number;
+  lastValue: number;
+}>;
+
+type LineSegmentPoint = Readonly<{
+  x: number;
+  value: number;
 }>;
 
 type LineLayout = Readonly<{
@@ -379,16 +388,6 @@ function lineRunAtPosition(runs: readonly LineRun[], position: number): LineRun 
   return position >= first.originalIndex && position <= last.originalIndex ? run : null;
 }
 
-function lineValueAtRunsPosition(
-  runs: readonly LineRun[],
-  position: number,
-): { run: LineRun; value: number } | null {
-  const run = lineRunAtPosition(runs, position);
-  if (!run || run.points.length < 2) return null;
-  const value = lineValueAtPosition(run.points, position);
-  return value == null ? null : { run, value };
-}
-
 function nearestLinePoint(points: readonly LinePoint[], position: number): LinePoint | null {
   if (!points.length) return null;
   const index = lowerBoundLinePoint(points, position);
@@ -455,20 +454,84 @@ function lineBucketsForRun(
   sourceLength: number,
 ): LineBucket[] {
   const buckets: LineBucket[] = [];
-  let current: { x: number; minValue: number; maxValue: number } | null = null;
+  let current: {
+    x: number;
+    minValue: number;
+    maxValue: number;
+    firstIndex: number;
+    firstValue: number;
+    lastIndex: number;
+    lastValue: number;
+  } | null = null;
   for (const point of points) {
     const x = lineXForOriginalIndex(point.originalIndex, 0, plotW, sourceLength);
     if (x < 0 || x >= plotW) continue;
     if (!current || current.x !== x) {
       if (current) buckets.push(current);
-      current = { x, minValue: point.value, maxValue: point.value };
+      current = {
+        x,
+        minValue: point.value,
+        maxValue: point.value,
+        firstIndex: point.originalIndex,
+        firstValue: point.value,
+        lastIndex: point.originalIndex,
+        lastValue: point.value,
+      };
       continue;
     }
     if (point.value < current.minValue) current.minValue = point.value;
     if (point.value > current.maxValue) current.maxValue = point.value;
+    current.lastIndex = point.originalIndex;
+    current.lastValue = point.value;
   }
   if (current) buckets.push(current);
   return buckets;
+}
+
+function lineBucketRepresentativeValue(
+  points: readonly LinePoint[],
+  bucket: LineBucket,
+  plotW: number,
+  sourceLength: number,
+): number {
+  const position = samplePositionAtX(bucket.x, plotW, sourceLength);
+  if (position <= bucket.firstIndex) return bucket.firstValue;
+  if (position >= bucket.lastIndex) return bucket.lastValue;
+  return lineValueAtPosition(points, position) ?? bucket.lastValue;
+}
+
+function lineSegmentPointsForRun(
+  points: readonly LinePoint[],
+  buckets: readonly LineBucket[],
+  plotW: number,
+  sourceLength: number,
+): LineSegmentPoint[] {
+  const valuesByX = new Map<number, number>();
+  const first = points[0];
+  const last = points[points.length - 1];
+
+  if (first && last) {
+    if (plotW <= 1 || sourceLength <= 1) {
+      const value = lineValueAtPosition(points, 0);
+      if (value != null) valuesByX.set(0, value);
+    } else {
+      const scale = (sourceLength - 1) / (plotW - 1);
+      const startX = Math.max(0, Math.ceil(first.originalIndex / scale));
+      const endX = Math.min(plotW - 1, Math.floor(last.originalIndex / scale));
+      for (let x = startX; x <= endX; x++) {
+        const value = lineValueAtPosition(points, samplePositionAtX(x, plotW, sourceLength));
+        if (value != null) valuesByX.set(x, value);
+      }
+    }
+  }
+
+  for (const bucket of buckets) {
+    if (!valuesByX.has(bucket.x)) {
+      valuesByX.set(bucket.x, lineBucketRepresentativeValue(points, bucket, plotW, sourceLength));
+    }
+  }
+
+  return Array.from(valuesByX, ([x, value]) => ({ x, value })).sort((a, b) => a.x - b.x);
 }
 
 function putLineGlyph(
@@ -562,7 +625,8 @@ function formatChartValue(value: number): string {
   if (Number.isInteger(value)) return String(value);
   if (abs >= 100) return value.toFixed(0);
   if (abs >= 10) return value.toFixed(1);
-  return value.toFixed(2).replace(/\.?0+$/u, "");
+  if (abs > 0 && abs < 0.01) return Number(value.toPrecision(2)).toString();
+  return Number(value.toFixed(2)).toString();
 }
 
 function fitLabel(value: string, width: number): string {
@@ -1162,47 +1226,27 @@ export const TLineChart = defineComponent({
       const cells: ChartCell[] = [];
 
       if (layout.plotW > 0 && layout.plotH > 0 && runs.length > 0) {
-        let prevX: number | null = null;
-        let prevY: number | null = null;
-        let prevRun: LineRun | null = null;
-        for (let x = 0; x < layout.plotW; x++) {
-          const position = samplePositionAtX(x, layout.plotW, sourceLength);
-          const sample = lineValueAtRunsPosition(runs, position);
-          if (!sample) {
-            prevX = null;
-            prevY = null;
-            prevRun = null;
-            continue;
-          }
-          const y = valueToY(sample.value, min, max, layout.plotH);
-          if (prevX == null || prevY == null || prevRun !== sample.run) {
-            putLineGlyph(
-              cells,
-              layout.plotX + x,
-              layout.plotY + y,
-              "●",
-              lineStyle.value,
-              width,
-              height,
-            );
-          } else {
-            drawSteppedLineSegment(
-              cells,
-              layout.plotX + prevX,
-              layout.plotY + prevY,
-              layout.plotX + x,
-              layout.plotY + y,
-              lineStyle.value,
-              width,
-              height,
-            );
-          }
-          prevX = x;
-          prevY = y;
-          prevRun = sample.run;
-        }
         for (const run of runs) {
-          for (const bucket of lineBucketsForRun(run.points, layout.plotW, sourceLength)) {
+          const buckets = lineBucketsForRun(run.points, layout.plotW, sourceLength);
+          let prevX: number | null = null;
+          let prevY: number | null = null;
+          for (const point of lineSegmentPointsForRun(
+            run.points,
+            buckets,
+            layout.plotW,
+            sourceLength,
+          )) {
+            const x = layout.plotX + point.x;
+            const y = layout.plotY + valueToY(point.value, min, max, layout.plotH);
+            if (prevX == null || prevY == null) {
+              putLineGlyph(cells, x, y, "●", lineStyle.value, width, height);
+            } else {
+              drawSteppedLineSegment(cells, prevX, prevY, x, y, lineStyle.value, width, height);
+            }
+            prevX = x;
+            prevY = y;
+          }
+          for (const bucket of buckets) {
             pushLineBucketExtrema(cells, bucket, layout, min, max, lineStyle.value, width, height);
           }
         }
