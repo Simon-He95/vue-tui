@@ -462,6 +462,9 @@
       "maturity": "experimental",
       "runtime": "browser-safe",
       "valueExports": [
+        "TCandlestickChart",
+        "TContributionGraph",
+        "TLineChart",
         "TLogLinksPanel",
         "TLogMinimap",
         "TLogScrollbar",
@@ -471,6 +474,7 @@
         "TLogView",
         "TLogVirtualLinksPanel",
         "TLogVirtualSearchResults",
+        "TPieChart",
         "TTranscriptView",
         "TVirtualList",
         "captureTLogViewSessionState",
@@ -521,6 +525,7 @@
         "RowScrollMode",
         "SanitizeTerminalHrefOptions",
         "StorageLike",
+        "TCandlestickDatum",
         "TLinkifyOptions",
         "TLinkifyProtocol",
         "TLinkifySegment",
@@ -1871,6 +1876,167 @@
         }
       ]
     },
+    "TCandlestickChart": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "candles",
+          "type": "readonly TCandlestickDatum[]",
+          "required": true,
+          "description": "Candles rendered from left to right; the most recent candles are kept when width is smaller."
+        },
+        {
+          "name": "labels",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Labels aligned with candles and shown in hover tooltips."
+        },
+        {
+          "name": "min",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Lower price bound. Defaults to the smallest candle low."
+        },
+        {
+          "name": "max",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Upper price bound. Defaults to the largest candle high."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "upStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"greenBright\" })",
+          "description": "Style used when close is greater than or equal to open."
+        },
+        {
+          "name": "downStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"redBright\" })",
+          "description": "Style used when close is less than open."
+        },
+        {
+          "name": "wickStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Optional style override for wick cells."
+        },
+        {
+          "name": "showAxes",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Whether to render axes and price labels when there is enough space."
+        },
+        {
+          "name": "axisStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"white\", dim: true })",
+          "description": "Style used for axis lines."
+        },
+        {
+          "name": "labelStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"whiteBright\" })",
+          "description": "Style used for axis labels."
+        },
+        {
+          "name": "xLabel",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Label centered under the x axis."
+        },
+        {
+          "name": "yLabel",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Label rendered at the top of the plot area."
+        },
+        {
+          "name": "startLabel",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Left endpoint label for the x axis when xLabel is empty."
+        },
+        {
+          "name": "endLabel",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Right endpoint label for the x axis when xLabel is empty."
+        },
+        {
+          "name": "showTooltip",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Whether pointer hover shows candle values."
+        },
+        {
+          "name": "hoverStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({})",
+          "description": "Style merged onto the currently hovered candle."
+        },
+        {
+          "name": "tooltipStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"whiteBright\" })",
+          "description": "Style used for hover tooltip text."
+        }
+      ],
+      "events": []
+    },
     "TCheckbox": {
       "entrypoint": "@simon_he/vue-tui",
       "maturity": "public",
@@ -2421,6 +2587,141 @@
           "name": "close"
         }
       ]
+    },
+    "TContributionGraph": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Width in terminal cells. Defaults to the rendered graph width."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Height in terminal cells. Defaults to the row count plus a tooltip row when tooltips are enabled."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "values",
+          "type": "readonly number[]",
+          "required": true,
+          "description": "Numeric samples rendered column-major from top to bottom."
+        },
+        {
+          "name": "rows",
+          "type": "number",
+          "required": false,
+          "defaultValue": "7",
+          "description": "Number of rows in each heatmap column."
+        },
+        {
+          "name": "columns",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Number of columns to render. Defaults to enough columns for the values."
+        },
+        {
+          "name": "max",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Maximum sample value used for level mapping. Defaults to the largest positive value."
+        },
+        {
+          "name": "labels",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Labels aligned with values and shown in hover tooltips."
+        },
+        {
+          "name": "unit",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Unit appended to hover tooltip values."
+        },
+        {
+          "name": "showTooltip",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Whether pointer hover shows a value tooltip."
+        },
+        {
+          "name": "emptyStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"blackBright\", dim: true })",
+          "description": "Empty cells and surrounding clear area style."
+        },
+        {
+          "name": "levelStyles",
+          "type": "readonly Style[]",
+          "required": false,
+          "defaultValue": "() => DEFAULT_HEATMAP_LEVEL_STYLES",
+          "description": "Positive value styles ordered from low to high intensity."
+        },
+        {
+          "name": "cell",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"■\"",
+          "description": "Glyph used for each heatmap cell."
+        },
+        {
+          "name": "gap",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1",
+          "description": "Horizontal gap between columns in terminal cells."
+        },
+        {
+          "name": "hoverStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({})",
+          "description": "Style merged onto the currently hovered heatmap cell."
+        },
+        {
+          "name": "tooltipStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"whiteBright\" })",
+          "description": "Style used for hover tooltip text."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        }
+      ],
+      "events": []
     },
     "TDataTable": {
       "entrypoint": "@simon_he/vue-tui",
@@ -4188,6 +4489,160 @@
           "type": "Style",
           "required": false,
           "defaultValue": "() => ({ inverse: true })"
+        }
+      ],
+      "events": []
+    },
+    "TLineChart": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "values",
+          "type": "readonly number[]",
+          "required": true,
+          "description": "Numeric samples rendered across the chart width."
+        },
+        {
+          "name": "labels",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Labels aligned with values and shown in hover tooltips."
+        },
+        {
+          "name": "unit",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Unit appended to hover y values."
+        },
+        {
+          "name": "min",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Lower domain bound. Defaults to the smallest sample."
+        },
+        {
+          "name": "max",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Upper domain bound. Defaults to the largest sample."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "lineStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"cyanBright\" })",
+          "description": "Style used for line glyphs."
+        },
+        {
+          "name": "showAxes",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Whether to render axes and domain labels when there is enough space."
+        },
+        {
+          "name": "axisStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"white\", dim: true })",
+          "description": "Style used for axis lines."
+        },
+        {
+          "name": "labelStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"whiteBright\" })",
+          "description": "Style used for axis labels."
+        },
+        {
+          "name": "xLabel",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Label centered under the x axis."
+        },
+        {
+          "name": "yLabel",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Label rendered at the top of the plot area."
+        },
+        {
+          "name": "startLabel",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Left endpoint label for the x axis when xLabel is empty."
+        },
+        {
+          "name": "endLabel",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"\"",
+          "description": "Right endpoint label for the x axis when xLabel is empty."
+        },
+        {
+          "name": "showTooltip",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Whether pointer hover shows point values."
+        },
+        {
+          "name": "hoverStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"whiteBright\", bold: true })",
+          "description": "Style merged onto the currently hovered point."
+        },
+        {
+          "name": "tooltipStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"whiteBright\" })",
+          "description": "Style used for hover tooltip text."
         }
       ],
       "events": []
@@ -6576,6 +7031,90 @@
           "name": "blur"
         }
       ]
+    },
+    "TPieChart": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Left position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Top position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "values",
+          "type": "readonly number[]",
+          "required": true,
+          "description": "Segment values rendered clockwise from the top."
+        },
+        {
+          "name": "labels",
+          "type": "readonly string[]",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Labels aligned with segment values and shown in the legend."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "segmentStyles",
+          "type": "readonly Style[]",
+          "required": false,
+          "defaultValue": "() => DEFAULT_PIE_SEGMENT_STYLES",
+          "description": "Segment styles cycled when there are more segments than styles."
+        },
+        {
+          "name": "cell",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"█\"",
+          "description": "Glyph used for filled pie cells."
+        },
+        {
+          "name": "showLegend",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Whether to render a label/value/percent legend when there is enough space."
+        },
+        {
+          "name": "legendStyle",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "() => ({ fg: \"whiteBright\" })",
+          "description": "Style used for legend text."
+        }
+      ],
+      "events": []
     },
     "TPopover": {
       "entrypoint": "@simon_he/vue-tui/vue",

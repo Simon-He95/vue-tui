@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { normalizeOpenHref, openExternalHref } from "../scripts/run-component-terminal.js";
+import {
+  componentTerminalMouseTracking,
+  normalizeOpenHref,
+  openExternalHref,
+} from "../scripts/run-component-terminal.js";
 
 describe("component terminal script", () => {
   it("normalizes only supported external href protocols", () => {
@@ -31,5 +35,12 @@ describe("component terminal script", () => {
       if (previous === undefined) delete process.env.VT_OPEN_LINKS;
       else process.env.VT_OPEN_LINKS = previous;
     }
+  });
+
+  it("enables any-motion mouse tracking for hover demos", () => {
+    expect(componentTerminalMouseTracking).toEqual({
+      enableMouse: true,
+      enableMouseMotion: true,
+    });
   });
 });

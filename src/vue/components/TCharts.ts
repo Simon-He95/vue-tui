@@ -1,0 +1,1278 @@
+import type { ComputedRef, PropType } from "vue";
+import type {
+  Rect,
+  TerminalEventHandlerMap,
+  TerminalPointerEvent,
+} from "../../events/manager/types.js";
+import type { Style } from "../../core/types.js";
+import { computed, defineComponent, h, inject, ref } from "vue";
+import { useLayout } from "../composables/use-layout.js";
+import { useRenderNode } from "../composables/use-render-node.js";
+import { useTerminal } from "../composables/use-terminal.js";
+import { useTerminalNode } from "../composables/use-terminal-node.js";
+import { useVisibility } from "../composables/use-visibility.js";
+import { EventZIndexContextKey } from "../context.js";
+import { intersectRect, translateRect } from "../utils/rect.js";
+import { sanitizeInlineText, sliceByCells, spaces, textCellWidth } from "../utils/text.js";
+import { mergeStyle } from "./simple-utils.js";
+
+export type TCandlestickDatum = Readonly<{
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}>;
+
+const DEFAULT_HEATMAP_LEVEL_STYLES: readonly Style[] = Object.freeze([
+  Object.freeze({ fg: "#9be9a8" }),
+  Object.freeze({ fg: "#40c463" }),
+  Object.freeze({ fg: "#30a14e" }),
+  Object.freeze({ fg: "#216e39" }),
+]);
+
+const DEFAULT_PIE_SEGMENT_STYLES: readonly Style[] = Object.freeze([
+  Object.freeze({ fg: "cyanBright" }),
+  Object.freeze({ fg: "magentaBright" }),
+  Object.freeze({ fg: "yellowBright" }),
+  Object.freeze({ fg: "greenBright" }),
+  Object.freeze({ fg: "blueBright" }),
+  Object.freeze({ fg: "redBright" }),
+]);
+
+const TERMINAL_CELL_HEIGHT_TO_WIDTH = 1.8;
+const PIE_QUADRANT_BLOCKS: readonly string[] = Object.freeze([
+  " ",
+  "▘",
+  "▝",
+  "▀",
+  "▖",
+  "▌",
+  "▞",
+  "▛",
+  "▗",
+  "▚",
+  "▐",
+  "▜",
+  "▄",
+  "▙",
+  "▟",
+  "█",
+]);
+const PIE_CELL_SAMPLES = Object.freeze([
+  Object.freeze({ dx: 0.25, dy: 0.25, bit: 1 }),
+  Object.freeze({ dx: 0.75, dy: 0.25, bit: 2 }),
+  Object.freeze({ dx: 0.25, dy: 0.75, bit: 4 }),
+  Object.freeze({ dx: 0.75, dy: 0.75, bit: 8 }),
+]);
+
+type ChartCell = Readonly<{
+  x: number;
+  y: number;
+  ch: string;
+  style: Style;
+}>;
+
+type ChartSurface = Readonly<{
+  width: number;
+  height: number;
+  clearStyle: Style;
+  rows: readonly (readonly ChartCell[])[];
+}>;
+
+type AxisLayout = Readonly<{
+  enabled: boolean;
+  plotX: number;
+  plotY: number;
+  plotW: number;
+  plotH: number;
+  axisX: number;
+  axisY: number;
+  minLabel: string;
+  maxLabel: string;
+}>;
+
+type ChartRenderContext = Readonly<{
+  fullRect: ComputedRef<Rect>;
+  absRect: ComputedRef<Rect>;
+}>;
+
+type ChartRenderOptions = Readonly<{
+  handlers?: (context: ChartRenderContext) => TerminalEventHandlerMap;
+  selectable?: boolean;
+}>;
+
+type ContributionLayout = Readonly<{
+  rowCount: number;
+  gap: number;
+  columnWidth: number;
+  columns: number;
+  width: number;
+  height: number;
+  startIndex: number;
+  maxValue: number;
+}>;
+
+type ContributionHover = Readonly<{
+  x: number;
+  y: number;
+  index: number;
+  value: number;
+  label: string;
+}>;
+
+type CandlestickHover = Readonly<{
+  x: number;
+  y: number;
+  index: number;
+  label: string;
+  value: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}>;
+
+type LineHover = Readonly<{
+  x: number;
+  y: number;
+  index: number;
+  label: string;
+  value: number;
+}>;
+
+type LineLayout = Readonly<{
+  width: number;
+  height: number;
+  layout: AxisLayout;
+  values: readonly number[];
+  min: number;
+  max: number;
+}>;
+
+type CandlestickLayout = Readonly<{
+  width: number;
+  height: number;
+  layout: AxisLayout;
+  visibleCandles: readonly TCandlestickDatum[];
+  startIndex: number;
+  min: number;
+  max: number;
+}>;
+
+function cellCount(value: number | undefined, fallback: number): number {
+  const n = Math.floor(Number(value ?? fallback));
+  return Number.isFinite(n) ? Math.max(0, n) : Math.max(0, Math.floor(fallback));
+}
+
+function finiteNumbers(values: readonly number[]): number[] {
+  return values.map((value) => Number(value)).filter((value) => Number.isFinite(value));
+}
+
+function finiteRange(values: readonly number[]): { min: number; max: number } | null {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const raw of values) {
+    const value = Number(raw);
+    if (!Number.isFinite(value)) continue;
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  return min === Number.POSITIVE_INFINITY ? null : { min, max };
+}
+
+function maxPositive(values: readonly number[]): number {
+  let max = 0;
+  for (const raw of values) {
+    const value = Number(raw);
+    if (Number.isFinite(value) && value > max) max = value;
+  }
+  return max;
+}
+
+function domainFromValues(
+  values: readonly number[],
+  minValue: number | undefined,
+  maxValue: number | undefined,
+): { min: number; max: number } {
+  const range = finiteRange(values);
+  const fallbackMin = range?.min ?? 0;
+  const fallbackMax = range?.max ?? 0;
+  const min = Number.isFinite(Number(minValue)) ? Number(minValue) : fallbackMin;
+  const max = Number.isFinite(Number(maxValue)) ? Number(maxValue) : fallbackMax;
+  return max >= min ? { min, max } : { min: max, max: min };
+}
+
+function valueToY(value: number, min: number, max: number, height: number): number {
+  if (height <= 1) return 0;
+  if (max === min) return Math.floor((height - 1) / 2);
+  const ratio = (value - min) / (max - min);
+  return Math.max(0, Math.min(height - 1, Math.round((1 - ratio) * (height - 1))));
+}
+
+function yToValue(y: number, min: number, max: number, height: number): number {
+  if (height <= 1 || max === min) return max;
+  const ratio = 1 - Math.max(0, Math.min(height - 1, y)) / (height - 1);
+  return min + ratio * (max - min);
+}
+
+function emptyChartRows(height: number): ChartCell[][] {
+  return Array.from({ length: height }, () => []);
+}
+
+function valueAt(values: readonly number[], position: number): number {
+  if (values.length <= 1) return values[0] ?? 0;
+  const clamped = Math.max(0, Math.min(values.length - 1, position));
+  const left = Math.floor(clamped);
+  const right = Math.min(values.length - 1, left + 1);
+  const ratio = clamped - left;
+  return (values[left] ?? 0) * (1 - ratio) + (values[right] ?? 0) * ratio;
+}
+
+function putLineGlyph(
+  cells: ChartCell[],
+  x: number,
+  y: number,
+  ch: string,
+  style: Style,
+  width: number,
+  height: number,
+): void {
+  if (x < 0 || x >= width || y < 0 || y >= height) return;
+  cells.push({ x, y, ch, style });
+}
+
+function drawSteppedLineSegment(
+  cells: ChartCell[],
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  style: Style,
+  width: number,
+  height: number,
+): void {
+  if (toY === fromY) {
+    for (let x = fromX + 1; x <= toX; x++) {
+      putLineGlyph(cells, x, toY, "─", style, width, height);
+    }
+    return;
+  }
+
+  const rising = toY < fromY;
+  for (let x = fromX + 1; x < toX; x++) {
+    putLineGlyph(cells, x, fromY, "─", style, width, height);
+  }
+  putLineGlyph(cells, toX, fromY, rising ? "╯" : "╮", style, width, height);
+  const top = Math.min(fromY, toY);
+  const bottom = Math.max(fromY, toY);
+  for (let y = top + 1; y < bottom; y++) {
+    putLineGlyph(cells, toX, y, "│", style, width, height);
+  }
+  putLineGlyph(cells, toX, toY, rising ? "╭" : "╰", style, width, height);
+}
+
+function chartGlyph(value: string, fallback: string): string {
+  const text = sliceByCells(sanitizeInlineText(value || fallback), 1);
+  return text && textCellWidth(text) === 1 ? text : fallback;
+}
+
+function formatChartValue(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}m`;
+  if (abs >= 10_000) return `${Math.round(value / 1_000)}k`;
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+  if (Number.isInteger(value)) return String(value);
+  if (abs >= 100) return value.toFixed(0);
+  if (abs >= 10) return value.toFixed(1);
+  return value.toFixed(2).replace(/\.?0+$/u, "");
+}
+
+function fitLabel(value: string, width: number): string {
+  return sliceByCells(sanitizeInlineText(value), Math.max(0, width));
+}
+
+function pushTextCells(
+  cells: ChartCell[],
+  x: number,
+  y: number,
+  text: string,
+  style: Style,
+  maxWidth = Number.POSITIVE_INFINITY,
+): void {
+  const clipped = fitLabel(text, maxWidth);
+  let cursor = x;
+  for (const ch of clipped) {
+    const w = textCellWidth(ch);
+    if (w <= 0) continue;
+    cells.push({ x: cursor, y, ch, style });
+    cursor += w;
+  }
+}
+
+function chooseTooltipPlacement(
+  cells: readonly ChartCell[],
+  width: number,
+  height: number,
+  anchorX: number,
+  anchorY: number,
+  textWidth: number,
+  preferredY?: number,
+): { x: number; y: number } {
+  const tooltipWidth = Math.min(width, Math.max(1, textWidth));
+  const clampX = (x: number) => Math.max(0, Math.min(x, Math.max(0, width - tooltipWidth)));
+  const xCandidates = [anchorX + 2, anchorX - tooltipWidth - 2, 0, width - tooltipWidth]
+    .map(clampX)
+    .filter((x, index, values) => values.indexOf(x) === index);
+  const yCandidates = [
+    preferredY,
+    anchorY > 0 ? anchorY - 1 : anchorY + 1,
+    anchorY + 1,
+    anchorY - 2,
+    anchorY + 2,
+    0,
+    height - 1,
+  ].filter((y): y is number => y != null && y >= 0 && y < height);
+
+  let best = { x: xCandidates[0] ?? 0, y: yCandidates[0] ?? 0, score: Number.POSITIVE_INFINITY };
+  for (const y of yCandidates) {
+    for (const x of xCandidates) {
+      let overlap = 0;
+      for (const cell of cells) {
+        if (cell.y !== y) continue;
+        const cellW = Math.max(1, textCellWidth(cell.ch));
+        if (cell.x < x + tooltipWidth && cell.x + cellW > x) overlap++;
+      }
+      const score =
+        overlap * 1000 + Math.abs(y - anchorY) + Math.abs(x - anchorX) / Math.max(1, width);
+      if (score < best.score) best = { x, y, score };
+    }
+  }
+  return { x: best.x, y: best.y };
+}
+
+function resolveAxisLayout(
+  width: number,
+  height: number,
+  min: number,
+  max: number,
+  showAxes: boolean,
+): AxisLayout {
+  if (!showAxes || width < 12 || height < 5) {
+    return {
+      enabled: false,
+      plotX: 0,
+      plotY: 0,
+      plotW: width,
+      plotH: height,
+      axisX: -1,
+      axisY: height,
+      minLabel: formatChartValue(min),
+      maxLabel: formatChartValue(max),
+    };
+  }
+
+  const minLabel = fitLabel(formatChartValue(min), 7);
+  const maxLabel = fitLabel(formatChartValue(max), 7);
+  const labelW = Math.max(2, textCellWidth(minLabel), textCellWidth(maxLabel));
+  const plotX = labelW + 1;
+  const plotY = 0;
+  const plotW = Math.max(0, width - plotX);
+  const plotH = Math.max(0, height - 2);
+  if (plotW < 2 || plotH < 2) {
+    return {
+      enabled: false,
+      plotX: 0,
+      plotY: 0,
+      plotW: width,
+      plotH: height,
+      axisX: -1,
+      axisY: height,
+      minLabel,
+      maxLabel,
+    };
+  }
+
+  return {
+    enabled: true,
+    plotX,
+    plotY,
+    plotW,
+    plotH,
+    axisX: plotX - 1,
+    axisY: plotY + plotH,
+    minLabel,
+    maxLabel,
+  };
+}
+
+function pushAxes(
+  cells: ChartCell[],
+  layout: AxisLayout,
+  style: Style,
+  labelStyle: Style,
+  xLabel: string,
+  yLabel: string,
+  startLabel: string,
+  endLabel: string,
+): void {
+  if (!layout.enabled) return;
+  pushTextCells(cells, 0, layout.plotY, layout.maxLabel, labelStyle, layout.axisX);
+  pushTextCells(
+    cells,
+    0,
+    Math.max(layout.plotY, layout.axisY - 1),
+    layout.minLabel,
+    labelStyle,
+    layout.axisX,
+  );
+  for (let y = layout.plotY; y < layout.axisY; y++) {
+    cells.push({ x: layout.axisX, y, ch: "│", style });
+  }
+  cells.push({ x: layout.axisX, y: layout.axisY, ch: "└", style });
+  for (let x = layout.plotX; x < layout.plotX + layout.plotW; x++) {
+    cells.push({ x, y: layout.axisY, ch: "─", style });
+  }
+  if (yLabel) pushTextCells(cells, layout.plotX, layout.plotY, yLabel, labelStyle, layout.plotW);
+  if (xLabel) {
+    const xLabelW = textCellWidth(sanitizeInlineText(xLabel));
+    const x = layout.plotX + Math.max(0, Math.floor((layout.plotW - xLabelW) / 2));
+    pushTextCells(cells, x, layout.axisY + 1, xLabel, labelStyle, layout.plotW);
+  } else {
+    pushTextCells(cells, layout.plotX, layout.axisY + 1, startLabel, labelStyle, layout.plotW);
+    const endW = textCellWidth(sanitizeInlineText(endLabel));
+    const endX = layout.plotX + Math.max(0, layout.plotW - endW);
+    pushTextCells(cells, endX, layout.axisY + 1, endLabel, labelStyle, layout.plotW);
+  }
+}
+
+function createSurface(
+  width: number,
+  height: number,
+  clearStyle: Style,
+  cells: readonly ChartCell[],
+): ChartSurface {
+  const rows = emptyChartRows(height);
+  for (const cell of cells) {
+    if (cell.y < 0 || cell.y >= height || cell.x < 0 || cell.x >= width) continue;
+    rows[cell.y]!.push(cell);
+  }
+  return { width, height, clearStyle, rows };
+}
+
+function useChartRender(
+  props: {
+    x: number;
+    y: number;
+    zIndex: number;
+  },
+  surface: ComputedRef<ChartSurface>,
+  options?: ChartRenderOptions,
+): () => ReturnType<typeof h> {
+  const { terminal } = useTerminal();
+  const layout = useLayout();
+  const { visible, rootProps } = useVisibility();
+  const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
+  const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
+
+  const fullRect = computed<Rect>(() =>
+    translateRect(
+      {
+        x: Math.floor(props.x),
+        y: Math.floor(props.y),
+        w: surface.value.width,
+        h: surface.value.height,
+      },
+      layout.originX,
+      layout.originY,
+    ),
+  );
+
+  const absRect = computed<Rect>(() => {
+    const translated = fullRect.value;
+    if (!layout.clipRect) return translated;
+    return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
+  });
+
+  const dirtyRowsHint = computed<readonly number[]>(() => {
+    if (!visible.value) return [];
+    const r = absRect.value;
+    if (r.w <= 0 || r.h <= 0) return [];
+    return Array.from({ length: r.h }, (_, index) => r.y + index);
+  });
+
+  if (options?.handlers) {
+    const handlers = options.handlers({ fullRect, absRect });
+    useTerminalNode(() => ({
+      rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
+      zIndex: eventZ.value,
+      visible: visible.value,
+      selectable: options.selectable ?? false,
+      handlers,
+    }));
+  }
+
+  useRenderNode(() => ({
+    zIndex: props.zIndex,
+    rect: visible.value ? absRect.value : { x: 0, y: 0, w: 0, h: 0 },
+    dirtyRowsHint: dirtyRowsHint.value,
+    deps: [visible.value, absRect.value, fullRect.value, surface.value],
+    paint: (dirtyRows) => {
+      if (!visible.value) return;
+      const r = absRect.value;
+      if (r.w <= 0 || r.h <= 0) return;
+
+      const full = fullRect.value;
+      const current = surface.value;
+      const blank = spaces(r.w);
+      const paintRow = (y: number) => {
+        if (y < r.y || y >= r.y + r.h) return;
+        const localY = y - full.y;
+        if (localY < 0 || localY >= current.height) return;
+
+        terminal.write(blank, { x: r.x, y, style: current.clearStyle });
+        for (const cell of current.rows[localY] ?? []) {
+          const x = full.x + cell.x;
+          if (x < r.x || x >= r.x + r.w) continue;
+          terminal.put(x, y, cell.ch, cell.style);
+        }
+      };
+
+      if (!dirtyRows) {
+        for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+        return;
+      }
+
+      for (const y of dirtyRows) paintRow(y);
+    },
+  }));
+
+  return () => h("span", rootProps);
+}
+
+function positiveHeatmapStyle(value: number, max: number, styles: readonly Style[]): Style {
+  if (!styles.length) return {};
+  if (max <= 0) return styles[0] ?? {};
+  const ratio = Math.max(0, Math.min(1, value / max));
+  const index = Math.max(0, Math.min(styles.length - 1, Math.ceil(ratio * styles.length) - 1));
+  return styles[index] ?? {};
+}
+
+export const TContributionGraph = defineComponent({
+  name: "TContributionGraph",
+  props: {
+    /** Left position in terminal cells. */
+    x: { type: Number, required: true },
+    /** Top position in terminal cells. */
+    y: { type: Number, required: true },
+    /** Width in terminal cells. Defaults to the rendered graph width. */
+    w: { type: Number, default: undefined },
+    /** Height in terminal cells. Defaults to the row count plus a tooltip row when tooltips are enabled. */
+    h: { type: Number, default: undefined },
+    zIndex: { type: Number, default: 0 },
+    /** Numeric samples rendered column-major from top to bottom. */
+    values: { type: Array as PropType<readonly number[]>, required: true },
+    /** Number of rows in each heatmap column. */
+    rows: { type: Number, default: 7 },
+    /** Number of columns to render. Defaults to enough columns for the values. */
+    columns: { type: Number, default: undefined },
+    /** Maximum sample value used for level mapping. Defaults to the largest positive value. */
+    max: { type: Number, default: undefined },
+    /** Labels aligned with values and shown in hover tooltips. */
+    labels: { type: Array as PropType<readonly string[]>, default: undefined },
+    /** Unit appended to hover tooltip values. */
+    unit: { type: String, default: "" },
+    /** Whether pointer hover shows a value tooltip. */
+    showTooltip: { type: Boolean, default: true },
+    /** Empty cells and surrounding clear area style. */
+    emptyStyle: {
+      type: Object as PropType<Style>,
+      default: () => ({ fg: "blackBright", dim: true }),
+    },
+    /** Positive value styles ordered from low to high intensity. */
+    levelStyles: {
+      type: Array as PropType<readonly Style[]>,
+      default: () => DEFAULT_HEATMAP_LEVEL_STYLES,
+    },
+    /** Glyph used for each heatmap cell. */
+    cell: { type: String, default: "■" },
+    /** Horizontal gap between columns in terminal cells. */
+    gap: { type: Number, default: 1 },
+    /** Style merged onto the currently hovered heatmap cell. */
+    hoverStyle: { type: Object as PropType<Style>, default: () => ({}) },
+    /** Style used for hover tooltip text. */
+    tooltipStyle: { type: Object as PropType<Style>, default: () => ({ fg: "whiteBright" }) },
+    style: { type: Object as PropType<Style>, default: undefined },
+  },
+  setup(props) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+    const hover = ref<ContributionHover | null>(null);
+
+    const graphLayout = computed<ContributionLayout>(() => {
+      const rowCount = cellCount(props.rows, 7);
+      if (rowCount <= 0) {
+        return {
+          rowCount,
+          gap: 0,
+          columnWidth: 1,
+          columns: 0,
+          width: 0,
+          height: 0,
+          startIndex: 0,
+          maxValue: 0,
+        };
+      }
+
+      const gap = cellCount(props.gap, 1);
+      const dataColumns = Math.ceil(props.values.length / rowCount);
+      const requestedColumns = props.columns == null ? dataColumns : cellCount(props.columns, 0);
+      const columnWidth = 1 + gap;
+      const maxColumnsFromWidth =
+        props.w == null
+          ? requestedColumns
+          : Math.floor((cellCount(props.w, 0) + gap) / columnWidth);
+      const columns = Math.max(0, Math.min(requestedColumns, maxColumnsFromWidth));
+      const width =
+        props.w == null ? Math.max(0, columns * columnWidth - gap) : cellCount(props.w, 0);
+      const height =
+        props.h == null ? rowCount + (props.showTooltip ? 1 : 0) : cellCount(props.h, rowCount);
+      const maxValue =
+        props.max == null ? maxPositive(props.values) : Math.max(0, Number(props.max) || 0);
+      const startIndex = Math.max(0, props.values.length - columns * rowCount);
+      return { rowCount, gap, columnWidth, columns, width, height, startIndex, maxValue };
+    });
+
+    function hitCell(event: TerminalPointerEvent, fullRect: Rect): ContributionHover | null {
+      const current = graphLayout.value;
+      if (current.width <= 0 || current.height <= 0 || current.columns <= 0) return null;
+      const localX = Math.floor(event.cellX - fullRect.x);
+      const localY = Math.floor(event.cellY - fullRect.y);
+      const graphHeight = Math.min(current.rowCount, current.height);
+      if (localX < 0 || localX >= current.width || localY < 0 || localY >= graphHeight) return null;
+
+      const col = Math.floor(localX / current.columnWidth);
+      const cellX = col * current.columnWidth;
+      if (col < 0 || col >= current.columns) return null;
+      if (localX !== cellX) return null;
+
+      const index = current.startIndex + col * current.rowCount + localY;
+      if (index < 0 || index >= props.values.length) return null;
+      const value = Number(props.values[index] ?? 0);
+      const label = props.labels?.[index] ?? `#${index + 1}`;
+      return { x: cellX, y: localY, index, value: Number.isFinite(value) ? value : 0, label };
+    }
+
+    const surface = computed<ChartSurface>(() => {
+      const current = graphLayout.value;
+      if (current.rowCount <= 0) return createSurface(0, 0, baseStyle.value, []);
+
+      const clearStyle = mergeStyle(baseStyle.value, props.emptyStyle);
+      const levelStyles = props.levelStyles.map((style) => mergeStyle(baseStyle.value, style));
+      const cells: ChartCell[] = [];
+      const glyph = chartGlyph(props.cell, "■");
+      const hovered = hover.value;
+
+      for (let col = 0; col < current.columns; col++) {
+        const cellX = col * current.columnWidth;
+        for (let row = 0; row < current.rowCount && row < current.height; row++) {
+          const index = current.startIndex + col * current.rowCount + row;
+          const value = Number(props.values[index] ?? 0);
+          const positive = Number.isFinite(value) && value > 0;
+          const baseCellStyle = positive
+            ? levelStyles.length
+              ? positiveHeatmapStyle(value, current.maxValue, levelStyles)
+              : baseStyle.value
+            : clearStyle;
+          const style =
+            hovered?.index === index ? mergeStyle(baseCellStyle, props.hoverStyle) : baseCellStyle;
+          cells.push({ x: cellX, y: row, ch: glyph, style });
+        }
+      }
+
+      if (props.showTooltip && hovered && current.width > 0 && current.height > 0) {
+        const unit = sanitizeInlineText(props.unit);
+        const value = unit
+          ? `${formatChartValue(hovered.value)} ${unit}`
+          : formatChartValue(hovered.value);
+        const text = `${sanitizeInlineText(hovered.label)} ${value}`;
+        const textWidth = textCellWidth(text);
+        const tooltipX = Math.max(0, Math.min(hovered.x + 2, current.width - textWidth));
+        const graphHeight = Math.min(current.rowCount, current.height);
+        let tooltipY =
+          current.height > graphHeight
+            ? graphHeight
+            : hovered.y > 0
+              ? hovered.y - 1
+              : hovered.y + 1;
+        if (tooltipY >= current.height) tooltipY = Math.max(0, current.height - 1);
+        pushTextCells(
+          cells,
+          tooltipX,
+          tooltipY,
+          text,
+          mergeStyle(baseStyle.value, props.tooltipStyle),
+          current.width - tooltipX,
+        );
+      }
+
+      return createSurface(current.width, current.height, clearStyle, cells);
+    });
+
+    return useChartRender(props, surface, {
+      handlers: ({ fullRect }) => ({
+        pointermove: (event) => {
+          hover.value = props.showTooltip ? hitCell(event, fullRect.value) : null;
+        },
+        pointerleave: () => {
+          hover.value = null;
+        },
+      }),
+    });
+  },
+});
+
+export const TLineChart = defineComponent({
+  name: "TLineChart",
+  props: {
+    /** Left position in terminal cells. */
+    x: { type: Number, required: true },
+    /** Top position in terminal cells. */
+    y: { type: Number, required: true },
+    /** Width in terminal cells. */
+    w: { type: Number, required: true },
+    /** Height in terminal cells. */
+    h: { type: Number, required: true },
+    zIndex: { type: Number, default: 0 },
+    /** Numeric samples rendered across the chart width. */
+    values: { type: Array as PropType<readonly number[]>, required: true },
+    /** Labels aligned with values and shown in hover tooltips. */
+    labels: { type: Array as PropType<readonly string[]>, default: undefined },
+    /** Unit appended to hover y values. */
+    unit: { type: String, default: "" },
+    /** Lower domain bound. Defaults to the smallest sample. */
+    min: { type: Number, default: undefined },
+    /** Upper domain bound. Defaults to the largest sample. */
+    max: { type: Number, default: undefined },
+    style: { type: Object as PropType<Style>, default: undefined },
+    /** Style used for line glyphs. */
+    lineStyle: { type: Object as PropType<Style>, default: () => ({ fg: "cyanBright" }) },
+    /** Whether to render axes and domain labels when there is enough space. */
+    showAxes: { type: Boolean, default: true },
+    /** Style used for axis lines. */
+    axisStyle: { type: Object as PropType<Style>, default: () => ({ fg: "white", dim: true }) },
+    /** Style used for axis labels. */
+    labelStyle: { type: Object as PropType<Style>, default: () => ({ fg: "whiteBright" }) },
+    /** Label centered under the x axis. */
+    xLabel: { type: String, default: "" },
+    /** Label rendered at the top of the plot area. */
+    yLabel: { type: String, default: "" },
+    /** Left endpoint label for the x axis when xLabel is empty. */
+    startLabel: { type: String, default: "" },
+    /** Right endpoint label for the x axis when xLabel is empty. */
+    endLabel: { type: String, default: "" },
+    /** Whether pointer hover shows point values. */
+    showTooltip: { type: Boolean, default: true },
+    /** Style merged onto the currently hovered point. */
+    hoverStyle: {
+      type: Object as PropType<Style>,
+      default: () => ({ fg: "whiteBright", bold: true }),
+    },
+    /** Style used for hover tooltip text. */
+    tooltipStyle: { type: Object as PropType<Style>, default: () => ({ fg: "whiteBright" }) },
+  },
+  setup(props) {
+    const { defaultStyle } = useTerminal();
+    const clearStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+    const lineStyle = computed(() => mergeStyle(clearStyle.value, props.lineStyle));
+    const axisStyle = computed(() => mergeStyle(clearStyle.value, props.axisStyle));
+    const labelStyle = computed(() => mergeStyle(clearStyle.value, props.labelStyle));
+    const hover = ref<LineHover | null>(null);
+
+    const lineLayout = computed<LineLayout>(() => {
+      const width = cellCount(props.w, 0);
+      const height = cellCount(props.h, 0);
+      const values = finiteNumbers(props.values);
+      const { min, max } = domainFromValues(values, props.min, props.max);
+      const layout = resolveAxisLayout(width, height, min, max, props.showAxes);
+      return { width, height, layout, values, min, max };
+    });
+
+    function hitLine(event: TerminalPointerEvent, fullRect: Rect): LineHover | null {
+      const current = lineLayout.value;
+      const { layout, values, min, max } = current;
+      if (!values.length || layout.plotW <= 0 || layout.plotH <= 0) return null;
+      const localX = Math.floor(event.cellX - fullRect.x);
+      const localY = Math.floor(event.cellY - fullRect.y);
+      const plotX = localX - layout.plotX;
+      const plotY = localY - layout.plotY;
+      if (plotX < 0 || plotX >= layout.plotW || plotY < 0 || plotY >= layout.plotH) return null;
+
+      const position =
+        layout.plotW <= 1 || values.length <= 1
+          ? 0
+          : (plotX / (layout.plotW - 1)) * (values.length - 1);
+      const index = Math.max(0, Math.min(values.length - 1, Math.round(position)));
+      const value = values[index] ?? 0;
+      const x =
+        values.length <= 1
+          ? layout.plotX
+          : layout.plotX + Math.round((index / (values.length - 1)) * (layout.plotW - 1));
+      const y = layout.plotY + valueToY(value, min, max, layout.plotH);
+      const label = props.labels?.[index] ?? `#${index + 1}`;
+      return { x, y, index, label, value };
+    }
+
+    const surface = computed<ChartSurface>(() => {
+      const { width, height, layout, values, min, max } = lineLayout.value;
+      const cells: ChartCell[] = [];
+
+      if (layout.plotW > 0 && layout.plotH > 0 && values.length > 0) {
+        let prevX: number | null = null;
+        let prevY: number | null = null;
+        for (let x = 0; x < layout.plotW; x++) {
+          const position =
+            layout.plotW <= 1 || values.length <= 1
+              ? 0
+              : (x / (layout.plotW - 1)) * (values.length - 1);
+          const y = valueToY(valueAt(values, position), min, max, layout.plotH);
+          if (prevX == null || prevY == null) {
+            putLineGlyph(
+              cells,
+              layout.plotX + x,
+              layout.plotY + y,
+              "●",
+              lineStyle.value,
+              width,
+              height,
+            );
+          } else {
+            drawSteppedLineSegment(
+              cells,
+              layout.plotX + prevX,
+              layout.plotY + prevY,
+              layout.plotX + x,
+              layout.plotY + y,
+              lineStyle.value,
+              width,
+              height,
+            );
+          }
+          prevX = x;
+          prevY = y;
+        }
+      }
+
+      pushAxes(
+        cells,
+        layout,
+        axisStyle.value,
+        labelStyle.value,
+        props.xLabel,
+        props.yLabel,
+        props.startLabel,
+        props.endLabel || (values.length > 0 ? String(values.length - 1) : ""),
+      );
+
+      const hovered = hover.value;
+      if (hovered) {
+        cells.push({
+          x: hovered.x,
+          y: hovered.y,
+          ch: "●",
+          style: mergeStyle(lineStyle.value, props.hoverStyle),
+        });
+      }
+      if (props.showTooltip && hovered && width > 0 && height > 0) {
+        const unit = sanitizeInlineText(props.unit);
+        const yValue = unit
+          ? `${formatChartValue(hovered.value)} ${unit}`
+          : formatChartValue(hovered.value);
+        const text = `${sanitizeInlineText(hovered.label)} x=${hovered.index + 1} y=${yValue}`;
+        const textWidth = textCellWidth(text);
+        const placement = chooseTooltipPlacement(
+          cells,
+          width,
+          height,
+          hovered.x,
+          hovered.y,
+          textWidth,
+          layout.enabled ? layout.axisY + 1 : undefined,
+        );
+        pushTextCells(
+          cells,
+          placement.x,
+          placement.y,
+          text,
+          mergeStyle(clearStyle.value, props.tooltipStyle),
+          width - placement.x,
+        );
+      }
+      return createSurface(width, height, clearStyle.value, cells);
+    });
+
+    return useChartRender(props, surface, {
+      handlers: ({ fullRect }) => ({
+        pointermove: (event) => {
+          hover.value = props.showTooltip ? hitLine(event, fullRect.value) : null;
+        },
+        pointerleave: () => {
+          hover.value = null;
+        },
+      }),
+    });
+  },
+});
+
+export const TCandlestickChart = defineComponent({
+  name: "TCandlestickChart",
+  props: {
+    /** Left position in terminal cells. */
+    x: { type: Number, required: true },
+    /** Top position in terminal cells. */
+    y: { type: Number, required: true },
+    /** Width in terminal cells. */
+    w: { type: Number, required: true },
+    /** Height in terminal cells. */
+    h: { type: Number, required: true },
+    zIndex: { type: Number, default: 0 },
+    /** Candles rendered from left to right; the most recent candles are kept when width is smaller. */
+    candles: { type: Array as PropType<readonly TCandlestickDatum[]>, required: true },
+    /** Labels aligned with candles and shown in hover tooltips. */
+    labels: { type: Array as PropType<readonly string[]>, default: undefined },
+    /** Lower price bound. Defaults to the smallest candle low. */
+    min: { type: Number, default: undefined },
+    /** Upper price bound. Defaults to the largest candle high. */
+    max: { type: Number, default: undefined },
+    style: { type: Object as PropType<Style>, default: undefined },
+    /** Style used when close is greater than or equal to open. */
+    upStyle: { type: Object as PropType<Style>, default: () => ({ fg: "greenBright" }) },
+    /** Style used when close is less than open. */
+    downStyle: { type: Object as PropType<Style>, default: () => ({ fg: "redBright" }) },
+    /** Optional style override for wick cells. */
+    wickStyle: { type: Object as PropType<Style>, default: undefined },
+    /** Whether to render axes and price labels when there is enough space. */
+    showAxes: { type: Boolean, default: true },
+    /** Style used for axis lines. */
+    axisStyle: { type: Object as PropType<Style>, default: () => ({ fg: "white", dim: true }) },
+    /** Style used for axis labels. */
+    labelStyle: { type: Object as PropType<Style>, default: () => ({ fg: "whiteBright" }) },
+    /** Label centered under the x axis. */
+    xLabel: { type: String, default: "" },
+    /** Label rendered at the top of the plot area. */
+    yLabel: { type: String, default: "" },
+    /** Left endpoint label for the x axis when xLabel is empty. */
+    startLabel: { type: String, default: "" },
+    /** Right endpoint label for the x axis when xLabel is empty. */
+    endLabel: { type: String, default: "" },
+    /** Whether pointer hover shows candle values. */
+    showTooltip: { type: Boolean, default: true },
+    /** Style merged onto the currently hovered candle. */
+    hoverStyle: { type: Object as PropType<Style>, default: () => ({}) },
+    /** Style used for hover tooltip text. */
+    tooltipStyle: { type: Object as PropType<Style>, default: () => ({ fg: "whiteBright" }) },
+  },
+  setup(props) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+    const axisStyle = computed(() => mergeStyle(baseStyle.value, props.axisStyle));
+    const labelStyle = computed(() => mergeStyle(baseStyle.value, props.labelStyle));
+    const hover = ref<CandlestickHover | null>(null);
+
+    const candleLayout = computed<CandlestickLayout>(() => {
+      const width = cellCount(props.w, 0);
+      const height = cellCount(props.h, 0);
+      const domainValues = props.candles.flatMap((candle) => [
+        Number(candle.open),
+        Number(candle.low),
+        Number(candle.high),
+        Number(candle.close),
+      ]);
+      const { min, max } = domainFromValues(domainValues, props.min, props.max);
+      const layout = resolveAxisLayout(width, height, min, max, props.showAxes);
+      const startIndex = Math.max(0, props.candles.length - layout.plotW);
+      const visibleCandles = props.candles.slice(startIndex);
+      return { width, height, layout, visibleCandles, startIndex, min, max };
+    });
+
+    function hitCandle(event: TerminalPointerEvent, fullRect: Rect): CandlestickHover | null {
+      const current = candleLayout.value;
+      const { layout } = current;
+      if (current.width <= 0 || current.height <= 0 || layout.plotW <= 0 || layout.plotH <= 0)
+        return null;
+      const localX = Math.floor(event.cellX - fullRect.x);
+      const localY = Math.floor(event.cellY - fullRect.y);
+      const plotX = localX - layout.plotX;
+      const plotY = localY - layout.plotY;
+      if (
+        plotX < 0 ||
+        plotX >= layout.plotW ||
+        plotX >= current.visibleCandles.length ||
+        current.visibleCandles.length <= 0
+      )
+        return null;
+      if (plotY < 0 || plotY >= layout.plotH) return null;
+
+      const candleX = plotX;
+      const candle = current.visibleCandles[candleX]!;
+      const open = Number(candle.open);
+      const high = Number(candle.high);
+      const low = Number(candle.low);
+      const close = Number(candle.close);
+      if (![open, high, low, close].every(Number.isFinite)) return null;
+
+      const index = current.startIndex + candleX;
+      const label = props.labels?.[index] ?? `#${index + 1}`;
+      return {
+        x: layout.plotX + candleX,
+        y: localY,
+        index,
+        label,
+        value: yToValue(plotY, current.min, current.max, layout.plotH),
+        open,
+        high,
+        low,
+        close,
+      };
+    }
+
+    const surface = computed<ChartSurface>(() => {
+      const current = candleLayout.value;
+      const { width, height, layout, visibleCandles, min, max } = current;
+      const cells: ChartCell[] = [];
+      const upStyle = mergeStyle(baseStyle.value, props.upStyle);
+      const downStyle = mergeStyle(baseStyle.value, props.downStyle);
+      const upWickStyle = mergeStyle(baseStyle.value, props.upStyle, props.wickStyle);
+      const downWickStyle = mergeStyle(baseStyle.value, props.downStyle, props.wickStyle);
+      const hovered = hover.value;
+
+      for (let x = 0; x < visibleCandles.length; x++) {
+        const candle = visibleCandles[x]!;
+        const open = Number(candle.open);
+        const high = Number(candle.high);
+        const low = Number(candle.low);
+        const close = Number(candle.close);
+        if (![open, high, low, close].every(Number.isFinite)) continue;
+
+        const up = close >= open;
+        const baseBodyStyle = up ? upStyle : downStyle;
+        const baseWickStyle = up ? upWickStyle : downWickStyle;
+        const hoveredCandle = hovered?.index === current.startIndex + x;
+        const bodyStyle = hoveredCandle
+          ? mergeStyle(baseBodyStyle, props.hoverStyle)
+          : baseBodyStyle;
+        const wickStyle = hoveredCandle
+          ? mergeStyle(baseWickStyle, props.hoverStyle)
+          : baseWickStyle;
+        const highY = valueToY(Math.max(high, low, open, close), min, max, layout.plotH);
+        const lowY = valueToY(Math.min(high, low, open, close), min, max, layout.plotH);
+        const openY = valueToY(open, min, max, layout.plotH);
+        const closeY = valueToY(close, min, max, layout.plotH);
+        const bodyTop = Math.min(openY, closeY);
+        const bodyBottom = Math.max(openY, closeY);
+
+        for (let y = highY; y <= lowY; y++) {
+          const inBody = y >= bodyTop && y <= bodyBottom;
+          cells.push({
+            x: layout.plotX + x,
+            y: layout.plotY + y,
+            ch: inBody ? "█" : "│",
+            style: inBody ? bodyStyle : wickStyle,
+          });
+        }
+      }
+
+      const firstVisible = props.candles.length - visibleCandles.length + 1;
+      pushAxes(
+        cells,
+        layout,
+        axisStyle.value,
+        labelStyle.value,
+        props.xLabel,
+        props.yLabel,
+        props.startLabel || (visibleCandles.length > 0 ? String(firstVisible) : ""),
+        props.endLabel || (visibleCandles.length > 0 ? String(props.candles.length) : ""),
+      );
+
+      if (props.showTooltip && hovered && width > 0 && height > 0) {
+        const text = `${sanitizeInlineText(hovered.label)} x=${hovered.index + 1} y=${formatChartValue(hovered.value)} O:${formatChartValue(hovered.open)} H:${formatChartValue(hovered.high)} L:${formatChartValue(hovered.low)} C:${formatChartValue(hovered.close)}`;
+        const textWidth = textCellWidth(text);
+        const tooltipX = Math.max(0, Math.min(hovered.x + 2, width - textWidth));
+        let tooltipY = hovered.y > 0 ? hovered.y - 1 : hovered.y + 1;
+        if (tooltipY >= height) tooltipY = Math.max(0, height - 1);
+        pushTextCells(
+          cells,
+          tooltipX,
+          tooltipY,
+          text,
+          mergeStyle(baseStyle.value, props.tooltipStyle),
+          width - tooltipX,
+        );
+      }
+
+      return createSurface(width, height, baseStyle.value, cells);
+    });
+
+    return useChartRender(props, surface, {
+      handlers: ({ fullRect }) => ({
+        pointermove: (event) => {
+          hover.value = props.showTooltip ? hitCandle(event, fullRect.value) : null;
+        },
+        pointerleave: () => {
+          hover.value = null;
+        },
+      }),
+    });
+  },
+});
+
+export const TPieChart = defineComponent({
+  name: "TPieChart",
+  props: {
+    /** Left position in terminal cells. */
+    x: { type: Number, required: true },
+    /** Top position in terminal cells. */
+    y: { type: Number, required: true },
+    /** Width in terminal cells. */
+    w: { type: Number, required: true },
+    /** Height in terminal cells. */
+    h: { type: Number, required: true },
+    zIndex: { type: Number, default: 0 },
+    /** Segment values rendered clockwise from the top. */
+    values: { type: Array as PropType<readonly number[]>, required: true },
+    /** Labels aligned with segment values and shown in the legend. */
+    labels: { type: Array as PropType<readonly string[]>, default: undefined },
+    style: { type: Object as PropType<Style>, default: undefined },
+    /** Segment styles cycled when there are more segments than styles. */
+    segmentStyles: {
+      type: Array as PropType<readonly Style[]>,
+      default: () => DEFAULT_PIE_SEGMENT_STYLES,
+    },
+    /** Glyph used for filled pie cells. */
+    cell: { type: String, default: "█" },
+    /** Whether to render a label/value/percent legend when there is enough space. */
+    showLegend: { type: Boolean, default: true },
+    /** Style used for legend text. */
+    legendStyle: { type: Object as PropType<Style>, default: () => ({ fg: "whiteBright" }) },
+  },
+  setup(props) {
+    const { defaultStyle } = useTerminal();
+    const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
+    const legendStyle = computed(() => mergeStyle(baseStyle.value, props.legendStyle));
+
+    const surface = computed<ChartSurface>(() => {
+      const width = cellCount(props.w, 0);
+      const height = cellCount(props.h, 0);
+      const values = props.values.map((value) => Math.max(0, Number(value) || 0));
+      const total = values.reduce((sum, value) => sum + value, 0);
+      const cells: ChartCell[] = [];
+      const glyph = chartGlyph(props.cell, "█");
+      const segmentStyles = props.segmentStyles.map((style) => mergeStyle(baseStyle.value, style));
+      const visibleSegments = values
+        .map((value, index) => ({ value, index }))
+        .filter((segment) => segment.value > 0);
+      const legendItems = visibleSegments.map((segment) => {
+        const label = props.labels?.[segment.index] ?? `S${segment.index + 1}`;
+        const percent = total > 0 ? Math.round((segment.value / total) * 100) : 0;
+        const text = `${label} ${formatChartValue(segment.value)} ${percent}%`;
+        return { ...segment, text };
+      });
+      const showLegend =
+        props.showLegend && visibleSegments.length > 0 && width >= 18 && height >= 3;
+      const desiredLegendWidth =
+        legendItems.reduce(
+          (maxWidth, item) => Math.max(maxWidth, textCellWidth(sanitizeInlineText(item.text)) + 2),
+          0,
+        ) || 12;
+      const rightLegendWidth = showLegend
+        ? Math.min(Math.max(12, desiredLegendWidth), Math.max(0, width - 6))
+        : 0;
+      const rightPlotWidth = Math.max(0, width - rightLegendWidth - 1);
+      const legendRows = Math.min(legendItems.length, height);
+      const rightLegend = showLegend && rightPlotWidth >= 8;
+      const bottomLegend = showLegend && !rightLegend && height >= legendRows + 4;
+      const legendPlacement = rightLegend ? "right" : bottomLegend ? "bottom" : "none";
+      const plotWidth = legendPlacement === "right" ? rightPlotWidth : width;
+      const plotHeight =
+        legendPlacement === "bottom" ? Math.max(0, height - legendRows - 1) : height;
+
+      if (plotWidth > 0 && plotHeight > 0 && total > 0) {
+        const segments: Array<{ end: number; index: number; style: Style }> = [];
+        let cursor = 0;
+        for (let i = 0; i < values.length; i++) {
+          const value = values[i]!;
+          if (value <= 0) continue;
+          cursor += (value / total) * Math.PI * 2;
+          segments.push({
+            end: cursor,
+            index: i,
+            style: segmentStyles[i % Math.max(1, segmentStyles.length)] ?? baseStyle.value,
+          });
+        }
+
+        const cx = plotWidth / 2;
+        const cy = plotHeight / 2;
+        const maxRx = plotWidth / 2;
+        const maxRy = plotHeight / 2;
+        const ry = Math.max(0.5, Math.min(maxRy, maxRx / TERMINAL_CELL_HEIGHT_TO_WIDTH));
+        const rx = Math.max(0.5, Math.min(maxRx, ry * TERMINAL_CELL_HEIGHT_TO_WIDTH));
+        const smoothEdge = glyph === "█";
+        const segmentAt = (nx: number, ny: number) => {
+          let angle = Math.atan2(ny, nx) + Math.PI / 2;
+          if (angle < 0) angle += Math.PI * 2;
+          return segments.find((candidate) => angle <= candidate.end) ?? segments.at(-1);
+        };
+
+        for (let y = 0; y < plotHeight; y++) {
+          for (let x = 0; x < plotWidth; x++) {
+            let mask = 0;
+            const hits = new Map<number, { segment: (typeof segments)[number]; count: number }>();
+            for (const sample of PIE_CELL_SAMPLES) {
+              const nx = (x + sample.dx - cx) / rx;
+              const ny = (y + sample.dy - cy) / ry;
+              if (nx * nx + ny * ny > 1) continue;
+              mask |= sample.bit;
+              const segment = segmentAt(nx, ny);
+              if (!segment) continue;
+              const previous = hits.get(segment.index);
+              hits.set(segment.index, {
+                segment,
+                count: (previous?.count ?? 0) + 1,
+              });
+            }
+            if (!mask) continue;
+
+            const selected = Array.from(hits.values()).sort((a, b) => b.count - a.count)[0];
+            const ch = smoothEdge ? (PIE_QUADRANT_BLOCKS[mask] ?? glyph) : glyph;
+            cells.push({ x, y, ch, style: selected?.segment.style ?? baseStyle.value });
+          }
+        }
+      }
+
+      if (legendPlacement !== "none") {
+        const legendX = legendPlacement === "right" ? plotWidth + 1 : 0;
+        const legendY = legendPlacement === "right" ? 0 : plotHeight + 1;
+        const maxTextWidth =
+          legendPlacement === "right" ? Math.max(0, width - legendX - 2) : Math.max(0, width - 2);
+        for (let row = 0; row < legendItems.length && legendY + row < height; row++) {
+          const segment = legendItems[row]!;
+          const style =
+            segmentStyles[segment.index % Math.max(1, segmentStyles.length)] ?? baseStyle.value;
+          cells.push({ x: legendX, y: legendY + row, ch: glyph, style });
+          pushTextCells(
+            cells,
+            legendX + 2,
+            legendY + row,
+            segment.text,
+            legendStyle.value,
+            maxTextWidth,
+          );
+        }
+      }
+
+      return createSurface(width, height, baseStyle.value, cells);
+    });
+
+    return useChartRender(props, surface);
+  },
+});

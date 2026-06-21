@@ -70,4 +70,12 @@ describe("documented entrypoint exports", () => {
       expect(key in vue, key).toBe(true);
     }
   });
+
+  it("keeps chart documented exports under /experimental", async () => {
+    const experimental = await import("../src/experimental.js");
+
+    for (const key of ["TCandlestickChart", "TContributionGraph", "TLineChart", "TPieChart"]) {
+      expect(key in experimental, key).toBe(true);
+    }
+  });
 });

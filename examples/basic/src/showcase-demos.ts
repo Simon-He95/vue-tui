@@ -1,5 +1,6 @@
 import type { Component } from "vue";
 import { markRaw } from "vue";
+import ChartsDemo from "./ChartsDemo.vue";
 import CommandCenterDemo from "./CommandCenterDemo.vue";
 import DeployRunnerDemo from "./DeployRunnerDemo.vue";
 import Demo from "./Demo.vue";
@@ -57,6 +58,15 @@ export const showcaseDemos: ShowcaseDemo[] = [
     cols: 90,
     rows: 26,
     component: markRaw(LogExplorerDemo),
+    defaultStyle: { fg: "whiteBright", bg: "black" },
+  },
+  {
+    id: "charts",
+    label: "Charts",
+    summary: "贡献热力图、折线图、K 线图和饼图的 terminal dashboard。",
+    cols: 90,
+    rows: 28,
+    component: markRaw(ChartsDemo),
     defaultStyle: { fg: "whiteBright", bg: "black" },
   },
   {

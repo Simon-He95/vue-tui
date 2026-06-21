@@ -1,4 +1,11 @@
 export { TVirtualList } from "./vue/components/TVirtualList.js";
+export {
+  TCandlestickChart,
+  TContributionGraph,
+  TLineChart,
+  TPieChart,
+} from "./vue/components/TCharts.js";
+export type { TCandlestickDatum } from "./vue/components/TCharts.js";
 export { TTranscriptView } from "./vue/components/TTranscriptView.js";
 export { TLogView } from "./vue/components/TLogView.js";
 export { TLogScrollbar } from "./vue/components/TLogScrollbar.js";
