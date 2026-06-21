@@ -1,9 +1,5 @@
 import type { ComputedRef, PropType } from "vue";
-import type {
-  Rect,
-  TerminalEventHandlerMap,
-  TerminalPointerEvent,
-} from "../../events/manager/types.js";
+import type { Rect, TerminalEventHandlerMap } from "../../events/manager/types.js";
 import type { Style } from "../../core/types.js";
 import { computed, defineComponent, h, inject, ref } from "vue";
 import { useLayout } from "../composables/use-layout.js";
@@ -13,7 +9,13 @@ import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey } from "../context.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
-import { sanitizeInlineText, sliceByCells, spaces, textCellWidth } from "../utils/text.js";
+import {
+  forEachTextCellSegment,
+  sanitizeInlineText,
+  sliceByCells,
+  spaces,
+  textCellWidth,
+} from "../utils/text.js";
 import { mergeStyle } from "./simple-utils.js";
 
 export type TCandlestickDatum = Readonly<{
@@ -79,6 +81,11 @@ type ChartSurface = Readonly<{
   rows: readonly (readonly ChartCell[])[];
 }>;
 
+type PointerCell = Readonly<{
+  x: number;
+  y: number;
+}>;
+
 type AxisLayout = Readonly<{
   enabled: boolean;
   plotX: number;
@@ -140,11 +147,17 @@ type LineHover = Readonly<{
   value: number;
 }>;
 
+type LinePoint = Readonly<{
+  value: number;
+  originalIndex: number;
+}>;
+
 type LineLayout = Readonly<{
   width: number;
   height: number;
   layout: AxisLayout;
-  values: readonly number[];
+  points: readonly LinePoint[];
+  sourceLength: number;
   min: number;
   max: number;
 }>;
@@ -162,10 +175,6 @@ type CandlestickLayout = Readonly<{
 function cellCount(value: number | undefined, fallback: number): number {
   const n = Math.floor(Number(value ?? fallback));
   return Number.isFinite(n) ? Math.max(0, n) : Math.max(0, Math.floor(fallback));
-}
-
-function finiteNumbers(values: readonly number[]): number[] {
-  return values.map((value) => Number(value)).filter((value) => Number.isFinite(value));
 }
 
 function finiteRange(values: readonly number[]): { min: number; max: number } | null {
@@ -202,6 +211,13 @@ function domainFromValues(
   return max >= min ? { min, max } : { min: max, max: min };
 }
 
+function finiteLinePoints(values: readonly number[]): LinePoint[] {
+  return values.flatMap((raw, originalIndex) => {
+    const value = Number(raw);
+    return Number.isFinite(value) ? [{ value, originalIndex }] : [];
+  });
+}
+
 function valueToY(value: number, min: number, max: number, height: number): number {
   if (height <= 1) return 0;
   if (max === min) return Math.floor((height - 1) / 2);
@@ -219,13 +235,54 @@ function emptyChartRows(height: number): ChartCell[][] {
   return Array.from({ length: height }, () => []);
 }
 
-function valueAt(values: readonly number[], position: number): number {
-  if (values.length <= 1) return values[0] ?? 0;
-  const clamped = Math.max(0, Math.min(values.length - 1, position));
-  const left = Math.floor(clamped);
-  const right = Math.min(values.length - 1, left + 1);
-  const ratio = clamped - left;
-  return (values[left] ?? 0) * (1 - ratio) + (values[right] ?? 0) * ratio;
+function samplePositionAtX(x: number, width: number, sourceLength: number): number {
+  if (width <= 1 || sourceLength <= 1) return 0;
+  return (x / (width - 1)) * (sourceLength - 1);
+}
+
+function lineXForOriginalIndex(
+  originalIndex: number,
+  plotX: number,
+  plotW: number,
+  sourceLength: number,
+): number {
+  if (plotW <= 1 || sourceLength <= 1) return plotX;
+  return plotX + Math.round((originalIndex / (sourceLength - 1)) * (plotW - 1));
+}
+
+function lineValueAtPosition(points: readonly LinePoint[], position: number): number | null {
+  if (!points.length) return null;
+  const first = points[0]!;
+  const last = points[points.length - 1]!;
+  if (position < first.originalIndex || position > last.originalIndex) return null;
+  if (points.length === 1) return first.value;
+
+  let previous = first;
+  for (let i = 1; i < points.length; i++) {
+    const current = points[i]!;
+    if (position > current.originalIndex) {
+      previous = current;
+      continue;
+    }
+    const span = current.originalIndex - previous.originalIndex;
+    if (span <= 0) return current.value;
+    const ratio = (position - previous.originalIndex) / span;
+    return previous.value * (1 - ratio) + current.value * ratio;
+  }
+  return last.value;
+}
+
+function nearestLinePoint(points: readonly LinePoint[], position: number): LinePoint | null {
+  let best: LinePoint | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const point of points) {
+    const distance = Math.abs(point.originalIndex - position);
+    if (distance < bestDistance) {
+      best = point;
+      bestDistance = distance;
+    }
+  }
+  return best;
 }
 
 function putLineGlyph(
@@ -302,12 +359,11 @@ function pushTextCells(
 ): void {
   const clipped = fitLabel(text, maxWidth);
   let cursor = x;
-  for (const ch of clipped) {
-    const w = textCellWidth(ch);
-    if (w <= 0) continue;
-    cells.push({ x: cursor, y, ch, style });
-    cursor += w;
-  }
+  forEachTextCellSegment(clipped, (segment) => {
+    if (segment.cells <= 0) return;
+    cells.push({ x: cursor, y, ch: segment.text, style });
+    cursor += segment.cells;
+  });
 }
 
 function chooseTooltipPlacement(
@@ -607,7 +663,7 @@ export const TContributionGraph = defineComponent({
   setup(props) {
     const { defaultStyle } = useTerminal();
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
-    const hover = ref<ContributionHover | null>(null);
+    const hoverPointer = ref<PointerCell | null>(null);
 
     const graphLayout = computed<ContributionLayout>(() => {
       const rowCount = cellCount(props.rows, 7);
@@ -639,15 +695,13 @@ export const TContributionGraph = defineComponent({
         props.h == null ? rowCount + (props.showTooltip ? 1 : 0) : cellCount(props.h, rowCount);
       const maxValue =
         props.max == null ? maxPositive(props.values) : Math.max(0, Number(props.max) || 0);
-      const startIndex = Math.max(0, props.values.length - columns * rowCount);
+      const startIndex = Math.max(0, (dataColumns - columns) * rowCount);
       return { rowCount, gap, columnWidth, columns, width, height, startIndex, maxValue };
     });
 
-    function hitCell(event: TerminalPointerEvent, fullRect: Rect): ContributionHover | null {
+    function hitCell(localX: number, localY: number): ContributionHover | null {
       const current = graphLayout.value;
       if (current.width <= 0 || current.height <= 0 || current.columns <= 0) return null;
-      const localX = Math.floor(event.cellX - fullRect.x);
-      const localY = Math.floor(event.cellY - fullRect.y);
       const graphHeight = Math.min(current.rowCount, current.height);
       if (localX < 0 || localX >= current.width || localY < 0 || localY >= graphHeight) return null;
 
@@ -671,7 +725,8 @@ export const TContributionGraph = defineComponent({
       const levelStyles = props.levelStyles.map((style) => mergeStyle(baseStyle.value, style));
       const cells: ChartCell[] = [];
       const glyph = chartGlyph(props.cell, "■");
-      const hovered = hover.value;
+      const pointer = hoverPointer.value;
+      const hovered = props.showTooltip && pointer ? hitCell(pointer.x, pointer.y) : null;
 
       for (let col = 0; col < current.columns; col++) {
         const cellX = col * current.columnWidth;
@@ -722,10 +777,15 @@ export const TContributionGraph = defineComponent({
     return useChartRender(props, surface, {
       handlers: ({ fullRect }) => ({
         pointermove: (event) => {
-          hover.value = props.showTooltip ? hitCell(event, fullRect.value) : null;
+          hoverPointer.value = props.showTooltip
+            ? {
+                x: Math.floor(event.cellX - fullRect.value.x),
+                y: Math.floor(event.cellY - fullRect.value.y),
+              }
+            : null;
         },
         pointerleave: () => {
-          hover.value = null;
+          hoverPointer.value = null;
         },
       }),
     });
@@ -787,79 +847,93 @@ export const TLineChart = defineComponent({
     const lineStyle = computed(() => mergeStyle(clearStyle.value, props.lineStyle));
     const axisStyle = computed(() => mergeStyle(clearStyle.value, props.axisStyle));
     const labelStyle = computed(() => mergeStyle(clearStyle.value, props.labelStyle));
-    const hover = ref<LineHover | null>(null);
+    const hoverPointer = ref<PointerCell | null>(null);
 
     const lineLayout = computed<LineLayout>(() => {
       const width = cellCount(props.w, 0);
       const height = cellCount(props.h, 0);
-      const values = finiteNumbers(props.values);
-      const { min, max } = domainFromValues(values, props.min, props.max);
+      const points = finiteLinePoints(props.values);
+      const sourceLength = props.values.length;
+      const { min, max } = domainFromValues(props.values, props.min, props.max);
       const layout = resolveAxisLayout(width, height, min, max, props.showAxes);
-      return { width, height, layout, values, min, max };
+      return { width, height, layout, points, sourceLength, min, max };
     });
 
-    function hitLine(event: TerminalPointerEvent, fullRect: Rect): LineHover | null {
+    function hitLine(localX: number, localY: number): LineHover | null {
       const current = lineLayout.value;
-      const { layout, values, min, max } = current;
-      if (!values.length || layout.plotW <= 0 || layout.plotH <= 0) return null;
-      const localX = Math.floor(event.cellX - fullRect.x);
-      const localY = Math.floor(event.cellY - fullRect.y);
+      const { layout, points, sourceLength, min, max } = current;
+      if (!points.length || layout.plotW <= 0 || layout.plotH <= 0) return null;
       const plotX = localX - layout.plotX;
       const plotY = localY - layout.plotY;
       if (plotX < 0 || plotX >= layout.plotW || plotY < 0 || plotY >= layout.plotH) return null;
 
-      const position =
-        layout.plotW <= 1 || values.length <= 1
-          ? 0
-          : (plotX / (layout.plotW - 1)) * (values.length - 1);
-      const index = Math.max(0, Math.min(values.length - 1, Math.round(position)));
-      const value = values[index] ?? 0;
-      const x =
-        values.length <= 1
-          ? layout.plotX
-          : layout.plotX + Math.round((index / (values.length - 1)) * (layout.plotW - 1));
+      const position = samplePositionAtX(plotX, layout.plotW, sourceLength);
+      const point = nearestLinePoint(points, position);
+      if (!point) return null;
+      const value = point.value;
+      const x = lineXForOriginalIndex(
+        point.originalIndex,
+        layout.plotX,
+        layout.plotW,
+        sourceLength,
+      );
       const y = layout.plotY + valueToY(value, min, max, layout.plotH);
-      const label = props.labels?.[index] ?? `#${index + 1}`;
-      return { x, y, index, label, value };
+      const label = props.labels?.[point.originalIndex] ?? `#${point.originalIndex + 1}`;
+      return { x, y, index: point.originalIndex, label, value };
     }
 
     const surface = computed<ChartSurface>(() => {
-      const { width, height, layout, values, min, max } = lineLayout.value;
+      const { width, height, layout, points, sourceLength, min, max } = lineLayout.value;
       const cells: ChartCell[] = [];
 
-      if (layout.plotW > 0 && layout.plotH > 0 && values.length > 0) {
+      if (layout.plotW > 0 && layout.plotH > 0 && points.length > 0) {
         let prevX: number | null = null;
         let prevY: number | null = null;
-        for (let x = 0; x < layout.plotW; x++) {
-          const position =
-            layout.plotW <= 1 || values.length <= 1
-              ? 0
-              : (x / (layout.plotW - 1)) * (values.length - 1);
-          const y = valueToY(valueAt(values, position), min, max, layout.plotH);
-          if (prevX == null || prevY == null) {
-            putLineGlyph(
-              cells,
-              layout.plotX + x,
-              layout.plotY + y,
-              "●",
-              lineStyle.value,
-              width,
-              height,
-            );
-          } else {
-            drawSteppedLineSegment(
-              cells,
-              layout.plotX + prevX,
-              layout.plotY + prevY,
-              layout.plotX + x,
-              layout.plotY + y,
-              lineStyle.value,
-              width,
-              height,
-            );
+        if (points.length === 1) {
+          const point = points[0]!;
+          const x = lineXForOriginalIndex(
+            point.originalIndex,
+            layout.plotX,
+            layout.plotW,
+            sourceLength,
+          );
+          const y = layout.plotY + valueToY(point.value, min, max, layout.plotH);
+          putLineGlyph(cells, x, y, "●", lineStyle.value, width, height);
+        } else {
+          for (let x = 0; x < layout.plotW; x++) {
+            const position = samplePositionAtX(x, layout.plotW, sourceLength);
+            const value = lineValueAtPosition(points, position);
+            if (value == null) {
+              prevX = null;
+              prevY = null;
+              continue;
+            }
+            const y = valueToY(value, min, max, layout.plotH);
+            if (prevX == null || prevY == null) {
+              putLineGlyph(
+                cells,
+                layout.plotX + x,
+                layout.plotY + y,
+                "●",
+                lineStyle.value,
+                width,
+                height,
+              );
+            } else {
+              drawSteppedLineSegment(
+                cells,
+                layout.plotX + prevX,
+                layout.plotY + prevY,
+                layout.plotX + x,
+                layout.plotY + y,
+                lineStyle.value,
+                width,
+                height,
+              );
+            }
+            prevX = x;
+            prevY = y;
           }
-          prevX = x;
-          prevY = y;
         }
       }
 
@@ -871,10 +945,11 @@ export const TLineChart = defineComponent({
         props.xLabel,
         props.yLabel,
         props.startLabel,
-        props.endLabel || (values.length > 0 ? String(values.length - 1) : ""),
+        props.endLabel || (sourceLength > 0 ? String(sourceLength - 1) : ""),
       );
 
-      const hovered = hover.value;
+      const pointer = hoverPointer.value;
+      const hovered = props.showTooltip && pointer ? hitLine(pointer.x, pointer.y) : null;
       if (hovered) {
         cells.push({
           x: hovered.x,
@@ -914,10 +989,15 @@ export const TLineChart = defineComponent({
     return useChartRender(props, surface, {
       handlers: ({ fullRect }) => ({
         pointermove: (event) => {
-          hover.value = props.showTooltip ? hitLine(event, fullRect.value) : null;
+          hoverPointer.value = props.showTooltip
+            ? {
+                x: Math.floor(event.cellX - fullRect.value.x),
+                y: Math.floor(event.cellY - fullRect.value.y),
+              }
+            : null;
         },
         pointerleave: () => {
-          hover.value = null;
+          hoverPointer.value = null;
         },
       }),
     });
@@ -977,7 +1057,7 @@ export const TCandlestickChart = defineComponent({
     const baseStyle = computed(() => mergeStyle(defaultStyle.value, props.style));
     const axisStyle = computed(() => mergeStyle(baseStyle.value, props.axisStyle));
     const labelStyle = computed(() => mergeStyle(baseStyle.value, props.labelStyle));
-    const hover = ref<CandlestickHover | null>(null);
+    const hoverPointer = ref<PointerCell | null>(null);
 
     const candleLayout = computed<CandlestickLayout>(() => {
       const width = cellCount(props.w, 0);
@@ -995,13 +1075,11 @@ export const TCandlestickChart = defineComponent({
       return { width, height, layout, visibleCandles, startIndex, min, max };
     });
 
-    function hitCandle(event: TerminalPointerEvent, fullRect: Rect): CandlestickHover | null {
+    function hitCandle(localX: number, localY: number): CandlestickHover | null {
       const current = candleLayout.value;
       const { layout } = current;
       if (current.width <= 0 || current.height <= 0 || layout.plotW <= 0 || layout.plotH <= 0)
         return null;
-      const localX = Math.floor(event.cellX - fullRect.x);
-      const localY = Math.floor(event.cellY - fullRect.y);
       const plotX = localX - layout.plotX;
       const plotY = localY - layout.plotY;
       if (
@@ -1044,7 +1122,8 @@ export const TCandlestickChart = defineComponent({
       const downStyle = mergeStyle(baseStyle.value, props.downStyle);
       const upWickStyle = mergeStyle(baseStyle.value, props.upStyle, props.wickStyle);
       const downWickStyle = mergeStyle(baseStyle.value, props.downStyle, props.wickStyle);
-      const hovered = hover.value;
+      const pointer = hoverPointer.value;
+      const hovered = props.showTooltip && pointer ? hitCandle(pointer.x, pointer.y) : null;
 
       for (let x = 0; x < visibleCandles.length; x++) {
         const candle = visibleCandles[x]!;
@@ -1116,10 +1195,15 @@ export const TCandlestickChart = defineComponent({
     return useChartRender(props, surface, {
       handlers: ({ fullRect }) => ({
         pointermove: (event) => {
-          hover.value = props.showTooltip ? hitCandle(event, fullRect.value) : null;
+          hoverPointer.value = props.showTooltip
+            ? {
+                x: Math.floor(event.cellX - fullRect.value.x),
+                y: Math.floor(event.cellY - fullRect.value.y),
+              }
+            : null;
         },
         pointerleave: () => {
-          hover.value = null;
+          hoverPointer.value = null;
         },
       }),
     });
@@ -1163,7 +1247,10 @@ export const TPieChart = defineComponent({
     const surface = computed<ChartSurface>(() => {
       const width = cellCount(props.w, 0);
       const height = cellCount(props.h, 0);
-      const values = props.values.map((value) => Math.max(0, Number(value) || 0));
+      const values = props.values.map((value) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? Math.max(0, n) : 0;
+      });
       const total = values.reduce((sum, value) => sum + value, 0);
       const cells: ChartCell[] = [];
       const glyph = chartGlyph(props.cell, "█");

@@ -42,6 +42,30 @@ describe("terminal charts", () => {
     mounted.unmount();
   });
 
+  it("preserves contribution row alignment when truncating a partial final column", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TContributionGraph, {
+          x: 0,
+          y: 0,
+          values: Array.from({ length: 10 }, () => 1),
+          rows: 7,
+          columns: 1,
+          max: 1,
+          showTooltip: false,
+          emptyStyle: { fg: "blackBright" },
+          levelStyles: [{ fg: "green" }],
+        }),
+      4,
+      8,
+    );
+
+    for (let y = 0; y < 3; y++) expect(mounted.terminal.getCell(0, y).style.fg).toBe("green");
+    for (let y = 3; y < 7; y++) expect(mounted.terminal.getCell(0, y).style.fg).toBe("blackBright");
+
+    mounted.unmount();
+  });
+
   it("renders a sampled line chart across the requested width", async () => {
     const mounted = await mountTerminal(
       () => h(TLineChart, { x: 0, y: 0, w: 5, h: 3, values: [0, 1, 0] }),
@@ -54,6 +78,27 @@ describe("terminal charts", () => {
     expect(lines[1]?.slice(0, 5)).toBe(" ╭╯╰╮");
     expect(lines[2]?.slice(0, 5)).toBe("●╯  ╰");
     expect(mounted.terminal.getCell(2, 0).style.fg).toBe("cyanBright");
+
+    mounted.unmount();
+  });
+
+  it("renders a single finite line point at its original x position", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 5,
+          h: 3,
+          values: [Number.NaN, 1, Number.NaN],
+          showAxes: false,
+        }),
+      8,
+      4,
+    );
+
+    expect(mounted.terminal.getCell(2, 1).ch).toBe("●");
+    expect(mounted.terminal.getCell(0, 1).ch).toBe(" ");
 
     mounted.unmount();
   });
@@ -266,6 +311,50 @@ describe("terminal charts", () => {
     mounted.unmount();
   });
 
+  it("keeps pie labels as grapheme clusters", async () => {
+    const label = "e\u0301";
+    const mounted = await mountTerminal(
+      () =>
+        h(TPieChart, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 6,
+          values: [1],
+          labels: [label],
+        }),
+      28,
+      7,
+    );
+
+    expect(mounted.terminal.snapshot().lines.join("\n")).toContain(`${label} 1 100%`);
+
+    mounted.unmount();
+  });
+
+  it("ignores non-finite pie values", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TPieChart, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 6,
+          values: [Number.POSITIVE_INFINITY, 1],
+          labels: ["bad", "good"],
+        }),
+      28,
+      7,
+    );
+
+    const text = mounted.terminal.snapshot().lines.join("\n");
+    expect(text).toContain("good 1 100%");
+    expect(text).not.toContain("NaN%");
+    expect(text).not.toContain("bad");
+
+    mounted.unmount();
+  });
+
   it("shows contribution hover tooltip with label, value, and unit", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -360,6 +449,46 @@ describe("terminal charts", () => {
     }
   });
 
+  it("recomputes contribution hover from current values after data changes", async () => {
+    const values = ref([0, 5, 10, 15]);
+    const labels = ref(["Mon", "Tue", "Wed", "Thu"]);
+    const App = defineComponent({
+      setup: () => () =>
+        h(TContributionGraph, {
+          x: 0,
+          y: 0,
+          w: 20,
+          values: values.value,
+          labels: labels.value,
+          unit: "tokens",
+          rows: 2,
+          max: 30,
+        }),
+    });
+    const app = createTerminalApp({ cols: 24, rows: 5, component: App as any });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointermove", cellX: 2, cellY: 1, time: 1_000 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(app.terminal.snapshot().lines.join("\n")).toContain("Thu 15 tokens");
+
+      values.value = [0, 5, 10, 25];
+      labels.value = ["Mon", "Tue", "Wed", "Fri"];
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const text = app.terminal.snapshot().lines.join("\n");
+      expect(text).toContain("Fri 25 tokens");
+      expect(text).not.toContain("Thu 15 tokens");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("shows line hover tooltip with x and y data through the terminal event manager", async () => {
     const App = defineComponent({
       setup: () => () =>
@@ -390,6 +519,37 @@ describe("terminal charts", () => {
         fg: "whiteBright",
         bold: true,
       });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keeps line hover labels aligned with original indices when values are non-finite", async () => {
+    const App = defineComponent({
+      setup: () => () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 30,
+          h: 5,
+          values: [1, Number.NaN, 3],
+          labels: ["a", "missing", "c"],
+          showAxes: false,
+        }),
+    });
+    const app = createTerminalApp({ cols: 34, rows: 7, component: App as any });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointermove", cellX: 29, cellY: 0, time: 1_000 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const text = app.terminal.snapshot().lines.join("\n");
+      expect(text).toContain("c x=3 y=3");
+      expect(text).not.toContain("missing");
     } finally {
       app.dispose();
     }
