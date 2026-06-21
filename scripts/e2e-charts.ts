@@ -581,6 +581,13 @@ async function captureResize(): Promise<void> {
 
 async function measurePerformance(): Promise<Record<string, number>> {
   const values = ref(Array.from({ length: 120_000 }, (_, index) => index % 37));
+  let contributionFrame = values.value;
+  const contributionFrames = Array.from({ length: 50 }, () => {
+    const next = contributionFrame.slice();
+    next[119_999] = ((next[119_999] ?? 0) + 1) % 40;
+    contributionFrame = next;
+    return next;
+  });
   const PerfChart = defineComponent({
     setup: () => () =>
       h(TContributionGraph, {
@@ -601,11 +608,9 @@ async function measurePerformance(): Promise<Record<string, number>> {
 
   try {
     const frameDurations: number[] = [];
-    for (let i = 0; i < 50; i++) {
+    for (const nextValues of contributionFrames) {
       const start = performance.now();
-      values.value = values.value.map((value, index) =>
-        index === 119_999 ? (value + 1) % 40 : value,
-      );
+      values.value = nextValues;
       await settle(app);
       frameDurations.push(performance.now() - start);
     }
@@ -622,6 +627,81 @@ async function measurePerformance(): Promise<Record<string, number>> {
       avgMs: Number(avgMs.toFixed(2)),
       maxMs: Number(maxMs.toFixed(2)),
       maxDirtyRows: Math.max(...dirtyRowCounts),
+      ...(await measureLinePerformance()),
+    };
+  } finally {
+    off();
+    app.dispose();
+  }
+}
+
+async function measureLinePerformance(): Promise<Record<string, number>> {
+  const values = ref(Array.from({ length: 120_000 }, (_, index) => index % 97));
+  let lineFrame = values.value;
+  const lineFrames = Array.from({ length: 20 }, () => {
+    const next = lineFrame.slice();
+    next[119_999] = ((next[119_999] ?? 0) + 1) % 97;
+    lineFrame = next;
+    return next;
+  });
+  const PerfLineChart = defineComponent({
+    setup: () => () =>
+      h(TLineChart, {
+        x: 0,
+        y: 0,
+        w: 96,
+        h: 7,
+        values: values.value,
+        showAxes: false,
+      }),
+  });
+  const app = createTerminalApp({
+    cols: 110,
+    rows: 10,
+    component: PerfLineChart,
+    defaultStyle: { fg: "whiteBright" },
+  });
+  app.mount();
+  await settle(app);
+  const dirtyRowCounts: number[] = [];
+  const off = app.terminal.on("commit", ({ dirtyRows }) => {
+    if (dirtyRows) dirtyRowCounts.push(dirtyRows.length);
+  });
+
+  try {
+    const frameDurations: number[] = [];
+    for (const nextValues of lineFrames) {
+      const start = performance.now();
+      values.value = nextValues;
+      await settle(app);
+      frameDurations.push(performance.now() - start);
+    }
+    const totalMs = frameDurations.reduce((sum, value) => sum + value, 0);
+    const avgMs = totalMs / frameDurations.length;
+    const maxMs = Math.max(...frameDurations);
+    assert.ok(
+      dirtyRowCounts.length > 0 && dirtyRowCounts.every((count) => count <= 7),
+      "line updates must stay within chart dirty rows",
+    );
+    const maxDirtyRows = Math.max(...dirtyRowCounts);
+    app.terminal.commit();
+    dirtyRowCounts.length = 0;
+
+    const beforeHoverCommits = dirtyRowCounts.length;
+    app.events.dispatch({ type: "pointermove", cellX: 48, cellY: 3, time: 1_000 } as any);
+    await settle(app);
+    assert.ok(dirtyRowCounts.length > beforeHoverCommits, "line hover must repaint once");
+    const afterFirstHover = dirtyRowCounts.length;
+    app.events.dispatch({ type: "pointermove", cellX: 48, cellY: 3, time: 1_001 } as any);
+    await settle(app);
+    assert.equal(dirtyRowCounts.length, afterFirstHover, "same-cell line hover must not repaint");
+
+    return {
+      lineFrames: frameDurations.length,
+      lineTotalMs: Number(totalMs.toFixed(2)),
+      lineAvgMs: Number(avgMs.toFixed(2)),
+      lineMaxMs: Number(maxMs.toFixed(2)),
+      lineMaxDirtyRows: maxDirtyRows,
     };
   } finally {
     off();
@@ -644,6 +724,9 @@ async function main(): Promise<void> {
   console.log(`chart e2e screenshots: ${outDir}`);
   console.log(
     `chart perf: avg=${perf.avgMs}ms max=${perf.maxMs}ms dirtyRows<=${perf.maxDirtyRows}`,
+  );
+  console.log(
+    `line chart perf: avg=${perf.lineAvgMs}ms max=${perf.lineMaxMs}ms dirtyRows<=${perf.lineMaxDirtyRows}`,
   );
 }
 

@@ -108,6 +108,11 @@ type ChartRenderOptions = Readonly<{
   selectable?: boolean;
 }>;
 
+type ChartSize = Readonly<{
+  width: number;
+  height: number;
+}>;
+
 type ContributionLayout = Readonly<{
   rowCount: number;
   gap: number;
@@ -250,6 +255,17 @@ function lineXForOriginalIndex(
   return plotX + Math.round((originalIndex / (sourceLength - 1)) * (plotW - 1));
 }
 
+function lowerBoundLinePoint(points: readonly LinePoint[], position: number): number {
+  let low = 0;
+  let high = points.length;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (points[mid]!.originalIndex < position) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
 function lineValueAtPosition(points: readonly LinePoint[], position: number): number | null {
   if (!points.length) return null;
   const first = points[0]!;
@@ -257,32 +273,23 @@ function lineValueAtPosition(points: readonly LinePoint[], position: number): nu
   if (position < first.originalIndex || position > last.originalIndex) return null;
   if (points.length === 1) return first.value;
 
-  let previous = first;
-  for (let i = 1; i < points.length; i++) {
-    const current = points[i]!;
-    if (position > current.originalIndex) {
-      previous = current;
-      continue;
-    }
-    const span = current.originalIndex - previous.originalIndex;
-    if (span <= 0) return current.value;
-    const ratio = (position - previous.originalIndex) / span;
-    return previous.value * (1 - ratio) + current.value * ratio;
-  }
-  return last.value;
+  const index = Math.min(Math.max(1, lowerBoundLinePoint(points, position)), points.length - 1);
+  const previous = points[index - 1]!;
+  const current = points[index]!;
+  const span = current.originalIndex - previous.originalIndex;
+  if (span <= 0) return current.value;
+  const ratio = (position - previous.originalIndex) / span;
+  return previous.value * (1 - ratio) + current.value * ratio;
 }
 
 function nearestLinePoint(points: readonly LinePoint[], position: number): LinePoint | null {
-  let best: LinePoint | null = null;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (const point of points) {
-    const distance = Math.abs(point.originalIndex - position);
-    if (distance < bestDistance) {
-      best = point;
-      bestDistance = distance;
-    }
-  }
-  return best;
+  if (!points.length) return null;
+  const index = lowerBoundLinePoint(points, position);
+  if (index <= 0) return points[0]!;
+  if (index >= points.length) return points[points.length - 1]!;
+  const previous = points[index - 1]!;
+  const current = points[index]!;
+  return position - previous.originalIndex <= current.originalIndex - position ? previous : current;
 }
 
 function putLineGlyph(
@@ -374,10 +381,25 @@ function chooseTooltipPlacement(
   anchorY: number,
   textWidth: number,
   preferredY?: number,
+  bounds?: Rect,
 ): { x: number; y: number } {
-  const tooltipWidth = Math.min(width, Math.max(1, textWidth));
-  const clampX = (x: number) => Math.max(0, Math.min(x, Math.max(0, width - tooltipWidth)));
-  const xCandidates = [anchorX + 2, anchorX - tooltipWidth - 2, 0, width - tooltipWidth]
+  const boundsX = Math.max(0, Math.min(width, Math.floor(bounds?.x ?? 0)));
+  const boundsY = Math.max(0, Math.min(height, Math.floor(bounds?.y ?? 0)));
+  const boundsRight = Math.max(
+    boundsX,
+    Math.min(width, Math.floor((bounds?.x ?? 0) + (bounds?.w ?? width))),
+  );
+  const boundsBottom = Math.max(
+    boundsY,
+    Math.min(height, Math.floor((bounds?.y ?? 0) + (bounds?.h ?? height))),
+  );
+  const availableW = boundsRight - boundsX;
+  if (availableW <= 0 || boundsBottom <= boundsY) return { x: 0, y: 0 };
+
+  const tooltipWidth = Math.min(availableW, Math.max(1, textWidth));
+  const clampX = (x: number) =>
+    Math.max(boundsX, Math.min(x, Math.max(boundsX, boundsRight - tooltipWidth)));
+  const xCandidates = [anchorX + 2, anchorX - tooltipWidth - 2, boundsX, boundsRight - tooltipWidth]
     .map(clampX)
     .filter((x, index, values) => values.indexOf(x) === index);
   const yCandidates = [
@@ -386,9 +408,9 @@ function chooseTooltipPlacement(
     anchorY + 1,
     anchorY - 2,
     anchorY + 2,
-    0,
-    height - 1,
-  ].filter((y): y is number => y != null && y >= 0 && y < height);
+    boundsY,
+    boundsBottom - 1,
+  ].filter((y): y is number => y != null && y >= boundsY && y < boundsBottom);
 
   let best = { x: xCandidates[0] ?? 0, y: yCandidates[0] ?? 0, score: Number.POSITIVE_INFINITY };
   for (const y of yCandidates) {
@@ -400,11 +422,33 @@ function chooseTooltipPlacement(
         if (cell.x < x + tooltipWidth && cell.x + cellW > x) overlap++;
       }
       const score =
-        overlap * 1000 + Math.abs(y - anchorY) + Math.abs(x - anchorX) / Math.max(1, width);
+        overlap * 1000 + Math.abs(y - anchorY) + Math.abs(x - anchorX) / Math.max(1, availableW);
       if (score < best.score) best = { x, y, score };
     }
   }
   return { x: best.x, y: best.y };
+}
+
+function useChartVisibleRect(
+  props: { x: number; y: number },
+  size: ComputedRef<ChartSize>,
+): ComputedRef<Rect> {
+  const layout = useLayout();
+  return computed(() => {
+    const full = translateRect(
+      {
+        x: Math.floor(props.x),
+        y: Math.floor(props.y),
+        w: size.value.width,
+        h: size.value.height,
+      },
+      layout.originX,
+      layout.originY,
+    );
+    const abs = layout.clipRect ? intersectRect(full, layout.clipRect) : full;
+    if (!abs) return { x: 0, y: 0, w: 0, h: 0 };
+    return { x: abs.x - full.x, y: abs.y - full.y, w: abs.w, h: abs.h };
+  });
 }
 
 function resolveAxisLayout(
@@ -589,7 +633,8 @@ function useChartRender(
         terminal.write(blank, { x: r.x, y, style: current.clearStyle });
         for (const cell of current.rows[localY] ?? []) {
           const x = full.x + cell.x;
-          if (x < r.x || x >= r.x + r.w) continue;
+          const cellWidth = Math.max(1, textCellWidth(cell.ch));
+          if (x < r.x || x + cellWidth > r.x + r.w) continue;
           terminal.put(x, y, cell.ch, cell.style);
         }
       };
@@ -698,6 +743,7 @@ export const TContributionGraph = defineComponent({
       const startIndex = Math.max(0, (dataColumns - columns) * rowCount);
       return { rowCount, gap, columnWidth, columns, width, height, startIndex, maxValue };
     });
+    const visibleRect = useChartVisibleRect(props, graphLayout);
 
     function hitCell(localX: number, localY: number): ContributionHover | null {
       const current = graphLayout.value;
@@ -745,29 +791,39 @@ export const TContributionGraph = defineComponent({
         }
       }
 
-      if (props.showTooltip && hovered && current.width > 0 && current.height > 0) {
+      const visible = visibleRect.value;
+      if (
+        props.showTooltip &&
+        hovered &&
+        current.width > 0 &&
+        current.height > 0 &&
+        visible.w > 0 &&
+        visible.h > 0
+      ) {
         const unit = sanitizeInlineText(props.unit);
         const value = unit
           ? `${formatChartValue(hovered.value)} ${unit}`
           : formatChartValue(hovered.value);
         const text = `${sanitizeInlineText(hovered.label)} ${value}`;
         const textWidth = textCellWidth(text);
-        const tooltipX = Math.max(0, Math.min(hovered.x + 2, current.width - textWidth));
         const graphHeight = Math.min(current.rowCount, current.height);
-        let tooltipY =
-          current.height > graphHeight
-            ? graphHeight
-            : hovered.y > 0
-              ? hovered.y - 1
-              : hovered.y + 1;
-        if (tooltipY >= current.height) tooltipY = Math.max(0, current.height - 1);
+        const placement = chooseTooltipPlacement(
+          cells,
+          current.width,
+          current.height,
+          hovered.x,
+          hovered.y,
+          textWidth,
+          current.height > graphHeight ? graphHeight : undefined,
+          visible,
+        );
         pushTextCells(
           cells,
-          tooltipX,
-          tooltipY,
+          placement.x,
+          placement.y,
           text,
           mergeStyle(baseStyle.value, props.tooltipStyle),
-          current.width - tooltipX,
+          visible.x + visible.w - placement.x,
         );
       }
 
@@ -777,15 +833,19 @@ export const TContributionGraph = defineComponent({
     return useChartRender(props, surface, {
       handlers: ({ fullRect }) => ({
         pointermove: (event) => {
-          hoverPointer.value = props.showTooltip
-            ? {
-                x: Math.floor(event.cellX - fullRect.value.x),
-                y: Math.floor(event.cellY - fullRect.value.y),
-              }
-            : null;
+          if (!props.showTooltip) {
+            if (hoverPointer.value != null) hoverPointer.value = null;
+            return;
+          }
+          const next = {
+            x: Math.floor(event.cellX - fullRect.value.x),
+            y: Math.floor(event.cellY - fullRect.value.y),
+          };
+          const current = hoverPointer.value;
+          if (!current || current.x !== next.x || current.y !== next.y) hoverPointer.value = next;
         },
         pointerleave: () => {
-          hoverPointer.value = null;
+          if (hoverPointer.value != null) hoverPointer.value = null;
         },
       }),
     });
@@ -858,6 +918,7 @@ export const TLineChart = defineComponent({
       const layout = resolveAxisLayout(width, height, min, max, props.showAxes);
       return { width, height, layout, points, sourceLength, min, max };
     });
+    const visibleRect = useChartVisibleRect(props, lineLayout);
 
     function hitLine(localX: number, localY: number): LineHover | null {
       const current = lineLayout.value;
@@ -958,7 +1019,15 @@ export const TLineChart = defineComponent({
           style: mergeStyle(lineStyle.value, props.hoverStyle),
         });
       }
-      if (props.showTooltip && hovered && width > 0 && height > 0) {
+      const visible = visibleRect.value;
+      if (
+        props.showTooltip &&
+        hovered &&
+        width > 0 &&
+        height > 0 &&
+        visible.w > 0 &&
+        visible.h > 0
+      ) {
         const unit = sanitizeInlineText(props.unit);
         const yValue = unit
           ? `${formatChartValue(hovered.value)} ${unit}`
@@ -973,6 +1042,7 @@ export const TLineChart = defineComponent({
           hovered.y,
           textWidth,
           layout.enabled ? layout.axisY + 1 : undefined,
+          visible,
         );
         pushTextCells(
           cells,
@@ -980,7 +1050,7 @@ export const TLineChart = defineComponent({
           placement.y,
           text,
           mergeStyle(clearStyle.value, props.tooltipStyle),
-          width - placement.x,
+          visible.x + visible.w - placement.x,
         );
       }
       return createSurface(width, height, clearStyle.value, cells);
@@ -989,15 +1059,19 @@ export const TLineChart = defineComponent({
     return useChartRender(props, surface, {
       handlers: ({ fullRect }) => ({
         pointermove: (event) => {
-          hoverPointer.value = props.showTooltip
-            ? {
-                x: Math.floor(event.cellX - fullRect.value.x),
-                y: Math.floor(event.cellY - fullRect.value.y),
-              }
-            : null;
+          if (!props.showTooltip) {
+            if (hoverPointer.value != null) hoverPointer.value = null;
+            return;
+          }
+          const next = {
+            x: Math.floor(event.cellX - fullRect.value.x),
+            y: Math.floor(event.cellY - fullRect.value.y),
+          };
+          const current = hoverPointer.value;
+          if (!current || current.x !== next.x || current.y !== next.y) hoverPointer.value = next;
         },
         pointerleave: () => {
-          hoverPointer.value = null;
+          if (hoverPointer.value != null) hoverPointer.value = null;
         },
       }),
     });
@@ -1074,6 +1148,7 @@ export const TCandlestickChart = defineComponent({
       const visibleCandles = props.candles.slice(startIndex);
       return { width, height, layout, visibleCandles, startIndex, min, max };
     });
+    const visibleRect = useChartVisibleRect(props, candleLayout);
 
     function hitCandle(localX: number, localY: number): CandlestickHover | null {
       const current = candleLayout.value;
@@ -1173,19 +1248,34 @@ export const TCandlestickChart = defineComponent({
         props.endLabel || (visibleCandles.length > 0 ? String(props.candles.length) : ""),
       );
 
-      if (props.showTooltip && hovered && width > 0 && height > 0) {
+      const visible = visibleRect.value;
+      if (
+        props.showTooltip &&
+        hovered &&
+        width > 0 &&
+        height > 0 &&
+        visible.w > 0 &&
+        visible.h > 0
+      ) {
         const text = `${sanitizeInlineText(hovered.label)} x=${hovered.index + 1} y=${formatChartValue(hovered.value)} O:${formatChartValue(hovered.open)} H:${formatChartValue(hovered.high)} L:${formatChartValue(hovered.low)} C:${formatChartValue(hovered.close)}`;
         const textWidth = textCellWidth(text);
-        const tooltipX = Math.max(0, Math.min(hovered.x + 2, width - textWidth));
-        let tooltipY = hovered.y > 0 ? hovered.y - 1 : hovered.y + 1;
-        if (tooltipY >= height) tooltipY = Math.max(0, height - 1);
+        const placement = chooseTooltipPlacement(
+          cells,
+          width,
+          height,
+          hovered.x,
+          hovered.y,
+          textWidth,
+          undefined,
+          visible,
+        );
         pushTextCells(
           cells,
-          tooltipX,
-          tooltipY,
+          placement.x,
+          placement.y,
           text,
           mergeStyle(baseStyle.value, props.tooltipStyle),
-          width - tooltipX,
+          visible.x + visible.w - placement.x,
         );
       }
 
@@ -1195,15 +1285,19 @@ export const TCandlestickChart = defineComponent({
     return useChartRender(props, surface, {
       handlers: ({ fullRect }) => ({
         pointermove: (event) => {
-          hoverPointer.value = props.showTooltip
-            ? {
-                x: Math.floor(event.cellX - fullRect.value.x),
-                y: Math.floor(event.cellY - fullRect.value.y),
-              }
-            : null;
+          if (!props.showTooltip) {
+            if (hoverPointer.value != null) hoverPointer.value = null;
+            return;
+          }
+          const next = {
+            x: Math.floor(event.cellX - fullRect.value.x),
+            y: Math.floor(event.cellY - fullRect.value.y),
+          };
+          const current = hoverPointer.value;
+          if (!current || current.x !== next.x || current.y !== next.y) hoverPointer.value = next;
         },
         pointerleave: () => {
-          hoverPointer.value = null;
+          if (hoverPointer.value != null) hoverPointer.value = null;
         },
       }),
     });

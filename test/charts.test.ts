@@ -6,6 +6,7 @@ import {
   mountTerminal,
   nextTick,
   ref,
+  TBox,
 } from "./ui-regressions-support.js";
 import {
   TCandlestickChart,
@@ -634,6 +635,190 @@ describe("terminal charts", () => {
       app.scheduler.flushNow();
 
       expect(app.terminal.snapshot().lines.join("\n")).not.toContain("Tue x=2");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keeps chart tooltips inside the visible clipped viewport", async () => {
+    const ContributionApp = defineComponent({
+      setup: () => () =>
+        h(
+          TBox,
+          { x: 0, y: 0, w: 12, h: 3, border: false, padding: 0 },
+          {
+            default: () =>
+              h(TContributionGraph, {
+                x: 0,
+                y: 0,
+                w: 30,
+                h: 3,
+                values: Array.from({ length: 30 }, (_, index) => index),
+                labels: Array.from({ length: 30 }, (_, index) => `d${index}`),
+                rows: 1,
+                gap: 0,
+                max: 30,
+                unit: "u",
+              }),
+          },
+        ),
+    });
+    const contribution = createTerminalApp({
+      cols: 16,
+      rows: 4,
+      component: ContributionApp as any,
+    });
+    try {
+      contribution.mount();
+      await nextTick();
+      contribution.scheduler.flushNow();
+      contribution.events.dispatch({
+        type: "pointermove",
+        cellX: 10,
+        cellY: 0,
+        time: 1_000,
+      } as any);
+      await nextTick();
+      contribution.scheduler.flushNow();
+      expect(contribution.terminal.snapshot().lines.join("\n")).toContain("d10 10 u");
+    } finally {
+      contribution.dispose();
+    }
+
+    const LineApp = defineComponent({
+      setup: () => () =>
+        h(
+          TBox,
+          { x: 0, y: 0, w: 12, h: 4, border: false, padding: 0, scrollX: 18 },
+          {
+            default: () =>
+              h(TLineChart, {
+                x: 0,
+                y: 0,
+                w: 30,
+                h: 4,
+                values: Array.from({ length: 30 }, (_, index) => index),
+                labels: Array.from({ length: 30 }, (_, index) => `edge${index}`),
+                showAxes: false,
+              }),
+          },
+        ),
+    });
+    const line = createTerminalApp({ cols: 16, rows: 5, component: LineApp as any });
+    try {
+      line.mount();
+      await nextTick();
+      line.scheduler.flushNow();
+      line.events.dispatch({ type: "pointermove", cellX: 11, cellY: 0, time: 1_001 } as any);
+      await nextTick();
+      line.scheduler.flushNow();
+      expect(line.terminal.snapshot().lines.join("\n")).toContain("edge29 x=30");
+    } finally {
+      line.dispose();
+    }
+
+    const CandleApp = defineComponent({
+      setup: () => () =>
+        h(
+          TBox,
+          { x: 0, y: 0, w: 12, h: 5, border: false, padding: 0, scrollX: 18 },
+          {
+            default: () =>
+              h(TCandlestickChart, {
+                x: 0,
+                y: 0,
+                w: 30,
+                h: 5,
+                min: 0,
+                max: 30,
+                showAxes: false,
+                labels: Array.from({ length: 30 }, (_, index) => `c${index}`),
+                candles: Array.from({ length: 30 }, (_, index) => ({
+                  open: index,
+                  high: index + 2,
+                  low: index - 1,
+                  close: index + 1,
+                })),
+              }),
+          },
+        ),
+    });
+    const candle = createTerminalApp({ cols: 16, rows: 6, component: CandleApp as any });
+    try {
+      candle.mount();
+      await nextTick();
+      candle.scheduler.flushNow();
+      candle.events.dispatch({ type: "pointermove", cellX: 11, cellY: 1, time: 1_002 } as any);
+      await nextTick();
+      candle.scheduler.flushNow();
+      expect(candle.terminal.snapshot().lines.join("\n")).toContain("c29 x=30");
+    } finally {
+      candle.dispose();
+    }
+  });
+
+  it("does not write clipped wide chart text outside the visible rect", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TBox,
+          { x: 0, y: 0, w: 5, h: 5, border: false, padding: 0 },
+          {
+            default: () =>
+              h(TLineChart, {
+                x: 0,
+                y: 0,
+                w: 18,
+                h: 5,
+                values: [0, 10],
+                startLabel: "A語",
+              }),
+          },
+        ),
+      8,
+      6,
+    );
+
+    const outside = mounted.terminal.getCell(5, 4);
+    expect(outside.ch).toBe(" ");
+    expect(outside.continuation).not.toBe(true);
+
+    mounted.unmount();
+  });
+
+  it("handles large line arrays without repainting repeated pointer cells", async () => {
+    const App = defineComponent({
+      setup: () => () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 160,
+          h: 6,
+          values: Array.from({ length: 120_000 }, (_, index) => index % 97),
+          showAxes: false,
+        }),
+    });
+    const app = createTerminalApp({ cols: 170, rows: 8, component: App as any });
+    const commits: Array<readonly number[] | null> = [];
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      app.terminal.commit();
+      const off = app.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+
+      app.events.dispatch({ type: "pointermove", cellX: 80, cellY: 2, time: 1_000 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+      const afterFirstHover = commits.length;
+      expect(afterFirstHover).toBeGreaterThan(0);
+
+      app.events.dispatch({ type: "pointermove", cellX: 80, cellY: 2, time: 1_001 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(commits).toHaveLength(afterFirstHover);
+
+      off();
     } finally {
       app.dispose();
     }
