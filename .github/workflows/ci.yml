@@ -79,6 +79,20 @@ jobs:
 
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
 
+      - run: pnpm run e2e:charts
+
+      - run: pnpm run e2e:component-terminal-charts
+
+      - name: Upload chart e2e artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: chart-e2e-artifacts
+          path: |
+            test-results/charts-e2e
+            test-results/component-terminal-charts
+          if-no-files-found: ignore
+
       - run: pnpm run e2e:smoke
 
       - run: pnpm run e2e:browser-regressions

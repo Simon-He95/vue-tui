@@ -126,10 +126,12 @@ function writeTerminalShot(name: string, terminal: Terminal): void {
 }
 
 async function writePngShots(): Promise<void> {
+  const requirePng = process.env.CI || process.env.VUE_TUI_REQUIRE_CHART_PNG === "1";
   let chromium: typeof import("@playwright/test").chromium;
   try {
     ({ chromium } = await import("@playwright/test"));
-  } catch {
+  } catch (error) {
+    if (requirePng) throw error;
     console.warn("chart e2e png screenshots skipped: @playwright/test is unavailable");
     return;
   }
@@ -138,6 +140,7 @@ async function writePngShots(): Promise<void> {
   try {
     browser = await chromium.launch();
   } catch (error) {
+    if (requirePng) throw error;
     const message = error instanceof Error ? error.message : String(error);
     console.warn(
       [
