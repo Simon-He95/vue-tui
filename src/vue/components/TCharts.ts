@@ -192,6 +192,7 @@ type CandlestickLayout = Readonly<{
   layout: AxisLayout;
   visibleCandles: readonly TCandlestickDatum[];
   startIndex: number;
+  candleOffsetX: number;
   min: number;
   max: number;
 }>;
@@ -262,6 +263,13 @@ function normalizeCandlestick(candle: TCandlestickDatum): CandlestickValues | nu
     return null;
   }
   return { open, high, low, close };
+}
+
+function candlestickDomainValues(candles: readonly TCandlestickDatum[]): number[] {
+  return candles.flatMap((candle) => {
+    const values = normalizeCandlestick(candle);
+    return values ? [values.open, values.low, values.high, values.close] : [];
+  });
 }
 
 function finiteLineRuns(values: readonly number[]): LineRun[] {
@@ -542,14 +550,12 @@ function putLineGlyph(
   style: Style,
   width: number,
   height: number,
+  occupied?: Set<number>,
 ): void {
   if (!Number.isFinite(x) || !Number.isFinite(y)) return;
   if (x < 0 || x >= width || y < 0 || y >= height) return;
   cells.push({ x, y, ch, style });
-}
-
-function chartCellExists(cells: readonly ChartCell[], x: number, y: number): boolean {
-  return cells.some((cell) => cell.x === x && cell.y === y);
+  occupied?.add(y * width + x);
 }
 
 function pushLineBucketExtrema(
@@ -561,6 +567,7 @@ function pushLineBucketExtrema(
   style: Style,
   width: number,
   height: number,
+  occupied: Set<number>,
 ): void {
   const x = layout.plotX + bucket.x;
   const minY = valueToY(bucket.minValue, min, max, layout.plotH);
@@ -569,14 +576,15 @@ function pushLineBucketExtrema(
   const bottom = Math.max(minY, maxY);
   if (top === bottom) {
     const y = layout.plotY + top;
-    if (!chartCellExists(cells, x, y)) putLineGlyph(cells, x, y, "●", style, width, height);
+    if (!occupied.has(y * width + x))
+      putLineGlyph(cells, x, y, "●", style, width, height, occupied);
     return;
   }
 
   for (let y = top; y <= bottom; y++) {
     const cellY = layout.plotY + y;
-    if (!chartCellExists(cells, x, cellY)) {
-      putLineGlyph(cells, x, cellY, "│", style, width, height);
+    if (!occupied.has(cellY * width + x)) {
+      putLineGlyph(cells, x, cellY, "│", style, width, height, occupied);
     }
   }
 }
@@ -590,25 +598,26 @@ function drawSteppedLineSegment(
   style: Style,
   width: number,
   height: number,
+  occupied?: Set<number>,
 ): void {
   if (toY === fromY) {
     for (let x = fromX + 1; x <= toX; x++) {
-      putLineGlyph(cells, x, toY, "─", style, width, height);
+      putLineGlyph(cells, x, toY, "─", style, width, height, occupied);
     }
     return;
   }
 
   const rising = toY < fromY;
   for (let x = fromX + 1; x < toX; x++) {
-    putLineGlyph(cells, x, fromY, "─", style, width, height);
+    putLineGlyph(cells, x, fromY, "─", style, width, height, occupied);
   }
-  putLineGlyph(cells, toX, fromY, rising ? "╯" : "╮", style, width, height);
+  putLineGlyph(cells, toX, fromY, rising ? "╯" : "╮", style, width, height, occupied);
   const top = Math.min(fromY, toY);
   const bottom = Math.max(fromY, toY);
   for (let y = top + 1; y < bottom; y++) {
-    putLineGlyph(cells, toX, y, "│", style, width, height);
+    putLineGlyph(cells, toX, y, "│", style, width, height, occupied);
   }
-  putLineGlyph(cells, toX, toY, rising ? "╭" : "╰", style, width, height);
+  putLineGlyph(cells, toX, toY, rising ? "╭" : "╰", style, width, height, occupied);
 }
 
 function chartGlyph(value: string, fallback: string): string {
@@ -1226,6 +1235,7 @@ export const TLineChart = defineComponent({
       const cells: ChartCell[] = [];
 
       if (layout.plotW > 0 && layout.plotH > 0 && runs.length > 0) {
+        const occupiedLineCells = new Set<number>();
         for (const run of runs) {
           const buckets = lineBucketsForRun(run.points, layout.plotW, sourceLength);
           let prevX: number | null = null;
@@ -1239,15 +1249,35 @@ export const TLineChart = defineComponent({
             const x = layout.plotX + point.x;
             const y = layout.plotY + valueToY(point.value, min, max, layout.plotH);
             if (prevX == null || prevY == null) {
-              putLineGlyph(cells, x, y, "●", lineStyle.value, width, height);
+              putLineGlyph(cells, x, y, "●", lineStyle.value, width, height, occupiedLineCells);
             } else {
-              drawSteppedLineSegment(cells, prevX, prevY, x, y, lineStyle.value, width, height);
+              drawSteppedLineSegment(
+                cells,
+                prevX,
+                prevY,
+                x,
+                y,
+                lineStyle.value,
+                width,
+                height,
+                occupiedLineCells,
+              );
             }
             prevX = x;
             prevY = y;
           }
           for (const bucket of buckets) {
-            pushLineBucketExtrema(cells, bucket, layout, min, max, lineStyle.value, width, height);
+            pushLineBucketExtrema(
+              cells,
+              bucket,
+              layout,
+              min,
+              max,
+              lineStyle.value,
+              width,
+              height,
+              occupiedLineCells,
+            );
           }
         }
       }
@@ -1390,15 +1420,59 @@ export const TCandlestickChart = defineComponent({
     const candleLayout = computed<CandlestickLayout>(() => {
       const width = cellCount(props.w, 0);
       const height = cellCount(props.h, 0);
-      const domainValues = props.candles.flatMap((candle) => {
-        const values = normalizeCandlestick(candle);
-        return values ? [values.open, values.low, values.high, values.close] : [];
-      });
-      const { min, max } = domainFromValues(domainValues, props.min, props.max);
-      const layout = resolveAxisLayout(width, height, min, max, props.showAxes);
-      const startIndex = Math.max(0, props.candles.length - layout.plotW);
-      const visibleCandles = props.candles.slice(startIndex);
-      return { width, height, layout, visibleCandles, startIndex, min, max };
+      const hasExplicitDomain =
+        Number.isFinite(Number(props.min)) || Number.isFinite(Number(props.max));
+      if (hasExplicitDomain) {
+        const { min, max } = domainFromValues(
+          candlestickDomainValues(props.candles),
+          props.min,
+          props.max,
+        );
+        const layout = resolveAxisLayout(width, height, min, max, props.showAxes);
+        const startIndex = Math.max(0, props.candles.length - layout.plotW);
+        const visibleCandles = props.candles.slice(startIndex);
+        const candleOffsetX = Math.max(0, layout.plotW - visibleCandles.length);
+        return { width, height, layout, visibleCandles, startIndex, candleOffsetX, min, max };
+      }
+
+      let { min, max } = domainFromValues(
+        candlestickDomainValues(props.candles),
+        undefined,
+        undefined,
+      );
+      let layout = resolveAxisLayout(width, height, min, max, props.showAxes);
+      let startIndex = 0;
+      let visibleCandles: readonly TCandlestickDatum[] = props.candles;
+      let previousStartIndex = -1;
+
+      for (let attempt = 0; attempt < 8; attempt++) {
+        startIndex = Math.max(0, props.candles.length - layout.plotW);
+        visibleCandles = props.candles.slice(startIndex);
+        ({ min, max } = domainFromValues(
+          candlestickDomainValues(visibleCandles),
+          undefined,
+          undefined,
+        ));
+        const nextLayout = resolveAxisLayout(width, height, min, max, props.showAxes);
+        const nextStartIndex = Math.max(0, props.candles.length - nextLayout.plotW);
+        layout = nextLayout;
+        if (nextStartIndex === startIndex) break;
+        if (nextStartIndex === previousStartIndex) {
+          startIndex = Math.max(startIndex, nextStartIndex);
+          visibleCandles = props.candles.slice(startIndex);
+          ({ min, max } = domainFromValues(
+            candlestickDomainValues(visibleCandles),
+            undefined,
+            undefined,
+          ));
+          layout = resolveAxisLayout(width, height, min, max, props.showAxes);
+          break;
+        }
+        previousStartIndex = startIndex;
+      }
+
+      const candleOffsetX = Math.max(0, layout.plotW - visibleCandles.length);
+      return { width, height, layout, visibleCandles, startIndex, candleOffsetX, min, max };
     });
     const visibleRect = useChartVisibleRect(props, candleLayout);
 
@@ -1407,14 +1481,9 @@ export const TCandlestickChart = defineComponent({
       const { layout } = current;
       if (current.width <= 0 || current.height <= 0 || layout.plotW <= 0 || layout.plotH <= 0)
         return null;
-      const plotX = localX - layout.plotX;
+      const plotX = localX - layout.plotX - current.candleOffsetX;
       const plotY = localY - layout.plotY;
-      if (
-        plotX < 0 ||
-        plotX >= layout.plotW ||
-        plotX >= current.visibleCandles.length ||
-        current.visibleCandles.length <= 0
-      )
+      if (plotX < 0 || plotX >= current.visibleCandles.length || current.visibleCandles.length <= 0)
         return null;
       if (plotY < 0 || plotY >= layout.plotH) return null;
 
@@ -1427,7 +1496,7 @@ export const TCandlestickChart = defineComponent({
       const index = current.startIndex + candleX;
       const label = props.labels?.[index] ?? `#${index + 1}`;
       return {
-        x: layout.plotX + candleX,
+        x: layout.plotX + current.candleOffsetX + candleX,
         y: localY,
         index,
         label,
@@ -1441,7 +1510,7 @@ export const TCandlestickChart = defineComponent({
 
     const surface = computed<ChartSurface>(() => {
       const current = candleLayout.value;
-      const { width, height, layout, visibleCandles, min, max } = current;
+      const { width, height, layout, visibleCandles, candleOffsetX, min, max } = current;
       const cells: ChartCell[] = [];
       const upStyle = mergeStyle(baseStyle.value, props.upStyle);
       const downStyle = mergeStyle(baseStyle.value, props.downStyle);
@@ -1476,7 +1545,7 @@ export const TCandlestickChart = defineComponent({
         for (let y = highY; y <= lowY; y++) {
           const inBody = y >= bodyTop && y <= bodyBottom;
           cells.push({
-            x: layout.plotX + x,
+            x: layout.plotX + candleOffsetX + x,
             y: layout.plotY + y,
             ch: inBody ? "█" : "│",
             style: inBody ? bodyStyle : wickStyle,

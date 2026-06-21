@@ -321,6 +321,32 @@ describe("terminal charts", () => {
     mounted.unmount();
   });
 
+  it("derives automatic candlestick domain from visible candles after truncating history", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TCandlestickChart, {
+          x: 0,
+          y: 0,
+          w: 3,
+          h: 5,
+          showAxes: false,
+          candles: [
+            { open: 1, high: 1_000_000_000, low: 1, close: 1 },
+            { open: 100, high: 110, low: 100, close: 110 },
+            { open: 104, high: 108, low: 102, close: 103 },
+            { open: 101, high: 109, low: 100, close: 108 },
+          ],
+        }),
+      6,
+      6,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe("█");
+    expect(mounted.terminal.getCell(0, 4).ch).toBe("█");
+
+    mounted.unmount();
+  });
+
   it("renders finite candlestick values at numeric extremes", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -459,6 +485,47 @@ describe("terminal charts", () => {
     expect(lines[5]).toContain("latest");
 
     mounted.unmount();
+  });
+
+  it("right-aligns sparse candlesticks with the x-axis endpoint and hover", async () => {
+    const App = defineComponent({
+      setup: () => () =>
+        h(TCandlestickChart, {
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 6,
+          min: 0,
+          max: 10,
+          endLabel: "latest",
+          labels: ["Mon", "Tue"],
+          candles: [
+            { open: 2, high: 8, low: 1, close: 7 },
+            { open: 7, high: 9, low: 4, close: 5 },
+          ],
+        }),
+    });
+    const app = createTerminalApp({ cols: 22, rows: 7, component: App as any });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(app.terminal.getCell(3, 0).ch).toBe(" ");
+      expect(app.terminal.getCell(17, 0).ch).not.toBe(" ");
+
+      app.events.dispatch({ type: "pointermove", cellX: 17, cellY: 2, time: 1_000 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(app.terminal.snapshot().lines.join("\n")).toContain("Tue x=2");
+
+      app.events.dispatch({ type: "pointermove", cellX: 3, cellY: 2, time: 1_001 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(app.terminal.snapshot().lines.join("\n")).not.toContain("Tue x=2");
+    } finally {
+      app.dispose();
+    }
   });
 
   it("renders pie segments by angle", async () => {
@@ -959,13 +1026,13 @@ describe("terminal charts", () => {
       await nextTick();
       app.scheduler.flushNow();
 
-      app.events.dispatch({ type: "pointermove", cellX: 4, cellY: 2, time: 1_000 } as any);
+      app.events.dispatch({ type: "pointermove", cellX: 29, cellY: 2, time: 1_000 } as any);
       await nextTick();
       app.scheduler.flushNow();
 
       const text = app.terminal.snapshot().lines.join("\n");
       expect(text).toContain("Tue x=2 y=5 O:7 H:9 L:4 C:5");
-      expect(app.terminal.getCell(4, 2).style.inverse).not.toBe(true);
+      expect(app.terminal.getCell(29, 2).style.inverse).not.toBe(true);
 
       app.events.dispatch({ type: "pointermove", cellX: 20, cellY: 2, time: 1_001 } as any);
       await nextTick();
