@@ -126,6 +126,30 @@ describe("terminal charts", () => {
     mounted.unmount();
   });
 
+  it("renders short finite line runs that fall between sampled positions", async () => {
+    const values = Array.from({ length: 100 }, () => Number.NaN);
+    values[5] = 1;
+    values[6] = 1;
+
+    const mounted = await mountTerminal(
+      () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 5,
+          h: 3,
+          values,
+          showAxes: false,
+        }),
+      8,
+      4,
+    );
+
+    expect(mounted.terminal.getCell(0, 1).ch).toBe("●");
+
+    mounted.unmount();
+  });
+
   it("renders line axes and labels when there is enough space", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -146,6 +170,27 @@ describe("terminal charts", () => {
     expect(lines[0]?.slice(0, 5)).toBe("10│to");
     expect(mounted.terminal.getCell(2, 4).ch).toBe("└");
     expect(lines[5]).toContain("turn");
+
+    mounted.unmount();
+  });
+
+  it("uses one-based default line axis endpoint labels", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 6,
+          values: [0, 10, 5],
+        }),
+      22,
+      7,
+    );
+
+    const labelRow = mounted.terminal.snapshot().lines[5]?.slice(3, 18);
+    expect(labelRow).toContain("1");
+    expect(labelRow).toContain("3");
 
     mounted.unmount();
   });
@@ -194,6 +239,34 @@ describe("terminal charts", () => {
     const lines = mounted.terminal.snapshot().lines;
     expect(lines[0]?.slice(0, 3)).toBe("-5│");
     expect(lines[3]?.slice(0, 3)).toBe("-5│");
+
+    mounted.unmount();
+  });
+
+  it("ignores invalid candlesticks when deriving the automatic domain", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TCandlestickChart, {
+          x: 0,
+          y: 0,
+          w: 3,
+          h: 3,
+          showAxes: false,
+          candles: [
+            { open: 1, high: 2, low: 0, close: 1 },
+            { open: 10, high: 1_000_000, low: Number.NaN, close: 12 },
+            { open: 1, high: 2, low: 0, close: 1 },
+          ],
+        }),
+      6,
+      4,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe("│");
+    expect(mounted.terminal.getCell(1, 0).ch).toBe(" ");
+    expect(mounted.terminal.getCell(1, 1).ch).toBe(" ");
+    expect(mounted.terminal.getCell(1, 2).ch).toBe(" ");
+    expect(mounted.terminal.getCell(2, 0).ch).toBe("│");
 
     mounted.unmount();
   });

@@ -161,6 +161,12 @@ type LineRun = Readonly<{
   points: readonly LinePoint[];
 }>;
 
+type LineBucket = Readonly<{
+  x: number;
+  minValue: number;
+  maxValue: number;
+}>;
+
 type LineLayout = Readonly<{
   width: number;
   height: number;
@@ -179,6 +185,13 @@ type CandlestickLayout = Readonly<{
   startIndex: number;
   min: number;
   max: number;
+}>;
+
+type CandlestickValues = Readonly<{
+  open: number;
+  high: number;
+  low: number;
+  close: number;
 }>;
 
 function cellCount(value: number | undefined, fallback: number): number {
@@ -224,6 +237,22 @@ function domainFromValues(
     if (!hasMin && hasMax) return { min: max, max };
   }
   return max >= min ? { min, max } : { min: max, max: min };
+}
+
+function normalizeCandlestick(candle: TCandlestickDatum): CandlestickValues | null {
+  const open = Number(candle.open);
+  const high = Number(candle.high);
+  const low = Number(candle.low);
+  const close = Number(candle.close);
+  if (
+    !Number.isFinite(open) ||
+    !Number.isFinite(high) ||
+    !Number.isFinite(low) ||
+    !Number.isFinite(close)
+  ) {
+    return null;
+  }
+  return { open, high, low, close };
 }
 
 function finiteLineRuns(values: readonly number[]): LineRun[] {
@@ -279,6 +308,22 @@ function lineXForOriginalIndex(
 ): number {
   if (plotW <= 1 || sourceLength <= 1) return plotX;
   return plotX + Math.round((originalIndex / (sourceLength - 1)) * (plotW - 1));
+}
+
+function lineBucketIndexRange(
+  plotX: number,
+  plotW: number,
+  sourceLength: number,
+): { startIndex: number; endIndex: number } {
+  if (sourceLength <= 0) return { startIndex: 0, endIndex: -1 };
+  if (plotW <= 1 || sourceLength <= 1) return { startIndex: 0, endIndex: sourceLength - 1 };
+
+  const scale = (sourceLength - 1) / (plotW - 1);
+  const start = plotX <= 0 ? 0 : Math.ceil((plotX - 0.5) * scale);
+  const end = plotX >= plotW - 1 ? sourceLength - 1 : Math.ceil((plotX + 0.5) * scale) - 1;
+  const startIndex = Math.max(0, Math.min(sourceLength - 1, start));
+  const endIndex = Math.max(-1, Math.min(sourceLength - 1, end));
+  return endIndex < startIndex ? { startIndex: 0, endIndex: -1 } : { startIndex, endIndex };
 }
 
 function lowerBoundLinePoint(points: readonly LinePoint[], position: number): number {
@@ -348,6 +393,43 @@ function nearestLinePoint(points: readonly LinePoint[], position: number): LineP
   return position - previous.originalIndex <= current.originalIndex - position ? previous : current;
 }
 
+function nearestLinePointAtPlotX(
+  runs: readonly LineRun[],
+  plotX: number,
+  plotW: number,
+  sourceLength: number,
+  position: number,
+): LinePoint | null {
+  const { startIndex, endIndex } = lineBucketIndexRange(plotX, plotW, sourceLength);
+  if (endIndex < startIndex) return null;
+
+  let best: LinePoint | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let runIndex = lowerBoundLineRun(runs, startIndex); runIndex < runs.length; runIndex++) {
+    const points = runs[runIndex]!.points;
+    const first = points[0]!;
+    const last = points[points.length - 1]!;
+    if (first.originalIndex > endIndex) break;
+    if (last.originalIndex < startIndex) continue;
+
+    for (
+      let pointIndex = lowerBoundLinePoint(points, startIndex);
+      pointIndex < points.length;
+      pointIndex++
+    ) {
+      const point = points[pointIndex]!;
+      if (point.originalIndex > endIndex) break;
+      if (lineXForOriginalIndex(point.originalIndex, 0, plotW, sourceLength) !== plotX) continue;
+      const distance = Math.abs(point.originalIndex - position);
+      if (distance < bestDistance) {
+        best = point;
+        bestDistance = distance;
+      }
+    }
+  }
+  return best;
+}
+
 function nearestLinePointInRuns(
   runs: readonly LineRun[],
   position: number,
@@ -355,18 +437,32 @@ function nearestLinePointInRuns(
   plotW: number,
   sourceLength: number,
 ): LinePoint | null {
-  const index = lowerBoundLineRun(runs, position);
   const run = lineRunAtPosition(runs, position);
   if (run && run.points.length > 1) return nearestLinePoint(run.points, position);
 
-  const singlePointRuns = [runs[index], runs[index - 1], runs[index + 1]];
-  for (const candidate of singlePointRuns) {
-    if (!candidate || candidate.points.length !== 1) continue;
-    const point = candidate.points[0]!;
+  return nearestLinePointAtPlotX(runs, plotX, plotW, sourceLength, position);
+}
+
+function lineBucketsForRun(
+  points: readonly LinePoint[],
+  plotW: number,
+  sourceLength: number,
+): LineBucket[] {
+  const buckets: LineBucket[] = [];
+  let current: { x: number; minValue: number; maxValue: number } | null = null;
+  for (const point of points) {
     const x = lineXForOriginalIndex(point.originalIndex, 0, plotW, sourceLength);
-    if (x === plotX) return point;
+    if (x < 0 || x >= plotW) continue;
+    if (!current || current.x !== x) {
+      if (current) buckets.push(current);
+      current = { x, minValue: point.value, maxValue: point.value };
+      continue;
+    }
+    if (point.value < current.minValue) current.minValue = point.value;
+    if (point.value > current.maxValue) current.maxValue = point.value;
   }
-  return null;
+  if (current) buckets.push(current);
+  return buckets;
 }
 
 function putLineGlyph(
@@ -380,6 +476,39 @@ function putLineGlyph(
 ): void {
   if (x < 0 || x >= width || y < 0 || y >= height) return;
   cells.push({ x, y, ch, style });
+}
+
+function chartCellExists(cells: readonly ChartCell[], x: number, y: number): boolean {
+  return cells.some((cell) => cell.x === x && cell.y === y);
+}
+
+function pushLineBucketExtrema(
+  cells: ChartCell[],
+  bucket: LineBucket,
+  layout: AxisLayout,
+  min: number,
+  max: number,
+  style: Style,
+  width: number,
+  height: number,
+): void {
+  const x = layout.plotX + bucket.x;
+  const minY = valueToY(bucket.minValue, min, max, layout.plotH);
+  const maxY = valueToY(bucket.maxValue, min, max, layout.plotH);
+  const top = Math.min(minY, maxY);
+  const bottom = Math.max(minY, maxY);
+  if (top === bottom) {
+    const y = layout.plotY + top;
+    if (!chartCellExists(cells, x, y)) putLineGlyph(cells, x, y, "●", style, width, height);
+    return;
+  }
+
+  for (let y = top; y <= bottom; y++) {
+    const cellY = layout.plotY + y;
+    if (!chartCellExists(cells, x, cellY)) {
+      putLineGlyph(cells, x, cellY, "│", style, width, height);
+    }
+  }
 }
 
 function drawSteppedLineSegment(
@@ -1065,16 +1194,9 @@ export const TLineChart = defineComponent({
           prevRun = sample.run;
         }
         for (const run of runs) {
-          if (run.points.length !== 1) continue;
-          const point = run.points[0]!;
-          const x = lineXForOriginalIndex(
-            point.originalIndex,
-            layout.plotX,
-            layout.plotW,
-            sourceLength,
-          );
-          const y = layout.plotY + valueToY(point.value, min, max, layout.plotH);
-          putLineGlyph(cells, x, y, "●", lineStyle.value, width, height);
+          for (const bucket of lineBucketsForRun(run.points, layout.plotW, sourceLength)) {
+            pushLineBucketExtrema(cells, bucket, layout, min, max, lineStyle.value, width, height);
+          }
         }
       }
 
@@ -1085,8 +1207,8 @@ export const TLineChart = defineComponent({
         labelStyle.value,
         props.xLabel,
         props.yLabel,
-        props.startLabel,
-        props.endLabel || (sourceLength > 0 ? String(sourceLength - 1) : ""),
+        props.startLabel || (sourceLength > 0 ? "1" : ""),
+        props.endLabel || (sourceLength > 0 ? String(sourceLength) : ""),
       );
 
       const pointer = hoverPointer.value;
@@ -1216,12 +1338,10 @@ export const TCandlestickChart = defineComponent({
     const candleLayout = computed<CandlestickLayout>(() => {
       const width = cellCount(props.w, 0);
       const height = cellCount(props.h, 0);
-      const domainValues = props.candles.flatMap((candle) => [
-        Number(candle.open),
-        Number(candle.low),
-        Number(candle.high),
-        Number(candle.close),
-      ]);
+      const domainValues = props.candles.flatMap((candle) => {
+        const values = normalizeCandlestick(candle);
+        return values ? [values.open, values.low, values.high, values.close] : [];
+      });
       const { min, max } = domainFromValues(domainValues, props.min, props.max);
       const layout = resolveAxisLayout(width, height, min, max, props.showAxes);
       const startIndex = Math.max(0, props.candles.length - layout.plotW);
@@ -1248,12 +1368,10 @@ export const TCandlestickChart = defineComponent({
 
       const candleX = plotX;
       const candle = current.visibleCandles[candleX]!;
-      const open = Number(candle.open);
-      const high = Number(candle.high);
-      const low = Number(candle.low);
-      const close = Number(candle.close);
-      if (![open, high, low, close].every(Number.isFinite)) return null;
+      const values = normalizeCandlestick(candle);
+      if (!values) return null;
 
+      const { open, high, low, close } = values;
       const index = current.startIndex + candleX;
       const label = props.labels?.[index] ?? `#${index + 1}`;
       return {
@@ -1282,12 +1400,10 @@ export const TCandlestickChart = defineComponent({
 
       for (let x = 0; x < visibleCandles.length; x++) {
         const candle = visibleCandles[x]!;
-        const open = Number(candle.open);
-        const high = Number(candle.high);
-        const low = Number(candle.low);
-        const close = Number(candle.close);
-        if (![open, high, low, close].every(Number.isFinite)) continue;
+        const values = normalizeCandlestick(candle);
+        if (!values) continue;
 
+        const { open, high, low, close } = values;
         const up = close >= open;
         const baseBodyStyle = up ? upStyle : downStyle;
         const baseWickStyle = up ? upWickStyle : downWickStyle;

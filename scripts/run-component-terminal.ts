@@ -658,10 +658,12 @@ function writeCaptureShot(name: string, terminal: Terminal): void {
 }
 
 async function writeCapturePngShots(): Promise<void> {
+  const requirePng = Boolean(process.env.CI) || process.env.VUE_TUI_REQUIRE_CHART_PNG === "1";
   let chromium: typeof import("@playwright/test").chromium;
   try {
     ({ chromium } = await import("@playwright/test"));
-  } catch {
+  } catch (error) {
+    if (requirePng) throw error;
     console.warn(
       "component terminal chart png screenshots skipped: @playwright/test is unavailable",
     );
@@ -672,6 +674,7 @@ async function writeCapturePngShots(): Promise<void> {
   try {
     browser = await chromium.launch();
   } catch (error) {
+    if (requirePng) throw error;
     const message = error instanceof Error ? error.message : String(error);
     console.warn(
       [
