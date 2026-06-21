@@ -241,6 +241,7 @@
     "run:tlog-view-lab": "pnpm run build && VT_INTERACTIVE=1 tsx examples/tlog-view-lab.ts",
     "run:component:terminal": "tsx scripts/run-component-terminal.ts",
     "run:component:terminal:list": "tsx scripts/run-component-terminal.ts --list",
+    "run:logo:terminal": "tsx examples/vue-tui-logo-terminal.ts",
     "run:image-showcase:terminal": "tsx examples/image-showcase.ts",
     "run:katex-showcase:terminal": "tsx examples/katex-showcase.ts",
     "trace:terminal-resize": "node scripts/trace-terminal-resize.mjs",
