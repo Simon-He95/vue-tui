@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@simon_he/vue-tui": ["../../src/index.ts"],
+      "@simon_he/vue-tui/cli": ["../../src/cli.ts"],
+      "@simon_he/vue-tui/core": ["../../src/core.ts"],
+      "@simon_he/vue-tui/vue": ["../../src/vue.ts"]
+    }
+  },
+  "include": ["src"]
+}

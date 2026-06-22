@@ -1,0 +1,30 @@
+{
+  "name": "@simon_he/vue-vite-conf-card",
+  "version": "0.1.0",
+  "description": "Vue x Vite conference terminal card powered by vue-tui",
+  "private": true,
+  "bin": {
+    "vue-vite-conf-card": "./dist/cli.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.130",
+    "@types/qrcode": "^1.5.6",
+    "tsdown": "^0.9.9",
+    "tsx": "^4.22.4",
+    "typescript": "^5.9.3",
+    "vue": "^3.5.38"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
