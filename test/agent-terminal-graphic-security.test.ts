@@ -95,6 +95,13 @@ describe("terminal graphics capability detection", () => {
 
     expect(
       detectTerminalGraphicsCapabilities({
+        stdoutIsTTY: true,
+        env: { GHOSTTY_RESOURCES_DIR: "/Applications/Ghostty.app/Contents/Resources" },
+      }),
+    ).toMatchObject({ protocol: "kitty", supported: true });
+
+    expect(
+      detectTerminalGraphicsCapabilities({
         stdoutIsTTY: false,
         env: { KITTY_WINDOW_ID: "1" },
       }),

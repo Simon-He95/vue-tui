@@ -364,6 +364,9 @@ describe("package exports", () => {
       "layoutMarkdownBlocks",
     ]);
     expect(Object.keys(experimental).sort()).toEqual([
+      "TCandlestickChart",
+      "TContributionGraph",
+      "TLineChart",
       "TLogLinksPanel",
       "TLogMinimap",
       "TLogScrollbar",
@@ -373,6 +376,7 @@ describe("package exports", () => {
       "TLogView",
       "TLogVirtualLinksPanel",
       "TLogVirtualSearchResults",
+      "TPieChart",
       "TTranscriptView",
       "TVirtualList",
       "captureTLogViewSessionState",

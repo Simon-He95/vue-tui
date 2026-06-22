@@ -11,10 +11,12 @@
 - [TBadge](#tbadge)
 - [TBox](#tbox)
 - [TBreadcrumb](#tbreadcrumb)
+- [TCandlestickChart](#tcandlestickchart)
 - [TCheckbox](#tcheckbox)
 - [TCode](#tcode)
 - [TCommandPalette](#tcommandpalette)
 - [TContextMenu](#tcontextmenu)
+- [TContributionGraph](#tcontributiongraph)
 - [TDataTable](#tdatatable)
 - [TDebugOverlay](#tdebugoverlay)
 - [TDialog](#tdialog)
@@ -27,6 +29,7 @@
 - [TInputBox](#tinputbox)
 - [TJsonEditor](#tjsoneditor)
 - [TKeyHint](#tkeyhint)
+- [TLineChart](#tlinechart)
 - [TLink](#tlink)
 - [TLinkifyText](#tlinkifytext)
 - [TList](#tlist)
@@ -45,6 +48,7 @@
 - [TMultilineModal](#tmultilinemodal)
 - [TPasswordInput](#tpasswordinput)
 - [TPathPicker](#tpathpicker)
+- [TPieChart](#tpiechart)
 - [TPopover](#tpopover)
 - [TProgress](#tprogress)
 - [TRadioGroup](#tradiogroup)
@@ -340,6 +344,46 @@ Import: `@simon_he/vue-tui/vue`
 | ------------------- | ------------------------------------- | ---- |
 | <code>select</code> | <code>TBreadcrumbSelectPayload</code> | —    |
 
+## TCandlestickChart
+
+源码：`src/vue/components/TCharts.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
+
+### Props
+
+| 名称                      | 类型                                      | 默认值                                                       | 必填 | 说明                                                                                         |
+| ------------------------- | ----------------------------------------- | ------------------------------------------------------------ | ---- | -------------------------------------------------------------------------------------------- |
+| <code>x</code>            | <code>number</code>                       | —                                                            | 是   | Left position in terminal cells.                                                             |
+| <code>y</code>            | <code>number</code>                       | —                                                            | 是   | Top position in terminal cells.                                                              |
+| <code>w</code>            | <code>number</code>                       | —                                                            | 是   | Width in terminal cells.                                                                     |
+| <code>h</code>            | <code>number</code>                       | —                                                            | 是   | Height in terminal cells.                                                                    |
+| <code>zIndex</code>       | <code>number</code>                       | <code>0</code>                                               | 否   | —                                                                                            |
+| <code>candles</code>      | <code>readonly TCandlestickDatum[]</code> | —                                                            | 是   | Candles rendered from left to right; the most recent candles are kept when width is smaller. |
+| <code>labels</code>       | <code>readonly string[]</code>            | <code>undefined</code>                                       | 否   | Labels aligned with candles and shown in hover tooltips.                                     |
+| <code>min</code>          | <code>number</code>                       | <code>undefined</code>                                       | 否   | Lower price bound. Defaults to the smallest candle low.                                      |
+| <code>max</code>          | <code>number</code>                       | <code>undefined</code>                                       | 否   | Upper price bound. Defaults to the largest candle high.                                      |
+| <code>style</code>        | <code>Style</code>                        | <code>undefined</code>                                       | 否   | —                                                                                            |
+| <code>upStyle</code>      | <code>Style</code>                        | <code>() =&gt; ({ fg: &quot;greenBright&quot; })</code>      | 否   | Style used when close is greater than or equal to open.                                      |
+| <code>downStyle</code>    | <code>Style</code>                        | <code>() =&gt; ({ fg: &quot;redBright&quot; })</code>        | 否   | Style used when close is less than open.                                                     |
+| <code>wickStyle</code>    | <code>Style</code>                        | <code>undefined</code>                                       | 否   | Optional style override for wick cells.                                                      |
+| <code>showAxes</code>     | <code>boolean</code>                      | <code>true</code>                                            | 否   | Whether to render axes and price labels when there is enough space.                          |
+| <code>axisStyle</code>    | <code>Style</code>                        | <code>() =&gt; ({ fg: &quot;white&quot;, dim: true })</code> | 否   | Style used for axis lines.                                                                   |
+| <code>labelStyle</code>   | <code>Style</code>                        | <code>() =&gt; ({ fg: &quot;whiteBright&quot; })</code>      | 否   | Style used for axis labels.                                                                  |
+| <code>xLabel</code>       | <code>string</code>                       | <code>&quot;&quot;</code>                                    | 否   | Label centered under the x axis.                                                             |
+| <code>yLabel</code>       | <code>string</code>                       | <code>&quot;&quot;</code>                                    | 否   | Label rendered at the top of the plot area.                                                  |
+| <code>startLabel</code>   | <code>string</code>                       | <code>&quot;&quot;</code>                                    | 否   | Left endpoint label for the x axis when xLabel is empty.                                     |
+| <code>endLabel</code>     | <code>string</code>                       | <code>&quot;&quot;</code>                                    | 否   | Right endpoint label for the x axis when xLabel is empty.                                    |
+| <code>showTooltip</code>  | <code>boolean</code>                      | <code>true</code>                                            | 否   | Whether pointer hover shows candle values.                                                   |
+| <code>hoverStyle</code>   | <code>Style</code>                        | <code>() =&gt; ({})</code>                                   | 否   | Style merged onto the currently hovered candle.                                              |
+| <code>tooltipStyle</code> | <code>Style</code>                        | <code>() =&gt; ({ fg: &quot;whiteBright&quot; })</code>      | 否   | Style used for hover tooltip text.                                                           |
+
+### Events
+
+—
+
 ## TCheckbox
 
 源码：`src/vue/components/TForm.ts`
@@ -482,6 +526,42 @@ Import: `@simon_he/vue-tui/vue`
 | <code>update:selectedIndex</code> | <code>number</code>                    | —    |
 | <code>select</code>               | <code>TContextMenuSelectPayload</code> | —    |
 | <code>close</code>                | —                                      | —    |
+
+## TContributionGraph
+
+源码：`src/vue/components/TCharts.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
+
+### Props
+
+| 名称                      | 类型                           | 默认值                                                             | 必填 | 说明                                                                                              |
+| ------------------------- | ------------------------------ | ------------------------------------------------------------------ | ---- | ------------------------------------------------------------------------------------------------- |
+| <code>x</code>            | <code>number</code>            | —                                                                  | 是   | Left position in terminal cells.                                                                  |
+| <code>y</code>            | <code>number</code>            | —                                                                  | 是   | Top position in terminal cells.                                                                   |
+| <code>w</code>            | <code>number</code>            | <code>undefined</code>                                             | 否   | Width in terminal cells. Defaults to the rendered graph width.                                    |
+| <code>h</code>            | <code>number</code>            | <code>undefined</code>                                             | 否   | Height in terminal cells. Defaults to the row count plus a tooltip row when tooltips are enabled. |
+| <code>zIndex</code>       | <code>number</code>            | <code>0</code>                                                     | 否   | —                                                                                                 |
+| <code>values</code>       | <code>readonly number[]</code> | —                                                                  | 是   | Numeric samples rendered column-major from top to bottom.                                         |
+| <code>rows</code>         | <code>number</code>            | <code>7</code>                                                     | 否   | Number of rows in each heatmap column.                                                            |
+| <code>columns</code>      | <code>number</code>            | <code>undefined</code>                                             | 否   | Number of columns to render. Defaults to enough columns for the values.                           |
+| <code>max</code>          | <code>number</code>            | <code>undefined</code>                                             | 否   | Maximum sample value used for level mapping. Defaults to the largest positive value.              |
+| <code>labels</code>       | <code>readonly string[]</code> | <code>undefined</code>                                             | 否   | Labels aligned with values and shown in hover tooltips.                                           |
+| <code>unit</code>         | <code>string</code>            | <code>&quot;&quot;</code>                                          | 否   | Unit appended to hover tooltip values.                                                            |
+| <code>showTooltip</code>  | <code>boolean</code>           | <code>true</code>                                                  | 否   | Whether pointer hover shows a value tooltip.                                                      |
+| <code>emptyStyle</code>   | <code>Style</code>             | <code>() =&gt; ({ fg: &quot;blackBright&quot;, dim: true })</code> | 否   | Empty cells and surrounding clear area style.                                                     |
+| <code>levelStyles</code>  | <code>readonly Style[]</code>  | <code>() =&gt; DEFAULT_HEATMAP_LEVEL_STYLES</code>                 | 否   | Positive value styles ordered from low to high intensity.                                         |
+| <code>cell</code>         | <code>string</code>            | <code>&quot;■&quot;</code>                                         | 否   | Glyph used for each heatmap cell.                                                                 |
+| <code>gap</code>          | <code>number</code>            | <code>1</code>                                                     | 否   | Horizontal gap between columns in terminal cells.                                                 |
+| <code>hoverStyle</code>   | <code>Style</code>             | <code>() =&gt; ({})</code>                                         | 否   | Style merged onto the currently hovered heatmap cell.                                             |
+| <code>tooltipStyle</code> | <code>Style</code>             | <code>() =&gt; ({ fg: &quot;whiteBright&quot; })</code>            | 否   | Style used for hover tooltip text.                                                                |
+| <code>style</code>        | <code>Style</code>             | <code>undefined</code>                                             | 否   | —                                                                                                 |
+
+### Events
+
+—
 
 ## TDataTable
 
@@ -927,6 +1007,45 @@ Import: `@simon_he/vue-tui/vue`
 | <code>label</code>      | <code>string</code> | —                                         | 是   | —    |
 | <code>style</code>      | <code>Style</code>  | <code>undefined</code>                    | 否   | —    |
 | <code>comboStyle</code> | <code>Style</code>  | <code>() =&gt; ({ inverse: true })</code> | 否   | —    |
+
+### Events
+
+—
+
+## TLineChart
+
+源码：`src/vue/components/TCharts.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
+
+### Props
+
+| 名称                      | 类型                           | 默认值                                                              | 必填 | 说明                                                                 |
+| ------------------------- | ------------------------------ | ------------------------------------------------------------------- | ---- | -------------------------------------------------------------------- |
+| <code>x</code>            | <code>number</code>            | —                                                                   | 是   | Left position in terminal cells.                                     |
+| <code>y</code>            | <code>number</code>            | —                                                                   | 是   | Top position in terminal cells.                                      |
+| <code>w</code>            | <code>number</code>            | —                                                                   | 是   | Width in terminal cells.                                             |
+| <code>h</code>            | <code>number</code>            | —                                                                   | 是   | Height in terminal cells.                                            |
+| <code>zIndex</code>       | <code>number</code>            | <code>0</code>                                                      | 否   | —                                                                    |
+| <code>values</code>       | <code>readonly number[]</code> | —                                                                   | 是   | Numeric samples rendered across the chart width.                     |
+| <code>labels</code>       | <code>readonly string[]</code> | <code>undefined</code>                                              | 否   | Labels aligned with values and shown in hover tooltips.              |
+| <code>unit</code>         | <code>string</code>            | <code>&quot;&quot;</code>                                           | 否   | Unit appended to hover y values.                                     |
+| <code>min</code>          | <code>number</code>            | <code>undefined</code>                                              | 否   | Lower domain bound. Defaults to the smallest sample.                 |
+| <code>max</code>          | <code>number</code>            | <code>undefined</code>                                              | 否   | Upper domain bound. Defaults to the largest sample.                  |
+| <code>style</code>        | <code>Style</code>             | <code>undefined</code>                                              | 否   | —                                                                    |
+| <code>lineStyle</code>    | <code>Style</code>             | <code>() =&gt; ({ fg: &quot;cyanBright&quot; })</code>              | 否   | Style used for line glyphs.                                          |
+| <code>showAxes</code>     | <code>boolean</code>           | <code>true</code>                                                   | 否   | Whether to render axes and domain labels when there is enough space. |
+| <code>axisStyle</code>    | <code>Style</code>             | <code>() =&gt; ({ fg: &quot;white&quot;, dim: true })</code>        | 否   | Style used for axis lines.                                           |
+| <code>labelStyle</code>   | <code>Style</code>             | <code>() =&gt; ({ fg: &quot;whiteBright&quot; })</code>             | 否   | Style used for axis labels.                                          |
+| <code>xLabel</code>       | <code>string</code>            | <code>&quot;&quot;</code>                                           | 否   | Label centered under the x axis.                                     |
+| <code>yLabel</code>       | <code>string</code>            | <code>&quot;&quot;</code>                                           | 否   | Label rendered at the top of the plot area.                          |
+| <code>startLabel</code>   | <code>string</code>            | <code>&quot;&quot;</code>                                           | 否   | Left endpoint label for the x axis when xLabel is empty.             |
+| <code>endLabel</code>     | <code>string</code>            | <code>&quot;&quot;</code>                                           | 否   | Right endpoint label for the x axis when xLabel is empty.            |
+| <code>showTooltip</code>  | <code>boolean</code>           | <code>true</code>                                                   | 否   | Whether pointer hover shows point values.                            |
+| <code>hoverStyle</code>   | <code>Style</code>             | <code>() =&gt; ({ fg: &quot;whiteBright&quot;, bold: true })</code> | 否   | Style merged onto the currently hovered point.                       |
+| <code>tooltipStyle</code> | <code>Style</code>             | <code>() =&gt; ({ fg: &quot;whiteBright&quot; })</code>             | 否   | Style used for hover tooltip text.                                   |
 
 ### Events
 
@@ -1645,6 +1764,35 @@ Import: `@simon_he/vue-tui/vue`
 | <code>keydown</code>           | —       | —    |
 | <code>focus</code>             | —       | —    |
 | <code>blur</code>              | —       | —    |
+
+## TPieChart
+
+源码：`src/vue/components/TCharts.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
+
+### Props
+
+| 名称                       | 类型                           | 默认值                                                  | 必填 | 说明                                                                       |
+| -------------------------- | ------------------------------ | ------------------------------------------------------- | ---- | -------------------------------------------------------------------------- |
+| <code>x</code>             | <code>number</code>            | —                                                       | 是   | Left position in terminal cells.                                           |
+| <code>y</code>             | <code>number</code>            | —                                                       | 是   | Top position in terminal cells.                                            |
+| <code>w</code>             | <code>number</code>            | —                                                       | 是   | Width in terminal cells.                                                   |
+| <code>h</code>             | <code>number</code>            | —                                                       | 是   | Height in terminal cells.                                                  |
+| <code>zIndex</code>        | <code>number</code>            | <code>0</code>                                          | 否   | —                                                                          |
+| <code>values</code>        | <code>readonly number[]</code> | —                                                       | 是   | Segment values rendered clockwise from the top.                            |
+| <code>labels</code>        | <code>readonly string[]</code> | <code>undefined</code>                                  | 否   | Labels aligned with segment values and shown in the legend.                |
+| <code>style</code>         | <code>Style</code>             | <code>undefined</code>                                  | 否   | —                                                                          |
+| <code>segmentStyles</code> | <code>readonly Style[]</code>  | <code>() =&gt; DEFAULT_PIE_SEGMENT_STYLES</code>        | 否   | Segment styles cycled when there are more segments than styles.            |
+| <code>cell</code>          | <code>string</code>            | <code>&quot;█&quot;</code>                              | 否   | Glyph used for filled pie cells.                                           |
+| <code>showLegend</code>    | <code>boolean</code>           | <code>true</code>                                       | 否   | Whether to render a label/value/percent legend when there is enough space. |
+| <code>legendStyle</code>   | <code>Style</code>             | <code>() =&gt; ({ fg: &quot;whiteBright&quot; })</code> | 否   | Style used for legend text.                                                |
+
+### Events
+
+—
 
 ## TPopover
 

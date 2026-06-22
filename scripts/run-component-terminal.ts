@@ -1,10 +1,12 @@
 import type { App, Component } from "vue";
+import type { Cell, Style, Terminal } from "../src/core/types.js";
+import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
-import { computed, defineComponent, h, onUnmounted, ref } from "vue";
+import { computed, defineComponent, h, nextTick, onUnmounted, ref } from "vue";
 import {
   TAutocompleteInput,
   TBox,
@@ -52,6 +54,9 @@ import {
 import { TMarkdownText, TVirtualMarkdown } from "../src/markdown.js";
 import { beautifulMermaidRenderer } from "../src/mermaid.js";
 import {
+  TCandlestickChart,
+  TContributionGraph,
+  TLineChart,
   TLogLinksPanel,
   TLogMinimap,
   TLogScrollbar,
@@ -61,6 +66,7 @@ import {
   TLogView,
   TLogVirtualLinksPanel,
   TLogVirtualSearchResults,
+  TPieChart,
   TTranscriptView,
   TVirtualList,
 } from "../src/experimental.js";
@@ -78,6 +84,7 @@ import {
   installTerminalCleanup,
   type TerminalCleanupHandle,
 } from "../src/cli.js";
+import { sliceByCells, textCellWidth } from "../src/vue/utils/text.js";
 
 type Demo = Readonly<{
   name: string;
@@ -100,6 +107,10 @@ const foregroundOptions = [
 const backgroundOptions = ["black", "blue", "green", "magenta", "red"] as const;
 const titleStyle = { fg: "cyanBright", bold: true } as const;
 const mutedStyle = { dim: true } as const;
+export const componentTerminalMouseTracking = {
+  enableMouse: true,
+  enableMouseMotion: true,
+} as const;
 let activeGalleryNavHandler: ((key: string) => boolean) | null = null;
 const rows = [
   { id: "2", name: "build", status: "fail", rank: 2 },
@@ -185,6 +196,97 @@ const linkItems = [
     endCell: 26,
   },
 ];
+const tokenActivityStats = [
+  { value: "36.2B", label: "Lifetime tokens" },
+  { value: "1.2B", label: "Peak tokens" },
+  { value: "11h 28m", label: "Longest task" },
+  { value: "11 days", label: "Current streak" },
+  { value: "24 days", label: "Longest streak" },
+] as const;
+const tokenActivityRows = 7;
+const tokenActivityColumns = 52;
+const tokenActivityGraphWidth = tokenActivityColumns * 2 - 1;
+const tokenActivityPanelWidth = tokenActivityGraphWidth + 2;
+const tokenActivityMonths = [
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+] as const;
+const tokenActivityMonthStarts = [0, 4, 9, 13, 17, 22, 26, 31, 35, 39, 44, 48] as const;
+const tokenActivityDayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+function tokenActivityMonthForWeek(week: number): string {
+  let index = 0;
+  for (let i = 0; i < tokenActivityMonthStarts.length; i++) {
+    if (week >= tokenActivityMonthStarts[i]!) index = i;
+  }
+  return tokenActivityMonths[index]!;
+}
+
+function tokenActivityValue(week: number, day: number): number {
+  if (week < 31) {
+    return (week === 28 && day === 5) || (week === 30 && day === 6) ? 1_400 : 0;
+  }
+  if (week < 35) {
+    return (week + day) % 5 === 0 ? 2_800 + day * 360 : 0;
+  }
+
+  const pattern = (week * 5 + day * 7) % 13;
+  if (week < 39 && pattern < 3) return 0;
+  const monthMultiplier = week >= 48 ? 1.7 : week >= 44 ? 1.5 : week >= 39 ? 1.25 : 1;
+  const dayBoost = day === 1 || day === 3 ? 4 : day === 5 ? 2 : 0;
+  return Math.round((6 + pattern + dayBoost) * monthMultiplier * 1_800);
+}
+
+const tokenActivityValues = Array.from(
+  { length: tokenActivityColumns * tokenActivityRows },
+  (_, index) => {
+    const week = Math.floor(index / tokenActivityRows);
+    const day = index % tokenActivityRows;
+    return tokenActivityValue(week, day);
+  },
+);
+const tokenActivityLabels = tokenActivityValues.map((_, index) => {
+  const week = Math.floor(index / tokenActivityRows);
+  const day = index % tokenActivityRows;
+  return `${tokenActivityMonthForWeek(week)} ${tokenActivityDayLabels[day]} week ${week + 1}`;
+});
+const tokenActivityBorderStyle = { fg: "#5f6772" } as const;
+const tokenActivityMetricStyle = { fg: "#f8fafc", bold: true } as const;
+const tokenActivityLabelStyle = { fg: "#a9b0ba" } as const;
+const tokenActivityInactiveTabStyle = { fg: "#8c939d" } as const;
+const tokenActivityDividerStyle = { fg: "#3f4650" } as const;
+const tokenActivityEmptyStyle = { fg: "#383f48" } as const;
+const tokenActivityLevelStyles: readonly Style[] = [
+  { fg: "#5b4a43" },
+  { fg: "#9b6655" },
+  { fg: "#c7856e" },
+  { fg: "#e4a085" },
+];
+const lineValues = [12, 18, 15, 26, 31, 28, 42, 39, 52, 48, 64, 58, 71, 76, 69, 82];
+const lineLabels = lineValues.map((_, index) => `turn ${index + 1}`);
+const candles = [
+  { open: 18, high: 24, low: 14, close: 22 },
+  { open: 22, high: 29, low: 20, close: 25 },
+  { open: 25, high: 27, low: 18, close: 20 },
+  { open: 20, high: 32, low: 19, close: 29 },
+  { open: 29, high: 36, low: 25, close: 31 },
+  { open: 31, high: 34, low: 22, close: 24 },
+  { open: 24, high: 38, low: 23, close: 35 },
+  { open: 35, high: 42, low: 31, close: 40 },
+];
+const candleLabels = candles.map((_, index) => `candle ${index + 1}`);
+const pieValues = [52, 31, 17];
+const pieLabels = ["prompt", "output", "cache"];
 const transcriptRows = [
   {
     kind: "message",
@@ -251,6 +353,139 @@ function simple(name: string, render: () => unknown): Component {
   return defineComponent({ name: `${name}Demo`, setup: () => render });
 }
 
+function centerCells(value: string, width: number): string {
+  const clipped = sliceByCells(value, width);
+  const used = textCellWidth(clipped);
+  return `${" ".repeat(Math.max(0, Math.floor((width - used) / 2)))}${clipped}`;
+}
+
+function tokenActivityStatNodes(): unknown[] {
+  const nodes: unknown[] = [];
+  const innerWidth = tokenActivityPanelWidth - 2;
+  const separatorCount = tokenActivityStats.length - 1;
+  const contentWidth = innerWidth - separatorCount;
+  const baseWidth = Math.floor(contentWidth / tokenActivityStats.length);
+  const remainder = contentWidth % tokenActivityStats.length;
+  let x = 0;
+
+  for (let i = 0; i < tokenActivityStats.length; i++) {
+    const stat = tokenActivityStats[i]!;
+    const w = baseWidth + (i < remainder ? 1 : 0);
+    nodes.push(
+      h(TText, {
+        x,
+        y: 0,
+        w,
+        value: centerCells(stat.value, w),
+        style: tokenActivityMetricStyle,
+      }),
+      h(TText, {
+        x,
+        y: 2,
+        w,
+        value: centerCells(stat.label, w),
+        style: tokenActivityLabelStyle,
+      }),
+    );
+    x += w;
+
+    if (i < tokenActivityStats.length - 1) {
+      for (let row = 0; row < 3; row++) {
+        nodes.push(
+          h(TText, {
+            x,
+            y: row,
+            value: "│",
+            style: tokenActivityDividerStyle,
+            clear: false,
+          }),
+        );
+      }
+      x += 1;
+    }
+  }
+
+  return nodes;
+}
+
+function tokenActivityMonthNodes(y: number): unknown[] {
+  return tokenActivityMonths.map((month, index) => {
+    const x = Math.min(
+      Math.max(0, tokenActivityMonthStarts[index]! * 2),
+      tokenActivityGraphWidth - textCellWidth(month),
+    );
+    return h(TText, {
+      x,
+      y,
+      w: textCellWidth(month),
+      value: month,
+      style: tokenActivityInactiveTabStyle,
+    });
+  });
+}
+
+function tokenActivityDemo(): unknown[] {
+  const tabsY = 10;
+  const weeklyX = tokenActivityGraphWidth - 19;
+  const cumulativeX = tokenActivityGraphWidth - 10;
+  return frame("TContributionGraph", [
+    h(
+      TBox,
+      {
+        x: 0,
+        y: 3,
+        w: tokenActivityPanelWidth,
+        h: 5,
+        border: true,
+        style: tokenActivityBorderStyle,
+      },
+      { default: () => tokenActivityStatNodes() },
+    ),
+    h(TText, {
+      x: 0,
+      y: tabsY,
+      w: 28,
+      value: "Token activity",
+      style: tokenActivityMetricStyle,
+    }),
+    h(TText, {
+      x: tokenActivityGraphWidth - 27,
+      y: tabsY,
+      w: 5,
+      value: "Daily",
+      style: tokenActivityMetricStyle,
+    }),
+    h(TText, {
+      x: weeklyX,
+      y: tabsY,
+      w: 6,
+      value: "Weekly",
+      style: tokenActivityInactiveTabStyle,
+    }),
+    h(TText, {
+      x: cumulativeX,
+      y: tabsY,
+      w: 10,
+      value: "Cumulative",
+      style: tokenActivityInactiveTabStyle,
+    }),
+    h(TContributionGraph, {
+      x: 0,
+      y: 13,
+      w: tokenActivityGraphWidth,
+      values: tokenActivityValues,
+      labels: tokenActivityLabels,
+      unit: "tokens",
+      rows: tokenActivityRows,
+      columns: tokenActivityColumns,
+      emptyStyle: tokenActivityEmptyStyle,
+      levelStyles: tokenActivityLevelStyles,
+      tooltipStyle: tokenActivityMetricStyle,
+    }),
+    ...tokenActivityMonthNodes(22),
+  ]);
+}
+
 export function normalizeOpenHref(href: string): string | null {
   let url: URL;
   try {
@@ -308,6 +543,175 @@ export function openExternalHref(href: string): boolean {
   }
   if (!existsSync("/usr/bin/xdg-open")) return false;
   return openWithFixedCommand("/usr/bin/xdg-open", [normalized]);
+}
+
+const captureOutDir =
+  process.env.VUE_TUI_COMPONENT_CHART_E2E_DIR || "test-results/component-terminal-charts";
+const captureCellW = 10;
+const captureCellH = 18;
+const captureFontSize = 14;
+const captureFgColors: Record<string, string> = {
+  black: "#111827",
+  blackBright: "#6b7280",
+  blue: "#2563eb",
+  blueBright: "#60a5fa",
+  cyan: "#06b6d4",
+  cyanBright: "#67e8f9",
+  green: "#22c55e",
+  greenBright: "#4ade80",
+  magenta: "#d946ef",
+  magentaBright: "#f0abfc",
+  red: "#ef4444",
+  redBright: "#f87171",
+  white: "#d1d5db",
+  whiteBright: "#f9fafb",
+  yellow: "#eab308",
+  yellowBright: "#fef08a",
+};
+
+function captureCssColor(value: unknown, fallback: string): string {
+  if (typeof value !== "string" || !value) return fallback;
+  if (value.startsWith("#")) return value;
+  return captureFgColors[value] ?? fallback;
+}
+
+function captureEscapeHtml(value: string): string {
+  return value
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;");
+}
+
+function captureCellColors(style: Style): { fg: string; bg: string } {
+  const fg = captureCssColor(style.fg, "#d1d5db");
+  const bg = captureCssColor(style.bg, "#262b33");
+  return style.inverse ? { fg: bg, bg: fg } : { fg, bg };
+}
+
+function captureSnapshotText(terminal: Terminal): string {
+  return terminal.snapshot().lines.join("\n");
+}
+
+function captureHasInverseCell(terminal: Terminal): boolean {
+  const size = terminal.size();
+  for (let y = 0; y < size.rows; y++) {
+    for (const cell of terminal.getRow(y)) {
+      if (cell.style.inverse) return true;
+    }
+  }
+  return false;
+}
+
+function captureHasLineHoverCell(terminal: Terminal): boolean {
+  const size = terminal.size();
+  for (let y = 0; y < size.rows; y++) {
+    for (const cell of terminal.getRow(y)) {
+      if (cell.ch === "●" && cell.style.fg === "whiteBright" && cell.style.bold) return true;
+    }
+  }
+  return false;
+}
+
+function writeCaptureShot(name: string, terminal: Terminal): void {
+  const size = terminal.size();
+  const width = size.cols * captureCellW;
+  const height = size.rows * captureCellH;
+  const rects: string[] = [];
+  const text: string[] = [];
+  const lines: string[] = [];
+
+  for (let y = 0; y < size.rows; y++) {
+    const row = terminal.getRow(y);
+    lines.push(row.map((cell) => (cell.continuation ? "" : cell.ch)).join(""));
+    for (let x = 0; x < size.cols; x++) {
+      const cell = row[x] as Cell | undefined;
+      if (!cell || cell.continuation) continue;
+      const { fg, bg } = captureCellColors(cell.style);
+      if (cell.style.bg || cell.style.inverse) {
+        rects.push(
+          `<rect x="${x * captureCellW}" y="${y * captureCellH}" width="${captureCellW * cell.width}" height="${captureCellH}" fill="${bg}" />`,
+        );
+      }
+      if (!cell.ch.trim()) continue;
+      const opacity = cell.style.dim ? "0.72" : "1";
+      const weight = cell.style.bold ? "700" : "400";
+      text.push(
+        `<text x="${x * captureCellW}" y="${y * captureCellH + 14}" fill="${fg}" opacity="${opacity}" font-weight="${weight}">${captureEscapeHtml(cell.ch)}</text>`,
+      );
+    }
+  }
+
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+    `<rect width="100%" height="100%" fill="#262b33" />`,
+    ...rects,
+    `<g font-family="Menlo, Monaco, Consolas, monospace" font-size="${captureFontSize}" dominant-baseline="alphabetic">`,
+    ...text,
+    "</g>",
+    "</svg>",
+    "",
+  ].join("\n");
+
+  writeFileSync(join(captureOutDir, `${name}.svg`), svg);
+  writeFileSync(join(captureOutDir, `${name}.txt`), `${lines.join("\n")}\n`);
+}
+
+async function writeCapturePngShots(): Promise<void> {
+  const requirePng = Boolean(process.env.CI) || process.env.VUE_TUI_REQUIRE_CHART_PNG === "1";
+  let chromium: typeof import("@playwright/test").chromium;
+  try {
+    ({ chromium } = await import("@playwright/test"));
+  } catch (error) {
+    if (requirePng) throw error;
+    console.warn(
+      "component terminal chart png screenshots skipped: @playwright/test is unavailable",
+    );
+    return;
+  }
+
+  let browser: Awaited<ReturnType<typeof chromium.launch>>;
+  try {
+    browser = await chromium.launch();
+  } catch (error) {
+    if (requirePng) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      [
+        "component terminal chart png screenshots skipped: Playwright Chromium is unavailable.",
+        "SVG and TXT screenshots were still generated.",
+        "Install Chromium with: pnpm exec playwright install chromium",
+        message.split("\n")[0],
+      ].join("\n"),
+    );
+    return;
+  }
+
+  try {
+    const page = await browser.newPage();
+    const svgFiles = readdirSync(captureOutDir)
+      .filter((name) => name.endsWith(".svg"))
+      .sort();
+
+    for (const file of svgFiles) {
+      const svg = readFileSync(join(captureOutDir, file), "utf8");
+      await page.setContent(
+        `<style>html,body{margin:0;background:#262b33;width:max-content;height:max-content}</style>${svg}`,
+      );
+      const box = await page.locator("svg").boundingBox();
+      assert.ok(box, `expected ${file} to render an svg`);
+      await page.setViewportSize({
+        width: Math.ceil(box.width),
+        height: Math.ceil(box.height),
+      });
+      await page.screenshot({
+        path: join(captureOutDir, file.replace(/\.svg$/u, ".png")),
+        fullPage: true,
+      });
+    }
+  } finally {
+    await browser.close();
+  }
 }
 
 function tableDemo(componentName = "TTable"): unknown {
@@ -500,6 +904,74 @@ const demos: Demo[] = [
         }),
       ),
     ),
+  },
+  {
+    name: "TContributionGraph",
+    group: "root",
+    component: simple("TContributionGraph", () => tokenActivityDemo()),
+    cols: 112,
+    rows: 25,
+  },
+  {
+    name: "TLineChart",
+    group: "root",
+    component: simple("TLineChart", () =>
+      frame(
+        "TLineChart",
+        h(TLineChart, {
+          x: 0,
+          y: 3,
+          w: 48,
+          h: 9,
+          values: lineValues,
+          labels: lineLabels,
+          unit: "tokens",
+          yLabel: "tokens",
+          startLabel: "turn 1",
+          endLabel: "turn 16",
+        }),
+      ),
+    ),
+    rows: 16,
+  },
+  {
+    name: "TCandlestickChart",
+    group: "root",
+    component: simple("TCandlestickChart", () =>
+      frame(
+        "TCandlestickChart",
+        h(TCandlestickChart, {
+          x: 0,
+          y: 3,
+          w: 56,
+          h: 10,
+          candles,
+          labels: candleLabels,
+          yLabel: "price",
+          startLabel: "open",
+          endLabel: "latest",
+        }),
+      ),
+    ),
+    rows: 17,
+  },
+  {
+    name: "TPieChart",
+    group: "root",
+    component: simple("TPieChart", () =>
+      frame(
+        "TPieChart",
+        h(TPieChart, {
+          x: 0,
+          y: 3,
+          w: 20,
+          h: 10,
+          values: pieValues,
+          labels: pieLabels,
+        }),
+      ),
+    ),
+    rows: 17,
   },
   {
     name: "TDialog",
@@ -1390,6 +1862,143 @@ function resolveDemo(raw: string): Demo | undefined {
   return findDemo(raw);
 }
 
+async function captureMountedDemo(demo: Demo, cols: number, rows: number) {
+  const app = createTerminalApp({
+    cols,
+    rows,
+    component: demo.component,
+    defaultStyle: { fg: "whiteBright" },
+    linkOpener: { openExternal: openExternalHref },
+    selection: true,
+  });
+  demo.install?.(app.app);
+  app.mount();
+  await nextTick();
+  app.scheduler.flushNow();
+  return app;
+}
+
+async function settleCapturedDemo(app: Awaited<ReturnType<typeof captureMountedDemo>>) {
+  await nextTick();
+  app.scheduler.flushNow();
+}
+
+async function captureChartDemoScenario(scenario: {
+  demoName: string;
+  fileName: string;
+  hover?: { cellX: number; cellY: number };
+  contains: readonly string[];
+  inverse?: boolean;
+  lineHover?: boolean;
+  noInverse?: boolean;
+}): Promise<void> {
+  const demo = findDemo(scenario.demoName);
+  assert.ok(demo, `expected ${scenario.demoName} demo to exist`);
+  const app = await captureMountedDemo(demo, demo.cols ?? 88, demo.rows ?? 22);
+  try {
+    if (scenario.hover) {
+      app.events.dispatch({
+        type: "pointermove",
+        cellX: scenario.hover.cellX,
+        cellY: scenario.hover.cellY,
+        time: Date.now(),
+      } as any);
+      await settleCapturedDemo(app);
+    }
+
+    const text = captureSnapshotText(app.terminal);
+    for (const value of scenario.contains) {
+      assert.ok(text.includes(value), `${scenario.fileName} must contain ${value}`);
+    }
+    if (scenario.inverse) {
+      assert.ok(captureHasInverseCell(app.terminal), `${scenario.fileName} must show hover style`);
+    }
+    if (scenario.lineHover) {
+      assert.ok(
+        captureHasLineHoverCell(app.terminal),
+        `${scenario.fileName} must show hover style`,
+      );
+    }
+    if (scenario.noInverse) {
+      assert.ok(
+        !captureHasInverseCell(app.terminal),
+        `${scenario.fileName} must not inverse filled chart cells`,
+      );
+    }
+    writeCaptureShot(scenario.fileName, app.terminal);
+  } finally {
+    app.dispose();
+  }
+}
+
+async function captureChartDemos(): Promise<void> {
+  rmSync(captureOutDir, { recursive: true, force: true });
+  mkdirSync(captureOutDir, { recursive: true });
+
+  const candlestickChartX = 0;
+  const candlestickChartY = 3;
+  const candlestickChartW = 56;
+  const scenarios = [
+    {
+      demoName: "TContributionGraph",
+      fileName: "01-run-terminal-contribution",
+      contains: [
+        "TContributionGraph",
+        "Lifetime tokens",
+        "Peak tokens",
+        "Token activity",
+        "Daily",
+        "Weekly",
+        "Cumulative",
+        "Jul",
+        "Jun",
+      ],
+    },
+    {
+      demoName: "TContributionGraph",
+      fileName: "02-run-terminal-contribution-hover",
+      hover: { cellX: 90, cellY: 17 },
+      contains: ["May Fri week 46", "tokens"],
+      noInverse: true,
+    },
+    {
+      demoName: "TLineChart",
+      fileName: "03-run-terminal-line",
+      contains: ["TLineChart", "tokens", "turn 16", "╭", "─"],
+    },
+    {
+      demoName: "TLineChart",
+      fileName: "04-run-terminal-line-hover",
+      hover: { cellX: 28, cellY: 7 },
+      contains: ["turn", "x=", "y=", "tokens"],
+      lineHover: true,
+    },
+    {
+      demoName: "TCandlestickChart",
+      fileName: "05-run-terminal-candlestick",
+      contains: ["TCandlestickChart", "price", "latest", "█"],
+    },
+    {
+      demoName: "TCandlestickChart",
+      fileName: "06-run-terminal-candlestick-hover",
+      hover: { cellX: candlestickChartX + candlestickChartW - 1, cellY: candlestickChartY + 3 },
+      contains: ["candle", "x=", "y=", "O:", "H:", "L:", "C:"],
+      noInverse: true,
+    },
+    {
+      demoName: "TPieChart",
+      fileName: "07-run-terminal-pie",
+      contains: ["TPieChart", "prompt 52 52%", "output 31 31%", "cache 17 17%", "▗", "▘"],
+    },
+  ] as const;
+
+  for (const scenario of scenarios) {
+    await captureChartDemoScenario(scenario);
+  }
+  await writeCapturePngShots();
+  console.log(`component terminal chart screenshots: ${captureOutDir}`);
+}
+
 function selectedStyle(active: boolean) {
   return active ? { fg: "black", bg: "cyanBright", bold: true } : { fg: "whiteBright" };
 }
@@ -1855,6 +2464,7 @@ function printList(): void {
 function usage(): void {
   console.log("Usage: pnpm run run:component:terminal -- [initial-component]");
   console.log("       pnpm run run:component:terminal -- --list");
+  console.log("       pnpm run run:component:terminal -- --capture-charts");
   console.log("       VT_SMOKE=1 pnpm run run:component:terminal -- --all");
 }
 
@@ -1941,7 +2551,7 @@ function mountComponentApp(options: {
       app.scheduler.flushNow();
       return prevented;
     },
-    enableMouse: true,
+    ...componentTerminalMouseTracking,
     onExit: exit,
   });
 }
@@ -1977,6 +2587,10 @@ async function main(): Promise<void> {
   }
   if (args.includes("--list")) {
     printList();
+    return;
+  }
+  if (args.includes("--capture-charts")) {
+    await captureChartDemos();
     return;
   }
 

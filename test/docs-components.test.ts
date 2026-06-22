@@ -20,6 +20,10 @@ const components = [
   "TView",
   "TTable",
   "TDataTable",
+  "TContributionGraph",
+  "TLineChart",
+  "TCandlestickChart",
+  "TPieChart",
   "TTree",
   "TAnchor",
   "TFlow",
@@ -172,6 +176,7 @@ describe("docs: components coverage", () => {
     const manifestPath = resolve(process.cwd(), "docs/generated/api-manifest.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     const root = manifest.entrypoints["@simon_he/vue-tui"];
+    const experimental = manifest.entrypoints["@simon_he/vue-tui/experimental"];
 
     expect(root.valueExports).toContain("TSelect");
     expect(root.typeExports).toEqual(
@@ -181,6 +186,7 @@ describe("docs: components coverage", () => {
         "TSelectValueMode",
       ]),
     );
+    expect(experimental.typeExports).toContain("TCandlestickDatum");
 
     const tmp = mkdtempSync(resolve(tmpdir(), "vue-tui-api-"));
     try {

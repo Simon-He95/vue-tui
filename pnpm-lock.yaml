@@ -82,6 +82,24 @@ importers:
         specifier: ^3.5.38
         version: 3.5.38(typescript@5.9.3)
 
+  apps/simon-terminal-card:
+    devDependencies:
+      '@types/node':
+        specifier: ^18.19.130
+        version: 18.19.130
+      tsdown:
+        specifier: ^0.9.9
+        version: 0.9.9(publint@0.3.21)(typescript@5.9.3)
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vue:
+        specifier: ^3.5.38
+        version: 3.5.38(typescript@5.9.3)
+
   examples/agent-console:
     dependencies:
       '@simon_he/vue-tui':
