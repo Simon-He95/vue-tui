@@ -341,12 +341,25 @@ function lineBucketIndexRange(
   if (sourceLength <= 0) return { startIndex: 0, endIndex: -1 };
   if (plotW <= 1 || sourceLength <= 1) return { startIndex: 0, endIndex: sourceLength - 1 };
 
-  const scale = (sourceLength - 1) / (plotW - 1);
-  const start = plotX <= 0 ? 0 : Math.ceil((plotX - 0.5) * scale);
-  const end = plotX >= plotW - 1 ? sourceLength - 1 : Math.ceil((plotX + 0.5) * scale) - 1;
-  const startIndex = Math.max(0, Math.min(sourceLength - 1, start));
-  const endIndex = Math.max(-1, Math.min(sourceLength - 1, end));
-  return endIndex < startIndex ? { startIndex: 0, endIndex: -1 } : { startIndex, endIndex };
+  let startIndex = 0;
+  let high = sourceLength;
+  while (startIndex < high) {
+    const mid = Math.floor((startIndex + high) / 2);
+    if (lineXForOriginalIndex(mid, 0, plotW, sourceLength) < plotX) startIndex = mid + 1;
+    else high = mid;
+  }
+
+  let endExclusive = startIndex;
+  high = sourceLength;
+  while (endExclusive < high) {
+    const mid = Math.floor((endExclusive + high) / 2);
+    if (lineXForOriginalIndex(mid, 0, plotW, sourceLength) <= plotX) endExclusive = mid + 1;
+    else high = mid;
+  }
+
+  return endExclusive <= startIndex
+    ? { startIndex: 0, endIndex: -1 }
+    : { startIndex, endIndex: endExclusive - 1 };
 }
 
 function lowerBoundLinePoint(points: readonly LinePoint[], position: number): number {
@@ -1060,7 +1073,7 @@ export const TContributionGraph = defineComponent({
       const cells: ChartCell[] = [];
       const glyph = chartGlyph(props.cell, "■");
       const pointer = hoverPointer.value;
-      const hovered = props.showTooltip && pointer ? hitCell(pointer.x, pointer.y) : null;
+      const hovered = pointer ? hitCell(pointer.x, pointer.y) : null;
 
       for (let col = 0; col < current.columns; col++) {
         const cellX = col * current.columnWidth;
@@ -1121,10 +1134,6 @@ export const TContributionGraph = defineComponent({
     return useChartRender(props, surface, {
       handlers: ({ fullRect }) => ({
         pointermove: (event) => {
-          if (!props.showTooltip) {
-            if (hoverPointer.value != null) hoverPointer.value = null;
-            return;
-          }
           const next = {
             x: Math.floor(event.cellX - fullRect.value.x),
             y: Math.floor(event.cellY - fullRect.value.y),
@@ -1301,7 +1310,7 @@ export const TLineChart = defineComponent({
       const { width, height, layout } = lineLayout.value;
       const cells = baseCells.value.slice();
       const pointer = hoverPointer.value;
-      const hovered = props.showTooltip && pointer ? hitLine(pointer.x, pointer.y) : null;
+      const hovered = pointer ? hitLine(pointer.x, pointer.y) : null;
       if (hovered) {
         cells.push({
           x: hovered.x,
@@ -1350,10 +1359,6 @@ export const TLineChart = defineComponent({
     return useChartRender(props, surface, {
       handlers: ({ fullRect }) => ({
         pointermove: (event) => {
-          if (!props.showTooltip) {
-            if (hoverPointer.value != null) hoverPointer.value = null;
-            return;
-          }
           const next = {
             x: Math.floor(event.cellX - fullRect.value.x),
             y: Math.floor(event.cellY - fullRect.value.y),
@@ -1491,7 +1496,7 @@ export const TCandlestickChart = defineComponent({
       const upWickStyle = mergeStyle(baseStyle.value, props.upStyle, props.wickStyle);
       const downWickStyle = mergeStyle(baseStyle.value, props.downStyle, props.wickStyle);
       const pointer = hoverPointer.value;
-      const hovered = props.showTooltip && pointer ? hitCandle(pointer.x, pointer.y) : null;
+      const hovered = pointer ? hitCandle(pointer.x, pointer.y) : null;
 
       for (let x = 0; x < visibleCandles.length; x++) {
         const candle = visibleCandles[x]!;
@@ -1576,10 +1581,6 @@ export const TCandlestickChart = defineComponent({
     return useChartRender(props, surface, {
       handlers: ({ fullRect }) => ({
         pointermove: (event) => {
-          if (!props.showTooltip) {
-            if (hoverPointer.value != null) hoverPointer.value = null;
-            return;
-          }
           const next = {
             x: Math.floor(event.cellX - fullRect.value.x),
             y: Math.floor(event.cellY - fullRect.value.y),

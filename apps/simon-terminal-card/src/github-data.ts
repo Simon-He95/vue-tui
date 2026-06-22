@@ -21,12 +21,14 @@ function stripHtml(value: string): string {
 }
 
 function decodeHtml(value: string): string {
-  return value
-    .replace(/&amp;/gu, "&")
-    .replace(/&lt;/gu, "<")
-    .replace(/&gt;/gu, ">")
-    .replace(/&quot;/gu, '"')
-    .replace(/&#39;/gu, "'");
+  const entities: Record<string, string> = {
+    "&amp;": "&",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&#39;": "'",
+  };
+  return value.replace(/&(amp|lt|gt|quot|#39);/gu, (entity) => entities[entity] ?? entity);
 }
 
 function parseContributionCount(text: string): number {

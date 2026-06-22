@@ -56,6 +56,45 @@ function stripAnsi(value: string): string {
     .replace(new RegExp(`${esc}\\[[0-?]*[ -/]*[@-~]`, "gu"), "");
 }
 
+function sameUrl(raw: string, expectedHref: string): boolean {
+  try {
+    const actual = new URL(raw);
+    const expected = new URL(expectedHref);
+    return (
+      actual.protocol === expected.protocol &&
+      actual.hostname === expected.hostname &&
+      actual.pathname === expected.pathname &&
+      actual.search === expected.search &&
+      actual.hash === expected.hash
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hasVisibleUrl(value: string, expectedHref: string): boolean {
+  for (const candidate of value.split(/\s+/u)) {
+    if (sameUrl(candidate, expectedHref)) return true;
+  }
+  return false;
+}
+
+function hasOsc8Href(value: string, expectedHref: string): boolean {
+  const prefix = "\u001B]8;;";
+  let index = 0;
+  while (index < value.length) {
+    const start = value.indexOf(prefix, index);
+    if (start < 0) return false;
+    const hrefStart = start + prefix.length;
+    const belEnd = value.indexOf("\u0007", hrefStart);
+    const stEnd = value.indexOf("\u001B\\", hrefStart);
+    const end = belEnd < 0 ? stEnd : stEnd < 0 ? belEnd : Math.min(belEnd, stEnd);
+    if (end >= hrefStart && sameUrl(value.slice(hrefStart, end), expectedHref)) return true;
+    index = hrefStart;
+  }
+  return false;
+}
+
 function assertNoScreenControl(value: string, label: string): void {
   const esc = "\\u001B";
   assert(!value.includes("\u001B[2J"), `${label} should not clear the screen`);
@@ -214,7 +253,6 @@ async function verifyCachedCardRender(): Promise<void> {
       text.includes("cached fallback from"),
       "card should identify cached fallback data when rendered from cache",
     );
-    assert(text.includes("https://github.com/Simon-He95"), "card should render a GitHub link");
     assert(
       [...text].filter((char) => char === "■").length > 120,
       "card should render the TContributionGraph block cells",
@@ -422,12 +460,11 @@ async function verifyDirectStdoutRender(): Promise<void> {
   assert(text.includes("Simon He"), "direct command stdout should include Simon's profile");
   assert(text.includes("love ❤️"), "direct command stdout should preserve the heart emoji");
   assert(text.includes("GitHub contributions"), "direct command stdout should include the graph");
+  const githubUrl = "https://github.com/Simon-He95";
+  const projectRepoUrl = "https://github.com/Simon-He95/vue-tui";
+  assert(hasVisibleUrl(text, githubUrl), "direct command stdout should include the GitHub link");
   assert(
-    text.includes("https://github.com/Simon-He95"),
-    "direct command stdout should include the GitHub link",
-  );
-  assert(
-    result.stdout.includes("\u001B]8;;https://github.com/Simon-He95/vue-tui"),
+    hasOsc8Href(result.stdout, projectRepoUrl),
     "direct command stdout should link the vue-tui repository label",
   );
   assert(

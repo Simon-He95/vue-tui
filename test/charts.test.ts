@@ -1004,6 +1004,42 @@ describe("terminal charts", () => {
     }
   });
 
+  it("hovers sparse line points at the same x cell used for rendering", async () => {
+    const values = Array.from({ length: 11 }, () => Number.NaN);
+    values[7] = 1;
+    const App = defineComponent({
+      setup: () => () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 46,
+          h: 3,
+          values,
+          showAxes: false,
+        }),
+    });
+    const app = createTerminalApp({ cols: 50, rows: 5, component: App as any });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(app.terminal.getCell(31, 1).ch).toBe("●");
+
+      app.events.dispatch({ type: "pointermove", cellX: 31, cellY: 1, time: 1_000 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      expect(app.terminal.snapshot().lines.join("\n")).toContain("#8 x=8 y=1");
+      expect(app.terminal.getCell(31, 1).style).toMatchObject({
+        fg: "whiteBright",
+        bold: true,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not show line hover tooltip in non-finite leading or trailing blank regions", async () => {
     const App = defineComponent({
       setup: () => () =>
@@ -1082,6 +1118,105 @@ describe("terminal charts", () => {
       }
     } finally {
       app.dispose();
+    }
+  });
+
+  it("keeps hover styling active when chart tooltips are hidden", async () => {
+    const ContributionApp = defineComponent({
+      setup: () => () =>
+        h(TContributionGraph, {
+          x: 0,
+          y: 0,
+          values: [1],
+          rows: 1,
+          gap: 0,
+          max: 1,
+          showTooltip: false,
+          levelStyles: [{ fg: "green" }],
+          hoverStyle: { inverse: true },
+        }),
+    });
+    const contribution = createTerminalApp({
+      cols: 8,
+      rows: 3,
+      component: ContributionApp as any,
+    });
+    try {
+      contribution.mount();
+      await nextTick();
+      contribution.scheduler.flushNow();
+      contribution.events.dispatch({ type: "pointermove", cellX: 0, cellY: 0, time: 1_000 } as any);
+      await nextTick();
+      contribution.scheduler.flushNow();
+
+      expect(contribution.terminal.getCell(0, 0).style).toMatchObject({
+        fg: "green",
+        inverse: true,
+      });
+      expect(contribution.terminal.snapshot().lines.join("\n")).not.toContain("#1 1");
+    } finally {
+      contribution.dispose();
+    }
+
+    const LineApp = defineComponent({
+      setup: () => () =>
+        h(TLineChart, {
+          x: 0,
+          y: 0,
+          w: 5,
+          h: 3,
+          values: [0, 1, 0],
+          showAxes: false,
+          showTooltip: false,
+          hoverStyle: { fg: "redBright", bold: true },
+        }),
+    });
+    const line = createTerminalApp({ cols: 8, rows: 4, component: LineApp as any });
+    try {
+      line.mount();
+      await nextTick();
+      line.scheduler.flushNow();
+      line.events.dispatch({ type: "pointermove", cellX: 2, cellY: 0, time: 1_001 } as any);
+      await nextTick();
+      line.scheduler.flushNow();
+
+      expect(line.terminal.getCell(2, 0).style).toMatchObject({
+        fg: "redBright",
+        bold: true,
+      });
+      expect(line.terminal.snapshot().lines.join("\n")).not.toContain("#2 x=2");
+    } finally {
+      line.dispose();
+    }
+
+    const CandleApp = defineComponent({
+      setup: () => () =>
+        h(TCandlestickChart, {
+          x: 0,
+          y: 0,
+          w: 5,
+          h: 5,
+          min: 0,
+          max: 10,
+          showAxes: false,
+          showTooltip: false,
+          hoverStyle: { inverse: true },
+          candles: [{ open: 2, high: 8, low: 1, close: 7 }],
+        }),
+    });
+    const candle = createTerminalApp({ cols: 8, rows: 6, component: CandleApp as any });
+    try {
+      candle.mount();
+      await nextTick();
+      candle.scheduler.flushNow();
+      candle.events.dispatch({ type: "pointermove", cellX: 4, cellY: 2, time: 1_002 } as any);
+      await nextTick();
+      candle.scheduler.flushNow();
+
+      expect(candle.terminal.getCell(4, 2).style.inverse).toBe(true);
+      expect(candle.terminal.snapshot().lines.join("\n")).not.toContain("O:");
+    } finally {
+      candle.dispose();
     }
   });
 
