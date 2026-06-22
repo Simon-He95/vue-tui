@@ -256,6 +256,7 @@ function detectCandidates(env: Record<string, unknown>): TerminalGraphicsProtoco
 
   if (
     envString(env, "KITTY_WINDOW_ID") ||
+    envString(env, "GHOSTTY_RESOURCES_DIR") ||
     /(?:^|-)kitty(?:-|$)/i.test(term) ||
     term.includes("ghostty") ||
     termProgram.includes("ghostty")
