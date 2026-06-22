@@ -423,13 +423,15 @@ async function captureCandlestickHover(): Promise<void> {
   );
 
   try {
-    app.events.dispatch({ type: "pointermove", cellX: 11, cellY: 3, time: Date.now() } as any);
+    const candleIndex = 8;
+    const targetX = 42 - candles.length + candleIndex;
+    app.events.dispatch({ type: "pointermove", cellX: targetX, cellY: 3, time: Date.now() } as any);
     await settle(app);
     const text = snapshotText(app.terminal);
     assertContains(text, "session 9", "candlestick hover");
     assertContains(text, "x=9", "candlestick hover");
     assertContains(text, "O:57 H:74 L:55 C:71", "candlestick hover");
-    assert.notEqual(app.terminal.getCell(11, 3).style.inverse, true);
+    assert.notEqual(app.terminal.getCell(targetX, 3).style.inverse, true);
     writeTerminalShot("04b-candlestick-hover", app.terminal);
   } finally {
     app.dispose();

@@ -347,6 +347,58 @@ describe("terminal charts", () => {
     mounted.unmount();
   });
 
+  it("derives automatic candlestick max from visible candles when min is explicit", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TCandlestickChart, {
+          x: 0,
+          y: 0,
+          w: 3,
+          h: 5,
+          min: 100,
+          showAxes: false,
+          candles: [
+            { open: 1, high: 1_000_000_000, low: 1, close: 1 },
+            { open: 100, high: 110, low: 100, close: 110 },
+            { open: 104, high: 108, low: 102, close: 103 },
+            { open: 101, high: 109, low: 100, close: 108 },
+          ],
+        }),
+      6,
+      6,
+    );
+
+    expect(mounted.terminal.getCell(0, 0).ch).toBe("█");
+
+    mounted.unmount();
+  });
+
+  it("derives automatic candlestick min from visible candles when max is explicit", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TCandlestickChart, {
+          x: 0,
+          y: 0,
+          w: 3,
+          h: 5,
+          max: 110,
+          showAxes: false,
+          candles: [
+            { open: 100, high: 100, low: -1_000_000_000, close: 100 },
+            { open: 100, high: 110, low: 100, close: 110 },
+            { open: 104, high: 108, low: 102, close: 103 },
+            { open: 101, high: 109, low: 100, close: 108 },
+          ],
+        }),
+      6,
+      6,
+    );
+
+    expect(mounted.terminal.getCell(0, 4).ch).toBe("█");
+
+    mounted.unmount();
+  });
+
   it("renders finite candlestick values at numeric extremes", async () => {
     const mounted = await mountTerminal(
       () =>

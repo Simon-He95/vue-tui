@@ -1420,25 +1420,10 @@ export const TCandlestickChart = defineComponent({
     const candleLayout = computed<CandlestickLayout>(() => {
       const width = cellCount(props.w, 0);
       const height = cellCount(props.h, 0);
-      const hasExplicitDomain =
-        Number.isFinite(Number(props.min)) || Number.isFinite(Number(props.max));
-      if (hasExplicitDomain) {
-        const { min, max } = domainFromValues(
-          candlestickDomainValues(props.candles),
-          props.min,
-          props.max,
-        );
-        const layout = resolveAxisLayout(width, height, min, max, props.showAxes);
-        const startIndex = Math.max(0, props.candles.length - layout.plotW);
-        const visibleCandles = props.candles.slice(startIndex);
-        const candleOffsetX = Math.max(0, layout.plotW - visibleCandles.length);
-        return { width, height, layout, visibleCandles, startIndex, candleOffsetX, min, max };
-      }
-
       let { min, max } = domainFromValues(
         candlestickDomainValues(props.candles),
-        undefined,
-        undefined,
+        props.min,
+        props.max,
       );
       let layout = resolveAxisLayout(width, height, min, max, props.showAxes);
       let startIndex = 0;
@@ -1450,8 +1435,8 @@ export const TCandlestickChart = defineComponent({
         visibleCandles = props.candles.slice(startIndex);
         ({ min, max } = domainFromValues(
           candlestickDomainValues(visibleCandles),
-          undefined,
-          undefined,
+          props.min,
+          props.max,
         ));
         const nextLayout = resolveAxisLayout(width, height, min, max, props.showAxes);
         const nextStartIndex = Math.max(0, props.candles.length - nextLayout.plotW);
@@ -1462,8 +1447,8 @@ export const TCandlestickChart = defineComponent({
           visibleCandles = props.candles.slice(startIndex);
           ({ min, max } = domainFromValues(
             candlestickDomainValues(visibleCandles),
-            undefined,
-            undefined,
+            props.min,
+            props.max,
           ));
           layout = resolveAxisLayout(width, height, min, max, props.showAxes);
           break;
