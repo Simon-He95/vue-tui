@@ -1045,9 +1045,10 @@ export const TContributionGraph = defineComponent({
 
       const index = current.startIndex + col * current.rowCount + localY;
       if (index < 0 || index >= props.values.length) return null;
-      const value = Number(props.values[index] ?? 0);
+      const value = Number(props.values[index]);
+      if (!Number.isFinite(value)) return null;
       const label = props.labels?.[index] ?? `#${index + 1}`;
-      return { x: cellX, y: localY, index, value: Number.isFinite(value) ? value : 0, label };
+      return { x: cellX, y: localY, index, value, label };
     }
 
     const surface = computed<ChartSurface>(() => {
@@ -1230,7 +1231,7 @@ export const TLineChart = defineComponent({
       return { x, y, index: point.originalIndex, label, value };
     }
 
-    const surface = computed<ChartSurface>(() => {
+    const baseCells = computed<readonly ChartCell[]>(() => {
       const { width, height, layout, runs, sourceLength, min, max } = lineLayout.value;
       const cells: ChartCell[] = [];
 
@@ -1293,6 +1294,12 @@ export const TLineChart = defineComponent({
         props.endLabel || (sourceLength > 0 ? String(sourceLength) : ""),
       );
 
+      return cells;
+    });
+
+    const surface = computed<ChartSurface>(() => {
+      const { width, height, layout } = lineLayout.value;
+      const cells = baseCells.value.slice();
       const pointer = hoverPointer.value;
       const hovered = props.showTooltip && pointer ? hitLine(pointer.x, pointer.y) : null;
       if (hovered) {
@@ -1428,32 +1435,20 @@ export const TCandlestickChart = defineComponent({
       let layout = resolveAxisLayout(width, height, min, max, props.showAxes);
       let startIndex = 0;
       let visibleCandles: readonly TCandlestickDatum[] = props.candles;
-      let previousStartIndex = -1;
+      let capacity = layout.plotW;
 
-      for (let attempt = 0; attempt < 8; attempt++) {
-        startIndex = Math.max(0, props.candles.length - layout.plotW);
+      for (;;) {
+        startIndex = Math.max(0, props.candles.length - capacity);
         visibleCandles = props.candles.slice(startIndex);
         ({ min, max } = domainFromValues(
           candlestickDomainValues(visibleCandles),
           props.min,
           props.max,
         ));
-        const nextLayout = resolveAxisLayout(width, height, min, max, props.showAxes);
-        const nextStartIndex = Math.max(0, props.candles.length - nextLayout.plotW);
-        layout = nextLayout;
-        if (nextStartIndex === startIndex) break;
-        if (nextStartIndex === previousStartIndex) {
-          startIndex = Math.max(startIndex, nextStartIndex);
-          visibleCandles = props.candles.slice(startIndex);
-          ({ min, max } = domainFromValues(
-            candlestickDomainValues(visibleCandles),
-            props.min,
-            props.max,
-          ));
-          layout = resolveAxisLayout(width, height, min, max, props.showAxes);
-          break;
-        }
-        previousStartIndex = startIndex;
+        layout = resolveAxisLayout(width, height, min, max, props.showAxes);
+        const nextCapacity = Math.min(capacity, layout.plotW);
+        if (nextCapacity === capacity) break;
+        capacity = nextCapacity;
       }
 
       const candleOffsetX = Math.max(0, layout.plotW - visibleCandles.length);

@@ -1935,6 +1935,9 @@ async function captureChartDemos(): Promise<void> {
   rmSync(captureOutDir, { recursive: true, force: true });
   mkdirSync(captureOutDir, { recursive: true });
 
+  const candlestickChartX = 0;
+  const candlestickChartY = 3;
+  const candlestickChartW = 56;
   const scenarios = [
     {
       demoName: "TContributionGraph",
@@ -1978,7 +1981,7 @@ async function captureChartDemos(): Promise<void> {
     {
       demoName: "TCandlestickChart",
       fileName: "06-run-terminal-candlestick-hover",
-      hover: { cellX: 7, cellY: 6 },
+      hover: { cellX: candlestickChartX + candlestickChartW - 1, cellY: candlestickChartY + 3 },
       contains: ["candle", "x=", "y=", "O:", "H:", "L:", "C:"],
       noInverse: true,
     },

@@ -836,6 +836,36 @@ describe("terminal charts", () => {
     }
   });
 
+  it("does not show contribution hover tooltip for non-finite values", async () => {
+    const App = defineComponent({
+      setup: () => () =>
+        h(TContributionGraph, {
+          x: 0,
+          y: 0,
+          values: [Number.NaN],
+          labels: ["bad"],
+          rows: 1,
+          gap: 0,
+        }),
+    });
+    const app = createTerminalApp({ cols: 8, rows: 3, component: App as any });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointermove", cellX: 0, cellY: 0, time: 1_000 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const text = app.terminal.snapshot().lines.join("\n");
+      expect(text).not.toContain("bad");
+      expect(text).not.toContain("0");
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("recomputes contribution hover from current values after data changes", async () => {
     const values = ref([0, 5, 10, 15]);
     const labels = ref(["Mon", "Tue", "Wed", "Thu"]);
@@ -1091,6 +1121,41 @@ describe("terminal charts", () => {
       app.scheduler.flushNow();
 
       expect(app.terminal.snapshot().lines.join("\n")).not.toContain("Tue x=2");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("keeps the newest candlestick visible when axis width oscillates", async () => {
+    const values = [-1e9, -1e6, -999_999, -999, 1e6, 9_999, 10, 10];
+    const App = defineComponent({
+      setup: () => () =>
+        h(TCandlestickChart, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 6,
+          candles: values.map((value) => ({
+            open: value,
+            high: value,
+            low: value,
+            close: value,
+          })),
+        }),
+    });
+    const app = createTerminalApp({ cols: 16, rows: 8, component: App as any });
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointermove", cellX: 11, cellY: 2, time: 1_000 } as any);
+      await nextTick();
+      app.scheduler.flushNow();
+
+      const text = app.terminal.snapshot().lines.join("\n");
+      expect(text).toContain("#8 x=8");
+      expect(text).not.toContain("#7 x=7");
     } finally {
       app.dispose();
     }
