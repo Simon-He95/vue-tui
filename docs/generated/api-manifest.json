@@ -801,6 +801,8 @@
         "TDebugOverlay",
         "TDialog",
         "TDivider",
+        "TFlex",
+        "TFlexItem",
         "TFlow",
         "TForm",
         "TFormContextKey",
@@ -900,6 +902,14 @@
         "TDataTableSortDirection",
         "TDataTableSorter",
         "TFeedbackTone",
+        "TFlexAlign",
+        "TFlexDirection",
+        "TFlexItemSlotProps",
+        "TFlexJustify",
+        "TFlexMeasure",
+        "TFlexMeasureConstraints",
+        "TFlexMeasureResult",
+        "TFlexSize",
         "TFormContext",
         "TFormHandle",
         "TFormModel",
@@ -3464,6 +3474,166 @@
           "description": "Terminal component tree rendered inside the provider runtime context."
         }
       ]
+    },
+    "TFlex": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "direction",
+          "type": "TFlexDirection",
+          "required": false,
+          "defaultValue": "\"row\""
+        },
+        {
+          "name": "gap",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "padding",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "wrap",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "alignItems",
+          "type": "TFlexAlign",
+          "required": false,
+          "defaultValue": "\"stretch\""
+        },
+        {
+          "name": "justifyContent",
+          "type": "TFlexJustify",
+          "required": false,
+          "defaultValue": "\"start\""
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        }
+      ],
+      "events": []
+    },
+    "TFlexItem": {
+      "entrypoint": "@simon_he/vue-tui/vue",
+      "maturity": "advanced",
+      "props": [
+        {
+          "name": "grow",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "shrink",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1"
+        },
+        {
+          "name": "basis",
+          "type": "TFlexSize",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "w",
+          "type": "TFlexSize",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "width",
+          "type": "TFlexSize",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "h",
+          "type": "TFlexSize",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "height",
+          "type": "TFlexSize",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "minWidth",
+          "type": "TFlexSize",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "minHeight",
+          "type": "TFlexSize",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "maxWidth",
+          "type": "TFlexSize",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "maxHeight",
+          "type": "TFlexSize",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "measure",
+          "type": "TFlexMeasure",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "alignSelf",
+          "type": "TFlexAlign",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        }
+      ],
+      "events": []
     },
     "TFlow": {
       "entrypoint": "@simon_he/vue-tui/vue",

@@ -44,15 +44,15 @@ import DocsShowcaseTerminal from './.vitepress/components/DocsShowcaseTerminal.v
 
 ## 组件导航
 
-| 类别       | 组件                                            | 常见用途                                |
-| ---------- | ----------------------------------------------- | --------------------------------------- |
-| Root       | `TerminalProvider`                              | 创建终端上下文、renderer、event manager |
-| Layout     | `TBox` `TView` `TAnchor` `TFlow` `TRenderLayer` | 结构、裁剪、层级、布局                  |
-| Text       | `TText` `TTransition`                           | 内容呈现、状态切换、动画插值            |
-| Input      | `TInput` `TInputBox` `TJsonEditor`              | prompt、表单、结构化文本                |
-| Picker     | `TList` `TSelect` `TPathPicker`                 | palette、列表、路径选择                 |
-| Overlay    | `TDialog` `TMultilineModal` `TDebugOverlay`     | modal、详情查看、调试辅助               |
-| Navigation | `TRouterView` + `createTerminalRouter()`        | 多页面 TUI、shell 导航                  |
+| 类别       | 组件                                                                | 常见用途                                |
+| ---------- | ------------------------------------------------------------------- | --------------------------------------- |
+| Root       | `TerminalProvider`                                                  | 创建终端上下文、renderer、event manager |
+| Layout     | `TBox` `TView` `TAnchor` `TFlex` `TFlexItem` `TFlow` `TRenderLayer` | 结构、裁剪、层级、布局                  |
+| Text       | `TText` `TTransition`                                               | 内容呈现、状态切换、动画插值            |
+| Input      | `TInput` `TInputBox` `TJsonEditor`                                  | prompt、表单、结构化文本                |
+| Picker     | `TList` `TSelect` `TPathPicker`                                     | palette、列表、路径选择                 |
+| Overlay    | `TDialog` `TMultilineModal` `TDebugOverlay`                         | modal、详情查看、调试辅助               |
+| Navigation | `TRouterView` + `createTerminalRouter()`                            | 多页面 TUI、shell 导航                  |
 
 ## 为什么比“单独做一个官网”更合适
 

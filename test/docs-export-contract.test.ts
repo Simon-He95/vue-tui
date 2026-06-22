@@ -40,6 +40,8 @@ describe("documented entrypoint exports", () => {
 
     for (const key of [
       "TAnchor",
+      "TFlex",
+      "TFlexItem",
       "TFlow",
       "TInputBox",
       "TJsonEditor",

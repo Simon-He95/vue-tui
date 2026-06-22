@@ -41,6 +41,17 @@ export type {
   TerminalProviderSelectionOptions,
 } from "./components/TerminalProvider.js";
 export { TerminalProvider } from "./components/TerminalProvider.js";
+export { TFlex, TFlexItem } from "./components/TFlex.js";
+export type {
+  TFlexAlign,
+  TFlexDirection,
+  TFlexMeasure,
+  TFlexMeasureConstraints,
+  TFlexMeasureResult,
+  TFlexItemSlotProps,
+  TFlexJustify,
+  TFlexSize,
+} from "./components/TFlex.js";
 export { TFlow } from "./components/TFlow.js";
 export {
   TAutocompleteInput,

@@ -67,6 +67,8 @@ describe("public API surface", () => {
         "TDebugOverlay",
         "TDialog",
         "TDivider",
+        "TFlex",
+        "TFlexItem",
         "TFlow",
         "TForm",
         "TFormContextKey",

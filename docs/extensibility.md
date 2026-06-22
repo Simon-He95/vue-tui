@@ -20,12 +20,12 @@ import DocsExtensibilityTerminal from './.vitepress/components/DocsExtensibility
 
 ## 组件适配性评估
 
-| 分组           | 组件/模块                                                      | 适配更多场景的能力 | 当前耦合点                                        |
-| -------------- | -------------------------------------------------------------- | ------------------ | ------------------------------------------------- |
-| Foundation     | `TerminalProvider` `TText` `TBox` `TView` `TAnchor` `TFlow`    | 很高               | 几乎无业务耦合                                    |
-| Interaction    | `TInput` `TInputBox` `TList` `TSelect` `TDialog` `TTransition` | 高                 | 只有少量默认行为偏 chat/CLI                       |
-| Advanced       | `TJsonEditor` `TRouterView` `TRenderLayer`                     | 高                 | 更像通用上层能力                                  |
-| Adapter-shaped | `TPathPicker`                                                  | 高                 | 路径语义已经能外置到 provider，剩下是宿主接入选择 |
+| 分组           | 组件/模块                                                                       | 适配更多场景的能力 | 当前耦合点                                        |
+| -------------- | ------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------- |
+| Foundation     | `TerminalProvider` `TText` `TBox` `TView` `TAnchor` `TFlex` `TFlexItem` `TFlow` | 很高               | 几乎无业务耦合                                    |
+| Interaction    | `TInput` `TInputBox` `TList` `TSelect` `TDialog` `TTransition`                  | 高                 | 只有少量默认行为偏 chat/CLI                       |
+| Advanced       | `TJsonEditor` `TRouterView` `TRenderLayer`                                      | 高                 | 更像通用上层能力                                  |
+| Adapter-shaped | `TPathPicker`                                                                   | 高                 | 路径语义已经能外置到 provider，剩下是宿主接入选择 |
 
 ## 已经存在的注入点
 

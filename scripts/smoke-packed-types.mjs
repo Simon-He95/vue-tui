@@ -42,7 +42,7 @@ try {
 import { TerminalProvider, TBox, TText, createTerminal, type Style } from "@simon_he/vue-tui";
 import { createDomRenderer, type DomRendererOptions } from "@simon_he/vue-tui/renderer/dom";
 import type { TerminalEventRecord } from "@simon_he/vue-tui/runtime";
-import { TAnchor, TDebugOverlay, TFlow, TInputBox, TJsonEditor, TMultilineModal, TPathPicker, TRenderLayer, TRenderPlane, TTransition, useTerminal, type TInputPlugin } from "@simon_he/vue-tui/vue";
+import { TAnchor, TDebugOverlay, TFlex, TFlexItem, TFlow, TInputBox, TJsonEditor, TMultilineModal, TPathPicker, TRenderLayer, TRenderPlane, TTransition, useTerminal, type TInputPlugin } from "@simon_he/vue-tui/vue";
 import { createDefaultTInputHostAdapter, createStdoutRenderer, createTerminalApp, defaultTInputHostPlugin, installTerminalCleanup, type TerminalCleanupSignalPolicy } from "@simon_he/vue-tui/cli";
 import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
@@ -62,6 +62,8 @@ console.log(
   createDomRenderer,
   TAnchor,
   TDebugOverlay,
+  TFlex,
+  TFlexItem,
   TFlow,
   TInputBox,
   TJsonEditor,

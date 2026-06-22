@@ -260,6 +260,7 @@ const app = createTerminalApp({
 
 - `<TView x y w h />`：绝对布局容器（提供局部坐标系）
 - `<TAnchor left/top/right/bottom w h />`：锚定布局（依赖父 clipRect）
+- `<TFlex><TFlexItem /></TFlex>`：Flex 风格 row/column 布局（基于 grow/shrink/min/max/百分比尺寸/wrap/measure 生成子 view）
 - `<TFlow :items ...>`：基础 flow 布局（基于 itemSize/gap 生成子 view）
 
 ### 基础绘制组件

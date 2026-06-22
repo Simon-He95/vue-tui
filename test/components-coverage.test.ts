@@ -5,6 +5,8 @@ import type { EventManager } from "../src/runtime.js";
 import {
   TAnchor,
   TDebugOverlay,
+  TFlex,
+  TFlexItem,
   TFlow,
   TInput,
   TerminalProvider,
@@ -235,6 +237,282 @@ describe("component coverage (docs + acceptance gates)", () => {
     expect(l0.slice(6, 8)).toBe("h1");
     expect(l0.slice(12, 14)).toBe("h2");
     mounted2.unmount();
+  });
+
+  it("TFlex distributes row space with grow, min size, gap, and padding", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TFlex,
+          {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 3,
+            direction: "row",
+            gap: 1,
+            padding: 1,
+          },
+          () => [
+            h(
+              TFlexItem,
+              { grow: 1, minWidth: 3 },
+              {
+                default: ({ rect }: any) =>
+                  h(TText, { x: 0, y: 0, w: rect.w, value: `L${rect.w}` }),
+              },
+            ),
+            h(
+              TFlexItem,
+              { grow: 2 },
+              {
+                default: ({ rect }: any) =>
+                  h(TText, { x: 0, y: 0, w: rect.w, value: `R${rect.w}` }),
+              },
+            ),
+          ],
+        ),
+      20,
+      5,
+    );
+
+    const line = mounted.terminal.snapshot().lines[1]!;
+    expect(line.slice(1, 3)).toBe("L5");
+    expect(line.slice(7, 9)).toBe("R4");
+    mounted.unmount();
+  });
+
+  it("TFlex lays out fixed and growing column items", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TFlex,
+          {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 6,
+            direction: "column",
+          },
+          () => [
+            h(TFlexItem, { height: 1 }, () => h(TText, { x: 0, y: 0, value: "H" })),
+            h(TFlexItem, { grow: 1 }, () => h(TText, { x: 0, y: 0, value: "M" })),
+            h(TFlexItem, { height: 1 }, () => h(TText, { x: 0, y: 0, value: "F" })),
+          ],
+        ),
+      12,
+      8,
+    );
+
+    const lines = mounted.terminal.snapshot().lines;
+    expect(lines[0]?.startsWith("H")).toBe(true);
+    expect(lines[1]?.startsWith("M")).toBe(true);
+    expect(lines[5]?.startsWith("F")).toBe(true);
+    mounted.unmount();
+  });
+
+  it("TFlex applies justifyContent and alignItems", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TFlex,
+          {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 5,
+            direction: "row",
+            justifyContent: "center",
+            alignItems: "center",
+          },
+          () => [
+            h(TFlexItem, { width: 2, height: 1 }, () => h(TText, { x: 0, y: 0, value: "A" })),
+            h(TFlexItem, { width: 2, height: 1 }, () => h(TText, { x: 0, y: 0, value: "B" })),
+          ],
+        ),
+      12,
+      6,
+    );
+
+    const line = mounted.terminal.snapshot().lines[2]!;
+    expect(line[3]).toBe("A");
+    expect(line[5]).toBe("B");
+    mounted.unmount();
+  });
+
+  it("TFlex resolves percentage width and height against the content box", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TFlex,
+          {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 6,
+            direction: "row",
+            gap: 1,
+            padding: 1,
+            alignItems: "start",
+          },
+          () => [
+            h(
+              TFlexItem,
+              { width: "50%", height: "50%" },
+              {
+                default: ({ rect }: any) => h(TText, { x: rect.w - 1, y: rect.h - 1, value: "A" }),
+              },
+            ),
+            h(TFlexItem, { width: "25%", height: "100%" }, () =>
+              h(TText, { x: 0, y: 0, value: "B" }),
+            ),
+          ],
+        ),
+      14,
+      8,
+    );
+
+    const lines = mounted.terminal.snapshot().lines;
+    expect(lines[2]?.[4]).toBe("A");
+    expect(lines[1]?.[6]).toBe("B");
+    mounted.unmount();
+  });
+
+  it("TFlex applies percentage min and max constraints", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TFlex,
+          {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 3,
+            direction: "row",
+          },
+          () => [
+            h(
+              TFlexItem,
+              { grow: 1, minWidth: "50%", maxWidth: "50%" },
+              {
+                default: ({ rect }: any) => h(TText, { x: rect.w - 1, y: 0, value: "A" }),
+              },
+            ),
+            h(TFlexItem, { grow: 1 }, () => h(TText, { x: 0, y: 0, value: "B" })),
+          ],
+        ),
+      22,
+      5,
+    );
+
+    const line = mounted.terminal.snapshot().lines[0]!;
+    expect(line[9]).toBe("A");
+    expect(line[10]).toBe("B");
+    mounted.unmount();
+  });
+
+  it("TFlex wraps row items into multiple lines", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TFlex,
+          {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 5,
+            direction: "row",
+            gap: 1,
+            wrap: true,
+            alignItems: "start",
+          },
+          () => [
+            h(TFlexItem, { width: 4, height: 1 }, () => h(TText, { x: 0, y: 0, value: "A" })),
+            h(TFlexItem, { width: 4, height: 1 }, () => h(TText, { x: 0, y: 0, value: "B" })),
+            h(TFlexItem, { width: 4, height: 1 }, () => h(TText, { x: 0, y: 0, value: "C" })),
+          ],
+        ),
+      12,
+      6,
+    );
+
+    const lines = mounted.terminal.snapshot().lines;
+    expect(lines[0]?.[0]).toBe("A");
+    expect(lines[0]?.[5]).toBe("B");
+    expect(lines[2]?.[0]).toBe("C");
+    mounted.unmount();
+  });
+
+  it("TFlex wraps column items into multiple columns", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TFlex,
+          {
+            x: 0,
+            y: 0,
+            w: 7,
+            h: 5,
+            direction: "column",
+            gap: 1,
+            wrap: true,
+            alignItems: "start",
+          },
+          () => [
+            h(TFlexItem, { width: 1, height: 2 }, () => h(TText, { x: 0, y: 0, value: "A" })),
+            h(TFlexItem, { width: 1, height: 2 }, () => h(TText, { x: 0, y: 0, value: "B" })),
+            h(TFlexItem, { width: 1, height: 2 }, () => h(TText, { x: 0, y: 0, value: "C" })),
+          ],
+        ),
+      10,
+      7,
+    );
+
+    const lines = mounted.terminal.snapshot().lines;
+    expect(lines[0]?.[0]).toBe("A");
+    expect(lines[3]?.[0]).toBe("B");
+    expect(lines[0]?.[2]).toBe("C");
+    mounted.unmount();
+  });
+
+  it("TFlex uses measured item size when no explicit size is provided", async () => {
+    const constraints: any[] = [];
+    const measure = (next: any) => {
+      constraints.push(next);
+      return { width: 6, height: 2 };
+    };
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TFlex,
+          {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 5,
+            direction: "row",
+            alignItems: "start",
+          },
+          () => [
+            h(
+              TFlexItem,
+              { measure },
+              {
+                default: ({ rect }: any) => h(TText, { x: rect.w - 1, y: rect.h - 1, value: "A" }),
+              },
+            ),
+            h(TFlexItem, { grow: 1 }, () => h(TText, { x: 0, y: 0, value: "B" })),
+          ],
+        ),
+      22,
+      7,
+    );
+
+    const lines = mounted.terminal.snapshot().lines;
+    expect(lines[1]?.[5]).toBe("A");
+    expect(lines[0]?.[6]).toBe("B");
+    expect(constraints[0]).toEqual({ maxWidth: 20, maxHeight: 5, direction: "row" });
+    mounted.unmount();
   });
 
   it("TText wrap with huge content does not write outside its rect", async () => {
