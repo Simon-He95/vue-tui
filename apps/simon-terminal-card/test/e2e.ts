@@ -23,7 +23,7 @@ import {
   resolveUsernameArg,
   terminalAnsi,
 } from "../src/cli.ts";
-import { parseProfile } from "../src/github-data.ts";
+import { parseProfile, writeUserCachedSnapshot } from "../src/github-data.ts";
 import { fetchText } from "../src/network.ts";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -431,6 +431,18 @@ function verifyUsernameArgs(): void {
     "positional user should ignore --out value",
   );
   assert(
+    resolveUsernameArg(["terminal-card", "zerob13"]) === "zerob13",
+    "npx package-name command form should ignore the duplicated bin name",
+  );
+  assert(
+    resolveUsernameArg(["terminal-card", "--out", "/tmp/card", "zerob13"]) === "zerob13",
+    "npx package-name command form should ignore the duplicated bin name before options",
+  );
+  assert(
+    resolveUsernameArg(["--out", "/tmp/card", "terminal-card", "zerob13"]) === "zerob13",
+    "npx package-name command form should ignore the duplicated bin name after options",
+  );
+  assert(
     resolveUsernameArg(["antfu", "--user", "Simon-He95"]) === "Simon-He95",
     "--user should override positional user",
   );
@@ -573,6 +585,65 @@ async function verifyOfflineFallback(): Promise<void> {
   );
 }
 
+async function verifyCustomUserLocalCacheFallback(): Promise<void> {
+  const outDir = join(testOutputRoot, "custom-offline");
+  const cacheRoot = join(testOutputRoot, "custom-cache");
+  rmSync(outDir, { recursive: true, force: true });
+  rmSync(cacheRoot, { recursive: true, force: true });
+  mkdirSync(outDir, { recursive: true });
+  mkdirSync(cacheRoot, { recursive: true });
+  const base = readCachedSnapshot();
+  assert(base, "cached Simon-He95 snapshot should be available for custom cache fixture");
+  withEnv({ XDG_CACHE_HOME: cacheRoot }, () => {
+    writeUserCachedSnapshot({
+      ...base,
+      capturedAt: "2026-06-23T00:00:00.000Z",
+      profile: {
+        ...base.profile,
+        login: "zerob13",
+        html_url: "https://github.com/zerob13",
+        name: "Cached Zero",
+      },
+    });
+  });
+  const preload = join(outDir, "offline-preload.mjs");
+  writeFileSync(
+    preload,
+    [
+      'import childProcess from "node:child_process";',
+      'import { syncBuiltinESMExports } from "node:module";',
+      'globalThis.fetch = async () => { throw new Error("offline custom e2e"); };',
+      'childProcess.execFileSync = () => { throw new Error("offline custom e2e curl"); };',
+      "syncBuiltinESMExports();",
+      "",
+    ].join("\n"),
+  );
+  const result = await runCommand(
+    process.execPath,
+    ["dist/cli.js", "--no-ansi", "--out", outDir, "terminal-card", "zerob13"],
+    {
+      cwd: packageRoot,
+      env: {
+        ...process.env,
+        NODE_OPTIONS: `--import=${preload}`,
+        XDG_CACHE_HOME: cacheRoot,
+      },
+      timeoutMs: 90_000,
+    },
+  );
+  const txt = readFileSync(join(outDir, "simon-terminal-card.txt"), "utf8");
+  assert(txt.includes("@zerob13"), "custom offline fallback should use the requested username");
+  assert(txt.includes("Cached Zero"), "custom offline fallback should use the user cache snapshot");
+  assert(
+    txt.includes("cached fallback from 2026-06-23"),
+    "custom offline fallback should identify cached custom data",
+  );
+  assert(
+    result.stderr.includes("GitHub fetch failed; using cached snapshot."),
+    "custom offline fallback should report that cached data was used",
+  );
+}
+
 async function verifyDirectStdoutRender(): Promise<void> {
   const result = await runCommand(process.execPath, ["dist/cli.js"], {
     cwd: packageRoot,
@@ -628,6 +699,7 @@ async function verifyPackedNpxEntry(): Promise<void> {
 async function main(): Promise<void> {
   rmSync(testOutputRoot, { recursive: true, force: true });
   mkdirSync(testOutputRoot, { recursive: true });
+  process.env.XDG_CACHE_HOME = join(testOutputRoot, "cache-home");
 
   assert(
     openExternalHref("file:///tmp/nope") === false,
@@ -642,6 +714,7 @@ async function main(): Promise<void> {
   await verifyLoadingStatus();
   await verifyDirectStdoutRender();
   await verifyOfflineFallback();
+  await verifyCustomUserLocalCacheFallback();
   await verifyPackedNpxEntry();
 
   process.stdout.write("simon-terminal-card e2e passed\n");

@@ -1,5 +1,6 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAvatar, fallbackAvatar } from "./avatar.js";
 import { defaultUser, fallbackSnapshotUrl } from "./constants.js";
@@ -193,10 +194,46 @@ function normalizeProfile(profile: GitHubProfile): GitHubProfile {
   };
 }
 
+function userCacheRoot(): string {
+  return process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
+}
+
+function userSnapshotPath(username: string): string {
+  const name = username.toLowerCase().replace(/[^a-z0-9-]/gu, "_");
+  return join(userCacheRoot(), "simon-terminal-card", `${name}.snapshot.json`);
+}
+
+function normalizeSnapshot(snapshot: CardSnapshot): CardSnapshot {
+  return {
+    ...snapshot,
+    avatar: snapshot.avatar?.length
+      ? snapshot.avatar
+      : fallbackAvatar(snapshot.profile.login, 14, 7),
+  };
+}
+
+function readUserCachedSnapshot(username: string): CardSnapshot | null {
+  const path = userSnapshotPath(username);
+  if (!existsSync(path)) return null;
+  try {
+    return normalizeSnapshot(JSON.parse(readFileSync(path, "utf8")) as CardSnapshot);
+  } catch {
+    return null;
+  }
+}
+
 export function readCachedSnapshot(username: string = defaultUser): CardSnapshot | null {
+  const userSnapshot = readUserCachedSnapshot(username);
+  if (userSnapshot) return userSnapshot;
   if (username.toLowerCase() !== defaultUser.toLowerCase()) return null;
   const snapshot = cachedSnapshotJson as CardSnapshot;
   return { ...snapshot, avatar: fallbackAvatar(snapshot.profile.login, 14, 7) };
+}
+
+export function writeUserCachedSnapshot(snapshot: CardSnapshot): void {
+  const path = userSnapshotPath(snapshot.profile.login);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(snapshot, null, 2)}\n`);
 }
 
 export function writeCachedSnapshot(snapshot: CardSnapshot): void {

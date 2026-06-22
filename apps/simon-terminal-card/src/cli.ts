@@ -6,7 +6,12 @@ import process from "node:process";
 import { hasFlag, readOption, resolveUsernameArg } from "./args.js";
 import { makeCardComponent } from "./card.js";
 import { defaultUser, outputName } from "./constants.js";
-import { fetchLiveSnapshot, readCachedSnapshot, writeCachedSnapshot } from "./github-data.js";
+import {
+  fetchLiveSnapshot,
+  readCachedSnapshot,
+  writeCachedSnapshot,
+  writeUserCachedSnapshot,
+} from "./github-data.js";
 import { createLoadingStatus } from "./loading.js";
 import {
   detectStdoutGraphicsCapabilities,
@@ -36,6 +41,11 @@ export async function main(): Promise<void> {
   let snapshot: CardSnapshot;
   try {
     snapshot = await fetchLiveSnapshot(username, cached, loading);
+    try {
+      writeUserCachedSnapshot(snapshot);
+    } catch {
+      // Local cache is best-effort; live rendering should not fail when cache writes fail.
+    }
     if (hasFlag("--update-cache") && username.toLowerCase() === defaultUser.toLowerCase()) {
       writeCachedSnapshot(snapshot);
     }

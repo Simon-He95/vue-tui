@@ -1,6 +1,6 @@
 {
   "name": "@simon_he/terminal-card",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Simon He's terminal profile card powered by vue-tui",
   "license": "MIT",
   "author": "Simon He",
