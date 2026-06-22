@@ -1011,6 +1011,22 @@ function renderMarkdown(components: ComponentMeta[]): string {
       );
       lines.push("");
     }
+
+    if (c.slots.length) {
+      lines.push("### Slots");
+      lines.push("");
+      lines.push(
+        ...renderTable(
+          ["名称", "Props", "说明"],
+          c.slots.map((slot) => [
+            formatMaybeCode(slot.name),
+            formatMaybeCode(slot.props ?? null),
+            formatTextCell(slot.description),
+          ]),
+        ),
+      );
+      lines.push("");
+    }
   }
 
   while (lines.at(-1) === "") lines.pop();

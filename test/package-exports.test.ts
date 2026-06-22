@@ -285,6 +285,8 @@ describe("package exports", () => {
       "TDebugOverlay",
       "TDialog",
       "TDivider",
+      "TFlex",
+      "TFlexItem",
       "TFlow",
       "TForm",
       "TFormContextKey",

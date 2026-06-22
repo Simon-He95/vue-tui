@@ -6,6 +6,7 @@ import { TView } from "./TView.js";
 export type TFlexDirection = "row" | "column";
 export type TFlexAlign = "start" | "center" | "end" | "stretch";
 export type TFlexJustify = "start" | "center" | "end" | "space-between";
+export type TFlexAlignContent = "start" | "center" | "end" | "space-between" | "stretch";
 export type TFlexSize = number | string;
 export type TFlexMeasureConstraints = Readonly<{
   maxWidth: number;
@@ -34,13 +35,25 @@ type FlexItem = Readonly<{
   maxWidth: TFlexSize | undefined;
   maxHeight: TFlexSize | undefined;
   measure: TFlexMeasure | undefined;
+  measureCache: Map<string, { main: number | undefined; cross: number | undefined }> | undefined;
+  order: number;
+  marginTop: number;
+  marginRight: number;
+  marginBottom: number;
+  marginLeft: number;
   alignSelf: TFlexAlign | undefined;
-  zIndex: number;
 }>;
 
 type FlexLayoutItem = Readonly<{
   item: FlexItem;
   rect: Rect;
+}>;
+
+type BoxEdges = Readonly<{
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
 }>;
 
 function normalizeCellCount(value: unknown, fallback = 0): number {
@@ -63,6 +76,33 @@ function normalizeOptionalCellCount(value: unknown): number | undefined {
 function normalizeRatio(value: unknown, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) ? Math.max(0, n) : fallback;
+}
+
+function edgeProp(props: VNode["props"], key: string): number | undefined {
+  return normalizeOptionalCellCount(props?.[key]);
+}
+
+function resolveEdges(
+  props: VNode["props"],
+  options: Readonly<{
+    all: string;
+    x: string;
+    y: string;
+    top: string;
+    right: string;
+    bottom: string;
+    left: string;
+  }>,
+): BoxEdges {
+  const all = edgeProp(props, options.all) ?? 0;
+  const x = edgeProp(props, options.x) ?? all;
+  const y = edgeProp(props, options.y) ?? all;
+  return {
+    top: edgeProp(props, options.top) ?? y,
+    right: edgeProp(props, options.right) ?? x,
+    bottom: edgeProp(props, options.bottom) ?? y,
+    left: edgeProp(props, options.left) ?? x,
+  };
 }
 
 function sizeProp(props: VNode["props"], key: string): TFlexSize | undefined {
@@ -111,6 +151,15 @@ function createFlexItem(vnode: VNode): FlexItem {
   const width = sizeProp(props, "width") ?? sizeProp(props, "w");
   const height = sizeProp(props, "height") ?? sizeProp(props, "h");
   const grow = normalizeRatio(props?.grow, 0);
+  const margin = resolveEdges(props, {
+    all: "margin",
+    x: "marginX",
+    y: "marginY",
+    top: "marginTop",
+    right: "marginRight",
+    bottom: "marginBottom",
+    left: "marginLeft",
+  });
   return {
     vnode,
     isFlexItem,
@@ -124,8 +173,13 @@ function createFlexItem(vnode: VNode): FlexItem {
     maxWidth: sizeProp(props, "maxWidth"),
     maxHeight: sizeProp(props, "maxHeight"),
     measure: typeof props?.measure === "function" ? (props.measure as TFlexMeasure) : undefined,
+    measureCache: typeof props?.measure === "function" ? new Map() : undefined,
+    order: normalizeInteger(props?.order),
+    marginTop: margin.top,
+    marginRight: margin.right,
+    marginBottom: margin.bottom,
+    marginLeft: margin.left,
     alignSelf: props?.alignSelf as TFlexAlign | undefined,
-    zIndex: normalizeInteger(props?.zIndex),
   };
 }
 
@@ -162,14 +216,21 @@ function measureItem(
   crossReference: number,
 ): { main: number | undefined; cross: number | undefined } {
   if (!item.measure) return { main: undefined, cross: undefined };
-  const measured = item.measure(
+  const constraints =
     direction === "row"
       ? { maxWidth: mainReference, maxHeight: crossReference, direction }
-      : { maxWidth: crossReference, maxHeight: mainReference, direction },
-  );
+      : { maxWidth: crossReference, maxHeight: mainReference, direction };
+  const cacheKey = `${constraints.direction}:${constraints.maxWidth}:${constraints.maxHeight}`;
+  const cached = item.measureCache?.get(cacheKey);
+  if (cached) return cached;
+
+  const measured = item.measure(constraints);
   const width = normalizeOptionalCellCount(measured?.width ?? measured?.w);
   const height = normalizeOptionalCellCount(measured?.height ?? measured?.h);
-  return direction === "row" ? { main: width, cross: height } : { main: height, cross: width };
+  const resolved =
+    direction === "row" ? { main: width, cross: height } : { main: height, cross: width };
+  item.measureCache?.set(cacheKey, resolved);
+  return resolved;
 }
 
 function resolveMeasuredMain(
@@ -225,6 +286,38 @@ function resolveCrossBase(
       : resolveSize(item.maxWidth, reference)) ?? Number.POSITIVE_INFINITY,
   );
   return fixed == null ? clampSize(measured ?? min, min, max) : clampSize(fixed, min, max);
+}
+
+function mainBefore(item: FlexItem, direction: TFlexDirection): number {
+  return direction === "row" ? item.marginLeft : item.marginTop;
+}
+
+function mainAfter(item: FlexItem, direction: TFlexDirection): number {
+  return direction === "row" ? item.marginRight : item.marginBottom;
+}
+
+function crossBefore(item: FlexItem, direction: TFlexDirection): number {
+  return direction === "row" ? item.marginTop : item.marginLeft;
+}
+
+function crossAfter(item: FlexItem, direction: TFlexDirection): number {
+  return direction === "row" ? item.marginBottom : item.marginRight;
+}
+
+function mainMargin(item: FlexItem, direction: TFlexDirection): number {
+  return mainBefore(item, direction) + mainAfter(item, direction);
+}
+
+function crossMargin(item: FlexItem, direction: TFlexDirection): number {
+  return crossBefore(item, direction) + crossAfter(item, direction);
+}
+
+function fitEdges(edges: BoxEdges, width: number, height: number): BoxEdges {
+  const left = Math.min(edges.left, width);
+  const right = Math.min(edges.right, Math.max(0, width - left));
+  const top = Math.min(edges.top, height);
+  const bottom = Math.min(edges.bottom, Math.max(0, height - top));
+  return { top, right, bottom, left };
 }
 
 function proportionalSizes(weights: readonly number[], available: number): number[] {
@@ -386,6 +479,12 @@ function justifyOffset(justify: TFlexJustify, slack: number): number {
   return 0;
 }
 
+function alignContentOffset(alignContent: TFlexAlignContent, slack: number): number {
+  if (alignContent === "end") return slack;
+  if (alignContent === "center") return Math.floor(slack / 2);
+  return 0;
+}
+
 function layoutFlexLine(
   items: readonly FlexItem[],
   options: Readonly<{
@@ -402,13 +501,15 @@ function layoutFlexLine(
 ): FlexLayoutItem[] {
   const totalGap = Math.max(0, items.length - 1) * options.gap;
   const availableMain = Math.max(0, options.mainSize - totalGap);
+  const totalMainMargin = items.reduce((sum, item) => sum + mainMargin(item, options.direction), 0);
+  const availableContentMain = Math.max(0, availableMain - totalMainMargin);
   const mainSizes = resolveMainSizes(
     items,
     options.direction,
-    availableMain,
+    availableContentMain,
     options.crossReference,
   );
-  const usedMain = mainSizes.reduce((sum, next) => sum + next, 0);
+  const usedMain = mainSizes.reduce((sum, next) => sum + next, 0) + totalMainMargin;
   const slack = Math.max(0, availableMain - usedMain);
   const gapExtras = items.map(() => 0);
 
@@ -429,28 +530,53 @@ function layoutFlexLine(
   return items.map((item, index) => {
     const main = mainSizes[index] ?? 0;
     const align = item.alignSelf ?? options.alignItems;
+    const itemCrossMargin = crossMargin(item, options.direction);
     const cross = resolveCrossSize(
       item,
       options.direction,
       align,
-      options.crossSize,
+      Math.max(0, options.crossSize - itemCrossMargin),
       options.crossReference,
       options.mainSize,
     );
+    const outerCross = cross + itemCrossMargin;
     const crossOffset =
       align === "end"
-        ? options.crossSize - cross
+        ? options.crossSize - outerCross
         : align === "center"
-          ? Math.floor((options.crossSize - cross) / 2)
+          ? Math.floor((options.crossSize - outerCross) / 2)
           : 0;
+    const itemMainStart = cursor + mainBefore(item, options.direction);
+    const itemCrossStart = options.crossStart + crossOffset + crossBefore(item, options.direction);
     const rect =
       options.direction === "row"
-        ? { x: cursor, y: options.crossStart + crossOffset, w: main, h: cross }
-        : { x: options.crossStart + crossOffset, y: cursor, w: cross, h: main };
+        ? { x: itemMainStart, y: itemCrossStart, w: main, h: cross }
+        : { x: itemCrossStart, y: itemMainStart, w: cross, h: main };
 
-    cursor += main + options.gap + (gapExtras[index] ?? 0);
+    cursor += mainMargin(item, options.direction) + main + options.gap + (gapExtras[index] ?? 0);
     return { item, rect };
   });
+}
+
+function lineBaseUsedMain(
+  items: readonly FlexItem[],
+  direction: TFlexDirection,
+  mainSize: number,
+  crossReference: number,
+  gap: number,
+): number {
+  const totalGap = Math.max(0, items.length - 1) * gap;
+  const totalMainMargin = items.reduce((sum, item) => sum + mainMargin(item, direction), 0);
+  const reference = Math.max(0, mainSize - totalGap - totalMainMargin);
+  return (
+    totalGap +
+    totalMainMargin +
+    items.reduce((sum, item) => {
+      const min = resolveMainMin(item, direction, reference);
+      const max = resolveMainMax(item, direction, reference, min);
+      return sum + resolveMainBase(item, direction, reference, crossReference, min, max);
+    }, 0)
+  );
 }
 
 function createWrappedLines(
@@ -462,23 +588,18 @@ function createWrappedLines(
 ): FlexItem[][] {
   const lines: FlexItem[][] = [];
   let line: FlexItem[] = [];
-  let used = 0;
 
   for (const item of items) {
-    const min = resolveMainMin(item, direction, availableMain);
-    const max = resolveMainMax(item, direction, availableMain, min);
-    const base = resolveMainBase(item, direction, availableMain, crossReference, min, max);
-    const nextUsed = line.length === 0 ? base : used + gap + base;
+    const nextLine = [...line, item];
+    const nextUsed = lineBaseUsedMain(nextLine, direction, availableMain, crossReference, gap);
 
     if (line.length > 0 && nextUsed > availableMain) {
       lines.push(line);
       line = [item];
-      used = base;
       continue;
     }
 
-    line.push(item);
-    used = nextUsed;
+    line = nextLine;
   }
 
   if (line.length > 0) lines.push(line);
@@ -495,12 +616,16 @@ function resolveWrappedLineCrossSizes(
   const bases = lines.map((line) =>
     Math.max(
       1,
-      ...line.map((item) => resolveCrossBase(item, direction, crossReference, mainReference)),
+      ...line.map(
+        (item) =>
+          resolveCrossBase(item, direction, crossReference, mainReference) +
+          crossMargin(item, direction),
+      ),
     ),
   );
   const baseTotal = bases.reduce((sum, next) => sum + next, 0);
   if (baseTotal <= availableCross) return bases;
-  return proportionalSizes(bases, availableCross);
+  return bases;
 }
 
 function layoutFlexItems(
@@ -509,25 +634,27 @@ function layoutFlexItems(
     w: number;
     h: number;
     direction: TFlexDirection;
-    gap: number;
-    padding: number;
+    mainGap: number;
+    crossGap: number;
+    padding: BoxEdges;
     alignItems: TFlexAlign;
     justifyContent: TFlexJustify;
+    alignContent: TFlexAlignContent;
     wrap: boolean;
   }>,
 ): FlexLayoutItem[] {
-  const padding = Math.min(options.padding, Math.floor(Math.min(options.w, options.h) / 2));
-  const contentX = padding;
-  const contentY = padding;
-  const contentW = Math.max(0, options.w - padding * 2);
-  const contentH = Math.max(0, options.h - padding * 2);
+  const padding = fitEdges(options.padding, options.w, options.h);
+  const contentX = padding.left;
+  const contentY = padding.top;
+  const contentW = Math.max(0, options.w - padding.left - padding.right);
+  const contentH = Math.max(0, options.h - padding.top - padding.bottom);
   const mainSize = options.direction === "row" ? contentW : contentH;
   const crossSize = options.direction === "row" ? contentH : contentW;
 
   if (!options.wrap) {
     return layoutFlexLine(items, {
       direction: options.direction,
-      gap: options.gap,
+      gap: options.mainGap,
       alignItems: options.alignItems,
       justifyContent: options.justifyContent,
       mainStart: options.direction === "row" ? contentX : contentY,
@@ -538,8 +665,8 @@ function layoutFlexItems(
     });
   }
 
-  const lines = createWrappedLines(items, options.direction, mainSize, crossSize, options.gap);
-  const availableCross = Math.max(0, crossSize - Math.max(0, lines.length - 1) * options.gap);
+  const lines = createWrappedLines(items, options.direction, mainSize, crossSize, options.mainGap);
+  const availableCross = Math.max(0, crossSize - Math.max(0, lines.length - 1) * options.crossGap);
   const lineCrossSizes = resolveWrappedLineCrossSizes(
     lines,
     options.direction,
@@ -547,7 +674,32 @@ function layoutFlexItems(
     crossSize,
     mainSize,
   );
-  let crossCursor = options.direction === "row" ? contentY : contentX;
+  let slack = Math.max(0, availableCross - lineCrossSizes.reduce((sum, next) => sum + next, 0));
+  const crossGapExtras = lines.map(() => 0);
+
+  if (options.alignContent === "stretch" && lineCrossSizes.length > 0 && slack > 0) {
+    const extraSizes = proportionalSizes(
+      lineCrossSizes.map(() => 1),
+      slack,
+    );
+    for (let i = 0; i < lineCrossSizes.length; i++) {
+      lineCrossSizes[i]! += extraSizes[i] ?? 0;
+    }
+    slack = 0;
+  } else if (options.alignContent === "space-between" && lines.length > 1 && slack > 0) {
+    const extraGaps = proportionalSizes(
+      Array.from({ length: lines.length - 1 }, () => 1),
+      slack,
+    );
+    for (let i = 0; i < extraGaps.length; i++) {
+      crossGapExtras[i] = extraGaps[i] ?? 0;
+    }
+    slack = 0;
+  }
+
+  let crossCursor =
+    (options.direction === "row" ? contentY : contentX) +
+    alignContentOffset(options.alignContent, slack);
   const out: FlexLayoutItem[] = [];
 
   for (let index = 0; index < lines.length; index++) {
@@ -556,7 +708,7 @@ function layoutFlexItems(
     out.push(
       ...layoutFlexLine(line, {
         direction: options.direction,
-        gap: options.gap,
+        gap: options.mainGap,
         alignItems: options.alignItems,
         justifyContent: options.justifyContent,
         mainStart: options.direction === "row" ? contentX : contentY,
@@ -566,7 +718,7 @@ function layoutFlexItems(
         crossReference: crossSize,
       }),
     );
-    crossCursor += lineCross + options.gap;
+    crossCursor += lineCross + options.crossGap + (crossGapExtras[index] ?? 0);
   }
 
   return out;
@@ -600,8 +752,15 @@ export const TFlexItem = defineComponent({
     maxWidth: { type: [Number, String] as PropType<TFlexSize>, default: undefined },
     maxHeight: { type: [Number, String] as PropType<TFlexSize>, default: undefined },
     measure: { type: Function as PropType<TFlexMeasure>, default: undefined },
+    order: { type: Number, default: 0 },
+    margin: { type: Number, default: 0 },
+    marginX: { type: Number, default: undefined },
+    marginY: { type: Number, default: undefined },
+    marginTop: { type: Number, default: undefined },
+    marginRight: { type: Number, default: undefined },
+    marginBottom: { type: Number, default: undefined },
+    marginLeft: { type: Number, default: undefined },
     alignSelf: { type: String as PropType<TFlexAlign>, default: undefined },
-    zIndex: { type: Number, default: 0 },
   },
   setup(_props, { slots }) {
     return () => slots.default?.() ?? null;
@@ -617,24 +776,52 @@ export const TFlex = defineComponent({
     h: { type: Number, required: true },
     direction: { type: String as PropType<TFlexDirection>, default: "row" },
     gap: { type: Number, default: 0 },
+    rowGap: { type: Number, default: undefined },
+    columnGap: { type: Number, default: undefined },
     padding: { type: Number, default: 0 },
+    paddingX: { type: Number, default: undefined },
+    paddingY: { type: Number, default: undefined },
+    paddingTop: { type: Number, default: undefined },
+    paddingRight: { type: Number, default: undefined },
+    paddingBottom: { type: Number, default: undefined },
+    paddingLeft: { type: Number, default: undefined },
     wrap: { type: Boolean, default: false },
     alignItems: { type: String as PropType<TFlexAlign>, default: "stretch" },
     justifyContent: { type: String as PropType<TFlexJustify>, default: "start" },
+    alignContent: { type: String as PropType<TFlexAlignContent>, default: "start" },
     zIndex: { type: Number, default: 0 },
   },
   setup(props, { slots }) {
     return () => {
-      const items = collectChildren(slots.default?.() ?? []).map(createFlexItem);
+      const items = collectChildren(slots.default?.() ?? [])
+        .map((vnode, index) => ({ item: createFlexItem(vnode), index }))
+        .sort((a, b) => a.item.order - b.item.order || a.index - b.index)
+        .map(({ item }) => item);
+      const gap = normalizeCellCount(props.gap);
+      const rowGap = props.rowGap == null ? gap : normalizeCellCount(props.rowGap);
+      const columnGap = props.columnGap == null ? gap : normalizeCellCount(props.columnGap);
+      const mainGap = props.direction === "row" ? columnGap : rowGap;
+      const crossGap = props.direction === "row" ? rowGap : columnGap;
+      const padding = resolveEdges(props as any, {
+        all: "padding",
+        x: "paddingX",
+        y: "paddingY",
+        top: "paddingTop",
+        right: "paddingRight",
+        bottom: "paddingBottom",
+        left: "paddingLeft",
+      });
       const layout = layoutFlexItems(items, {
         w: normalizeCellCount(props.w),
         h: normalizeCellCount(props.h),
         direction: props.direction,
-        gap: normalizeCellCount(props.gap),
-        padding: normalizeCellCount(props.padding),
+        mainGap,
+        crossGap,
+        padding,
         wrap: props.wrap,
         alignItems: props.alignItems,
         justifyContent: props.justifyContent,
+        alignContent: props.alignContent,
       });
 
       return h(
@@ -656,7 +843,6 @@ export const TFlex = defineComponent({
                 y: rect.y,
                 w: rect.w,
                 h: rect.h,
-                zIndex: item.zIndex,
               },
               () => renderFlexItemChildren(item, rect),
             ),

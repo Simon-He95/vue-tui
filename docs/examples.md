@@ -4,11 +4,11 @@
 
 ## Browser Examples
 
-| Example       | Command                          | Purpose                                          |
-| ------------- | -------------------------------- | ------------------------------------------------ |
-| Basic         | `pnpm -C examples/basic dev`     | 基础组件、输入、select、table、browser renderer  |
-| Basic build   | `pnpm run build:examples`        | browser example build smoke                      |
-| Agent Console | `pnpm run example:agent-console` | streaming transcript、markdown/log、overlay 组合 |
+| Example       | Command                          | Purpose                                                       |
+| ------------- | -------------------------------- | ------------------------------------------------------------- |
+| Basic         | `pnpm -C examples/basic dev`     | 基础组件、TFlex layout、输入、select、table、browser renderer |
+| Basic build   | `pnpm run build:examples`        | browser example build smoke                                   |
+| Agent Console | `pnpm run example:agent-console` | streaming transcript、markdown/log、overlay 组合              |
 
 ## Terminal Examples
 
