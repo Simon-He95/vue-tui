@@ -5,6 +5,12 @@
   "bin": {
     "vue-vite-conf-card": "./dist/cli.js"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "scripts": {
     "build": "tsdown",
