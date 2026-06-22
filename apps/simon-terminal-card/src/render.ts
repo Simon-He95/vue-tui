@@ -1,10 +1,11 @@
 import type { Component } from "vue";
-import type { Cell, Style, Terminal } from "@simon_he/vue-tui/core";
+import type { Cell, Style, Terminal, TerminalColorMode } from "@simon_he/vue-tui/core";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 import { nextTick } from "vue";
+import { detectTerminalColorCapability, rgbToAnsi256 } from "@simon_he/vue-tui/core";
 import type { TerminalGraphicsCapabilities } from "@simon_he/vue-tui/agent";
 import {
   createStdinDriver,
@@ -283,26 +284,87 @@ export function writeTerminalSvg(name: string, terminal: Terminal, outDir: strin
   writeFileSync(join(outDir, `${name}.txt`), `${lines.join("\n")}\n`);
 }
 
-function ansiColor(value: string | undefined, foreground: boolean): string {
+type Rgb = Readonly<{ r: number; g: number; b: number }>;
+
+export type TerminalAnsiOptions = Readonly<{
+  colorMode?: TerminalColorMode;
+  env?: Record<string, unknown>;
+  isTTY?: boolean;
+  manageCursor?: boolean;
+  platform?: string;
+}>;
+
+function resolveTerminalAnsiColorMode(options: TerminalAnsiOptions = {}): TerminalColorMode {
+  if (options.colorMode) return options.colorMode;
+  return detectTerminalColorCapability({
+    env: options.env ?? (process.env as Record<string, unknown>),
+    isTTY: options.isTTY ?? process.stdout.isTTY,
+    platform: options.platform ?? process.platform,
+  }).mode;
+}
+
+function isAppleTerminalEnv(env: Record<string, unknown>): boolean {
+  return String(env.TERM_PROGRAM ?? "")
+    .toLowerCase()
+    .includes("apple_terminal");
+}
+
+function hexToRgb(value: string): Rgb | null {
+  if (!/^#[0-9a-f]{6}$/iu.test(value)) return null;
+  return {
+    r: Number.parseInt(value.slice(1, 3), 16),
+    g: Number.parseInt(value.slice(3, 5), 16),
+    b: Number.parseInt(value.slice(5, 7), 16),
+  };
+}
+
+function nearestAnsiName(rgb: Rgb, colorMode: TerminalColorMode): string {
+  let best = "white";
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const [name, hex] of Object.entries(fgColors)) {
+    const candidate = hexToRgb(hex);
+    if (!candidate) continue;
+    const distance =
+      (rgb.r - candidate.r) ** 2 + (rgb.g - candidate.g) ** 2 + (rgb.b - candidate.b) ** 2;
+    if (distance < bestDistance) {
+      best = name;
+      bestDistance = distance;
+    }
+  }
+  return colorMode === "ansi8" ? best.replace(/Bright$/u, "") : best;
+}
+
+function ansiColor(
+  value: string | undefined,
+  foreground: boolean,
+  colorMode: TerminalColorMode,
+): string {
   if (!value) return "";
   if (value === "transparent") return `\u001B[${foreground ? 39 : 49}m`;
-  if (value.startsWith("#") && /^#[0-9a-f]{6}$/iu.test(value)) {
-    const r = Number.parseInt(value.slice(1, 3), 16);
-    const g = Number.parseInt(value.slice(3, 5), 16);
-    const b = Number.parseInt(value.slice(5, 7), 16);
-    return `\u001B[${foreground ? 38 : 48};2;${r};${g};${b}m`;
+  if (value.startsWith("#")) {
+    const rgb = hexToRgb(value);
+    if (!rgb) return "";
+    if (colorMode === "truecolor")
+      return `\u001B[${foreground ? 38 : 48};2;${rgb.r};${rgb.g};${rgb.b}m`;
+    if (colorMode === "ansi256") return `\u001B[${foreground ? 38 : 48};5;${rgbToAnsi256(rgb)}m`;
+    const name = nearestAnsiName(rgb, colorMode);
+    const code = foreground ? ansiFgCodes[name] : ansiBgCodes[name];
+    return code ? `\u001B[${code}m` : "";
   }
   const code = foreground ? ansiFgCodes[value] : ansiBgCodes[value];
   return code ? `\u001B[${code}m` : "";
 }
 
-function ansiStyle(style: Style): string {
+function ansiStyle(style: Style, colorMode: TerminalColorMode): string {
   const chunks = [ansiReset];
   if (style.bold) chunks.push("\u001B[1m");
   if (style.dim) chunks.push("\u001B[2m");
   if (style.italic) chunks.push("\u001B[3m");
   if (style.underline) chunks.push("\u001B[4m");
-  chunks.push(ansiColor(style.fg, true), ansiColor(style.bg ?? cardBg, false));
+  chunks.push(
+    ansiColor(style.fg, true, colorMode),
+    ansiColor(style.bg ?? cardBg, false, colorMode),
+  );
   if (style.inverse) chunks.push("\u001B[7m");
   return chunks.join("");
 }
@@ -327,6 +389,10 @@ function cursorColumn(col: number): string {
   return col > 1 ? `\u001B[${col}G` : "";
 }
 
+function eraseCharacters(cols: number): string {
+  return cols > 0 ? `\u001B[${cols}X` : "";
+}
+
 function isTerminalColumnSensitiveText(value: string): boolean {
   if (!value) return false;
   if (value.includes("\uFE0F") || value.includes("\u200D") || value.includes("\u20E3")) return true;
@@ -338,8 +404,38 @@ function isTerminalColumnSensitiveText(value: string): boolean {
   return false;
 }
 
-function rowNeedsColumnGuard(row: readonly Cell[]): boolean {
-  return row.some((cell) => !cell.continuation && isTerminalColumnSensitiveText(cell.ch));
+function rowColumnGuardStart(row: readonly Cell[]): number | null {
+  const index = row.findIndex(
+    (cell) => !cell.continuation && isTerminalColumnSensitiveText(cell.ch),
+  );
+  return index >= 0 ? index : null;
+}
+
+function rowHasColumnSensitiveText(row: readonly Cell[]): boolean {
+  return rowColumnGuardStart(row) != null;
+}
+
+function needsAbsoluteCellPaint(cell: Cell): boolean {
+  if (cell.ch !== " ") return true;
+  if (cell.style.href) return true;
+  if (cell.style.inverse) return true;
+  return Boolean(cell.style.bg && cell.style.bg !== cardBg);
+}
+
+function absoluteRowAnsi(row: readonly Cell[], colorMode: TerminalColorMode): string {
+  const out = [
+    ansiStyle({ fg: "whiteBright", bg: cardBg }, colorMode),
+    eraseCharacters(row.length),
+  ];
+  for (let x = 0; x < row.length; x++) {
+    const cell = row[x]!;
+    if (cell.continuation || !needsAbsoluteCellPaint(cell)) continue;
+    out.push(cursorColumn(x + 1));
+    if (cell.style.href) out.push(osc8Open(cell.style.href));
+    out.push(ansiStyle(cell.style, colorMode), cell.ch);
+    if (cell.style.href) out.push(osc8Close());
+  }
+  return out.join("");
 }
 
 function lastCursorPositionBefore(value: string, index: number): { x: number; y: number } | null {
@@ -389,17 +485,26 @@ function capturedGraphicsAnsi(
 export function terminalAnsi(
   terminal: Terminal,
   graphics: readonly RenderedTerminalGraphic[] = [],
+  options: TerminalAnsiOptions = {},
 ): string {
   const size = terminal.size();
-  const out: string[] = [];
+  const env = options.env ?? (process.env as Record<string, unknown>);
+  const colorMode = resolveTerminalAnsiColorMode(options);
+  const isAppleTerminal = isAppleTerminalEnv(env);
+  const enableColumnGuard = !isAppleTerminal;
+  const out: string[] = options.manageCursor ? ["\u001B[?25l"] : [];
   let openHref: string | undefined;
   for (let y = 0; y < size.rows; y++) {
     const row = terminal.getRow(y);
-    const guardColumns = rowNeedsColumnGuard(row);
+    const guardFrom = enableColumnGuard ? rowColumnGuardStart(row) : null;
+    if (isAppleTerminal && rowHasColumnSensitiveText(row)) {
+      out.push(absoluteRowAnsi(row, colorMode), ansiReset, "\n");
+      continue;
+    }
     for (let x = 0; x < row.length; x++) {
       const cell = row[x]!;
       if (cell.continuation) continue;
-      if (guardColumns && cell.ch !== " ") {
+      if (guardFrom != null && x > guardFrom && cell.ch !== " ") {
         if (openHref) {
           out.push(osc8Close());
           openHref = undefined;
@@ -411,7 +516,7 @@ export function terminalAnsi(
         openHref = cell.style.href;
         if (openHref) out.push(osc8Open(openHref));
       }
-      out.push(ansiStyle(cell.style), cell.ch);
+      out.push(ansiStyle(cell.style, colorMode), cell.ch);
     }
     if (openHref) {
       out.push(osc8Close());
@@ -420,6 +525,7 @@ export function terminalAnsi(
     out.push(ansiReset, "\n");
   }
   out.push(capturedGraphicsAnsi(graphics, size.rows));
+  if (options.manageCursor) out.push("\u001B[?25h");
   return out.join("");
 }
 
@@ -432,7 +538,9 @@ export async function printAnsiComponent(
     graphicsCapabilities,
   });
   try {
-    process.stdout.write(terminalAnsi(rendered.terminal, rendered.graphics));
+    process.stdout.write(
+      terminalAnsi(rendered.terminal, rendered.graphics, { manageCursor: true }),
+    );
   } finally {
     rendered.dispose();
   }

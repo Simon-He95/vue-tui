@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { buildAvatar, fallbackAvatar } from "./avatar.js";
 import { defaultUser, fallbackSnapshotUrl } from "./constants.js";
 import cachedSnapshotJson from "./data/simon-he95.snapshot.json";
-import { fetchJson, fetchText } from "./network.js";
+import { fetchText } from "./network.js";
 import type {
   CardSnapshot,
   ContributionData,
@@ -27,8 +27,14 @@ function decodeHtml(value: string): string {
     "&gt;": ">",
     "&quot;": '"',
     "&#39;": "'",
+    "&apos;": "'",
+    "&nbsp;": " ",
+    "&middot;": "·",
   };
-  return value.replace(/&(amp|lt|gt|quot|#39);/gu, (entity) => entities[entity] ?? entity);
+  return value
+    .replace(/&#(\d+);/gu, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([\da-f]+);/giu, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&(amp|lt|gt|quot|apos|nbsp|middot|#39);/gu, (entity) => entities[entity] ?? entity);
 }
 
 function parseContributionCount(text: string): number {
@@ -55,6 +61,119 @@ function parseContributions(html: string): ContributionData {
   days.sort((a, b) => a.date.localeCompare(b.date));
   if (!days.length) throw new Error("No contribution days found in GitHub response");
   return { days, totalText };
+}
+
+function readAttribute(tag: string, name: string): string | null {
+  const match = tag.match(new RegExp(`\\b${name}="([^"]*)"`, "u"));
+  return match ? decodeHtml(match[1]!) : null;
+}
+
+function cleanHtmlText(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const text = stripHtml(decodeHtml(value));
+  return text || null;
+}
+
+function readMetaContent(html: string, key: string): string | null {
+  for (const match of html.matchAll(/<meta\b([^>]*)>/gu)) {
+    const attrs = match[1]!;
+    if (readAttribute(attrs, "property") !== key && readAttribute(attrs, "name") !== key) continue;
+    return readAttribute(attrs, "content");
+  }
+  return null;
+}
+
+function readClassText(html: string, className: string): string | null {
+  const match = html.match(
+    new RegExp(`<[^>]+class="[^"]*\\b${className}\\b[^"]*"[^>]*>([\\s\\S]*?)<\\/[^>]+>`, "u"),
+  );
+  return cleanHtmlText(match?.[1]);
+}
+
+function readItemPropBlock(html: string, itemProp: string): { tag: string; body: string } | null {
+  const match = html.match(
+    new RegExp(`<li\\b([^>]*\\bitemprop="${itemProp}"[^>]*)>([\\s\\S]*?)<\\/li>`, "u"),
+  );
+  return match ? { tag: match[1]!, body: match[2]! } : null;
+}
+
+function parseCounterText(value: string | null | undefined): number {
+  const text = stripHtml(decodeHtml(value ?? ""))
+    .trim()
+    .toLowerCase();
+  const match = text.match(/([\d,.]+)\s*([kmb])?/u);
+  if (!match) return 0;
+  const number = Number(match[1]!.replace(/,/gu, ""));
+  if (!Number.isFinite(number)) return 0;
+  const scale =
+    match[2] === "m" ? 1_000_000 : match[2] === "k" ? 1_000 : match[2] === "b" ? 1_000_000_000 : 1;
+  return Math.round(number * scale);
+}
+
+function readNavCounter(html: string, tab: string): number {
+  const anchor = html.match(
+    new RegExp(`<a\\b[^>]*\\bdata-tab-item="${tab}"[^>]*>[\\s\\S]*?<\\/a>`, "u"),
+  )?.[0];
+  if (!anchor) return 0;
+  const counter = anchor.match(/<span\b([^>]*\bCounter\b[^>]*)>([\s\S]*?)<\/span>/u);
+  return parseCounterText(readAttribute(counter?.[1] ?? "", "title") ?? counter?.[2]);
+}
+
+function readFollowerCount(html: string, tab: "followers" | "following"): number {
+  const link = html.match(new RegExp(`href="[^"]*\\?tab=${tab}"[^>]*>[\\s\\S]*?<\\/a>`, "u"))?.[0];
+  const count = link?.match(/<span\b[^>]*\btext-bold\b[^>]*>([\s\S]*?)<\/span>/u);
+  return parseCounterText(count?.[1]);
+}
+
+function readProfileAvatarUrl(html: string): string | null {
+  const imageLink = html.match(/<a\b[^>]*\bitemprop="image"[^>]*>[\s\S]*?<img\b([^>]*)>/u);
+  const imageSrc = readAttribute(imageLink?.[1] ?? "", "src");
+  return imageSrc ?? readMetaContent(html, "og:image");
+}
+
+function readProfileBlog(html: string): string | null {
+  const block = readItemPropBlock(html, "url")?.body;
+  if (!block) return null;
+  const link = block.match(/<a\b([^>]*)>([\s\S]*?)<\/a>/u);
+  return cleanHtmlText(link?.[2]) ?? readAttribute(link?.[1] ?? "", "href");
+}
+
+function readProfileField(
+  html: string,
+  itemProp: string,
+  ariaPrefix: string,
+  className: string,
+): string | null {
+  const block = readItemPropBlock(html, itemProp);
+  if (!block) return null;
+  const label = readAttribute(block.tag, "aria-label");
+  if (label?.startsWith(ariaPrefix)) return label.slice(ariaPrefix.length).trim();
+  return readClassText(block.body, className) ?? cleanHtmlText(block.body);
+}
+
+export function parseProfile(html: string, username: string): GitHubProfile {
+  const login =
+    readClassText(html, "p-nickname") ?? readMetaContent(html, "profile:username") ?? username;
+  const htmlUrl =
+    readMetaContent(html, "og:url") ?? `https://github.com/${encodeURIComponent(login)}`;
+  return {
+    login,
+    avatar_url: readProfileAvatarUrl(html) ?? `https://github.com/${encodeURIComponent(login)}.png`,
+    html_url: htmlUrl,
+    name: readClassText(html, "p-name"),
+    company: readProfileField(html, "worksFor", "Organization:", "p-org"),
+    blog: readProfileBlog(html),
+    location: readProfileField(html, "homeLocation", "Home location:", "p-label"),
+    bio:
+      readAttribute(
+        html.match(/<div\b[^>]*\bdata-bio-text="[^"]*"[^>]*>/u)?.[0] ?? "",
+        "data-bio-text",
+      ) ?? readClassText(html, "p-note"),
+    public_repos: readNavCounter(html, "repositories"),
+    followers: readFollowerCount(html, "followers"),
+    following: readFollowerCount(html, "following"),
+    created_at: "",
+  };
 }
 
 function normalizeProfile(profile: GitHubProfile): GitHubProfile {
@@ -91,12 +210,13 @@ export async function fetchLiveSnapshot(
   cached: CardSnapshot | null,
   loading: LoadingStatus,
 ): Promise<CardSnapshot> {
-  loading.set("Fetching GitHub profile and contribution calendar...");
-  const [rawProfile, contributionHtml] = await Promise.all([
-    fetchJson<GitHubProfile>(`https://api.github.com/users/${encodeURIComponent(username)}`),
+  loading.set("Fetching GitHub profile page and contribution calendar...");
+  const [profileHtml, contributionHtml] = await Promise.all([
+    fetchText(`https://github.com/${encodeURIComponent(username)}`),
     fetchText(`https://github.com/users/${encodeURIComponent(username)}/contributions`),
   ]);
-  const profile = normalizeProfile(rawProfile);
+  loading.set("Parsing GitHub profile and contribution data...");
+  const profile = normalizeProfile(parseProfile(profileHtml, username));
   const contributions = parseContributions(contributionHtml);
   loading.set("Rendering terminal avatar...");
   const avatar = await buildAvatar(profile, 14, 7, cached ?? undefined);

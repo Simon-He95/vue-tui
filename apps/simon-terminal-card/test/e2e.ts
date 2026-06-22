@@ -1,6 +1,6 @@
 import type { Terminal } from "@simon_he/vue-tui/core";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,12 +15,16 @@ import {
 } from "@simon_he/vue-tui/cli";
 import {
   createLoadingStatus,
+  fetchLiveSnapshot,
   makeCardComponent,
   openExternalHref,
   readCachedSnapshot,
   renderComponent,
   resolveUsernameArg,
+  terminalAnsi,
 } from "../src/cli.ts";
+import { parseProfile } from "../src/github-data.ts";
+import { fetchText } from "../src/network.ts";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = resolve(packageRoot, "../..");
@@ -302,6 +306,117 @@ async function verifyCachedCardRender(): Promise<void> {
   }
 }
 
+async function verifyAppleTerminalAnsiFallback(): Promise<void> {
+  const snapshot = readCachedSnapshot();
+  assert(snapshot, "cached Simon-He95 snapshot should be bundled");
+  const rendered = await renderComponent(
+    makeCardComponent({
+      ...snapshot,
+      source: "cached",
+      avatarMode: "cells",
+    }),
+  );
+  try {
+    const ansi = terminalAnsi(rendered.terminal, [], {
+      env: {
+        TERM_PROGRAM: "Apple_Terminal",
+        TERM: "xterm-256color",
+        COLORTERM: "truecolor",
+      },
+      isTTY: true,
+      manageCursor: true,
+      platform: "darwin",
+    });
+    assert(
+      ansi.startsWith("\u001B[?25l"),
+      "Apple Terminal output should hide the cursor while painting",
+    );
+    assert(
+      ansi.endsWith("\u001B[?25h"),
+      "Apple Terminal output should restore the cursor after painting",
+    );
+    assert(
+      ansi.includes("\u001B[48;5;16m"),
+      "Apple Terminal output should render the card background with ANSI256 black",
+    );
+    assert(
+      ansi.includes("\u001B[38;5;"),
+      "Apple Terminal output should render hex foreground colors with ANSI256",
+    );
+    assert(
+      !ansi.includes("\u001B[48;2;"),
+      "Apple Terminal output should not emit truecolor backgrounds",
+    );
+    assert(
+      !ansi.includes("\u001B[38;2;"),
+      "Apple Terminal output should not emit truecolor foregrounds",
+    );
+    const heartLine = ansi.split("\n").find((line) => line.includes("❤️"));
+    assert(heartLine, "Apple Terminal output should include the heart emoji row");
+    assert(
+      heartLine.includes("\u001B[80X"),
+      "Apple Terminal emoji rows should paint the full row background before overlays",
+    );
+    assert(
+      heartLine.includes("\u001B[80G"),
+      "Apple Terminal emoji rows should place the right border by absolute column",
+    );
+    assert(
+      !heartLine.includes("❤️\u001B[0m\u001B[37m\u001B[48;5;16m "),
+      "Apple Terminal emoji rows should not append a width-dependent continuation space",
+    );
+  } finally {
+    rendered.dispose();
+  }
+}
+
+async function verifyLiveProfileHtmlParsing(): Promise<void> {
+  const html = await fetchText("https://github.com/Simon-He95");
+  const profile = parseProfile(html, "Simon-He95");
+  assert(profile.login === "Simon-He95", "live profile HTML should parse login");
+  assert(
+    profile.html_url === "https://github.com/Simon-He95",
+    "live profile HTML should parse URL",
+  );
+  assert(
+    profile.avatar_url.includes("avatars.githubusercontent.com"),
+    "live profile HTML should parse avatar CDN URL",
+  );
+  assert(profile.name === "Simon He", "live profile HTML should parse display name");
+  assert(profile.bio?.includes("laziness"), "live profile HTML should parse bio text");
+  assert(profile.location === "Shanghai", "live profile HTML should parse location");
+  assert(profile.blog === "simonhe.me", "live profile HTML should parse website text");
+  assert(profile.company?.includes("@vue-vine"), "live profile HTML should parse organizations");
+  assert(profile.public_repos > 0, "live profile HTML should parse repository count");
+  assert(profile.followers > 0, "live profile HTML should parse followers count");
+  assert(profile.following > 0, "live profile HTML should parse following count");
+}
+
+async function verifyLiveSnapshotLoadingStates(): Promise<void> {
+  const messages: string[] = [];
+  const snapshot = await fetchLiveSnapshot("Simon-He95", readCachedSnapshot(), {
+    set(message) {
+      messages.push(message);
+    },
+    stop() {},
+  });
+  assert(
+    messages.includes("Fetching GitHub profile page and contribution calendar..."),
+    "live snapshot should show GitHub page fetching loading state",
+  );
+  assert(
+    messages.includes("Parsing GitHub profile and contribution data..."),
+    "live snapshot should show GitHub HTML parsing loading state",
+  );
+  assert(
+    messages.includes("Rendering terminal avatar..."),
+    "live snapshot should show avatar rendering loading state",
+  );
+  assert(snapshot.profile.login === "Simon-He95", "live snapshot should parse profile login");
+  assert(snapshot.profile.name === "Simon He", "live snapshot should parse profile display name");
+  assert(snapshot.contributions.days.length >= 300, "live snapshot should parse contribution days");
+}
+
 function verifyUsernameArgs(): void {
   assert(resolveUsernameArg([]) === "Simon-He95", "empty args should use Simon-He95");
   assert(resolveUsernameArg(["antfu"]) === "antfu", "positional arg should select GitHub user");
@@ -428,11 +543,23 @@ async function verifyOfflineFallback(): Promise<void> {
   const outDir = join(testOutputRoot, "offline");
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
+  const preload = join(outDir, "offline-preload.mjs");
+  writeFileSync(
+    preload,
+    [
+      'import childProcess from "node:child_process";',
+      'import { syncBuiltinESMExports } from "node:module";',
+      'globalThis.fetch = async () => { throw new Error("offline e2e"); };',
+      'childProcess.execFileSync = () => { throw new Error("offline e2e curl"); };',
+      "syncBuiltinESMExports();",
+      "",
+    ].join("\n"),
+  );
   const result = await runCommand(process.execPath, ["dist/cli.js", "--no-ansi", "--out", outDir], {
     cwd: packageRoot,
     env: {
       ...process.env,
-      GITHUB_TOKEN: "invalid-token-for-cache-fallback-e2e",
+      NODE_OPTIONS: `--import=${preload}`,
     },
     timeoutMs: 90_000,
   });
@@ -449,14 +576,11 @@ async function verifyOfflineFallback(): Promise<void> {
 async function verifyDirectStdoutRender(): Promise<void> {
   const result = await runCommand(process.execPath, ["dist/cli.js"], {
     cwd: packageRoot,
-    env: {
-      ...process.env,
-      GITHUB_TOKEN: "invalid-token-for-cache-fallback-e2e",
-    },
     timeoutMs: 90_000,
   });
   const text = stripAnsi(result.stdout);
   assert(text.includes("GitHub activity card"), "direct command should print the card to stdout");
+  assert(text.includes("live GitHub data"), "direct command should render live GitHub data");
   assert(text.includes("Simon He"), "direct command stdout should include Simon's profile");
   assert(text.includes("love ❤️"), "direct command stdout should preserve the heart emoji");
   assert(text.includes("GitHub contributions"), "direct command stdout should include the graph");
@@ -489,14 +613,11 @@ async function verifyPackedNpxEntry(): Promise<void> {
     ["exec", "--yes", `--package=${join(releaseDir, packed)}`, "--", "terminal-card", "Simon-He95"],
     {
       cwd: packageRoot,
-      env: {
-        ...process.env,
-        GITHUB_TOKEN: "invalid-token-for-cache-fallback-e2e",
-      },
       timeoutMs: 120_000,
     },
   );
   const text = stripAnsi(result.stdout);
+  assert(text.includes("live GitHub data"), "packed npx entry should render live GitHub data");
   assert(text.includes("Simon He"), "packed npx entry should print Simon's profile");
   assert(text.includes("GitHub contributions"), "packed npx entry should print the graph card");
   assert(result.stdout.endsWith("\n"), "packed npx entry should leave the prompt below the card");
@@ -514,6 +635,9 @@ async function main(): Promise<void> {
   );
   verifyUsernameArgs();
   await verifyCachedCardRender();
+  await verifyAppleTerminalAnsiFallback();
+  await verifyLiveProfileHtmlParsing();
+  await verifyLiveSnapshotLoadingStates();
   await verifyGraphicAvatarRender();
   await verifyLoadingStatus();
   await verifyDirectStdoutRender();
