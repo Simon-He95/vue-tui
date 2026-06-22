@@ -1427,17 +1427,13 @@ export const TCandlestickChart = defineComponent({
     const candleLayout = computed<CandlestickLayout>(() => {
       const width = cellCount(props.w, 0);
       const height = cellCount(props.h, 0);
-      let { min, max } = domainFromValues(
-        candlestickDomainValues(props.candles),
-        props.min,
-        props.max,
-      );
+      let min = 0;
+      let max = 0;
       let layout = resolveAxisLayout(width, height, min, max, props.showAxes);
-      let startIndex = 0;
-      let visibleCandles: readonly TCandlestickDatum[] = props.candles;
-      let capacity = layout.plotW;
+      let startIndex = props.candles.length;
+      let visibleCandles: readonly TCandlestickDatum[] = [];
 
-      for (;;) {
+      for (let capacity = Math.min(props.candles.length, width); capacity >= 0; capacity--) {
         startIndex = Math.max(0, props.candles.length - capacity);
         visibleCandles = props.candles.slice(startIndex);
         ({ min, max } = domainFromValues(
@@ -1446,9 +1442,7 @@ export const TCandlestickChart = defineComponent({
           props.max,
         ));
         layout = resolveAxisLayout(width, height, min, max, props.showAxes);
-        const nextCapacity = Math.min(capacity, layout.plotW);
-        if (nextCapacity === capacity) break;
-        capacity = nextCapacity;
+        if (visibleCandles.length <= layout.plotW) break;
       }
 
       const candleOffsetX = Math.max(0, layout.plotW - visibleCandles.length);

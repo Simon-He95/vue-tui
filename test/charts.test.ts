@@ -1161,6 +1161,31 @@ describe("terminal charts", () => {
     }
   });
 
+  it("shows the maximum recent candlesticks after historical axis extremes fall out of view", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(TCandlestickChart, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 6,
+          candles: [
+            { open: -1e9, high: -1e9, low: -1e9, close: -1e9 },
+            ...Array.from({ length: 9 }, () => ({ open: 10, high: 10, low: 10, close: 10 })),
+          ],
+        }),
+      14,
+      7,
+    );
+
+    for (let x = 3; x < 12; x++) expect(mounted.terminal.getCell(x, 1).ch).toBe("█");
+    expect(mounted.terminal.getCell(3, 5).ch).toBe("2");
+    expect(mounted.terminal.getCell(10, 5).ch).toBe("1");
+    expect(mounted.terminal.getCell(11, 5).ch).toBe("0");
+
+    mounted.unmount();
+  });
+
   it("keeps chart tooltips inside the visible clipped viewport", async () => {
     const ContributionApp = defineComponent({
       setup: () => () =>
