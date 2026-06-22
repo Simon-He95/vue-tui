@@ -37,8 +37,8 @@ importers:
         specifier: ^0.20.2
         version: 0.20.2
       happy-dom:
-        specifier: ^17.6.3
-        version: 17.6.3
+        specifier: ^20.0.0
+        version: 20.10.6
       lint-staged:
         specifier: ^13.3.0
         version: 13.3.0
@@ -77,7 +77,7 @@ importers:
         version: 1.6.4(@algolia/client-search@5.52.0)(@types/node@18.19.130)(change-case@5.4.4)(lightningcss@1.32.0)(postcss@8.5.15)(qrcode@1.5.4)(search-insights@2.17.3)(typescript@5.9.3)
       vitest:
         specifier: ^4.1.9
-        version: 4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@17.6.3)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4))
+        version: 4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@20.10.6)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4))
       vue:
         specifier: ^3.5.38
         version: 3.5.38(typescript@5.9.3)
@@ -129,13 +129,13 @@ importers:
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^5.2.4
-        version: 5.2.4(vite@5.4.21(@types/node@18.19.130)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))
+        version: 5.2.4(vite@5.4.21(@types/node@26.0.0)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))
       typescript:
         specifier: 5.8.3
         version: 5.8.3
       vite:
         specifier: ^5.4.21
-        version: 5.4.21(@types/node@18.19.130)(lightningcss@1.32.0)
+        version: 5.4.21(@types/node@26.0.0)(lightningcss@1.32.0)
 
   examples/basic:
     dependencies:
@@ -148,13 +148,13 @@ importers:
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^5.2.4
-        version: 5.2.4(vite@5.4.21(@types/node@18.19.130)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))
+        version: 5.2.4(vite@5.4.21(@types/node@26.0.0)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))
       typescript:
         specifier: 5.8.3
         version: 5.8.3
       vite:
         specifier: ^5.4.21
-        version: 5.4.21(@types/node@18.19.130)(lightningcss@1.32.0)
+        version: 5.4.21(@types/node@26.0.0)(lightningcss@1.32.0)
 
 packages:
 
@@ -1587,14 +1587,24 @@ packages:
   '@types/node@18.19.130':
     resolution: {integrity: sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg==}
 
+  '@types/node@26.0.0':
+    resolution: {integrity: sha512-vf2YFi1iY9lHGwNJMs01biZFbKJkrZR1T6/MlzjhJLPdntOHLhTrDSnSVcdtvjihi4VQNlrFRIxLsDBlQpAipA==}
+
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
 
   '@types/web-bluetooth@0.0.21':
     resolution: {integrity: sha512-oIQLCGWtcFZy2JW77j9k8nHzAOpqMHLQejDA48XXMWH6tjCQHz5RCFz1bzsmROyL6PUm+LLnUiI4BCn221inxA==}
 
+  '@types/whatwg-mimetype@3.0.2':
+    resolution: {integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
+    deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
   '@valibot/to-json-schema@1.0.0':
     resolution: {integrity: sha512-/9crJgPptVsGCL6X+JPDQyaJwkalSZ/52WuF8DiRUxJgcmpNdzYRfZ+gqMEP8W3CTVfuMWPqqvIgfwJ97f9Etw==}
@@ -1796,6 +1806,10 @@ packages:
   braces@3.0.2:
     resolution: {integrity: sha512-b8um+L1RzM3WDSzvhm6gIz1yfTbBt6YTlcEKAvsmqCZZFw46z626lVj9j1yEPW33H5H+lBQpZMP1k8l+78Ha0A==}
     engines: {node: '>=8'}
+
+  buffer-image-size@0.6.4:
+    resolution: {integrity: sha512-nEh+kZOPY1w+gcCMobZ6ETUp9WfibndnosbpwB1iJk/8Gt5ZF2bhS6+B6bPYz424KtwsR6Rflc3tCz1/ghX2dQ==}
+    engines: {node: '>=4.0'}
 
   bumpp@8.2.1:
     resolution: {integrity: sha512-4tHKsWC2mqHQvdjZ4AXgVhS2xMsz8qQ4zYt87vGRXW5tqAjrYa/UJqy7s/dGYI2OIe9ghBdiFhKpyKEX9SXffg==}
@@ -2074,10 +2088,10 @@ packages:
 
   glob@7.1.6:
     resolution: {integrity: sha512-LwaxwyZ72Lk7vZINtNNrywX0ZuLyStrdDtabefZKAY5ZGJhVtgdznluResxNmPitE0SAO+O26sWTHeKSI2wMBA==}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
-  happy-dom@17.6.3:
-    resolution: {integrity: sha512-UVIHeVhxmxedbWPCfgS55Jg2rDfwf2BCKeylcPSqazLz5w3Kri7Q4xdBJubsr/+VUzFLh0VjIvh13RaDA2/Xug==}
+  happy-dom@20.10.6:
+    resolution: {integrity: sha512-6QD0ilzDDt93tX44y8tbmZdAcdTRYDhUP+Asgi6pC8Pp5IA3cvaZGyoVN/EGtlq9ziT65iPuBBn3ASLr6hCgVw==}
     engines: {node: '>=20.0.0'}
 
   has-flag@4.0.0:
@@ -2915,6 +2929,9 @@ packages:
   undici-types@5.26.5:
     resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
 
+  undici-types@8.3.0:
+    resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
+
   unist-util-is@6.0.0:
     resolution: {integrity: sha512-2qCTHimwdxLfz+YzdGfkqNlH0tLi9xjTnHddPmJwtIG9MGsdbutfTc4P+haPD7l7Cjxf/WZj+we5qfVPvvxfYw==}
 
@@ -3091,10 +3108,6 @@ packages:
       typescript:
         optional: true
 
-  webidl-conversions@7.0.0:
-    resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
-    engines: {node: '>=12'}
-
   webpack-virtual-modules@0.6.2:
     resolution: {integrity: sha512-66/V2i5hQanC51vBQKPH4aI8NMAcBW59FVBs+rC7eGHupMyfn34q7rZIE+ETlJ+XTevqfUhVVBgSUNSW2flEUQ==}
 
@@ -3125,6 +3138,18 @@ packages:
 
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
+
+  ws@8.21.0:
+    resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
 
   y18n@4.0.3:
     resolution: {integrity: sha512-JKhqTOwSrqNA1NY5lSztJ1GrBiUodLMmIZuLiDaMRJ+itFd+ABVE8XBjOvIWL+rSqNDC74LCSFmlb/U4UZ4hJQ==}
@@ -4109,9 +4134,19 @@ snapshots:
     dependencies:
       undici-types: 5.26.5
 
+  '@types/node@26.0.0':
+    dependencies:
+      undici-types: 8.3.0
+
   '@types/unist@3.0.3': {}
 
   '@types/web-bluetooth@0.0.21': {}
+
+  '@types/whatwg-mimetype@3.0.2': {}
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 18.19.130
 
   '@ungap/structured-clone@1.3.0': {}
 
@@ -4119,15 +4154,15 @@ snapshots:
     dependencies:
       valibot: 1.0.0(typescript@5.9.3)
 
-  '@vitejs/plugin-vue@5.2.4(vite@5.4.21(@types/node@18.19.130)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))':
-    dependencies:
-      vite: 5.4.21(@types/node@18.19.130)(lightningcss@1.32.0)
-      vue: 3.5.38(typescript@5.8.3)
-
   '@vitejs/plugin-vue@5.2.4(vite@5.4.21(@types/node@18.19.130)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.9.3))':
     dependencies:
       vite: 5.4.21(@types/node@18.19.130)(lightningcss@1.32.0)
       vue: 3.5.38(typescript@5.9.3)
+
+  '@vitejs/plugin-vue@5.2.4(vite@5.4.21(@types/node@26.0.0)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))':
+    dependencies:
+      vite: 5.4.21(@types/node@26.0.0)(lightningcss@1.32.0)
+      vue: 3.5.38(typescript@5.8.3)
 
   '@vitest/coverage-v8@4.1.9(vitest@4.1.9)':
     dependencies:
@@ -4141,7 +4176,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@17.6.3)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4))
+      vitest: 4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@20.10.6)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4))
 
   '@vitest/expect@4.1.9':
     dependencies:
@@ -4316,13 +4351,15 @@ snapshots:
     dependencies:
       type-fest: 1.4.0
 
-  ansi-regex@5.0.1: {}
+  ansi-regex@5.0.1:
+    optional: true
 
   ansi-regex@6.0.1: {}
 
   ansi-styles@4.3.0:
     dependencies:
       color-convert: 2.0.1
+    optional: true
 
   ansi-styles@6.2.1: {}
 
@@ -4359,6 +4396,10 @@ snapshots:
     dependencies:
       fill-range: 7.0.1
 
+  buffer-image-size@0.6.4:
+    dependencies:
+      '@types/node': 18.19.130
+
   bumpp@8.2.1:
     dependencies:
       '@jsdevtools/ez-spawn': 3.0.4
@@ -4374,7 +4415,8 @@ snapshots:
 
   call-me-maybe@1.0.1: {}
 
-  camelcase@5.3.1: {}
+  camelcase@5.3.1:
+    optional: true
 
   ccount@2.0.1: {}
 
@@ -4409,12 +4451,15 @@ snapshots:
       string-width: 4.2.3
       strip-ansi: 6.0.1
       wrap-ansi: 6.2.0
+    optional: true
 
   color-convert@2.0.1:
     dependencies:
       color-name: 1.1.4
+    optional: true
 
-  color-name@1.1.4: {}
+  color-name@1.1.4:
+    optional: true
 
   colorette@2.0.20: {}
 
@@ -4450,7 +4495,8 @@ snapshots:
     dependencies:
       ms: 2.1.3
 
-  decamelize@1.2.0: {}
+  decamelize@1.2.0:
+    optional: true
 
   defu@6.1.4: {}
 
@@ -4464,7 +4510,8 @@ snapshots:
 
   diff@7.0.0: {}
 
-  dijkstrajs@1.0.3: {}
+  dijkstrajs@1.0.3:
+    optional: true
 
   dts-resolver@1.0.1:
     dependencies:
@@ -4477,7 +4524,8 @@ snapshots:
 
   emoji-regex-xs@1.0.0: {}
 
-  emoji-regex@8.0.0: {}
+  emoji-regex@8.0.0:
+    optional: true
 
   emoji-regex@9.2.2: {}
 
@@ -4626,6 +4674,7 @@ snapshots:
     dependencies:
       locate-path: 5.0.0
       path-exists: 4.0.0
+    optional: true
 
   focus-trap@7.8.0:
     dependencies:
@@ -4639,7 +4688,8 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
-  get-caller-file@2.0.5: {}
+  get-caller-file@2.0.5:
+    optional: true
 
   get-stream@6.0.1: {}
 
@@ -4660,10 +4710,18 @@ snapshots:
       once: 1.4.0
       path-is-absolute: 1.0.1
 
-  happy-dom@17.6.3:
+  happy-dom@20.10.6:
     dependencies:
-      webidl-conversions: 7.0.0
+      '@types/node': 26.0.0
+      '@types/whatwg-mimetype': 3.0.2
+      '@types/ws': 8.18.1
+      buffer-image-size: 0.6.4
+      entities: 7.0.1
       whatwg-mimetype: 3.0.0
+      ws: 8.21.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   has-flag@4.0.0: {}
 
@@ -4702,7 +4760,8 @@ snapshots:
 
   is-extglob@2.1.1: {}
 
-  is-fullwidth-code-point@3.0.0: {}
+  is-fullwidth-code-point@3.0.0:
+    optional: true
 
   is-fullwidth-code-point@4.0.0: {}
 
@@ -4873,6 +4932,7 @@ snapshots:
   locate-path@5.0.0:
     dependencies:
       p-locate: 4.1.0
+    optional: true
 
   log-update@5.0.1:
     dependencies:
@@ -5101,16 +5161,20 @@ snapshots:
   p-limit@2.3.0:
     dependencies:
       p-try: 2.2.0
+    optional: true
 
   p-locate@4.1.0:
     dependencies:
       p-limit: 2.3.0
+    optional: true
 
-  p-try@2.2.0: {}
+  p-try@2.2.0:
+    optional: true
 
   package-manager-detector@1.6.0: {}
 
-  path-exists@4.0.0: {}
+  path-exists@4.0.0:
+    optional: true
 
   path-is-absolute@1.0.1: {}
 
@@ -5151,7 +5215,8 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.2
 
-  pngjs@5.0.0: {}
+  pngjs@5.0.0:
+    optional: true
 
   postcss@8.5.12:
     dependencies:
@@ -5188,6 +5253,7 @@ snapshots:
       dijkstrajs: 1.0.3
       pngjs: 5.0.0
       yargs: 15.4.1
+    optional: true
 
   quansync@0.2.10: {}
 
@@ -5205,9 +5271,11 @@ snapshots:
     dependencies:
       regex-utilities: 2.3.0
 
-  require-directory@2.1.1: {}
+  require-directory@2.1.1:
+    optional: true
 
-  require-main-filename@2.0.0: {}
+  require-main-filename@2.0.0:
+    optional: true
 
   resolve-pkg-maps@1.0.0: {}
 
@@ -5332,7 +5400,8 @@ snapshots:
 
   semver@7.8.0: {}
 
-  set-blocking@2.0.0: {}
+  set-blocking@2.0.0:
+    optional: true
 
   shebang-command@2.0.0:
     dependencies:
@@ -5392,6 +5461,7 @@ snapshots:
       emoji-regex: 8.0.0
       is-fullwidth-code-point: 3.0.0
       strip-ansi: 6.0.1
+    optional: true
 
   string-width@5.1.2:
     dependencies:
@@ -5407,6 +5477,7 @@ snapshots:
   strip-ansi@6.0.1:
     dependencies:
       ansi-regex: 5.0.1
+    optional: true
 
   strip-ansi@7.0.1:
     dependencies:
@@ -5512,6 +5583,8 @@ snapshots:
 
   undici-types@5.26.5: {}
 
+  undici-types@8.3.0: {}
+
   unist-util-is@6.0.0:
     dependencies:
       '@types/unist': 3.0.3
@@ -5570,6 +5643,16 @@ snapshots:
       rollup: 4.55.1
     optionalDependencies:
       '@types/node': 18.19.130
+      fsevents: 2.3.3
+      lightningcss: 1.32.0
+
+  vite@5.4.21(@types/node@26.0.0)(lightningcss@1.32.0):
+    dependencies:
+      esbuild: 0.21.5
+      postcss: 8.5.12
+      rollup: 4.55.1
+    optionalDependencies:
+      '@types/node': 26.0.0
       fsevents: 2.3.3
       lightningcss: 1.32.0
 
@@ -5636,7 +5719,7 @@ snapshots:
       - typescript
       - universal-cookie
 
-  vitest@4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@17.6.3)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4)):
+  vitest@4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@20.10.6)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4)):
     dependencies:
       '@vitest/expect': 4.1.9
       '@vitest/mocker': 4.1.9(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4))
@@ -5661,7 +5744,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 18.19.130
       '@vitest/coverage-v8': 4.1.9(vitest@4.1.9)
-      happy-dom: 17.6.3
+      happy-dom: 20.10.6
     transitivePeerDependencies:
       - msw
 
@@ -5685,13 +5768,12 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  webidl-conversions@7.0.0: {}
-
   webpack-virtual-modules@0.6.2: {}
 
   whatwg-mimetype@3.0.0: {}
 
-  which-module@2.0.1: {}
+  which-module@2.0.1:
+    optional: true
 
   which@2.0.2:
     dependencies:
@@ -5707,6 +5789,7 @@ snapshots:
       ansi-styles: 4.3.0
       string-width: 4.2.3
       strip-ansi: 6.0.1
+    optional: true
 
   wrap-ansi@8.1.0:
     dependencies:
@@ -5716,7 +5799,10 @@ snapshots:
 
   wrappy@1.0.2: {}
 
-  y18n@4.0.3: {}
+  ws@8.21.0: {}
+
+  y18n@4.0.3:
+    optional: true
 
   yallist@4.0.0: {}
 
@@ -5726,6 +5812,7 @@ snapshots:
     dependencies:
       camelcase: 5.3.1
       decamelize: 1.2.0
+    optional: true
 
   yargs@15.4.1:
     dependencies:
@@ -5740,5 +5827,6 @@ snapshots:
       which-module: 2.0.1
       y18n: 4.0.3
       yargs-parser: 18.1.3
+    optional: true
 
   zwitch@2.0.4: {}
