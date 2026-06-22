@@ -2,7 +2,6 @@
   "name": "@simon_he/vue-vite-conf-card",
   "version": "0.1.1",
   "description": "Vue x Vite conference terminal card powered by vue-tui",
-  "private": true,
   "bin": {
     "vue-vite-conf-card": "./dist/cli.js"
   },
