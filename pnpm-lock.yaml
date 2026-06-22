@@ -101,17 +101,10 @@ importers:
         version: 3.5.38(typescript@5.9.3)
 
   apps/vue-vite-conf-card:
-    dependencies:
-      qrcode:
-        specifier: ^1.5.4
-        version: 1.5.4
     devDependencies:
       '@types/node':
         specifier: ^18.19.130
         version: 18.19.130
-      '@types/qrcode':
-        specifier: ^1.5.6
-        version: 1.5.6
       tsdown:
         specifier: ^0.9.9
         version: 0.9.9(publint@0.3.21)(typescript@5.9.3)
@@ -1593,9 +1586,6 @@ packages:
 
   '@types/node@18.19.130':
     resolution: {integrity: sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg==}
-
-  '@types/qrcode@1.5.6':
-    resolution: {integrity: sha512-te7NQcV2BOvdj2b1hCAHzAoMNuj65kNBMz0KBaxM6c3VGBOhU0dURQKOtH8CFNI/dsKkwlv32p26qYQTWoB5bw==}
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
@@ -4118,10 +4108,6 @@ snapshots:
   '@types/node@18.19.130':
     dependencies:
       undici-types: 5.26.5
-
-  '@types/qrcode@1.5.6':
-    dependencies:
-      '@types/node': 18.19.130
 
   '@types/unist@3.0.3': {}
 

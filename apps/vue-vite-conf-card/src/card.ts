@@ -1,10 +1,9 @@
 import type { Component } from "vue";
 import type { Style } from "@simon_he/vue-tui/core";
-import { create as createQRCode } from "qrcode";
 import { defineComponent, h } from "vue";
 import { TBox, TText } from "@simon_he/vue-tui";
 import { sliceByCells, textCellWidth } from "@simon_he/vue-tui/vue";
-import { siteUrl, ticketUrl } from "./logo-images.js";
+import { siteUrl } from "./logo-images.js";
 
 export type LogoMode = "blocks" | "graphics";
 export type QrMode = "link" | "image" | "terminal";
@@ -71,48 +70,49 @@ const pudongSkylineRows = [
   "─┴┴─┴──┴─┴──┴──┴┴──┴┴─",
 ] as const;
 
-type TerminalQrCell = Readonly<{
-  value: " " | "▀" | "▄";
-  style: Style;
-}>;
+const terminalShanghaiSkylineRows = [
+  "                                   │          ",
+  "                                  ╭┴╮         ",
+  "                                  │ │         ",
+  "                                 ╭╯ ╰╮        ",
+  "                                 ╰╮ ╭╯        ",
+  "                                  │ │         ",
+  "                              ╭───╯ ╰───╮     ",
+  "                            ╭─╯ · · · · ╰─╮   ",
+  "                            │ · · · · · · │   ",
+  "                            ╰─╮ · · · · ╭─╯   ",
+  "                              ╰────┬────╯     ",
+  "                                ╱  │  ╲       ",
+  "       ╭╮        ╭────╮        ╱   │   ╲      ",
+  "   ╭╮  ││   ╭╮   │    │   ────╯    │    ╰──── ",
+  "   ││ ╭╯╰╮  ││   │╭──╮│            │          ",
+  "   ││ │  │ ╭╯╰╮  ││  ││            │          ",
+  "───┴┴─┴──┴─┴──┴──┴┴──┴┴────────────┴─────────",
+] as const;
 
 const qrLightStyle: Style = { fg: "whiteBright", bg: "whiteBright" };
 const qrDarkStyle: Style = { fg: "black", bg: "black" };
 const qrHalfStyle: Style = { fg: "black", bg: "whiteBright" };
 
-function terminalQrRows(value: string, margin: number): readonly (readonly TerminalQrCell[])[] {
-  const qr = createQRCode(value, { errorCorrectionLevel: "L" });
-  const moduleSize = qr.modules.size;
-  const size = moduleSize + margin * 2;
-  const moduleAt = (row: number, column: number): boolean => {
-    const qrRow = row - margin;
-    const qrColumn = column - margin;
-    if (qrRow < 0 || qrColumn < 0 || qrRow >= moduleSize || qrColumn >= moduleSize) return false;
-    return Boolean(qr.modules.get(qrRow, qrColumn));
-  };
-
-  const rows: TerminalQrCell[][] = [];
-  for (let row = 0; row < size; row += 2) {
-    const line: TerminalQrCell[] = [];
-    for (let column = 0; column < size; column++) {
-      const top = moduleAt(row, column);
-      const bottom = moduleAt(row + 1, column);
-      line.push(
-        top && bottom
-          ? { value: " ", style: qrDarkStyle }
-          : top
-            ? { value: "▀", style: qrHalfStyle }
-            : bottom
-              ? { value: "▄", style: qrHalfStyle }
-              : { value: " ", style: qrLightStyle },
-      );
-    }
-    rows.push(line);
-  }
-  return rows;
-}
-
-const ticketQrTerminalRows = terminalQrRows(ticketUrl, 2);
+const ticketQrTerminalRows = [
+  "                                 ",
+  "  █▀▀▀▀▀█ ▄▄█  ▄▀█ ▀█▀█ █▀▀▀▀▀█  ",
+  "  █ ███ █ ▀▄    █▄▀▀▄ ▀ █ ███ █  ",
+  "  █ ▀▀▀ █ █▀█ ██ ██▀█▄  █ ▀▀▀ █  ",
+  "  ▀▀▀▀▀▀▀ █ █ ▀ ▀ ▀▄█▄█ ▀▀▀▀▀▀▀  ",
+  "  ██ ▀▄▄▀█ ▄ ▀ ▀▀▀ ▄ ▀▄▄█▀▀▄▀▀▄  ",
+  "  █▀▄█▄█▀▄ ▄▄▄ █▀▄▄ █▀▄█▄▄▄▀██   ",
+  "  ▄ ██▄ ▀▄  ▀  ▀▄  ▀ ▄██▀▄ ▀ ▀▀  ",
+  "  ▀ ▄▄█▀▀██▀ █▄█▀▄▄█  ▄▀▀  █▀█▀  ",
+  "  ▀▀█  █▀█▀ ▄█  ▄ ▄█  █▀▄█ ▄ ▀▄  ",
+  "  ▀ ▀▄▀▄▀█▀█▄▄█ █ ▄▄ ▄█ █▀   ██  ",
+  "  ▀  ▀  ▀▀▄▀▀▀███▀█ ▀██▀▀▀█ █▄▄  ",
+  "  █▀▀▀▀▀█ ▀▀   █▄ ▀▀▄ █ ▀ █▄▄▀   ",
+  "  █ ███ █ ▄▄▀▀██▄ ▀█▄▄▀▀█▀█▄▄ ▀  ",
+  "  █ ▀▀▀ █ ▄▄▀▀▄▄▄▄ █ ▄▄▀  █▀▀▄▀  ",
+  "  ▀▀▀▀▀▀▀ ▀▀▀▀ ▀ ▀ ▀  ▀▀ ▀▀  ▀   ",
+  "                                 ",
+] as const;
 
 function textNode(x: number, y: number, w: number, value: string, style: Style): unknown {
   return h(TText, {
@@ -134,7 +134,30 @@ function lineNodes(
   rows: readonly string[],
   style: Style,
 ): unknown[] {
-  return rows.map((row, index) => textNode(x, y + index, textCellWidth(row), row, style));
+  const nodes: unknown[] = [];
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex]!;
+    let start = -1;
+    let value = "";
+    const flush = (): void => {
+      if (start === -1) return;
+      nodes.push(textNode(x + start, y + rowIndex, textCellWidth(value), value, style));
+      start = -1;
+      value = "";
+    };
+
+    for (let column = 0; column < row.length; column++) {
+      const char = row[column]!;
+      if (char === " ") {
+        flush();
+        continue;
+      }
+      if (start === -1) start = column;
+      value += char;
+    }
+    flush();
+  }
+  return nodes;
 }
 
 function clearRectNodes(x: number, y: number, w: number, h: number): unknown[] {
@@ -182,16 +205,17 @@ function infoChipNode(x: number, y: number, value: string): unknown {
 function terminalQrNodes(x: number, y: number): unknown[] {
   const nodes: unknown[] = [];
   for (let row = 0; row < ticketQrTerminalRows.length; row++) {
-    const cells = ticketQrTerminalRows[row]!;
-    for (let column = 0; column < cells.length; column++) {
-      const cell = cells[column]!;
+    const line = ticketQrTerminalRows[row]!;
+    for (let column = 0; column < line.length; column++) {
+      const value = line[column]!;
+      const style = value === "█" ? qrDarkStyle : value === " " ? qrLightStyle : qrHalfStyle;
       nodes.push(
         h(TText, {
           x: x + column,
           y: y + row,
           w: 1,
-          value: cell.value,
-          style: cell.style,
+          value: value === "█" ? " " : value,
+          style,
         }),
       );
     }
@@ -215,8 +239,10 @@ export function makeVueViteConfCardComponent(
   const logoLabelY = comfortable ? 14 : 12;
   const welcomeY = comfortable ? 8 : 6;
   const landmarkY = comfortable ? 14 : 10;
-  const skylineX = qrMode === "terminal" ? 52 : 48;
+  const skylineX = 48;
   const skylineY = comfortable ? 28 : 18;
+  const terminalSkylineX = 46;
+  const terminalSkylineY = 14;
   const textStartY = comfortable ? 17 : logoMode === "blocks" ? 14 : 12;
   const qrTitleY = comfortable ? 27 : 19;
   const qrLinkY = comfortable ? 29 : 21;
@@ -289,11 +315,17 @@ export function makeVueViteConfCardComponent(
                     }),
                   ]),
             ...clearRectNodes(1, 4, 48, 9),
-            ...lineNodes(skylineX, skylineY, pudongSkylineRows, { fg: "#334155" }),
+            ...(qrMode === "terminal"
+              ? lineNodes(terminalSkylineX, terminalSkylineY, terminalShanghaiSkylineRows, {
+                  fg: "#475569",
+                })
+              : [
+                  ...lineNodes(skylineX, skylineY, pudongSkylineRows, { fg: "#334155" }),
+                  ...lineNodes(72, landmarkY, shanghaiLandmarkRows, { fg: "#475569" }),
+                ]),
             ...(logoMode === "blocks"
               ? [textLine(76, welcomeY, "欢 迎 您 👋", { fg: "whiteBright", bold: true })]
               : []),
-            ...lineNodes(72, landmarkY, shanghaiLandmarkRows, { fg: "#475569" }),
             ...(logoMode === "blocks"
               ? [
                   ...logoBlockNodes(3, logoY, vueLogoRows, {
