@@ -6,6 +6,7 @@ import DeployRunnerDemo from "./DeployRunnerDemo.vue";
 import Demo from "./Demo.vue";
 import Essay30Demo from "./Essay30Demo.vue";
 import EssayDemo from "./EssayDemo.vue";
+import FlexLayoutDemo from "./FlexLayoutDemo.vue";
 import LogExplorerDemo from "./LogExplorerDemo.vue";
 import MiniAgentShellDemo from "./MiniAgentShellDemo.vue";
 import MultilinePasteDemo from "./MultilinePasteDemo.vue";
@@ -49,6 +50,15 @@ export const showcaseDemos: ShowcaseDemo[] = [
     cols: 86,
     rows: 26,
     component: markRaw(DeployRunnerDemo),
+    defaultStyle: { fg: "whiteBright", bg: "black" },
+  },
+  {
+    id: "flex-layout",
+    label: "Flex Layout",
+    summary: "TFlex 嵌套布局、grow/basis、百分比、wrap、order 和 measure。",
+    cols: 88,
+    rows: 26,
+    component: markRaw(FlexLayoutDemo),
     defaultStyle: { fg: "whiteBright", bg: "black" },
   },
   {

@@ -520,6 +520,19 @@ export const componentSlotDocs: Record<string, readonly ComponentSlotDoc[]> = {
         "Children rendered with this view's layout origin, clip rect, render stack, and event z-index context.",
     },
   ],
+  TFlex: [
+    {
+      name: "default",
+      description: "Flex item subtree measured and positioned inside the flex container.",
+    },
+  ],
+  TFlexItem: [
+    {
+      name: "default",
+      props: "{ rect: Rect }",
+      description: "Item content rendered inside the computed child rect.",
+    },
+  ],
   TDialog: [
     {
       name: "default",

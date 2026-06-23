@@ -34,7 +34,7 @@ import DocsShowcaseTerminal from './.vitepress/components/DocsShowcaseTerminal.v
 ## 这页覆盖了什么
 
 - `Layout + copy`
-  重点看 `TBox`、`TFlow`、`TText` 这类基础构件如何组织复杂屏幕。
+  重点看 `TBox`、`TFlex`、`TFlow`、`TText` 这类基础构件如何组织复杂屏幕。
 - `Forms + editing`
   重点看 `TInput`、`TInputBox`、`TSelect`、`TList`、`TJsonEditor` 这类交互组件。
 - `Overlay + focus`

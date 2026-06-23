@@ -44,6 +44,7 @@ export { TerminalProvider } from "./components/TerminalProvider.js";
 export { TFlex, TFlexItem } from "./components/TFlex.js";
 export type {
   TFlexAlign,
+  TFlexAlignContent,
   TFlexDirection,
   TFlexMeasure,
   TFlexMeasureConstraints,

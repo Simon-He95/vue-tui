@@ -318,6 +318,12 @@ Import: `@simon_he/vue-tui`
 | <code>pointerleaveCapture</code> | <code>TerminalPointerEvent</code> | Emitted when the pointer leaves the component. Runs during capture. |
 | <code>pointerleave</code>        | <code>TerminalPointerEvent</code> | Emitted when the pointer leaves the component.                      |
 
+### Slots
+
+| 名称                 | Props | 说明                                                                                            |
+| -------------------- | ----- | ----------------------------------------------------------------------------------------------- |
+| <code>default</code> | —     | Content rendered inside the box content area with origin, clipping, and scroll offsets applied. |
+
 ## TBreadcrumb
 
 源码：`src/vue/components/TNavigation.ts`
@@ -685,6 +691,12 @@ Import: `@simon_he/vue-tui`
 | <code>keydown</code>           | <code>TerminalKeyboardEvent</code>                | Emitted for keydown events.                      |
 | <code>confirm</code>           | <code>DialogButton &amp; { index: number }</code> | Emitted when a focused action is confirmed.      |
 
+### Slots
+
+| 名称                 | Props | 说明                                                                                 |
+| -------------------- | ----- | ------------------------------------------------------------------------------------ |
+| <code>default</code> | —     | Dialog body content rendered inside the content rect before optional footer buttons. |
+
 ## TDivider
 
 源码：`src/vue/components/TFeedback.ts`
@@ -744,6 +756,12 @@ Import: `@simon_he/vue-tui`
 | -------------------------- | ----------------------------------------- | -------------------------------------- |
 | <code>selectionCopy</code> | <code>TerminalSelectionCopyPayload</code> | Emitted after terminal selection copy. |
 
+### Slots
+
+| 名称                 | Props | 说明                                                                  |
+| -------------------- | ----- | --------------------------------------------------------------------- |
+| <code>default</code> | —     | Terminal component tree rendered inside the provider runtime context. |
+
 ## TFlex
 
 源码：`src/vue/components/TFlex.ts`
@@ -754,23 +772,38 @@ Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
-| 名称                        | 类型                        | 默认值                           | 必填 | 说明 |
-| --------------------------- | --------------------------- | -------------------------------- | ---- | ---- |
-| <code>x</code>              | <code>number</code>         | —                                | 是   | —    |
-| <code>y</code>              | <code>number</code>         | —                                | 是   | —    |
-| <code>w</code>              | <code>number</code>         | —                                | 是   | —    |
-| <code>h</code>              | <code>number</code>         | —                                | 是   | —    |
-| <code>direction</code>      | <code>TFlexDirection</code> | <code>&quot;row&quot;</code>     | 否   | —    |
-| <code>gap</code>            | <code>number</code>         | <code>0</code>                   | 否   | —    |
-| <code>padding</code>        | <code>number</code>         | <code>0</code>                   | 否   | —    |
-| <code>wrap</code>           | <code>boolean</code>        | <code>false</code>               | 否   | —    |
-| <code>alignItems</code>     | <code>TFlexAlign</code>     | <code>&quot;stretch&quot;</code> | 否   | —    |
-| <code>justifyContent</code> | <code>TFlexJustify</code>   | <code>&quot;start&quot;</code>   | 否   | —    |
-| <code>zIndex</code>         | <code>number</code>         | <code>0</code>                   | 否   | —    |
+| 名称                        | 类型                           | 默认值                           | 必填 | 说明 |
+| --------------------------- | ------------------------------ | -------------------------------- | ---- | ---- |
+| <code>x</code>              | <code>number</code>            | —                                | 是   | —    |
+| <code>y</code>              | <code>number</code>            | —                                | 是   | —    |
+| <code>w</code>              | <code>number</code>            | —                                | 是   | —    |
+| <code>h</code>              | <code>number</code>            | —                                | 是   | —    |
+| <code>direction</code>      | <code>TFlexDirection</code>    | <code>&quot;row&quot;</code>     | 否   | —    |
+| <code>gap</code>            | <code>number</code>            | <code>0</code>                   | 否   | —    |
+| <code>rowGap</code>         | <code>number</code>            | <code>undefined</code>           | 否   | —    |
+| <code>columnGap</code>      | <code>number</code>            | <code>undefined</code>           | 否   | —    |
+| <code>padding</code>        | <code>number</code>            | <code>0</code>                   | 否   | —    |
+| <code>paddingX</code>       | <code>number</code>            | <code>undefined</code>           | 否   | —    |
+| <code>paddingY</code>       | <code>number</code>            | <code>undefined</code>           | 否   | —    |
+| <code>paddingTop</code>     | <code>number</code>            | <code>undefined</code>           | 否   | —    |
+| <code>paddingRight</code>   | <code>number</code>            | <code>undefined</code>           | 否   | —    |
+| <code>paddingBottom</code>  | <code>number</code>            | <code>undefined</code>           | 否   | —    |
+| <code>paddingLeft</code>    | <code>number</code>            | <code>undefined</code>           | 否   | —    |
+| <code>wrap</code>           | <code>boolean</code>           | <code>false</code>               | 否   | —    |
+| <code>alignItems</code>     | <code>TFlexAlign</code>        | <code>&quot;stretch&quot;</code> | 否   | —    |
+| <code>justifyContent</code> | <code>TFlexJustify</code>      | <code>&quot;start&quot;</code>   | 否   | —    |
+| <code>alignContent</code>   | <code>TFlexAlignContent</code> | <code>&quot;start&quot;</code>   | 否   | —    |
+| <code>zIndex</code>         | <code>number</code>            | <code>0</code>                   | 否   | —    |
 
 ### Events
 
 —
+
+### Slots
+
+| 名称                 | Props | 说明                                                                 |
+| -------------------- | ----- | -------------------------------------------------------------------- |
+| <code>default</code> | —     | Flex item subtree measured and positioned inside the flex container. |
 
 ## TFlexItem
 
@@ -782,26 +815,40 @@ Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
-| 名称                   | 类型                      | 默认值                 | 必填 | 说明 |
-| ---------------------- | ------------------------- | ---------------------- | ---- | ---- |
-| <code>grow</code>      | <code>number</code>       | <code>0</code>         | 否   | —    |
-| <code>shrink</code>    | <code>number</code>       | <code>1</code>         | 否   | —    |
-| <code>basis</code>     | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
-| <code>w</code>         | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
-| <code>width</code>     | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
-| <code>h</code>         | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
-| <code>height</code>    | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
-| <code>minWidth</code>  | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
-| <code>minHeight</code> | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
-| <code>maxWidth</code>  | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
-| <code>maxHeight</code> | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
-| <code>measure</code>   | <code>TFlexMeasure</code> | <code>undefined</code> | 否   | —    |
-| <code>alignSelf</code> | <code>TFlexAlign</code>   | <code>undefined</code> | 否   | —    |
-| <code>zIndex</code>    | <code>number</code>       | <code>0</code>         | 否   | —    |
+| 名称                      | 类型                      | 默认值                 | 必填 | 说明 |
+| ------------------------- | ------------------------- | ---------------------- | ---- | ---- |
+| <code>grow</code>         | <code>number</code>       | <code>0</code>         | 否   | —    |
+| <code>shrink</code>       | <code>number</code>       | <code>1</code>         | 否   | —    |
+| <code>basis</code>        | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
+| <code>w</code>            | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
+| <code>width</code>        | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
+| <code>h</code>            | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
+| <code>height</code>       | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
+| <code>minWidth</code>     | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
+| <code>minHeight</code>    | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
+| <code>maxWidth</code>     | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
+| <code>maxHeight</code>    | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
+| <code>measure</code>      | <code>TFlexMeasure</code> | <code>undefined</code> | 否   | —    |
+| <code>order</code>        | <code>number</code>       | <code>0</code>         | 否   | —    |
+| <code>zIndex</code>       | <code>number</code>       | <code>0</code>         | 否   | —    |
+| <code>margin</code>       | <code>number</code>       | <code>0</code>         | 否   | —    |
+| <code>marginX</code>      | <code>number</code>       | <code>undefined</code> | 否   | —    |
+| <code>marginY</code>      | <code>number</code>       | <code>undefined</code> | 否   | —    |
+| <code>marginTop</code>    | <code>number</code>       | <code>undefined</code> | 否   | —    |
+| <code>marginRight</code>  | <code>number</code>       | <code>undefined</code> | 否   | —    |
+| <code>marginBottom</code> | <code>number</code>       | <code>undefined</code> | 否   | —    |
+| <code>marginLeft</code>   | <code>number</code>       | <code>undefined</code> | 否   | —    |
+| <code>alignSelf</code>    | <code>TFlexAlign</code>   | <code>undefined</code> | 否   | —    |
 
 ### Events
 
 —
+
+### Slots
+
+| 名称                 | Props                       | 说明                                                  |
+| -------------------- | --------------------------- | ----------------------------------------------------- |
+| <code>default</code> | <code>{ rect: Rect }</code> | Item content rendered inside the computed child rect. |
 
 ## TFlow
 
@@ -859,6 +906,12 @@ Import: `@simon_he/vue-tui/vue`
 | <code>submit</code>     | <code>TFormSubmitPayload</code>           | —    |
 | <code>validation</code> | <code>Record&lt;string, string&gt;</code> | —    |
 
+### Slots
+
+| 名称                 | Props | 说明                                                                    |
+| -------------------- | ----- | ----------------------------------------------------------------------- |
+| <code>default</code> | —     | Form field subtree rendered with TForm context provided to descendants. |
+
 ## TFormField
 
 源码：`src/vue/components/TForm.ts`
@@ -890,6 +943,12 @@ Import: `@simon_he/vue-tui`
 ### Events
 
 —
+
+### Slots
+
+| 名称                 | Props | 说明                                                                 |
+| -------------------- | ----- | -------------------------------------------------------------------- |
+| <code>default</code> | —     | Field control content rendered between the label and help/error row. |
 
 ## TInput
 
@@ -2136,6 +2195,12 @@ Import: `@simon_he/vue-tui/vue`
 | <code>update:sizes</code> | <code>number[]</code> | —    |
 | <code>resize</code>       | <code>number[]</code> | —    |
 
+### Slots
+
+| 名称                 | Props                                             | 说明                                                                                     |
+| -------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| <code>default</code> | <code>{ panes: readonly TSplitPaneRect[] }</code> | Pane content renderer. The host renders pane children from the resolved pane rectangles. |
+
 ## TStatusBar
 
 源码：`src/vue/components/TNavigation.ts`
@@ -2708,6 +2773,12 @@ Import: `@simon_he/vue-tui`
 | <code>focus</code>               | <code>void</code>                  | Emitted when the component receives focus.                          |
 | <code>blurCapture</code>         | <code>void</code>                  | Emitted when the component loses focus. Runs during capture.        |
 | <code>blur</code>                | <code>void</code>                  | Emitted when the component loses focus.                             |
+
+### Slots
+
+| 名称                 | Props | 说明                                                                                                  |
+| -------------------- | ----- | ----------------------------------------------------------------------------------------------------- |
+| <code>default</code> | —     | Children rendered with this view's layout origin, clip rect, render stack, and event z-index context. |
 
 ## TVirtualList
 

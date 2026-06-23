@@ -542,12 +542,18 @@ const theme = createTheme({
 
 `wrap` 会按 item 的显式主轴尺寸、`basis` 和 min/max 约束分行或分列；当前不读取 slot 内容固有尺寸。
 
+`rowGap`/`columnGap` 可覆盖 `gap` 在对应轴上的值。`alignContent` 只影响 wrap 后的多行/多列交叉轴分布。
+
+`paddingX`/`paddingY`/`paddingTop`/`paddingRight`/`paddingBottom`/`paddingLeft` 可覆盖 `padding`。`TFlexItem` 支持 `margin`、`marginX`/`marginY` 和四个方向的 margin；margin 参与主轴分配和 wrap 判断，最终子内容仍渲染在 margin 内侧。
+
+`TFlexItem.order` 控制视觉排列顺序；相同 order 的 item 保持原 slot 顺序。
+
 需要内容固有尺寸时，可以在 `TFlexItem.measure` 中返回 preferred `width`/`height`。`measure` 会收到扣除 padding 后的 `maxWidth`/`maxHeight` 和当前 `direction`，返回值会在没有显式尺寸或 `basis` 时参与布局。
 
 ### Props
 
-- `TFlex`: `x`/`y`/`w`/`h`、`direction`、`gap`、`padding`、`wrap`、`alignItems`、`justifyContent`、`zIndex`
-- `TFlexItem`: `grow`、`shrink`、`basis`、`width`/`height`、`w`/`h`、`minWidth`/`minHeight`、`maxWidth`/`maxHeight`、`measure`、`alignSelf`、`zIndex`
+- `TFlex`: `x`/`y`/`w`/`h`、`direction`、`gap`、`rowGap`、`columnGap`、`padding`、`paddingX`/`paddingY`、`paddingTop`/`paddingRight`/`paddingBottom`/`paddingLeft`、`wrap`、`alignItems`、`justifyContent`、`alignContent`、`zIndex`
+- `TFlexItem`: `grow`、`shrink`、`basis`、`width`/`height`、`w`/`h`、`minWidth`/`minHeight`、`maxWidth`/`maxHeight`、`measure`、`order`、`zIndex`、`margin`、`marginX`/`marginY`、`marginTop`/`marginRight`/`marginBottom`/`marginLeft`、`alignSelf`
 
 ### Slots
 

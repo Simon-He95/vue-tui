@@ -128,12 +128,7 @@ function textLine(x: number, y: number, value: string, style: Style): unknown {
   return textNode(x, y, textCellWidth(value), value, style);
 }
 
-function lineNodes(
-  x: number,
-  y: number,
-  rows: readonly string[],
-  style: Style,
-): unknown[] {
+function lineNodes(x: number, y: number, rows: readonly string[], style: Style): unknown[] {
   const nodes: unknown[] = [];
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
     const row = rows[rowIndex]!;

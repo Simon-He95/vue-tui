@@ -903,6 +903,7 @@
         "TDataTableSorter",
         "TFeedbackTone",
         "TFlexAlign",
+        "TFlexAlignContent",
         "TFlexDirection",
         "TFlexItemSlotProps",
         "TFlexJustify",
@@ -3512,10 +3513,58 @@
           "defaultValue": "0"
         },
         {
+          "name": "rowGap",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "columnGap",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
           "name": "padding",
           "type": "number",
           "required": false,
           "defaultValue": "0"
+        },
+        {
+          "name": "paddingX",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "paddingY",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "paddingTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "paddingRight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "paddingBottom",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "paddingLeft",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
         },
         {
           "name": "wrap",
@@ -3536,13 +3585,25 @@
           "defaultValue": "\"start\""
         },
         {
+          "name": "alignContent",
+          "type": "TFlexAlignContent",
+          "required": false,
+          "defaultValue": "\"start\""
+        },
+        {
           "name": "zIndex",
           "type": "number",
           "required": false,
           "defaultValue": "0"
         }
       ],
-      "events": []
+      "events": [],
+      "slots": [
+        {
+          "name": "default",
+          "description": "Flex item subtree measured and positioned inside the flex container."
+        }
+      ]
     },
     "TFlexItem": {
       "entrypoint": "@simon_he/vue-tui/vue",
@@ -3621,19 +3682,74 @@
           "defaultValue": "undefined"
         },
         {
-          "name": "alignSelf",
-          "type": "TFlexAlign",
+          "name": "order",
+          "type": "number",
           "required": false,
-          "defaultValue": "undefined"
+          "defaultValue": "0"
         },
         {
           "name": "zIndex",
           "type": "number",
           "required": false,
           "defaultValue": "0"
+        },
+        {
+          "name": "margin",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "marginX",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "marginY",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "marginTop",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "marginRight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "marginBottom",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "marginLeft",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "alignSelf",
+          "type": "TFlexAlign",
+          "required": false,
+          "defaultValue": "undefined"
         }
       ],
-      "events": []
+      "events": [],
+      "slots": [
+        {
+          "name": "default",
+          "props": "{ rect: Rect }",
+          "description": "Item content rendered inside the computed child rect."
+        }
+      ]
     },
     "TFlow": {
       "entrypoint": "@simon_he/vue-tui/vue",

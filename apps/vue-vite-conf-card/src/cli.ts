@@ -267,14 +267,20 @@ function ansi256Index(hex: string): number {
 
   const levels = [0, 95, 135, 175, 215, 255];
   const nearest = (channel: number): number =>
-    levels.reduce((best, level, index) =>
-      Math.abs(level - channel) < Math.abs(levels[best]! - channel) ? index : best,
-    0);
+    levels.reduce(
+      (best, level, index) =>
+        Math.abs(level - channel) < Math.abs(levels[best]! - channel) ? index : best,
+      0,
+    );
 
   return 16 + 36 * nearest(r) + 6 * nearest(g) + nearest(b);
 }
 
-function ansiColor(value: string | undefined, foreground: boolean, colorMode: AnsiColorMode): string {
+function ansiColor(
+  value: string | undefined,
+  foreground: boolean,
+  colorMode: AnsiColorMode,
+): string {
   if (!value) return "";
   if (value === "transparent") return `\u001B[${foreground ? 39 : 49}m`;
   if (value.startsWith("#") && /^#[0-9a-f]{6}$/iu.test(value)) {
@@ -369,7 +375,8 @@ export async function main(): Promise<void> {
     isTTY: Boolean(process.stdout.isTTY),
   });
   const colorMode = ansiColorMode(env);
-  const useImageOverlays = Boolean(outDir) || (shouldWriteAnsi && supportsKittyImages(graphicsCapabilities));
+  const useImageOverlays =
+    Boolean(outDir) || (shouldWriteAnsi && supportsKittyImages(graphicsCapabilities));
   const layout: CardLayout = useImageOverlays ? "normal" : "comfortable";
   const rows = cardRowsForLayout(layout);
   const rendered = await renderComponent(

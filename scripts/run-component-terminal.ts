@@ -34,6 +34,8 @@ import {
   TBreadcrumb,
   TContextMenu,
   TDebugOverlay,
+  TFlex,
+  TFlexItem,
   TFlow,
   TInputBox,
   TJsonEditor,
@@ -1343,6 +1345,55 @@ const demos: Demo[] = [
             item: ({ item, index }: { item: string; index: number }) =>
               h(TText, { x: 0, y: 0, w: 24, value: `${index}: ${item}` }),
           },
+        ),
+      ),
+    ),
+  },
+  {
+    name: "TFlex",
+    group: "vue",
+    component: simple("TFlex", () =>
+      frame(
+        "TFlex",
+        h(
+          TFlex,
+          {
+            x: 0,
+            y: 3,
+            w: 52,
+            h: 10,
+            direction: "row",
+            columnGap: 1,
+            rowGap: 1,
+            paddingX: 1,
+            wrap: true,
+            alignItems: "stretch",
+            alignContent: "stretch",
+          },
+          () => [
+            h(TFlexItem, { width: "35%", minWidth: 14, order: 2 }, () =>
+              h(TBox, { x: 0, y: 0, w: 17, h: 4, title: "Nav", padding: 1 }, () =>
+                h(TText, { x: 0, y: 0, w: 13, value: "order=2" }),
+              ),
+            ),
+            h(TFlexItem, { grow: 1, minWidth: 18, order: 1 }, () =>
+              h(TBox, { x: 0, y: 0, w: 24, h: 4, title: "Main", padding: 1 }, () =>
+                h(TText, { x: 0, y: 0, w: 20, value: "grow + minWidth" }),
+              ),
+            ),
+            h(
+              TFlexItem,
+              {
+                measure: () => ({ width: 18, height: 3 }),
+                marginTop: 1,
+                order: 3,
+              },
+              () =>
+                h(TBox, { x: 0, y: 0, w: 18, h: 3, title: "Measure", padding: 0 }, () =>
+                  h(TText, { x: 1, y: 1, value: "preferred size" }),
+                ),
+            ),
+          ],
         ),
       ),
     ),
