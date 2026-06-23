@@ -378,8 +378,9 @@ async function verifyLiveProfileHtmlParsing(): Promise<void> {
     profile.html_url === "https://github.com/Simon-He95",
     "live profile HTML should parse URL",
   );
+  const avatarUrl = new URL(profile.avatar_url);
   assert(
-    profile.avatar_url.includes("avatars.githubusercontent.com"),
+    avatarUrl.protocol === "https:" && avatarUrl.hostname === "avatars.githubusercontent.com",
     "live profile HTML should parse avatar CDN URL",
   );
   assert(profile.name === "Simon He", "live profile HTML should parse display name");
