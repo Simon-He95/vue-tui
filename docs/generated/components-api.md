@@ -830,6 +830,7 @@ Import: `@simon_he/vue-tui/vue`
 | <code>maxHeight</code>    | <code>TFlexSize</code>    | <code>undefined</code> | 否   | —    |
 | <code>measure</code>      | <code>TFlexMeasure</code> | <code>undefined</code> | 否   | —    |
 | <code>order</code>        | <code>number</code>       | <code>0</code>         | 否   | —    |
+| <code>zIndex</code>       | <code>number</code>       | <code>0</code>         | 否   | —    |
 | <code>margin</code>       | <code>number</code>       | <code>0</code>         | 否   | —    |
 | <code>marginX</code>      | <code>number</code>       | <code>undefined</code> | 否   | —    |
 | <code>marginY</code>      | <code>number</code>       | <code>undefined</code> | 否   | —    |

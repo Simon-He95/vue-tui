@@ -37,6 +37,8 @@ type FlexItem = FlexLayoutInputItem &
     vnode: VNode;
     isFlexItem: boolean;
     order: number;
+    slotIndex: number;
+    zIndex: number;
   }>;
 
 function normalizeInteger(value: unknown, fallback = 0): number {
@@ -103,7 +105,7 @@ function isFlexItemVNode(vnode: VNode): boolean {
   return vnode.type === TFlexItem;
 }
 
-function createFlexItem(vnode: VNode): FlexItem {
+function createFlexItem(vnode: VNode, slotIndex: number): FlexItem {
   const props = vnode.props;
   const margin = resolveEdges(props, {
     all: "margin",
@@ -129,6 +131,8 @@ function createFlexItem(vnode: VNode): FlexItem {
     measure: typeof props?.measure === "function" ? (props.measure as TFlexMeasure) : undefined,
     measureCache: typeof props?.measure === "function" ? new Map() : undefined,
     order: normalizeInteger(props?.order),
+    slotIndex,
+    zIndex: normalizeInteger(props?.zIndex),
     marginTop: margin.top,
     marginRight: margin.right,
     marginBottom: margin.bottom,
@@ -166,6 +170,7 @@ export const TFlexItem = defineComponent({
     maxHeight: { type: [Number, String] as PropType<TFlexSize>, default: undefined },
     measure: { type: Function as PropType<TFlexMeasure>, default: undefined },
     order: { type: Number, default: 0 },
+    zIndex: { type: Number, default: 0 },
     margin: { type: Number, default: 0 },
     marginX: { type: Number, default: undefined },
     marginY: { type: Number, default: undefined },
@@ -207,7 +212,7 @@ export const TFlex = defineComponent({
   setup(props, { slots }) {
     return () => {
       const items = collectChildren(slots.default?.() ?? [])
-        .map((vnode, index) => ({ item: createFlexItem(vnode), index }))
+        .map((vnode, index) => ({ item: createFlexItem(vnode, index), index }))
         .sort((a, b) => a.item.order - b.item.order || a.index - b.index)
         .map(({ item }) => item);
       const gap = normalizeCellCount(props.gap);
@@ -245,15 +250,16 @@ export const TFlex = defineComponent({
           zIndex: props.zIndex,
         },
         () =>
-          layout.map(({ item, rect }, index) =>
+          layout.map(({ item, rect }) =>
             h(
               TView,
               {
-                key: item.vnode.key ?? index,
+                key: item.vnode.key ?? item.slotIndex,
                 x: rect.x,
                 y: rect.y,
                 w: rect.w,
                 h: rect.h,
+                zIndex: item.zIndex,
               },
               () => renderFlexItemChildren(item, rect),
             ),

@@ -12,6 +12,7 @@ import {
   TerminalProvider,
   TText,
   TView,
+  useLayout,
   useTerminal,
 } from "../src/vue.js";
 
@@ -337,6 +338,52 @@ describe("component coverage (docs + acceptance gates)", () => {
     mounted.unmount();
   });
 
+  it("TFlexItem fallback keys preserve state when order changes", async () => {
+    const flipped = ref(false);
+    const StatefulText = defineComponent({
+      name: "StatefulFlexItemText",
+      props: {
+        value: { type: String, required: true },
+      },
+      setup(props) {
+        const initial = props.value;
+        return () => h(TText, { x: 0, y: 0, value: initial });
+      },
+    });
+
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TFlex,
+          {
+            x: 0,
+            y: 0,
+            w: 4,
+            h: 1,
+            direction: "row",
+          },
+          () => [
+            h(TFlexItem, { width: 1, height: 1, order: flipped.value ? 2 : 1 }, () =>
+              h(StatefulText, { value: "A" }),
+            ),
+            h(TFlexItem, { width: 1, height: 1, order: flipped.value ? 1 : 2 }, () =>
+              h(StatefulText, { value: "B" }),
+            ),
+          ],
+        ),
+      6,
+      3,
+    );
+
+    expect(mounted.terminal.snapshot().lines[0]?.slice(0, 2)).toBe("AB");
+    flipped.value = true;
+    await nextTick();
+    await nextTick();
+
+    expect(mounted.terminal.snapshot().lines[0]?.slice(0, 2)).toBe("BA");
+    mounted.unmount();
+  });
+
   it("TFlex applies justifyContent and alignItems", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -507,6 +554,49 @@ describe("component coverage (docs + acceptance gates)", () => {
     const lines = mounted.terminal.snapshot().lines;
     expect(lines[2]?.[4]).toBe("A");
     expect(lines[1]?.[6]).toBe("B");
+    mounted.unmount();
+  });
+
+  it("TFlex responds when terminal resize updates layout-provided dimensions", async () => {
+    const ResponsiveFlex = defineComponent({
+      name: "ResponsiveFlexTest",
+      setup() {
+        const layout = useLayout();
+        return () =>
+          h(
+            TFlex,
+            {
+              x: 1,
+              y: 1,
+              w: Math.max(0, (layout.clipRect?.w ?? 0) - 2),
+              h: 1,
+              direction: "row",
+              gap: 1,
+              alignItems: "start",
+            },
+            () => [
+              h(TFlexItem, { width: 3, height: 1 }, () => h(TText, { x: 0, y: 0, value: "A" })),
+              h(
+                TFlexItem,
+                { grow: 1, height: 1 },
+                {
+                  default: ({ rect }: any) => h(TText, { x: rect.w - 1, y: 0, value: "B" }),
+                },
+              ),
+            ],
+          );
+      },
+    });
+
+    const mounted = await mountTerminal(() => h(ResponsiveFlex), 12, 4);
+    expect(mounted.terminal.snapshot().lines[1]?.[1]).toBe("A");
+    expect(mounted.terminal.snapshot().lines[1]?.[10]).toBe("B");
+
+    mounted.terminal.resize(16, 4);
+    await nextTick();
+    await nextTick();
+
+    expect(mounted.terminal.snapshot().lines[1]?.[14]).toBe("B");
     mounted.unmount();
   });
 
@@ -841,6 +931,41 @@ describe("component coverage (docs + acceptance gates)", () => {
     mounted.unmount();
   });
 
+  it("TFlex applies remaining side padding overrides", async () => {
+    const mounted = await mountTerminal(
+      () =>
+        h(
+          TFlex,
+          {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 6,
+            direction: "row",
+            paddingY: 1,
+            paddingLeft: 2,
+            paddingBottom: 2,
+            alignItems: "stretch",
+          },
+          () => [
+            h(
+              TFlexItem,
+              { width: 1 },
+              {
+                default: ({ rect }: any) => h(TText, { x: 0, y: rect.h - 1, value: "A" }),
+              },
+            ),
+          ],
+        ),
+      10,
+      7,
+    );
+
+    const lines = mounted.terminal.snapshot().lines;
+    expect(lines[3]?.[2]).toBe("A");
+    mounted.unmount();
+  });
+
   it("TFlex applies margin shorthand and axis overrides", async () => {
     const mounted = await mountTerminal(
       () =>
@@ -855,8 +980,10 @@ describe("component coverage (docs + acceptance gates)", () => {
             alignItems: "start",
           },
           () => [
-            h(TFlexItem, { width: 1, height: 1, margin: 1, marginX: 2, marginBottom: 2 }, () =>
-              h(TText, { x: 0, y: 0, value: "A" }),
+            h(
+              TFlexItem,
+              { width: 1, height: 1, margin: 1, marginX: 2, marginY: 2, marginBottom: 1 },
+              () => h(TText, { x: 0, y: 0, value: "A" }),
             ),
             h(TFlexItem, { width: 1, height: 1 }, () => h(TText, { x: 0, y: 0, value: "B" })),
           ],
@@ -866,7 +993,7 @@ describe("component coverage (docs + acceptance gates)", () => {
     );
 
     const lines = mounted.terminal.snapshot().lines;
-    expect(lines[1]?.[2]).toBe("A");
+    expect(lines[2]?.[2]).toBe("A");
     expect(lines[0]?.[5]).toBe("B");
     mounted.unmount();
   });
@@ -1018,6 +1145,24 @@ describe("component coverage (docs + acceptance gates)", () => {
     );
 
     expect(mounted.terminal.snapshot().lines[0]?.[0]).toBe("B");
+    mounted.unmount();
+  });
+
+  it("TFlexItem zIndex participates in stack order", async () => {
+    const mounted = await mountTerminal(
+      () => [
+        h(TText, { x: 0, y: 0, w: 1, value: "B", zIndex: 5 }),
+        h(TFlex, { x: 0, y: 0, w: 2, h: 1, direction: "row" }, () => [
+          h(TFlexItem, { width: 1, height: 1, zIndex: 10 }, () =>
+            h(TText, { x: 0, y: 0, value: "A" }),
+          ),
+        ]),
+      ],
+      4,
+      3,
+    );
+
+    expect(mounted.terminal.snapshot().lines[0]?.[0]).toBe("A");
     mounted.unmount();
   });
 

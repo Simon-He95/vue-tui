@@ -3688,6 +3688,12 @@
           "defaultValue": "0"
         },
         {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
           "name": "margin",
           "type": "number",
           "required": false,

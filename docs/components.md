@@ -553,7 +553,7 @@ const theme = createTheme({
 ### Props
 
 - `TFlex`: `x`/`y`/`w`/`h`、`direction`、`gap`、`rowGap`、`columnGap`、`padding`、`paddingX`/`paddingY`、`paddingTop`/`paddingRight`/`paddingBottom`/`paddingLeft`、`wrap`、`alignItems`、`justifyContent`、`alignContent`、`zIndex`
-- `TFlexItem`: `grow`、`shrink`、`basis`、`width`/`height`、`w`/`h`、`minWidth`/`minHeight`、`maxWidth`/`maxHeight`、`measure`、`order`、`margin`、`marginX`/`marginY`、`marginTop`/`marginRight`/`marginBottom`/`marginLeft`、`alignSelf`
+- `TFlexItem`: `grow`、`shrink`、`basis`、`width`/`height`、`w`/`h`、`minWidth`/`minHeight`、`maxWidth`/`maxHeight`、`measure`、`order`、`zIndex`、`margin`、`marginX`/`marginY`、`marginTop`/`marginRight`/`marginBottom`/`marginLeft`、`alignSelf`
 
 ### Slots
 
