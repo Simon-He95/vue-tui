@@ -520,7 +520,6 @@ describe("markdown image fallback and sizing", () => {
 
           // Kitty graphics sequence must be present.
           expect(stdout).toContain("\u001B_G");
-          expect(stdout).toContain("z=-1");
           expect(stdout).toContain("\u001B\\");
           // Alt text must not leak as visible text.
           expect(rowText(mounted, 0)).not.toContain("data image");

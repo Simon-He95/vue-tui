@@ -550,4 +550,5 @@ describe("terminal graphic render queue", () => {
     expect(queue.stats()).toMatchObject({ active: 0, waiting: 0 });
     expect(metrics).toContain("render-abort");
   });
+
 });

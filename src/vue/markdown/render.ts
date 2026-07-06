@@ -142,13 +142,13 @@ function queueMarkdownImageGraphic(
   const placementId = stableTerminalGraphicNumericId(`placement:${id}`);
   const sequence =
     protocol === "kitty"
-      ? createKittyGraphicsSequence(segment.base64, {
-          imageId,
-          placementId,
-          columns: width,
-          rows: height,
-          zIndex: -1,
-        })
+        ? createKittyGraphicsSequence(segment.base64, {
+            imageId,
+            placementId,
+            columns: width,
+            rows: height,
+            zIndex: -1,
+          })
       : protocol === "iterm2"
         ? createIterm2InlineImageSequence(segment.base64, {
             width,
@@ -172,7 +172,6 @@ function queueMarkdownImageGraphic(
           placementId,
           columns: width,
           rows: height,
-          zIndex: -1,
         })
       : undefined;
 

@@ -2,6 +2,7 @@ import { defineComponent, h, inject, nextTick, provide, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   TAgentTerminalGraphic,
+  TRenderPlane,
   TText,
   TView,
   createPngTerminalGraphicRenderer,
@@ -119,6 +120,10 @@ describe("TAgentTerminalGraphic", () => {
           altScreen: false,
           hideCursor: false,
           trackResize: false,
+          terminalGraphics: {
+            protocol: "kitty",
+            force: true,
+          },
         }),
     );
     const graphics = getTerminalGraphicsOutput(app.terminal);
@@ -317,6 +322,10 @@ describe("TAgentTerminalGraphic", () => {
           altScreen: false,
           hideCursor: false,
           trackResize: false,
+          terminalGraphics: {
+            protocol: "kitty",
+            force: true,
+          },
         }),
     );
     const graphics = getTerminalGraphicsOutput(app.terminal);
@@ -391,6 +400,10 @@ describe("TAgentTerminalGraphic", () => {
           altScreen: false,
           hideCursor: false,
           trackResize: false,
+          terminalGraphics: {
+            protocol: "kitty",
+            force: true,
+          },
         }),
     );
     const graphics = getTerminalGraphicsOutput(app.terminal);
@@ -2152,6 +2165,879 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("does not chunk small Ghostty terminal graphics frames", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const imagePayload = "A".repeat(20_000);
+    const renderer: TAgentTerminalGraphicRenderer = (_content, context) => ({
+      type: "sequence",
+      protocol: "kitty",
+      sequence: createKittyGraphicsSequence(imagePayload, {
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      }),
+      clearSequence: createKittyDeleteGraphicsSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+      }),
+      fallback: "fallback",
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 2,
+            y: 1,
+            w: 8,
+            h: 2,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 6, component: App });
+    const stdout = withEnv(
+      {
+        GHOSTTY_RESOURCES_DIR: "/tmp/ghostty",
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+          terminalGraphics: {
+            protocol: "kitty",
+            force: true,
+          },
+        }),
+    );
+
+    app.mount();
+    for (let index = 0; index < 20 && !writes.join("").includes("\x1B_G"); index += 1) {
+      await settle(app);
+      flushStdout(stdout);
+    }
+
+    const graphicWrites = writes.filter((write) => write.includes("\x1B_G"));
+    expect(graphicWrites).toHaveLength(1);
+    expect(graphicWrites[0]).toContain("A".repeat(1024));
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("clears active Kitty graphic placement when the component moves without redrawing image data", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 30,
+      rows: 8,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const y = ref(1);
+    let imageSequence = "";
+    let placementSequence = "";
+    let clearSequence = "";
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      imageSequence = createKittyGraphicsSequence("QUJD", {
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      placementSequence = createKittyPlacementSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      clearSequence = createKittyDeleteGraphicsSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+      });
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence: imageSequence,
+        resizeSequence: placementSequence,
+        clearSequence,
+        fallback: "fallback",
+        cols: 8,
+        rows: 2,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 2,
+            y: y.value,
+            w: 8,
+            h: 2,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 30, rows: 8, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(imageSequence);
+
+    writes.length = 0;
+    y.value = 2;
+    await settle(app);
+    flushStdout(stdout);
+    const movedOutput = writes.join("");
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(movedOutput).toContain(placementSequence);
+    expect(movedOutput).not.toContain(imageSequence);
+    expect(movedOutput).toContain(clearSequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("re-places active Kitty graphic when scrollVersion changes without redrawing image data", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 30,
+      rows: 8,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const scrollVersion = ref(0);
+    let imageSequence = "";
+    let placementSequence = "";
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      imageSequence = createKittyGraphicsSequence("QUJD", {
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      placementSequence = createKittyPlacementSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence: imageSequence,
+        resizeSequence: placementSequence,
+        fallback: "fallback",
+        cols: 8,
+        rows: 2,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 2,
+            y: 1,
+            w: 8,
+            h: 2,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+            scrollVersion: scrollVersion.value,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 30, rows: 8, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(imageSequence);
+
+    writes.length = 0;
+    scrollVersion.value++;
+    await settle(app);
+    flushStdout(stdout);
+    const scrolledOutput = writes.join("");
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(scrolledOutput).toContain(placementSequence);
+    expect(scrolledOutput).not.toContain(imageSequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("moves active Kitty graphic before sibling text paints into the previous graphic rect", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 30,
+      rows: 8,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const graphicY = ref(2);
+    const showOldRectText = ref(false);
+    const scrollVersion = ref(0);
+    let imageSequence = "";
+    let placementSequence = "";
+    let clearSequence = "";
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      imageSequence = createKittyGraphicsSequence("QUJD", {
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 16,
+        rows: 2,
+      });
+      placementSequence = createKittyPlacementSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 16,
+        rows: 2,
+      });
+      clearSequence = createKittyDeleteGraphicsSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+      });
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence: imageSequence,
+        resizeSequence: placementSequence,
+        clearSequence,
+        fallback: "fallback",
+        cols: 16,
+        rows: 2,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TRenderPlane, { plane: "transcript" }, () => [
+            showOldRectText.value
+              ? h(TText, {
+                  x: 4,
+                  y: 2,
+                  w: 16,
+                  h: 1,
+                  value: "OLDRECT",
+                })
+              : null,
+            h(TAgentTerminalGraphic, {
+              x: 4,
+              y: graphicY.value,
+              w: 16,
+              h: 2,
+              content: "image.png",
+              fallback: "fallback",
+              renderer,
+              scrollVersion: scrollVersion.value,
+            }),
+          ]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 30, rows: 8, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(imageSequence);
+
+    writes.length = 0;
+    graphicY.value = 3;
+    scrollVersion.value++;
+    showOldRectText.value = true;
+    await settle(app);
+    flushStdout(stdout);
+    const movedOutput = writes.join("");
+    const clearIndex = movedOutput.indexOf(clearSequence);
+    const moveIndex = movedOutput.indexOf(placementSequence);
+    const textIndex = movedOutput.indexOf("OLDRECT");
+    expect(clearIndex).toBeGreaterThanOrEqual(0);
+    expect(moveIndex).toBeGreaterThanOrEqual(0);
+    expect(textIndex).toBeGreaterThanOrEqual(0);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("clears active Kitty graphic placement in Ghostty without redrawing image data", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 30,
+      rows: 8,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const y = ref(1);
+    let imageSequence = "";
+    let placementSequence = "";
+    let clearSequence = "";
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      imageSequence = createKittyGraphicsSequence("QUJD", {
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      placementSequence = createKittyPlacementSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      clearSequence = createKittyDeleteGraphicsSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+      });
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence: imageSequence,
+        resizeSequence: placementSequence,
+        clearSequence,
+        fallback: "fallback",
+        cols: 8,
+        rows: 2,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 2,
+            y: y.value,
+            w: 8,
+            h: 2,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 30, rows: 8, component: App });
+    const stdout = withEnv(
+      {
+        GHOSTTY_RESOURCES_DIR: "/tmp/ghostty-test",
+        TERM_PROGRAM: "ghostty",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(imageSequence);
+
+    writes.length = 0;
+    y.value = 2;
+    await settle(app);
+    flushStdout(stdout);
+    const movedOutput = writes.join("");
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(movedOutput).toContain(placementSequence);
+    expect(movedOutput).not.toContain(imageSequence);
+    expect(movedOutput).toContain(clearSequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("clears active Kitty graphic crop without redrawing image data", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 30,
+      rows: 8,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const y = ref(-1);
+    let imageSequence = "";
+    let clearSequence = "";
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      imageSequence = createKittyGraphicsSequence("QUJD", {
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 4,
+      });
+      clearSequence = createKittyDeleteGraphicsSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+      });
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence: imageSequence,
+        resizeSequence: createKittyPlacementSequence({
+          imageId: context.imageId,
+          placementId: context.placementId,
+          columns: 8,
+          rows: 4,
+        }),
+        clearSequence,
+        fallback: "fallback",
+        cols: 8,
+        rows: 4,
+        sourceWidth: 800,
+        sourceHeight: 400,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 2,
+            y: y.value,
+            w: 8,
+            h: 4,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 30, rows: 8, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(imageSequence);
+
+    writes.length = 0;
+    y.value = -2;
+    await settle(app);
+    flushStdout(stdout);
+    const croppedOutput = writes.join("");
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(croppedOutput).toContain("a=p");
+    expect(croppedOutput).not.toContain(imageSequence);
+    expect(croppedOutput).toContain(clearSequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("reuses retained Kitty image data when a cached graphic remounts at a new position", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 30,
+      rows: 8,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const show = ref(true);
+    const y = ref(1);
+    let imageSequence = "";
+    let placementSequence = "";
+    let clearSequence = "";
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      imageSequence = createKittyGraphicsSequence("QUJD", {
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      placementSequence = createKittyPlacementSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      clearSequence = createKittyDeleteGraphicsSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+      });
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence: imageSequence,
+        resizeSequence: placementSequence,
+        clearSequence,
+        fallback: "fallback",
+        cols: 8,
+        rows: 2,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          show.value
+            ? h(TAgentTerminalGraphic, {
+                x: 2,
+                y: y.value,
+                w: 8,
+                h: 2,
+                content: "image.png",
+                fallback: "fallback",
+                renderer,
+                cacheKey: "image:image.png",
+              })
+            : null;
+      },
+    });
+
+    const app = createTerminalApp({ cols: 30, rows: 8, component: App });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(imageSequence);
+
+    writes.length = 0;
+    show.value = false;
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(clearSequence);
+
+    writes.length = 0;
+    y.value = 2;
+    show.value = true;
+    await settle(app);
+    flushStdout(stdout);
+    const remountOutput = writes.join("");
+    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(remountOutput).toContain(placementSequence);
+    expect(remountOutput).not.toContain(imageSequence);
+    expect(remountOutput).not.toContain(clearSequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("reuses retained Kitty image data after remounting in Ghostty", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 30,
+      rows: 8,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const show = ref(true);
+    const y = ref(1);
+    let imageSequence = "";
+    let placementSequence = "";
+    let clearSequence = "";
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      imageSequence = createKittyGraphicsSequence("QUJD", {
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      placementSequence = createKittyPlacementSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      clearSequence = createKittyDeleteGraphicsSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+      });
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence: imageSequence,
+        resizeSequence: placementSequence,
+        clearSequence,
+        fallback: "fallback",
+        cols: 8,
+        rows: 2,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          show.value
+            ? h(TAgentTerminalGraphic, {
+                x: 2,
+                y: y.value,
+                w: 8,
+                h: 2,
+                content: "image.png",
+                fallback: "fallback",
+                renderer,
+                cacheKey: "image:image.png",
+              })
+            : null;
+      },
+    });
+
+    const app = createTerminalApp({ cols: 30, rows: 8, component: App });
+    const stdout = withEnv(
+      {
+        GHOSTTY_RESOURCES_DIR: "/tmp/ghostty-test",
+        TERM_PROGRAM: "ghostty",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    writes.length = 0;
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(imageSequence);
+
+    writes.length = 0;
+    show.value = false;
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(clearSequence);
+
+    writes.length = 0;
+    y.value = 2;
+    show.value = true;
+    await settle(app);
+    flushStdout(stdout);
+    const remountOutput = writes.join("");
+    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(remountOutput).toContain(placementSequence);
+    expect(remountOutput).not.toContain(imageSequence);
+    expect(remountOutput).not.toContain(clearSequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("keeps retained Kitty graphics visible while an async cached remount is loading", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 30,
+      rows: 8,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const show = ref(true);
+    const y = ref(1);
+    const pending: Array<() => void> = [];
+    let imageSequence = "";
+    let placementSequence = "";
+    let clearSequence = "";
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn(async (_content, context) => {
+      await new Promise<void>((resolve) => pending.push(resolve));
+      imageSequence = createKittyGraphicsSequence("QUJD", {
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      placementSequence = createKittyPlacementSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      clearSequence = createKittyDeleteGraphicsSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+      });
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence: imageSequence,
+        resizeSequence: placementSequence,
+        clearSequence,
+        fallback: "",
+        cols: 8,
+        rows: 2,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          show.value
+            ? h(TAgentTerminalGraphic, {
+                x: 2,
+                y: y.value,
+                w: 8,
+                h: 2,
+                content: "image.png",
+                fallback: "",
+                loadingText: "loading marker",
+                renderer,
+                cacheKey: "image:image.png",
+              })
+            : null;
+      },
+    });
+
+    const app = createTerminalApp({ cols: 30, rows: 8, component: App });
+    const stdout = withEnv(
+      {
+        GHOSTTY_RESOURCES_DIR: "/tmp/ghostty-test",
+        TERM_PROGRAM: "ghostty",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+
+    try {
+      app.mount();
+      await nextTick();
+      pending.shift()?.();
+      await settle(app);
+      flushStdout(stdout);
+      expect(writes.join("")).toContain(imageSequence);
+
+      writes.length = 0;
+      show.value = false;
+      await settle(app);
+      flushStdout(stdout);
+      expect(writes.join("")).toContain(clearSequence);
+
+      writes.length = 0;
+      y.value = 2;
+      show.value = true;
+      await nextTick();
+      app.scheduler.flushNow();
+      flushStdout(stdout);
+      const loadingOutput = writes.join("");
+      expect(loadingOutput).not.toContain("loading marker");
+      expect(loadingOutput).not.toContain(clearSequence);
+
+      writes.length = 0;
+      pending.shift()?.();
+      await settle(app);
+      flushStdout(stdout);
+      const remountOutput = writes.join("");
+      expect(renderer).toHaveBeenCalledTimes(2);
+      expect(remountOutput).toContain(placementSequence);
+      expect(remountOutput).not.toContain(imageSequence);
+      expect(remountOutput).not.toContain(clearSequence);
+    } finally {
+      stdout.dispose();
+      app.dispose();
+    }
+  });
+
   it("uses per-component image ids for identical Kitty graphics", async () => {
     const capabilities = detectTerminalGraphicsCapabilities({
       stdoutIsTTY: true,
@@ -2192,6 +3078,7 @@ describe("TAgentTerminalGraphic", () => {
               h: 1,
               content: "same.png",
               cacheKey: "same-cache-key",
+              placementKey: "same-cache-key:0",
               renderer,
             }),
             h(TAgentTerminalGraphic, {
@@ -2201,6 +3088,7 @@ describe("TAgentTerminalGraphic", () => {
               h: 1,
               content: "same.png",
               cacheKey: "same-cache-key",
+              placementKey: "same-cache-key:1",
               renderer,
             }),
           ]);
@@ -2768,6 +3656,7 @@ describe("TAgentTerminalGraphic", () => {
       rows: 1,
     }));
     const renderer = createPngTerminalGraphicRenderer({
+      zIndex: -1,
       toPngBase64,
       fallback: () => "text fallback",
     });
@@ -2809,6 +3698,7 @@ describe("TAgentTerminalGraphic", () => {
     expect(toPngBase64).toHaveBeenCalledTimes(1);
     expect(rowText(app, 0)).toBe("");
     expect(writes.join("")).toContain("QUJD");
+    expect(writes.join("")).toContain("z=-1");
 
     writes.length = 0;
     clipWidth.value = 10;
@@ -2817,6 +3707,7 @@ describe("TAgentTerminalGraphic", () => {
 
     expect(toPngBase64).toHaveBeenCalledTimes(1);
     expect(writes.join("")).not.toContain("QUJD");
+    expect(writes.join("")).toContain("z=-1");
     expect(rowText(app, 0)).toBe("");
 
     stdout.dispose();
@@ -3448,6 +4339,140 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("rerenders renderer context when terminal graphics output becomes available", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const rawVisibleValues: boolean[] = [];
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      rawVisibleValues.push(context.rawVisible);
+      if (!context.rawVisible) return { type: "text", text: "fallback" };
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TAgentTerminalGraphic, {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 1,
+            content: "image.png",
+            fallback: "fallback",
+            renderer,
+          });
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    await settle(app);
+
+    expect(renderer).toHaveBeenCalledTimes(1);
+    expect(rawVisibleValues).toEqual([false]);
+    expect(writes.join("")).not.toContain("QUJD");
+
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    await settle(app);
+    app.scheduler.flushNow();
+
+    expect(renderer).toHaveBeenCalledTimes(2);
+    expect(rawVisibleValues).toEqual([false, true]);
+    await settle(app);
+    app.scheduler.flushNow();
+    expect(writes.join("")).toContain("QUJD");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("uses root terminal graphics output from render planes", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const sequence = createKittyGraphicsSequence("QUJD");
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      if (!context.rawVisible) return { type: "text", text: "fallback" };
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(TRenderPlane, { plane: "transcript" }, () =>
+            h(TAgentTerminalGraphic, {
+              x: 0,
+              y: 0,
+              w: 10,
+              h: 1,
+              content: "image.png",
+              fallback: "fallback",
+              renderer,
+            }),
+          );
+      },
+    });
+
+    const app = createTerminalApp({ cols: 20, rows: 4, component: App });
+    app.mount();
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    await settle(app);
+    app.scheduler.flushNow();
+    flushStdout(stdout);
+
+    expect(renderer).toHaveBeenCalledWith(
+      "image.png",
+      expect.objectContaining({
+        protocol: "kitty",
+        rawVisible: true,
+      }),
+    );
+    expect(writes.join("")).toContain("QUJD");
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it("creates cached PNG terminal graphics renderers", async () => {
     const queue = createTerminalGraphicRenderQueue();
     const capabilities = detectTerminalGraphicsCapabilities({
@@ -3501,12 +4526,81 @@ describe("TAgentTerminalGraphic", () => {
       typeof first === "object" && first && "sequence" in first ? String(first.sequence) : "";
     const secondSequence =
       typeof second === "object" && second && "sequence" in second ? String(second.sequence) : "";
+    const firstResizeSequence =
+      typeof first === "object" && first && "resizeSequence" in first
+        ? String(first.resizeSequence)
+        : "";
+    const secondResizeSequence =
+      typeof second === "object" && second && "resizeSequence" in second
+        ? String(second.resizeSequence)
+        : "";
 
     expect(firstSequence).toContain("i=123");
     expect(firstSequence).toContain("p=456");
     expect(secondSequence).toContain("i=789");
     expect(secondSequence).toContain("p=321");
+    expect(firstResizeSequence).toContain("a=p");
+    expect(firstResizeSequence).toContain("i=123");
+    expect(firstResizeSequence).toContain("p=456");
+    expect(secondResizeSequence).toContain("a=p");
+    expect(secondResizeSequence).toContain("i=789");
+    expect(secondResizeSequence).toContain("p=321");
     expect(secondSequence).not.toBe(firstSequence);
+    expect(queue.stats().cacheEntries).toBe(1);
+  });
+
+  it("caches PNG frames that finish after the visible caller aborts", async () => {
+    const queue = createTerminalGraphicRenderQueue();
+    const capabilities = detectTerminalGraphicsCapabilities({
+      stdoutIsTTY: true,
+      env: { KITTY_WINDOW_ID: "1" },
+    });
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const toPngBase64 = vi.fn(async () => {
+      await gate;
+      return {
+        base64: "QUJD",
+        fallback: "png fallback",
+        cols: 4,
+        rows: 2,
+      };
+    });
+    const renderer = createPngTerminalGraphicRenderer({ queue, toPngBase64 });
+    const controller = new AbortController();
+    const makeContext = (signal: AbortSignal) => ({
+      kind: "image" as const,
+      width: 4,
+      height: 2,
+      final: true,
+      streaming: false,
+      protocol: "kitty" as const,
+      capabilities,
+      signal,
+      imageId: 123,
+      placementId: 456,
+      visible: true,
+      rawVisible: true,
+      scrolling: false,
+      viewport: {
+        visible: true,
+        rawVisible: true,
+        scrolling: false,
+        rect: { x: 0, y: 0, w: 4, h: 2 },
+        fullRect: { x: 0, y: 0, w: 4, h: 2 },
+      },
+    });
+
+    const first = renderer("image.png", makeContext(controller.signal));
+    controller.abort();
+    finish();
+
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+    await expect(renderer("image.png", makeContext(new AbortController().signal))).resolves
+      .toMatchObject({ type: "sequence", protocol: "kitty" });
+    expect(toPngBase64).toHaveBeenCalledTimes(1);
     expect(queue.stats().cacheEntries).toBe(1);
   });
 
@@ -4800,7 +5894,7 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
-  it("redraws a component graphic after stdout clears it for a scroll operation", async () => {
+  it("keeps a component graphic active across stdout scroll operations", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -4863,13 +5957,15 @@ describe("TAgentTerminalGraphic", () => {
 
     writes.length = 0;
     (stdout.render as any)([], true, [{ startY: 0, endY: 6, delta: 1 }]);
-    expect(writes.join("")).toContain("a=d");
+    expect(writes.join("")).not.toContain("a=d");
+    expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(1);
 
     writes.length = 0;
     activityVersion.value++;
     await settle(app);
     flushStdout(stdout);
-    expect(writes.join("")).toContain(sequence);
+    expect(writes.join("")).not.toContain("a=d");
+    expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
     app.dispose();
@@ -5010,7 +6106,7 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
-  it("shows fallback when terminal graphic starts before the viewport", async () => {
+  it("keeps terminal graphic raw when clipped at left edge", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -5059,8 +6155,8 @@ describe("TAgentTerminalGraphic", () => {
     await settle(app);
     flushStdout(stdout);
 
-    expect(writes.join("")).not.toContain(sequence);
-    expect(rowText(app, 0)).not.toBe("");
+    expect(writes.join("")).toContain(sequence);
+    expect(rowText(app, 0)).toBe("");
 
     stdout.dispose();
     app.dispose();
@@ -5703,7 +6799,7 @@ describe("TAgentTerminalGraphic", () => {
     expect(graphics!.clear?.("graphic")).toBe(true);
     flushStdoutRows(stdout, []);
 
-    expect(writes.join("")).toContain("\u001B[2;2H\u001B[44m   \u001B[0m");
+    expect(writes.join("")).toContain("\u001B[2;2H\u001B[44m\u001B[3X\u001B[0m");
 
     stdout.dispose();
     app.dispose();

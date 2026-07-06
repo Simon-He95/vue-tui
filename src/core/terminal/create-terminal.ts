@@ -48,6 +48,7 @@ function mergePlanes(
 }
 
 const TERMINAL_PLANE_INTERNALS = Symbol.for("@simon_he/vue-tui:v1:terminal-plane-internals");
+const TERMINAL_ROOT = Symbol.for("@simon_he/vue-tui:v1:terminal-root");
 
 interface PlaneBufferState {
   buffer: GridBuffer;
@@ -68,7 +69,12 @@ interface PlaneTerminalInternals {
 
 type PlaneAwareTerminal = Terminal & {
   [TERMINAL_PLANE_INTERNALS]?: PlaneTerminalInternals;
+  [TERMINAL_ROOT]?: Terminal;
 };
+
+export function getRootTerminal(terminal: Terminal): Terminal {
+  return (terminal as PlaneAwareTerminal)[TERMINAL_ROOT] ?? terminal;
+}
 
 function createCoverage(cols: number, rows: number): Uint8Array[] {
   return Array.from({ length: rows }, () => new Uint8Array(cols));
@@ -1018,6 +1024,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
         return getRowFingerprints(state.buffer, yy);
       },
     };
+    (api as PlaneAwareTerminal)[TERMINAL_ROOT] = base;
     planeTerminals.set(plane, api);
     return api;
   }
@@ -1262,6 +1269,7 @@ export function createTerminal(opts: TerminalOptions): Terminal {
       scrollRowsForPlane(plane, startY, endY, lines);
     },
   };
+  base[TERMINAL_ROOT] = base;
 
   return base;
 }

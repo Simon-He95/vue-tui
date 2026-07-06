@@ -172,7 +172,7 @@ export function useRenderNode(getOptions: () => RenderNodeOptions): {
     const priority = opt.priority ?? "normal";
     requestBatchedInvalidate(scheduler, prevPlane, priority);
     if (prevPlane !== nextPlane) requestBatchedInvalidate(scheduler, nextPlane, priority);
-  });
+  }, { flush: "sync" });
 
   onBeforeUnmount(() => {
     stop();
