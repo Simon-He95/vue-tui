@@ -2024,7 +2024,7 @@ describe("stdout renderer", () => {
     });
   });
 
-  it("clears the target terminal graphic rect before moving an active placement", () => {
+  it("moves an active terminal graphic placement before clearing target text rows", () => {
     withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
       vi.useFakeTimers();
       const nowRef = { t: 0 };
@@ -2114,7 +2114,7 @@ describe("stdout renderer", () => {
         expect(moveIndex).toBeGreaterThanOrEqual(0);
         expect(eraseIndex).toBeGreaterThanOrEqual(0);
         expect(textIndex).toBeGreaterThanOrEqual(0);
-        expect(eraseIndex).toBeLessThan(moveIndex);
+        expect(moveIndex).toBeLessThan(eraseIndex);
 
         renderer.dispose();
       } finally {

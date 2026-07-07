@@ -74,6 +74,7 @@ export type TerminalGraphicsPayload = Readonly<{
   resizeSequence?: string;
   resizeRedraw?: boolean;
   placementMoveWithoutClear?: boolean;
+  allowTextOverlay?: boolean;
   forceDraw?: boolean;
   deferFlush?: boolean;
   retainOnClear?: boolean;

@@ -830,6 +830,7 @@ export const TAgentTerminalGraphic = defineComponent({
         force?: boolean;
         deferFlush?: boolean;
         placementMoveWithoutClear?: boolean;
+        allowTextOverlay?: boolean;
       }> = {},
     ): boolean {
       const clearSequence = resolveClearSequence(current);
@@ -912,6 +913,7 @@ export const TAgentTerminalGraphic = defineComponent({
           clearSequence,
           resizeRedraw: canReusePlacementSequence,
           placementMoveWithoutClear: canMoveWithoutClear,
+          allowTextOverlay: options.allowTextOverlay,
           forceDraw: options.force,
           deferFlush: options.deferFlush ?? true,
           fallbackText: current.fallback,
@@ -1018,6 +1020,17 @@ export const TAgentTerminalGraphic = defineComponent({
         render.isRectCoveredByHigherNode(id, rect, {
           ignoreSamePlane: props.ignoreSamePlaneRawCoverage,
         })
+      );
+    }
+
+    function retainedRawCoveredByHigherRenderNode(rect: Rect): boolean {
+      if (!props.retainRawWhileCovered) return false;
+      const id = renderNodeId.value;
+      return Boolean(
+        id != null &&
+          render.isRectCoveredByHigherNode(id, rect, {
+            ignoreSamePlane: props.ignoreSamePlaneRawCoverage,
+          }),
       );
     }
 
@@ -1446,6 +1459,7 @@ export const TAgentTerminalGraphic = defineComponent({
             current?.type === "terminal" && rawCanQueue.value && rawRectForPaint != null;
           let preserveActiveRawGraphic = false;
           let forceActiveRawRedraw = false;
+          let allowTextOverlay = false;
           if (rawCanQueueForPaint && output) {
             const previous = lastDrawnGraphic.value;
             const previousStillActive = previous
@@ -1460,8 +1474,11 @@ export const TAgentTerminalGraphic = defineComponent({
                 rawClearPendingRepaint.value == null &&
                 previous.drawKey ===
                   terminalDrawKey(current, rawRectForPaint, clearSequence, resizeSequence);
+              allowTextOverlay = retainedRawCoveredByHigherRenderNode(r);
               forceActiveRawRedraw =
-                preserveActiveRawGraphic && previous.activityVersion !== graphicsActivityVersion.value;
+                preserveActiveRawGraphic &&
+                (previous.activityVersion !== graphicsActivityVersion.value ||
+                  allowTextOverlay);
             }
           }
           const preserveActiveRawGraphicForPaint = preserveActiveRawGraphic;
@@ -1515,6 +1532,7 @@ export const TAgentTerminalGraphic = defineComponent({
               force: forceActiveRawRedraw,
               deferFlush: preserveActiveRawGraphicForPaint,
               placementMoveWithoutClear: props.placementMoveWithoutClear || rawCoverageClipped,
+              allowTextOverlay,
             });
             if (queued) {
               trace("raw-draw", {

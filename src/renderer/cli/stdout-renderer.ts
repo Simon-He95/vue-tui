@@ -2796,7 +2796,7 @@ export function createStdoutRenderer(
       }
 
       const next = payloadRect(payload);
-      addTerminalGraphicTextPreserveSpans(next);
+      if (!payload.allowTextOverlay) addTerminalGraphicTextPreserveSpans(next);
       addTerminalGraphicRows(active);
       addTerminalGraphicRows(next);
 
@@ -3187,6 +3187,23 @@ export function createStdoutRenderer(
       return result;
     };
 
+    const preserveFingerprintSpans = (
+      y: number,
+      spans: readonly TextPreserveSpan[],
+    ): void => {
+      if (!fpPrevValid || y < 0 || y >= fpRows || currentFP.length !== prevFP.length) return;
+      const base = y * fpCols;
+      for (const span of spans) {
+        const start = Math.max(0, Math.min(fpCols, span.start));
+        const end = Math.max(start, Math.min(fpCols, span.end));
+        for (let x = start; x < end; x++) {
+          currentFP[base + x] = prevFP[base + x]!;
+          currentHrefIds[base + x] = prevHrefIds[base + x]!;
+          currentTextIds[base + x] = prevTextIds[base + x]!;
+        }
+      }
+    };
+
     const renderRowPreservingTerminalGraphics = (y: number, row: readonly Cell[]): void => {
       const spans = terminalGraphicTextPreserveSpans.get(y);
       if (!spans?.length) {
@@ -3206,6 +3223,7 @@ export function createStdoutRenderer(
         cursor = Math.max(cursor, span.end);
       }
       if (cursor < size.cols) renderRow(y, row, cursor, size.cols, false);
+      preserveFingerprintSpans(y, effectiveSpans);
     };
 
     const lastRenderableColumnInCurrentRow = (
@@ -4112,11 +4130,11 @@ export function createStdoutRenderer(
           canReplacePlacement && payload.resizeSequence ? payload.resizeSequence : payload.sequence;
         const sequence = maybeWrapTerminalGraphic(sequencePayload);
         frameParts.push(
-          clearRowBackground ? countGraphicsBytes(clearRowBackground) : "",
-          clearRect ? countGraphicsBytes(clearRect) : "",
           countGraphicsBytes(cursor),
           countGraphicsBytes(sequence),
           countGraphicsBytes(SGR_RESET),
+          clearRowBackground ? countGraphicsBytes(clearRowBackground) : "",
+          clearRect ? countGraphicsBytes(clearRect) : "",
         );
         terminalGraphicsDraws++;
         nextActiveGraphics.set(payload.id, {
