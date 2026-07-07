@@ -1337,6 +1337,19 @@ export const TAgentTerminalGraphic = defineComponent({
       },
     );
 
+    watch(
+      () => [props.x, props.y, props.w, props.h, props.scrollVersion] as const,
+      () => {
+        if (graphic.value?.type === "terminal") {
+          scheduler.invalidate({ priority: "low", reason: "data" });
+          return;
+        }
+        if (props.kind !== "image" || status.value !== "loading" || !props.renderer) return;
+        scheduleRender({ clearLastGraphic: false });
+      },
+      { flush: "sync" },
+    );
+
     onBeforeUnmount(() => {
       alive = false;
       renderVersion++;

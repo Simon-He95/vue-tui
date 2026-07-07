@@ -3848,7 +3848,6 @@ export function createStdoutRenderer(
       rect: Readonly<{ x: number; y: number; w: number; h: number }>,
     ): string => {
       if (scrollHandled) return "";
-      if (graphicsOnlyFrame) return "";
 
       const clearStyle = bgSeq;
       let out = "";
