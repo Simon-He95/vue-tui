@@ -4880,11 +4880,6 @@ export function createStdoutRenderer(
       return;
     }
     clearRowsOnlyResizeRepaintTimer();
-    if (hasPendingTerminalGraphics()) {
-      deferGraphicsFlushUntilResizeCommit = false;
-      allowNextGraphicsOnlyRenderWithoutBaseline = true;
-      render([], true);
-    }
   });
 
   const resizeSource: any = (options?.output as any) ?? process.stdout;
