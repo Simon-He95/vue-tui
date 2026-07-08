@@ -273,13 +273,13 @@ describe("TAgentTerminalGraphic", () => {
     ).toBe(true);
     flushStdout(stdout);
     expect(writes.join("")).not.toContain(sequence);
-    expect(writes.join("")).not.toContain("a=d");
+    expect(writes.join("")).toContain(clearSequence);
+    expect(writes.join("")).toContain(resizeSequence);
 
     writes.length = 0;
     outputRows = 8;
     resize.listener?.();
-    expect(writes.join("")).not.toContain(clearSequence);
-    expect(writes.join("")).not.toContain("a=d");
+    expect(writes.join("")).toContain(clearSequence);
     expect(writes.join("")).toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
@@ -362,8 +362,7 @@ describe("TAgentTerminalGraphic", () => {
     app.terminal.resize(20, 8);
     app.terminal.commit({ sync: true });
 
-    expect(writes.join("")).not.toContain(clearSequence);
-    expect(writes.join("")).not.toContain("a=d");
+    expect(writes.join("")).toContain(clearSequence);
     expect(writes.join("")).toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
@@ -440,7 +439,7 @@ describe("TAgentTerminalGraphic", () => {
     app.terminal.resize(20, 6);
     app.terminal.commit({ sync: true });
 
-    expect(writes.join("")).not.toContain(clearSequence);
+    expect(writes.join("")).toContain(clearSequence);
     expect(writes.join("")).toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
@@ -917,7 +916,7 @@ describe("TAgentTerminalGraphic", () => {
     writes.length = 0;
     app.terminal.resize(20, 3);
 
-    expect(writes.join("")).not.toContain(clearSequence);
+    expect(writes.join("")).toContain(clearSequence);
     expect(writes.join("")).toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
@@ -990,7 +989,7 @@ describe("TAgentTerminalGraphic", () => {
     app.terminal.resize(4, 6);
 
     expect(writes.join("")).not.toContain(clearSequence);
-    expect(writes.join("")).toContain(resizeSequence);
+    expect(writes.join("")).not.toContain(resizeSequence);
     expect(writes.join("")).not.toContain(sequence);
 
     stdout.dispose();
@@ -1385,6 +1384,7 @@ describe("TAgentTerminalGraphic", () => {
 
     writes.length = 0;
     app.terminal.resize(4, 2);
+    flushStdout(stdout);
     expect(writes.join("")).toContain(clearSequence);
 
     writes.length = 0;

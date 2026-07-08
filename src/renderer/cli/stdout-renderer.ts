@@ -509,6 +509,7 @@ export function createStdoutRenderer(
       op: TerminalGraphicsOperation;
       order: number;
       resizeRedraw?: boolean;
+      terminalResizeRedraw?: boolean;
     }>;
   type ActiveTerminalGraphic = Readonly<{
     x: number;
@@ -532,6 +533,7 @@ export function createStdoutRenderer(
   const pendingGraphicSignatures = new Map<string, string>();
   const activeGraphicSignatures = new Map<string, string>();
   const retainedGraphics = new Map<string, RetainedTerminalGraphic>();
+  const terminalResizeDirtyGraphics = new Set<string>();
   let nextGraphicsOrder = 0;
   let terminalGraphicsFlushTimer: ReturnType<typeof setTimeout> | null = null;
   const hasPendingTerminalGraphics = (): boolean =>
@@ -648,6 +650,7 @@ export function createStdoutRenderer(
     previous: ActiveTerminalGraphic,
     payload: QueuedTerminalGraphicsPayload,
   ): boolean {
+    if (payload.terminalResizeRedraw) return false;
     if (!payload.resizeRedraw || previous.protocol !== "kitty" || payload.protocol !== "kitty") {
       return false;
     }
@@ -670,6 +673,7 @@ export function createStdoutRenderer(
 
     const removedPendingDraw = pendingGraphics.delete(`${id}:draw`);
     pendingGraphicSignatures.delete(id);
+    terminalResizeDirtyGraphics.delete(id);
 
     const active = activeGraphics.get(id);
     if (!active) {
@@ -713,6 +717,7 @@ export function createStdoutRenderer(
       );
     }
     for (const [id, active] of activeGraphics) {
+      terminalResizeDirtyGraphics.add(id);
       pendingGraphics.delete(`${id}:draw`);
       const anchored = anchoredGraphicRectInViewport(active, size);
       if (anchored && !active.resizeSequence) {
@@ -738,6 +743,7 @@ export function createStdoutRenderer(
         op: "draw",
         order: nextGraphicsOrder++,
         resizeRedraw: true,
+        terminalResizeRedraw: true,
       });
       if (signature) pendingGraphicSignatures.set(id, signature);
       if (isDebugEnabled()) {
@@ -770,6 +776,7 @@ export function createStdoutRenderer(
         op: "draw",
         order: nextGraphicsOrder++,
         resizeRedraw: true,
+        terminalResizeRedraw: true,
       });
       pendingGraphicSignatures.set(id, signature);
       if (isDebugEnabled()) {
@@ -857,12 +864,14 @@ export function createStdoutRenderer(
           resizeSequence,
           clearSequence,
         });
+        const forceTerminalResizeRedraw = terminalResizeDirtyGraphics.has(frame.id);
 
         const removedPendingGraphicClear = pendingGraphics.delete(`${frame.id}:clear`);
         const removedPendingClear = pendingGraphicClears.delete(frame.id);
         const canceledPendingClear = removedPendingGraphicClear || removedPendingClear;
 
         if (
+          !forceTerminalResizeRedraw &&
           !normalized.forceDraw &&
           !canceledPendingClear &&
           (pendingGraphicSignatures.get(frame.id) === signature ||
@@ -882,6 +891,7 @@ export function createStdoutRenderer(
         }
 
         if (
+          !forceTerminalResizeRedraw &&
           !normalized.forceDraw &&
           canceledPendingClear &&
           activeGraphicSignatures.get(frame.id) === signature
@@ -935,6 +945,7 @@ export function createStdoutRenderer(
             fallbackText: frame.fallbackText,
             resizeRedraw: true,
             placementMoveWithoutClear: true,
+            terminalResizeRedraw: forceTerminalResizeRedraw,
           });
           pendingGraphicSignatures.set(frame.id, signature);
           if (isDebugEnabled()) {
@@ -962,6 +973,7 @@ export function createStdoutRenderer(
           resizeSequence,
           clearSequence,
           fallbackText: frame.fallbackText,
+          terminalResizeRedraw: forceTerminalResizeRedraw,
         });
         pendingGraphicSignatures.set(frame.id, signature);
         if (isDebugEnabled()) {
@@ -3997,6 +4009,7 @@ export function createStdoutRenderer(
         wroteClear = appendActiveGraphicProtocolClear(active, visibleRect) || wroteClear;
         if (wroteClear) terminalGraphicsClears++;
         retainedGraphics.delete(id);
+        terminalResizeDirtyGraphics.delete(id);
         nextActiveGraphics.delete(id);
         nextActiveGraphicSignatures.delete(id);
         nextPendingGraphicSignatures.delete(id);
@@ -4045,6 +4058,7 @@ export function createStdoutRenderer(
           } else {
             retainedGraphics.delete(payload.id);
           }
+          terminalResizeDirtyGraphics.delete(payload.id);
           nextActiveGraphics.delete(payload.id);
           nextActiveGraphicSignatures.delete(payload.id);
           nextPendingGraphicSignatures.delete(payload.id);
@@ -4077,6 +4091,7 @@ export function createStdoutRenderer(
             nextActiveGraphics.delete(payload.id);
             nextActiveGraphicSignatures.delete(payload.id);
           }
+          terminalResizeDirtyGraphics.delete(payload.id);
           nextPendingGraphicSignatures.delete(payload.id);
           continue;
         }
@@ -4092,7 +4107,7 @@ export function createStdoutRenderer(
           canReplaceKittyPlacementWithoutClear(previous, payload);
         const resizeRedrawNeedsClear =
           previous &&
-          payload.resizeRedraw &&
+          (payload.resizeRedraw || payload.terminalResizeRedraw) &&
           Boolean(previous.clearSequence) &&
           !canReplacePlacement;
 
@@ -4127,7 +4142,9 @@ export function createStdoutRenderer(
           : "";
         const cursor = `\u001B[${rect.y + 1};${rect.x + 1}H`;
         const sequencePayload =
-          canReplacePlacement && payload.resizeSequence ? payload.resizeSequence : payload.sequence;
+          (canReplacePlacement || payload.terminalResizeRedraw) && payload.resizeSequence
+            ? payload.resizeSequence
+            : payload.sequence;
         const sequence = maybeWrapTerminalGraphic(sequencePayload);
         frameParts.push(
           countGraphicsBytes(cursor),
@@ -4146,6 +4163,7 @@ export function createStdoutRenderer(
         });
         nextActiveGraphicSignatures.set(payload.id, nextSignature);
         nextPendingGraphicSignatures.delete(payload.id);
+        terminalResizeDirtyGraphics.delete(payload.id);
       }
 
       if (allowGraphicsOnlyWithoutBaseline) frameParts.push(CURSOR_RESTORE);
@@ -4962,6 +4980,7 @@ export function createStdoutRenderer(
     pendingGraphicClears.clear();
     pendingGraphicSignatures.clear();
     retainedGraphics.clear();
+    terminalResizeDirtyGraphics.clear();
     try {
       if (activeGraphics.size > 0) {
         const size = terminal.size();

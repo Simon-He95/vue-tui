@@ -811,7 +811,7 @@ describe("markdown image fallback and sizing", () => {
           mounted.scheduler()?.flushNow();
           (renderer as any).render(undefined, true);
 
-          expect(stdout).not.toContain("a=d");
+          expect(stdout).toContain("a=d");
           expect(stdout).toContain("a=p");
           expect(stdout).not.toContain("a=T");
           expect(rowText(mounted, 0)).toContain("Cat photo:");
@@ -878,7 +878,7 @@ describe("markdown image fallback and sizing", () => {
           mounted.scheduler()?.flushNow();
           (renderer as any).render(undefined, true);
 
-          expect(stdout).not.toContain("a=d");
+          expect(stdout).toContain("a=d");
           expect(stdout).toContain("a=p");
           expect(stdout).not.toContain("a=T");
           expect(rowText(mounted, 0)).toContain("Cat photo:");
