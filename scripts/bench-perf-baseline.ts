@@ -346,7 +346,7 @@ async function main() {
   const uniqueOps = (warmup + samples) * fastIter + 100;
 
   // Prevent accidental memory exhaustion
-  const MAX_UNIQUE_OPS = 1_000_000;
+  const MAX_UNIQUE_OPS = 100_000;
   if (uniqueOps > MAX_UNIQUE_OPS) {
     throw new Error(
       `Unique corpus too large: ${uniqueOps} entries. ` +

@@ -13,8 +13,8 @@
 
 ## Stability Distribution
 
-- **Stable (CV < 10%)**: 6 scenarios ✓
-- **Noisy (CV 10-50%)**: 9 scenarios ~
+- **Stable (CV < 10%)**: 7 scenarios ✓
+- **Noisy (CV 10-50%)**: 8 scenarios ~
 - **Unstable (CV > 50%)**: 3 scenarios ⚠
 
 ## Stable Scenarios (Reliable for Unicode/Text Micro-benchmark Comparisons)
