@@ -18,8 +18,9 @@ import * as assert from "node:assert";
 import { execSync } from "node:child_process";
 
 // Import functions to benchmark
+import { EAW_UNICODE_VERSION } from "../src/core/buffer/eaw-ranges-unicode-17.js";
 import { charCellWidth } from "../src/core/buffer/width.js";
-import { textCellWidth, sliceByCells, wrapByCells } from "../src/vue/utils/text.js";
+import { textCellWidth, sliceByCells, wrapByCells, clearTextCaches } from "../src/vue/utils/text.js";
 import { createTerminal } from "../src/core/index.js";
 
 // Blackhole sink to prevent V8 optimization
@@ -230,6 +231,21 @@ function benchmark(name: string, fn: () => void, options: BenchmarkOptions): Ben
 }
 
 /**
+ * Read flag value and validate
+ */
+function readFlagValue(args: string[], flag: string): string | null {
+  const index = args.indexOf(flag);
+  if (index < 0) return null;
+
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${flag} requires a value`);
+  }
+
+  return value;
+}
+
+/**
  * Parse and validate positive integer
  */
 function parsePositiveInt(value: string | undefined, name: string): number | null {
@@ -246,14 +262,26 @@ function parsePositiveInt(value: string | undefined, name: string): number | nul
  */
 function parseArgs() {
   const args = process.argv.slice(2);
-  const outputIndex = args.indexOf("--output");
-  const warmupIndex = args.indexOf("--warmup");
-  const samplesIndex = args.indexOf("--samples");
 
-  const outputFile = outputIndex >= 0 ? args[outputIndex + 1] || null : null;
-  const warmupArg = warmupIndex >= 0 ? parsePositiveInt(args[warmupIndex + 1], "--warmup") : null;
-  const samplesArg =
-    samplesIndex >= 0 ? parsePositiveInt(args[samplesIndex + 1], "--samples") : null;
+  // Validate known flags
+  const knownFlags = new Set(["--output", "--warmup", "--samples"]);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg.startsWith("--")) {
+      if (!knownFlags.has(arg)) {
+        throw new Error(`Unknown argument: ${arg}`);
+      }
+      i++; // skip value
+    }
+  }
+
+  // Read flag values with validation
+  const outputFile = readFlagValue(args, "--output");
+  const warmupStr = readFlagValue(args, "--warmup");
+  const samplesStr = readFlagValue(args, "--samples");
+
+  const warmupArg = parsePositiveInt(warmupStr, "--warmup");
+  const samplesArg = parsePositiveInt(samplesStr, "--samples");
 
   // Environment variables for smoke mode
   const isSmoke = process.env.BENCH_SMOKE === "1";
@@ -416,7 +444,13 @@ async function main() {
     },
   );
 
-  // Scenario 7: textCellWidth unique ASCII (simulates unique log lines)
+  
+  // Text scenarios: Clear cache at scenario boundaries to prevent cross-contamination
+  // Hot cache scenarios will rebuild cache during warmup
+  // Unique scenarios test cache-miss path with each new input
+  clearTextCaches();
+
+// Scenario 7: textCellWidth unique ASCII (simulates unique log lines)
   results["textCellWidth_ascii_unique"] = benchmark(
     "textCellWidth(ASCII unique, cache-miss path)",
     () => {
@@ -544,7 +578,10 @@ async function main() {
     },
   );
 
-  // Scenario 15: wrapByCells CJK (hot cache)
+  
+  clearTextCaches();
+
+// Scenario 15: wrapByCells CJK (hot cache)
   results["wrapByCells_cjk_long_hot"] = benchmark(
     "wrapByCells(CJK 100, hot cache)",
     () => {
@@ -630,7 +667,7 @@ async function main() {
     schemaVersion: 1,
     benchmarkSuite: "unicode-width-text-v1",
     commit: getCommitHash(),
-    eawUnicodeVersion: "17.0.0",
+    eawUnicodeVersion: EAW_UNICODE_VERSION,
     runtimeUnicodeVersion: process.versions.unicode,
     icu: process.versions.icu,
     node: process.version,

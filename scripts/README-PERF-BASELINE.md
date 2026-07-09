@@ -118,11 +118,7 @@ This makes before/after comparisons meaningful.
   "timestamp": "2026-07-09T10:27:22.455Z",
   "blackhole": 12345,
   "results": {
-  "schemaVersion": 1,
-  "benchmarkSuite": "unicode-width-text-v1",
     "charCellWidth_ascii": {
-  "schemaVersion": 1,
-  "benchmarkSuite": "unicode-width-text-v1",
       "p50": 4.12,
       "p95": 8.3,
       "p99": 12.45,
@@ -226,11 +222,13 @@ Per the RFC, optimization work (cache tuning, long text strategy, etc.) should:
 ### ASCII Fast Path
 
 `textCellWidth` has a special fast path for ASCII text that bypasses the text cache entirely:
+
 ```typescript
 if (hasAsciiFastPath(provider) && isAscii(text)) return text.length;
 ```
 
 This means:
+
 - `textCellWidth_ascii_long_fast_path`: Uses fast path (no cache)
 - `textCellWidth_ascii_unique`: Still uses fast path (no cache), just with different input each time
 
@@ -242,22 +240,22 @@ The `harness_blackhole_overhead` scenario measures the pure overhead of the benc
 
 The overhead baseline only covers `consumeNumber`. Scenarios using `consumeString` or `consumeArray` may have slightly different overhead, but this doesn't affect before/after comparisons.
 
-
 ### Complex Grapheme Scenarios
 
 The complex grapheme scenarios test different aspects:
 
 **Hot scenario** (`textCellWidth_complex_grapheme_hot`):
+
 - Measures cache-hit behavior for complex strings
 - After warmup, the same string is cached
 - Tests how fast cache lookup + return is
 - Does NOT repeatedly measure segmentation cost
 
 **Unique scenario** (`textCellWidth_complex_grapheme_unique`):
+
 - Each iteration uses different input
 - Forces cache miss every time
 - Measures actual `segmentedGraphemes` / `Intl.Segmenter` computation
 - Tests ZWJ, regional indicators, combining marks processing
 
 This distinction is important: hot scenario validates caching works; unique scenario measures true grapheme processing cost.
-
