@@ -101,7 +101,16 @@ export type RenderManager = Readonly<{
    */
   markDirtyRows: (id: string, rows: readonly number[]) => boolean;
   /** For raw terminal graphics, covered means any overlap by a higher node. */
-  isRectCoveredByHigherNode: (id: string, rect: RenderRect) => boolean;
+  isRectCoveredByHigherNode: (
+    id: string,
+    rect: RenderRect,
+    options?: Readonly<{ ignoreSamePlane?: boolean }>,
+  ) => boolean;
+  higherNodeCoverageRects: (
+    id: string,
+    rect: RenderRect,
+    options?: Readonly<{ ignoreSamePlane?: boolean }>,
+  ) => readonly RenderRect[];
   unregister: (id: string) => void;
   render: (options?: { activePlanes?: TerminalRenderPlanes | null }) => RenderStats | null;
   dispose: () => void;
@@ -469,6 +478,17 @@ export function createRenderManager(
     }
   }
 
+  function markLowerPlanesForRect(
+    plane: TerminalRenderPlane,
+    rect: RenderRect | null | undefined,
+  ): void {
+    const planeIndex = TERMINAL_RENDER_PLANES.indexOf(plane);
+    if (planeIndex <= 0) return;
+    for (let i = 0; i < planeIndex; i++) {
+      markRect(TERMINAL_RENDER_PLANES[i]!, rect);
+    }
+  }
+
   function markRowRange(plane: TerminalRenderPlane, startY: number, endY: number): void {
     const state = getDirtyState(plane);
     const start = Math.max(0, Math.min(terminalRows, Math.floor(startY)));
@@ -567,6 +587,7 @@ export function createRenderManager(
     nodes.set(id, full);
     addToRowBuckets(full);
     markRect(full.plane, full.rect);
+    markLowerPlanesForRect(full.plane, full.rect);
     sortedDirty = true;
     return full;
   }
@@ -619,6 +640,8 @@ export function createRenderManager(
       markRect(prev.plane, prev.rect);
       markRect(nextPlane, nextRect);
     }
+    markLowerPlanesForRect(prev.plane, prev.rect);
+    markLowerPlanesForRect(nextPlane, nextRect);
     if (bucketChanged) removeFromRowBuckets(prev);
     const full: RenderNode = Object.freeze({
       ...prev,
@@ -651,24 +674,47 @@ export function createRenderManager(
     return markRowsForNode(node, rows);
   }
 
-  function isRectCoveredByHigherNode(id: string, rect: RenderRect): boolean {
-    if (disposed || isEmptyRect(rect)) return false;
+  function isRectCoveredByHigherNode(
+    id: string,
+    rect: RenderRect,
+    options: Readonly<{ ignoreSamePlane?: boolean }> = {},
+  ): boolean {
+    return higherNodeCoverageRects(id, rect, options).length > 0;
+  }
+
+  function higherNodeCoverageRects(
+    id: string,
+    rect: RenderRect,
+    options: Readonly<{ ignoreSamePlane?: boolean }> = {},
+  ): readonly RenderRect[] {
+    if (disposed || isEmptyRect(rect)) return [];
     const owner = nodes.get(id);
-    if (!owner) return false;
+    if (!owner) return [];
     const ownerPlaneIndex = TERMINAL_RENDER_PLANES.indexOf(owner.plane);
-    if (ownerPlaneIndex < 0) return false;
+    if (ownerPlaneIndex < 0) return [];
+
+    const out: RenderRect[] = [];
 
     for (const candidate of nodes.values()) {
       if (candidate.id === id || !candidate.rect || isEmptyRect(candidate.rect)) continue;
       if (!rectsIntersect(rect, candidate.rect)) continue;
 
       const candidatePlaneIndex = TERMINAL_RENDER_PLANES.indexOf(candidate.plane);
-      if (candidatePlaneIndex > ownerPlaneIndex) return true;
-      if (candidatePlaneIndex === ownerPlaneIndex && compareNodes(owner, candidate) < 0)
-        return true;
+      const covered =
+        candidatePlaneIndex > ownerPlaneIndex ||
+        (!options.ignoreSamePlane &&
+          candidatePlaneIndex === ownerPlaneIndex &&
+          compareNodes(owner, candidate) < 0);
+      if (!covered) continue;
+
+      const x0 = Math.max(rect.x, candidate.rect.x);
+      const y0 = Math.max(rect.y, candidate.rect.y);
+      const x1 = Math.min(rect.x + rect.w, candidate.rect.x + candidate.rect.w);
+      const y1 = Math.min(rect.y + rect.h, candidate.rect.y + candidate.rect.h);
+      if (x1 > x0 && y1 > y0) out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
     }
 
-    return false;
+    return out;
   }
 
   function unregister(id: string): void {
@@ -676,6 +722,7 @@ export function createRenderManager(
     const prev = nodes.get(id);
     if (prev) {
       markRect(prev.plane, prev.rect);
+      markLowerPlanesForRect(prev.plane, prev.rect);
       removeFromRowBuckets(prev);
       warnedLocalDirtyRows.delete(id);
     }
@@ -954,6 +1001,7 @@ export function createRenderManager(
     update,
     markDirtyRows,
     isRectCoveredByHigherNode,
+    higherNodeCoverageRects,
     unregister,
     render,
     dispose() {

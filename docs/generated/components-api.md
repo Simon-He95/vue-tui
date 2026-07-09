@@ -112,8 +112,14 @@ Import: `@simon_he/vue-tui/agent`
 | <code>suspendRawWhileScrolling</code>    | <code>boolean</code>                                             | <code>true</code>                                      | 否   | —    |
 | <code>suspendRenderWhileScrolling</code> | <code>boolean</code>                                             | <code>true</code>                                      | 否   | —    |
 | <code>scrolling</code>                   | <code>boolean</code>                                             | <code>false</code>                                     | 否   | —    |
+| <code>scrollVersion</code>               | <code>number</code>                                              | <code>0</code>                                         | 否   | —    |
+| <code>placementMoveWithoutClear</code>   | <code>boolean</code>                                             | <code>false</code>                                     | 否   | —    |
 | <code>suspended</code>                   | <code>boolean</code>                                             | <code>false</code>                                     | 否   | —    |
+| <code>retainRawWhileCovered</code>       | <code>boolean</code>                                             | <code>false</code>                                     | 否   | —    |
+| <code>ignoreRawCoverage</code>           | <code>boolean</code>                                             | <code>false</code>                                     | 否   | —    |
+| <code>ignoreSamePlaneRawCoverage</code>  | <code>boolean</code>                                             | <code>false</code>                                     | 否   | —    |
 | <code>cacheKey</code>                    | <code>string</code>                                              | <code>undefined</code>                                 | 否   | —    |
+| <code>placementKey</code>                | <code>string</code>                                              | <code>undefined</code>                                 | 否   | —    |
 | <code>trace</code>                       | <code>(event: TAgentTerminalGraphicTraceEvent) =&gt; void</code> | <code>undefined</code>                                 | 否   | —    |
 
 ### Events

@@ -256,6 +256,7 @@ export const TerminalProvider = defineComponent({
     } as const;
     const selectionOverlay = getPlaneTerminal(terminal, "overlay");
     let selectionRenderNodeId: string | null = null;
+    const selectionRenderRect = () => null;
     const selection = createTerminalSelectionController({
       terminal,
       overlayTerminal: selectionOverlay,
@@ -299,10 +300,19 @@ export const TerminalProvider = defineComponent({
       stack: render.rootStack,
       plane: "overlay",
       zIndex: -10_000,
-      rect: { x: 0, y: 0, w: props.cols, h: props.rows },
+      rect: selectionRenderRect(),
       paint: selection.paint,
     });
     selectionRenderNodeId = selectionRenderNode.id;
+    watch(
+      () => [selection.state.value.active, selection.state.value.hasRange, props.cols, props.rows],
+      () => {
+        render.update(selectionRenderNode.id, {
+          rect: selectionRenderRect(),
+        });
+        invalidate({ plane: "overlay", reason: "selection" });
+      },
+    );
 
     const { portals, runtime } = createTerminalPortals(invalidate);
 
@@ -364,6 +374,11 @@ export const TerminalProvider = defineComponent({
       scope.run(() => {
         const el = containerRef.value;
         if (!el) return;
+        const imeInput = imeRef.value;
+        if (imeInput) {
+          imeInput.style.left = "0px";
+          imeInput.style.top = "0px";
+        }
 
         const r = createDomRenderer(terminal, el, props.domRendererOptions ?? {});
         renderer.value = r;
@@ -431,7 +446,7 @@ export const TerminalProvider = defineComponent({
           rootLayout.clipRect = { x: 0, y: 0, w: cols, h: rows };
           selection.clear();
           render.update(selectionRenderNode.id, {
-            rect: { x: 0, y: 0, w: cols, h: rows },
+            rect: selectionRenderRect(),
           });
           clearTextCaches();
           invalidate({ reason: "resize" });
@@ -1509,8 +1524,6 @@ export const TerminalProvider = defineComponent({
               // Mimics xterm-like hidden textarea behavior.
               // Use position: fixed so the textarea is not clipped by overflow:hidden on parent elements.
               position: "fixed",
-              left: "0px",
-              top: "0px",
               // Size will be set by updateImePosition to match cell dimensions
               width: debugIme ? "240px" : "10px",
               height: debugIme ? "90px" : "20px",

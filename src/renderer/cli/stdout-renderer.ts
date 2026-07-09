@@ -45,7 +45,7 @@ import {
 } from "../../core/ansi/colors.js";
 import { createDebugLogger, isDebugEnabled } from "../../core/debug-logger.js";
 import { sanitizeTerminalHref } from "../../core/hyperlink.js";
-import { getPlaneRowCoverageKind } from "../../core/terminal/create-terminal.js";
+import { getPlaneRowCoverageKind, getPlaneTerminal } from "../../core/terminal/create-terminal.js";
 import { getCliLatencyProfiler } from "../../observability/cli-latency-node.js";
 import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { firstNonEmptyEnv } from "../../utils/env.js";
@@ -509,6 +509,7 @@ export function createStdoutRenderer(
       op: TerminalGraphicsOperation;
       order: number;
       resizeRedraw?: boolean;
+      terminalResizeRedraw?: boolean;
     }>;
   type ActiveTerminalGraphic = Readonly<{
     x: number;
@@ -523,6 +524,7 @@ export function createStdoutRenderer(
   type RetainedTerminalGraphic = Readonly<{
     active: ActiveTerminalGraphic;
     signature: string;
+    autoRedrawOnResize: boolean;
   }>;
 
   const graphicsCapabilities = resolveTerminalGraphicsCapabilities(options, env, outputIsTTY);
@@ -532,7 +534,9 @@ export function createStdoutRenderer(
   const pendingGraphicSignatures = new Map<string, string>();
   const activeGraphicSignatures = new Map<string, string>();
   const retainedGraphics = new Map<string, RetainedTerminalGraphic>();
+  const terminalResizeDirtyGraphics = new Set<string>();
   let nextGraphicsOrder = 0;
+  let terminalGraphicsFlushTimer: ReturnType<typeof setTimeout> | null = null;
   const hasPendingTerminalGraphics = (): boolean =>
     pendingGraphics.size > 0 || pendingGraphicClears.size > 0;
   function canUseTerminalGraphicsProtocol(
@@ -545,7 +549,7 @@ export function createStdoutRenderer(
       protocol === capabilities.preferredProtocol
     );
   }
-  function requestTerminalGraphicsFlush(): void {
+  function requestTerminalGraphicsFlush(defer = false): void {
     if (disposed) return;
     if (deferGraphicsFlushUntilResizeCommit) {
       if (isDebugEnabled()) {
@@ -553,7 +557,15 @@ export function createStdoutRenderer(
       }
       return;
     }
-    render([], false);
+    if (!defer) {
+      render([], false);
+      return;
+    }
+    if (terminalGraphicsFlushTimer) return;
+    terminalGraphicsFlushTimer = setTimeout(() => {
+      terminalGraphicsFlushTimer = null;
+      if (!disposed) render([], false);
+    }, 0);
   }
   function terminalGraphicsPayloadSignature(
     payload: Readonly<{
@@ -599,6 +611,7 @@ export function createStdoutRenderer(
     id: string,
     active: ActiveTerminalGraphic,
     signature: string | undefined,
+    options: Readonly<{ autoRedrawOnResize?: boolean }> = {},
   ): void {
     if (
       !signature ||
@@ -610,7 +623,11 @@ export function createStdoutRenderer(
       retainedGraphics.delete(id);
       return;
     }
-    retainedGraphics.set(id, { active, signature });
+    retainedGraphics.set(id, {
+      active,
+      signature,
+      autoRedrawOnResize: Boolean(options.autoRedrawOnResize),
+    });
   }
   function kittyPlacementKey(sequence: string | undefined): string | null {
     if (!sequence) return null;
@@ -639,19 +656,30 @@ export function createStdoutRenderer(
     previous: ActiveTerminalGraphic,
     payload: QueuedTerminalGraphicsPayload,
   ): boolean {
+    if (payload.terminalResizeRedraw) return false;
     if (!payload.resizeRedraw || previous.protocol !== "kitty" || payload.protocol !== "kitty") {
       return false;
     }
 
-    const nextKey = kittyPlacementKey(payload.sequence);
+    const nextKey = kittyPlacementKey(payload.resizeSequence ?? payload.sequence);
     if (!nextKey) return false;
-    return kittyPlacementKey(previous.resizeSequence ?? previous.sequence) === nextKey;
+    return (
+      kittyPlacementKey(previous.resizeSequence ?? previous.sequence) === nextKey &&
+      (payload.placementMoveWithoutClear ||
+        sameGraphicRect(previous, {
+          x: payload.x,
+          y: payload.y,
+          w: payload.w ?? previous.w,
+          h: payload.h ?? previous.h,
+        }))
+    );
   }
   function queueTerminalGraphicClear(id: string): boolean {
     if (disposed) return false;
 
     const removedPendingDraw = pendingGraphics.delete(`${id}:draw`);
     pendingGraphicSignatures.delete(id);
+    terminalResizeDirtyGraphics.delete(id);
 
     const active = activeGraphics.get(id);
     if (!active) {
@@ -695,6 +723,7 @@ export function createStdoutRenderer(
       );
     }
     for (const [id, active] of activeGraphics) {
+      terminalResizeDirtyGraphics.add(id);
       pendingGraphics.delete(`${id}:draw`);
       const anchored = anchoredGraphicRectInViewport(active, size);
       if (anchored && !active.resizeSequence) {
@@ -720,6 +749,7 @@ export function createStdoutRenderer(
         op: "draw",
         order: nextGraphicsOrder++,
         resizeRedraw: true,
+        terminalResizeRedraw: true,
       });
       if (signature) pendingGraphicSignatures.set(id, signature);
       if (isDebugEnabled()) {
@@ -729,7 +759,7 @@ export function createStdoutRenderer(
       }
     }
     for (const [id, retained] of retainedGraphics) {
-      if (activeGraphics.has(id)) continue;
+      if (activeGraphics.has(id) || !retained.autoRedrawOnResize) continue;
 
       const { active, signature } = retained;
       if (!anchoredGraphicRectInViewport(active, size)) continue;
@@ -752,6 +782,7 @@ export function createStdoutRenderer(
         op: "draw",
         order: nextGraphicsOrder++,
         resizeRedraw: true,
+        terminalResizeRedraw: true,
       });
       pendingGraphicSignatures.set(id, signature);
       if (isDebugEnabled()) {
@@ -766,7 +797,9 @@ export function createStdoutRenderer(
     capabilities: graphicsCapabilities,
     isActive(id) {
       if (pendingGraphicClears.has(id) || pendingGraphics.has(`${id}:clear`)) return false;
-      return activeGraphics.has(id) || pendingGraphics.has(`${id}:draw`);
+      return (
+        activeGraphics.has(id) || retainedGraphics.has(id) || pendingGraphics.has(`${id}:draw`)
+      );
     },
     queue(payload) {
       if (disposed) return false;
@@ -839,12 +872,15 @@ export function createStdoutRenderer(
           resizeSequence,
           clearSequence,
         });
+        const forceTerminalResizeRedraw = terminalResizeDirtyGraphics.has(frame.id);
 
         const removedPendingGraphicClear = pendingGraphics.delete(`${frame.id}:clear`);
         const removedPendingClear = pendingGraphicClears.delete(frame.id);
         const canceledPendingClear = removedPendingGraphicClear || removedPendingClear;
 
         if (
+          !forceTerminalResizeRedraw &&
+          !normalized.forceDraw &&
           !canceledPendingClear &&
           (pendingGraphicSignatures.get(frame.id) === signature ||
             activeGraphicSignatures.get(frame.id) === signature)
@@ -862,7 +898,12 @@ export function createStdoutRenderer(
           return true;
         }
 
-        if (canceledPendingClear && activeGraphicSignatures.get(frame.id) === signature) {
+        if (
+          !forceTerminalResizeRedraw &&
+          !normalized.forceDraw &&
+          canceledPendingClear &&
+          activeGraphicSignatures.get(frame.id) === signature
+        ) {
           recordTerminalGraphicTrace({
             type: "queue-dedupe",
             id: frame.id,
@@ -877,11 +918,26 @@ export function createStdoutRenderer(
         }
 
         const retained = retainedGraphics.get(frame.id);
+        const retainedCanReplacePlacement =
+          retained &&
+          resizeSequence &&
+          canReplaceKittyPlacementWithoutClear(retained.active, {
+            ...normalized,
+            id: frame.id,
+            w: frame.width,
+            h: frame.height,
+            sequence: resizeSequence,
+            resizeSequence,
+            clearSequence,
+            fallbackText: frame.fallbackText,
+            resizeRedraw: true,
+            placementMoveWithoutClear: true,
+          });
         if (
           !canceledPendingClear &&
           retained &&
-          retained.signature === signature &&
-          resizeSequence
+          resizeSequence &&
+          (retained.signature === signature || retainedCanReplacePlacement)
         ) {
           activeGraphics.set(frame.id, retained.active);
           activeGraphicSignatures.set(frame.id, retained.signature);
@@ -896,6 +952,8 @@ export function createStdoutRenderer(
             clearSequence,
             fallbackText: frame.fallbackText,
             resizeRedraw: true,
+            placementMoveWithoutClear: true,
+            terminalResizeRedraw: forceTerminalResizeRedraw,
           });
           pendingGraphicSignatures.set(frame.id, signature);
           if (isDebugEnabled()) {
@@ -909,7 +967,7 @@ export function createStdoutRenderer(
             protocol: normalized.protocol,
             bytes: resizeSequence.length,
           });
-          requestTerminalGraphicsFlush();
+          requestTerminalGraphicsFlush(Boolean(normalized.deferFlush));
           return true;
         }
 
@@ -923,6 +981,7 @@ export function createStdoutRenderer(
           resizeSequence,
           clearSequence,
           fallbackText: frame.fallbackText,
+          terminalResizeRedraw: forceTerminalResizeRedraw,
         });
         pendingGraphicSignatures.set(frame.id, signature);
         if (isDebugEnabled()) {
@@ -936,7 +995,7 @@ export function createStdoutRenderer(
           protocol: normalized.protocol,
           bytes: frame.sequence.length,
         });
-        requestTerminalGraphicsFlush();
+        requestTerminalGraphicsFlush(Boolean(normalized.deferFlush));
         return true;
       }
 
@@ -960,7 +1019,7 @@ export function createStdoutRenderer(
         id: normalized.id,
         protocol: normalized.protocol,
       });
-      requestTerminalGraphicsFlush();
+      requestTerminalGraphicsFlush(Boolean(normalized.deferFlush));
       return true;
     },
     clear(id) {
@@ -1322,8 +1381,10 @@ export function createStdoutRenderer(
   let continuationTextId = 0;
   const cellTextIdCache = new Map<string, number>();
   const MAX_CELL_TEXT_IDS = 131_072;
+  type TextPreserveSpan = { start: number; end: number };
   let prevOverlayBlockedRows: readonly number[] = [];
   let prevOverlayPartialRows: readonly number[] = [];
+  let prevOverlayVisibleSpans: ReadonlyMap<number, readonly TextPreserveSpan[]> = new Map();
   const hrefIndex = new Map<string, number>();
   let nextHrefId = 1;
   const MAX_HREF_IDS = 8192;
@@ -1348,6 +1409,7 @@ export function createStdoutRenderer(
     fpPrevValid = false;
     prevOverlayBlockedRows = [];
     prevOverlayPartialRows = [];
+    prevOverlayVisibleSpans = new Map();
   }
   function cellFingerprintFromStyleKey(_ch: string, key: number): number {
     return key >>> 0;
@@ -2580,13 +2642,13 @@ export function createStdoutRenderer(
         : null;
     preserveNextRowsOnlyResizeBaseline = false;
     const pendingGraphicClearsToRender = new Set(pendingGraphicClears);
-    const graphicsClearsToRender = Array.from(pendingGraphicClearsToRender);
-    const graphicsEntriesToRender = Array.from(pendingGraphics.entries()).sort(([, a], [, b]) => {
+    let graphicsClearsToRender = Array.from(pendingGraphicClearsToRender);
+    let graphicsEntriesToRender = Array.from(pendingGraphics.entries()).sort(([, a], [, b]) => {
       const opA = a.op === "clear" ? 0 : 1;
       const opB = b.op === "clear" ? 0 : 1;
       return opA - opB || a.order - b.order;
     });
-    const graphicsToRender = graphicsEntriesToRender.map(([, payload]) => payload);
+    let graphicsToRender = graphicsEntriesToRender.map(([, payload]) => payload);
     const allowGraphicsOnlyWithoutBaseline =
       allowNextGraphicsOnlyRenderWithoutBaseline &&
       dirtyRows?.length === 0 &&
@@ -2643,6 +2705,7 @@ export function createStdoutRenderer(
     })();
 
     const terminalGraphicsAffectedRows = new Set<number>();
+    const terminalGraphicTextPreserveSpans = new Map<number, TextPreserveSpan[]>();
     const addTerminalGraphicRows = (
       rect: Readonly<{ x: number; y: number; w: number; h: number }> | null | undefined,
     ): void => {
@@ -2652,6 +2715,23 @@ export function createStdoutRenderer(
 
       for (let y = visible.y; y < visible.y + visible.h; y++) {
         terminalGraphicsAffectedRows.add(y);
+      }
+    };
+    const addTerminalGraphicTextPreserveSpans = (
+      rect: Readonly<{ x: number; y: number; w: number; h: number }> | null | undefined,
+    ): void => {
+      if (!rect) return;
+      const visible = clipGraphicRectToViewport(rect, size);
+      if (!visible) return;
+
+      const start = Math.max(0, Math.min(size.cols, visible.x));
+      const end = Math.max(start, Math.min(size.cols, visible.x + visible.w));
+      if (end <= start) return;
+
+      for (let y = visible.y; y < visible.y + visible.h; y++) {
+        const spans = terminalGraphicTextPreserveSpans.get(y);
+        if (spans) spans.push({ start, end });
+        else terminalGraphicTextPreserveSpans.set(y, [{ start, end }]);
       }
     };
     const payloadRect = (
@@ -2674,21 +2754,48 @@ export function createStdoutRenderer(
       }
       return false;
     };
+    const graphicRectVisible = (
+      rect: Readonly<{ x: number; y: number; w: number; h: number }> | null | undefined,
+    ): boolean => Boolean(rect && clipGraphicRectToViewport(rect, size));
 
     const pendingGraphicIds = new Set(graphicsToRender.map((payload) => payload.id));
     const explicitGraphicClears = new Set(graphicsClearsToRender);
-
     if (normalizedScrollOperations?.length && activeGraphics.size > 0) {
       for (const [id, active] of activeGraphics) {
+        if (explicitGraphicClears.has(id) || pendingGraphicIds.has(id)) continue;
+        if (!intersectsScrollOperations(active)) continue;
+        const signature = activeGraphicSignatures.get(id);
+        graphicsToRender.push({
+          id,
+          x: active.x,
+          y: active.y,
+          w: active.w,
+          h: active.h,
+          protocol: active.protocol,
+          sequence: active.sequence,
+          resizeSequence: active.resizeSequence,
+          clearSequence: active.clearSequence,
+          op: "draw",
+          order: nextGraphicsOrder++,
+        });
+        if (signature) pendingGraphicSignatures.set(id, signature);
+        pendingGraphicIds.add(id);
+      }
+    }
+
+    for (const [id, active] of activeGraphics) {
+      if (explicitGraphicClears.has(id)) continue;
+      if (pendingGraphicIds.has(id)) continue;
+      if (intersectsScrollOperations(active)) continue;
+      addTerminalGraphicTextPreserveSpans(active);
+    }
+
+    if (normalizedScrollOperations?.length && activeGraphics.size > 0) {
+      for (const active of activeGraphics.values()) {
         if (!intersectsScrollOperations(active)) continue;
 
         terminalGraphicsBlockScrollRegions = true;
         addTerminalGraphicRows(active);
-
-        if (!pendingGraphicIds.has(id) && !explicitGraphicClears.has(id)) {
-          graphicsClearsToRender.push(id);
-          explicitGraphicClears.add(id);
-        }
       }
     }
 
@@ -2709,6 +2816,7 @@ export function createStdoutRenderer(
       }
 
       const next = payloadRect(payload);
+      if (!payload.allowTextOverlay) addTerminalGraphicTextPreserveSpans(next);
       addTerminalGraphicRows(active);
       addTerminalGraphicRows(next);
 
@@ -2716,9 +2824,102 @@ export function createStdoutRenderer(
         terminalGraphicsBlockScrollRegions = true;
       }
     }
+    if (
+      !terminalGraphicsBlockScrollRegions &&
+      (Array.from(activeGraphics.values()).some(graphicRectVisible) ||
+        graphicsClearsToRender.some((id) => graphicRectVisible(activeGraphics.get(id))) ||
+        graphicsToRender.some((payload) =>
+          payload.op === "clear"
+            ? graphicRectVisible(activeGraphics.get(payload.id) ?? payloadRect(payload))
+            : graphicRectVisible(
+                anchoredGraphicRectInViewport(
+                  { x: payload.x, y: payload.y, w: payload.w ?? 1, h: payload.h ?? 1 },
+                  size,
+                ),
+              ),
+        ))
+    ) {
+      terminalGraphicsBlockScrollRegions = true;
+    }
 
+    let forceDirtyRowsRepaintForFrame = forceDirtyRowsRepaint;
     const forceTerminalGraphicsRowRepaint = (y: number): boolean =>
-      forceDirtyRowsRepaint || terminalGraphicsAffectedRows.has(y);
+      forceDirtyRowsRepaintForFrame ||
+      terminalGraphicsAffectedRows.has(y) ||
+      terminalGraphicTextPreserveSpans.has(y);
+    for (const [y, spans] of terminalGraphicTextPreserveSpans) {
+      spans.sort((a, b) => a.start - b.start || a.end - b.end);
+      const merged: TextPreserveSpan[] = [];
+      for (const span of spans) {
+        const previous = merged[merged.length - 1];
+        if (previous && span.start <= previous.end) {
+          previous.end = Math.max(previous.end, span.end);
+        } else {
+          merged.push({ ...span });
+        }
+      }
+      terminalGraphicTextPreserveSpans.set(y, merged);
+    }
+
+    const mergeSpans = (spans: readonly TextPreserveSpan[]): TextPreserveSpan[] => {
+      if (!spans.length) return [];
+      const sorted = [...spans].sort((a, b) => a.start - b.start || a.end - b.end);
+      const merged: TextPreserveSpan[] = [];
+      for (const span of sorted) {
+        const start = Math.max(0, Math.min(size.cols, span.start));
+        const end = Math.max(start, Math.min(size.cols, span.end));
+        if (end <= start) continue;
+        const previous = merged[merged.length - 1];
+        if (previous && start <= previous.end) {
+          previous.end = Math.max(previous.end, end);
+        } else {
+          merged.push({ start, end });
+        }
+      }
+      return merged;
+    };
+
+    const overlayVisibleSpansForRows = (
+      rows: readonly number[],
+    ): Map<number, TextPreserveSpan[]> => {
+      const overlay = getPlaneTerminal(terminal, "overlay");
+      const result = new Map<number, TextPreserveSpan[]>();
+      for (const y of rows) {
+        if (y < 0 || y >= size.rows) continue;
+        const row = overlay.getRow(y) as Cell[];
+        const spans: TextPreserveSpan[] = [];
+        let start: number | null = null;
+        let end = 0;
+
+        for (let x = 0; x < size.cols; x++) {
+          const cell = row[x];
+          const visible =
+            cell != null &&
+            !cell.continuation &&
+            (cell.ch !== " " ||
+              styleKey(cell.style) !== bgKey ||
+              renderedHref(cell.style.href) != null);
+
+          if (visible) {
+            if (start == null) start = x;
+            end = Math.max(end, Math.min(size.cols, x + Math.max(1, cell.width ?? 1)));
+            continue;
+          }
+
+          if (start != null && x >= end) {
+            spans.push({ start, end });
+            start = null;
+          }
+        }
+
+        if (start != null) spans.push({ start, end: Math.max(end, start + 1) });
+        if (spans.length) result.set(y, mergeSpans(spans));
+      }
+      return result;
+    };
+
+    const overlayCoverage = overlayPlaneCoverageRows(size.rows);
+    const overlayVisibleSpans = overlayVisibleSpansForRows(overlayCoverage.blockedRows);
 
     // Raw terminal graphics are not represented in the cell buffer. If a frame
     // needs to draw/clear protocol graphics, dirty-span patching is unsafe for
@@ -2781,9 +2982,13 @@ export function createStdoutRenderer(
     // Build entire frame as a single string - NO async, NO multiple writes.
     // Use synchronized output mode (DEC 2026) to prevent flickering (if enabled).
     // Disable line wrap to prevent auto-wrapping from causing vertical jumps.
-    // NOTE: In ghostty, we avoid SYNC_START/END and use chunked writes instead.
+    // Ghostty can expose partial text/graphics frames during fast scroll unless
+    // terminal-graphics frames are submitted atomically.
+    const frameHasTerminalGraphics =
+      activeGraphics.size > 0 || graphicsClearsToRender.length > 0 || graphicsToRender.length > 0;
+    const useFrameSyncOutput = useSyncOutput || (isGhostty && frameHasTerminalGraphics);
     const frameParts: string[] = [];
-    frameParts.push(!isGhostty && useSyncOutput ? SYNC_START : "");
+    frameParts.push(useFrameSyncOutput ? SYNC_START : "");
     frameParts.push(allowGraphicsOnlyWithoutBaseline || keepLineWrapDisabled ? "" : "\u001B[?7l");
     // Reset once at the start so we can avoid repeated resets for common style changes.
     frameParts.push(SGR_RESET, bgSeq);
@@ -2815,6 +3020,7 @@ export function createStdoutRenderer(
       inverse: false,
       href: null,
     };
+    let overlayTouchedRowSet: ReadonlySet<number> | null = null;
 
     const closeActiveHrefBeforeCursorMove = (): void => {
       if (!enableOsc8Links || !activeStyle.href) return;
@@ -2918,7 +3124,6 @@ export function createStdoutRenderer(
       let currentStyle: Style | null = null;
       const currentTextParts = rowTextPartsScratch;
       currentTextParts.length = 0;
-
       for (let x = spanStart; x < spanEnd; x++) {
         const cell = cellAt(row, x);
         if (cell.continuation) continue;
@@ -2975,6 +3180,68 @@ export function createStdoutRenderer(
       }
       lastRenderedY = y;
       lastRenderWasFullRow = spanStart === 0 && (spanEnd >= size.cols || shouldClearToEol);
+    };
+    const overlayBypassSpansForRow = (y: number): readonly TextPreserveSpan[] => {
+      const current = overlayVisibleSpans.get(y) ?? [];
+      const previous = prevOverlayVisibleSpans.get(y) ?? [];
+      return current.length || previous.length ? mergeSpans([...current, ...previous]) : [];
+    };
+
+    const subtractSpans = (
+      spans: readonly TextPreserveSpan[],
+      bypass: readonly TextPreserveSpan[],
+    ): TextPreserveSpan[] => {
+      if (!bypass.length) return [...spans];
+      const result: TextPreserveSpan[] = [];
+      for (const span of spans) {
+        let cursor = span.start;
+        for (const cut of bypass) {
+          if (cut.end <= cursor) continue;
+          if (cut.start >= span.end) break;
+          if (cursor < cut.start)
+            result.push({ start: cursor, end: Math.min(cut.start, span.end) });
+          cursor = Math.max(cursor, cut.end);
+          if (cursor >= span.end) break;
+        }
+        if (cursor < span.end) result.push({ start: cursor, end: span.end });
+      }
+      return result;
+    };
+
+    const preserveFingerprintSpans = (y: number, spans: readonly TextPreserveSpan[]): void => {
+      if (!fpPrevValid || y < 0 || y >= fpRows || currentFP.length !== prevFP.length) return;
+      const base = y * fpCols;
+      for (const span of spans) {
+        const start = Math.max(0, Math.min(fpCols, span.start));
+        const end = Math.max(start, Math.min(fpCols, span.end));
+        for (let x = start; x < end; x++) {
+          currentFP[base + x] = prevFP[base + x]!;
+          currentHrefIds[base + x] = prevHrefIds[base + x]!;
+          currentTextIds[base + x] = prevTextIds[base + x]!;
+        }
+      }
+    };
+
+    const renderRowPreservingTerminalGraphics = (y: number, row: readonly Cell[]): void => {
+      const spans = terminalGraphicTextPreserveSpans.get(y);
+      if (!spans?.length) {
+        renderRow(y, row);
+        return;
+      }
+
+      const effectiveSpans = subtractSpans(spans, overlayBypassSpansForRow(y));
+      if (!effectiveSpans.length) {
+        renderRow(y, row);
+        return;
+      }
+
+      let cursor = 0;
+      for (const span of effectiveSpans) {
+        if (cursor < span.start) renderRow(y, row, cursor, span.start, false);
+        cursor = Math.max(cursor, span.end);
+      }
+      if (cursor < size.cols) renderRow(y, row, cursor, size.cols, false);
+      preserveFingerprintSpans(y, effectiveSpans);
     };
 
     const lastRenderableColumnInCurrentRow = (
@@ -3116,7 +3383,6 @@ export function createStdoutRenderer(
     // use DECSTBM scroll regions to let the terminal shift content natively,
     // then only render the newly revealed rows. This reduces ANSI output from
     // O(viewport) to O(scrolled_lines) — ~97% reduction for single-line scrolls.
-    const overlayCoverage = overlayPlaneCoverageRows(size.rows);
     const overlayRows = Array.from(
       new Set([...overlayCoverage.blockedRows, ...prevOverlayBlockedRows]),
     ).sort((a, b) => a - b);
@@ -3125,7 +3391,7 @@ export function createStdoutRenderer(
       new Set([...overlayCoverage.partialRows, ...prevOverlayPartialRows]),
     ).sort((a, b) => a - b);
     const overlayPartialRowSet = overlayPartialRows.length ? new Set(overlayPartialRows) : null;
-    const overlayTouchedRowSet = (() => {
+    overlayTouchedRowSet = (() => {
       if (!overlayRowSet && !overlayPartialRowSet) return null;
       return new Set<number>([
         ...(overlayRowSet ? Array.from(overlayRowSet) : []),
@@ -3159,6 +3425,7 @@ export function createStdoutRenderer(
         }
         rowsToRender = Array.from(expandedRows).sort((a, b) => a - b);
         dirtySorted = true;
+        forceDirtyRowsRepaintForFrame = true;
         explicitScrollOperations = null;
         hiddenExplicitDirtyRows = null;
         if (isDebugEnabled()) {
@@ -3187,6 +3454,7 @@ export function createStdoutRenderer(
       includeRowsForPendingScrollOperations(normalizedScrollOperations);
       rowsToRender = Array.from(expandedRows).sort((a, b) => a - b);
       dirtySorted = true;
+      forceDirtyRowsRepaintForFrame = true;
       if (isDebugEnabled()) {
         getDebugLog().render(
           " Scroll regions disabled for frame with active/pending terminal graphics",
@@ -3197,6 +3465,7 @@ export function createStdoutRenderer(
       includeRowsForPendingScrollOperations(explicitScrollOperations);
       rowsToRender = Array.from(expandedRows).sort((a, b) => a - b);
       dirtySorted = true;
+      forceDirtyRowsRepaintForFrame = true;
       explicitScrollOperations = null;
       hiddenExplicitDirtyRows = null;
       if (isDebugEnabled()) {
@@ -3312,7 +3581,7 @@ export function createStdoutRenderer(
         const overlayRow = overlayTouchedRowSet?.has(y);
         if (forceTerminalGraphicsRowRepaint(y) || !shouldUseDirtySpans() || overlayRow) {
           fingerprintRow(row, y, size.cols);
-          renderRow(y, row);
+          renderRowPreservingTerminalGraphics(y, row);
           paintedExplicitRows.push(y);
           continue;
         }
@@ -3426,7 +3695,7 @@ export function createStdoutRenderer(
           const row = terminal.getRow(y) as Cell[];
           // Fingerprint if not already done (rows outside dirty set)
           fingerprintRow(row, y, size.cols);
-          renderRow(y, row);
+          renderRowPreservingTerminalGraphics(y, row);
         }
         const extraDirtyRows = overlayRowSet
           ? shift.extraDirtyRows.filter(
@@ -3438,7 +3707,7 @@ export function createStdoutRenderer(
         // (e.g., scrollbar column changes)
         for (const y of extraDirtyRows) {
           const row = terminal.getRow(y) as Cell[];
-          if (shouldUseDirtySpans()) {
+          if (!forceTerminalGraphicsRowRepaint(y) && shouldUseDirtySpans()) {
             const spans = resolveChangedSpansAgainstReference(
               row,
               y,
@@ -3466,7 +3735,7 @@ export function createStdoutRenderer(
           }
 
           fingerprintRow(row, y, size.cols);
-          renderRow(y, row);
+          renderRowPreservingTerminalGraphics(y, row);
         }
         for (let y = shift.newRowStart; y < shift.newRowEnd; y++) {
           fingerprintRow(terminal.getRow(y) as Cell[], y, size.cols);
@@ -3498,7 +3767,7 @@ export function createStdoutRenderer(
       for (let y = 0; y < size.rows; y++) {
         const row = terminal.getRow(y) as Cell[];
         fingerprintRow(row, y, size.cols);
-        renderRow(y, row);
+        renderRowPreservingTerminalGraphics(y, row);
       }
     } else {
       const overlayDirtyRows = overlayTouchedRowSet
@@ -3513,7 +3782,7 @@ export function createStdoutRenderer(
         const row = terminal.getRow(y) as Cell[];
         fingerprintRow(row, y, size.cols);
         if (forceTerminalGraphicsRowRepaint(y) || !shouldUseDirtySpans()) {
-          renderRow(y, row);
+          renderRowPreservingTerminalGraphics(y, row);
           continue;
         }
 
@@ -3573,6 +3842,7 @@ export function createStdoutRenderer(
         : !hrefIndexResetRequiresBaseline && !fingerprintInternResetRequiresBaseline;
       prevOverlayBlockedRows = overlayCoverage.blockedRows;
       prevOverlayPartialRows = overlayCoverage.partialRows;
+      prevOverlayVisibleSpans = overlayVisibleSpans;
     };
 
     if (graphicsOnlyFrame && fpPrevValid && currentFP.length === prevFP.length) {
@@ -3592,15 +3862,43 @@ export function createStdoutRenderer(
     const clearGraphicRectForRowsNotPainted = (
       rect: Readonly<{ x: number; y: number; w: number; h: number }>,
     ): string => {
-      if (!rowsToRender || scrollHandled) return "";
+      if (scrollHandled) return "";
 
-      const blank = " ".repeat(Math.max(0, rect.w));
+      const erase = `\u001B[${Math.max(0, rect.w)}X`;
+      const clearStyle = bgSeq;
       let out = "";
 
       for (let row = 0; row < rect.h; row++) {
         const y = rect.y + row;
-        if (rowWasPaintedByTextRenderer(y)) continue;
-        out += `\u001B[${y + 1};${rect.x + 1}H${bgSeq}${blank}${SGR_RESET}`;
+        const spans = terminalGraphicTextPreserveSpans.get(y);
+        const preservedGraphicSpan =
+          !overlayTouchedRowSet?.has(y) &&
+          Boolean(spans?.some((span) => span.start < rect.x + rect.w && span.end > rect.x));
+        if ((!rowsToRender || rowWasPaintedByTextRenderer(y)) && !preservedGraphicSpan) continue;
+        out += `\u001B[${y + 1};${rect.x + 1}H${clearStyle}${erase}${SGR_RESET}`;
+      }
+
+      return out;
+    };
+    const clearGraphicRowBackgroundForRowsNotPainted = (
+      rect: Readonly<{ x: number; y: number; w: number; h: number }>,
+    ): string => {
+      if (scrollHandled) return "";
+
+      const clearStyle = bgSeq;
+      let out = "";
+      const leftW = Math.max(0, Math.min(size.cols, rect.x));
+      const rightX = Math.max(0, Math.min(size.cols, rect.x + rect.w));
+      const rightW = Math.max(0, size.cols - rightX);
+
+      if (leftW <= 0 && rightW <= 0) return "";
+
+      for (let row = 0; row < rect.h; row++) {
+        const y = rect.y + row;
+        if (!rowsToRender || rowWasPaintedByTextRenderer(y)) continue;
+        if (leftW > 0) out += `\u001B[${y + 1};1H${clearStyle}\u001B[${leftW}X${SGR_RESET}`;
+        if (rightW > 0)
+          out += `\u001B[${y + 1};${rightX + 1}H${clearStyle}\u001B[${rightW}X${SGR_RESET}`;
       }
 
       return out;
@@ -3613,6 +3911,30 @@ export function createStdoutRenderer(
       bytes?: number;
       active: number;
     }> | null = null;
+
+    const mergeGraphicsQueuedDuringPaint = () => {
+      const seenEntries = new Set(graphicsEntriesToRender.map(([key]) => key));
+      let changed = false;
+      for (const entry of pendingGraphics.entries()) {
+        if (seenEntries.has(entry[0])) continue;
+        graphicsEntriesToRender.push(entry);
+        changed = true;
+      }
+      for (const id of pendingGraphicClears) {
+        if (pendingGraphicClearsToRender.has(id)) continue;
+        pendingGraphicClearsToRender.add(id);
+        graphicsClearsToRender.push(id);
+      }
+      if (!changed) return;
+      graphicsEntriesToRender = graphicsEntriesToRender.sort(([, a], [, b]) => {
+        const opA = a.op === "clear" ? 0 : 1;
+        const opB = b.op === "clear" ? 0 : 1;
+        return opA - opB || a.order - b.order;
+      });
+      graphicsToRender = graphicsEntriesToRender.map(([, payload]) => payload);
+    };
+
+    mergeGraphicsQueuedDuringPaint();
 
     if (graphicsClearsToRender.length > 0 || graphicsToRender.length > 0) {
       const nextActiveGraphics = new Map(activeGraphics);
@@ -3693,6 +4015,7 @@ export function createStdoutRenderer(
         wroteClear = appendActiveGraphicProtocolClear(active, visibleRect) || wroteClear;
         if (wroteClear) terminalGraphicsClears++;
         retainedGraphics.delete(id);
+        terminalResizeDirtyGraphics.delete(id);
         nextActiveGraphics.delete(id);
         nextActiveGraphicSignatures.delete(id);
         nextPendingGraphicSignatures.delete(id);
@@ -3732,11 +4055,12 @@ export function createStdoutRenderer(
               clearSequenceNeedsVisibleCell(payload.sequence, payload.protocol),
             ) || wroteClear;
           if (wroteClear) terminalGraphicsClears++;
-          if (active) {
-            retainedGraphics.delete(payload.id);
+          if (active && payload.retainOnClear) {
+            retainTerminalGraphic(payload.id, active, nextActiveGraphicSignatures.get(payload.id));
           } else {
             retainedGraphics.delete(payload.id);
           }
+          terminalResizeDirtyGraphics.delete(payload.id);
           nextActiveGraphics.delete(payload.id);
           nextActiveGraphicSignatures.delete(payload.id);
           nextPendingGraphicSignatures.delete(payload.id);
@@ -3765,10 +4089,12 @@ export function createStdoutRenderer(
               payload.id,
               previous,
               nextActiveGraphicSignatures.get(payload.id),
+              { autoRedrawOnResize: true },
             );
             nextActiveGraphics.delete(payload.id);
             nextActiveGraphicSignatures.delete(payload.id);
           }
+          terminalResizeDirtyGraphics.delete(payload.id);
           nextPendingGraphicSignatures.delete(payload.id);
           continue;
         }
@@ -3778,16 +4104,20 @@ export function createStdoutRenderer(
           : undefined;
         const nextSignature =
           nextPendingGraphicSignatures.get(payload.id) ?? terminalGraphicsPayloadSignature(payload);
+        const canReplacePlacement =
+          previous != null &&
+          payload.resizeRedraw &&
+          canReplaceKittyPlacementWithoutClear(previous, payload);
         const resizeRedrawNeedsClear =
           previous &&
-          payload.resizeRedraw &&
+          (payload.resizeRedraw || payload.terminalResizeRedraw) &&
           Boolean(previous.clearSequence) &&
-          !canReplaceKittyPlacementWithoutClear(previous, payload);
+          !canReplacePlacement;
 
         if (
           previous &&
-          (previousSignature !== nextSignature ||
-            !sameGraphicRect(previous, rect) ||
+          ((!canReplacePlacement &&
+            (previousSignature !== nextSignature || !sameGraphicRect(previous, rect))) ||
             resizeRedrawNeedsClear)
         ) {
           const visiblePrevious = clipGraphicRectToViewport(previous, size);
@@ -3809,28 +4139,34 @@ export function createStdoutRenderer(
             `terminal graphic render draw: id=${payload.id}, x=${rect.x}, y=${rect.y}, w=${rect.w}, h=${rect.h}, visible=${visibleRect ? `${visibleRect.x},${visibleRect.y},${visibleRect.w},${visibleRect.h}` : "none"}, resizeRedraw=${payload.resizeRedraw ? "true" : "false"}, previous=${previous ? `${previous.x},${previous.y},${previous.w},${previous.h}` : "none"}`,
           );
         }
-        const clearRect =
-          visibleRect && (!payload.resizeRedraw || resizeRedrawNeedsClear)
-            ? clearGraphicRectForRowsNotPainted(visibleRect)
-            : "";
+        const clearRect = visibleRect ? clearGraphicRectForRowsNotPainted(visibleRect) : "";
+        const clearRowBackground = visibleRect
+          ? clearGraphicRowBackgroundForRowsNotPainted(visibleRect)
+          : "";
         const cursor = `\u001B[${rect.y + 1};${rect.x + 1}H`;
-        const sequence = maybeWrapTerminalGraphic(payload.sequence);
+        const sequencePayload =
+          (canReplacePlacement || payload.terminalResizeRedraw) && payload.resizeSequence
+            ? payload.resizeSequence
+            : payload.sequence;
+        const sequence = maybeWrapTerminalGraphic(sequencePayload);
         frameParts.push(
-          clearRect ? countGraphicsBytes(clearRect) : "",
           countGraphicsBytes(cursor),
           countGraphicsBytes(sequence),
           countGraphicsBytes(SGR_RESET),
+          clearRowBackground ? countGraphicsBytes(clearRowBackground) : "",
+          clearRect ? countGraphicsBytes(clearRect) : "",
         );
         terminalGraphicsDraws++;
         nextActiveGraphics.set(payload.id, {
           ...rect,
           protocol: payload.protocol,
-          sequence: payload.resizeRedraw && previous ? previous.sequence : payload.sequence,
+          sequence: payload.sequence,
           resizeSequence: payload.resizeSequence ?? previous?.resizeSequence,
           clearSequence: payload.clearSequence,
         });
         nextActiveGraphicSignatures.set(payload.id, nextSignature);
         nextPendingGraphicSignatures.delete(payload.id);
+        terminalResizeDirtyGraphics.delete(payload.id);
       }
 
       if (allowGraphicsOnlyWithoutBaseline) frameParts.push(CURSOR_RESTORE);
@@ -3898,11 +4234,11 @@ export function createStdoutRenderer(
     if (enableOsc8Links && activeStyle.href) frameParts.push(OSC8_CLOSE);
     frameParts.push(SGR_RESET);
     if (hideCursor && !getImeAnchor) frameParts.push(CURSOR_HOME);
-    // Re-enable line wrap and end synchronized output (if enabled and not ghostty).
+    // Re-enable line wrap and end synchronized output when this frame used it.
     // Alt-screen TUI sessions keep autowrap disabled between frames so terminal
     // window resizes clip existing content instead of reflowing it.
     frameParts.push(allowGraphicsOnlyWithoutBaseline || keepLineWrapDisabled ? "" : "\u001B[?7h");
-    frameParts.push(!isGhostty && useSyncOutput ? SYNC_END : "");
+    frameParts.push(useFrameSyncOutput ? SYNC_END : "");
 
     const frame = frameParts.join("");
     const frameBytes = Buffer.byteLength(frame, "utf8");
@@ -3973,15 +4309,18 @@ export function createStdoutRenderer(
         ` Frame built: ${frameSize} bytes, ${cursorSeqCount} cursor sequences, ${resetCount} resets, ${buildTime}ms`,
       );
       getDebugLog().render(
-        ` Terminal: ${isGhostty ? "GHOSTTY" : "other"}, useSyncOutput: ${useSyncOutput}`,
+        ` Terminal: ${isGhostty ? "GHOSTTY" : "other"}, useSyncOutput: ${useSyncOutput}, useFrameSyncOutput: ${useFrameSyncOutput}`,
       );
     }
 
     // Write the frame to stdout.
-    // For ghostty, use chunked writes to avoid terminal hang on large frames.
-    // For other terminals, prefer writeSync when available for atomic output.
+    // Prefer one write for small terminal-graphics frames so image placement and
+    // text-layer cleanup cannot be observed as separate partial frames.
     const writeStart = performance.now();
     const resolveWriteMode = (frameSizeBytes: number): "stream" | "sync" | "chunked" => {
+      if (frameHasTerminalGraphics && frameSizeBytes <= syncMaxBytes) {
+        return canUseSyncStdout ? "sync" : "stream";
+      }
       if (isGhostty) return "chunked";
 
       const preferChunked = frameSizeBytes >= chunkThresholdBytes || writeEmaMs >= 24;
@@ -4024,7 +4363,7 @@ export function createStdoutRenderer(
       restoreTerminalGraphicsAfterWriteFailure?.();
       if (isDebugEnabled()) getDebugLog().error(`Write ERROR:`, writeError);
       try {
-        out.write(`\u001B[?7h${!isGhostty && useSyncOutput ? SYNC_END : ""}`);
+        out.write(`\u001B[?7h${useFrameSyncOutput ? SYNC_END : ""}`);
       } catch {
         // Terminal may be in bad state, but we tried our best.
       }
@@ -4562,11 +4901,6 @@ export function createStdoutRenderer(
       return;
     }
     clearRowsOnlyResizeRepaintTimer();
-    if (hasPendingTerminalGraphics()) {
-      deferGraphicsFlushUntilResizeCommit = false;
-      allowNextGraphicsOnlyRenderWithoutBaseline = true;
-      render([], true);
-    }
   });
 
   const resizeSource: any = (options?.output as any) ?? process.stdout;
@@ -4634,6 +4968,10 @@ export function createStdoutRenderer(
       clearTimeout(renderTimer);
       renderTimer = null;
     }
+    if (terminalGraphicsFlushTimer) {
+      clearTimeout(terminalGraphicsFlushTimer);
+      terminalGraphicsFlushTimer = null;
+    }
     clearRowsOnlyResizeRepaintTimer();
     accumulatedAllRows = false;
     accumulatedDirtyBits = null;
@@ -4645,6 +4983,7 @@ export function createStdoutRenderer(
     pendingGraphicClears.clear();
     pendingGraphicSignatures.clear();
     retainedGraphics.clear();
+    terminalResizeDirtyGraphics.clear();
     try {
       if (activeGraphics.size > 0) {
         const size = terminal.size();
@@ -4742,6 +5081,7 @@ export function createStdoutRenderer(
     fpPrevValid = false;
     prevOverlayBlockedRows = [];
     prevOverlayPartialRows = [];
+    prevOverlayVisibleSpans = new Map();
     render();
   };
 

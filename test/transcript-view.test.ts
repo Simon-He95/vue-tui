@@ -1193,7 +1193,7 @@ describe("TTranscriptView", () => {
         "dddd",
         "c",
       ]);
-      expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3, 4], scrollOperations: null }]);
+      expect(commits).toEqual([{ dirtyRows: [0, 1, 2, 3, 4, 5], scrollOperations: null }]);
     } finally {
       app.dispose();
     }

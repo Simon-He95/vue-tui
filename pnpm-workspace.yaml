@@ -1,3 +1,6 @@
 packages:
   - apps/*
   - examples/*
+allowBuilds:
+  esbuild: true
+  rolldown: true

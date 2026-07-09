@@ -14,6 +14,7 @@ import {
   isSafeTerminalGraphicsSequence,
   normalizeTerminalGraphicSize,
   sanitizeTerminalFallbackText,
+  createKittyPlacementSequence,
   validateTerminalGraphicFrame,
   validateTerminalGraphicsPayload,
 } from "../src/renderer/terminal-graphics.js";
@@ -418,6 +419,14 @@ describe("terminal graphics sequence validation", () => {
     }
   });
 
+  it("accepts generated-image sized Kitty payloads", () => {
+    const payload = "A".repeat(2_748_736);
+    const sequence = createKittyGraphicsSequence(payload, { columns: 80, rows: 12 });
+
+    expect(sequence.length).toBeGreaterThan(2 * 1024 * 1024);
+    expect(isSafeTerminalGraphicsSequence(sequence, "kitty")).toBe(true);
+  });
+
   it("rejects raw iTerm2 sequences with empty payloads", () => {
     const sequence = `${ESC}]1337;File=inline=1:${BEL}`;
 
@@ -458,6 +467,38 @@ describe("terminal graphics sequence validation", () => {
     expect(oversized).not.toContain("c=101");
     expect(oversized).not.toContain("r=100");
     expect(isSafeTerminalGraphicsSequence(oversized, "kitty")).toBe(true);
+  });
+
+  it("creates safe kitty source-cropped image and placement sequences", () => {
+    const image = createKittyGraphicsSequence("QUJD", {
+      columns: 80,
+      rows: 12,
+      sourceX: 2,
+      sourceY: 4,
+      sourceWidth: 160,
+      sourceHeight: 240,
+    });
+    const placement = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 80,
+      rows: 12,
+      sourceX: 2,
+      sourceY: 4,
+      sourceWidth: 160,
+      sourceHeight: 240,
+    });
+
+    expect(image).toContain("x=2");
+    expect(image).toContain("y=4");
+    expect(image).toContain("w=160");
+    expect(image).toContain("h=240");
+    expect(placement).toContain("x=2");
+    expect(placement).toContain("y=4");
+    expect(placement).toContain("w=160");
+    expect(placement).toContain("h=240");
+    expect(isSafeTerminalGraphicsSequence(image, "kitty")).toBe(true);
+    expect(isSafeTerminalGraphicsSequence(placement, "kitty")).toBe(true);
   });
 
   it("creates safe kitty delete sequences", () => {

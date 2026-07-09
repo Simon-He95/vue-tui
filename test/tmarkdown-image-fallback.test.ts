@@ -520,7 +520,6 @@ describe("markdown image fallback and sizing", () => {
 
           // Kitty graphics sequence must be present.
           expect(stdout).toContain("\u001B_G");
-          expect(stdout).toContain("z=-1");
           expect(stdout).toContain("\u001B\\");
           // Alt text must not leak as visible text.
           expect(rowText(mounted, 0)).not.toContain("data image");
@@ -812,7 +811,7 @@ describe("markdown image fallback and sizing", () => {
           mounted.scheduler()?.flushNow();
           (renderer as any).render(undefined, true);
 
-          expect(stdout).not.toContain("a=d");
+          expect(stdout).toContain("a=d");
           expect(stdout).toContain("a=p");
           expect(stdout).not.toContain("a=T");
           expect(rowText(mounted, 0)).toContain("Cat photo:");
@@ -879,11 +878,81 @@ describe("markdown image fallback and sizing", () => {
           mounted.scheduler()?.flushNow();
           (renderer as any).render(undefined, true);
 
-          expect(stdout).not.toContain("a=d");
+          expect(stdout).toContain("a=d");
           expect(stdout).toContain("a=p");
           expect(stdout).not.toContain("a=T");
           expect(rowText(mounted, 0)).toContain("Cat photo:");
           expect(rowText(mounted, 0)).not.toContain("cat fallback");
+        } finally {
+          renderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
+
+  it("clears the previous markdown image placement when resize moves it", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        const imageY = ref(0);
+        const mounted = await mountTerminal(
+          () =>
+            h(TMarkdownText, {
+              x: 0,
+              y: imageY.value,
+              w: 40,
+              h: 4,
+              content: `![cat fallback](${TINY_PNG_DATA_URL})`,
+              imageMinWidth: 20,
+              imageMaxWidth: 20,
+              imageMinHeight: 2,
+              imageMaxHeight: 2,
+            }),
+          40,
+          8,
+        );
+
+        let stdout = "";
+        const renderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            isTTY: true,
+            write(chunk: string) {
+              stdout += chunk;
+            },
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+          expect(stdout).toContain("\u001B_G");
+
+          stdout = "";
+          mounted.terminal.resize(40, 10);
+          imageY.value = 2;
+          await Promise.resolve();
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+
+          const clearIndex = stdout.indexOf("a=d");
+          const drawIndex = stdout.indexOf("a=T");
+          expect(clearIndex).toBeGreaterThanOrEqual(0);
+          expect(drawIndex).toBeGreaterThanOrEqual(0);
+          expect(clearIndex).toBeLessThan(drawIndex);
         } finally {
           renderer.dispose();
           mounted.unmount();

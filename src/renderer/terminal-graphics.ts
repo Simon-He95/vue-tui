@@ -1,4 +1,5 @@
 import type { Terminal, TerminalSize } from "../core/types.js";
+import { getRootTerminal } from "../core/terminal/create-terminal.js";
 import {
   nowTerminalGraphicTraceTime,
   recordTerminalGraphicTrace,
@@ -71,6 +72,12 @@ export type TerminalGraphicsPayload = Readonly<{
   protocol: TerminalGraphicsProtocol;
   sequence: string;
   resizeSequence?: string;
+  resizeRedraw?: boolean;
+  placementMoveWithoutClear?: boolean;
+  allowTextOverlay?: boolean;
+  forceDraw?: boolean;
+  deferFlush?: boolean;
+  retainOnClear?: boolean;
   op?: TerminalGraphicsOperation;
   order?: number;
   fallbackText?: string;
@@ -99,7 +106,7 @@ const C1_OSC_RE = new RegExp(`\\u009D[\\s\\S]*?(?:${BEL_RE}|\\u009C)`, "g");
 const C1_DCS_RE = new RegExp("\\u0090[\\s\\S]*?\\u009C", "g");
 const C1_APC_RE = new RegExp("\\u009F[\\s\\S]*?\\u009C", "g");
 
-export const MAX_TERMINAL_GRAPHICS_SEQUENCE_CHARS = 2 * 1024 * 1024;
+export const MAX_TERMINAL_GRAPHICS_SEQUENCE_CHARS = 16 * 1024 * 1024;
 export const MAX_TERMINAL_GRAPHICS_FALLBACK_CHARS = 16_384;
 export const MAX_TERMINAL_GRAPHIC_CELLS = 10_000;
 
@@ -137,38 +144,40 @@ export function registerTerminalGraphicsOutput(
   terminal: Terminal,
   output: TerminalGraphicsOutput,
 ): () => void {
-  terminalGraphicsOutputs.set(terminal, output);
-  notifyTerminalGraphicsOutputChange(terminal);
+  const rootTerminal = getRootTerminal(terminal);
+  terminalGraphicsOutputs.set(rootTerminal, output);
+  notifyTerminalGraphicsOutputChange(rootTerminal);
   return () => {
-    if (terminalGraphicsOutputs.get(terminal) === output) {
-      terminalGraphicsOutputs.delete(terminal);
-      notifyTerminalGraphicsOutputChange(terminal);
+    if (terminalGraphicsOutputs.get(rootTerminal) === output) {
+      terminalGraphicsOutputs.delete(rootTerminal);
+      notifyTerminalGraphicsOutputChange(rootTerminal);
     }
   };
 }
 
 export function getTerminalGraphicsOutput(terminal: Terminal): TerminalGraphicsOutput | null {
-  return terminalGraphicsOutputs.get(terminal) ?? null;
+  return terminalGraphicsOutputs.get(getRootTerminal(terminal)) ?? null;
 }
 
 export function getTerminalGraphicsOutputVersion(terminal: Terminal): number {
-  return terminalGraphicsOutputVersions.get(terminal) ?? 0;
+  return terminalGraphicsOutputVersions.get(getRootTerminal(terminal)) ?? 0;
 }
 
 export function subscribeTerminalGraphicsOutput(
   terminal: Terminal,
   listener: () => void,
 ): () => void {
-  let listeners = terminalGraphicsOutputListeners.get(terminal);
+  const rootTerminal = getRootTerminal(terminal);
+  let listeners = terminalGraphicsOutputListeners.get(rootTerminal);
   if (!listeners) {
     listeners = new Set();
-    terminalGraphicsOutputListeners.set(terminal, listeners);
+    terminalGraphicsOutputListeners.set(rootTerminal, listeners);
   }
 
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0) terminalGraphicsOutputListeners.delete(terminal);
+    if (listeners.size === 0) terminalGraphicsOutputListeners.delete(rootTerminal);
   };
 }
 
@@ -572,6 +581,10 @@ const KITTY_DRAW_FIRST_CONTROL_KEYS = new Set([
   "p",
   "c",
   "r",
+  "x",
+  "y",
+  "w",
+  "h",
   "z",
   "m",
   "t",
@@ -651,6 +664,14 @@ function validateKittySharedSafeControls(controls: ReadonlyMap<string, string>):
     if (!kittyControlIsUint32(controls, key, 1)) return false;
   }
   if (!kittyControlIsTerminalGraphicCellsBounded(controls)) return false;
+
+  for (const key of ["x", "y"]) {
+    if (!kittyControlIsUint32(controls, key)) return false;
+  }
+
+  for (const key of ["w", "h"]) {
+    if (!kittyControlIsUint32(controls, key, 1)) return false;
+  }
 
   if (!kittyControlIsInt32(controls, "z")) return false;
 
@@ -977,6 +998,20 @@ function kittyGraphicCellControls(columns: number | undefined, rows: number | un
   return [columns == null ? "" : `c=${size.width}`, rows == null ? "" : `r=${size.height}`];
 }
 
+function kittyGraphicSourceControls(
+  sourceX: number | undefined,
+  sourceY: number | undefined,
+  sourceWidth: number | undefined,
+  sourceHeight: number | undefined,
+): string[] {
+  return [
+    uint32Control("x", sourceX),
+    uint32Control("y", sourceY),
+    uint32Control("w", sourceWidth, 1),
+    uint32Control("h", sourceHeight, 1),
+  ];
+}
+
 function chunkBase64(value: string, chunkSize: number): string[] {
   const normalizedSize = Math.max(4, Math.floor(chunkSize / 4) * 4);
   const chunks: string[] = [];
@@ -994,6 +1029,10 @@ export type CreateKittyGraphicsSequenceOptions = Readonly<{
   placementId?: number;
   columns?: number;
   rows?: number;
+  sourceX?: number;
+  sourceY?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
   zIndex?: number;
   quiet?: boolean;
   noCursorMove?: boolean;
@@ -1006,6 +1045,10 @@ export type CreateKittyPlacementSequenceOptions = Readonly<{
   placementId?: number;
   columns?: number;
   rows?: number;
+  sourceX?: number;
+  sourceY?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
   zIndex?: number;
   quiet?: boolean;
   noCursorMove?: boolean;
@@ -1024,6 +1067,12 @@ export function createKittyPlacementSequence(options: CreateKittyPlacementSequen
     imageNumber,
     uint32Control("p", options.placementId),
     ...kittyGraphicCellControls(options.columns, options.rows),
+    ...kittyGraphicSourceControls(
+      options.sourceX,
+      options.sourceY,
+      options.sourceWidth,
+      options.sourceHeight,
+    ),
     int32Control("z", options.zIndex),
   ].filter(Boolean);
 
@@ -1047,6 +1096,12 @@ export function createKittyGraphicsSequence(
     uint32Control("I", options.imageNumber),
     uint32Control("p", options.placementId),
     ...kittyGraphicCellControls(options.columns, options.rows),
+    ...kittyGraphicSourceControls(
+      options.sourceX,
+      options.sourceY,
+      options.sourceWidth,
+      options.sourceHeight,
+    ),
     int32Control("z", options.zIndex),
   ].filter(Boolean);
 

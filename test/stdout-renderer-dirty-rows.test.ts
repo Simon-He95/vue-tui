@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTerminal } from "../src/index.js";
 import { charCellWidth } from "../src/core.js";
-import { createStdoutRenderer } from "../src/cli.js";
+import {
+  createKittyDeleteGraphicsSequence,
+  createKittyGraphicsSequence,
+  createStdoutRenderer,
+} from "../src/cli.js";
 import { getPlaneTerminal, scrollPlaneRows } from "../src/core/terminal/create-terminal.js";
+import {
+  createKittyPlacementSequence,
+  getTerminalGraphicsOutput,
+} from "../src/renderer/terminal-graphics.js";
 
 const getFrameDelayMs = () => ("GHOSTTY_RESOURCES_DIR" in process.env ? 24 : 16);
 
@@ -1715,6 +1723,403 @@ describe("stdout renderer", () => {
         vi.useRealTimers();
         if (prevScrollRegions == null) delete process.env.DIMCODE_TUI_SCROLL_REGIONS;
         else process.env.DIMCODE_TUI_SCROLL_REGIONS = prevScrollRegions;
+      }
+    });
+  });
+
+  it("falls back to repaint when explicit scroll operations overlap active terminal graphics", () => {
+    const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
+
+    withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
+      vi.useFakeTimers();
+      const nowRef = { t: 0 };
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowRef.t);
+      try {
+        process.env.DIMCODE_TUI_SCROLL_REGIONS = "1";
+
+        const terminal = createTerminal({ cols: 8, rows: 8 });
+        const transcript = getPlaneTerminal(terminal, "transcript");
+        let out = "";
+        const output = {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+          },
+        };
+        const renderer = createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+        const graphics = getTerminalGraphicsOutput(terminal);
+
+        const writeRow = (y: number, text: string) => {
+          transcript.fill(0, y, 8, 1, " ");
+          transcript.write(text.padEnd(8, " "), { x: 0, y });
+        };
+
+        writeRow(2, "row0");
+        writeRow(3, "row1");
+        writeRow(4, "row2");
+        writeRow(5, "row3");
+        terminal.commit({ planes: ["transcript"], sync: true });
+        const frameDelayMs = getFrameDelayMs();
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        graphics?.queue({
+          id: "image",
+          x: 0,
+          y: 3,
+          w: 8,
+          h: 2,
+          protocol: "kitty",
+          sequence: createKittyGraphicsSequence("QUJD", { columns: 8, rows: 2 }),
+          op: "draw",
+        });
+        out = "";
+        scrollPlaneRows(terminal, "transcript", 2, 6, 1);
+        writeRow(5, "row4");
+        terminal.commit({ planes: ["transcript"], sync: true });
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        expect(out.includes("\u001B[3;6r")).toBe(false);
+        expect(out.includes("\u001B[1S")).toBe(false);
+
+        renderer.dispose();
+      } finally {
+        nowSpy.mockRestore();
+        vi.useRealTimers();
+        if (prevScrollRegions == null) delete process.env.DIMCODE_TUI_SCROLL_REGIONS;
+        else process.env.DIMCODE_TUI_SCROLL_REGIONS = prevScrollRegions;
+      }
+    });
+  });
+
+  it("does not infer scroll regions while terminal graphics are visible", () => {
+    const prevThreshold = process.env.DIMCODE_TUI_DIRTY_FULL_THRESHOLD;
+    const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
+
+    withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
+      vi.useFakeTimers();
+      const nowRef = { t: 0 };
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowRef.t);
+      try {
+        process.env.DIMCODE_TUI_DIRTY_FULL_THRESHOLD = "0.6";
+        process.env.DIMCODE_TUI_SCROLL_REGIONS = "1";
+
+        const terminal = createTerminal({ cols: 8, rows: 6 });
+        let out = "";
+        const output = {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+          },
+        };
+        const renderer = createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+        const graphics = getTerminalGraphicsOutput(terminal);
+
+        const writeRows = (rows: readonly string[]) => {
+          for (let y = 0; y < rows.length; y++) {
+            terminal.fill(0, y, 8, 1, " ");
+            terminal.write(rows[y]!.padEnd(8, " "), { x: 0, y });
+          }
+        };
+
+        writeRows(["row0", "row1", "row2", "row3", "row4", "row5"]);
+        terminal.commit({ sync: true });
+        const frameDelayMs = getFrameDelayMs();
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        graphics?.queue({
+          id: "image",
+          x: 0,
+          y: 2,
+          w: 8,
+          h: 2,
+          protocol: "kitty",
+          sequence: createKittyGraphicsSequence("QUJD", { columns: 8, rows: 2 }),
+          op: "draw",
+        });
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        out = "";
+        writeRows(["row1", "row2", "row3", "row4", "row5", "row6"]);
+        terminal.commit({ sync: true });
+        nowRef.t += frameDelayMs;
+        vi.advanceTimersByTime(frameDelayMs);
+
+        expect(out.includes("\u001B[1;6r")).toBe(false);
+        expect(/\u001B\[\d+[ST]/.test(out)).toBe(false);
+
+        renderer.dispose();
+      } finally {
+        nowSpy.mockRestore();
+        vi.useRealTimers();
+        if (prevThreshold == null) delete process.env.DIMCODE_TUI_DIRTY_FULL_THRESHOLD;
+        else process.env.DIMCODE_TUI_DIRTY_FULL_THRESHOLD = prevThreshold;
+
+        if (prevScrollRegions == null) delete process.env.DIMCODE_TUI_SCROLL_REGIONS;
+        else process.env.DIMCODE_TUI_SCROLL_REGIONS = prevScrollRegions;
+      }
+    });
+  });
+
+  it("only repaints visible overlay cells inside active terminal graphics", () => {
+    withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
+      vi.useFakeTimers();
+      const nowRef = { t: 0 };
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowRef.t);
+      try {
+        const terminal = createTerminal({ cols: 30, rows: 6 });
+        const transcript = getPlaneTerminal(terminal, "transcript");
+        const overlay = getPlaneTerminal(terminal, "overlay");
+        let out = "";
+        const output = {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+          },
+        };
+        const renderer = createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+        const graphics = getTerminalGraphicsOutput(terminal);
+        const imageSequence = createKittyGraphicsSequence("QUJD", { columns: 16, rows: 2 });
+        const frameDelayMs = getFrameDelayMs();
+        const flushFrame = () => {
+          nowRef.t += frameDelayMs;
+          vi.advanceTimersByTime(frameDelayMs);
+        };
+
+        transcript.fill(0, 0, 30, 6, " ");
+        transcript.write("before image", { x: 0, y: 1 });
+        terminal.commit({ planes: ["transcript"], sync: true });
+        flushFrame();
+
+        graphics?.queue({
+          id: "image",
+          x: 4,
+          y: 2,
+          w: 16,
+          h: 2,
+          protocol: "kitty",
+          sequence: imageSequence,
+          op: "draw",
+        });
+        terminal.commit({ planes: ["transcript"], sync: true });
+        flushFrame();
+        expect(out).toContain(imageSequence);
+
+        out = "";
+        transcript.fill(0, 2, 30, 1, " ");
+        transcript.write("HEAD", { x: 0, y: 2 });
+        transcript.write("BADLEFT", { x: 4, y: 2 });
+        transcript.write("BADRIGHT", { x: 16, y: 2 });
+        transcript.write("TAIL", { x: 22, y: 2 });
+        overlay.write("DIALOG", { x: 10, y: 2 });
+        terminal.commit({ planes: ["transcript", "overlay"], sync: true });
+        flushFrame();
+
+        expect(out).toContain("HEAD");
+        expect(out).toContain("DIALOG");
+        expect(out).toContain("TAIL");
+        expect(out).not.toContain("BADLEFT");
+        expect(out).not.toContain("BADRIGHT");
+        expect(out).not.toContain("a=d");
+        expect(out).not.toContain(imageSequence);
+
+        out = "";
+        overlay.clear(10, 2, 6, 1);
+        terminal.commit({ planes: ["overlay"], sync: true });
+        flushFrame();
+
+        expect(out).not.toContain("BADLEFT");
+        expect(out).not.toContain("BADRIGHT");
+        expect(out).not.toContain("a=d");
+        expect(out).not.toContain(imageSequence);
+
+        renderer.dispose();
+      } finally {
+        nowSpy.mockRestore();
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it("does not repaint text hidden by a pending terminal graphic draw", () => {
+    withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
+      vi.useFakeTimers();
+      const nowRef = { t: 0 };
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowRef.t);
+      try {
+        const terminal = createTerminal({ cols: 30, rows: 6 });
+        const transcript = getPlaneTerminal(terminal, "transcript");
+        let out = "";
+        const output = {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+          },
+        };
+        const renderer = createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+        const graphics = getTerminalGraphicsOutput(terminal);
+        const imageSequence = createKittyGraphicsSequence("QUJD", { columns: 16, rows: 2 });
+        const frameDelayMs = getFrameDelayMs();
+        const flushFrame = () => {
+          nowRef.t += frameDelayMs;
+          vi.advanceTimersByTime(frameDelayMs);
+        };
+
+        transcript.fill(0, 0, 30, 6, " ");
+        transcript.write("HEAD", { x: 0, y: 2 });
+        transcript.write("BADLEFT", { x: 4, y: 2 });
+        transcript.write("BADRIGHT", { x: 16, y: 2 });
+        transcript.write("TAIL", { x: 22, y: 2 });
+        graphics?.queue({
+          id: "image",
+          x: 4,
+          y: 2,
+          w: 16,
+          h: 2,
+          protocol: "kitty",
+          sequence: imageSequence,
+          op: "draw",
+        });
+        terminal.commit({ planes: ["transcript"], sync: true });
+        flushFrame();
+
+        expect(out).toContain(imageSequence);
+        expect(out).toContain("HEAD");
+        expect(out).toContain("TAIL");
+        expect(out).not.toContain("BADLEFT");
+        expect(out).not.toContain("BADRIGHT");
+
+        renderer.dispose();
+      } finally {
+        nowSpy.mockRestore();
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it("moves an active terminal graphic placement before clearing target text rows", () => {
+    withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
+      vi.useFakeTimers();
+      const nowRef = { t: 0 };
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowRef.t);
+      try {
+        const terminal = createTerminal({ cols: 30, rows: 6 });
+        const transcript = getPlaneTerminal(terminal, "transcript");
+        let out = "";
+        const output = {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+          },
+        };
+        const renderer = createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+        const graphics = getTerminalGraphicsOutput(terminal);
+        const imageId = 101;
+        const placementId = 202;
+        const imageSequence = createKittyGraphicsSequence("QUJD", {
+          imageId,
+          placementId,
+          columns: 16,
+          rows: 2,
+        });
+        const placementSequence = createKittyPlacementSequence({
+          imageId,
+          placementId,
+          columns: 16,
+          rows: 2,
+        });
+        const clearSequence = createKittyDeleteGraphicsSequence({ imageId, placementId });
+        const frameDelayMs = getFrameDelayMs();
+        const flushFrame = () => {
+          nowRef.t += frameDelayMs;
+          vi.advanceTimersByTime(frameDelayMs);
+        };
+
+        transcript.fill(0, 0, 30, 6, " ");
+        terminal.commit({ planes: ["transcript"], sync: true });
+        flushFrame();
+
+        graphics?.queue({
+          id: "image",
+          x: 4,
+          y: 2,
+          w: 16,
+          h: 2,
+          protocol: "kitty",
+          sequence: imageSequence,
+          resizeSequence: placementSequence,
+          clearSequence,
+          op: "draw",
+        });
+        terminal.commit({ planes: ["transcript"], sync: true });
+        flushFrame();
+        expect(out).toContain(imageSequence);
+
+        out = "";
+        transcript.write("OLDRECT", { x: 4, y: 2 });
+        transcript.write("TARGETRECT", { x: 4, y: 3 });
+        graphics?.queue({
+          id: "image",
+          x: 4,
+          y: 3,
+          w: 16,
+          h: 2,
+          protocol: "kitty",
+          sequence: placementSequence,
+          resizeSequence: placementSequence,
+          clearSequence,
+          resizeRedraw: true,
+          placementMoveWithoutClear: true,
+          op: "draw",
+        });
+        terminal.commit({ planes: ["transcript"], sync: true });
+        flushFrame();
+
+        const moveIndex = out.indexOf(placementSequence);
+        const eraseIndex = out.indexOf("\x1B[16X");
+        const textIndex = out.indexOf("OLDRECT");
+        expect(moveIndex).toBeGreaterThanOrEqual(0);
+        expect(eraseIndex).toBeGreaterThanOrEqual(0);
+        expect(textIndex).toBeGreaterThanOrEqual(0);
+        expect(moveIndex).toBeLessThan(eraseIndex);
+
+        renderer.dispose();
+      } finally {
+        nowSpy.mockRestore();
+        vi.useRealTimers();
       }
     });
   });

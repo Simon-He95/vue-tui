@@ -67,6 +67,7 @@ export {
   createIterm2InlineImageSequence,
   createKittyDeleteGraphicsSequence,
   createKittyGraphicsSequence,
+  createKittyPlacementSequence,
   detectTerminalGraphicsCapabilities,
   getTerminalGraphicsOutput,
   getTerminalGraphicsOutputVersion,

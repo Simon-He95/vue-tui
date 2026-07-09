@@ -1053,6 +1053,7 @@ describe("ui regressions", () => {
     // Focus the input.
     container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
     await nextTick();
+    mounted.scheduler()?.flushNow();
 
     const left0 = ime!.style.left;
     const top0 = ime!.style.top;
@@ -1068,6 +1069,7 @@ describe("ui regressions", () => {
       container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
       await nextTick();
     }
+    mounted.scheduler()?.flushNow();
 
     const left1 = ime!.style.left;
     const top1 = ime!.style.top;
@@ -1082,6 +1084,7 @@ describe("ui regressions", () => {
       }),
     );
     await nextTick();
+    mounted.scheduler()?.flushNow();
     expect(`${ime!.style.left}:${ime!.style.top}`).not.toBe(`${left1}:${top1}`);
 
     mounted.unmount();

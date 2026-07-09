@@ -138,6 +138,7 @@
         "createIterm2InlineImageSequence",
         "createKittyDeleteGraphicsSequence",
         "createKittyGraphicsSequence",
+        "createKittyPlacementSequence",
         "createMarkdownBlockSource",
         "createPngTerminalGraphicRenderer",
         "createTLogDensityBucketsFromMarkers",
@@ -1114,13 +1115,49 @@
           "defaultValue": "false"
         },
         {
+          "name": "scrollVersion",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "placementMoveWithoutClear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
           "name": "suspended",
           "type": "boolean",
           "required": false,
           "defaultValue": "false"
         },
         {
+          "name": "retainRawWhileCovered",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "ignoreRawCoverage",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "ignoreSamePlaneRawCoverage",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
           "name": "cacheKey",
+          "type": "string",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "placementKey",
           "type": "string",
           "required": false,
           "defaultValue": "undefined"

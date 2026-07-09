@@ -646,6 +646,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   const selectionOverlay = getPlaneTerminal(terminal, "overlay");
   const selectionReadPlanes: TerminalRenderPlanes = ["default", "transcript", "chrome"];
   let selectionRenderNodeId: string | null = null;
+  const selectionRenderRect = () => null;
   const selection = createTerminalSelectionController({
     terminal,
     overlayTerminal: selectionOverlay,
@@ -688,7 +689,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
       stack: render.rootStack,
       plane: "overlay",
       zIndex: -10_000,
-      rect: { x: 0, y: 0, w: options.cols, h: options.rows },
+      rect: selectionRenderRect(),
       paint: selection.paint,
     });
     selectionRenderNodeId = selectionRenderNode.id;
@@ -881,7 +882,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     selection.clear();
     if (selectionRenderNodeId) {
       render.update(selectionRenderNodeId, {
-        rect: { x: 0, y: 0, w: cols, h: rows },
+        rect: selectionRenderRect(),
       });
     }
     // Ensure resize triggers a re-render even if no other reactive state changes.
