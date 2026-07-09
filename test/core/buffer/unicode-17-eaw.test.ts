@@ -133,6 +133,18 @@ describe("Terminal Tailoring Preservation (Regression)", () => {
       expect(charCellWidth("\u0308", "cjk")).toBe(1); // Combining diaeresis
       expect(charCellWidth("\u0323", "cjk")).toBe(1); // Combining dot below
     });
+
+    it("EAW=W combining marks should still be narrow (UAX #11)", () => {
+      // These are classified as W in EAW but should be narrow per UAX #11
+      expect(charCellWidth("\u3099")).toBe(1); // Combining Katakana-Hiragana Voiced Sound Mark
+      expect(charCellWidth("\u3099", "cjk")).toBe(1);
+
+      expect(charCellWidth("\u302A")).toBe(1); // Ideographic Level Tone Mark
+      expect(charCellWidth("\u302A", "cjk")).toBe(1);
+
+      expect(charCellWidth("\u{16FE4}")).toBe(1); // Tangut Caesura Mark
+      expect(charCellWidth("\u{16FE4}", "cjk")).toBe(1);
+    });
   });
 
   describe("Box drawing should remain narrow in all modes", () => {
@@ -165,6 +177,22 @@ describe("Terminal Tailoring Preservation (Regression)", () => {
 
     it("Greek letters should be wide in cjk mode", () => {
       expect(charCellWidth("Ω", "cjk")).toBe(2);
+    });
+
+    it("supplementary private-use should be ambiguous", () => {
+      // Supplementary Private Use Area A (U+F0000-U+FFFFD) is EAW=A
+      expect(charCellWidth("\u{F0000}", "default")).toBe(1);
+      expect(charCellWidth("\u{F0000}", "cjk")).toBe(2);
+
+      // Supplementary Private Use Area B (U+100000-U+10FFFD) is EAW=A
+      expect(charCellWidth("\u{100000}", "default")).toBe(1);
+      expect(charCellWidth("\u{100000}", "cjk")).toBe(2);
+    });
+
+    it("VS supplement should be tailored narrow despite being ambiguous", () => {
+      // Variation Selectors Supplement (U+E0100-U+E01EF) is EAW=A
+      // But should be narrow even in cjk mode due to terminal tailoring
+      expect(charCellWidth("\u{E0100}", "cjk")).toBe(1);
     });
   });
 });

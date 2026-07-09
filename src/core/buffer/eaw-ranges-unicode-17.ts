@@ -2,7 +2,7 @@
  * East Asian Width ranges generated from Unicode 17.0.0
  * Source: https://www.unicode.org/Public/17.0.0/ucd/EastAsianWidth.txt
  * SHA-256: ea7ce50f3444a050333448dffef1cadd9325af55cbb764b4a2280faf52170a33
- * 
+ *
  * DO NOT EDIT MANUALLY - regenerate with: pnpm exec tsx scripts/generate-eaw-ranges.ts
  */
 

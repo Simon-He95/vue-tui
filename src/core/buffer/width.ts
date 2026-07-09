@@ -1,4 +1,4 @@
-import { fullWidthRanges, ambiguousWidthRanges } from './eaw-ranges-unicode-17.js';
+import { fullWidthRanges, ambiguousWidthRanges } from "./eaw-ranges-unicode-17.js";
 
 export type CellWidth = 1 | 2;
 export type BuiltinWidthProvider = "default" | "cjk" | "narrow-ambiguous";
@@ -17,7 +17,13 @@ function isFullWidthCodePoint(codePoint: number): boolean {
 }
 
 function isAmbiguousWidthCodePoint(codePoint: number): boolean {
-  if (codePoint < 0x00a1 || codePoint > 0xfffd) return false;
+  // Use dynamic bounds from generated ranges to support supplementary plane ambiguous
+  const first = ambiguousWidthRanges[0];
+  const last = ambiguousWidthRanges[ambiguousWidthRanges.length - 1];
+
+  if (!first || !last) return false;
+  if (codePoint < first[0] || codePoint > last[1]) return false;
+
   for (const [start, end] of ambiguousWidthRanges) {
     if (codePoint < start) return false;
     if (codePoint <= end) return true;
@@ -28,20 +34,23 @@ function isAmbiguousWidthCodePoint(codePoint: number): boolean {
 function isVariationSelectorCodePoint(codePoint: number): boolean {
   // Variation Selectors block (U+FE00-U+FE0F) and Variation Selectors Supplement (U+E0100-U+E01EF)
   return (
-    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
-    (codePoint >= 0xe0100 && codePoint <= 0xe01ef)
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) || (codePoint >= 0xe0100 && codePoint <= 0xe01ef)
   );
 }
 
 function isCombiningMarkCodePoint(codePoint: number): boolean {
   // Common combining mark ranges
   // UAX #11 notes that EAW for combining marks doesn't equal advance width
+  // This includes both EAW=A and EAW=W combining marks
   return (
     (codePoint >= 0x0300 && codePoint <= 0x036f) || // Combining Diacritical Marks
     (codePoint >= 0x1ab0 && codePoint <= 0x1aff) || // Combining Diacritical Marks Extended
     (codePoint >= 0x1dc0 && codePoint <= 0x1dff) || // Combining Diacritical Marks Supplement
     (codePoint >= 0x20d0 && codePoint <= 0x20ff) || // Combining Diacritical Marks for Symbols
-    (codePoint >= 0xfe20 && codePoint <= 0xfe2f)    // Combining Half Marks
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f) || // Combining Half Marks
+    (codePoint >= 0x302a && codePoint <= 0x302f) || // EAW=W: Ideographic level tone marks
+    (codePoint >= 0x3099 && codePoint <= 0x309a) || // EAW=W: Combining Katakana-Hiragana marks
+    codePoint === 0x16fe4 // EAW=W: Tangut Caesura Mark
   );
 }
 
@@ -102,18 +111,17 @@ export function charCellWidth(text: string, provider: WidthProvider = "default")
   // borders/layout will appear shifted.
   const hasVs16 = text.includes("\uFE0F");
 
-  if (isFullWidthCodePoint(codePoint)) return 2;
-
-  // Terminal tailoring: Box Drawing (U+2500-U+257F) remains narrow in all modes
-  // Even though they are classified as Ambiguous in Unicode EAW
-  if (codePoint >= 0x2500 && codePoint <= 0x257F) return 1;
-
-  // Terminal/grapheme tailoring: Variation selectors and combining marks
-  // UAX #11 notes that EAW for combining marks doesn't equal advance width
-  // These should remain narrow (width 1) even in cjk mode
+  // First-code-point terminal/grapheme tailoring for standalone marks/selectors.
+  // These must be checked BEFORE EAW W/F to handle marks that are classified as W.
   if (isVariationSelectorCodePoint(codePoint) || isCombiningMarkCodePoint(codePoint)) {
     return 1;
   }
+
+  // Terminal tailoring: Box Drawing (U+2500-U+257F) remains narrow in all modes
+  // Even though they are classified as Ambiguous in Unicode EAW
+  if (codePoint >= 0x2500 && codePoint <= 0x257f) return 1;
+
+  if (isFullWidthCodePoint(codePoint)) return 2;
 
   if (provider === "cjk" && isAmbiguousWidthCodePoint(codePoint)) return 2;
 
