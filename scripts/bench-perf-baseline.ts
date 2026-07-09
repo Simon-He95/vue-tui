@@ -5,17 +5,21 @@
  * Generates reproducible performance baseline data with statistical analysis.
  * Outputs JSON with environment info, p50/p95/p99, mean, stdev, and CV.
  * 
- * Usage: pnpm run bench:perf-baseline [--output <file>]
+ * Usage:
+ *   pnpm run bench:perf-baseline [--output <file>]
+ *   pnpm run bench:perf-baseline -- --warmup 200 --samples 2000
+ *   BENCH_SMOKE=1 pnpm run bench:perf-baseline
  */
 
 import * as os from "node:os";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as assert from "node:assert";
 import { execSync } from "node:child_process";
 
 // Import functions to benchmark
 import { charCellWidth } from "../src/core/buffer/width.js";
-import { textCellWidth, sliceByCells, wrapByCells, clearTextCaches } from "../src/vue/utils/text.js";
+import { textCellWidth, sliceByCells, wrapByCells } from "../src/vue/utils/text.js";
 import { createTerminal } from "../src/core/index.js";
 
 // Blackhole sink to prevent V8 optimization
@@ -27,10 +31,16 @@ function consumeNumber(value: number): void {
 
 function consumeString(value: string): void {
   sinkValue = (sinkValue + value.length) | 0;
+  if (value.length) {
+    sinkValue = (sinkValue + value.charCodeAt(0) + value.charCodeAt(value.length - 1)) | 0;
+  }
 }
 
 function consumeArray(value: readonly string[]): void {
-  sinkValue = (sinkValue + value.length + (value[0]?.length ?? 0)) | 0;
+  sinkValue = (sinkValue + value.length) | 0;
+  for (let i = 0; i < Math.min(value.length, 3); i++) {
+    consumeString(value[i] ?? "");
+  }
 }
 
 interface BenchmarkResult {
@@ -88,6 +98,40 @@ function getStability(cv: number): "stable" | "noisy" | "unstable" {
   if (cv < 0.1) return "stable";
   if (cv < 0.5) return "noisy";
   return "unstable";
+}
+
+/**
+ * Sanity check: ensure functions return expected values before benchmarking
+ */
+function sanityCheck(): void {
+  console.log("Running sanity checks...");
+
+  // Character width
+  assert.strictEqual(charCellWidth("a"), 1, "ASCII should be width 1");
+  assert.strictEqual(charCellWidth("中"), 2, "BMP CJK should be width 2");
+  assert.strictEqual(charCellWidth("\u{20BB7}"), 2, "Supplementary CJK (𠮷) should be width 2");
+  assert.strictEqual(charCellWidth("\u{2B820}"), 2, "Supplementary CJK Ext E should be width 2");
+  assert.strictEqual(charCellWidth("\u{30000}"), 2, "Supplementary CJK Ext G should be width 2");
+  assert.strictEqual(charCellWidth("\u{1D11E}"), 1, "Musical symbol should be width 1");
+  assert.strictEqual(charCellWidth("⏱"), 1, "Stopwatch without VS16 should be width 1");
+  assert.strictEqual(charCellWidth("⏱️"), 2, "Stopwatch with VS16 should be width 2");
+
+  // Text width
+  assert.strictEqual(textCellWidth("\u{20BB7}x"), 3, "𠮷x should be width 3 (2+1)");
+  assert.strictEqual(textCellWidth("中文"), 4, "中文 should be width 4 (2+2)");
+
+  // Slice
+  assert.strictEqual(sliceByCells("\u{20BB7}x", 1), "", "Slicing at 1 should return empty");
+  assert.strictEqual(sliceByCells("\u{20BB7}x", 2), "\u{20BB7}", "Slicing at 2 should return 𠮷");
+  assert.strictEqual(sliceByCells("\u{20BB7}x", 3), "\u{20BB7}x", "Slicing at 3 should return full");
+
+  // Wrap
+  const wrapped = wrapByCells("中文中文", 4);
+  assert.strictEqual(wrapped.length, 2, "中文中文 wrapped at 4 should be 2 lines");
+  assert.strictEqual(wrapped[0], "中文", "First line should be 中文");
+  assert.strictEqual(wrapped[1], "中文", "Second line should be 中文");
+
+  console.log("✅ All sanity checks passed\n");
 }
 
 /**
@@ -184,24 +228,65 @@ function benchmark(
 }
 
 /**
+ * Parse command line arguments
+ */
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const outputIndex = args.indexOf("--output");
+  const warmupIndex = args.indexOf("--warmup");
+  const samplesIndex = args.indexOf("--samples");
+
+  const outputFile = outputIndex >= 0 ? args[outputIndex + 1] : null;
+  const warmupArg = warmupIndex >= 0 ? parseInt(args[warmupIndex + 1] || "", 10) : null;
+  const samplesArg = samplesIndex >= 0 ? parseInt(args[samplesIndex + 1] || "", 10) : null;
+
+  // Environment variables for smoke mode
+  const isSmoke = process.env.BENCH_SMOKE === "1";
+  const envWarmup = process.env.BENCH_WARMUP ? parseInt(process.env.BENCH_WARMUP, 10) : null;
+  const envSamples = process.env.BENCH_SAMPLES ? parseInt(process.env.BENCH_SAMPLES, 10) : null;
+
+  let warmup = 100;
+  let samples = 1000;
+
+  if (isSmoke) {
+    warmup = 1;
+    samples = 3;
+  } else {
+    if (warmupArg && !isNaN(warmupArg)) warmup = warmupArg;
+    else if (envWarmup && !isNaN(envWarmup)) warmup = envWarmup;
+
+    if (samplesArg && !isNaN(samplesArg)) samples = samplesArg;
+    else if (envSamples && !isNaN(envSamples)) samples = envSamples;
+  }
+
+  return { outputFile, warmup, samples, isSmoke };
+}
+
+/**
  * Main benchmark suite
  */
 async function main() {
-  const args = process.argv.slice(2);
-  const outputIndex = args.indexOf("--output");
-  const outputFile = outputIndex >= 0 ? args[outputIndex + 1] : null;
-
-  const warmup = 100;
-  const samples = 1000;
+  const { outputFile, warmup, samples, isSmoke } = parseArgs();
 
   console.log("Performance Baseline Harness");
   console.log("============================\n");
+  if (isSmoke) {
+    console.log("🔥 SMOKE MODE: Quick validation");
+  }
   console.log(`Warmup: ${warmup} iterations`);
   console.log(`Samples: ${samples} iterations`);
   console.log(`Clock: process.hrtime.bigint`);
   console.log(`Unit: ns/op (nanoseconds per operation)\n`);
 
+  // Run sanity checks first
+  sanityCheck();
+
   const results: Record<string, BenchmarkResult> = {};
+
+  // Adjust iterations for smoke mode
+  const charIter = isSmoke ? 1 : 1000;
+  const textIter = isSmoke ? 1 : 100;
+  const fastIter = isSmoke ? 1 : 10;
 
   // Pre-generate corpus for unique text scenarios
   const cjkCorpus = Array.from({ length: 2048 }, (_, i) => `日志${i}：${"中文".repeat(50)}`);
@@ -220,7 +305,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 1000,
+      iterationsPerSample: charIter,
       operationsPerIteration: 3,
     },
   );
@@ -236,7 +321,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 1000,
+      iterationsPerSample: charIter,
       operationsPerIteration: 3,
     },
   );
@@ -252,7 +337,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 1000,
+      iterationsPerSample: charIter,
       operationsPerIteration: 3,
     },
   );
@@ -267,7 +352,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 1000,
+      iterationsPerSample: charIter,
       operationsPerIteration: 2,
     },
   );
@@ -283,7 +368,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 1000,
+      iterationsPerSample: charIter,
       operationsPerIteration: 3,
     },
   );
@@ -298,7 +383,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 100,
+      iterationsPerSample: textIter,
       operationsPerIteration: 1,
     },
   );
@@ -312,7 +397,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 10,
+      iterationsPerSample: fastIter,
       operationsPerIteration: 1,
     },
   );
@@ -327,7 +412,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 100,
+      iterationsPerSample: textIter,
       operationsPerIteration: 1,
     },
   );
@@ -341,7 +426,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 10,
+      iterationsPerSample: fastIter,
       operationsPerIteration: 1,
     },
   );
@@ -356,7 +441,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 100,
+      iterationsPerSample: textIter,
       operationsPerIteration: 1,
     },
   );
@@ -373,7 +458,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 100,
+      iterationsPerSample: textIter,
       operationsPerIteration: 3,
     },
   );
@@ -387,7 +472,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 100,
+      iterationsPerSample: textIter,
       operationsPerIteration: 1,
     },
   );
@@ -402,7 +487,7 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 10,
+      iterationsPerSample: fastIter,
       operationsPerIteration: 1,
     },
   );
@@ -417,16 +502,16 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 100,
+      iterationsPerSample: textIter,
       operationsPerIteration: 1,
     },
   );
 
-  // Scenario 15: terminal write supplementary CJK (unique rows)
+  // Scenario 15: terminal write supplementary CJK (cycling rows, buffer write only)
   const terminal2 = createTerminal({ cols: 80, rows: 24 });
   let rowCounter = 0;
-  results["terminal_write_supplementary_cjk_unique_rows"] = benchmark(
-    "terminal.write(Supplementary CJK, unique rows)",
+  results["terminal_write_supplementary_cjk_cycling_rows"] = benchmark(
+    "terminal.write(Supplementary CJK, cycling rows)",
     () => {
       const y = rowCounter % 24;
       terminal2.write(`\u{20BB7}test${rowCounter}\u{2B820}`, { x: 0, y });
@@ -435,10 +520,30 @@ async function main() {
     {
       warmup,
       samples,
-      iterationsPerSample: 10,
+      iterationsPerSample: fastIter,
       operationsPerIteration: 1,
     },
   );
+
+  // Verify scenario count
+  const expectedScenarios = 15;
+  const actualScenarios = Object.keys(results).length;
+  assert.strictEqual(
+    actualScenarios,
+    expectedScenarios,
+    `Expected ${expectedScenarios} scenarios, got ${actualScenarios}`,
+  );
+
+  // Verify all results have required fields
+  for (const [name, result] of Object.entries(results)) {
+    assert.ok(typeof result.p50 === "number", `${name}: p50 must be number`);
+    assert.ok(typeof result.p95 === "number", `${name}: p95 must be number`);
+    assert.ok(typeof result.p99 === "number", `${name}: p99 must be number`);
+    assert.ok(typeof result.mean === "number", `${name}: mean must be number`);
+    assert.ok(typeof result.stdev === "number", `${name}: stdev must be number`);
+    assert.ok(typeof result.cv === "number", `${name}: cv must be number`);
+    assert.ok(result.unit === "ns/op", `${name}: unit must be ns/op`);
+  }
 
   // Build report
   const report: BaselineReport = {
@@ -493,6 +598,8 @@ async function main() {
     console.log("=".repeat(50));
     console.log(json);
   }
+
+  console.log(`\n✅ Benchmark completed: ${actualScenarios} scenarios`);
 }
 
 main().catch((error) => {
