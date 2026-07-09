@@ -21,7 +21,9 @@ export interface CellCacheMetrics {
   continuationCellCacheMiss: number;
   maxCacheSizeWidth1: number;
   maxCacheSizeWidth2: number;
-  estimatedLiveStyleBuckets: number;
+  cellCacheBucketCountWidth1: number;
+  cellCacheBucketCountWidth2: number;
+  estimatedRetainedCells: number;
 }
 
 export interface TextCacheMetrics {
@@ -37,6 +39,11 @@ export interface TextCacheMetrics {
   wrapCacheMiss: number;
   wrapCacheSet: number;
   wrapCacheClear: number;
+  wrapWidthBucketMapClear: number;
+  inlineLineCacheHit: number;
+  inlineLineCacheMiss: number;
+  inlineLineCacheSet: number;
+  inlineLineCacheClear: number;
   maxTextLength: number;
   totalTextLength: number;
   asciiCount: number;

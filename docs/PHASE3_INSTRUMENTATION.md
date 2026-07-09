@@ -4,6 +4,8 @@
 
 Phase 3 adds **observation-only instrumentation** to measure cache behavior, allocation patterns, and grapheme processing costs. This phase does NOT include any optimizations - it only collects metrics to identify actual bottlenecks.
 
+> **Note**: This is an **internal development/profiling API** and is not exported in the npm package. It is intended for performance analysis during development and benchmarking.
+
 ## What Phase 3 Does
 
 ### ✅ Instrumentation Added
@@ -12,10 +14,10 @@ Phase 3 adds **observation-only instrumentation** to measure cache behavior, all
 - **Text Cache Metrics**: textCellWidth calls, text width cache hit/miss, wrap cache behavior
 - **Grapheme Metrics**: segmentation calls, Intl.Segmenter vs fallback usage
 
-### ✅ Zero-Cost When Disabled
+### ✅ Low-Overhead When Disabled
 
 - All instrumentation checks `isInstrumentationEnabled()` first
-- Production code unaffected when instrumentation disabled
+- When disabled: minimal overhead (function call + boolean check) when instrumentation disabled
 - Enable only for profiling/benchmarking
 
 ### ✅ Profiler Benchmark
@@ -49,7 +51,7 @@ import {
 enableInstrumentation,
 resetMetrics,
 getMetrics
-} from '@simon_he/vue-tui/core/perf/instrumentation';
+} from "../src/core/perf/instrumentation.js";
 
 // Enable instrumentation
 enableInstrumentation();
