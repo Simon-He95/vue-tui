@@ -11,7 +11,8 @@
 
 本 RFC 基于 7 位专业 agents 对 vue-tui 代码库的深度审查，提出了性能优化方向和实施建议。
 
-**重要说明**: 
+**重要说明**:
+
 - ✅ 本文档是**优化方向草案**，非最终实施方案
 - ⚠️ 所有诊断和收益预期基于代码审查，需要真实 baseline 数据验证
 - 📊 后续应拆分为多个小 PR，每个 PR 配真实性能数据
@@ -24,7 +25,7 @@
 
 - **代码量**: 7328 行核心代码
 - **审查时长**: 4+ 小时
-- **审查团队**: 
+- **审查团队**:
   - Marcus & Elena: 性能分析
   - Alex: 边界情况
   - Victor: 风险评估
@@ -54,6 +55,7 @@ if (codePoint > 0xffe6) return false;
 ```
 
 **建议方向**:
+
 1. 引入/生成 Unicode East Asian Width 表
 2. 维护补充平面 CJK 区间 (0x20000-0x3FFFD)
 3. 确保 emoji、VS16、keycap、ZWJ grapheme 继续走 grapheme-safe 路径
@@ -82,6 +84,7 @@ if (map.size > MAX_CACHED_CELLS_PER_STYLE) map.clear();
 ```
 
 **潜在问题**:
+
 1. 清空策略可能导致缓存抖动
 2. 128 的上限对 CJK 场景可能偏小
 3. 缺少缓存命中率监控
@@ -104,7 +107,8 @@ function evictOldestInStyleMap(map: Map<string, Cell>, keepRatio = 0.75) {
 ```
 
 **优先级**: P2 (性能优化，需先证明是瓶颈)  
-**建议实施**: 
+**建议实施**:
+
 1. 先收集真实缓存命中率数据
 2. 如果命中率 < 70%，尝试方案 A
 3. 如果方案 A 后仍 < 80%，考虑方案 B
@@ -185,6 +189,7 @@ for (let i = 0; i < segments.length; i += SEGMENT_SIZE) {
 
 **优先级**: P2 (性能优化)  
 **建议实施**:
+
 1. 先用 profiler 确认 `textCellWidth` 是热点
 2. 收集真实长文本场景数据
 3. 优先尝试方案 B（不缓存超长文本）
@@ -196,12 +201,12 @@ for (let i = 0; i < segments.length; i += SEGMENT_SIZE) {
 
 ### 原预期 vs 修正后预期
 
-| 指标 | 原预期 | 修正后 | 说明 |
-|------|--------|--------|------|
-| 整体性能 | 3-7x | **待验证** | 需要真实 baseline |
-| ASCII 文本 | 5x | **待验证** | Fast path 已大量存在 |
-| 缓存命中率 | +80% | **+10-30%** | 需要真实数据验证 |
-| 内存占用 | -38% | **待验证** | 依赖实施方案 |
+| 指标       | 原预期 | 修正后      | 说明                 |
+| ---------- | ------ | ----------- | -------------------- |
+| 整体性能   | 3-7x   | **待验证**  | 需要真实 baseline    |
+| ASCII 文本 | 5x     | **待验证**  | Fast path 已大量存在 |
+| 缓存命中率 | +80%   | **+10-30%** | 需要真实数据验证     |
+| 内存占用   | -38%   | **待验证**  | 依赖实施方案         |
 
 ### 保守目标（基于 review 建议）
 
@@ -298,10 +303,10 @@ P2: 如果 profiler 确认某个函数是 top hotspot，该函数提升 20-50%
 
 ```typescript
 // 开发模式下添加统计
-if (process.env.NODE_ENV === 'development') {
+if (process.env.NODE_ENV === "development") {
   let cellCacheHits = 0;
   let cellCacheMisses = 0;
-  
+
   export function getCellCacheStats() {
     return {
       hits: cellCacheHits,
@@ -317,7 +322,7 @@ if (process.env.NODE_ENV === 'development') {
 ```typescript
 export type FramePerfSample = {
   // 现有字段...
-  
+
   // 可选：优化相关指标
   cacheMissRate?: number;
   asciiTextRatio?: number;
@@ -350,11 +355,13 @@ export type FramePerfSample = {
 ## 🔗 参考资料
 
 ### 审查报告
+
 - [ULTIMATE_REVIEW_CONCLUSION.zh-CN.md](./ULTIMATE_REVIEW_CONCLUSION.zh-CN.md) - 5 agents 综合结论
 - [COMPREHENSIVE_REVIEW_REPORT.zh-CN.md](./COMPREHENSIVE_REVIEW_REPORT.zh-CN.md) - 详细审查
 - [VIRTUAL_SCROLL_OPTIMIZATION_REVIEW.md](./VIRTUAL_SCROLL_OPTIMIZATION_REVIEW.md) - Sophia 虚拟滚动分析
 
 ### 相关测试
+
 - `test/core/buffer/unicode-width.test.ts` - 现有 Unicode 测试
 - `scripts/bench-*.ts` - 现有性能基准脚本
 
@@ -372,7 +379,7 @@ export type FramePerfSample = {
 
 **文档状态**: ✅ RFC / 草案  
 **实施状态**: ⏳ 待实施  
-**验证方式**: 真实 baseline + profiler 数据驱动  
+**验证方式**: 真实 baseline + profiler 数据驱动
 
 **审查团队**: 7 agents + 1 人工 reviewer  
 **最后更新**: 2026-07-09（基于 review 反馈修正）
