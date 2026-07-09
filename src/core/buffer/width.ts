@@ -1,178 +1,13 @@
-const fullWidthRanges: Array<[number, number]> = [
-  [0x1100, 0x115f],
-  [0x2329, 0x232a],
-  [0x2e80, 0xa4cf],
-  [0xac00, 0xd7a3],
-  [0xf900, 0xfaff],
-  [0xfe10, 0xfe19],
-  [0xfe30, 0xfe6f],
-  [0xff00, 0xff60],
-  [0xffe0, 0xffe6],
-];
-
-const ambiguousWidthRanges: Array<[number, number]> = [
-  [0x00a1, 0x00a1],
-  [0x00a4, 0x00a4],
-  [0x00a7, 0x00a8],
-  [0x00aa, 0x00aa],
-  [0x00ad, 0x00ae],
-  [0x00b0, 0x00b4],
-  [0x00b6, 0x00ba],
-  [0x00bc, 0x00bf],
-  [0x00c6, 0x00c6],
-  [0x00d0, 0x00d0],
-  [0x00d7, 0x00d8],
-  [0x00de, 0x00e1],
-  [0x00e6, 0x00e6],
-  [0x00e8, 0x00ea],
-  [0x00ec, 0x00ed],
-  [0x00f0, 0x00f0],
-  [0x00f2, 0x00f3],
-  [0x00f7, 0x00fa],
-  [0x00fc, 0x00fc],
-  [0x00fe, 0x00fe],
-  [0x0101, 0x0101],
-  [0x0111, 0x0111],
-  [0x0113, 0x0113],
-  [0x011b, 0x011b],
-  [0x0126, 0x0127],
-  [0x012b, 0x012b],
-  [0x0131, 0x0133],
-  [0x0138, 0x0138],
-  [0x013f, 0x0142],
-  [0x0144, 0x0144],
-  [0x0148, 0x014b],
-  [0x014d, 0x014d],
-  [0x0152, 0x0153],
-  [0x0166, 0x0167],
-  [0x016b, 0x016b],
-  [0x01ce, 0x01ce],
-  [0x01d0, 0x01d0],
-  [0x01d2, 0x01d2],
-  [0x01d4, 0x01d4],
-  [0x01d6, 0x01d6],
-  [0x01d8, 0x01d8],
-  [0x01da, 0x01da],
-  [0x01dc, 0x01dc],
-  [0x0251, 0x0251],
-  [0x0261, 0x0261],
-  [0x02c4, 0x02c4],
-  [0x02c7, 0x02c7],
-  [0x02c9, 0x02cb],
-  [0x02cd, 0x02cd],
-  [0x02d0, 0x02d0],
-  [0x02d8, 0x02db],
-  [0x02dd, 0x02dd],
-  [0x02df, 0x02df],
-  [0x0391, 0x03a1],
-  [0x03a3, 0x03a9],
-  [0x03b1, 0x03c1],
-  [0x03c3, 0x03c9],
-  [0x0401, 0x0401],
-  [0x0410, 0x044f],
-  [0x0451, 0x0451],
-  [0x2010, 0x2015],
-  [0x2018, 0x2019],
-  [0x201c, 0x201d],
-  [0x2020, 0x2022],
-  [0x2024, 0x2027],
-  [0x2030, 0x2030],
-  [0x2032, 0x2033],
-  [0x2035, 0x2035],
-  [0x203b, 0x203b],
-  [0x203e, 0x203e],
-  [0x2074, 0x2074],
-  [0x207f, 0x207f],
-  [0x2081, 0x2084],
-  [0x20ac, 0x20ac],
-  [0x2103, 0x2103],
-  [0x2105, 0x2105],
-  [0x2109, 0x2109],
-  [0x2113, 0x2113],
-  [0x2116, 0x2116],
-  [0x2121, 0x2122],
-  [0x2126, 0x2126],
-  [0x212b, 0x212b],
-  [0x2153, 0x2154],
-  [0x215b, 0x215e],
-  [0x2160, 0x216b],
-  [0x2170, 0x2179],
-  [0x2189, 0x2189],
-  [0x2190, 0x2199],
-  [0x21b8, 0x21b9],
-  [0x21d2, 0x21d2],
-  [0x21d4, 0x21d4],
-  [0x21e7, 0x21e7],
-  [0x2200, 0x2200],
-  [0x2202, 0x2203],
-  [0x2207, 0x2208],
-  [0x220b, 0x220b],
-  [0x220f, 0x220f],
-  [0x2211, 0x2211],
-  [0x2215, 0x2215],
-  [0x221a, 0x221a],
-  [0x221d, 0x2220],
-  [0x2223, 0x2223],
-  [0x2225, 0x2225],
-  [0x2227, 0x222c],
-  [0x222e, 0x222e],
-  [0x2234, 0x2237],
-  [0x223c, 0x223d],
-  [0x2248, 0x2248],
-  [0x224c, 0x224c],
-  [0x2252, 0x2252],
-  [0x2260, 0x2261],
-  [0x2264, 0x2267],
-  [0x226a, 0x226b],
-  [0x226e, 0x226f],
-  [0x2282, 0x2283],
-  [0x2286, 0x2287],
-  [0x2295, 0x2295],
-  [0x2299, 0x2299],
-  [0x22a5, 0x22a5],
-  [0x22bf, 0x22bf],
-  [0x2312, 0x2312],
-  [0x2460, 0x24e9],
-  [0x24eb, 0x24ff],
-  [0x2580, 0x258f],
-  [0x2592, 0x2595],
-  [0x25a0, 0x25a1],
-  [0x25a3, 0x25a9],
-  [0x25b2, 0x25b3],
-  [0x25b6, 0x25b7],
-  [0x25bc, 0x25bd],
-  [0x25c0, 0x25c1],
-  [0x25c6, 0x25c8],
-  [0x25cb, 0x25cb],
-  [0x25ce, 0x25d1],
-  [0x25e2, 0x25e5],
-  [0x25ef, 0x25ef],
-  [0x2605, 0x2606],
-  [0x2609, 0x2609],
-  [0x260e, 0x260f],
-  [0x261c, 0x261c],
-  [0x261e, 0x261e],
-  [0x2640, 0x2640],
-  [0x2642, 0x2642],
-  [0x2660, 0x2661],
-  [0x2663, 0x2665],
-  [0x2667, 0x266a],
-  [0x266c, 0x266d],
-  [0x266f, 0x266f],
-  [0x273d, 0x273d],
-  [0x2776, 0x277f],
-  [0x2b56, 0x2b56],
-  [0xe000, 0xf8ff],
-  [0xfffd, 0xfffd],
-];
+import { fullWidthRanges, ambiguousWidthRanges } from "./eaw-ranges-unicode-17.js";
 
 export type CellWidth = 1 | 2;
 export type BuiltinWidthProvider = "default" | "cjk" | "narrow-ambiguous";
 export type WidthProvider = BuiltinWidthProvider | ((text: string) => CellWidth);
 
 function isFullWidthCodePoint(codePoint: number): boolean {
-  // Quick reject: below first or above last full-width range
-  if (codePoint < 0x1100 || codePoint > 0xffe6) return false;
+  // Unicode 17.0.0: supplementary plane CJK (Planes 2-3) are wide
+  // Quick reject only for code points below first range
+  if (codePoint < 0x1100) return false;
   // Ranges are sorted — exit as soon as we pass the candidate
   for (const [start, end] of fullWidthRanges) {
     if (codePoint < start) return false;
@@ -182,12 +17,41 @@ function isFullWidthCodePoint(codePoint: number): boolean {
 }
 
 function isAmbiguousWidthCodePoint(codePoint: number): boolean {
-  if (codePoint < 0x00a1 || codePoint > 0xfffd) return false;
+  // Use dynamic bounds from generated ranges to support supplementary plane ambiguous
+  const first = ambiguousWidthRanges[0];
+  const last = ambiguousWidthRanges[ambiguousWidthRanges.length - 1];
+
+  if (!first || !last) return false;
+  if (codePoint < first[0] || codePoint > last[1]) return false;
+
   for (const [start, end] of ambiguousWidthRanges) {
     if (codePoint < start) return false;
     if (codePoint <= end) return true;
   }
   return false;
+}
+
+function isVariationSelectorCodePoint(codePoint: number): boolean {
+  // Variation Selectors block (U+FE00-U+FE0F) and Variation Selectors Supplement (U+E0100-U+E01EF)
+  return (
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) || (codePoint >= 0xe0100 && codePoint <= 0xe01ef)
+  );
+}
+
+function isCombiningMarkCodePoint(codePoint: number): boolean {
+  // Common combining mark ranges
+  // UAX #11 notes that EAW for combining marks doesn't equal advance width
+  // This includes both EAW=A and EAW=W combining marks
+  return (
+    (codePoint >= 0x0300 && codePoint <= 0x036f) || // Combining Diacritical Marks
+    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) || // Combining Diacritical Marks Extended
+    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) || // Combining Diacritical Marks Supplement
+    (codePoint >= 0x20d0 && codePoint <= 0x20ff) || // Combining Diacritical Marks for Symbols
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f) || // Combining Half Marks
+    (codePoint >= 0x302a && codePoint <= 0x302f) || // EAW=W: Ideographic level tone marks
+    (codePoint >= 0x3099 && codePoint <= 0x309a) || // EAW=W: Combining Katakana-Hiragana marks
+    codePoint === 0x16fe4 // EAW=W: Tangut Caesura Mark
+  );
 }
 
 function isEmojiLike(codePoint: number): boolean {
@@ -246,6 +110,16 @@ export function charCellWidth(text: string, provider: WidthProvider = "default")
   // If we treat them as wide unconditionally, the buffer will insert continuation cells (gaps) and
   // borders/layout will appear shifted.
   const hasVs16 = text.includes("\uFE0F");
+
+  // First-code-point terminal/grapheme tailoring for standalone marks/selectors.
+  // These must be checked BEFORE EAW W/F to handle marks that are classified as W.
+  if (isVariationSelectorCodePoint(codePoint) || isCombiningMarkCodePoint(codePoint)) {
+    return 1;
+  }
+
+  // Terminal tailoring: Box Drawing (U+2500-U+257F) remains narrow in all modes
+  // Even though they are classified as Ambiguous in Unicode EAW
+  if (codePoint >= 0x2500 && codePoint <= 0x257f) return 1;
 
   if (isFullWidthCodePoint(codePoint)) return 2;
 
