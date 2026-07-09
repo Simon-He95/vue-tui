@@ -73,6 +73,8 @@ interface BaselineReport {
   benchmarkSuite: string;
   mode: "smoke" | "full";
   commit: string;
+  gitDirty: boolean;
+  branch: string;
   eawUnicodeVersion: string;
   eawSourceSha256: string;
   runtimeUnicodeVersion: string | undefined;
@@ -84,6 +86,7 @@ interface BaselineReport {
   arch: string;
   warmup: number;
   samples: number;
+  uniqueCorpusSize: number;
   clock: string;
   timestamp: string;
   blackhole: number;
@@ -93,6 +96,23 @@ interface BaselineReport {
 function getCommitHash(): string {
   try {
     return execSync("git rev-parse HEAD", { encoding: "utf-8" }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
+function getGitDirty(): boolean {
+  try {
+    const status = execSync("git status --porcelain", { encoding: "utf-8" });
+    return status.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function getGitBranch(): string {
+  try {
+    return execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf-8" }).trim();
   } catch {
     return "unknown";
   }
@@ -152,6 +172,15 @@ function sanityCheck(): void {
 }
 
 /**
+ * Calculate percentile using nearest-rank method
+ */
+function percentile(sorted: number[], p: number): number {
+  if (!sorted.length) return 0;
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1));
+  return sorted[index]!;
+}
+
+/**
  * Calculate statistical metrics from samples
  */
 function calculateStats(
@@ -166,10 +195,10 @@ function calculateStats(
   const totalOpsPerSample = iterationsPerSample * operationsPerIteration;
   const nsPerOp = sorted.map((ns) => ns / totalOpsPerSample);
 
-  // Percentiles
-  const p50 = nsPerOp[Math.floor(n * 0.5)] || 0;
-  const p95 = nsPerOp[Math.floor(n * 0.95)] || 0;
-  const p99 = nsPerOp[Math.floor(n * 0.99)] || 0;
+  // Percentiles using nearest-rank method
+  const p50 = percentile(nsPerOp, 0.5);
+  const p95 = percentile(nsPerOp, 0.95);
+  const p99 = percentile(nsPerOp, 0.99);
 
   // Mean
   const sum = nsPerOp.reduce((a, b) => a + b, 0);
@@ -686,6 +715,8 @@ async function main() {
     benchmarkSuite: "unicode-width-text-v1",
     mode: isSmoke ? "smoke" : "full",
     commit: getCommitHash(),
+    gitDirty: getGitDirty(),
+    branch: getGitBranch(),
     eawUnicodeVersion: EAW_UNICODE_VERSION,
     eawSourceSha256: EAW_SOURCE_SHA256,
     runtimeUnicodeVersion: process.versions.unicode,
@@ -697,6 +728,7 @@ async function main() {
     arch: os.arch(),
     warmup,
     samples,
+    uniqueCorpusSize: uniqueOps,
     clock: "process.hrtime.bigint",
     timestamp: new Date().toISOString(),
     blackhole: sinkValue,
