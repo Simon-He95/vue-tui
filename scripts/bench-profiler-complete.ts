@@ -239,9 +239,9 @@ function formatMetrics(result: WorkloadResult): string {
     `  cache clears: ${metrics.cell.cellCacheClearWidth1 + metrics.cell.cellCacheClearWidth2}`,
   );
   lines.push(
-    `  bucket count (w1/w2): ${metrics.cell.cellCacheBucketCountWidth1}/${metrics.cell.cellCacheBucketCountWidth2}`,
+    `  bucket count (w1/w2): ${metrics.cell.registeredBucketCountWidth1}/${metrics.cell.registeredBucketCountWidth2}`,
   );
-  lines.push(`  estimated retained cells: ${metrics.cell.estimatedRetainedCells}`);
+  lines.push(`  estimated retained cells: ${metrics.cell.estimatedRegisteredBucketCells}`);
   lines.push(
     `  max single bucket size (w1/w2): ${metrics.cell.maxCacheSizeWidth1}/${metrics.cell.maxCacheSizeWidth2}`,
   );

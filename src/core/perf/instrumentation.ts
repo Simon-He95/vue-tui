@@ -22,9 +22,9 @@ export interface CellCacheMetrics {
   maxCacheSizeWidth1: number;
   maxCacheSizeWidth2: number;
   // TODO Phase 3.2: Not populated until bucket tracking is implemented
-  cellCacheBucketCountWidth1: number;
-  cellCacheBucketCountWidth2: number;
-  estimatedRetainedCells: number;
+  registeredBucketCountWidth1: number;
+  registeredBucketCountWidth2: number;
+  estimatedRegisteredBucketCells: number;
 }
 
 export interface TextCacheMetrics {
@@ -85,9 +85,9 @@ const cellMetrics: CellCacheMetrics = {
   maxCacheSizeWidth1: 0,
   maxCacheSizeWidth2: 0,
   // TODO Phase 3.2: Not populated until bucket tracking is implemented
-  cellCacheBucketCountWidth1: 0,
-  cellCacheBucketCountWidth2: 0,
-  estimatedRetainedCells: 0,
+  registeredBucketCountWidth1: 0,
+  registeredBucketCountWidth2: 0,
+  estimatedRegisteredBucketCells: 0,
 };
 
 const textMetrics: TextCacheMetrics = {
@@ -165,9 +165,9 @@ export function resetMetrics(): void {
   cellMetrics.continuationCellCacheMiss = 0;
   cellMetrics.maxCacheSizeWidth1 = 0;
   cellMetrics.maxCacheSizeWidth2 = 0;
-  cellMetrics.cellCacheBucketCountWidth1 = 0;
-  cellMetrics.cellCacheBucketCountWidth2 = 0;
-  cellMetrics.estimatedRetainedCells = 0;
+  cellMetrics.registeredBucketCountWidth1 = 0;
+  cellMetrics.registeredBucketCountWidth2 = 0;
+  cellMetrics.estimatedRegisteredBucketCells = 0;
 
   // Text metrics
   textMetrics.textCellWidthCalls = 0;
@@ -215,7 +215,7 @@ function getCacheBucketDistribution() {
   const width1Sizes = cellCacheBucketsWidth1.map((b) => b.size).sort((a, b) => a - b);
   const width2Sizes = cellCacheBucketsWidth2.map((b) => b.size).sort((a, b) => a - b);
 
-  const estimatedRetainedCells =
+  const estimatedRegisteredBucketCells =
     width1Sizes.reduce((sum, s) => sum + s, 0) + width2Sizes.reduce((sum, s) => sum + s, 0);
 
   return {
@@ -227,7 +227,7 @@ function getCacheBucketDistribution() {
     sizeP50Width2: percentile(width2Sizes, 0.5),
     sizeP95Width2: percentile(width2Sizes, 0.95),
     sizeMaxWidth2: Math.max(...width2Sizes, 0),
-    estimatedRetainedCells,
+    estimatedRegisteredBucketCells,
   };
 }
 
@@ -240,9 +240,9 @@ export function getMetrics(): PerformanceMetrics {
   // Populate bucket distribution if instrumentation enabled
   if (instrumentationEnabled) {
     const distribution = getCacheBucketDistribution();
-    cellMetricsSnapshot.cellCacheBucketCountWidth1 = distribution.bucketCountWidth1;
-    cellMetricsSnapshot.cellCacheBucketCountWidth2 = distribution.bucketCountWidth2;
-    cellMetricsSnapshot.estimatedRetainedCells = distribution.estimatedRetainedCells;
+    cellMetricsSnapshot.registeredBucketCountWidth1 = distribution.bucketCountWidth1;
+    cellMetricsSnapshot.registeredBucketCountWidth2 = distribution.bucketCountWidth2;
+    cellMetricsSnapshot.estimatedRegisteredBucketCells = distribution.estimatedRegisteredBucketCells;
   }
 
   return {
@@ -377,13 +377,13 @@ export const cellInstr = {
 
   updateBucketCounts(width1Count: number, width2Count: number) {
     if (!instrumentationEnabled) return;
-    cellMetrics.cellCacheBucketCountWidth1 = width1Count;
-    cellMetrics.cellCacheBucketCountWidth2 = width2Count;
+    cellMetrics.registeredBucketCountWidth1 = width1Count;
+    cellMetrics.registeredBucketCountWidth2 = width2Count;
   },
 
   updateEstimatedRetainedCells(count: number) {
     if (!instrumentationEnabled) return;
-    cellMetrics.estimatedRetainedCells = count;
+    cellMetrics.estimatedRegisteredBucketCells = count;
   },
 };
 
