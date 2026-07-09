@@ -1,6 +1,7 @@
 import type { Cell, Style } from "../types.js";
 import { charCellWidth } from "./width.js";
 import type { WidthProvider } from "./width.js";
+import { cellInstr } from "../perf/instrumentation.js";
 
 const DEFAULT_STYLE: Style = Object.freeze({});
 const styleCache = new WeakMap<object, Style>();
@@ -32,9 +33,12 @@ function getOrCreateCellCache(
 }
 
 export function createCell(ch: string, style?: Style, widthProvider?: WidthProvider): Cell {
+  cellInstr.recordCreateCellCall();
+
   if (ch === " ") return createBlankCell(style);
 
   const normalizedStyle = normalizeStyle(style);
+  cellInstr.recordCharCellWidthCall();
   const width = charCellWidth(ch, widthProvider);
 
   const map =
@@ -43,18 +47,37 @@ export function createCell(ch: string, style?: Style, widthProvider?: WidthProvi
       : getOrCreateCellCache(cellCacheWidth1, normalizedStyle);
 
   const cached = map.get(ch);
-  if (cached) return cached;
+  if (cached) {
+    cellInstr.recordCacheHit(width as 1 | 2);
+    return cached;
+  }
+
+  cellInstr.recordCacheMiss(width as 1 | 2);
+  cellInstr.recordNewCell();
 
   const cell: Cell = { ch, width, style: normalizedStyle };
   map.set(ch, cell);
-  if (map.size > MAX_CACHED_CELLS_PER_STYLE) map.clear();
+
+  cellInstr.updateMaxCacheSize(width as 1 | 2, map.size);
+
+  if (map.size > MAX_CACHED_CELLS_PER_STYLE) {
+    cellInstr.recordCacheClear(width as 1 | 2);
+    map.clear();
+  }
+
   return cell;
 }
 
 export function createBlankCell(style?: Style): Cell {
   const normalizedStyle = normalizeStyle(style);
   const cached = blankCellCache.get(normalizedStyle);
-  if (cached) return cached;
+  if (cached) {
+    cellInstr.recordBlankCacheHit();
+    return cached;
+  }
+
+  cellInstr.recordBlankCacheMiss();
+
   const cell = Object.freeze({
     ch: " ",
     width: 1,
@@ -67,7 +90,13 @@ export function createBlankCell(style?: Style): Cell {
 export function createContinuationCell(style?: Style): Cell {
   const normalizedStyle = normalizeStyle(style);
   const cached = continuationCellCache.get(normalizedStyle);
-  if (cached) return cached;
+  if (cached) {
+    cellInstr.recordContinuationCacheHit();
+    return cached;
+  }
+
+  cellInstr.recordContinuationCacheMiss();
+
   const cell = Object.freeze({
     ch: "",
     width: 1,
