@@ -39,7 +39,7 @@ Phase 3 adds **observation-only instrumentation** to measure cache behavior, all
 ### ❌ No Behavior Changes
 
 - All existing functionality unchanged
-- Same performance characteristics (when instrumentation disabled)
+- Performance impact should be verified by baseline benchmarks (when instrumentation disabled)
 - Only adds observation capability
 
 ## Usage
@@ -184,7 +184,7 @@ Only after analyzing instrumentation data:
 
 - **Data-Driven Only**: No optimization without profiler evidence
 - **Observation Phase**: This PR only measures, does not optimize
-- **Zero Production Impact**: Instrumentation disabled by default
+- **Low-Overhead When Disabled**: Instrumentation disabled by default
 - **Targeted Workloads**: Each workload tests specific behavior
 
 ## Files Modified
@@ -208,7 +208,7 @@ pnpm run typecheck
 
 pnpm run bench:profiler
 
-# Verify zero cost when disabled (same performance as Phase 2)
+# Verify low-overhead when disabled (same performance as Phase 2)
 
 pnpm run bench:perf-baseline:smoke
 \`\`\`

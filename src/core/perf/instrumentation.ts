@@ -2,7 +2,7 @@
  * Performance instrumentation for Phase 3 profiling
  *
  * This module provides debug-only metrics collection without affecting production behavior.
- * All instrumentation is designed to be zero-cost when disabled.
+ * All instrumentation is designed to be low-overhead when disabled.
  */
 
 export interface CellCacheMetrics {
@@ -40,10 +40,6 @@ export interface TextCacheMetrics {
   wrapCacheSet: number;
   wrapCacheClear: number;
   wrapWidthBucketMapClear: number;
-  inlineLineCacheHit: number;
-  inlineLineCacheMiss: number;
-  inlineLineCacheSet: number;
-  inlineLineCacheClear: number;
   maxTextLength: number;
   totalTextLength: number;
   asciiCount: number;
@@ -103,10 +99,6 @@ const textMetrics: TextCacheMetrics = {
   wrapCacheSet: 0,
   wrapCacheClear: 0,
   wrapWidthBucketMapClear: 0,
-  inlineLineCacheHit: 0,
-  inlineLineCacheMiss: 0,
-  inlineLineCacheSet: 0,
-  inlineLineCacheClear: 0,
   maxTextLength: 0,
   totalTextLength: 0,
   asciiCount: 0,
@@ -179,10 +171,6 @@ export function resetMetrics(): void {
   textMetrics.wrapCacheSet = 0;
   textMetrics.wrapCacheClear = 0;
   textMetrics.wrapWidthBucketMapClear = 0;
-  textMetrics.inlineLineCacheHit = 0;
-  textMetrics.inlineLineCacheMiss = 0;
-  textMetrics.inlineLineCacheSet = 0;
-  textMetrics.inlineLineCacheClear = 0;
   textMetrics.maxTextLength = 0;
   textMetrics.totalTextLength = 0;
   textMetrics.asciiCount = 0;
@@ -221,7 +209,10 @@ export function getHeapUsed(): number | null {
 }
 
 /**
- * Get metrics with heap information (requires --expose-gc for GC)
+ * Get metrics with heap information
+ * 
+ * Note: heapUsedBefore/After measures GC impact, not workload memory.
+ * To measure workload memory, call getHeapUsed() before/after your workload.
  */
 export function getMetricsWithHeap(): PerformanceMetrics {
   const metrics = getMetrics();
@@ -231,9 +222,10 @@ export function getMetricsWithHeap(): PerformanceMetrics {
     metrics.heapUsedBefore = heapBefore;
   }
 
-  // Only try GC if available
-  if (typeof (global as any).gc === "function") {
-    (global as any).gc();
+  // Only try GC if available - safe for browser and Node
+  const maybeGc = (globalThis as any).gc;
+  if (typeof maybeGc === "function") {
+    maybeGc();
     const heapAfter = getHeapUsed();
     if (heapAfter !== null) {
       metrics.heapUsedAfter = heapAfter;

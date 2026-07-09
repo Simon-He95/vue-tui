@@ -489,12 +489,14 @@ export function wrapByCells(
   const useCache = canUseDefaultTextCache(provider);
   const bucket = useCache ? getWrapBucket(width) : null;
   if (text && hasAsciiFastPath(provider) && isAscii(text)) {
-    const cached = bucket?.get(text);
-    if (cached) {
-      textInstr.recordWrapCacheHit();
-      return cached;
+    if (bucket) {
+      const cached = bucket.get(text);
+      if (cached) {
+        if (isInstrumentationEnabled()) textInstr.recordWrapCacheHit();
+        return cached;
+      }
+      if (isInstrumentationEnabled()) textInstr.recordWrapCacheMiss();
     }
-    textInstr.recordWrapCacheMiss();
 
     const out: string[] = [];
     for (const rawLine of text.replace(/\r/g, "").split("\n")) {
@@ -507,21 +509,23 @@ export function wrapByCells(
 
     if (bucket) {
       if (bucket.size >= MAX_WRAP_CACHE_PER_WIDTH) {
-        textInstr.recordWrapCacheClear();
+        if (isInstrumentationEnabled()) textInstr.recordWrapCacheClear();
         bucket.clear();
       }
-      textInstr.recordWrapCacheSet();
+      if (isInstrumentationEnabled()) textInstr.recordWrapCacheSet();
       bucket.set(text, out);
     }
     return out;
   }
 
-  const cached = bucket?.get(text);
-  if (cached) {
-    textInstr.recordWrapCacheHit();
-    return cached;
+  if (bucket) {
+    const cached = bucket.get(text);
+    if (cached) {
+      if (isInstrumentationEnabled()) textInstr.recordWrapCacheHit();
+      return cached;
+    }
+    if (isInstrumentationEnabled()) textInstr.recordWrapCacheMiss();
   }
-  textInstr.recordWrapCacheMiss();
 
   const out: string[] = [];
   for (const rawLine of text.replace(/\r/g, "").split("\n")) {
@@ -581,10 +585,10 @@ export function wrapByCells(
   const res = out.length ? out : [""];
   if (bucket) {
     if (bucket.size >= MAX_WRAP_CACHE_PER_WIDTH) {
-      textInstr.recordWrapCacheClear();
+      if (isInstrumentationEnabled()) textInstr.recordWrapCacheClear();
       bucket.clear();
     }
-    textInstr.recordWrapCacheSet();
+    if (isInstrumentationEnabled()) textInstr.recordWrapCacheSet();
     bucket.set(text, res);
   }
   return res;
