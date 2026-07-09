@@ -1,3 +1,5 @@
+import { graphemeInstr } from "../core/perf/instrumentation.js";
+
 export interface GraphemeSegment {
   segment: string;
   index: number;
@@ -137,6 +139,15 @@ function fallbackGraphemeSegments(text: string): readonly GraphemeSegment[] {
 
 export function segmentedGraphemes(text: string): Iterable<GraphemeSegment> | null {
   if (!needsGraphemeSegmentation(text)) return null;
-  if (graphemeSegmenter) return graphemeSegmenter.segment(text);
+
+  graphemeInstr.recordSegmentedGraphemesCall();
+  graphemeInstr.recordComplexGrapheme();
+
+  if (graphemeSegmenter) {
+    graphemeInstr.recordIntlSegmenterUsed();
+    return graphemeSegmenter.segment(text);
+  }
+
+  graphemeInstr.recordFallbackSegmenterUsed();
   return fallbackGraphemeSegments(text);
 }

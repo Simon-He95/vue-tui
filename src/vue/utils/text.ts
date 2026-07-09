@@ -1,5 +1,6 @@
 import { charCellWidth, type WidthProvider } from "../../core/buffer/width.js";
 import { segmentedGraphemes } from "../../utils/grapheme.js";
+import { textInstr } from "../../core/perf/instrumentation.js";
 
 export interface TextCellSegment {
   text: string;
@@ -228,16 +229,29 @@ export function textCellWidth(
   provider: WidthProvider = currentTextWidthProvider(),
 ): number {
   if (!text) return 0;
+
+  const isAsciiText = isAscii(text);
+  textInstr.recordTextCellWidthCall(text.length, isAsciiText);
+
   // Fast path: ASCII is always single-cell and doesn't require grapheme segmentation.
-  if (hasAsciiFastPath(provider) && isAscii(text)) return text.length;
+  if (hasAsciiFastPath(provider) && isAsciiText) return text.length;
+
   const useCache = canUseDefaultTextCache(provider);
   if (useCache && renderPassDepth > 0) {
     const cached = renderPassTextWidthCache.get(text);
-    if (cached != null) return cached;
+    if (cached != null) {
+      textInstr.recordRenderPassCacheHit();
+      return cached;
+    }
+    textInstr.recordRenderPassCacheMiss();
   }
   if (useCache) {
     const cached = textWidthCacheGet(text);
-    if (cached != null) return cached;
+    if (cached != null) {
+      textInstr.recordTextWidthCacheHit();
+      return cached;
+    }
+    textInstr.recordTextWidthCacheMiss();
   }
   let cells = 0;
   forEachGrapheme(text, (g) => {
@@ -437,8 +451,10 @@ function textWidthCacheGet(text: string): number | null {
 }
 
 function textWidthCacheSet(text: string, cells: number): void {
+  textInstr.recordTextWidthCacheSet();
   textWidthCache.set(text, cells);
   if (textWidthCache.size > MAX_TEXT_WIDTH_CACHE) {
+    textInstr.recordTextWidthCacheEvict();
     const firstKey = textWidthCache.keys().next().value as string | undefined;
     if (firstKey != null) textWidthCache.delete(firstKey);
   }
@@ -457,12 +473,18 @@ export function wrapByCells(
   width: number,
   provider: WidthProvider = currentTextWidthProvider(),
 ): readonly string[] {
+  textInstr.recordWrapByCellsCall();
+
   width = Math.max(1, Math.floor(width));
   const useCache = canUseDefaultTextCache(provider);
   const bucket = useCache ? getWrapBucket(width) : null;
   if (text && hasAsciiFastPath(provider) && isAscii(text)) {
     const cached = bucket?.get(text);
-    if (cached) return cached;
+    if (cached) {
+      textInstr.recordWrapCacheHit();
+      return cached;
+    }
+    textInstr.recordWrapCacheMiss();
 
     const out: string[] = [];
     for (const rawLine of text.replace(/\r/g, "").split("\n")) {
@@ -474,14 +496,22 @@ export function wrapByCells(
     }
 
     if (bucket) {
-      if (bucket.size >= MAX_WRAP_CACHE_PER_WIDTH) bucket.clear();
+      if (bucket.size >= MAX_WRAP_CACHE_PER_WIDTH) {
+        textInstr.recordWrapCacheClear();
+        bucket.clear();
+      }
+      textInstr.recordWrapCacheSet();
       bucket.set(text, out);
     }
     return out;
   }
 
   const cached = bucket?.get(text);
-  if (cached) return cached;
+  if (cached) {
+    textInstr.recordWrapCacheHit();
+    return cached;
+  }
+  textInstr.recordWrapCacheMiss();
 
   const out: string[] = [];
   for (const rawLine of text.replace(/\r/g, "").split("\n")) {
@@ -540,7 +570,11 @@ export function wrapByCells(
   }
   const res = out.length ? out : [""];
   if (bucket) {
-    if (bucket.size >= MAX_WRAP_CACHE_PER_WIDTH) bucket.clear();
+    if (bucket.size >= MAX_WRAP_CACHE_PER_WIDTH) {
+      textInstr.recordWrapCacheClear();
+      bucket.clear();
+    }
+    textInstr.recordWrapCacheSet();
     bucket.set(text, res);
   }
   return res;
