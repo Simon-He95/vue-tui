@@ -109,6 +109,9 @@ function generateTypeScript(
  * DO NOT EDIT MANUALLY - regenerate with: pnpm run unicode:eaw:generate
  */
 
+export const EAW_UNICODE_VERSION = "17.0.0";
+export const EAW_SOURCE_SHA256 = "${sha256}";
+
 `;
 
   const wideRanges = `export const fullWidthRanges: Array<[number, number]> = [
