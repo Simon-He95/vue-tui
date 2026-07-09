@@ -457,6 +457,7 @@ describe("package exports", () => {
       "createIterm2InlineImageSequence",
       "createKittyDeleteGraphicsSequence",
       "createKittyGraphicsSequence",
+      "createKittyPlacementSequence",
       "createMarkdownBlockSource",
       "createPngTerminalGraphicRenderer",
       "createTLogDensityBucketsFromMarkers",

@@ -90,8 +90,7 @@ function readPngDimensions(base64: string): Readonly<{ width: number; height: nu
     return null;
   }
   const width = ((bytes[16]! << 24) | (bytes[17]! << 16) | (bytes[18]! << 8) | bytes[19]!) >>> 0;
-  const height =
-    ((bytes[20]! << 24) | (bytes[21]! << 16) | (bytes[22]! << 8) | bytes[23]!) >>> 0;
+  const height = ((bytes[20]! << 24) | (bytes[21]! << 16) | (bytes[22]! << 8) | bytes[23]!) >>> 0;
   return width > 0 && height > 0 ? { width, height } : null;
 }
 
@@ -187,12 +186,7 @@ function resolveKittyViewportPlacement(
   const offsetY = Math.max(0, rect.y - full.y);
   const visibleW = Math.max(0, Math.min(rect.w, full.w - offsetX));
   const visibleH = Math.max(0, Math.min(rect.h, full.h - offsetY));
-  if (
-    offsetX <= 0 &&
-    offsetY <= 0 &&
-    visibleW >= full.w &&
-    visibleH >= full.h
-  ) {
+  if (offsetX <= 0 && offsetY <= 0 && visibleW >= full.w && visibleH >= full.h) {
     return { columns, rows };
   }
 

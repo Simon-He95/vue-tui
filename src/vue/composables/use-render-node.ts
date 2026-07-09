@@ -109,25 +109,60 @@ export function useRenderNode(getOptions: () => RenderNodeOptions): {
 
   const options = computed(() => withTextWidthProvider(widthProvider, getOptions));
 
-  const stop = watchEffect(() => {
-    const opt = options.value;
-    void opt.deps;
-    const stack = opt.stack ?? parentStack.value;
-    const nextPlane = plane.value;
-    const hasRect = Object.prototype.hasOwnProperty.call(opt, "rect");
-    const nextRect = hasRect ? (opt.rect ?? null) : null;
-    const nextZIndex = opt.zIndex ?? 0;
-    const hasDeps = Object.prototype.hasOwnProperty.call(opt, "deps");
-    if (!stack) return;
-    if (!id.value) {
-      const node: RenderNode = render.register({
+  const stop = watchEffect(
+    () => {
+      const opt = options.value;
+      void opt.deps;
+      const stack = opt.stack ?? parentStack.value;
+      const nextPlane = plane.value;
+      const hasRect = Object.prototype.hasOwnProperty.call(opt, "rect");
+      const nextRect = hasRect ? (opt.rect ?? null) : null;
+      const nextZIndex = opt.zIndex ?? 0;
+      const hasDeps = Object.prototype.hasOwnProperty.call(opt, "deps");
+      if (!stack) return;
+      if (!id.value) {
+        const node: RenderNode = render.register({
+          stack,
+          zIndex: nextZIndex,
+          rect: hasRect ? nextRect : undefined,
+          plane: nextPlane,
+          paint: opt.paint,
+        });
+        id.value = node.id;
+        lastPlane.value = nextPlane;
+        lastStack = stack;
+        lastZIndex = nextZIndex;
+        lastHasRect = hasRect;
+        lastRect = nextRect;
+        lastHasDeps = hasDeps;
+        lastDeps = opt.deps;
+        requestBatchedInvalidate(scheduler, nextPlane, opt.priority ?? "normal");
+        return;
+      }
+      const prevPlane = lastPlane.value;
+      if (
+        hasDeps &&
+        lastHasDeps &&
+        !opt.dirtyRowsHint?.length &&
+        lastStack === stack &&
+        lastZIndex === nextZIndex &&
+        prevPlane === nextPlane &&
+        lastHasRect === hasRect &&
+        (!hasRect || sameRenderRect(lastRect, nextRect)) &&
+        sameDeps(lastDeps, opt.deps)
+      ) {
+        return;
+      }
+
+      const updatePayload: Parameters<typeof render.update>[1] = {
         stack,
         zIndex: nextZIndex,
-        rect: hasRect ? nextRect : undefined,
+        dirtyRowsHint: opt.dirtyRowsHint,
         plane: nextPlane,
         paint: opt.paint,
-      });
-      id.value = node.id;
+      };
+      if (hasRect) updatePayload.rect = nextRect;
+      render.update(id.value, updatePayload);
       lastPlane.value = nextPlane;
       lastStack = stack;
       lastZIndex = nextZIndex;
@@ -135,44 +170,12 @@ export function useRenderNode(getOptions: () => RenderNodeOptions): {
       lastRect = nextRect;
       lastHasDeps = hasDeps;
       lastDeps = opt.deps;
-      requestBatchedInvalidate(scheduler, nextPlane, opt.priority ?? "normal");
-      return;
-    }
-    const prevPlane = lastPlane.value;
-    if (
-      hasDeps &&
-      lastHasDeps &&
-      !opt.dirtyRowsHint?.length &&
-      lastStack === stack &&
-      lastZIndex === nextZIndex &&
-      prevPlane === nextPlane &&
-      lastHasRect === hasRect &&
-      (!hasRect || sameRenderRect(lastRect, nextRect)) &&
-      sameDeps(lastDeps, opt.deps)
-    ) {
-      return;
-    }
-
-    const updatePayload: Parameters<typeof render.update>[1] = {
-      stack,
-      zIndex: nextZIndex,
-      dirtyRowsHint: opt.dirtyRowsHint,
-      plane: nextPlane,
-      paint: opt.paint,
-    };
-    if (hasRect) updatePayload.rect = nextRect;
-    render.update(id.value, updatePayload);
-    lastPlane.value = nextPlane;
-    lastStack = stack;
-    lastZIndex = nextZIndex;
-    lastHasRect = hasRect;
-    lastRect = nextRect;
-    lastHasDeps = hasDeps;
-    lastDeps = opt.deps;
-    const priority = opt.priority ?? "normal";
-    requestBatchedInvalidate(scheduler, prevPlane, priority);
-    if (prevPlane !== nextPlane) requestBatchedInvalidate(scheduler, nextPlane, priority);
-  }, { flush: "sync" });
+      const priority = opt.priority ?? "normal";
+      requestBatchedInvalidate(scheduler, prevPlane, priority);
+      if (prevPlane !== nextPlane) requestBatchedInvalidate(scheduler, nextPlane, priority);
+    },
+    { flush: "sync" },
+  );
 
   onBeforeUnmount(() => {
     stop();

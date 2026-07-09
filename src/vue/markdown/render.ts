@@ -143,13 +143,13 @@ function queueMarkdownImageGraphic(
   const placementId = stableTerminalGraphicNumericId(`placement:${id}`);
   const sequence =
     protocol === "kitty"
-        ? createKittyGraphicsSequence(segment.base64, {
-            imageId,
-            placementId,
-            columns: width,
-            rows: height,
-            zIndex: -1,
-          })
+      ? createKittyGraphicsSequence(segment.base64, {
+          imageId,
+          placementId,
+          columns: width,
+          rows: height,
+          zIndex: -1,
+        })
       : protocol === "iterm2"
         ? createIterm2InlineImageSequence(segment.base64, {
             width,
@@ -327,16 +327,11 @@ export function paintMarkdownVisualRow(
         !graphicCovered &&
         visibleStart === segmentStart &&
         visibleCells > 0 &&
-        queueMarkdownImageGraphic(
-          terminal,
-          segment.graphic,
-          `${row.key}:${segmentIndex}`,
-          {
-            x: cellX,
-            y: options.y,
-            w: visibleCells,
-          },
-        );
+        queueMarkdownImageGraphic(terminal, segment.graphic, `${row.key}:${segmentIndex}`, {
+          x: cellX,
+          y: options.y,
+          w: visibleCells,
+        });
       const graphicAvailable =
         queueResult || canAttemptMarkdownImageGraphic(terminal, segment.graphic);
       const queuedGraphic = queueResult === "queued";

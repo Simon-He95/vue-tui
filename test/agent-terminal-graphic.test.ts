@@ -4701,8 +4701,9 @@ describe("TAgentTerminalGraphic", () => {
     finish();
 
     await expect(first).rejects.toMatchObject({ name: "AbortError" });
-    await expect(renderer("image.png", makeContext(new AbortController().signal))).resolves
-      .toMatchObject({ type: "sequence", protocol: "kitty" });
+    await expect(
+      renderer("image.png", makeContext(new AbortController().signal)),
+    ).resolves.toMatchObject({ type: "sequence", protocol: "kitty" });
     expect(toPngBase64).toHaveBeenCalledTimes(1);
     expect(queue.stats().cacheEntries).toBe(1);
   });

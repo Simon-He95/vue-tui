@@ -374,6 +374,11 @@ export const TerminalProvider = defineComponent({
       scope.run(() => {
         const el = containerRef.value;
         if (!el) return;
+        const imeInput = imeRef.value;
+        if (imeInput) {
+          imeInput.style.left = "0px";
+          imeInput.style.top = "0px";
+        }
 
         const r = createDomRenderer(terminal, el, props.domRendererOptions ?? {});
         renderer.value = r;
@@ -1519,8 +1524,6 @@ export const TerminalProvider = defineComponent({
               // Mimics xterm-like hidden textarea behavior.
               // Use position: fixed so the textarea is not clipped by overflow:hidden on parent elements.
               position: "fixed",
-              left: "0px",
-              top: "0px",
               // Size will be set by updateImePosition to match cell dimensions
               width: debugIme ? "240px" : "10px",
               height: debugIme ? "90px" : "20px",

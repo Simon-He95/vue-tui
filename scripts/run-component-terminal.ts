@@ -690,6 +690,7 @@ async function writeCapturePngShots(): Promise<void> {
   }
 
   try {
+    mkdirSync(captureOutDir, { recursive: true });
     const page = await browser.newPage();
     const svgFiles = readdirSync(captureOutDir)
       .filter((name) => name.endsWith(".svg"))

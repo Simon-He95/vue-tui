@@ -797,7 +797,9 @@ export function createStdoutRenderer(
     capabilities: graphicsCapabilities,
     isActive(id) {
       if (pendingGraphicClears.has(id) || pendingGraphics.has(`${id}:clear`)) return false;
-      return activeGraphics.has(id) || retainedGraphics.has(id) || pendingGraphics.has(`${id}:draw`);
+      return (
+        activeGraphics.has(id) || retainedGraphics.has(id) || pendingGraphics.has(`${id}:draw`)
+      );
     },
     queue(payload) {
       if (disposed) return false;
@@ -2877,7 +2879,9 @@ export function createStdoutRenderer(
       return merged;
     };
 
-    const overlayVisibleSpansForRows = (rows: readonly number[]): Map<number, TextPreserveSpan[]> => {
+    const overlayVisibleSpansForRows = (
+      rows: readonly number[],
+    ): Map<number, TextPreserveSpan[]> => {
       const overlay = getPlaneTerminal(terminal, "overlay");
       const result = new Map<number, TextPreserveSpan[]>();
       for (const y of rows) {
@@ -2981,9 +2985,7 @@ export function createStdoutRenderer(
     // Ghostty can expose partial text/graphics frames during fast scroll unless
     // terminal-graphics frames are submitted atomically.
     const frameHasTerminalGraphics =
-      activeGraphics.size > 0 ||
-      graphicsClearsToRender.length > 0 ||
-      graphicsToRender.length > 0;
+      activeGraphics.size > 0 || graphicsClearsToRender.length > 0 || graphicsToRender.length > 0;
     const useFrameSyncOutput = useSyncOutput || (isGhostty && frameHasTerminalGraphics);
     const frameParts: string[] = [];
     frameParts.push(useFrameSyncOutput ? SYNC_START : "");
@@ -3196,7 +3198,8 @@ export function createStdoutRenderer(
         for (const cut of bypass) {
           if (cut.end <= cursor) continue;
           if (cut.start >= span.end) break;
-          if (cursor < cut.start) result.push({ start: cursor, end: Math.min(cut.start, span.end) });
+          if (cursor < cut.start)
+            result.push({ start: cursor, end: Math.min(cut.start, span.end) });
           cursor = Math.max(cursor, cut.end);
           if (cursor >= span.end) break;
         }
@@ -3205,10 +3208,7 @@ export function createStdoutRenderer(
       return result;
     };
 
-    const preserveFingerprintSpans = (
-      y: number,
-      spans: readonly TextPreserveSpan[],
-    ): void => {
+    const preserveFingerprintSpans = (y: number, spans: readonly TextPreserveSpan[]): void => {
       if (!fpPrevValid || y < 0 || y >= fpRows || currentFP.length !== prevFP.length) return;
       const base = y * fpCols;
       for (const span of spans) {
@@ -4056,11 +4056,7 @@ export function createStdoutRenderer(
             ) || wroteClear;
           if (wroteClear) terminalGraphicsClears++;
           if (active && payload.retainOnClear) {
-            retainTerminalGraphic(
-              payload.id,
-              active,
-              nextActiveGraphicSignatures.get(payload.id),
-            );
+            retainTerminalGraphic(payload.id, active, nextActiveGraphicSignatures.get(payload.id));
           } else {
             retainedGraphics.delete(payload.id);
           }

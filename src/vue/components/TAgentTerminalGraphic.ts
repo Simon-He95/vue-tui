@@ -668,7 +668,8 @@ export const TAgentTerminalGraphic = defineComponent({
       const rawClear =
         typeof maybeRaw.clearSequence === "string" ? maybeRaw.clearSequence : undefined;
       const clearSequence =
-        rawClear && isSafeComponentClearSequence(rawClear, protocol, imageId.value, placementId.value)
+        rawClear &&
+        isSafeComponentClearSequence(rawClear, protocol, imageId.value, placementId.value)
           ? rawClear
           : undefined;
       const rawResize =
@@ -956,10 +957,10 @@ export const TAgentTerminalGraphic = defineComponent({
       const output = graphicsOutput();
       return Boolean(
         status.value === "loading" &&
-          !graphic.value &&
-          output &&
-          typeof output.isActive === "function" &&
-          output.isActive(rawId),
+        !graphic.value &&
+        output &&
+        typeof output.isActive === "function" &&
+        output.isActive(rawId),
       );
     }
 
@@ -1028,9 +1029,9 @@ export const TAgentTerminalGraphic = defineComponent({
       const id = renderNodeId.value;
       return Boolean(
         id != null &&
-          render.isRectCoveredByHigherNode(id, rect, {
-            ignoreSamePlane: props.ignoreSamePlaneRawCoverage,
-          }),
+        render.isRectCoveredByHigherNode(id, rect, {
+          ignoreSamePlane: props.ignoreSamePlaneRawCoverage,
+        }),
       );
     }
 
@@ -1477,8 +1478,7 @@ export const TAgentTerminalGraphic = defineComponent({
               allowTextOverlay = retainedRawCoveredByHigherRenderNode(r);
               forceActiveRawRedraw =
                 preserveActiveRawGraphic &&
-                (previous.activityVersion !== graphicsActivityVersion.value ||
-                  allowTextOverlay);
+                (previous.activityVersion !== graphicsActivityVersion.value || allowTextOverlay);
             }
           }
           const preserveActiveRawGraphicForPaint = preserveActiveRawGraphic;
@@ -1486,9 +1486,10 @@ export const TAgentTerminalGraphic = defineComponent({
           const clearingRawGraphic =
             rawClearPendingRepaint.value != null ||
             (lastDrawnGraphic.value != null && !preserveActiveRawGraphicForPaint);
-          const clearOwnedRegion = preserveActiveRawGraphicForPaint || retainedActiveRawGraphic
-            ? false
-            : props.clear || clearingRawGraphic || Boolean(rawCanQueueForPaint);
+          const clearOwnedRegion =
+            preserveActiveRawGraphicForPaint || retainedActiveRawGraphic
+              ? false
+              : props.clear || clearingRawGraphic || Boolean(rawCanQueueForPaint);
           const blank = clearOwnedRegion ? spaces(r.w) : "";
 
           const paintRow = (y: number) => {

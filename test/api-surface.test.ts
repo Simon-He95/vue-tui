@@ -340,6 +340,7 @@ describe("public API surface", () => {
         "createIterm2InlineImageSequence",
         "createKittyDeleteGraphicsSequence",
         "createKittyGraphicsSequence",
+        "createKittyPlacementSequence",
         "createMarkdownBlockSource",
         "createPngTerminalGraphicRenderer",
         "createTLogDensityBucketsFromMarkers",
