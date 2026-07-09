@@ -10,8 +10,7 @@
  */
 
 export const EAW_UNICODE_VERSION = "17.0.0";
-export const EAW_SOURCE_SHA256 =
-  "ea7ce50f3444a050333448dffef1cadd9325af55cbb764b4a2280faf52170a33";
+export const EAW_SOURCE_SHA256 = "ea7ce50f3444a050333448dffef1cadd9325af55cbb764b4a2280faf52170a33";
 
 export const fullWidthRanges: Array<[number, number]> = [
   [0x1100, 0x115f],

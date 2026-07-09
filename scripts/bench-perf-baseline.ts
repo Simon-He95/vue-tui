@@ -18,9 +18,14 @@ import * as assert from "node:assert";
 import { execSync } from "node:child_process";
 
 // Import functions to benchmark
-import { EAW_UNICODE_VERSION } from "../src/core/buffer/eaw-ranges-unicode-17.js";
+import { EAW_UNICODE_VERSION, EAW_SOURCE_SHA256 } from "../src/core/buffer/eaw-ranges-unicode-17.js";
 import { charCellWidth } from "../src/core/buffer/width.js";
-import { textCellWidth, sliceByCells, wrapByCells, clearTextCaches } from "../src/vue/utils/text.js";
+import {
+  textCellWidth,
+  sliceByCells,
+  wrapByCells,
+  clearTextCaches,
+} from "../src/vue/utils/text.js";
 import { createTerminal } from "../src/core/index.js";
 
 // Blackhole sink to prevent V8 optimization
@@ -63,8 +68,10 @@ interface BenchmarkResult {
 interface BaselineReport {
   schemaVersion: number;
   benchmarkSuite: string;
+  mode: "smoke" | "full";
   commit: string;
   eawUnicodeVersion: string;
+  eawSourceSha256: string;
   runtimeUnicodeVersion: string | undefined;
   icu: string | undefined;
   node: string;
@@ -444,15 +451,14 @@ async function main() {
     },
   );
 
-  
   // Text scenarios: Clear cache at scenario boundaries to prevent cross-contamination
   // Hot cache scenarios will rebuild cache during warmup
   // Unique scenarios test cache-miss path with each new input
   clearTextCaches();
 
-// Scenario 7: textCellWidth unique ASCII (simulates unique log lines)
+  // Scenario 7: textCellWidth unique ASCII (simulates unique log lines)
   results["textCellWidth_ascii_unique"] = benchmark(
-    "textCellWidth(ASCII unique, cache-miss path)",
+    "textCellWidth(ASCII unique, fast path)",
     () => {
       consumeNumber(textCellWidth(asciiCorpus[asciiIdx++]!));
     },
@@ -578,10 +584,9 @@ async function main() {
     },
   );
 
-  
   clearTextCaches();
 
-// Scenario 15: wrapByCells CJK (hot cache)
+  // Scenario 15: wrapByCells CJK (hot cache)
   results["wrapByCells_cjk_long_hot"] = benchmark(
     "wrapByCells(CJK 100, hot cache)",
     () => {
@@ -666,8 +671,10 @@ async function main() {
   const report: BaselineReport = {
     schemaVersion: 1,
     benchmarkSuite: "unicode-width-text-v1",
+    mode: isSmoke ? "smoke" : "full",
     commit: getCommitHash(),
     eawUnicodeVersion: EAW_UNICODE_VERSION,
+    eawSourceSha256: EAW_SOURCE_SHA256,
     runtimeUnicodeVersion: process.versions.unicode,
     icu: process.versions.icu,
     node: process.version,
