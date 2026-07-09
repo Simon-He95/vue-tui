@@ -524,6 +524,7 @@ export function createStdoutRenderer(
   type RetainedTerminalGraphic = Readonly<{
     active: ActiveTerminalGraphic;
     signature: string;
+    autoRedrawOnResize: boolean;
   }>;
 
   const graphicsCapabilities = resolveTerminalGraphicsCapabilities(options, env, outputIsTTY);
@@ -610,6 +611,7 @@ export function createStdoutRenderer(
     id: string,
     active: ActiveTerminalGraphic,
     signature: string | undefined,
+    options: Readonly<{ autoRedrawOnResize?: boolean }> = {},
   ): void {
     if (
       !signature ||
@@ -621,7 +623,11 @@ export function createStdoutRenderer(
       retainedGraphics.delete(id);
       return;
     }
-    retainedGraphics.set(id, { active, signature });
+    retainedGraphics.set(id, {
+      active,
+      signature,
+      autoRedrawOnResize: Boolean(options.autoRedrawOnResize),
+    });
   }
   function kittyPlacementKey(sequence: string | undefined): string | null {
     if (!sequence) return null;
@@ -753,7 +759,7 @@ export function createStdoutRenderer(
       }
     }
     for (const [id, retained] of retainedGraphics) {
-      if (activeGraphics.has(id)) continue;
+      if (activeGraphics.has(id) || !retained.autoRedrawOnResize) continue;
 
       const { active, signature } = retained;
       if (!anchoredGraphicRectInViewport(active, size)) continue;
@@ -4087,6 +4093,7 @@ export function createStdoutRenderer(
               payload.id,
               previous,
               nextActiveGraphicSignatures.get(payload.id),
+              { autoRedrawOnResize: true },
             );
             nextActiveGraphics.delete(payload.id);
             nextActiveGraphicSignatures.delete(payload.id);

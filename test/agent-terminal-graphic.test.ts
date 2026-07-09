@@ -1394,6 +1394,109 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
+  it("does not redraw a retained terminal graphic after its owner unmounts on resize", async () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: false,
+      columns: 30,
+      rows: 8,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const show = ref(true);
+    let imageSequence = "";
+    let placementSequence = "";
+    let clearSequence = "";
+    const renderer: TAgentTerminalGraphicRenderer = vi.fn((_content, context) => {
+      imageSequence = createKittyGraphicsSequence("QUJD", {
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      placementSequence = createKittyPlacementSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+        columns: 8,
+        rows: 2,
+      });
+      clearSequence = createKittyDeleteGraphicsSequence({
+        imageId: context.imageId,
+        placementId: context.placementId,
+      });
+      return {
+        type: "sequence" as const,
+        protocol: "kitty" as const,
+        sequence: imageSequence,
+        resizeSequence: placementSequence,
+        clearSequence,
+        fallback: "fallback",
+        cols: 8,
+        rows: 2,
+      };
+    });
+    const App = defineComponent({
+      setup() {
+        return () =>
+          show.value
+            ? h(TAgentTerminalGraphic, {
+                x: 2,
+                y: 1,
+                w: 8,
+                h: 2,
+                content: "image.png",
+                fallback: "fallback",
+                cacheKey: "retained-resize-owner",
+                renderer,
+              })
+            : null;
+      },
+    });
+
+    const app = createTerminalApp({ cols: 30, rows: 8, component: App });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+          terminalGraphics: {
+            protocol: "kitty",
+            force: true,
+          },
+        }),
+    );
+
+    app.mount();
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(imageSequence);
+
+    writes.length = 0;
+    show.value = false;
+    await settle(app);
+    flushStdout(stdout);
+    expect(writes.join("")).toContain(clearSequence);
+
+    writes.length = 0;
+    app.terminal.resize(40, 10);
+    flushStdout(stdout);
+    expect(writes.join("")).not.toContain(imageSequence);
+    expect(writes.join("")).not.toContain(placementSequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
   it("unregisters terminal graphics output without throwing when dispose clear write fails", () => {
     const writes: string[] = [];
     const sequence = createKittyGraphicsSequence("QUJD");
