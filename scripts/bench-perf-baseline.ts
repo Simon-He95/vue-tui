@@ -228,6 +228,18 @@ function benchmark(
 }
 
 /**
+ * Parse and validate positive integer
+ */
+function parsePositiveInt(value: string | undefined, name: string): number | null {
+  if (value == null) return null;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n <= 0) {
+    throw new Error(`${name} must be a positive integer, got ${JSON.stringify(value)}`);
+  }
+  return n;
+}
+
+/**
  * Parse command line arguments
  */
 function parseArgs() {
@@ -236,14 +248,14 @@ function parseArgs() {
   const warmupIndex = args.indexOf("--warmup");
   const samplesIndex = args.indexOf("--samples");
 
-  const outputFile = outputIndex >= 0 ? args[outputIndex + 1] : null;
-  const warmupArg = warmupIndex >= 0 ? parseInt(args[warmupIndex + 1] || "", 10) : null;
-  const samplesArg = samplesIndex >= 0 ? parseInt(args[samplesIndex + 1] || "", 10) : null;
+  const outputFile = outputIndex >= 0 ? args[outputIndex + 1] || null : null;
+  const warmupArg = warmupIndex >= 0 ? parsePositiveInt(args[warmupIndex + 1], "--warmup") : null;
+  const samplesArg = samplesIndex >= 0 ? parsePositiveInt(args[samplesIndex + 1], "--samples") : null;
 
   // Environment variables for smoke mode
   const isSmoke = process.env.BENCH_SMOKE === "1";
-  const envWarmup = process.env.BENCH_WARMUP ? parseInt(process.env.BENCH_WARMUP, 10) : null;
-  const envSamples = process.env.BENCH_SAMPLES ? parseInt(process.env.BENCH_SAMPLES, 10) : null;
+  const envWarmup = parsePositiveInt(process.env.BENCH_WARMUP, "BENCH_WARMUP");
+  const envSamples = parsePositiveInt(process.env.BENCH_SAMPLES, "BENCH_SAMPLES");
 
   let warmup = 100;
   let samples = 1000;
@@ -252,11 +264,11 @@ function parseArgs() {
     warmup = 1;
     samples = 3;
   } else {
-    if (warmupArg && !isNaN(warmupArg)) warmup = warmupArg;
-    else if (envWarmup && !isNaN(envWarmup)) warmup = envWarmup;
+    if (warmupArg != null) warmup = warmupArg;
+    else if (envWarmup != null) warmup = envWarmup;
 
-    if (samplesArg && !isNaN(samplesArg)) samples = samplesArg;
-    else if (envSamples && !isNaN(envSamples)) samples = envSamples;
+    if (samplesArg != null) samples = samplesArg;
+    else if (envSamples != null) samples = envSamples;
   }
 
   return { outputFile, warmup, samples, isSmoke };
@@ -288,11 +300,18 @@ async function main() {
   const textIter = isSmoke ? 1 : 100;
   const fastIter = isSmoke ? 1 : 10;
 
-  // Pre-generate corpus for unique text scenarios
-  const cjkCorpus = Array.from({ length: 2048 }, (_, i) => `日志${i}：${"中文".repeat(50)}`);
-  const asciiCorpus = Array.from({ length: 2048 }, (_, i) => `Log ${i}: ${"text ".repeat(20)}`);
+  // Pre-generate corpus for unique text scenarios (true no-cache)
+  // Size = total operations needed (warmup + samples) * iterations + safety margin
+  const uniqueOps = (warmup + samples) * fastIter + 100;
+  
+  const cjkCorpus = Array.from({ length: uniqueOps }, (_, i) => `日志${i}：${"中文".repeat(50)}`);
+  const asciiCorpus = Array.from({ length: uniqueOps }, (_, i) => `Log ${i}: ${"text ".repeat(20)}`);
+  const wrapCorpus = Array.from({ length: uniqueOps }, (_, i) => `包装文本${i}${"测试".repeat(30)}`);
   let cjkIdx = 0;
   let asciiIdx = 0;
+  let wrapIdx = 0;
+  
+  console.log(`Generated unique corpus: ${uniqueOps} entries per type\n`);
 
   // Scenario 1: charCellWidth ASCII
   results["charCellWidth_ascii"] = benchmark(
@@ -392,7 +411,7 @@ async function main() {
   results["textCellWidth_ascii_unique"] = benchmark(
     "textCellWidth(ASCII unique, no cache)",
     () => {
-      consumeNumber(textCellWidth(asciiCorpus[asciiIdx++ & 2047]!));
+      consumeNumber(textCellWidth(asciiCorpus[asciiIdx++]!));
     },
     {
       warmup,
@@ -421,7 +440,7 @@ async function main() {
   results["textCellWidth_cjk_unique"] = benchmark(
     "textCellWidth(CJK unique, no cache)",
     () => {
-      consumeNumber(textCellWidth(cjkCorpus[cjkIdx++ & 2047]!));
+      consumeNumber(textCellWidth(cjkCorpus[cjkIdx++]!));
     },
     {
       warmup,
@@ -477,12 +496,11 @@ async function main() {
     },
   );
 
-  // Scenario 13: wrapByCells unique CJK (no cache)
-  let wrapIdx = 0;
+  // Scenario 13: wrapByCells unique text (no cache)
   results["wrapByCells_cjk_unique"] = benchmark(
-    "wrapByCells(CJK unique, no cache)",
+    "wrapByCells(unique text, no cache)",
     () => {
-      consumeArray(wrapByCells(cjkCorpus[wrapIdx++ & 2047]!, 40));
+      consumeArray(wrapByCells(wrapCorpus[wrapIdx++]!, 40));
     },
     {
       warmup,

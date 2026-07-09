@@ -40,7 +40,7 @@ pnpm run bench:perf-baseline:json
 
 ### Terminal Integration (2 scenarios)
 14. **terminal_write_supplementary_cjk_hot** - Write to same position (hot Cell cache)
-15. **terminal_write_supplementary_cjk_unique_rows** - Write to different rows
+15. **terminal_write_supplementary_cjk_cycling_rows** - Write to different rows
 
 ## Key Design Decisions
 

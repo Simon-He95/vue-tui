@@ -269,7 +269,7 @@
     "publish:npm:patch": "pnpm exec bumpp patch --yes --no-commit --no-tag --no-push && (npm whoami >/dev/null 2>&1 || npm login) && VUE_TUI_ALLOW_DIRECT_PUBLISH=1 pnpm publish --access public --no-git-checks",
     "release:local": "pnpm run release:dry-run && VUE_TUI_ALLOW_DIRECT_PUBLISH=1 npm publish .release/*.tgz --access public --tag rc",
     "release:local:dry-run": "pnpm run release:dry-run && VUE_TUI_ALLOW_DIRECT_PUBLISH=1 npm publish .release/*.tgz --access public --dry-run --tag rc",
-    "release:bench": "pnpm run bench:baseline && FRAMES=2000 pnpm run bench:stdout-column-diff",
+    "release:bench": "pnpm run bench:baseline && pnpm run bench:perf-baseline:smoke && FRAMES=2000 pnpm run bench:stdout-column-diff",
     "release:check": "pnpm run check:hidden-unicode && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run test:coverage:core && pnpm run build:checked && pnpm run test:package-exports:dist && pnpm run check:dist-dts && pnpm run test:types:dist && pnpm run test:browser-vite-import:dist && pnpm run docs:build && pnpm run api:diff && git diff --exit-code -- docs/generated",
     "release:dry-run": "pnpm run release:check && pnpm run release:bench && pnpm run release:smoke && pnpm run release:pack-smoke",
     "release:pack": "rimraf .release && pnpm run build:checked && pnpm pack --pack-destination .release",
