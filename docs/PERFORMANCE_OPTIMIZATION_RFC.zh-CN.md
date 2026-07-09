@@ -3,13 +3,13 @@
 **文档类型**: RFC / 草案  
 **状态**: 待实施  
 **创建日期**: 2026-07-09  
-**审查团队**: 7 位专业 agents 深度分析
+**修订版本**: v3 (基于三轮 review 反馈)
 
 ---
 
 ## 📋 执行摘要
 
-本 RFC 基于 7 位专业 agents 对 vue-tui 代码库的深度审查，提出了性能优化方向和实施建议。
+本 RFC 基于代码审查和多轮 review 反馈，提出 vue-tui 性能优化方向和实施建议。
 
 **重要说明**:
 
@@ -19,47 +19,54 @@
 
 ---
 
-## 🎯 审查发现
-
-### 审查范围
-
-- **代码量**: 7328 行核心代码
-- **审查时长**: 4+ 小时
-- **审查团队**:
-  - Marcus & Elena: 性能分析
-  - Alex: 边界情况
-  - Victor: 风险评估
-  - Chen: 实施难度
-  - Sophia: 虚拟滚动
-  - Maya: 可观测性
-
----
-
 ## 🔍 发现的潜在问题
 
 ### 问题 #1: 补充平面 CJK 宽度覆盖不足
 
-**修正后的诊断**（基于 review 反馈）:
+**根因诊断**:
 
-原诊断错误地认为 `isAscii()` 会误判代理对。实际上代理对的 UTF-16 code unit (0xD800-0xDFFF) 一定 > 0x7F，不会被当作 ASCII。
-
-**真正的问题**:
-
-`charCellWidth` 的 fullwidth 范围主要覆盖 BMP 内的 CJK 区间，对补充平面的 CJK 扩展字符（如 `𠮷`、CJK Extension B/C 等）可能计算不准确。
+当前 `isFullWidthCodePoint` 的 fast reject:
 
 ```typescript
 // src/core/buffer/width.ts
-// 当前 isFullWidthCodePoint 使用快速拒绝:
-if (codePoint > 0xffe6) return false;
-// 这会排除很多补充平面 CJK (0x20000-0x3FFFD)
+if (codePoint < 0x1100 || codePoint > 0xffe6) return false;
 ```
+
+这会将 `𠮷` (U+20BB7) 等补充平面 CJK 扩展字符直接排除，导致宽度计算错误。
 
 **建议方向**:
 
-1. 引入/生成 Unicode East Asian Width 表
-2. 维护补充平面 CJK 区间 (0x20000-0x3FFFD)
-3. 确保 emoji、VS16、keycap、ZWJ grapheme 继续走 grapheme-safe 路径
-4. 在现有 `unicode-width.test.ts` 基础上补充测试用例
+使用 Unicode `EastAsianWidth.txt` 生成/维护 `W/F` 范围表，并保留当前对 emoji、VS16、ambiguous、box drawing 等 terminal-specific tailoring。
+
+参考: [Unicode Annex #11: East Asian Width](https://www.unicode.org/reports/tr11/)
+
+**测试建议**:
+
+```typescript
+// CJK Extensions 基本测试
+expect(charCellWidth("𠮷")).toBe(2); // U+20BB7, Ext B
+expect(textCellWidth("𠮷x")).toBe(3);
+expect(sliceByCells("𠮷x", 1)).toBe("");
+expect(sliceByCells("𠮷x", 2)).toBe("𠮷");
+
+// 终端集成测试
+terminal.write("𠮷x", { x: 0, y: 0 });
+expect(terminal.getCell(0, 0).ch).toBe("𠮷");
+expect(terminal.getCell(0, 0).width).toBe(2);
+expect(terminal.getCell(1, 0).continuation).toBe(true);
+expect(terminal.getCell(2, 0).ch).toBe("x");
+
+// 反例：非 CJK 补充平面字符
+expect(charCellWidth("𝄞")).toBe(1); // U+1D11E musical symbol
+
+// 其他 CJK 扩展区代表字符
+expect(charCellWidth("\u{2A700}")).toBe(2); // Ext C
+expect(charCellWidth("\u{2B740}")).toBe(2); // Ext D
+expect(charCellWidth("\u{2CEB0}")).toBe(2); // Ext E
+expect(charCellWidth("\u{2EBF0}")).toBe(2); // Ext F
+expect(charCellWidth("\u{30000}")).toBe(2); // Ext G
+expect(charCellWidth("\u{31350}")).toBe(2); // Ext H
+```
 
 **优先级**: P1 (功能正确性)  
 **预期难度**: 中等  
@@ -67,7 +74,7 @@ if (codePoint > 0xffe6) return false;
 
 ---
 
-### 问题 #2: 缓存策略可能的改进空间（需数据验证）
+### 问题 #2: Cell 缓存策略可能的改进空间
 
 **当前状态**:
 
@@ -76,26 +83,29 @@ if (codePoint > 0xffe6) return false;
 const cellCacheWidth1 = new WeakMap<Style, Map<string, Cell>>();
 const cellCacheWidth2 = new WeakMap<Style, Map<string, Cell>>();
 
-// 每个 style 最多缓存 128 个字符
 const MAX_CACHED_CELLS_PER_STYLE = 128;
 
 // 超过上限时全部清空
 if (map.size > MAX_CACHED_CELLS_PER_STYLE) map.clear();
 ```
 
-**潜在问题**:
+**关键事实**:
 
-1. 清空策略可能导致缓存抖动
-2. 128 的上限对 CJK 场景可能偏小
-3. 缺少缓存命中率监控
+`createCell` 流程是:
 
-**建议方向**（需验证）:
+1. 先调用 `charCellWidth(ch, widthProvider)` 计算宽度
+2. 根据 width 选择 width1/width2 cache
+3. 查找或创建 Cell 对象
+
+**因此，这个 cache 优化主要减少 `Cell` 对象分配和对象复用，不直接减少宽度计算成本。**
+
+**建议方向**:
 
 ```typescript
 // 方案 A: 简单调大上限 (Quick Win)
 const MAX_CACHED_CELLS_PER_STYLE = 512; // 原 128
 
-// 方案 B: 每个 style 内部的 LRU (如果方案 A 不够)
+// 方案 B: 部分淘汰 (如果方案 A 不够)
 // 注意: 外层 WeakMap 不可遍历，但内层 Map 可以
 function evictOldestInStyleMap(map: Map<string, Cell>, keepRatio = 0.75) {
   const toDelete = Math.floor(map.size * (1 - keepRatio));
@@ -106,16 +116,23 @@ function evictOldestInStyleMap(map: Map<string, Cell>, keepRatio = 0.75) {
 }
 ```
 
-**优先级**: P2 (性能优化，需先证明是瓶颈)  
-**建议实施**:
+**验收标准**（不只是 hit rate）:
 
-1. 先收集真实缓存命中率数据
-2. 如果命中率 < 70%，尝试方案 A
-3. 如果方案 A 后仍 < 80%，考虑方案 B
+- `createCell` 调用次数
+- `Cell` 新建次数
+- `map.clear()` 次数
+- width1/width2 cache hit/miss
+- p50/p95 渲染耗时
+- heap delta / retained memory
+- LRU 或 partial eviction 的额外开销
+
+**门槛**: 只有当 cache miss 对 p95 或 allocation pressure 有**可见影响**时才优化；hit rate 只是辅助指标。
+
+**优先级**: P2 (性能优化，需先证明是瓶颈)
 
 ---
 
-### 问题 #3: Provider-Aware 缓存策略（Future Consideration）
+### 问题 #3: Provider-Aware 缓存策略 (Future Consideration)
 
 **当前状态**:
 
@@ -125,96 +142,88 @@ const renderPassTextWidthCache = new Map<string, number>(); // 全局
 const textWidthProviderStack: WidthProvider[] = []; // 全局
 ```
 
-**潜在风险** (review 指出需要证据):
+源码中 `canUseDefaultTextCache` 只允许 `"default"` 和 `"narrow-ambiguous"` 使用默认 cache。`"cjk"` 和 function provider 不走默认 cache。
 
-当前默认文本宽度缓存只对 `"default"` 和 `"narrow-ambiguous"` 启用，这两个 provider 对 ambiguous 字符的宽度规则相同。真正有差异的 `"cjk"` provider 不走默认缓存。
+当前 `default` 和 `narrow-ambiguous` 对 ambiguous 字符的宽度规则相同，因此**目前没有明确的 provider cache 污染证据**。
 
-**因此当前可能不存在实际污染问题。**
+**未来考虑**:
 
-**建议方向**（如果未来引入更多 provider）:
+如果引入更多 provider 或改变 cache 策略，需要同时审查这些 cache:
+
+- `renderPassTextWidthCache`
+- `textWidthCache`
+- `inlineLineCacheByWidth`
+- `wrapCacheByWidth`
+
+**防回归测试建议**:
 
 ```typescript
-// 选项 A: Provider 作为缓存 key 的一部分
-type BuiltinProviderKey = "default" | "narrow-ambiguous" | "cjk";
-const builtinTextWidthCaches = new Map<BuiltinProviderKey, Map<string, number>>();
+// 确保 default 和 narrow-ambiguous 一致
+expect(textCellWidth("Ω", "default")).toBe(textCellWidth("Ω", "narrow-ambiguous"));
 
-// 选项 B: WeakMap 用于 function provider
-const functionProviderCaches = new WeakMap<WidthProviderFn, Map<string, number>>();
+// 确保 cjk 不复用 default cache
+clearTextCaches();
+expect(textCellWidth("Ω", "default")).toBe(1);
+expect(textCellWidth("Ω", "cjk")).toBe(2);
 ```
 
-**优先级**: P3 (未来考虑，需要先证明存在问题)  
-**建议实施**: 仅在可以复现缓存污染时实施
+**优先级**: P3 (未来考虑，需要先证明存在问题)
 
 ---
 
-### 问题 #4: 长文本性能（需要 Grapheme-Safe 方案）
+### 问题 #4: 长文本性能优化方向
 
-**确认的问题**:
+**性能分类**:
 
-非 ASCII 长文本（CJK、emoji、混合文本）在 `textCellWidth` 中需要完整的 grapheme 分割和宽度计算，性能可能不佳。
+长文本热点需要区分三类:
 
-**错误的方案** (已在 review 中指出):
+1. **ASCII fast path**: 已优化，直接返回 `text.length`
+2. **普通非 ASCII**: code point iteration + `charCellWidth`
+3. **复杂 grapheme**: ZWJ/VS/combining mark/emoji modifier 等需要 `Intl.Segmenter`
+
+**关键澄清**:
+
+**纯 CJK 长文本不会走完整 grapheme segmentation**。当前 `segmentedGraphemes` 只在检测到 ZWJ、variation selector、combining mark 等情况时才返回 segmenter，否则只用 `for...of` 按 code point 迭代。
+
+真正昂贵的通常是第三类（复杂 grapheme），纯 CJK 的成本主要来自逐 code point 宽度判断和 cache 行为。
+
+**建议方向**:
 
 ```typescript
-// ❌ 不能这样做 - 会破坏 grapheme
-const SEGMENT_SIZE = 256;
-for (let i = 0; i < text.length; i += SEGMENT_SIZE) {
-  total += textCellWidth(text.slice(i, i + SEGMENT_SIZE));
-}
+const MAX_GLOBAL_CACHEABLE_TEXT_LENGTH = 1000;
+const MAX_RENDER_PASS_CACHEABLE_TEXT_LENGTH = 4000;
+
+// 全局 cache 受长 transcript/日志污染风险高，应限制
+const useGlobalCache = useCache && text.length <= MAX_GLOBAL_CACHEABLE_TEXT_LENGTH;
+
+// render-pass cache 只在 render pass 期间存在，风险较小
+const useRenderPassCache =
+  useCache && renderPassDepth > 0 && text.length <= MAX_RENDER_PASS_CACHEABLE_TEXT_LENGTH;
 ```
 
-这会切断代理对、组合字符、ZWJ emoji、variation selector 等。
+**Grapheme-aware 分块 (如果需要)**:
 
-**正确的方向**:
+不要一次性 `Array.from()` 成大数组，使用 streaming chunk:
 
 ```typescript
-// 方案 A: ASCII fast path (已存在)
-if (isAscii(text)) return text.length;
+let chunk: string[] = [];
+let cells = 0;
 
-// 方案 B: 不缓存超长唯一字符串
-const MAX_CACHEABLE_TEXT_LENGTH = 1000;
-if (text.length > MAX_CACHEABLE_TEXT_LENGTH) {
-  return computeWidthNoGlobalCache(text, provider);
-}
+forEachGrapheme(text, (g) => {
+  chunk.push(g);
+  if (chunk.length >= SEGMENT_SIZE) {
+    cells += computeChunkWidth(chunk, provider);
+    chunk = [];
+  }
+});
 
-// 方案 C: Grapheme-aware 分段 (如果需要)
-// 必须基于 segmentedGraphemes 的结果分块
-const segments = segmentedGraphemes(text);
-let width = 0;
-for (let i = 0; i < segments.length; i += SEGMENT_SIZE) {
-  const chunk = segments.slice(i, i + SEGMENT_SIZE);
-  width += computeChunkWidth(chunk, provider);
+if (chunk.length) {
+  cells += computeChunkWidth(chunk, provider);
 }
 ```
 
 **优先级**: P2 (性能优化)  
-**建议实施**:
-
-1. 先用 profiler 确认 `textCellWidth` 是热点
-2. 收集真实长文本场景数据
-3. 优先尝试方案 B（不缓存超长文本）
-4. 仅在必要时实施方案 C
-
----
-
-## 📊 收益预期修正
-
-### 原预期 vs 修正后预期
-
-| 指标       | 原预期 | 修正后      | 说明                 |
-| ---------- | ------ | ----------- | -------------------- |
-| 整体性能   | 3-7x   | **待验证**  | 需要真实 baseline    |
-| ASCII 文本 | 5x     | **待验证**  | Fast path 已大量存在 |
-| 缓存命中率 | +80%   | **+10-30%** | 需要真实数据验证     |
-| 内存占用   | -38%   | **待验证**  | 依赖实施方案         |
-
-### 保守目标（基于 review 建议）
-
-```text
-P0: 不引入功能回退或性能回退
-P1: 在现有 benchmark 中关键路径 p50/p95 不下降
-P2: 如果 profiler 确认某个函数是 top hotspot，该函数提升 20-50%
-```
+**建议实施**: Profiler 确认 `textCellWidth` 是热点后再实施
 
 ---
 
@@ -224,10 +233,13 @@ P2: 如果 profiler 确认某个函数是 top hotspot，该函数提升 20-50%
 
 **PR #1: Unicode Width Correctness**
 
-- 修复补充平面 CJK / East Asian Width 覆盖
-- 添加确定性测试（`𠮷`、CJK Extension B/C 等）
-- 不涉及性能优化
-- **验收**: 新增测试通过，现有测试不失败
+- 基于 Unicode `EastAsianWidth.txt` 生成/维护 W/F 范围
+- 添加补充平面 CJK 测试（Extension B/C/D/E/F/G/H/I）
+- 添加非 CJK 补充平面反例（如音乐符号）
+- 保留现有 emoji/VS16/keycap/combining mark 测试
+- **不涉及性能优化**
+
+**验收**: 新增测试通过，现有测试不失败
 
 ---
 
@@ -235,135 +247,161 @@ P2: 如果 profiler 确认某个函数是 top hotspot，该函数提升 20-50%
 
 **PR #2: Real Baseline Benchmark**
 
-- 基于现有脚本（`bench:baseline`、`bench:dom-renderer` 等）
-- 收集真实场景数据，不使用 mock
-- 输出格式化 JSON（环境、commit、warmup、samples、p50/p95）
-- **验收**: 可重复运行，数据稳定
+**需要新增或包装 baseline harness**，因为现有脚本不统一输出所需格式:
+
+- `check-bench-baselines.ts`: 跑 bench 并检查预算，只打印 pass/fail
+- `bench-dom-renderer.ts`: 单次 scenario 测量，非 samples/p50/p95
+- `bench-stdout-column-diff.ts`: 输出 table 和 ratio，非 JSON baseline
+
+**建议**: 新增 `pnpm run bench:perf-baseline` harness，复用现有场景，但添加:
+
+```json
+{
+  "commit": "abc123",
+  "node": "v18.19.0",
+  "os": "darwin-arm64",
+  "warmup": 100,
+  "samples": 1000,
+  "results": {
+    "textCellWidth_ascii_100": {
+      "p50": 45,
+      "p95": 68,
+      "samples": 1000
+    },
+    "textCellWidth_cjk_100": {
+      "p50": 152,
+      "p95": 201,
+      "samples": 1000
+    }
+  }
+}
+```
+
+**验收**: 可重复运行，数据稳定，环境信息完整
 
 ---
 
 ### Phase 3: 低风险 Quick Wins
 
-**PR #3: Cache Parameter Tuning**
+**PR #3: Cache Parameter Tuning** (如果 Phase 2 数据显示需要)
 
-- 调整缓存上限（`MAX_CACHED_CELLS_PER_STYLE` 等）
-- 配真实 benchmark 验证收益
-- 不引入复杂 LRU
-- **验收**: 缓存命中率提升 > 10%，无性能回退
+```typescript
+// 方案 A: 调大上限
+const MAX_CACHED_CELLS_PER_STYLE = 512; // 原 128
+```
+
+**必需数据**:
+
+- Before/after `createCell` 调用次数
+- Before/after `Cell` 新建次数
+- Before/after `map.clear()` 次数
+- Before/after p50/p95 渲染耗时
+- Heap delta
+
+**验收**: Cache miss 对 p95 的影响降低，无内存泄漏
 
 ---
 
-### Phase 4: 按需优化（基于 Profiler 数据）
+### Phase 4: Profiler 驱动优化
 
-**PR #4: Long Text Strategy** (如果 profiler 显示需要)
+**仅在 profiler 证明瓶颈后实施**:
 
-- 实现 `MAX_CACHEABLE_TEXT_LENGTH`
-- 或 grapheme-safe chunking
-- **验收**: 不拆 grapheme，长文本场景更稳定
+**PR #4: Long Text Strategy** (如果 `textCellWidth` 是 top hotspot)
+
+- 实现 `MAX_GLOBAL/RENDER_PASS_CACHEABLE_TEXT_LENGTH`
+- 或 grapheme-safe streaming chunking
+
+**验收**: 不拆 grapheme，长文本场景更稳定，有 before/after 数据
 
 **PR #5: Provider-Aware Cache** (如果可证明污染)
 
-- 实现缓存分桶
-- **验收**: 可复现的污染场景被修复
+- 实现缓存分桶，覆盖所有相关 cache
 
-**PR #6: Virtual Scroll Optimizations** (如果 profiler 显示需要)
+**验收**: 可复现的污染场景被修复
 
-- 基于 Sophia 的分析
-- **验收**: 虚拟滚动场景 FPS 稳定提升
+**PR #6: Virtual Scroll Optimizations**
+
+- 基于 profiler 数据优化实际瓶颈
+
+**验收**: 滚动场景 FPS 稳定提升，有工作负载描述
 
 ---
 
 ## ⚠️ 需要避免的陷阱
 
-### 1. 诊断错误
+### 1. Unicode 完整性
 
-❌ **错误**: "代理对被误判为 ASCII"  
-✅ **正确**: "补充平面 CJK 宽度覆盖不足"
+❌ **错误**: 只添加 0x20000-0x3FFFD，漏掉其他 Extension  
+✅ **正确**: 基于 EastAsianWidth.txt，覆盖所有 W/F 范围
 
-### 2. 破坏 Unicode 完整性
+❌ **错误**: 把所有补充平面字符都判宽  
+✅ **正确**: 添加非 CJK 补充平面反例测试
+
+### 2. 破坏 Grapheme
 
 ❌ **错误**: 按 UTF-16 index 直接切分文本  
-✅ **正确**: 基于 grapheme 边界切分
+✅ **正确**: 基于 grapheme 边界或 streaming chunk
 
 ### 3. 过度优化
 
 ❌ **错误**: 没有数据支持就实施复杂优化  
 ✅ **正确**: Profiler 先行，数据驱动决策
 
-### 4. Mock 验收系统
+### 4. 验收标准不足
 
-❌ **错误**: 硬编码假数据冒充真实 benchmark  
-✅ **正确**: 基于真实代码路径的性能测试
+❌ **错误**: 只报 cache hit rate 提升  
+✅ **正确**: 提供完整指标（allocation、p50/p95、heap delta）
 
 ---
 
-## 📋 监控建议
+## 📋 严格的验收标准
 
-### 缓存监控（Maya 的建议）
+### Correctness PR
 
-```typescript
-// 开发模式下添加统计
-if (process.env.NODE_ENV === "development") {
-  let cellCacheHits = 0;
-  let cellCacheMisses = 0;
+- ✅ 基于 EastAsianWidth.txt 的宽度判断
+- ✅ 覆盖 Extension B/C/D/E/F/G/H/I 测试
+- ✅ 包含非 CJK 补充平面反例
+- ✅ 现有 emoji/VS16/grapheme 测试仍通过
 
-  export function getCellCacheStats() {
-    return {
-      hits: cellCacheHits,
-      misses: cellCacheMisses,
-      hitRate: cellCacheHits / (cellCacheHits + cellCacheMisses) || 0,
-    };
-  }
-}
-```
+### Baseline PR
 
-### 性能监控扩展
+- ✅ 新增或包装 baseline harness
+- ✅ 输出 JSON 包含: commit, Node, OS, warmup, samples, p50/p95
+- ✅ 多次运行数据稳定（变异系数 < 10%）
 
-```typescript
-export type FramePerfSample = {
-  // 现有字段...
+### Cache Tuning PR
 
-  // 可选：优化相关指标
-  cacheMissRate?: number;
-  asciiTextRatio?: number;
-  longTextCount?: number;
-};
-```
+- ✅ Before/after createCell/new Cell 次数
+- ✅ Before/after map.clear 次数
+- ✅ Before/after p50/p95
+- ✅ Heap delta 测量
+- ✅ 证明 cache miss 对 p95 有可见影响
+
+### Long Text PR
+
+- ✅ Profiler 证明 textCellWidth 是 hotspot
+- ✅ Grapheme safety 证明（不拆 ZWJ/combining）
+- ✅ Before/after benchmarks
+- ✅ CJK/emoji/混合文本测试
+
+### Virtual Scroll PR
+
+- ✅ Profiler 指出具体瓶颈
+- ✅ 滚动工作负载描述
+- ✅ Dirty rows, candidate fallback 指标
+- ✅ FPS 或 frame duration 数据
 
 ---
 
 ## 🎓 经验教训
 
-### 从这次 Review 学到的
+### 从三轮 Review 学到的
 
-1. ✅ **代码审查必不可少** - AI 分析可能误判根因
-2. ✅ **真实数据优先于假设** - 不要基于假设设定目标
-3. ✅ **小步快跑** - 拆分 PR 比大 PR 更安全
-4. ✅ **功能优先于性能** - 先修复正确性问题
-5. ✅ **验证优先于实施** - Profiler 数据驱动优化
-
-### Review 指出的关键问题
-
-- Bug #1 根因判断错误 ✅ 已修正
-- Bug #2 缺少证据 ✅ 已降级
-- 验收脚本是 mock ✅ 已删除
-- 测试用例有错误 ✅ 已删除
-- 收益预期过高 ✅ 已调整
-
----
-
-## 🔗 参考资料
-
-### 审查报告
-
-- [ULTIMATE_REVIEW_CONCLUSION.zh-CN.md](./ULTIMATE_REVIEW_CONCLUSION.zh-CN.md) - 5 agents 综合结论
-- [COMPREHENSIVE_REVIEW_REPORT.zh-CN.md](./COMPREHENSIVE_REVIEW_REPORT.zh-CN.md) - 详细审查
-- [VIRTUAL_SCROLL_OPTIMIZATION_REVIEW.md](./VIRTUAL_SCROLL_OPTIMIZATION_REVIEW.md) - Sophia 虚拟滚动分析
-
-### 相关测试
-
-- `test/core/buffer/unicode-width.test.ts` - 现有 Unicode 测试
-- `scripts/bench-*.ts` - 现有性能基准脚本
+1. ✅ **根因诊断需要准确** - 不是代理对误判，是补充平面覆盖不足
+2. ✅ **区分优化目标** - Cell cache 优化对象分配，不是宽度计算
+3. ✅ **理解实际实现** - 纯 CJK 不走完整 grapheme segmentation
+4. ✅ **验收标准完整** - 不只是 hit rate，要有完整性能指标
+5. ✅ **文档诚实一致** - 不引用已删除的报告
 
 ---
 
@@ -381,5 +419,4 @@ export type FramePerfSample = {
 **实施状态**: ⏳ 待实施  
 **验证方式**: 真实 baseline + profiler 数据驱动
 
-**审查团队**: 7 agents + 1 人工 reviewer  
-**最后更新**: 2026-07-09（基于 review 反馈修正）
+**最后更新**: 2026-07-09 (v3, 基于三轮 review 修正)
