@@ -120,6 +120,10 @@ const graphemeMetrics: GraphemeMetrics = {
   segmentationRequiredInputCount: 0,
 };
 
+// Cell cache bucket tracking (only when instrumentation enabled)
+const cellCacheBucketsWidth1: Array<Map<string, any>> = [];
+const cellCacheBucketsWidth2: Array<Map<string, any>> = [];
+
 /**
  * Enable instrumentation collection
  */
@@ -189,14 +193,60 @@ export function resetMetrics(): void {
   graphemeMetrics.intlSegmenterUsed = 0;
   graphemeMetrics.fallbackSegmenterUsed = 0;
   graphemeMetrics.segmentationRequiredInputCount = 0;
+
+  // Clear bucket tracking
+  cellCacheBucketsWidth1.length = 0;
+  cellCacheBucketsWidth2.length = 0;
+}
+
+/**
+ * Helper: Calculate percentile from sorted array
+ */
+function percentile(sorted: number[], p: number): number {
+  if (!sorted.length) return 0;
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1));
+  return sorted[index]!;
+}
+
+/**
+ * Get cache bucket distribution (Phase 3.2)
+ */
+function getCacheBucketDistribution() {
+  const width1Sizes = cellCacheBucketsWidth1.map((b) => b.size).sort((a, b) => a - b);
+  const width2Sizes = cellCacheBucketsWidth2.map((b) => b.size).sort((a, b) => a - b);
+
+  const estimatedRetainedCells =
+    width1Sizes.reduce((sum, s) => sum + s, 0) + width2Sizes.reduce((sum, s) => sum + s, 0);
+
+  return {
+    bucketCountWidth1: width1Sizes.length,
+    bucketCountWidth2: width2Sizes.length,
+    sizeP50Width1: percentile(width1Sizes, 0.5),
+    sizeP95Width1: percentile(width1Sizes, 0.95),
+    sizeMaxWidth1: Math.max(...width1Sizes, 0),
+    sizeP50Width2: percentile(width2Sizes, 0.5),
+    sizeP95Width2: percentile(width2Sizes, 0.95),
+    sizeMaxWidth2: Math.max(...width2Sizes, 0),
+    estimatedRetainedCells,
+  };
 }
 
 /**
  * Get current metrics snapshot
  */
 export function getMetrics(): PerformanceMetrics {
+  const cellMetricsSnapshot = { ...cellMetrics };
+
+  // Populate bucket distribution if instrumentation enabled
+  if (instrumentationEnabled) {
+    const distribution = getCacheBucketDistribution();
+    cellMetricsSnapshot.cellCacheBucketCountWidth1 = distribution.bucketCountWidth1;
+    cellMetricsSnapshot.cellCacheBucketCountWidth2 = distribution.bucketCountWidth2;
+    cellMetricsSnapshot.estimatedRetainedCells = distribution.estimatedRetainedCells;
+  }
+
   return {
-    cell: { ...cellMetrics },
+    cell: cellMetricsSnapshot,
     text: { ...textMetrics },
     grapheme: { ...graphemeMetrics },
   };
@@ -313,6 +363,15 @@ export const cellInstr = {
       cellMetrics.maxCacheSizeWidth1 = Math.max(cellMetrics.maxCacheSizeWidth1, size);
     } else {
       cellMetrics.maxCacheSizeWidth2 = Math.max(cellMetrics.maxCacheSizeWidth2, size);
+    }
+  },
+
+  registerCacheBucket(width: 1 | 2, bucket: Map<string, any>) {
+    if (!instrumentationEnabled) return;
+    if (width === 1) {
+      cellCacheBucketsWidth1.push(bucket);
+    } else {
+      cellCacheBucketsWidth2.push(bucket);
     }
   },
 
