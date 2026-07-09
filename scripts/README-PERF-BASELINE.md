@@ -17,7 +17,7 @@ pnpm run bench:perf-baseline:json
 # Output: .tmp/perf-baseline.json
 ```
 
-## Benchmark Scenarios (15 Total)
+## Benchmark Scenarios (18 Total)
 
 ### Character Width Calculation (5 scenarios)
 1. **charCellWidth_ascii** - ASCII characters (a, Z, 0)
@@ -26,21 +26,24 @@ pnpm run bench:perf-baseline:json
 4. **charCellWidth_non_cjk_supplementary** - Non-CJK supplementary (musical symbols, math)
 5. **charCellWidth_emoji_sequence** - Emoji and ZWJ sequences
 
-### Text Width Operations (5 scenarios)
-6. **textCellWidth_ascii_long_fast_path** - ASCII text (100 chars, uses fast path, no cache)
-7. **textCellWidth_ascii_unique** - Unique ASCII text (simulates unique log lines)
+### Text Width Operations (7 scenarios)
+6. **textCellWidth_ascii_long_fast_path** - ASCII text (100 chars, uses fast path, cache-miss path)
+7. **textCellWidth_ascii_unique** - Unique ASCII text (simulates unique log lines, cache-miss path)
 8. **textCellWidth_cjk_long_hot** - BMP CJK text (100 chars, hot cache)
-9. **textCellWidth_cjk_unique** - Unique CJK text (simulates unique log lines)
+9. **textCellWidth_cjk_unique** - Unique CJK text (cache-miss path)
 10. **textCellWidth_supplementary_cjk_long_hot** - Supplementary CJK (50 chars, hot cache)
+11. **textCellWidth_complex_grapheme_hot** - Complex grapheme (ZWJ emoji, combining marks, hot cache)
+12. **textCellWidth_complex_grapheme_unique** - Complex grapheme (cache-miss path, tests segmentedGraphemes)
 
-### Text Operations (3 scenarios)
-11. **sliceByCells_supplementary_cjk** - Slicing with supplementary CJK
-12. **wrapByCells_cjk_long_hot** - Wrapping CJK text (hot cache)
-13. **wrapByCells_cjk_unique** - Wrapping unique CJK text (no cache)
+### Text Operations (4 scenarios)
+13. **harness_blackhole_overhead** - Blackhole overhead baseline
+14. **sliceByCells_supplementary_cjk** - Slicing with supplementary CJK
+15. **wrapByCells_cjk_long_hot** - Wrapping CJK text (hot cache)
+16. **wrapByCells_cjk_unique** - Wrapping unique text (cache-miss path)
 
 ### Terminal Integration (2 scenarios)
-14. **terminal_write_supplementary_cjk_hot** - Write to same position (hot Cell cache)
-15. **terminal_write_supplementary_cjk_cycling_rows** - Write to different rows
+17. **terminal_write_supplementary_cjk_hot** - Write to same position (hot Cell cache)
+18. **terminal_write_supplementary_cjk_cycling_rows** - Write to different rows
 
 ## Key Design Decisions
 
@@ -50,7 +53,7 @@ All benchmark results are consumed by a blackhole sink to prevent V8 from optimi
 ### Hot Cache vs Unique Input
 Two approaches to avoid cache pollution:
 - **Hot cache**: Repeated input, measures cache hit performance
-- **Unique input**: Pre-generated corpus (2048 entries), each iteration uses different input
+- **Unique input**: Dynamic corpus sized from warmup/samples/iterations, each iteration uses different input
 
 **Why unique input instead of `clearTextCaches()`?**
 

@@ -60,6 +60,8 @@ interface BenchmarkResult {
 }
 
 interface BaselineReport {
+  schemaVersion: number;
+  benchmarkSuite: string;
   commit: string;
   eawUnicodeVersion: string;
   runtimeUnicodeVersion: string | undefined;
@@ -409,7 +411,7 @@ async function main() {
 
   // Scenario 7: textCellWidth unique ASCII (simulates unique log lines)
   results["textCellWidth_ascii_unique"] = benchmark(
-    "textCellWidth(ASCII unique, no cache)",
+    "textCellWidth(ASCII unique, cache-miss path)",
     () => {
       consumeNumber(textCellWidth(asciiCorpus[asciiIdx++]!));
     },
@@ -438,7 +440,7 @@ async function main() {
 
   // Scenario 9: textCellWidth unique CJK (simulates unique log lines)
   results["textCellWidth_cjk_unique"] = benchmark(
-    "textCellWidth(CJK unique, no cache)",
+    "textCellWidth(CJK unique, cache-miss path)",
     () => {
       consumeNumber(textCellWidth(cjkCorpus[cjkIdx++]!));
     },
@@ -465,7 +467,58 @@ async function main() {
     },
   );
 
-  // Scenario 11: sliceByCells with supplementary CJK
+
+  // Scenario 11: textCellWidth complex grapheme (hot cache) - ZWJ emoji, regional indicators, combining marks
+  const complexGraphemeHot = "👩‍💻".repeat(20) + "🇺🇸".repeat(20) + "e\u0301".repeat(50);
+  results["textCellWidth_complex_grapheme_hot"] = benchmark(
+    "textCellWidth(complex grapheme, hot cache)",
+    () => {
+      consumeNumber(textCellWidth(complexGraphemeHot));
+    },
+    {
+      warmup,
+      samples,
+      iterationsPerSample: textIter,
+      operationsPerIteration: 1,
+    },
+  );
+
+  // Scenario 12: textCellWidth complex grapheme (unique) - tests segmentedGraphemes path
+  const complexGraphemeCorpus = Array.from({ length: uniqueOps }, (_, i) => 
+    `👨‍👩‍👧‍👦${i}🇺🇸${"e\u0301".repeat(10)}`
+  );
+  let complexIdx = 0;
+  results["textCellWidth_complex_grapheme_unique"] = benchmark(
+    "textCellWidth(complex grapheme unique, cache-miss path)",
+    () => {
+      consumeNumber(textCellWidth(complexGraphemeCorpus[complexIdx++]!));
+    },
+    {
+      warmup,
+      samples,
+      iterationsPerSample: fastIter,
+      operationsPerIteration: 1,
+    },
+  );
+
+  // Scenario 13: blackhole overhead baseline
+  results["harness_blackhole_overhead"] = benchmark(
+    "harness blackhole overhead",
+    () => {
+      consumeNumber(1);
+      consumeNumber(2);
+      consumeNumber(3);
+    },
+    {
+      warmup,
+      samples,
+      iterationsPerSample: charIter,
+      operationsPerIteration: 3,
+    },
+  );
+
+
+  // Scenario 14: sliceByCells with supplementary CJK
   const sliceText = "\u{20BB7}\u{2B820}\u{30000}abc";
   results["sliceByCells_supplementary_cjk"] = benchmark(
     "sliceByCells(Supplementary CJK)",
@@ -482,7 +535,7 @@ async function main() {
     },
   );
 
-  // Scenario 12: wrapByCells CJK (hot cache)
+  // Scenario 15: wrapByCells CJK (hot cache)
   results["wrapByCells_cjk_long_hot"] = benchmark(
     "wrapByCells(CJK 100, hot cache)",
     () => {
@@ -496,9 +549,9 @@ async function main() {
     },
   );
 
-  // Scenario 13: wrapByCells unique text (no cache)
+  // Scenario 16: wrapByCells unique text (no cache)
   results["wrapByCells_cjk_unique"] = benchmark(
-    "wrapByCells(unique text, no cache)",
+    "wrapByCells(unique text, cache-miss path)",
     () => {
       consumeArray(wrapByCells(wrapCorpus[wrapIdx++]!, 40));
     },
@@ -510,7 +563,7 @@ async function main() {
     },
   );
 
-  // Scenario 14: terminal write supplementary CJK (hot same position)
+  // Scenario 17: terminal write supplementary CJK (hot same position)
   const terminal1 = createTerminal({ cols: 80, rows: 24 });
   results["terminal_write_supplementary_cjk_hot"] = benchmark(
     "terminal.write(Supplementary CJK, hot same position)",
@@ -525,7 +578,7 @@ async function main() {
     },
   );
 
-  // Scenario 15: terminal write supplementary CJK (cycling rows, buffer write only)
+  // Scenario 18: terminal write supplementary CJK (cycling rows, buffer write only)
   const terminal2 = createTerminal({ cols: 80, rows: 24 });
   let rowCounter = 0;
   results["terminal_write_supplementary_cjk_cycling_rows"] = benchmark(
@@ -544,7 +597,7 @@ async function main() {
   );
 
   // Verify scenario count
-  const expectedScenarios = 15;
+  const expectedScenarios = 18;
   const actualScenarios = Object.keys(results).length;
   assert.strictEqual(
     actualScenarios,
@@ -565,6 +618,8 @@ async function main() {
 
   // Build report
   const report: BaselineReport = {
+    schemaVersion: 1,
+    benchmarkSuite: "unicode-width-text-v1",
     commit: getCommitHash(),
     eawUnicodeVersion: "17.0.0",
     runtimeUnicodeVersion: process.versions.unicode,
