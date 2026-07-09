@@ -4,7 +4,7 @@ This directory contains the performance baseline harness for vue-tui, implementi
 
 ## Overview
 
-The baseline harness (`bench-perf-baseline.ts`) provides reproducible performance measurements with statistical analysis. It outputs JSON with complete environment information and statistical metrics (p50/p95/p99, mean, stdev, CV) in **ns/op** (nanoseconds per operation).
+The baseline harness (`bench-perf-baseline.ts`) provides reproducible performance measurements with statistical analysis. It outputs JSON with complete environment information and statistical metrics (p50/p95/p99, mean, stdev, CV, stability) in **ns/op** (nanoseconds per operation).
 
 ## Usage
 
@@ -17,7 +17,7 @@ pnpm run bench:perf-baseline:json
 # Output: .tmp/perf-baseline.json
 ```
 
-## Benchmark Scenarios (17 Total)
+## Benchmark Scenarios (15 Total)
 
 ### Character Width Calculation (5 scenarios)
 1. **charCellWidth_ascii** - ASCII characters (a, Z, 0)
@@ -26,43 +26,50 @@ pnpm run bench:perf-baseline:json
 4. **charCellWidth_non_cjk_supplementary** - Non-CJK supplementary (musical symbols, math)
 5. **charCellWidth_emoji_sequence** - Emoji and ZWJ sequences
 
-### Text Width Operations (7 scenarios)
-6. **textCellWidth_ascii_long_hot** - ASCII text (100 chars, hot cache)
-7. **textCellWidth_ascii_long_cold** - ASCII text (100 chars, cold cache)
+### Text Width Operations (5 scenarios)
+6. **textCellWidth_ascii_long_fast_path** - ASCII text (100 chars, uses fast path, no cache)
+7. **textCellWidth_ascii_unique** - Unique ASCII text (simulates unique log lines)
 8. **textCellWidth_cjk_long_hot** - BMP CJK text (100 chars, hot cache)
-9. **textCellWidth_cjk_long_cold** - BMP CJK text (100 chars, cold cache)
-10. **textCellWidth_unique_text** - Unique text each iteration (simulates log lines)
-11. **textCellWidth_supplementary_cjk_long_hot** - Supplementary CJK (50 chars, hot cache)
-12. **textCellWidth_supplementary_cjk_long_cold** - Supplementary CJK (50 chars, cold cache)
+9. **textCellWidth_cjk_unique** - Unique CJK text (simulates unique log lines)
+10. **textCellWidth_supplementary_cjk_long_hot** - Supplementary CJK (50 chars, hot cache)
 
-### Text Operations (2 scenarios)
-13. **sliceByCells_supplementary_cjk** - Slicing with supplementary CJK
-14. **wrapByCells_cjk_long_hot** - Wrapping CJK text (hot cache)
-15. **wrapByCells_cjk_long_cold** - Wrapping CJK text (cold cache)
+### Text Operations (3 scenarios)
+11. **sliceByCells_supplementary_cjk** - Slicing with supplementary CJK
+12. **wrapByCells_cjk_long_hot** - Wrapping CJK text (hot cache)
+13. **wrapByCells_cjk_unique** - Wrapping unique CJK text (no cache)
 
 ### Terminal Integration (2 scenarios)
-16. **terminal_write_supplementary_cjk_hot** - Write to same position (hot Cell cache)
-17. **terminal_write_supplementary_cjk_unique_rows** - Write to different rows
+14. **terminal_write_supplementary_cjk_hot** - Write to same position (hot Cell cache)
+15. **terminal_write_supplementary_cjk_unique_rows** - Write to different rows
 
 ## Key Design Decisions
 
-### Hot vs Cold Cache
-Many operations use caches:
-- `textCellWidth` → `textWidthCache`
-- `wrapByCells` → `wrapCacheByWidth`
-- `terminal.write` → Cell cache
+### Blackhole Sink
+All benchmark results are consumed by a blackhole sink to prevent V8 from optimizing away computations. Without this, micro-benchmarks could measure "nothing" instead of actual work.
 
-We measure both:
-- **Hot cache**: Repeated operations, measures cache hit performance
-- **Cold cache**: `clearTextCaches()` before each sample, measures actual computation
+### Hot Cache vs Unique Input
+Two approaches to avoid cache pollution:
+- **Hot cache**: Repeated input, measures cache hit performance
+- **Unique input**: Pre-generated corpus (2048 entries), each iteration uses different input
 
-This distinction is critical - without it, benchmarks measure `Map.get()` speed, not width calculation speed.
+**Why unique input instead of `clearTextCaches()`?**
+
+Early versions used `beforeEach: clearTextCaches`, but this gave misleading results. With `iterationsPerSample: 100`, the first iteration was cold but the next 99 were hot (same input). The result was a "1 cold + 99 hot" mix, not true cold cache.
+
+Unique corpus solves this: each iteration gets different text, so cache never hits.
+
+### ASCII Fast Path
+`textCellWidth` has a direct fast path for ASCII that doesn't use the text cache:
+```typescript
+if (hasAsciiFastPath(provider) && isAscii(text)) return text.length;
+```
+
+So `textCellWidth_ascii_long_fast_path` doesn't test cache behavior - it tests the fast path itself.
 
 ### Iterations Per Sample
 Instead of measuring single operations (prone to timer noise), we use inner loops:
 - Character width: 1000 iterations/sample × 2-3 operations
-- Text operations: 100 iterations/sample × 1 operation
-- Terminal operations: 10-100 iterations/sample
+- Text operations: 10-100 iterations/sample × 1 operation
 
 This reduces CV (coefficient of variation) to acceptable levels.
 
@@ -79,7 +86,9 @@ This makes before/after comparisons meaningful.
 ```json
 {
   "commit": "...",
-  "unicodeVersion": "17.0.0",
+  "eawUnicodeVersion": "17.0.0",
+  "runtimeUnicodeVersion": "15.1.0",
+  "icu": "75.1",
   "node": "v24.16.0",
   "v8": "13.6.233.17",
   "os": "darwin-arm64",
@@ -89,6 +98,7 @@ This makes before/after comparisons meaningful.
   "samples": 1000,
   "clock": "process.hrtime.bigint",
   "timestamp": "2026-07-09T10:27:22.455Z",
+  "blackhole": 12345,
   "results": {
     "charCellWidth_ascii": {
       "p50": 0.12,
@@ -97,6 +107,7 @@ This makes before/after comparisons meaningful.
       "mean": 0.13,
       "stdev": 0.02,
       "cv": 0.15,
+      "stability": "noisy",
       "samples": 1000,
       "min": 0.10,
       "max": 0.25,
@@ -114,17 +125,27 @@ This makes before/after comparisons meaningful.
 - **mean**: Average time per operation
 - **stdev**: Standard deviation
 - **cv**: Coefficient of variation (stdev/mean) - **lower is more stable**
+- **stability**: Automatic classification based on CV
+  - `stable`: CV < 10% - Excellent, reliable baseline
+  - `noisy`: CV 10-50% - Acceptable for comparisons
+  - `unstable`: CV > 50% - High variance, use cautiously
 - **min/max**: Minimum/maximum observed times
 - **unit**: Always "ns/op" (nanoseconds per operation)
-- **iterationsPerSample**: Inner loop size
-- **operationsPerIteration**: Operations per inner loop iteration
+- **blackhole**: Sink value (prevents optimization elimination)
+- **eawUnicodeVersion**: Unicode version for EAW generated tables (17.0.0)
+- **runtimeUnicodeVersion**: Node/V8/ICU Unicode version (affects emoji regex)
 
 ## Stability Guidelines
 
 Per RFC Phase 2 acceptance criteria:
-- **CV < 0.1** (10%): Excellent - stable baseline
+- **CV < 0.1** (10%): Excellent - stable baseline, **preferred for optimization decisions**
 - **CV < 0.5** (50%): Acceptable - usable for comparisons
-- **CV > 1.0** (100%): High variance - investigate or increase iterations
+- **CV > 0.5** (50%): High variance - informational only, do not base optimization decisions on these
+
+Many micro-benchmarks naturally have higher CV due to timer noise, JIT, GC. Focus on:
+1. Scenarios with `stability: "stable"` for critical decisions
+2. Relative comparisons (before/after) rather than absolute numbers
+3. p95/p99 (less affected by outliers) rather than mean
 
 ## Limitations
 
@@ -148,8 +169,11 @@ cp .tmp/perf-baseline.json baseline-before.json
 pnpm run bench:perf-baseline:json
 cp .tmp/perf-baseline.json baseline-after.json
 
-# 4. Compare (manual or with a comparison script)
-# Look for: p95 improvement, CV stability, no regressions in unrelated scenarios
+# 4. Manual comparison
+# Focus on:
+# - p95 improvement in optimized scenarios
+# - stability unchanged or improved
+# - no regressions in unrelated scenarios
 ```
 
 ## Next Steps
