@@ -213,49 +213,14 @@ Per the RFC, optimization work (cache tuning, long text strategy, etc.) should:
 4. Re-run baseline
 5. Provide before/after data in PR
 
+## Important Notes
+
+**Smoke Mode**: The `bench:perf-baseline:smoke` command is designed for CI validation only. With warmup=1 and samples=3, it verifies that the harness runs correctly, sanity checks pass, and JSON output is valid. **Do not use smoke results for performance judgments** - they lack statistical significance. Use full baseline mode for actual performance analysis.
+
+**Performance Decisions**: This harness provides Unicode width/text micro-benchmarks. It does NOT prove that Cell cache tuning, virtual scroll optimization, or other optimizations are beneficial. Phase 3 optimization PRs must provide targeted profiler evidence (Cell allocation counts, cache hit/miss rates, GC pressure, etc.) before implementing changes.
+
 ## References
 
 - RFC: `docs/PERFORMANCE_OPTIMIZATION_RFC.zh-CN.md`
 - Phase 1 (Unicode correctness): PR #114 (merged)
 - Phase 2 (this baseline): PR #115
-
-### ASCII Fast Path
-
-`textCellWidth` has a special fast path for ASCII text that bypasses the text cache entirely:
-
-```typescript
-if (hasAsciiFastPath(provider) && isAscii(text)) return text.length;
-```
-
-This means:
-
-- `textCellWidth_ascii_long_fast_path`: Uses fast path (no cache)
-- `textCellWidth_ascii_unique`: Still uses fast path (no cache), just with different input each time
-
-Neither scenario tests text cache behavior. For cache-miss path testing, see the CJK unique scenarios.
-
-### Blackhole Overhead
-
-The `harness_blackhole_overhead` scenario measures the pure overhead of the benchmark harness (loop + blackhole sink). This overhead is **informational only** and is **not subtracted** from other scenario results.
-
-The overhead baseline only covers `consumeNumber`. Scenarios using `consumeString` or `consumeArray` may have slightly different overhead, but this doesn't affect before/after comparisons.
-
-### Complex Grapheme Scenarios
-
-The complex grapheme scenarios test different aspects:
-
-**Hot scenario** (`textCellWidth_complex_grapheme_hot`):
-
-- Measures cache-hit behavior for complex strings
-- After warmup, the same string is cached
-- Tests how fast cache lookup + return is
-- Does NOT repeatedly measure segmentation cost
-
-**Unique scenario** (`textCellWidth_complex_grapheme_unique`):
-
-- Each iteration uses different input
-- Forces cache miss every time
-- Measures actual `segmentedGraphemes` / `Intl.Segmenter` computation
-- Tests ZWJ, regional indicators, combining marks processing
-
-This distinction is important: hot scenario validates caching works; unique scenario measures true grapheme processing cost.

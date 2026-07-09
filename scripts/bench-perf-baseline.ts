@@ -18,7 +18,10 @@ import * as assert from "node:assert";
 import { execSync } from "node:child_process";
 
 // Import functions to benchmark
-import { EAW_UNICODE_VERSION, EAW_SOURCE_SHA256 } from "../src/core/buffer/eaw-ranges-unicode-17.js";
+import {
+  EAW_UNICODE_VERSION,
+  EAW_SOURCE_SHA256,
+} from "../src/core/buffer/eaw-ranges-unicode-17.js";
 import { charCellWidth } from "../src/core/buffer/width.js";
 import {
   textCellWidth,
