@@ -25,6 +25,26 @@ function isAmbiguousWidthCodePoint(codePoint: number): boolean {
   return false;
 }
 
+function isVariationSelectorCodePoint(codePoint: number): boolean {
+  // Variation Selectors block (U+FE00-U+FE0F) and Variation Selectors Supplement (U+E0100-U+E01EF)
+  return (
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
+    (codePoint >= 0xe0100 && codePoint <= 0xe01ef)
+  );
+}
+
+function isCombiningMarkCodePoint(codePoint: number): boolean {
+  // Common combining mark ranges
+  // UAX #11 notes that EAW for combining marks doesn't equal advance width
+  return (
+    (codePoint >= 0x0300 && codePoint <= 0x036f) || // Combining Diacritical Marks
+    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) || // Combining Diacritical Marks Extended
+    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) || // Combining Diacritical Marks Supplement
+    (codePoint >= 0x20d0 && codePoint <= 0x20ff) || // Combining Diacritical Marks for Symbols
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f)    // Combining Half Marks
+  );
+}
+
 function isEmojiLike(codePoint: number): boolean {
   // Basic heuristic; we also have an Extended_Pictographic check in charCellWidth.
   return (
@@ -87,6 +107,13 @@ export function charCellWidth(text: string, provider: WidthProvider = "default")
   // Terminal tailoring: Box Drawing (U+2500-U+257F) remains narrow in all modes
   // Even though they are classified as Ambiguous in Unicode EAW
   if (codePoint >= 0x2500 && codePoint <= 0x257F) return 1;
+
+  // Terminal/grapheme tailoring: Variation selectors and combining marks
+  // UAX #11 notes that EAW for combining marks doesn't equal advance width
+  // These should remain narrow (width 1) even in cjk mode
+  if (isVariationSelectorCodePoint(codePoint) || isCombiningMarkCodePoint(codePoint)) {
+    return 1;
+  }
 
   if (provider === "cjk" && isAmbiguousWidthCodePoint(codePoint)) return 2;
 

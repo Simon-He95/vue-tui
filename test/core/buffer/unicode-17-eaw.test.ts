@@ -117,6 +117,22 @@ describe("Terminal Tailoring Preservation (Regression)", () => {
     it("⏱️ with VS16 should be wide", () => {
       expect(charCellWidth("⏱️")).toBe(2);
     });
+
+    it("standalone VS16 should be narrow even in cjk mode", () => {
+      expect(charCellWidth("\uFE0F", "cjk")).toBe(1);
+    });
+  });
+
+  describe("Combining marks should remain narrow in all modes", () => {
+    it("standalone combining acute should be narrow in cjk mode", () => {
+      expect(charCellWidth("\u0301", "cjk")).toBe(1);
+    });
+
+    it("combining diacritical marks should be narrow", () => {
+      expect(charCellWidth("\u0300", "cjk")).toBe(1); // Combining grave
+      expect(charCellWidth("\u0308", "cjk")).toBe(1); // Combining diaeresis
+      expect(charCellWidth("\u0323", "cjk")).toBe(1); // Combining dot below
+    });
   });
 
   describe("Box drawing should remain narrow in all modes", () => {
@@ -130,6 +146,7 @@ describe("Terminal Tailoring Preservation (Regression)", () => {
       expect(charCellWidth("─", "cjk")).toBe(1);
       expect(charCellWidth("│", "cjk")).toBe(1);
       expect(charCellWidth("┌", "cjk")).toBe(1);
+      expect(charCellWidth("╋", "cjk")).toBe(1); // Another box drawing char
     });
   });
 

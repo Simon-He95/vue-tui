@@ -2,18 +2,20 @@
 /**
  * Generate East Asian Width ranges from Unicode 17.0.0 EastAsianWidth.txt
  * 
- * Usage: tsx scripts/generate-eaw-ranges.ts
+ * Usage: pnpm exec tsx scripts/generate-eaw-ranges.ts
  */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const EAW_URL = 'https://www.unicode.org/Public/17.0.0/ucd/EastAsianWidth.txt';
-const EAW_FILE = '/tmp/EastAsianWidth.txt';
+const UNICODE_DIR = path.join(__dirname, 'unicode');
+const EAW_FILE = path.join(UNICODE_DIR, 'EastAsianWidth-17.0.0.txt');
 
 interface Range {
   start: number;
@@ -87,24 +89,24 @@ function formatRange(range: [number, number]): string {
   return `[0x${range[0].toString(16)}, 0x${range[1].toString(16)}]`;
 }
 
-function generateTypeScript(wide: Array<[number, number]>, ambiguous: Array<[number, number]>): string {
+function generateTypeScript(wide: Array<[number, number]>, ambiguous: Array<[number, number]>, sha256: string): string {
   const header = `/**
  * East Asian Width ranges generated from Unicode 17.0.0
  * Source: ${EAW_URL}
- * Generated: ${new Date().toISOString()}
+ * SHA-256: ${sha256}
  * 
- * DO NOT EDIT MANUALLY - regenerate with: tsx scripts/generate-eaw-ranges.ts
+ * DO NOT EDIT MANUALLY - regenerate with: pnpm exec tsx scripts/generate-eaw-ranges.ts
  */
 
 `;
 
-  const wideRanges = `const fullWidthRanges: Array<[number, number]> = [
+  const wideRanges = `export const fullWidthRanges: Array<[number, number]> = [
 ${wide.map(r => '  ' + formatRange(r)).join(',\n')},
 ];
 `;
 
   const ambiguousRanges = `
-const ambiguousWidthRanges: Array<[number, number]> = [
+export const ambiguousWidthRanges: Array<[number, number]> = [
 ${ambiguous.map(r => '  ' + formatRange(r)).join(',\n')},
 ];
 `;
@@ -115,15 +117,32 @@ ${ambiguous.map(r => '  ' + formatRange(r)).join(',\n')},
 async function main() {
   console.log('Downloading EastAsianWidth.txt from Unicode 17.0.0...');
   
-  // Download if not exists
-  if (!fs.existsSync(EAW_FILE)) {
-    const response = await fetch(EAW_URL);
-    const text = await response.text();
-    fs.writeFileSync(EAW_FILE, text);
+  // Ensure unicode directory exists
+  if (!fs.existsSync(UNICODE_DIR)) {
+    fs.mkdirSync(UNICODE_DIR, { recursive: true });
   }
   
+  // Download file
+  let content: string;
+  if (fs.existsSync(EAW_FILE)) {
+    console.log('Using existing file:', EAW_FILE);
+    content = fs.readFileSync(EAW_FILE, 'utf-8');
+  } else {
+    console.log('Downloading from:', EAW_URL);
+    const response = await fetch(EAW_URL);
+    if (!response.ok) {
+      throw new Error(`Failed to download ${EAW_URL}: ${response.status} ${response.statusText}`);
+    }
+    content = await response.text();
+    fs.writeFileSync(EAW_FILE, content);
+    console.log('Saved to:', EAW_FILE);
+  }
+  
+  // Calculate SHA-256
+  const sha256 = crypto.createHash('sha256').update(content).digest('hex');
+  console.log('SHA-256:', sha256);
+  
   console.log('Parsing EastAsianWidth.txt...');
-  const content = fs.readFileSync(EAW_FILE, 'utf-8');
   const { wide, ambiguous } = parseEAWFile(content);
   
   console.log(`Found ${wide.length} wide ranges, ${ambiguous.length} ambiguous ranges`);
@@ -135,7 +154,7 @@ async function main() {
   console.log(`Merged to ${mergedWide.length} wide ranges, ${mergedAmbiguous.length} ambiguous ranges`);
   
   console.log('Generating TypeScript code...');
-  const tsCode = generateTypeScript(mergedWide, mergedAmbiguous);
+  const tsCode = generateTypeScript(mergedWide, mergedAmbiguous, sha256);
   
   const outputPath = path.join(__dirname, '..', 'src', 'core', 'buffer', 'eaw-ranges-unicode-17.ts');
   fs.writeFileSync(outputPath, tsCode);
@@ -145,6 +164,7 @@ async function main() {
   console.log(`- Wide (W/F) ranges: ${mergedWide.length}`);
   console.log(`- Ambiguous (A) ranges: ${mergedAmbiguous.length}`);
   console.log(`- Supplementary plane CJK included: ${mergedWide.some(r => r[0] >= 0x20000)}`);
+  console.log(`- Source SHA-256: ${sha256}`);
   
   // Print some key ranges for verification
   console.log('\nKey supplementary plane ranges:');
