@@ -75,7 +75,7 @@ Phase 3 review fixes have been completed in 3 commits:
 
 - ✅ Added `wrapWidthBucketMapClear` metric
 - ✅ Instrumented `getWrapBucket()` for width bucket map clears
-- ✅ Added placeholder metrics for inline cache
+- ✅ Inline cache instrumentation deferred (no metrics currently emitted)
 
 **What's deferred**:
 

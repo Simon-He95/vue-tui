@@ -46,7 +46,7 @@ Phase 3 adds **observation-only instrumentation** to measure cache behavior, all
 
 ### Enable Instrumentation
 
-\`\`\`typescript
+```typescript
 import {
 enableInstrumentation,
 resetMetrics,
@@ -68,13 +68,13 @@ console.log('Cell cache hit rate:',
 (metrics.cell.cellCacheHitWidth1 /
 (metrics.cell.cellCacheHitWidth1 + metrics.cell.cellCacheMissWidth1)) \* 100
 );
-\`\`\`
+```
 
 ### Run Profiler Benchmark
 
-\`\`\`bash
+```bash
 pnpm run bench:profiler
-\`\`\`
+```
 
 ## Workloads
 
@@ -151,7 +151,7 @@ pnpm run bench:profiler
 
 ### Grapheme Metrics
 
-- `segmentedGraphemesCalls`: segmentedGraphemes() calls
+- `graphemeSegmentationRequiredCalls`: segmentedGraphemes() calls
 - `intlSegmenterUsed`: Intl.Segmenter path usage
 - `fallbackSegmenterUsed`: Fallback segmenter usage
 - `complexGraphemeCount`: Complex grapheme detections
@@ -198,7 +198,7 @@ Only after analyzing instrumentation data:
 
 ## Verification
 
-\`\`\`bash
+```bash
 
 # Type check
 
@@ -211,4 +211,4 @@ pnpm run bench:profiler
 # Verify low-overhead when disabled (same performance as Phase 2)
 
 pnpm run bench:perf-baseline:smoke
-\`\`\`
+```

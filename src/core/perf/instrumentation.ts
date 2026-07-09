@@ -21,6 +21,7 @@ export interface CellCacheMetrics {
   continuationCellCacheMiss: number;
   maxCacheSizeWidth1: number;
   maxCacheSizeWidth2: number;
+  // TODO Phase 3.2: Not populated until bucket tracking is implemented
   cellCacheBucketCountWidth1: number;
   cellCacheBucketCountWidth2: number;
   estimatedRetainedCells: number;
@@ -42,15 +43,18 @@ export interface TextCacheMetrics {
   wrapWidthBucketMapClear: number;
   maxTextLength: number;
   totalTextLength: number;
-  asciiCount: number;
-  nonAsciiCount: number;
+  // Note: asciiFastPathCount only counts when hasAsciiFastPath(provider) && isAscii(text)
+  // Other cases (non-ASCII or custom provider) count as nonAsciiOrNoFastPathCount
+  asciiFastPathCount: number;
+  nonAsciiOrNoFastPathCount: number;
 }
 
 export interface GraphemeMetrics {
   graphemeSegmentationRequiredCalls: number;
   intlSegmenterUsed: number;
   fallbackSegmenterUsed: number;
-  complexGraphemeCount: number;
+  // Count of inputs that required segmentation (not count of graphemes)
+  segmentationRequiredInputCount: number;
 }
 
 export interface PerformanceMetrics {
@@ -80,6 +84,7 @@ const cellMetrics: CellCacheMetrics = {
   continuationCellCacheMiss: 0,
   maxCacheSizeWidth1: 0,
   maxCacheSizeWidth2: 0,
+  // TODO Phase 3.2: Not populated until bucket tracking is implemented
   cellCacheBucketCountWidth1: 0,
   cellCacheBucketCountWidth2: 0,
   estimatedRetainedCells: 0,
@@ -101,15 +106,18 @@ const textMetrics: TextCacheMetrics = {
   wrapWidthBucketMapClear: 0,
   maxTextLength: 0,
   totalTextLength: 0,
-  asciiCount: 0,
-  nonAsciiCount: 0,
+  // Note: asciiFastPathCount only counts when hasAsciiFastPath(provider) && isAscii(text)
+  // Other cases (non-ASCII or custom provider) count as nonAsciiOrNoFastPathCount
+  asciiFastPathCount: 0,
+  nonAsciiOrNoFastPathCount: 0,
 };
 
 const graphemeMetrics: GraphemeMetrics = {
   graphemeSegmentationRequiredCalls: 0,
   intlSegmenterUsed: 0,
   fallbackSegmenterUsed: 0,
-  complexGraphemeCount: 0,
+  // Count of inputs that required segmentation (not count of graphemes)
+  segmentationRequiredInputCount: 0,
 };
 
 /**
@@ -173,14 +181,14 @@ export function resetMetrics(): void {
   textMetrics.wrapWidthBucketMapClear = 0;
   textMetrics.maxTextLength = 0;
   textMetrics.totalTextLength = 0;
-  textMetrics.asciiCount = 0;
-  textMetrics.nonAsciiCount = 0;
+  textMetrics.asciiFastPathCount = 0;
+  textMetrics.nonAsciiOrNoFastPathCount = 0;
 
   // Grapheme metrics
   graphemeMetrics.graphemeSegmentationRequiredCalls = 0;
   graphemeMetrics.intlSegmenterUsed = 0;
   graphemeMetrics.fallbackSegmenterUsed = 0;
-  graphemeMetrics.complexGraphemeCount = 0;
+  graphemeMetrics.segmentationRequiredInputCount = 0;
 }
 
 /**
@@ -210,7 +218,7 @@ export function getHeapUsed(): number | null {
 
 /**
  * Get metrics with heap information
- * 
+ *
  * Note: heapUsedBefore/After measures GC impact, not workload memory.
  * To measure workload memory, call getHeapUsed() before/after your workload.
  */
@@ -328,9 +336,9 @@ export const textInstr = {
     textMetrics.totalTextLength += textLength;
     textMetrics.maxTextLength = Math.max(textMetrics.maxTextLength, textLength);
     if (isAscii) {
-      textMetrics.asciiCount++;
+      textMetrics.asciiFastPathCount++;
     } else {
-      textMetrics.nonAsciiCount++;
+      textMetrics.nonAsciiOrNoFastPathCount++;
     }
   },
 
@@ -412,8 +420,8 @@ export const graphemeInstr = {
     graphemeMetrics.fallbackSegmenterUsed++;
   },
 
-  recordComplexGrapheme() {
+  recordSegmentationRequiredInput() {
     if (!instrumentationEnabled) return;
-    graphemeMetrics.complexGraphemeCount++;
+    graphemeMetrics.segmentationRequiredInputCount++;
   },
 };

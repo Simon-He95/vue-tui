@@ -98,8 +98,8 @@ describe("Performance Instrumentation", () => {
       textCellWidth("中文");
 
       const metrics = getMetrics();
-      expect(metrics.text.asciiCount).toBe(1);
-      expect(metrics.text.nonAsciiCount).toBe(1);
+      expect(metrics.text.asciiFastPathCount).toBe(1);
+      expect(metrics.text.nonAsciiOrNoFastPathCount).toBe(1);
     } finally {
       disableInstrumentation();
     }

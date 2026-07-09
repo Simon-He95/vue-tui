@@ -63,8 +63,8 @@ function formatMetrics(metrics: PerformanceMetrics): string {
   lines.push(
     `  avg text length: ${(metrics.text.totalTextLength / Math.max(1, metrics.text.textCellWidthCalls)).toFixed(2)}`,
   );
-  lines.push(`  ASCII count: ${metrics.text.asciiCount}`);
-  lines.push(`  non-ASCII count: ${metrics.text.nonAsciiCount}`);
+  lines.push(`  ASCII count: ${metrics.text.asciiFastPathCount}`);
+  lines.push(`  non-ASCII count: ${metrics.text.nonAsciiOrNoFastPathCount}`);
 
   const textCacheTotal = metrics.text.textWidthCacheHit + metrics.text.textWidthCacheMiss;
   if (textCacheTotal > 0) {
@@ -89,7 +89,7 @@ function formatMetrics(metrics: PerformanceMetrics): string {
   lines.push(`  segmentedGraphemes calls: ${metrics.grapheme.graphemeSegmentationRequiredCalls}`);
   lines.push(`  Intl.Segmenter used: ${metrics.grapheme.intlSegmenterUsed}`);
   lines.push(`  fallback segmenter used: ${metrics.grapheme.fallbackSegmenterUsed}`);
-  lines.push(`  complex grapheme count: ${metrics.grapheme.complexGraphemeCount}`);
+  lines.push(`  complex grapheme count: ${metrics.grapheme.segmentationRequiredInputCount}`);
 
   return lines.join("\n");
 }

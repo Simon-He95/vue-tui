@@ -141,7 +141,7 @@ export function segmentedGraphemes(text: string): Iterable<GraphemeSegment> | nu
   if (!needsGraphemeSegmentation(text)) return null;
 
   graphemeInstr.recordSegmentedGraphemesCall();
-  graphemeInstr.recordComplexGrapheme();
+  graphemeInstr.recordSegmentationRequiredInput();
 
   if (graphemeSegmenter) {
     graphemeInstr.recordIntlSegmenterUsed();
