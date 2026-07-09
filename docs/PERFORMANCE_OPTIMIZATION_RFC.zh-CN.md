@@ -3,7 +3,8 @@
 **文档类型**: RFC / 草案  
 **状态**: 待实施  
 **创建日期**: 2026-07-09  
-**修订版本**: v3 (基于三轮 review 反馈)
+**修订版本**: v4 (基于四轮 review 反馈)  
+**Unicode 版本**: 17.0.0
 
 ---
 
@@ -36,15 +37,40 @@ if (codePoint < 0x1100 || codePoint > 0xffe6) return false;
 
 **建议方向**:
 
-使用 Unicode `EastAsianWidth.txt` 生成/维护 `W/F` 范围表，并保留当前对 emoji、VS16、ambiguous、box drawing 等 terminal-specific tailoring。
+**基于 Unicode 17.0.0** 的 `EastAsianWidth.txt` 生成/维护 `W/F` 范围表。
 
-参考: [Unicode Annex #11: East Asian Width](https://www.unicode.org/reports/tr11/)
+**重要说明**: East_Asian_Width 是基础数据，不是现代终端宽度的最终规则。Unicode UAX #11 明确指出 East_Asian_Width 不适合作为现代 terminal emulator 的开箱即用方案，terminal 需要 case-by-case tailoring。
 
-**测试建议**:
+**宽度判断优先级**:
+
+1. Custom widthProvider
+2. Grapheme/emoji sequence rules (ZWJ, VS16, keycap, emoji tag sequence)
+3. Terminal overrides (box drawing remains narrow)
+4. Unicode EastAsianWidth W/F table
+5. Ambiguous 仅在 provider === "cjk" 时视为 wide
+6. Default fallback: narrow
+
+参考:
+
+- [Unicode Annex #11: East Asian Width](https://www.unicode.org/reports/tr11/)
+- [EastAsianWidth.txt (Unicode 17.0.0)](https://www.unicode.org/Public/17.0.0/ucd/EastAsianWidth.txt)
+- [Blocks.txt (Unicode 17.0.0)](https://www.unicode.org/Public/17.0.0/ucd/Blocks.txt)
+
+**测试建议** (基于 Unicode 17.0.0):
 
 ```typescript
-// CJK Extensions 基本测试
-expect(charCellWidth("𠮷")).toBe(2); // U+20BB7, Ext B
+// CJK Extensions 完整覆盖 (Unicode 17.0.0 包含 Extension J)
+expect(charCellWidth("\u{20BB7}")).toBe(2); // Ext B
+expect(charCellWidth("\u{2A700}")).toBe(2); // Ext C
+expect(charCellWidth("\u{2B740}")).toBe(2); // Ext D
+expect(charCellWidth("\u{2B820}")).toBe(2); // Ext E
+expect(charCellWidth("\u{2CEB0}")).toBe(2); // Ext F
+expect(charCellWidth("\u{30000}")).toBe(2); // Ext G (TIP)
+expect(charCellWidth("\u{31350}")).toBe(2); // Ext H (TIP)
+expect(charCellWidth("\u{2EBF0}")).toBe(2); // Ext I (SIP)
+expect(charCellWidth("\u{323B0}")).toBe(2); // Ext J (TIP, Unicode 17.0.0)
+
+// 基本功能测试
 expect(textCellWidth("𠮷x")).toBe(3);
 expect(sliceByCells("𠮷x", 1)).toBe("");
 expect(sliceByCells("𠮷x", 2)).toBe("𠮷");
@@ -59,13 +85,10 @@ expect(terminal.getCell(2, 0).ch).toBe("x");
 // 反例：非 CJK 补充平面字符
 expect(charCellWidth("𝄞")).toBe(1); // U+1D11E musical symbol
 
-// 其他 CJK 扩展区代表字符
-expect(charCellWidth("\u{2A700}")).toBe(2); // Ext C
-expect(charCellWidth("\u{2B740}")).toBe(2); // Ext D
-expect(charCellWidth("\u{2CEB0}")).toBe(2); // Ext E
-expect(charCellWidth("\u{2EBF0}")).toBe(2); // Ext F
-expect(charCellWidth("\u{30000}")).toBe(2); // Ext G
-expect(charCellWidth("\u{31350}")).toBe(2); // Ext H
+// 回归测试：现有 tailoring 必须保留
+expect(charCellWidth("⏱")).toBe(1); // 无 VS16 时窄
+expect(charCellWidth("⏱️")).toBe(2); // 有 VS16 时宽
+// Box drawing 在 cjk mode 仍然窄 (现有行为)
 ```
 
 **优先级**: P1 (功能正确性)  
@@ -99,14 +122,17 @@ if (map.size > MAX_CACHED_CELLS_PER_STYLE) map.clear();
 
 **因此，这个 cache 优化主要减少 `Cell` 对象分配和对象复用，不直接减少宽度计算成本。**
 
-**建议方向**:
+**建议方向** (需 profiler 验证):
 
 ```typescript
-// 方案 A: 简单调大上限 (Quick Win)
+// 方案 A: Candidate - 调大上限 (需谨慎评估)
 const MAX_CACHED_CELLS_PER_STYLE = 512; // 原 128
 
-// 方案 B: 部分淘汰 (如果方案 A 不够)
-// 注意: 外层 WeakMap 不可遍历，但内层 Map 可以
+// 注意: Cache 按 Style 分桶，width1/width2 各一套
+// 如果 live styles 多，512 会增加 retained memory
+
+// 方案 B: FIFO-like partial eviction (如果方案 A 不够)
+// 注意: 这不是真 LRU，真 LRU 需要在 get 时 refresh order
 function evictOldestInStyleMap(map: Map<string, Cell>, keepRatio = 0.75) {
   const toDelete = Math.floor(map.size * (1 - keepRatio));
   const keys = Array.from(map.keys());
@@ -116,19 +142,22 @@ function evictOldestInStyleMap(map: Map<string, Cell>, keepRatio = 0.75) {
 }
 ```
 
-**验收标准**（不只是 hit rate）:
+**验收标准** (完整指标):
 
 - `createCell` 调用次数
 - `Cell` 新建次数
 - `map.clear()` 次数
 - width1/width2 cache hit/miss
+- **Live Style 数量**
+- **每个 live Style 下 width1/width2 cache size 分布**
+- **Cache 容量调整后的 retained Cell 上限估算**
 - p50/p95 渲染耗时
 - heap delta / retained memory
-- LRU 或 partial eviction 的额外开销
+- Partial eviction 的额外开销 (如适用)
 
 **门槛**: 只有当 cache miss 对 p95 或 allocation pressure 有**可见影响**时才优化；hit rate 只是辅助指标。
 
-**优先级**: P2 (性能优化，需先证明是瓶颈)
+**优先级**: P2 (性能优化，需先 profiler 证明是瓶颈)
 
 ---
 
@@ -165,6 +194,16 @@ expect(textCellWidth("Ω", "default")).toBe(textCellWidth("Ω", "narrow-ambiguou
 clearTextCaches();
 expect(textCellWidth("Ω", "default")).toBe(1);
 expect(textCellWidth("Ω", "cjk")).toBe(2);
+
+// Nested provider 场景
+clearTextCaches();
+withTextRenderPass(() => {
+  expect(textCellWidth("Ω", "default")).toBe(1);
+  expect(textCellWidth("Ω", "cjk")).toBe(2);
+});
+withTextRenderPass(() => {
+  expect(textCellWidth("Ω", "default")).toBe(1);
+});
 ```
 
 **优先级**: P3 (未来考虑，需要先证明存在问题)
@@ -201,25 +240,26 @@ const useRenderPassCache =
   useCache && renderPassDepth > 0 && text.length <= MAX_RENDER_PASS_CACHEABLE_TEXT_LENGTH;
 ```
 
-**Grapheme-aware 分块 (如果需要)**:
+**关于 Chunking**:
 
-不要一次性 `Array.from()` 成大数组，使用 streaming chunk:
+当前 `textCellWidth` / `sliceByCells` 已经是 streaming iteration，**不应为了"分块"引入额外 string[] 分配**。
+
+只有在 profiler 证明需要以下目标时才考虑 chunk:
+
+1. 跨 render pass 复用 chunk width
+2. 长文本中断/分片计算
+3. 避免 wrap/split 产生大中间数组
+
+**验收标准**:
+
+需要 benchmark 两类场景:
 
 ```typescript
-let chunk: string[] = [];
-let cells = 0;
+// Scenario A: unique long text
+// 10k 条不同日志，验证 cache 不污染/heap 不膨胀
 
-forEachGrapheme(text, (g) => {
-  chunk.push(g);
-  if (chunk.length >= SEGMENT_SIZE) {
-    cells += computeChunkWidth(chunk, provider);
-    chunk = [];
-  }
-});
-
-if (chunk.length) {
-  cells += computeChunkWidth(chunk, provider);
-}
+// Scenario B: repeated long text
+// 同一长文本多次渲染，验证限制长度不会误伤真实复用收益
 ```
 
 **优先级**: P2 (性能优化)  
@@ -233,13 +273,14 @@ if (chunk.length) {
 
 **PR #1: Unicode Width Correctness**
 
-- 基于 Unicode `EastAsianWidth.txt` 生成/维护 W/F 范围
-- 添加补充平面 CJK 测试（Extension B/C/D/E/F/G/H/I）
+- 基于 Unicode 17.0.0 `EastAsianWidth.txt` 生成/维护 W/F 范围
+- 测试覆盖所有 CJK Extensions (B/C/D/E/F/G/H/I/J)
 - 添加非 CJK 补充平面反例（如音乐符号）
 - 保留现有 emoji/VS16/keycap/combining mark 测试
+- 确保宽度判断优先级正确（custom provider → grapheme → terminal override → EAW table）
 - **不涉及性能优化**
 
-**验收**: 新增测试通过，现有测试不失败
+**验收**: 新增测试通过，现有测试不失败，回归测试覆盖 tailoring
 
 ---
 
@@ -247,58 +288,63 @@ if (chunk.length) {
 
 **PR #2: Real Baseline Benchmark**
 
-**需要新增或包装 baseline harness**，因为现有脚本不统一输出所需格式:
+**需要新增 baseline harness**，因为现有脚本不统一输出所需格式:
 
 - `check-bench-baselines.ts`: 跑 bench 并检查预算，只打印 pass/fail
 - `bench-dom-renderer.ts`: 单次 scenario 测量，非 samples/p50/p95
 - `bench-stdout-column-diff.ts`: 输出 table 和 ratio，非 JSON baseline
 
-**建议**: 新增 `pnpm run bench:perf-baseline` harness，复用现有场景，但添加:
+**建议**: 新增 `pnpm run bench:perf-baseline` harness，复用现有场景，输出:
 
 ```json
 {
   "commit": "abc123",
+  "unicodeVersion": "17.0.0",
   "node": "v18.19.0",
+  "v8": "10.2.154.26",
   "os": "darwin-arm64",
+  "cpu": "Apple M1",
   "warmup": 100,
   "samples": 1000,
+  "clock": "process.hrtime.bigint",
+  "gc": "--expose-gc (if memory benchmark)",
   "results": {
     "textCellWidth_ascii_100": {
       "p50": 45,
       "p95": 68,
-      "samples": 1000
-    },
-    "textCellWidth_cjk_100": {
-      "p50": 152,
-      "p95": 201,
+      "p99": 80,
+      "mean": 50,
+      "stdev": 5,
+      "cv": 0.1,
       "samples": 1000
     }
   }
 }
 ```
 
-**验收**: 可重复运行，数据稳定，环境信息完整
+**注意**: DOM renderer 性能数据应区分 happy-dom 和真实浏览器。声称用户可感知的 DOM 渲染提升时，需补充 Playwright/browser benchmark。
+
+**验收**: 可重复运行，数据稳定（CV < 10%），环境信息完整
 
 ---
 
-### Phase 3: 低风险 Quick Wins
+### Phase 3: 低风险 Candidate Optimizations
 
 **PR #3: Cache Parameter Tuning** (如果 Phase 2 数据显示需要)
 
-```typescript
-// 方案 A: 调大上限
-const MAX_CACHED_CELLS_PER_STYLE = 512; // 原 128
-```
+仅作为 profiler-driven candidate，不是 quick-win。
 
 **必需数据**:
 
 - Before/after `createCell` 调用次数
 - Before/after `Cell` 新建次数
 - Before/after `map.clear()` 次数
+- Live Style 数量和分布
+- 每个 Style 下 cache size 分布
 - Before/after p50/p95 渲染耗时
-- Heap delta
+- Heap delta 和 retained Cell 估算
 
-**验收**: Cache miss 对 p95 的影响降低，无内存泄漏
+**验收**: Cache miss 对 p95 的影响降低，retained memory 在可接受范围
 
 ---
 
@@ -309,15 +355,15 @@ const MAX_CACHED_CELLS_PER_STYLE = 512; // 原 128
 **PR #4: Long Text Strategy** (如果 `textCellWidth` 是 top hotspot)
 
 - 实现 `MAX_GLOBAL/RENDER_PASS_CACHEABLE_TEXT_LENGTH`
-- 或 grapheme-safe streaming chunking
+- Benchmark unique vs repeated long text 场景
 
-**验收**: 不拆 grapheme，长文本场景更稳定，有 before/after 数据
+**验收**: 长文本场景更稳定，有 before/after 数据，heap 不膨胀
 
 **PR #5: Provider-Aware Cache** (如果可证明污染)
 
 - 实现缓存分桶，覆盖所有相关 cache
 
-**验收**: 可复现的污染场景被修复
+**验收**: 可复现的污染场景被修复，nested provider 测试通过
 
 **PR #6: Virtual Scroll Optimizations**
 
@@ -331,26 +377,26 @@ const MAX_CACHED_CELLS_PER_STYLE = 512; // 原 128
 
 ### 1. Unicode 完整性
 
-❌ **错误**: 只添加 0x20000-0x3FFFD，漏掉其他 Extension  
-✅ **正确**: 基于 EastAsianWidth.txt，覆盖所有 W/F 范围
+❌ **错误**: 只添加部分 Extension，使用过时 Unicode 版本  
+✅ **正确**: Pin Unicode 17.0.0，测试所有 Extension (B-J)，添加反例
 
 ❌ **错误**: 把所有补充平面字符都判宽  
-✅ **正确**: 添加非 CJK 补充平面反例测试
+✅ **正确**: 基于 EastAsianWidth.txt，保留 terminal tailoring 优先级
 
 ### 2. 破坏 Grapheme
 
 ❌ **错误**: 按 UTF-16 index 直接切分文本  
-✅ **正确**: 基于 grapheme 边界或 streaming chunk
+✅ **正确**: 基于 grapheme 边界
 
 ### 3. 过度优化
 
-❌ **错误**: 没有数据支持就实施复杂优化  
+❌ **错误**: 没有 profiler 数据就调 cache 参数或做 chunking  
 ✅ **正确**: Profiler 先行，数据驱动决策
 
 ### 4. 验收标准不足
 
 ❌ **错误**: 只报 cache hit rate 提升  
-✅ **正确**: 提供完整指标（allocation、p50/p95、heap delta）
+✅ **正确**: 提供完整指标（live styles、allocation、p50/p95、heap）
 
 ---
 
@@ -358,31 +404,34 @@ const MAX_CACHED_CELLS_PER_STYLE = 512; // 原 128
 
 ### Correctness PR
 
-- ✅ 基于 EastAsianWidth.txt 的宽度判断
-- ✅ 覆盖 Extension B/C/D/E/F/G/H/I 测试
+- ✅ 基于 Unicode 17.0.0 EastAsianWidth.txt
+- ✅ 测试覆盖所有 Extension (B/C/D/E/F/G/H/I/J)
 - ✅ 包含非 CJK 补充平面反例
+- ✅ 回归测试：⏱ vs ⏱️，box drawing 仍窄
 - ✅ 现有 emoji/VS16/grapheme 测试仍通过
 
 ### Baseline PR
 
-- ✅ 新增或包装 baseline harness
-- ✅ 输出 JSON 包含: commit, Node, OS, warmup, samples, p50/p95
-- ✅ 多次运行数据稳定（变异系数 < 10%）
+- ✅ 新增 baseline harness (现有脚本不足)
+- ✅ JSON 包含: commit, Unicode version, Node, V8, OS, CPU, p50/p95/p99/mean/stdev/CV
+- ✅ 多次运行数据稳定（CV < 10%）
+- ✅ DOM benchmark 区分 happy-dom vs 真实浏览器
 
 ### Cache Tuning PR
 
-- ✅ Before/after createCell/new Cell 次数
-- ✅ Before/after map.clear 次数
+- ✅ Profiler 证明 Cell allocation 是瓶颈
+- ✅ Before/after: createCell count, new Cell count, map.clear count
+- ✅ Live Style 数量和 cache size 分布
+- ✅ Retained Cell 上限估算
 - ✅ Before/after p50/p95
 - ✅ Heap delta 测量
-- ✅ 证明 cache miss 对 p95 有可见影响
 
 ### Long Text PR
 
 - ✅ Profiler 证明 textCellWidth 是 hotspot
-- ✅ Grapheme safety 证明（不拆 ZWJ/combining）
-- ✅ Before/after benchmarks
-- ✅ CJK/emoji/混合文本测试
+- ✅ Benchmark: unique vs repeated long text
+- ✅ 证明不污染 global cache
+- ✅ Heap 不膨胀
 
 ### Virtual Scroll PR
 
@@ -395,28 +444,29 @@ const MAX_CACHED_CELLS_PER_STYLE = 512; // 原 128
 
 ## 🎓 经验教训
 
-### 从三轮 Review 学到的
+### 从四轮 Review 学到的
 
-1. ✅ **根因诊断需要准确** - 不是代理对误判，是补充平面覆盖不足
-2. ✅ **区分优化目标** - Cell cache 优化对象分配，不是宽度计算
-3. ✅ **理解实际实现** - 纯 CJK 不走完整 grapheme segmentation
-4. ✅ **验收标准完整** - 不只是 hit rate，要有完整性能指标
-5. ✅ **文档诚实一致** - 不引用已删除的报告
+1. ✅ **Pin Unicode 版本** - 2026 年应使用 Unicode 17.0.0 (包含 Extension J)
+2. ✅ **测试标注准确** - U+2B820 是 Ext E，U+2CEB0 是 Ext F，U+2EBF0 是 Ext I
+3. ✅ **EAW 不是 Oracle** - 需要 terminal tailoring 优先级
+4. ✅ **Cache 调参需谨慎** - 不是 quick-win，需完整指标
+5. ✅ **Chunking 需明确目的** - 不应引入额外分配
 
 ---
 
 ## ✅ 下一步行动
 
 1. **立即**: 合并本 RFC，作为优化方向参考
-2. **Week 1**: 实施 PR #1 (Unicode Correctness)
-3. **Week 2**: 实施 PR #2 (Real Baseline)
-4. **Week 3**: 根据 baseline 数据决定 Quick Wins
-5. **Week 4+**: 基于 profiler 数据按需优化
+2. **Week 1**: 实施 PR #1 (Unicode Correctness, Unicode 17.0.0)
+3. **Week 2**: 实施 PR #2 (Real Baseline with harness)
+4. **Week 3**: 根据 baseline + profiler 数据决定候选优化
+5. **Week 4+**: 仅实施 profiler 证明的瓶颈优化
 
 ---
 
 **文档状态**: ✅ RFC / 草案  
 **实施状态**: ⏳ 待实施  
-**验证方式**: 真实 baseline + profiler 数据驱动
+**验证方式**: 真实 baseline + profiler 数据驱动  
+**Unicode 版本**: 17.0.0
 
-**最后更新**: 2026-07-09 (v3, 基于三轮 review 修正)
+**最后更新**: 2026-07-09 (v4, 基于四轮 review 修正)
