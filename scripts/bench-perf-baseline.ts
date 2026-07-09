@@ -475,7 +475,10 @@ async function main() {
   );
 
   // Scenario 11: textCellWidth complex grapheme (hot cache) - ZWJ emoji, regional indicators, combining marks
-  const complexGraphemeHot = "👩‍💻".repeat(20) + "🇺🇸".repeat(20) + "e\u0301".repeat(50);
+  const ZWJ = "\u200d";
+  const womanTechnologist = `👩${ZWJ}💻`;
+  const family = `👨${ZWJ}👩${ZWJ}👧${ZWJ}👦`;
+  const complexGraphemeHot = womanTechnologist.repeat(20) + "🇺🇸".repeat(20) + "e\u0301".repeat(50);
   results["textCellWidth_complex_grapheme_hot"] = benchmark(
     "textCellWidth(complex grapheme, hot cache)",
     () => {
@@ -492,7 +495,7 @@ async function main() {
   // Scenario 12: textCellWidth complex grapheme (unique) - tests segmentedGraphemes path
   const complexGraphemeCorpus = Array.from(
     { length: uniqueOps },
-    (_, i) => `👨‍👩‍👧‍👦${i}🇺🇸${"e\u0301".repeat(10)}`,
+    (_, i) => `${family}${i}🇺🇸${"e\u0301".repeat(10)}`,
   );
   let complexIdx = 0;
   results["textCellWidth_complex_grapheme_unique"] = benchmark(

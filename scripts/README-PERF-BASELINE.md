@@ -29,13 +29,13 @@ pnpm run bench:perf-baseline:json
 
 ### Text Width Operations (7 scenarios)
 
-6. **textCellWidth_ascii_long_fast_path** - ASCII text (100 chars, uses fast path, cache-miss path)
+6. **textCellWidth_ascii_long_fast_path** - ASCII text (100 chars, fast path only, no cache)
 7. **textCellWidth_ascii_unique** - Unique ASCII text (still fast path, not cache)
 8. **textCellWidth_cjk_long_hot** - BMP CJK text (100 chars, hot cache)
 9. **textCellWidth_cjk_unique** - Unique CJK text (cache-miss path)
 10. **textCellWidth_supplementary_cjk_long_hot** - Supplementary CJK (50 chars, hot cache)
-11. **textCellWidth_complex_grapheme_hot** - Complex grapheme (ZWJ emoji, combining marks, hot cache)
-12. **textCellWidth_complex_grapheme_unique** - Complex grapheme (cache-miss path, tests segmentedGraphemes)
+11. **textCellWidth_complex_grapheme_hot** - Complex grapheme (ZWJ emoji, combining marks, hot cache) (measures cache-hit)
+12. **textCellWidth_complex_grapheme_unique** - Complex grapheme (cache-miss path, measures actual segmentation)
 
 ### Text Operations (4 scenarios)
 
@@ -101,6 +101,8 @@ This makes before/after comparisons meaningful.
 
 ```json
 {
+  "schemaVersion": 1,
+  "benchmarkSuite": "unicode-width-text-v1",
   "commit": "...",
   "eawUnicodeVersion": "17.0.0",
   "runtimeUnicodeVersion": "15.1.0",
@@ -116,7 +118,11 @@ This makes before/after comparisons meaningful.
   "timestamp": "2026-07-09T10:27:22.455Z",
   "blackhole": 12345,
   "results": {
+  "schemaVersion": 1,
+  "benchmarkSuite": "unicode-width-text-v1",
     "charCellWidth_ascii": {
+  "schemaVersion": 1,
+  "benchmarkSuite": "unicode-width-text-v1",
       "p50": 4.12,
       "p95": 8.3,
       "p99": 12.45,
@@ -235,4 +241,23 @@ Neither scenario tests text cache behavior. For cache-miss path testing, see the
 The `harness_blackhole_overhead` scenario measures the pure overhead of the benchmark harness (loop + blackhole sink). This overhead is **informational only** and is **not subtracted** from other scenario results.
 
 The overhead baseline only covers `consumeNumber`. Scenarios using `consumeString` or `consumeArray` may have slightly different overhead, but this doesn't affect before/after comparisons.
+
+
+### Complex Grapheme Scenarios
+
+The complex grapheme scenarios test different aspects:
+
+**Hot scenario** (`textCellWidth_complex_grapheme_hot`):
+- Measures cache-hit behavior for complex strings
+- After warmup, the same string is cached
+- Tests how fast cache lookup + return is
+- Does NOT repeatedly measure segmentation cost
+
+**Unique scenario** (`textCellWidth_complex_grapheme_unique`):
+- Each iteration uses different input
+- Forces cache miss every time
+- Measures actual `segmentedGraphemes` / `Intl.Segmenter` computation
+- Tests ZWJ, regional indicators, combining marks processing
+
+This distinction is important: hot scenario validates caching works; unique scenario measures true grapheme processing cost.
 
