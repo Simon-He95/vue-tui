@@ -1,10 +1,10 @@
 #!/usr/bin/env tsx
 /**
  * Performance Baseline Harness
- * 
+ *
  * Generates reproducible performance baseline data with statistical analysis.
  * Outputs JSON with environment info, p50/p95/p99, mean, stdev, and CV.
- * 
+ *
  * Usage:
  *   pnpm run bench:perf-baseline [--output <file>]
  *   pnpm run bench:perf-baseline -- --warmup 200 --samples 2000
@@ -125,7 +125,11 @@ function sanityCheck(): void {
   // Slice
   assert.strictEqual(sliceByCells("\u{20BB7}x", 1), "", "Slicing at 1 should return empty");
   assert.strictEqual(sliceByCells("\u{20BB7}x", 2), "\u{20BB7}", "Slicing at 2 should return 𠮷");
-  assert.strictEqual(sliceByCells("\u{20BB7}x", 3), "\u{20BB7}x", "Slicing at 3 should return full");
+  assert.strictEqual(
+    sliceByCells("\u{20BB7}x", 3),
+    "\u{20BB7}x",
+    "Slicing at 3 should return full",
+  );
 
   // Wrap
   const wrapped = wrapByCells("中文中文", 4);
@@ -195,11 +199,7 @@ interface BenchmarkOptions {
 /**
  * Run a benchmark function multiple times and collect timing samples
  */
-function benchmark(
-  name: string,
-  fn: () => void,
-  options: BenchmarkOptions,
-): BenchmarkResult {
+function benchmark(name: string, fn: () => void, options: BenchmarkOptions): BenchmarkResult {
   const { warmup, samples, iterationsPerSample, operationsPerIteration, beforeEach } = options;
 
   console.log(`  Running: ${name}...`);
@@ -252,7 +252,8 @@ function parseArgs() {
 
   const outputFile = outputIndex >= 0 ? args[outputIndex + 1] || null : null;
   const warmupArg = warmupIndex >= 0 ? parsePositiveInt(args[warmupIndex + 1], "--warmup") : null;
-  const samplesArg = samplesIndex >= 0 ? parsePositiveInt(args[samplesIndex + 1], "--samples") : null;
+  const samplesArg =
+    samplesIndex >= 0 ? parsePositiveInt(args[samplesIndex + 1], "--samples") : null;
 
   // Environment variables for smoke mode
   const isSmoke = process.env.BENCH_SMOKE === "1";
@@ -305,14 +306,20 @@ async function main() {
   // Pre-generate corpus for unique text scenarios (true no-cache)
   // Size = total operations needed (warmup + samples) * iterations + safety margin
   const uniqueOps = (warmup + samples) * fastIter + 100;
-  
+
   const cjkCorpus = Array.from({ length: uniqueOps }, (_, i) => `日志${i}：${"中文".repeat(50)}`);
-  const asciiCorpus = Array.from({ length: uniqueOps }, (_, i) => `Log ${i}: ${"text ".repeat(20)}`);
-  const wrapCorpus = Array.from({ length: uniqueOps }, (_, i) => `包装文本${i}${"测试".repeat(30)}`);
+  const asciiCorpus = Array.from(
+    { length: uniqueOps },
+    (_, i) => `Log ${i}: ${"text ".repeat(20)}`,
+  );
+  const wrapCorpus = Array.from(
+    { length: uniqueOps },
+    (_, i) => `包装文本${i}${"测试".repeat(30)}`,
+  );
   let cjkIdx = 0;
   let asciiIdx = 0;
   let wrapIdx = 0;
-  
+
   console.log(`Generated unique corpus: ${uniqueOps} entries per type\n`);
 
   // Scenario 1: charCellWidth ASCII
@@ -467,7 +474,6 @@ async function main() {
     },
   );
 
-
   // Scenario 11: textCellWidth complex grapheme (hot cache) - ZWJ emoji, regional indicators, combining marks
   const complexGraphemeHot = "👩‍💻".repeat(20) + "🇺🇸".repeat(20) + "e\u0301".repeat(50);
   results["textCellWidth_complex_grapheme_hot"] = benchmark(
@@ -484,8 +490,9 @@ async function main() {
   );
 
   // Scenario 12: textCellWidth complex grapheme (unique) - tests segmentedGraphemes path
-  const complexGraphemeCorpus = Array.from({ length: uniqueOps }, (_, i) => 
-    `👨‍👩‍👧‍👦${i}🇺🇸${"e\u0301".repeat(10)}`
+  const complexGraphemeCorpus = Array.from(
+    { length: uniqueOps },
+    (_, i) => `👨‍👩‍👧‍👦${i}🇺🇸${"e\u0301".repeat(10)}`,
   );
   let complexIdx = 0;
   results["textCellWidth_complex_grapheme_unique"] = benchmark(
@@ -516,7 +523,6 @@ async function main() {
       operationsPerIteration: 3,
     },
   );
-
 
   // Scenario 14: sliceByCells with supplementary CJK
   const sliceText = "\u{20BB7}\u{2B820}\u{30000}abc";
@@ -653,7 +659,9 @@ async function main() {
     console.log(`  stdev: ${result.stdev.toFixed(2)} ns/op`);
     console.log(`  cv: ${result.cv.toFixed(4)} (${(result.cv * 100).toFixed(2)}%)`);
     console.log(`  stability: ${result.stability}`);
-    console.log(`  iterations: ${result.iterationsPerSample} x ${result.operationsPerIteration} ops`);
+    console.log(
+      `  iterations: ${result.iterationsPerSample} x ${result.operationsPerIteration} ops`,
+    );
   }
 
   console.log(`\n(Blackhole sink: ${sinkValue})`);
