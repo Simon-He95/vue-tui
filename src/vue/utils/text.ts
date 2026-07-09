@@ -230,28 +230,35 @@ export function textCellWidth(
 ): number {
   if (!text) return 0;
 
-  const isAsciiText = isAscii(text);
-  textInstr.recordTextCellWidthCall(text.length, isAsciiText);
-
   // Fast path: ASCII is always single-cell and doesn't require grapheme segmentation.
-  if (hasAsciiFastPath(provider) && isAsciiText) return text.length;
+  if (hasAsciiFastPath(provider) && isAscii(text)) {
+    if (isInstrumentationEnabled()) {
+      textInstr.recordTextCellWidthCall(text.length, true);
+    }
+    return text.length;
+  }
+
+  // Instrumentation only when enabled (avoid extra isAscii check for non-ASCII)
+  if (isInstrumentationEnabled()) {
+    textInstr.recordTextCellWidthCall(text.length, false);
+  }
 
   const useCache = canUseDefaultTextCache(provider);
   if (useCache && renderPassDepth > 0) {
     const cached = renderPassTextWidthCache.get(text);
     if (cached != null) {
-      textInstr.recordRenderPassCacheHit();
+      if (isInstrumentationEnabled()) textInstr.recordRenderPassCacheHit();
       return cached;
     }
-    textInstr.recordRenderPassCacheMiss();
+    if (isInstrumentationEnabled()) textInstr.recordRenderPassCacheMiss();
   }
   if (useCache) {
     const cached = textWidthCacheGet(text);
     if (cached != null) {
-      textInstr.recordTextWidthCacheHit();
+      if (isInstrumentationEnabled()) textInstr.recordTextWidthCacheHit();
       return cached;
     }
-    textInstr.recordTextWidthCacheMiss();
+    if (isInstrumentationEnabled()) textInstr.recordTextWidthCacheMiss();
   }
   let cells = 0;
   forEachGrapheme(text, (g) => {
