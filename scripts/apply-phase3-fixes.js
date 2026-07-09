@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * Phase 3 Review Fixes Script
- * 
+ *
  * This script applies all the fixes requested in the review:
  * 1. Add Cell cache bucket tracking
- * 2. Add wrap/inline cache instrumentation  
+ * 2. Add wrap/inline cache instrumentation
  * 3. Fix profiler workloads
  * 4. Fix documentation
  * 5. Add tests
@@ -23,5 +23,5 @@ const fixes = [
 
 console.log("Phase 3 Review Fixes");
 console.log("===================\n");
-fixes.forEach(fix => console.log(fix));
+fixes.forEach((fix) => console.log(fix));
 console.log("\nApply these fixes manually or continue implementation...");

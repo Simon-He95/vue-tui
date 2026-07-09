@@ -86,7 +86,7 @@ function formatMetrics(metrics: PerformanceMetrics): string {
   }
 
   lines.push("\nGrapheme Metrics:");
-  lines.push(`  segmentedGraphemes calls: ${metrics.grapheme.segmentedGraphemesCalls}`);
+  lines.push(`  segmentedGraphemes calls: ${metrics.grapheme.graphemeSegmentationRequiredCalls}`);
   lines.push(`  Intl.Segmenter used: ${metrics.grapheme.intlSegmenterUsed}`);
   lines.push(`  fallback segmenter used: ${metrics.grapheme.fallbackSegmenterUsed}`);
   lines.push(`  complex grapheme count: ${metrics.grapheme.complexGraphemeCount}`);
@@ -157,7 +157,7 @@ function workload_complexGraphemeText(): WorkloadResult {
     `👩${zwj}💻 Developer`,
     `👨${zwj}👩${zwj}👧${zwj}👦 Family`,
     "🇺🇸 Country flag",
-    "é café" + " naïve".repeat(10), // combining marks
+    "e\u0301 cafe\u0301" + " naïve".repeat(10), // combining marks
   ];
 
   // Call textCellWidth many times

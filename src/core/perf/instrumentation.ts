@@ -51,7 +51,7 @@ export interface TextCacheMetrics {
 }
 
 export interface GraphemeMetrics {
-  segmentedGraphemesCalls: number;
+  graphemeSegmentationRequiredCalls: number;
   intlSegmenterUsed: number;
   fallbackSegmenterUsed: number;
   complexGraphemeCount: number;
@@ -84,7 +84,9 @@ const cellMetrics: CellCacheMetrics = {
   continuationCellCacheMiss: 0,
   maxCacheSizeWidth1: 0,
   maxCacheSizeWidth2: 0,
-  estimatedLiveStyleBuckets: 0,
+  cellCacheBucketCountWidth1: 0,
+  cellCacheBucketCountWidth2: 0,
+  estimatedRetainedCells: 0,
 };
 
 const textMetrics: TextCacheMetrics = {
@@ -100,6 +102,11 @@ const textMetrics: TextCacheMetrics = {
   wrapCacheMiss: 0,
   wrapCacheSet: 0,
   wrapCacheClear: 0,
+  wrapWidthBucketMapClear: 0,
+  inlineLineCacheHit: 0,
+  inlineLineCacheMiss: 0,
+  inlineLineCacheSet: 0,
+  inlineLineCacheClear: 0,
   maxTextLength: 0,
   totalTextLength: 0,
   asciiCount: 0,
@@ -107,7 +114,7 @@ const textMetrics: TextCacheMetrics = {
 };
 
 const graphemeMetrics: GraphemeMetrics = {
-  segmentedGraphemesCalls: 0,
+  graphemeSegmentationRequiredCalls: 0,
   intlSegmenterUsed: 0,
   fallbackSegmenterUsed: 0,
   complexGraphemeCount: 0,
@@ -154,7 +161,9 @@ export function resetMetrics(): void {
   cellMetrics.continuationCellCacheMiss = 0;
   cellMetrics.maxCacheSizeWidth1 = 0;
   cellMetrics.maxCacheSizeWidth2 = 0;
-  cellMetrics.estimatedLiveStyleBuckets = 0;
+  cellMetrics.cellCacheBucketCountWidth1 = 0;
+  cellMetrics.cellCacheBucketCountWidth2 = 0;
+  cellMetrics.estimatedRetainedCells = 0;
 
   // Text metrics
   textMetrics.textCellWidthCalls = 0;
@@ -169,13 +178,18 @@ export function resetMetrics(): void {
   textMetrics.wrapCacheMiss = 0;
   textMetrics.wrapCacheSet = 0;
   textMetrics.wrapCacheClear = 0;
+  textMetrics.wrapWidthBucketMapClear = 0;
+  textMetrics.inlineLineCacheHit = 0;
+  textMetrics.inlineLineCacheMiss = 0;
+  textMetrics.inlineLineCacheSet = 0;
+  textMetrics.inlineLineCacheClear = 0;
   textMetrics.maxTextLength = 0;
   textMetrics.totalTextLength = 0;
   textMetrics.asciiCount = 0;
   textMetrics.nonAsciiCount = 0;
 
   // Grapheme metrics
-  graphemeMetrics.segmentedGraphemesCalls = 0;
+  graphemeMetrics.graphemeSegmentationRequiredCalls = 0;
   graphemeMetrics.intlSegmenterUsed = 0;
   graphemeMetrics.fallbackSegmenterUsed = 0;
   graphemeMetrics.complexGraphemeCount = 0;
@@ -193,17 +207,37 @@ export function getMetrics(): PerformanceMetrics {
 }
 
 /**
- * Get metrics with heap information (requires --expose-gc and Chrome/Node)
+ * Get heap used bytes (Node.js or Chrome)
+ */
+export function getHeapUsed(): number | null {
+  // Try Node.js first
+  if (typeof process !== "undefined" && typeof process.memoryUsage === "function") {
+    return process.memoryUsage().heapUsed;
+  }
+
+  // Try Chrome/browser
+  const memory = (performance as any).memory;
+  return typeof memory?.usedJSHeapSize === "number" ? memory.usedJSHeapSize : null;
+}
+
+/**
+ * Get metrics with heap information (requires --expose-gc for GC)
  */
 export function getMetricsWithHeap(): PerformanceMetrics {
   const metrics = getMetrics();
 
-  // Only available in Chrome/Node with performance.memory extension
-  const perf = performance as any;
-  if (typeof global.gc === "function" && perf.memory) {
-    metrics.heapUsedBefore = perf.memory.usedJSHeapSize;
-    global.gc();
-    metrics.heapUsedAfter = perf.memory.usedJSHeapSize;
+  const heapBefore = getHeapUsed();
+  if (heapBefore !== null) {
+    metrics.heapUsedBefore = heapBefore;
+  }
+
+  // Only try GC if available
+  if (typeof (global as any).gc === "function") {
+    (global as any).gc();
+    const heapAfter = getHeapUsed();
+    if (heapAfter !== null) {
+      metrics.heapUsedAfter = heapAfter;
+    }
   }
 
   return metrics;
@@ -282,9 +316,15 @@ export const cellInstr = {
     }
   },
 
-  estimateLiveStyleBuckets(count: number) {
+  updateBucketCounts(width1Count: number, width2Count: number) {
     if (!instrumentationEnabled) return;
-    cellMetrics.estimatedLiveStyleBuckets = count;
+    cellMetrics.cellCacheBucketCountWidth1 = width1Count;
+    cellMetrics.cellCacheBucketCountWidth2 = width2Count;
+  },
+
+  updateEstimatedRetainedCells(count: number) {
+    if (!instrumentationEnabled) return;
+    cellMetrics.estimatedRetainedCells = count;
   },
 };
 
@@ -356,13 +396,18 @@ export const textInstr = {
     if (!instrumentationEnabled) return;
     textMetrics.wrapCacheClear++;
   },
+
+  recordWrapWidthBucketMapClear() {
+    if (!instrumentationEnabled) return;
+    textMetrics.wrapWidthBucketMapClear++;
+  },
 };
 
 // Grapheme instrumentation helpers
 export const graphemeInstr = {
   recordSegmentedGraphemesCall() {
     if (!instrumentationEnabled) return;
-    graphemeMetrics.segmentedGraphemesCalls++;
+    graphemeMetrics.graphemeSegmentationRequiredCalls++;
   },
 
   recordIntlSegmenterUsed() {

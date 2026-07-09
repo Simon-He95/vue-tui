@@ -1,6 +1,6 @@
 import { charCellWidth, type WidthProvider } from "../../core/buffer/width.js";
 import { segmentedGraphemes } from "../../utils/grapheme.js";
-import { textInstr } from "../../core/perf/instrumentation.js";
+import { textInstr, isInstrumentationEnabled } from "../../core/perf/instrumentation.js";
 
 export interface TextCellSegment {
   text: string;
@@ -439,7 +439,10 @@ function getWrapBucket(width: number): Map<string, readonly string[]> {
   let bucket = wrapCacheByWidth.get(width);
   if (bucket) return bucket;
   // Guard against terminals that resize through many widths (e.g. dragging window).
-  if (wrapCacheByWidth.size >= MAX_WRAP_CACHE_BUCKETS) wrapCacheByWidth.clear();
+  if (wrapCacheByWidth.size >= MAX_WRAP_CACHE_BUCKETS) {
+    if (isInstrumentationEnabled()) textInstr.recordWrapWidthBucketMapClear();
+    wrapCacheByWidth.clear();
+  }
   bucket = new Map<string, readonly string[]>();
   wrapCacheByWidth.set(width, bucket);
   return bucket;
