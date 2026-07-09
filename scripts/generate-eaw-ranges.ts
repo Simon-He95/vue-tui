@@ -103,7 +103,10 @@ function generateTypeScript(
  * Source: ${EAW_URL}
  * SHA-256: ${sha256}
  * 
- * DO NOT EDIT MANUALLY - regenerate with: pnpm exec tsx scripts/generate-eaw-ranges.ts
+ * Data derived from Unicode EastAsianWidth.txt.
+ * © Unicode, Inc. See Unicode terms of use: https://www.unicode.org/terms_of_use.html
+ * 
+ * DO NOT EDIT MANUALLY - regenerate with: pnpm run unicode:eaw:generate
  */
 
 `;

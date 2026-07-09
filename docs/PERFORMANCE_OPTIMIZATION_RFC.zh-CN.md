@@ -1,20 +1,24 @@
 # vue-tui 性能优化 RFC
 
 **文档类型**: RFC / 草案  
-**状态**: 待实施  
+**状态**: Phase 1 已实施；Phase 2+ 待实施  
 **创建日期**: 2026-07-09  
 **修订版本**: v4 (基于四轮 review 反馈)  
 **Unicode 版本**: 17.0.0
 
 ---
 
+> **Update 2026-07-09**: Phase 1 (Unicode Width Correctness) 已在 PR #114 实现。
+> 本 RFC 中 Phase 2+ 仍作为后续独立 PR 的参考路线。
+
 ## 📋 执行摘要
 
 本 RFC 基于代码审查和多轮 review 反馈，提出 vue-tui 性能优化方向和实施建议。
 
-**重要说明**:
-
 - ✅ 本文档是**优化方向草案**，非最终实施方案
+- ✅ **Phase 1 已完成** - Unicode 17.0.0 East Asian Width 正确性修复
+- ⏳ **Phase 2+ 待实施** - 需要独立 PR，基于真实 baseline 数据
+- 📊 后续优化应拆分为多个小 PR，每个 PR 配真实性能数据
 - ⚠️ 所有诊断和收益预期基于代码审查，需要真实 baseline 数据验证
 - 📊 后续应拆分为多个小 PR，每个 PR 配真实性能数据
 

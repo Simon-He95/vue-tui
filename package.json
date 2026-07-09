@@ -278,7 +278,7 @@
     "release:smoke": "pnpm run example:tlog-view-lab && pnpm run example:agent-console:smoke && pnpm run example:agent-console:terminal:smoke && pnpm run example:basic:terminal-table:smoke",
     "start": "esno src/index.ts",
     "test": "vitest run",
-    "test:coverage:core": "vitest run test/unicode-width.test.ts test/hyperlink-sanitizer.test.ts test/dom-renderer.test.ts test/render-manager.test.ts test/terminal-selection.test.ts test/terminal-scroll-operations.test.ts test/plane-compositor.test.ts --coverage.enabled true --coverage.reporter text-summary",
+    "test:coverage:core": "vitest run test/unicode-width.test.ts test/core/buffer/unicode-17-eaw.test.ts test/hyperlink-sanitizer.test.ts test/dom-renderer.test.ts test/render-manager.test.ts test/terminal-selection.test.ts test/terminal-scroll-operations.test.ts test/plane-compositor.test.ts --coverage.enabled true --coverage.reporter text-summary",
     "test:browser-packed-vite-import": "pnpm run test:browser-vite-import:package",
     "test:browser-vite-import": "pnpm run build:checked && pnpm run test:browser-vite-import:dist",
     "test:browser-vite-import:dist": "pnpm exec vite build --config test/fixtures/browser-vite-import/vite.config.ts && node scripts/check-browser-vite-import.mjs",
@@ -304,7 +304,9 @@
     "bench:baseline:timing": "BENCH_TIMING=1 tsx scripts/check-bench-baselines.ts",
     "bench:phase2": "tsx scripts/bench-phase2.ts",
     "bench:scroll-mailbox": "tsx scripts/bench-scroll-mailbox.ts",
-    "bench:stdout-column-diff": "tsx scripts/bench-stdout-column-diff.ts"
+    "bench:stdout-column-diff": "tsx scripts/bench-stdout-column-diff.ts",
+    "unicode:eaw:generate": "tsx scripts/generate-eaw-ranges.ts",
+    "unicode:eaw:check": "tsx scripts/generate-eaw-ranges.ts && git diff --exit-code -- src/core/buffer/eaw-ranges-unicode-17.ts"
   },
   "dependencies": {
     "katex": "^0.16.47",
