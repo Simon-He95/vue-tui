@@ -21,10 +21,19 @@ export interface CellCacheMetrics {
   continuationCellCacheMiss: number;
   maxCacheSizeWidth1: number;
   maxCacheSizeWidth2: number;
-  // TODO Phase 3.2: Not populated until bucket tracking is implemented
-  cellCacheBucketCountWidth1: number;
-  cellCacheBucketCountWidth2: number;
-  estimatedRetainedCells: number;
+  // Registered bucket metrics (populated from bucket registry)
+  // IMPORTANT: Buckets are only registered when created while instrumentation is enabled.
+  // After resetMetrics(), existing buckets won't re-register.
+  // For accurate distribution profiling: use fresh terminal or unique styles per run.
+  registeredBucketCountWidth1: number;
+  registeredBucketCountWidth2: number;
+  registeredBucketSizeP50Width1: number;
+  registeredBucketSizeP95Width1: number;
+  registeredBucketSizeMaxWidth1: number;
+  registeredBucketSizeP50Width2: number;
+  registeredBucketSizeP95Width2: number;
+  registeredBucketSizeMaxWidth2: number;
+  estimatedRegisteredBucketCells: number;
 }
 
 export interface TextCacheMetrics {
@@ -84,10 +93,15 @@ const cellMetrics: CellCacheMetrics = {
   continuationCellCacheMiss: 0,
   maxCacheSizeWidth1: 0,
   maxCacheSizeWidth2: 0,
-  // TODO Phase 3.2: Not populated until bucket tracking is implemented
-  cellCacheBucketCountWidth1: 0,
-  cellCacheBucketCountWidth2: 0,
-  estimatedRetainedCells: 0,
+  registeredBucketCountWidth1: 0,
+  registeredBucketCountWidth2: 0,
+  registeredBucketSizeP50Width1: 0,
+  registeredBucketSizeP95Width1: 0,
+  registeredBucketSizeMaxWidth1: 0,
+  registeredBucketSizeP50Width2: 0,
+  registeredBucketSizeP95Width2: 0,
+  registeredBucketSizeMaxWidth2: 0,
+  estimatedRegisteredBucketCells: 0,
 };
 
 const textMetrics: TextCacheMetrics = {
@@ -119,6 +133,10 @@ const graphemeMetrics: GraphemeMetrics = {
   // Count of inputs that required segmentation (not count of graphemes)
   segmentationRequiredInputCount: 0,
 };
+
+// Cell cache bucket tracking (only when instrumentation enabled)
+const cellCacheBucketsWidth1: Array<Map<string, any>> = [];
+const cellCacheBucketsWidth2: Array<Map<string, any>> = [];
 
 /**
  * Enable instrumentation collection
@@ -161,9 +179,19 @@ export function resetMetrics(): void {
   cellMetrics.continuationCellCacheMiss = 0;
   cellMetrics.maxCacheSizeWidth1 = 0;
   cellMetrics.maxCacheSizeWidth2 = 0;
-  cellMetrics.cellCacheBucketCountWidth1 = 0;
-  cellMetrics.cellCacheBucketCountWidth2 = 0;
-  cellMetrics.estimatedRetainedCells = 0;
+  cellMetrics.registeredBucketCountWidth1 = 0;
+  cellMetrics.registeredBucketCountWidth2 = 0;
+  cellMetrics.registeredBucketSizeP50Width1 = 0;
+  cellMetrics.registeredBucketSizeP95Width1 = 0;
+  cellMetrics.registeredBucketSizeMaxWidth1 = 0;
+  cellMetrics.registeredBucketSizeP50Width2 = 0;
+  cellMetrics.registeredBucketSizeP95Width2 = 0;
+  cellMetrics.registeredBucketSizeMaxWidth2 = 0;
+  cellMetrics.estimatedRegisteredBucketCells = 0;
+
+  // Clear bucket tracking
+  cellCacheBucketsWidth1.length = 0;
+  cellCacheBucketsWidth2.length = 0;
 
   // Text metrics
   textMetrics.textCellWidthCalls = 0;
@@ -189,14 +217,65 @@ export function resetMetrics(): void {
   graphemeMetrics.intlSegmenterUsed = 0;
   graphemeMetrics.fallbackSegmenterUsed = 0;
   graphemeMetrics.segmentationRequiredInputCount = 0;
+
+  // Clear bucket tracking
+  cellCacheBucketsWidth1.length = 0;
+  cellCacheBucketsWidth2.length = 0;
+}
+
+/**
+ * Helper: Calculate percentile from sorted array
+ */
+function percentile(sorted: number[], p: number): number {
+  if (!sorted.length) return 0;
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1));
+  return sorted[index]!;
+}
+
+/**
+ * Get cache bucket distribution (Phase 3.2)
+ */
+function getCacheBucketDistribution() {
+  const width1Sizes = cellCacheBucketsWidth1.map((b) => b.size).sort((a, b) => a - b);
+  const width2Sizes = cellCacheBucketsWidth2.map((b) => b.size).sort((a, b) => a - b);
+
+  const estimatedRegisteredBucketCells =
+    width1Sizes.reduce((sum, s) => sum + s, 0) + width2Sizes.reduce((sum, s) => sum + s, 0);
+
+  return {
+    bucketCountWidth1: width1Sizes.length,
+    bucketCountWidth2: width2Sizes.length,
+    sizeP50Width1: percentile(width1Sizes, 0.5),
+    sizeP95Width1: percentile(width1Sizes, 0.95),
+    sizeMaxWidth1: Math.max(...width1Sizes, 0),
+    sizeP50Width2: percentile(width2Sizes, 0.5),
+    sizeP95Width2: percentile(width2Sizes, 0.95),
+    sizeMaxWidth2: Math.max(...width2Sizes, 0),
+    estimatedRegisteredBucketCells,
+  };
 }
 
 /**
  * Get current metrics snapshot
  */
 export function getMetrics(): PerformanceMetrics {
+  const cellMetricsSnapshot = { ...cellMetrics };
+
+  // Always populate bucket distribution from registered buckets
+  // (even if instrumentation is disabled, to support enable->run->disable->getMetrics pattern)
+  const distribution = getCacheBucketDistribution();
+  cellMetricsSnapshot.registeredBucketCountWidth1 = distribution.bucketCountWidth1;
+  cellMetricsSnapshot.registeredBucketCountWidth2 = distribution.bucketCountWidth2;
+  cellMetricsSnapshot.registeredBucketSizeP50Width1 = distribution.sizeP50Width1;
+  cellMetricsSnapshot.registeredBucketSizeP95Width1 = distribution.sizeP95Width1;
+  cellMetricsSnapshot.registeredBucketSizeMaxWidth1 = distribution.sizeMaxWidth1;
+  cellMetricsSnapshot.registeredBucketSizeP50Width2 = distribution.sizeP50Width2;
+  cellMetricsSnapshot.registeredBucketSizeP95Width2 = distribution.sizeP95Width2;
+  cellMetricsSnapshot.registeredBucketSizeMaxWidth2 = distribution.sizeMaxWidth2;
+  cellMetricsSnapshot.estimatedRegisteredBucketCells = distribution.estimatedRegisteredBucketCells;
+
   return {
-    cell: { ...cellMetrics },
+    cell: cellMetricsSnapshot,
     text: { ...textMetrics },
     grapheme: { ...graphemeMetrics },
   };
@@ -316,15 +395,24 @@ export const cellInstr = {
     }
   },
 
+  registerCacheBucket(width: 1 | 2, bucket: Map<string, any>) {
+    if (!instrumentationEnabled) return;
+    if (width === 1) {
+      cellCacheBucketsWidth1.push(bucket);
+    } else {
+      cellCacheBucketsWidth2.push(bucket);
+    }
+  },
+
   updateBucketCounts(width1Count: number, width2Count: number) {
     if (!instrumentationEnabled) return;
-    cellMetrics.cellCacheBucketCountWidth1 = width1Count;
-    cellMetrics.cellCacheBucketCountWidth2 = width2Count;
+    cellMetrics.registeredBucketCountWidth1 = width1Count;
+    cellMetrics.registeredBucketCountWidth2 = width2Count;
   },
 
   updateEstimatedRetainedCells(count: number) {
     if (!instrumentationEnabled) return;
-    cellMetrics.estimatedRetainedCells = count;
+    cellMetrics.estimatedRegisteredBucketCells = count;
   },
 };
 

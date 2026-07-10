@@ -24,11 +24,16 @@ export function normalizeStyle(style?: Style): Style {
 function getOrCreateCellCache(
   map: WeakMap<Style, Map<string, Cell>>,
   style: Style,
+  width: 1 | 2,
 ): Map<string, Cell> {
   const cached = map.get(style);
   if (cached) return cached;
   const next = new Map<string, Cell>();
   map.set(style, next);
+
+  // Register bucket for distribution tracking when instrumentation enabled
+  cellInstr.registerCacheBucket(width, next);
+
   return next;
 }
 
@@ -43,8 +48,8 @@ export function createCell(ch: string, style?: Style, widthProvider?: WidthProvi
 
   const map =
     width === 2
-      ? getOrCreateCellCache(cellCacheWidth2, normalizedStyle)
-      : getOrCreateCellCache(cellCacheWidth1, normalizedStyle);
+      ? getOrCreateCellCache(cellCacheWidth2, normalizedStyle, 2)
+      : getOrCreateCellCache(cellCacheWidth1, normalizedStyle, 1);
 
   const cached = map.get(ch);
   if (cached) {
