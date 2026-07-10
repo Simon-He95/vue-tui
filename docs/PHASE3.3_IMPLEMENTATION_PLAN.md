@@ -1,9 +1,33 @@
-# Phase 3.3: Overhead Validation - Implementation Plan
+# Phase 3.3: Overhead Validation - Implementation Plan (v2)
 
 ## Status
 
-✅ **Framework Complete** - Ready for execution  
-⚠️ **Benchmarks Pending** - Requires dedicated execution environment
+✅ **Framework Complete (v2)** - Blocking issues fixed  
+⚠️ **Benchmarks Pending** - Requires 30-60min execution
+
+**Related Issue**: #119 (remains open until results collected)
+
+---
+
+## Changes from v1 (Review Fixes)
+
+### Critical Fixes ✅
+
+1. **Fixed JSON parsing** - Reads from file output, not stdout
+2. **Implemented ABBA ordering** - Multiple paired samples, not single A→B
+3. **Added bootstrap 95% CI** - Statistical significance testing
+4. **Restored 5% gate** - Per #119 requirement (not 10%)
+5. **Isolated worktrees** - No direct git checkout in working directory
+6. **Frozen installs** - `--frozen-lockfile` for reproducibility
+7. **Full baseline** - warmup=50, samples=500 (not smoke mode)
+8. **Fixed bundle logic** - Only fails on positive increases
+9. **Per-entry deltas** - No sum of independent entries
+
+### Documentation ✅
+
+- Changed "Closes #119" to "Refs #119"
+- Added v2 changelog
+- Updated methodology description
 
 ---
 
@@ -13,13 +37,14 @@
 
 **Script**: `scripts/bench-instrumentation-overhead.ts`
 
-**Features**:
+**Method (per #119)**:
 
-- Automated git checkout and build at both commits
-- Uses existing Phase 2 baseline harness
-- Compares p50/p95/p99 across scenarios
-- 5%/10% regression thresholds
-- JSON output for analysis
+- Isolated worktrees for Commit A and B
+- ABBA execution order: A B B A, B A A B, ...
+- 10 samples per commit (configurable)
+- Full Phase 2 baseline (warmup=50, samples=500)
+- Bootstrap 95% confidence interval on p95 ratio
+- Decision: FAIL if CI lower bound > 1.05 (5% regression)
 
 **Usage**:
 
@@ -27,17 +52,25 @@
 pnpm run bench:overhead
 ```
 
+**Output**: `docs/perf/phase3.3-overhead-results.json`
+
+**Scenarios tested**:
+
+- All Phase 2 baseline scenarios
+- Includes instrumented paths: textCellWidth, wrapByCells, terminal.write
+- Plus non-instrumented controls: charCellWidth, sliceByCells
+
 ### 2. Bundle Size Comparison ✅
 
 **Script**: `scripts/bench-bundle-size.ts`
 
-**Features**:
+**Method**:
 
-- Automated build at both commits
-- Measures raw and gzip sizes
-- Compares core.js, vue.js, index.js
-- +2KB/+5KB thresholds
-- JSON output
+- Isolated worktrees for both commits
+- Measures dist/core.js, dist/vue.js, dist/index.js
+- Raw and gzip sizes
+- **Only fails on positive increases** (reductions are acceptable)
+- Per-entry thresholds: +2KB warning, +5KB fail
 
 **Usage**:
 
@@ -45,16 +78,7 @@ pnpm run bench:overhead
 pnpm run bench:bundle-size
 ```
 
-### 3. Documentation Template ✅
-
-**Document**: `docs/PHASE3.3_OVERHEAD_VALIDATION.md`
-
-**Includes**:
-
-- Methodology
-- Decision gates
-- Remediation options
-- Results template
+**Output**: `docs/perf/phase3.3-bundle-sizes.json`
 
 ---
 
@@ -72,98 +96,68 @@ pnpm run bench:bundle-size
 
 ---
 
-## Why Benchmarks Are Not Included Yet
-
-### Execution Requirements
-
-1. **Time-consuming**: Each full benchmark cycle takes 30-60 minutes
-2. **Git state changes**: Scripts checkout different commits
-3. **Clean environment**: Requires fresh Node processes
-4. **Multiple iterations**: Need statistical significance
-
-### Recommended Execution Approach
-
-**Option A: Dedicated CI Job**
-
-- Run on merge to main
-- Clean environment
-- Automated reporting
-- Historical tracking
-
-**Option B: Local Execution**
-
-- Developer runs manually
-- Results committed separately
-- Verified by reviewers
-
-**Option C: Separate Validation PR**
-
-- This PR: Framework and tooling
-- Next PR: Actual benchmark results
-
----
-
-## Expected Results (Prediction)
-
-Based on Phase 4.0 analysis:
+## Decision Gates
 
 ### Runtime Performance
 
-**Likely outcome**: Minor overhead (< 5%)
+**Statistical method**: Bootstrap 95% CI on p95 ratio (B/A)
 
-- Instrumentation hooks are simple boolean checks + no-ops
-- Disabled path: `if (!enabled) return`
-- Main cost: Function call overhead
+**Gates**:
 
-**Risk areas**:
+- ✅ **PASS**: CI lower bound <= 1.05 (no significant regression > 5%)
+- ⚠️ **INCONCLUSIVE**: CI too wide (> 20% range), re-run needed
+- ❌ **FAIL**: CI lower bound > 1.05 (significant regression > 5%)
 
-- `createCell()` - called very frequently
-- `textCellWidth()` - ASCII fast path
-- Multiple hook calls per operation
+**Action if FAIL**: Remediation required per #119
 
 ### Bundle Size
 
-**Likely outcome**: Small increase (< 2KB gzip per entry)
+**Method**: Per-entry gzip delta
 
-- Instrumentation module statically imported
-- Tree-shaking may help
-- Helper functions are small
+**Gates** (per entry):
 
-**Risk areas**:
+- ✅ **ACCEPTABLE**: Δ <= +2KB gzip
+- ⚠️ **WARNING**: +2KB < Δ <= +5KB gzip
+- ❌ **FAIL**: Δ > +5KB gzip
 
-- WeakMap/array registry code
-- Type definitions
-- Export surface expansion
+**Note**: Negative deltas (size reductions) are always acceptable
 
 ---
 
-## Decision Matrix
+## Why Benchmarks Are Not Included
 
-| Scenario   | p95 Ratio | Bundle Δ     | Decision                      |
-| ---------- | --------- | ------------ | ----------------------------- |
-| Best case  | < 1.05    | < +2KB       | ✅ Keep instrumentation       |
-| Acceptable | 1.05-1.10 | +2KB to +5KB | ⚠️ Review, minor optimization |
-| Concerning | > 1.10    | > +5KB       | ❌ Remediate required         |
+### Execution Requirements
+
+1. **Time**: 30-60 minutes for full run (10 samples × 2 commits × ABBA)
+2. **Clean state**: Fresh worktrees, no system load
+3. **Disruption**: Creates/removes worktrees, builds twice
+4. **CI integration**: Better as scheduled/manual job
+
+### Recommended Execution
+
+**After tooling merge**:
+
+- Execute in dedicated environment
+- Commit results separately
+- Update #119 with decision
 
 ---
 
-## Remediation Options
+## Remediation Options (If Fails)
 
-If overhead is unacceptable:
+Per #119, if p95 regression > 5% with statistical significance:
 
 ### Option 1: Reduce Hook Frequency
 
-- Keep only critical measurement points
 - Remove hooks from hottest paths
-- Merge multiple measurements
+- Keep only critical measurement points
+- Consolidate multiple hooks
 
 ### Option 2: Compile-Time Stripping
 
 ```typescript
-if (process.env.BUILD_PROFILING) {
-  // Include instrumentation
-} else {
-  // Strip completely
+if (import.meta.env.BUILD_PROFILING) {
+  instrumentHook();
 }
 ```
 
@@ -176,70 +170,69 @@ if (process.env.BUILD_PROFILING) {
 
 - Revert Phase 3.1 + 3.2
 - Redesign measurement approach
-- Consider external profiling tools
 
 ---
 
 ## Next Steps
 
-### This PR
+### This PR (Tooling Framework)
 
-1. ✅ Create harness scripts
-2. ✅ Add package.json commands
-3. ✅ Document methodology
-4. ✅ Define decision gates
-5. ⏳ Submit PR for review
-6. ⏳ Merge tooling
+1. ✅ Review v2 fixes
+2. ✅ Verify methodology compliance with #119
+3. ✅ Merge tooling
 
-### Follow-up Work
+### Follow-up (Results PR)
 
-**After this PR merges**:
-
-1. **Execute benchmarks** in clean environment
-2. **Collect data** (overhead + bundle size)
-3. **Analyze results** against gates
-4. **Make decision**:
-   - If PASS: Document and close #119
-   - If WARNING: Minor optimization PR
-   - If FAIL: Execute remediation
-
-5. **Update docs** with actual results
-6. **Close issue #119**
+1. Execute benchmarks in clean environment
+2. Collect runtime and bundle data
+3. Analyze against gates
+4. Make decision (pass/optimize/remediate)
+5. Close #119
 
 ---
 
 ## Verification Checklist
 
-- [x] Harness scripts created
-- [x] Package scripts added
-- [x] Documentation template ready
-- [x] Methodology documented
-- [x] Decision gates defined
-- [x] Remediation options outlined
-- [ ] Benchmarks executed (post-merge)
-- [ ] Results analyzed (post-merge)
-- [ ] Decision made (post-merge)
+Framework (this PR):
+
+- [x] JSON parsing fixed (reads files)
+- [x] ABBA ordering implemented
+- [x] Bootstrap 95% CI implemented
+- [x] 5% gate restored per #119
+- [x] Isolated worktrees used
+- [x] Frozen lockfile installs
+- [x] Full baseline (not smoke)
+- [x] Bundle logic fixed (positive-only)
+- [x] Per-entry deltas (not sum)
+- [x] "Closes" changed to "Refs #119"
+
+Results (follow-up PR):
+
+- [ ] Benchmarks executed
+- [ ] Results analyzed
+- [ ] Decision made
+- [ ] #119 closed
 
 ---
 
-## PR Summary
+## Review Response to Blocking Issues
 
-This PR provides the **tooling and methodology** for Phase 3.3 overhead validation.
+**P0: JSON parsing** ✅ Fixed - reads from file with --output flag
 
-**Includes**:
+**P1: Statistical method** ✅ Fixed - ABBA, bootstrap CI, multiple samples
 
-- Automated runtime comparison harness
-- Bundle size comparison tool
-- Clear decision gates and thresholds
-- Remediation playbook
+**P1: Decision gate** ✅ Fixed - 5% threshold per #119
 
-**Does NOT include**:
+**P1: Closes #119** ✅ Fixed - changed to "Refs #119"
 
-- Actual benchmark results (requires dedicated execution)
-- Final decision (pending data)
+**P1: Bundle logic** ✅ Fixed - positive-only failures, per-entry
 
-**Next**: Execute benchmarks in clean environment after tooling review
+**P2: Checkout safety** ✅ Fixed - isolated worktrees
+
+**P2: Scenario coverage** - Phase 2 suite includes instrumented paths
+
+**P2: CI validation** - Deferred to avoid long-running CI jobs
 
 ---
 
-**Ready for review and merge of tooling framework** ✅
+**Framework v2 ready for review** ✅

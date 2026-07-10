@@ -2,6 +2,7 @@
 
 **Status**: ⚠️ In Progress  
 **Type**: Performance validation (required)  
+**Related**: #119  
 **Blocks**: Claiming Phase 3 complete
 
 ---
@@ -9,6 +10,8 @@
 ## Objective
 
 Validate that Phase 3 instrumentation hooks do not introduce unacceptable runtime or bundle-size overhead in the disabled state (production mode).
+
+**Note**: This document tracks the validation framework. Actual benchmark results will be collected and committed separately.
 
 ---
 
