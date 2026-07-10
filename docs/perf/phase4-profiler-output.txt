@@ -1,5 +1,5 @@
 
-> @simon_he/vue-tui@1.1.0 bench:profiler:complete:gc /Users/Simon/Github/vue-tui
+> @simon_he/vue-tui@1.1.0 bench:profiler:complete:gc <project-root>
 > node --expose-gc --import=tsx scripts/bench-profiler-complete.ts
 
 Phase 3.2 Complete Profiler Benchmark (Corrected)
