@@ -305,7 +305,7 @@ bucket Max: 10 (w1), 6 (w2)
 
 **Rationale**:
 
-- Segmentation cost: 0.0015ms per unique string (negligible)
+- Observed advisory timing: ~8.5-8.9ms / 1000 unique complex strings (~0.0085-0.0089ms per string)
 - Text cache already provides 99.80% hit rate for repeated strings
 - Would add memory overhead (retain segment arrays)
 - Segmentation is not a measured hotspot
@@ -399,12 +399,19 @@ The measured Phase 3.2 profiler workloads show:
 - No grapheme segment caching (not added)
 - No long text admission policy (not added)
 
-**Revisit if**:
+**Revisit cache tuning only if**:
 
-- Production traces show frequent cache clears
-- Production traces show performance degradation
-- Real-world profiling reveals cache pressure
-- Additional targeted workloads show different patterns
+- Production or realistic traces show frequent cell cache clears
+- Registered bucket P95 approaches MAX=128 (e.g., >80)
+- Long unique text causes textWidthCache/wrapCache retained memory growth
+- `inlineLineCacheByWidth` shows churn or pollution after instrumentation
+- Phase 2 baseline p95/p99 regresses in text/wrap/render scenarios
+
+**Do not revisit based on**:
+
+- Theoretical optimization potential
+- "Feeling" that something could be faster
+- Stress test results without realistic workload validation
 
 ---
 
