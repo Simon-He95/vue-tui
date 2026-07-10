@@ -224,15 +224,16 @@ function formatMetrics(result: WorkloadResult): string {
   const lines: string[] = [];
   const { metrics } = result;
 
-  // Duration and overhead
+  // Duration and overhead - INVALID for production overhead estimation
   lines.push(
-    `Duration without instrumentation: ${result.durationWithoutInstrumentation.toFixed(2)}ms`,
+    `INVALID single-shot enabled-vs-disabled timing: ${result.durationWithoutInstrumentation.toFixed(2)}ms → ${result.durationWithInstrumentation.toFixed(2)}ms`,
   );
-  lines.push(`Duration with instrumentation: ${result.durationWithInstrumentation.toFixed(2)}ms`);
-  lines.push(`Instrumentation overhead: ${result.overheadPercent.toFixed(2)}%`);
+  lines.push(`INVALID overhead: ${result.overheadPercent.toFixed(2)}% (measurement artifact)`);
 
   if (result.heapDelta !== null) {
-    lines.push(`Heap delta: ${(result.heapDelta / 1024 / 1024).toFixed(2)} MB`);
+    lines.push(
+      `INVALID heap delta (audit only): ${(result.heapDelta / 1024 / 1024).toFixed(2)} MB`,
+    );
   }
 
   lines.push("");
@@ -311,16 +312,21 @@ function calculateHitRate(hits: number, misses: number): string {
 async function main() {
   const gcAvailable = typeof (globalThis as any).gc === "function";
 
-  console.log("Phase 3.2 Complete Profiler Benchmark (Corrected)");
-  console.log("==================================================\n");
+  console.log("Phase 3.2 Instrumentation Counter Snapshot");
+  console.log("==========================================\n");
   console.log("Environment:");
   console.log(`- Node: ${process.version}`);
   console.log(`- GC available: ${gcAvailable}`);
   if (!gcAvailable) {
-    console.log(
-      "  ⚠️  Heap delta is advisory only. Run with --expose-gc for accurate GC measurements.",
-    );
+    console.log("  ⚠️  Heap delta and overhead are INVALID without GC. Run with --expose-gc.");
   }
+  console.log("");
+  console.log("⚠️  CRITICAL WARNINGS:");
+  console.log("   1. Heap delta is INVALID for retained-memory analysis (measurement order issue)");
+  console.log("   2. Overhead percentages are INVALID (single-shot, fixed-order comparison)");
+  console.log("   3. Both arms execute instrumentation hooks - not pre-Phase-3 vs post-Phase-3");
+  console.log("   4. Use Phase 2 baseline harness for rigorous performance measurement");
+  console.log("   5. This script provides COUNTER SNAPSHOTS ONLY");
   console.log("");
   console.log("Fixes applied:");
   console.log("- clearTextCaches() between runs");
@@ -329,9 +335,6 @@ async function main() {
   console.log("- withTerminal() for robust cleanup");
   console.log("- P50/P95/Max bucket size metrics");
   console.log("- Fixed runId consistency (same length for overhead measurement)");
-  console.log("");
-  console.log("⚠️  Note: Overhead percentages are smoke signals only.");
-  console.log("   For rigorous performance measurement, use Phase 2 baseline harness.");
   console.log("");
 
   const workloads = [
@@ -384,10 +387,10 @@ async function main() {
     console.log("─".repeat(70));
   }
 
-  console.log("\n✅ Profiler benchmark completed");
+  console.log("\n✅ Instrumentation counter snapshot completed");
   console.log(`Total workloads: ${results.length}`);
   console.log(
-    `Average overhead: ${(results.reduce((sum, r) => sum + r.overheadPercent, 0) / results.length).toFixed(2)}%`,
+    `INVALID average overhead: ${(results.reduce((sum, r) => sum + r.overheadPercent, 0) / results.length).toFixed(2)}% (measurement artifact, not production overhead)`,
   );
 
   return results;

@@ -65,7 +65,7 @@ The current synthetic measurements do not provide sufficient evidence to justify
 - No workload tests stable style with >128 unique characters
 - No second-pass evaluation after clear
 
-**Conclusion**: Current measurements show no overflow in tested scenarios, but do not validate capacity is adequate for all realistic usage patterns.
+**Conclusion**: The repeated-CJK and mixed workloads did not overflow their per-style buckets. The two dedicated overflow stress workloads did trigger one clear each, as intended. None of these workloads validates behavior under eviction-sensitive reuse.
 
 ---
 
@@ -252,9 +252,10 @@ Before claiming comprehensive cache validation, add:
 
    **Recommended approaches**:
    - Bounded capture windows
-   - Periodic `resetMetrics()` calls
+   - `resetMetrics()` for counter-only capture windows (not for bucket-distribution profiling, as existing buckets do not re-register)
    - Maximum registered-bucket sampling
    - Offline trace replay (preferred)
+   - For bucket-distribution profiling: isolated processes, fresh Style objects per capture, or redesigned bounded/weak registry
 
 ---
 
