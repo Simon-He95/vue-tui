@@ -2,8 +2,20 @@
 > @simon_he/vue-tui@1.1.0 bench:profiler:complete:gc <project-root>
 > node --expose-gc --import=tsx scripts/bench-profiler-complete.ts
 
-Phase 3.2 Complete Profiler Benchmark (Corrected)
-==================================================
+Phase 3.2 Instrumentation Counter Snapshot
+═══════════════════════════════════════════
+
+ANNOTATED HISTORICAL TRANSCRIPT
+
+Data commit: c4182b6c2f449423739851c335feb5932f9d5b40
+Script commit used for measurement: c4182b6c2f449423739851c335feb5932f9d5b40
+Annotation commit: 10e729d (added data quality warnings)
+Date: 2026-07-10
+
+This file is an annotated historical transcript, not the literal output
+of the current script. No workload or counter-collection logic changed
+after c4182b6c. Subsequent changes only updated documentation and output
+labeling.
 
 ╔═══════════════════════════════════════════════════════════════════════════╗
 ║                          DATA QUALITY WARNING                             ║

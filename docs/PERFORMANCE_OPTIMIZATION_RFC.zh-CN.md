@@ -1,26 +1,49 @@
 # vue-tui 性能优化 RFC
 
-**文档类型**: RFC / 草案  
-**状态**: Phase 1 已实施；Phase 2+ 待实施  
+**文档类型**: RFC / 路线图  
+**状态**: Phase 1-3 已完成；Phase 4.0 checkpoint 完成；Phase 4.1+ 待定  
 **创建日期**: 2026-07-09  
-**修订版本**: v4 (基于四轮 review 反馈)  
+**最后更新**: 2026-07-10 (Phase 4.0 checkpoint)  
+**修订版本**: v5 (Phase roadmap 更新)  
 **Unicode 版本**: 17.0.0
 
 ---
 
+## Phase Status
+
+| Phase | Scope                              | Status                                | PR   |
+| ----- | ---------------------------------- | ------------------------------------- | ---- |
+| 1     | Unicode width correctness          | ✅ Complete                           | #114 |
+| 2     | Statistical baseline harness       | ✅ Complete                           | #115 |
+| 3.1   | Instrumentation foundation         | ✅ Complete                           | #116 |
+| 3.2   | Complete instrumentation           | ✅ Complete                           | #117 |
+| 4.0   | Cell-cache tuning decision gate    | ✅ Checkpoint: no change              | #118 |
+| 4.1   | Targeted cache workload validation | ⏸️ Optional for tuning / deferred     | -    |
+| 4.2   | Long-text cache admission          | ⏸️ Not measured                       | -    |
+| 4.3   | Provider-aware cache               | ⏸️ No reproducible issue              | -    |
+| 4.4   | Virtual-scroll optimization        | ⏸️ Requires browser profiler evidence | -    |
+| -     | **Phase 3 disabled-path overhead** | ⚠️ **Required** (independent)         | TBD  |
+
+**Note**: Phase 4.0 completed the Cell-cache tuning decision checkpoint. Current cache implementation unchanged. Comprehensive cache validation (4.1+) and original Phase 4 work (long-text, provider, virtual-scroll) remain deferred or unmeasured.
+
+**Critical**: Phase 3 instrumentation hooks are in production hot paths. Disabled-path overhead validation is required independently of cache tuning decisions.
+
+---
+
+> **Update 2026-07-10**: Phase 4.0 (Cell-Cache Tuning Checkpoint) 完成于 PR #118。决策：基于当前合成工作负载数据，不修改 cache 参数或 eviction 策略。这是有限的决策 checkpoint，不代表全面的 cache 验证。
+>
 > **Update 2026-07-09**: Phase 1 (Unicode Width Correctness) 已在 PR #114 实现。
-> 本 RFC 中 Phase 2+ 仍作为后续独立 PR 的参考路线。
 
 ## 📋 执行摘要
 
 本 RFC 基于代码审查和多轮 review 反馈，提出 vue-tui 性能优化方向和实施建议。
 
-- ✅ 本文档是**优化方向草案**，非最终实施方案
-- ✅ **Phase 1 已完成** - Unicode 17.0.0 East Asian Width 正确性修复
-- ⏳ **Phase 2+ 待实施** - 需要独立 PR，基于真实 baseline 数据
+- ✅ **Phase 1-3 已完成** - Unicode correctness, baseline, instrumentation
+- ✅ **Phase 4.0 checkpoint 完成** - Cell-cache 决策：无需调整
+- ⏳ **Phase 4.1+ 待实施** - 目标 cache 工作负载（若继续 cache 优化）
+- ⚠️ **Phase 3 overhead 验证必需** - 独立于 cache 工作
 - 📊 后续优化应拆分为多个小 PR，每个 PR 配真实性能数据
-- ⚠️ 所有诊断和收益预期基于代码审查，需要真实 baseline 数据验证
-- 📊 后续应拆分为多个小 PR，每个 PR 配真实性能数据
+- 📊 所有收益预期基于代码审查，需要真实 baseline 数据验证
 
 ---
 

@@ -230,9 +230,52 @@ The current synthetic measurements do not provide sufficient evidence to justify
 
 ---
 
-## Recommended Next Steps
+## Required Follow-up: Disabled-Path Instrumentation Overhead
 
-### Phase 4.1: Targeted Workload Coverage (Optional)
+**This is mandatory** because Phase 3 instrumentation hooks are already present in production hot paths (`createCell`, `textCellWidth`, `wrapByCells`).
+
+### Problem
+
+The current "without instrumentation" arm disables metric collection, but still executes all instrumentation hook functions. Therefore, it does not measure the production cost of adding the instrumentation foundation itself (pre-Phase-3 vs post-Phase-3).
+
+### Required Validation
+
+Compare:
+
+- Commit immediately before Phase 3 instrumentation
+- Current main with instrumentation disabled
+
+**Requirements**:
+
+- Isolated processes or separate worktrees
+- Identical Node/V8/hardware
+- Alternating or randomized execution order
+- Warmup + multiple samples
+- p50/p95 comparison
+- Use Phase 2 baseline harness
+
+**Workloads**:
+
+- createCell hit/miss scenarios
+- Repeated CJK terminal.write
+- textCellWidth ASCII/non-ASCII
+- wrapByCells workloads
+
+**This validation is required independently of cache tuning decisions.**
+
+---
+
+## Optional Follow-up: Targeted Cache Workload Coverage
+
+Phase 4.1 is optional only if cache optimization is explicitly deferred.
+
+It is required before:
+
+- Claiming the current cache strategy is validated
+- Changing cache capacity or eviction
+- Closing cache-performance evaluation as complete
+
+### Phase 4.1: Targeted Workload Coverage (If Pursued)
 
 Before claiming comprehensive cache validation, add:
 
