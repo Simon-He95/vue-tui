@@ -1,30 +1,24 @@
 /**
- * Phase 3.3: Instrumentation Overhead Validation
+ * Phase 3.3: Instrumentation Overhead Validation (v3)
  *
- * Compares runtime performance between:
- * - Commit A (697472b0): Pre-Phase-3 (Phase 2 baseline)
- * - Commit B (4d543ff7): Post-Phase-3 (instrumentation disabled)
- *
- * Methodology per #119:
- * - Isolated worktrees for each commit
- * - ABBA execution order to reduce systematic bias
- * - Multiple paired samples
- * - Statistical significance testing with 95% CI
- * - Decision gate: p95 regression > 5% with CI excluding 0 → remediate
+ * Critical fixes:
+ * - Paired AB/BA bootstrap matching point estimate
+ * - Non-inferiority decision logic
+ * - Proper validation (fail-closed)
+ * - execFileSync for shell safety
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// Configuration
-const COMMIT_A = "697472b0cc5c000fb46baf16e85c60d84ee22471"; // Pre-Phase-3
-const COMMIT_B = "4d543ff7042f9c2400fa50a9dff921a0f36f77a3"; // Post-Phase-3
-const SAMPLES_PER_COMMIT = 10; // 10 independent samples each
+const COMMIT_A = "697472b0cc5c000fb46baf16e85c60d84ee22471";
+const COMMIT_B = "4d543ff7042f9c2400fa50a9dff921a0f36f77a3";
+const PAIRS = 10;
 const WARMUP = 50;
 const ITERATIONS = 500;
-const DECISION_THRESHOLD = 0.05; // 5% regression threshold per #119
+const THRESHOLD = 0.05;
 
 interface BenchmarkReport {
   commit: string;
@@ -32,21 +26,25 @@ interface BenchmarkReport {
   v8: string;
   os: string;
   cpu: string;
+  arch: string;
   gitDirty: boolean;
   warmup: number;
   samples: number;
-  results: Record<string, { p50: number; p95: number; p99: number; mean: number; stdev: number }>;
+  results: Record<string, { p50: number; p95: number; p99: number }>;
 }
 
-interface ComparisonResult {
+interface PairedRun {
+  order: "AB" | "BA";
+  reportA: BenchmarkReport;
+  reportB: BenchmarkReport;
+}
+
+interface ScenarioResult {
   scenario: string;
-  commitA: { p50: number; p95: number; samples: number[] };
-  commitB: { p50: number; p95: number; samples: number[] };
-  p95Ratio: number;
-  p95RatioCILower: number; // Bootstrap 95% CI lower bound
-  p95RatioCIUpper: number;
-  regressionPercent: number;
-  significantRegression: boolean;
+  pairedP95Ratios: number[];
+  medianRatio: number;
+  ciLower: number;
+  ciUpper: number;
   status: "pass" | "fail" | "inconclusive";
 }
 
@@ -56,279 +54,180 @@ function log(msg: string) {
 
 function percentile(values: number[], p: number): number {
   const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.ceil((p / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, index)];
+  const idx = Math.ceil((p / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, idx)];
 }
 
-/**
- * Bootstrap 95% confidence interval for ratio
- */
-function bootstrapCI(
-  samplesA: number[],
-  samplesB: number[],
-  metric: "p95",
-  iterations = 1000,
-): [number, number] {
-  const ratios: number[] = [];
-
-  for (let i = 0; i < iterations; i++) {
-    // Resample with replacement
-    const resampledA: number[] = [];
-    const resampledB: number[] = [];
-
-    for (let j = 0; j < samplesA.length; j++) {
-      resampledA.push(samplesA[Math.floor(Math.random() * samplesA.length)]);
-      resampledB.push(samplesB[Math.floor(Math.random() * samplesB.length)]);
+function pairedBootstrapCI(ratios: number[], iters = 1000): [number, number] {
+  const n = ratios.length;
+  const boots: number[] = [];
+  for (let i = 0; i < iters; i++) {
+    const resampled: number[] = [];
+    for (let j = 0; j < n; j++) {
+      resampled.push(ratios[Math.floor(Math.random() * n)]);
     }
-
-    const metricA = percentile(resampledA, 95);
-    const metricB = percentile(resampledB, 95);
-    ratios.push(metricB / metricA);
+    boots.push(percentile(resampled, 50));
   }
-
-  ratios.sort((a, b) => a - b);
-  const lower = percentile(ratios, 2.5);
-  const upper = percentile(ratios, 97.5);
-
-  return [lower, upper];
+  boots.sort((a, b) => a - b);
+  return [percentile(boots, 2.5), percentile(boots, 97.5)];
 }
 
-/**
- * Setup isolated worktrees
- */
-function setupWorktrees(): { worktreeA: string; worktreeB: string } {
-  const baseDir = join(tmpdir(), `vue-tui-overhead-${Date.now()}`);
-  mkdirSync(baseDir, { recursive: true });
+function setupWorktrees(baseDir: string) {
+  const wA = join(baseDir, "commit-a");
+  const wB = join(baseDir, "commit-b");
 
-  const worktreeA = join(baseDir, "commit-a");
-  const worktreeB = join(baseDir, "commit-b");
+  log("Creating worktrees...");
+  execFileSync("git", ["worktree", "add", "--detach", wA, COMMIT_A], { stdio: "inherit" });
+  execFileSync("git", ["worktree", "add", "--detach", wB, COMMIT_B], { stdio: "inherit" });
 
-  log(`Creating worktree A at ${worktreeA}...`);
-  execSync(`git worktree add ${worktreeA} ${COMMIT_A}`, { stdio: "inherit" });
+  log("Installing...");
+  execFileSync("pnpm", ["install", "--frozen-lockfile"], { cwd: wA, stdio: "inherit" });
+  execFileSync("pnpm", ["install", "--frozen-lockfile"], { cwd: wB, stdio: "inherit" });
 
-  log(`Creating worktree B at ${worktreeB}...`);
-  execSync(`git worktree add ${worktreeB} ${COMMIT_B}`, { stdio: "inherit" });
+  log("Building...");
+  execFileSync("pnpm", ["run", "build"], { cwd: wA, stdio: "inherit" });
+  execFileSync("pnpm", ["run", "build"], { cwd: wB, stdio: "inherit" });
 
-  // Install with frozen lockfile
-  log("Installing dependencies in worktree A...");
-  execSync("pnpm install --frozen-lockfile", { cwd: worktreeA, stdio: "inherit" });
-
-  log("Installing dependencies in worktree B...");
-  execSync("pnpm install --frozen-lockfile", { cwd: worktreeB, stdio: "inherit" });
-
-  // Build both
-  log("Building worktree A...");
-  execSync("pnpm run build", { cwd: worktreeA, stdio: "inherit" });
-
-  log("Building worktree B...");
-  execSync("pnpm run build", { cwd: worktreeB, stdio: "inherit" });
-
-  return { worktreeA, worktreeB };
+  return { wA, wB };
 }
 
-/**
- * Run a single benchmark sample
- */
-function runSample(worktree: string, label: string, sampleIndex: number): BenchmarkReport {
-  const outputPath = join(tmpdir(), `phase3.3-${label}-${sampleIndex}.json`);
-
-  log(`Running ${label} sample ${sampleIndex + 1}/${SAMPLES_PER_COMMIT}...`);
-
-  execSync(
-    `pnpm exec tsx scripts/bench-perf-baseline.ts --warmup ${WARMUP} --samples ${ITERATIONS} --output ${outputPath}`,
-    {
-      cwd: worktree,
-      stdio: "inherit",
-    },
+function runBench(wt: string, out: string): BenchmarkReport {
+  execFileSync(
+    "pnpm",
+    [
+      "exec",
+      "tsx",
+      "scripts/bench-perf-baseline.ts",
+      "--warmup",
+      String(WARMUP),
+      "--samples",
+      String(ITERATIONS),
+      "--output",
+      out,
+    ],
+    { cwd: wt, stdio: "inherit" },
   );
-
-  const report = JSON.parse(readFileSync(outputPath, "utf-8")) as BenchmarkReport;
-
-  // Validate report
-  if (report.gitDirty) {
-    throw new Error(`${label}: git working tree is dirty`);
-  }
-
-  return report;
+  const r = JSON.parse(readFileSync(out, "utf-8")) as BenchmarkReport;
+  if (r.gitDirty) throw new Error("Git tree dirty");
+  return r;
 }
 
-/**
- * Run benchmarks in ABBA order
- */
-function runABBABenchmarks(
-  worktreeA: string,
-  worktreeB: string,
-): { reportsA: BenchmarkReport[]; reportsB: BenchmarkReport[] } {
-  const reportsA: BenchmarkReport[] = [];
-  const reportsB: BenchmarkReport[] = [];
-
-  log("Running ABBA benchmark sequence...");
-
-  for (let round = 0; round < SAMPLES_PER_COMMIT / 2; round++) {
-    log(`\n=== Round ${round + 1}/${SAMPLES_PER_COMMIT / 2} ===`);
-
-    // A
-    reportsA.push(runSample(worktreeA, "A", reportsA.length));
-
-    // B
-    reportsB.push(runSample(worktreeB, "B", reportsB.length));
-
-    // B again
-    reportsB.push(runSample(worktreeB, "B", reportsB.length));
-
-    // A again
-    reportsA.push(runSample(worktreeA, "A", reportsA.length));
+function validate(reportsA: BenchmarkReport[], reportsB: BenchmarkReport[]) {
+  const f = reportsA[0];
+  for (const r of [...reportsA, ...reportsB]) {
+    if (r.node !== f.node) throw new Error("Node mismatch");
+    if (r.v8 !== f.v8) throw new Error("V8 mismatch");
+    if (r.os !== f.os) throw new Error("OS mismatch");
+    if (r.cpu !== f.cpu) throw new Error("CPU mismatch");
+    if (r.arch !== f.arch) throw new Error("Arch mismatch");
+    if (r.warmup !== WARMUP) throw new Error("Warmup mismatch");
+    if (r.samples !== ITERATIONS) throw new Error("Samples mismatch");
   }
+  for (const r of reportsA) if (r.commit !== COMMIT_A) throw new Error("Commit A mismatch");
+  for (const r of reportsB) if (r.commit !== COMMIT_B) throw new Error("Commit B mismatch");
 
-  return { reportsA, reportsB };
+  const sA = Object.keys(reportsA[0].results).sort().join();
+  for (const r of [...reportsA, ...reportsB]) {
+    if (Object.keys(r.results).sort().join() !== sA) throw new Error("Scenario mismatch");
+  }
 }
 
-/**
- * Analyze scenario and determine if regression is significant
- */
-function analyzeScenario(
-  scenario: string,
-  reportsA: BenchmarkReport[],
-  reportsB: BenchmarkReport[],
-): ComparisonResult {
-  // Extract p95 values from each report
-  const p95A = reportsA.map((r) => r.results[scenario]?.p95).filter((v) => v !== undefined);
-  const p95B = reportsB.map((r) => r.results[scenario]?.p95).filter((v) => v !== undefined);
-
-  if (p95A.length === 0 || p95B.length === 0) {
-    return {
-      scenario,
-      commitA: { p50: 0, p95: 0, samples: [] },
-      commitB: { p50: 0, p95: 0, samples: [] },
-      p95Ratio: 1,
-      p95RatioCILower: 1,
-      p95RatioCIUpper: 1,
-      regressionPercent: 0,
-      significantRegression: false,
-      status: "inconclusive",
-    };
+function analyzeSc(sc: string, pairs: PairedRun[]): ScenarioResult {
+  const ratios: number[] = [];
+  for (const p of pairs) {
+    const pA = p.reportA.results[sc]?.p95;
+    const pB = p.reportB.results[sc]?.p95;
+    if (!pA || !pB || !isFinite(pA) || !isFinite(pB) || pA <= 0 || pB <= 0) {
+      throw new Error(`Invalid p95 for ${sc}`);
+    }
+    ratios.push(pB / pA);
   }
+  const med = percentile(ratios, 50);
+  const [ciL, ciU] = pairedBootstrapCI(ratios);
 
-  const p50A = reportsA.map((r) => r.results[scenario]?.p50).filter((v) => v !== undefined);
-  const p50B = reportsB.map((r) => r.results[scenario]?.p50).filter((v) => v !== undefined);
-
-  const medianP95A = percentile(p95A, 50);
-  const medianP95B = percentile(p95B, 50);
-  const p95Ratio = medianP95B / medianP95A;
-
-  // Bootstrap 95% CI
-  const [ciLower, ciUpper] = bootstrapCI(p95A, p95B, "p95");
-
-  const regressionPercent = (p95Ratio - 1) * 100;
-
-  // Decision: significant regression if CI lower bound > 1.05 (5% threshold)
-  const significantRegression = ciLower > 1.0 + DECISION_THRESHOLD;
-
-  let status: "pass" | "fail" | "inconclusive" = "pass";
-  if (significantRegression) {
-    status = "fail";
-  } else if (ciUpper - ciLower > 0.2) {
-    // CI too wide (> 20% range)
-    status = "inconclusive";
-  }
+  let status: "pass" | "fail" | "inconclusive";
+  if (ciL > 1 + THRESHOLD) status = "fail";
+  else if (ciU <= 1 + THRESHOLD) status = "pass";
+  else status = "inconclusive";
 
   return {
-    scenario,
-    commitA: {
-      p50: percentile(p50A, 50),
-      p95: medianP95A,
-      samples: p95A,
-    },
-    commitB: {
-      p50: percentile(p50B, 50),
-      p95: medianP95B,
-      samples: p95B,
-    },
-    p95Ratio,
-    p95RatioCILower: ciLower,
-    p95RatioCIUpper: ciUpper,
-    regressionPercent,
-    significantRegression,
+    scenario: sc,
+    pairedP95Ratios: ratios,
+    medianRatio: med,
+    ciLower: ciL,
+    ciUpper: ciU,
     status,
   };
 }
 
-/**
- * Main execution
- */
 function main() {
   console.log("=".repeat(80));
-  console.log("Phase 3.3: Instrumentation Overhead Validation");
+  console.log("Phase 3.3: Instrumentation Overhead Validation (v3)");
   console.log("=".repeat(80));
-  console.log();
-  console.log(`Commit A (Pre-Phase-3):  ${COMMIT_A}`);
-  console.log(`Commit B (Post-Phase-3): ${COMMIT_B}`);
-  console.log(`Samples per commit: ${SAMPLES_PER_COMMIT} (ABBA order)`);
-  console.log(`Decision threshold: ${DECISION_THRESHOLD * 100}% p95 regression`);
-  console.log(`Node: ${process.version}`);
-  console.log();
+  console.log(`Pairs: ${PAIRS} AB/BA\n`);
 
-  let worktreeA: string;
-  let worktreeB: string;
+  const base = join(tmpdir(), `phase3.3-${Date.now()}`);
+  const outDir = join(base, "results");
+  mkdirSync(outDir, { recursive: true });
 
+  let wA: string | undefined, wB: string | undefined;
   try {
-    // Setup
-    ({ worktreeA, worktreeB } = setupWorktrees());
+    ({ wA, wB } = setupWorktrees(base));
 
-    // Run benchmarks
-    const { reportsA, reportsB } = runABBABenchmarks(worktreeA, worktreeB);
+    const pairs: PairedRun[] = [];
+    for (let i = 0; i < PAIRS; i++) {
+      const ord: "AB" | "BA" = i % 2 === 0 ? "AB" : "BA";
+      log(`\n=== Pair ${i + 1}/${PAIRS} (${ord}) ===`);
 
-    // Get all scenarios from first report
-    const scenarios = Object.keys(reportsA[0].results);
+      const oA = join(outDir, `pair-${i}-A.json`);
+      const oB = join(outDir, `pair-${i}-B.json`);
 
-    // Analyze each scenario
-    const results: ComparisonResult[] = [];
+      if (ord === "AB") {
+        log("  Running A...");
+        const rA = runBench(wA, oA);
+        log("  Running B...");
+        const rB = runBench(wB, oB);
+        pairs.push({ order: ord, reportA: rA, reportB: rB });
+      } else {
+        log("  Running B...");
+        const rB = runBench(wB, oB);
+        log("  Running A...");
+        const rA = runBench(wA, oA);
+        pairs.push({ order: ord, reportA: rA, reportB: rB });
+      }
+    }
 
-    console.log();
-    console.log("=".repeat(80));
+    validate(
+      pairs.map((p) => p.reportA),
+      pairs.map((p) => p.reportB),
+    );
+
+    const scenarios = Object.keys(pairs[0].reportA.results);
+    const results: ScenarioResult[] = [];
+
+    console.log("\n" + "=".repeat(80));
     console.log("RESULTS");
-    console.log("=".repeat(80));
-    console.log();
+    console.log("=".repeat(80) + "\n");
 
-    for (const scenario of scenarios) {
-      const result = analyzeScenario(scenario, reportsA, reportsB);
-      results.push(result);
-
-      const statusSymbol = result.status === "pass" ? "✅" : result.status === "fail" ? "❌" : "⚠️";
-
-      console.log(`${statusSymbol} ${scenario}`);
-      console.log(`   Commit A p95: ${result.commitA.p95.toFixed(2)}ns`);
-      console.log(`   Commit B p95: ${result.commitB.p95.toFixed(2)}ns`);
-      console.log(
-        `   Ratio: ${result.p95Ratio.toFixed(3)} (${result.regressionPercent >= 0 ? "+" : ""}${result.regressionPercent.toFixed(2)}%)`,
-      );
-      console.log(
-        `   95% CI: [${result.p95RatioCILower.toFixed(3)}, ${result.p95RatioCIUpper.toFixed(3)}]`,
-      );
-      console.log(`   Status: ${result.status.toUpperCase()}`);
+    for (const sc of scenarios) {
+      const r = analyzeSc(sc, pairs);
+      results.push(r);
+      const sym = r.status === "pass" ? "✅" : r.status === "fail" ? "❌" : "⚠️";
+      const pct = ((r.medianRatio - 1) * 100).toFixed(2);
+      console.log(`${sym} ${sc}`);
+      console.log(`   Median: ${r.medianRatio.toFixed(3)} (${pct >= "0" ? "+" : ""}${pct}%)`);
+      console.log(`   95% CI: [${r.ciLower.toFixed(3)}, ${r.ciUpper.toFixed(3)}]`);
+      console.log(`   ${r.status.toUpperCase()}`);
       console.log();
     }
 
-    // Save results
     mkdirSync("docs/perf", { recursive: true });
-    const outputPath = "docs/perf/phase3.3-overhead-results.json";
     writeFileSync(
-      outputPath,
+      "docs/perf/phase3.3-overhead-results.json",
       JSON.stringify(
         {
-          config: {
-            commitA: COMMIT_A,
-            commitB: COMMIT_B,
-            samplesPerCommit: SAMPLES_PER_COMMIT,
-            warmup: WARMUP,
-            iterations: ITERATIONS,
-            decisionThreshold: DECISION_THRESHOLD,
-          },
-          environment: {
-            node: process.version,
-            platform: process.platform,
-            arch: process.arch,
-          },
+          config: { commitA: COMMIT_A, commitB: COMMIT_B, pairs: PAIRS, threshold: THRESHOLD },
+          environment: pairs[0].reportA,
           timestamp: new Date().toISOString(),
           results,
         },
@@ -337,59 +236,39 @@ function main() {
       ),
     );
 
-    log(`Results saved to ${outputPath}`);
-
-    // Summary
-    const failed = results.filter((r) => r.status === "fail").length;
-    const inconclusive = results.filter((r) => r.status === "inconclusive").length;
-    const passed = results.filter((r) => r.status === "pass").length;
+    const fail = results.filter((r) => r.status === "fail").length;
+    const inc = results.filter((r) => r.status === "inconclusive").length;
+    const pass = results.filter((r) => r.status === "pass").length;
 
     console.log("=".repeat(80));
     console.log("SUMMARY");
     console.log("=".repeat(80));
-    console.log(`Total scenarios: ${results.length}`);
-    console.log(`Pass: ${passed}`);
-    console.log(`Fail: ${failed}`);
-    console.log(`Inconclusive: ${inconclusive}`);
-    console.log();
+    console.log(`Pass: ${pass}, Fail: ${fail}, Inconclusive: ${inc}\n`);
 
-    if (failed > 0) {
-      console.log("❌ SIGNIFICANT REGRESSION DETECTED");
-      console.log("   Remediation required per #119:");
-      console.log("   - Reduce hook frequency");
-      console.log("   - Compile-time stripping");
-      console.log("   - Separate profiling build");
-      console.log("   - Rollback instrumentation");
+    if (fail > 0) {
+      console.log("❌ REGRESSION > 5%");
       process.exitCode = 1;
-    } else if (inconclusive > 0) {
-      console.log("⚠️  INCONCLUSIVE RESULTS");
-      console.log("   Some scenarios have high variance. Consider:");
-      console.log("   - Increasing sample count");
-      console.log("   - Isolating system load");
-      console.log("   - Reviewing scenario stability");
+    } else if (inc > 0) {
+      console.log("⚠️  INCONCLUSIVE");
+      process.exitCode = 2;
     } else {
-      console.log("✅ NO SIGNIFICANT REGRESSION");
-      console.log("   Instrumentation overhead is within acceptable limits.");
+      console.log("✅ PROVEN <= 5%");
     }
   } finally {
-    // Cleanup worktrees
-    if (worktreeA!) {
-      log("Cleaning up worktree A...");
+    if (wA)
       try {
-        execSync(`git worktree remove ${worktreeA} --force`);
-      } catch (err) {
-        log(`Warning: Failed to remove worktree A: ${err}`);
-      }
-    }
-
-    if (worktreeB!) {
-      log("Cleaning up worktree B...");
+        execFileSync("git", ["worktree", "remove", "--force", wA]);
+      } catch {}
+    if (wB)
       try {
-        execSync(`git worktree remove ${worktreeB} --force`);
-      } catch (err) {
-        log(`Warning: Failed to remove worktree B: ${err}`);
-      }
-    }
+        execFileSync("git", ["worktree", "remove", "--force", wB]);
+      } catch {}
+    try {
+      execFileSync("git", ["worktree", "prune"]);
+    } catch {}
+    try {
+      rmSync(base, { recursive: true, force: true });
+    } catch {}
   }
 }
 

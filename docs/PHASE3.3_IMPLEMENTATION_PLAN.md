@@ -1,238 +1,151 @@
-# Phase 3.3: Overhead Validation - Implementation Plan (v2)
+# Phase 3.3: Implementation Plan (v3)
 
 ## Status
 
-✅ **Framework Complete (v2)** - Blocking issues fixed  
-⚠️ **Benchmarks Pending** - Requires 30-60min execution
+✅ **Framework Complete (v3)** - All blocking issues fixed  
+⚠️ **Benchmarks Pending** - Requires execution
 
-**Related Issue**: #119 (remains open until results collected)
+**Related**: #119 (remains open until results)
 
 ---
 
-## Changes from v1 (Review Fixes)
+## v3 Changes (Critical Fixes)
 
-### Critical Fixes ✅
+### Statistical Method ✅
 
-1. **Fixed JSON parsing** - Reads from file output, not stdout
-2. **Implemented ABBA ordering** - Multiple paired samples, not single A→B
-3. **Added bootstrap 95% CI** - Statistical significance testing
-4. **Restored 5% gate** - Per #119 requirement (not 10%)
-5. **Isolated worktrees** - No direct git checkout in working directory
-6. **Frozen installs** - `--frozen-lockfile` for reproducibility
-7. **Full baseline** - warmup=50, samples=500 (not smoke mode)
-8. **Fixed bundle logic** - Only fails on positive increases
-9. **Per-entry deltas** - No sum of independent entries
+**Fixed**: Paired bootstrap now matches point estimate
+
+- Point estimate: median of paired p95 ratios
+- Bootstrap: resamples pairs, computes median
+- Was: independent A/B resampling with outer p95
+
+### Decision Logic ✅
+
+**Fixed**: Non-inferiority three-way gate
+
+- FAIL if CI lower > 1.05 (proven regression > 5%)
+- PASS if CI upper <= 1.05 (proven regression <= 5%)
+- INCONCLUSIVE if CI crosses 1.05
+- Was: PASS if CI lower <= 1.05 (wrong logic)
 
 ### Documentation ✅
 
-- Changed "Closes #119" to "Refs #119"
-- Added v2 changelog
-- Updated methodology description
+**Fixed**: All docs now consistent
+
+- Runtime: Non-inferiority gate
+- Bundle: Per-entry positive-only
+- No 10% threshold anywhere
+
+### Fail-Closed ✅
+
+**Fixed**: Bundle checker throws on missing files
+
+- Was: returned 0 and skipped
+
+### Shell Safety ✅
+
+**Fixed**: Uses execFileSync with argument arrays
+
+- Was: string interpolation in execSync
 
 ---
 
-## What's Implemented
+## Tools (v3)
 
-### 1. Runtime Overhead Harness ✅
+### Runtime Overhead Harness
 
-**Script**: `scripts/bench-instrumentation-overhead.ts`
-
-**Method (per #119)**:
-
-- Isolated worktrees for Commit A and B
-- ABBA execution order: A B B A, B A A B, ...
-- 10 samples per commit (configurable)
-- Full Phase 2 baseline (warmup=50, samples=500)
-- Bootstrap 95% confidence interval on p95 ratio
-- Decision: FAIL if CI lower bound > 1.05 (5% regression)
-
-**Usage**:
-
-```bash
-pnpm run bench:overhead
-```
-
-**Output**: `docs/perf/phase3.3-overhead-results.json`
-
-**Scenarios tested**:
-
-- All Phase 2 baseline scenarios
-- Includes instrumented paths: textCellWidth, wrapByCells, terminal.write
-- Plus non-instrumented controls: charCellWidth, sliceByCells
-
-### 2. Bundle Size Comparison ✅
-
-**Script**: `scripts/bench-bundle-size.ts`
+**Script**: \`scripts/bench-instrumentation-overhead.ts\`
 
 **Method**:
 
-- Isolated worktrees for both commits
-- Measures dist/core.js, dist/vue.js, dist/index.js
-- Raw and gzip sizes
-- **Only fails on positive increases** (reductions are acceptable)
-- Per-entry thresholds: +2KB warning, +5KB fail
+- 10 paired AB/BA runs
+- Paired p95 ratios
+- Paired bootstrap CI
+- Non-inferiority gate
 
 **Usage**:
+\`\`\`bash
+pnpm run bench:overhead
+\`\`\`
 
-```bash
+**Exit codes**:
+
+- 0: PASS (proven <= 5%)
+- 1: FAIL (proven > 5%)
+- 2: INCONCLUSIVE
+
+### Bundle Size Comparison
+
+**Script**: \`scripts/bench-bundle-size.ts\`
+
+**Method**:
+
+- Tests ESM and CJS (.js and .cjs)
+- Throws on missing bundles
+- Positive-only failures
+
+**Usage**:
+\`\`\`bash
 pnpm run bench:bundle-size
-```
-
-**Output**: `docs/perf/phase3.3-bundle-sizes.json`
-
----
-
-## Comparison Points
-
-**Commit A (Pre-Phase-3)**: `697472b0cc5c000fb46baf16e85c60d84ee22471`
-
-- PR #115 merge (Phase 2 baseline complete)
-- No instrumentation hooks
-
-**Commit B (Post-Phase-3)**: `4d543ff7042f9c2400fa50a9dff921a0f36f77a3`
-
-- PR #117 merge (Phase 3.1 + 3.2 complete)
-- Instrumentation hooks in production paths (disabled by default)
+\`\`\`
 
 ---
 
 ## Decision Gates
 
-### Runtime Performance
+### Runtime
 
-**Statistical method**: Bootstrap 95% CI on p95 ratio (B/A)
+**Non-inferiority logic**:
+\`\`\`
+if CI_lower > 1.05:
+FAIL (proven regression > 5%)
+elif CI_upper <= 1.05:
+PASS (proven regression <= 5%)
+else:
+INCONCLUSIVE (CI crosses threshold)
+\`\`\`
 
-**Gates**:
+### Bundle
 
-- ✅ **PASS**: CI lower bound <= 1.05 (no significant regression > 5%)
-- ⚠️ **INCONCLUSIVE**: CI too wide (> 20% range), re-run needed
-- ❌ **FAIL**: CI lower bound > 1.05 (significant regression > 5%)
+**Per-entry thresholds**:
 
-**Action if FAIL**: Remediation required per #119
-
-### Bundle Size
-
-**Method**: Per-entry gzip delta
-
-**Gates** (per entry):
-
-- ✅ **ACCEPTABLE**: Δ <= +2KB gzip
-- ⚠️ **WARNING**: +2KB < Δ <= +5KB gzip
-- ❌ **FAIL**: Δ > +5KB gzip
-
-**Note**: Negative deltas (size reductions) are always acceptable
+- +2KB gzip: WARNING
+- +5KB gzip: FAIL
 
 ---
 
-## Why Benchmarks Are Not Included
+## Validation
 
-### Execution Requirements
+Framework (v3):
 
-1. **Time**: 30-60 minutes for full run (10 samples × 2 commits × ABBA)
-2. **Clean state**: Fresh worktrees, no system load
-3. **Disruption**: Creates/removes worktrees, builds twice
-4. **CI integration**: Better as scheduled/manual job
+- [x] Paired bootstrap matching point estimate
+- [x] Non-inferiority decision logic
+- [x] Documentation consistent
+- [x] Fail-closed on missing bundles
+- [x] execFileSync for shell safety
+- [x] Environment validation
+- [x] Commit SHA validation
 
-### Recommended Execution
+Results (pending):
 
-**After tooling merge**:
-
-- Execute in dedicated environment
-- Commit results separately
-- Update #119 with decision
-
----
-
-## Remediation Options (If Fails)
-
-Per #119, if p95 regression > 5% with statistical significance:
-
-### Option 1: Reduce Hook Frequency
-
-- Remove hooks from hottest paths
-- Keep only critical measurement points
-- Consolidate multiple hooks
-
-### Option 2: Compile-Time Stripping
-
-```typescript
-if (import.meta.env.BUILD_PROFILING) {
-  instrumentHook();
-}
-```
-
-### Option 3: Separate Profiling Build
-
-- `@simon_he/vue-tui` - production (no instrumentation)
-- `@simon_he/vue-tui-profiling` - development (full instrumentation)
-
-### Option 4: Rollback
-
-- Revert Phase 3.1 + 3.2
-- Redesign measurement approach
+- [ ] Execute benchmarks
+- [ ] Analyze results
+- [ ] Close #119
 
 ---
 
-## Next Steps
+## Review Response (v3)
 
-### This PR (Tooling Framework)
+All P0/P1 blocking issues resolved:
 
-1. ✅ Review v2 fixes
-2. ✅ Verify methodology compliance with #119
-3. ✅ Merge tooling
-
-### Follow-up (Results PR)
-
-1. Execute benchmarks in clean environment
-2. Collect runtime and bundle data
-3. Analyze against gates
-4. Make decision (pass/optimize/remediate)
-5. Close #119
+1. ✅ **Bootstrap CI** - Paired resampling, matches point estimate
+2. ✅ **PASS logic** - Non-inferiority three-way gate
+3. ✅ **Documentation** - All gates consistent
+4. ✅ **Bundle fail-closed** - Throws on missing files
+5. ✅ **Shell safety** - execFileSync with arrays
+6. ✅ **Validation** - Commit, environment, scenarios
+7. ✅ **Cleanup** - Robust finally block
 
 ---
 
-## Verification Checklist
-
-Framework (this PR):
-
-- [x] JSON parsing fixed (reads files)
-- [x] ABBA ordering implemented
-- [x] Bootstrap 95% CI implemented
-- [x] 5% gate restored per #119
-- [x] Isolated worktrees used
-- [x] Frozen lockfile installs
-- [x] Full baseline (not smoke)
-- [x] Bundle logic fixed (positive-only)
-- [x] Per-entry deltas (not sum)
-- [x] "Closes" changed to "Refs #119"
-
-Results (follow-up PR):
-
-- [ ] Benchmarks executed
-- [ ] Results analyzed
-- [ ] Decision made
-- [ ] #119 closed
-
----
-
-## Review Response to Blocking Issues
-
-**P0: JSON parsing** ✅ Fixed - reads from file with --output flag
-
-**P1: Statistical method** ✅ Fixed - ABBA, bootstrap CI, multiple samples
-
-**P1: Decision gate** ✅ Fixed - 5% threshold per #119
-
-**P1: Closes #119** ✅ Fixed - changed to "Refs #119"
-
-**P1: Bundle logic** ✅ Fixed - positive-only failures, per-entry
-
-**P2: Checkout safety** ✅ Fixed - isolated worktrees
-
-**P2: Scenario coverage** - Phase 2 suite includes instrumented paths
-
-**P2: CI validation** - Deferred to avoid long-running CI jobs
-
----
-
-**Framework v2 ready for review** ✅
+**Framework v3 ready for review** ✅

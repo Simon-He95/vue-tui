@@ -1,36 +1,43 @@
 /**
- * Phase 3.3: Bundle Size Comparison
+ * Phase 3.3: Bundle Size Comparison (v3)
  *
- * Compares bundle sizes between pre-Phase-3 and post-Phase-3
- *
- * Per #119 requirements:
- * - Uses isolated worktrees
- * - Measures per-entry gzip delta (not sum)
- * - Only fails on positive increases (size reductions are good)
- * - Gate: +2KB per entry
+ * Fixes:
+ * - Fail-closed (missing bundles throw)
+ * - Positive-only failures
+ * - execFileSync for shell safety
+ * - Tests both ESM and CJS
  */
 
-import { execSync } from "node:child_process";
-import { statSync, writeFileSync, readFileSync, mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { statSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 
-const COMMIT_A = "697472b0cc5c000fb46baf16e85c60d84ee22471"; // Pre-Phase-3
-const COMMIT_B = "4d543ff7042f9c2400fa50a9dff921a0f36f77a3"; // Post-Phase-3
-const WARN_THRESHOLD = 2048; // +2KB per entry warning
-const FAIL_THRESHOLD = 5120; // +5KB per entry fail
+const COMMIT_A = "697472b0cc5c000fb46baf16e85c60d84ee22471";
+const COMMIT_B = "4d543ff7042f9c2400fa50a9dff921a0f36f77a3";
+const WARN_THRESHOLD = 2048;
+const FAIL_THRESHOLD = 5120;
+
+const EXPECTED_ENTRIES = [
+  "dist/core.js",
+  "dist/core.cjs",
+  "dist/vue.js",
+  "dist/vue.cjs",
+  "dist/index.js",
+  "dist/index.cjs",
+];
 
 interface BundleStats {
   raw: number;
   gzip: number;
 }
 
-interface EntryComparison {
+interface EntryComp {
   entry: string;
   commitA: BundleStats;
   commitB: BundleStats;
   delta: { raw: number; gzip: number };
-  percentChange: number;
   status: "acceptable" | "warning" | "fail";
 }
 
@@ -38,157 +45,85 @@ function log(msg: string) {
   console.log(`[Bundle] ${msg}`);
 }
 
-function formatBytes(bytes: number): string {
-  if (Math.abs(bytes) < 1024) return `${bytes} B`;
-  return `${(bytes / 1024).toFixed(2)} KB`;
+function fmt(b: number): string {
+  return b < 1024 ? `${b} B` : `${(b / 1024).toFixed(2)} KB`;
 }
 
-function getFileSize(path: string): number {
-  try {
-    return statSync(path).size;
-  } catch {
-    return 0;
-  }
+function getSize(p: string): BundleStats {
+  if (!existsSync(p)) throw new Error(`Expected bundle missing: ${p}`);
+  const raw = statSync(p).size;
+  const gzip = gzipSync(readFileSync(p)).length;
+  return { raw, gzip };
 }
 
-function getGzipSize(path: string): number {
-  try {
-    const content = readFileSync(path);
-    return gzipSync(content).length;
-  } catch {
-    return 0;
-  }
-}
+function setup(base: string) {
+  const wA = join(base, "commit-a");
+  const wB = join(base, "commit-b");
 
-function analyzeBundles(worktree: string): Record<string, BundleStats> {
-  const entries = ["dist/core.js", "dist/vue.js", "dist/index.js"];
-  const stats: Record<string, BundleStats> = {};
+  log("Creating worktrees...");
+  execFileSync("git", ["worktree", "add", "--detach", wA, COMMIT_A], { stdio: "inherit" });
+  execFileSync("git", ["worktree", "add", "--detach", wB, COMMIT_B], { stdio: "inherit" });
 
-  for (const entry of entries) {
-    const fullPath = join(worktree, entry);
-    stats[entry] = {
-      raw: getFileSize(fullPath),
-      gzip: getGzipSize(fullPath),
-    };
+  log("Installing...");
+  execFileSync("pnpm", ["install", "--frozen-lockfile"], { cwd: wA, stdio: "inherit" });
+  execFileSync("pnpm", ["install", "--frozen-lockfile"], { cwd: wB, stdio: "inherit" });
 
-    if (stats[entry].raw === 0) {
-      log(`Warning: ${entry} not found in ${worktree}`);
-    }
-  }
+  log("Building...");
+  execFileSync("pnpm", ["run", "build"], { cwd: wA, stdio: "inherit" });
+  execFileSync("pnpm", ["run", "build"], { cwd: wB, stdio: "inherit" });
 
-  return stats;
-}
-
-function setupWorktrees(): { worktreeA: string; worktreeB: string } {
-  const tmpDir = join(process.cwd(), ".tmp", `bundle-compare-${Date.now()}`);
-  mkdirSync(tmpDir, { recursive: true });
-
-  const worktreeA = join(tmpDir, "commit-a");
-  const worktreeB = join(tmpDir, "commit-b");
-
-  log(`Creating worktree A at ${worktreeA}...`);
-  execSync(`git worktree add ${worktreeA} ${COMMIT_A}`, { stdio: "inherit" });
-
-  log(`Creating worktree B at ${worktreeB}...`);
-  execSync(`git worktree add ${worktreeB} ${COMMIT_B}`, { stdio: "inherit" });
-
-  // Install with frozen lockfile
-  log("Installing dependencies in worktree A...");
-  execSync("pnpm install --frozen-lockfile", { cwd: worktreeA, stdio: "inherit" });
-
-  log("Installing dependencies in worktree B...");
-  execSync("pnpm install --frozen-lockfile", { cwd: worktreeB, stdio: "inherit" });
-
-  // Build both
-  log("Building worktree A...");
-  execSync("pnpm run build", { cwd: worktreeA, stdio: "inherit" });
-
-  log("Building worktree B...");
-  execSync("pnpm run build", { cwd: worktreeB, stdio: "inherit" });
-
-  return { worktreeA, worktreeB };
+  return { wA, wB };
 }
 
 function main() {
   console.log("=".repeat(80));
-  console.log("Phase 3.3: Bundle Size Comparison");
-  console.log("=".repeat(80));
-  console.log();
-  console.log(`Commit A (Pre-Phase-3):  ${COMMIT_A}`);
-  console.log(`Commit B (Post-Phase-3): ${COMMIT_B}`);
-  console.log(`Warning threshold: +${formatBytes(WARN_THRESHOLD)} gzip per entry`);
-  console.log(`Fail threshold: +${formatBytes(FAIL_THRESHOLD)} gzip per entry`);
-  console.log();
+  console.log("Phase 3.3: Bundle Size Comparison (v3)");
+  console.log("=".repeat(80) + "\n");
 
-  let worktreeA: string;
-  let worktreeB: string;
+  const base = join(tmpdir(), `bundle-${Date.now()}`);
+  mkdirSync(base, { recursive: true });
 
+  let wA: string | undefined, wB: string | undefined;
   try {
-    // Setup worktrees
-    ({ worktreeA, worktreeB } = setupWorktrees());
+    ({ wA, wB } = setup(base));
 
-    // Analyze bundles
-    const bundlesA = analyzeBundles(worktreeA);
-    const bundlesB = analyzeBundles(worktreeB);
+    const comps: EntryComp[] = [];
+    for (const entry of EXPECTED_ENTRIES) {
+      const a = getSize(join(wA, entry));
+      const b = getSize(join(wB, entry));
 
-    // Compare
-    console.log();
-    console.log("=".repeat(80));
-    console.log("RESULTS");
-    console.log("=".repeat(80));
-    console.log();
+      const raw = b.raw - a.raw;
+      const gzip = b.gzip - a.gzip;
 
-    const comparisons: EntryComparison[] = [];
-    let hasFailure = false;
-
-    for (const entry of Object.keys(bundlesA)) {
-      const a = bundlesA[entry];
-      const b = bundlesB[entry];
-
-      if (a.gzip === 0 || b.gzip === 0) {
-        log(`Skipping ${entry} (missing bundle)`);
-        continue;
-      }
-
-      const rawDelta = b.raw - a.raw;
-      const gzipDelta = b.gzip - a.gzip;
-      const percentChange = ((b.gzip / a.gzip - 1) * 100).toFixed(2);
-
-      // Status: only fail on POSITIVE increases (reductions are good)
       let status: "acceptable" | "warning" | "fail" = "acceptable";
-      if (gzipDelta > FAIL_THRESHOLD) {
-        status = "fail";
-        hasFailure = true;
-      } else if (gzipDelta > WARN_THRESHOLD) {
-        status = "warning";
-      }
+      if (gzip > FAIL_THRESHOLD) status = "fail";
+      else if (gzip > WARN_THRESHOLD) status = "warning";
 
-      const statusSymbol = status === "acceptable" ? "✅" : status === "warning" ? "⚠️" : "❌";
-
-      console.log(`${statusSymbol} ${entry}`);
-      console.log(`   Commit A: ${formatBytes(a.raw)} raw, ${formatBytes(a.gzip)} gzip`);
-      console.log(`   Commit B: ${formatBytes(b.raw)} raw, ${formatBytes(b.gzip)} gzip`);
-      console.log(
-        `   Delta:    ${gzipDelta >= 0 ? "+" : ""}${formatBytes(rawDelta)} raw, ${gzipDelta >= 0 ? "+" : ""}${formatBytes(gzipDelta)} gzip (${percentChange}%)`,
-      );
-      console.log(`   Status:   ${status.toUpperCase()}`);
-      console.log();
-
-      comparisons.push({
+      comps.push({
         entry,
         commitA: a,
         commitB: b,
-        delta: { raw: rawDelta, gzip: gzipDelta },
-        percentChange: parseFloat(percentChange),
+        delta: { raw, gzip },
         status,
       });
+
+      const sym = status === "acceptable" ? "✅" : status === "warning" ? "⚠️" : "❌";
+      const pct = ((b.gzip / a.gzip - 1) * 100).toFixed(2);
+      console.log(`${sym} ${entry}`);
+      console.log(`   A: ${fmt(a.gzip)} gzip`);
+      console.log(`   B: ${fmt(b.gzip)} gzip`);
+      console.log(`   Δ: ${gzip >= 0 ? "+" : ""}${fmt(gzip)} (${pct}%)`);
+      console.log(`   ${status.toUpperCase()}`);
+      console.log();
     }
 
-    // Save results
+    if (comps.length !== EXPECTED_ENTRIES.length) {
+      throw new Error("Incomplete bundle comparison");
+    }
+
     mkdirSync("docs/perf", { recursive: true });
-    const outputPath = "docs/perf/phase3.3-bundle-sizes.json";
     writeFileSync(
-      outputPath,
+      "docs/perf/phase3.3-bundle-sizes.json",
       JSON.stringify(
         {
           config: {
@@ -198,60 +133,44 @@ function main() {
             failThreshold: FAIL_THRESHOLD,
           },
           timestamp: new Date().toISOString(),
-          comparisons,
+          comparisons: comps,
         },
         null,
         2,
       ),
     );
 
-    log(`Results saved to ${outputPath}`);
+    const fail = comps.filter((c) => c.status === "fail").length;
+    const warn = comps.filter((c) => c.status === "warning").length;
 
-    // Summary
     console.log("=".repeat(80));
     console.log("SUMMARY");
     console.log("=".repeat(80));
+    console.log(`Fail: ${fail}, Warning: ${warn}\n`);
 
-    const totalGzipIncrease = comparisons.reduce((sum, c) => sum + Math.max(0, c.delta.gzip), 0);
-
-    console.log(`Total gzip increase: +${formatBytes(totalGzipIncrease)}`);
-    console.log(`Entries analyzed: ${comparisons.length}`);
-    console.log(`Failed: ${comparisons.filter((c) => c.status === "fail").length}`);
-    console.log(`Warnings: ${comparisons.filter((c) => c.status === "warning").length}`);
-    console.log();
-
-    if (hasFailure) {
-      console.log("❌ BUNDLE SIZE INCREASE EXCEEDS THRESHOLD");
-      console.log("   Consider:");
-      console.log("   - Tree-shaking optimization");
-      console.log("   - Compile-time stripping");
-      console.log("   - Code splitting");
+    if (fail > 0) {
+      console.log("❌ BUNDLE SIZE FAIL");
       process.exitCode = 1;
-    } else if (comparisons.some((c) => c.status === "warning")) {
-      console.log("⚠️  BUNDLE SIZE INCREASE WARNING");
-      console.log("   Review impact before release");
+    } else if (warn > 0) {
+      console.log("⚠️  BUNDLE SIZE WARNING");
     } else {
       console.log("✅ BUNDLE SIZE ACCEPTABLE");
     }
   } finally {
-    // Cleanup worktrees
-    if (worktreeA!) {
-      log("Cleaning up worktree A...");
+    if (wA)
       try {
-        execSync(`git worktree remove ${worktreeA} --force`);
-      } catch (err) {
-        log(`Warning: Failed to remove worktree A`);
-      }
-    }
-
-    if (worktreeB!) {
-      log("Cleaning up worktree B...");
+        execFileSync("git", ["worktree", "remove", "--force", wA]);
+      } catch {}
+    if (wB)
       try {
-        execSync(`git worktree remove ${worktreeB} --force`);
-      } catch (err) {
-        log(`Warning: Failed to remove worktree B`);
-      }
-    }
+        execFileSync("git", ["worktree", "remove", "--force", wB]);
+      } catch {}
+    try {
+      execFileSync("git", ["worktree", "prune"]);
+    } catch {}
+    try {
+      rmSync(base, { recursive: true, force: true });
+    } catch {}
   }
 }
 

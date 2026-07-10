@@ -1,9 +1,8 @@
 # Phase 3.3: Instrumentation Overhead Validation
 
-**Status**: ⚠️ In Progress  
-**Type**: Performance validation (required)  
-**Related**: #119  
-**Blocks**: Claiming Phase 3 complete
+**Status**: ⚠️ Framework Complete (v3)  
+**Related**: #119 (remains open until results collected)  
+**Type**: Performance validation (required)
 
 ---
 
@@ -11,23 +10,17 @@
 
 Validate that Phase 3 instrumentation hooks do not introduce unacceptable runtime or bundle-size overhead in the disabled state (production mode).
 
-**Note**: This document tracks the validation framework. Actual benchmark results will be collected and committed separately.
-
 ---
 
 ## Comparison Points
 
-**Baseline (Commit A)**: `697472b0cc5c000fb46baf16e85c60d84ee22471`
+**Baseline (Commit A)**: \`697472b0cc5c000fb46baf16e85c60d84ee22471\`
 
-- PR #115 merge commit
-- Phase 2 baseline complete
-- **Before** Phase 3 instrumentation
+- PR #115 merge (Phase 2 complete, before Phase 3)
 
-**Current (Commit B)**: `4d543ff7042f9c2400fa50a9dff921a0f36f77a3`
+**Current (Commit B)**: \`4d543ff7042f9c2400fa50a9dff921a0f36f77a3\`
 
-- PR #117 merge commit
-- Phase 3.1 + 3.2 complete
-- **After** Phase 3 instrumentation (disabled by default)
+- PR #117 merge (Phase 3.1 + 3.2 complete, instrumentation disabled)
 
 ---
 
@@ -35,85 +28,70 @@ Validate that Phase 3 instrumentation hooks do not introduce unacceptable runtim
 
 ### Runtime Performance
 
-**Approach**: Use existing Phase 2 baseline harness at both commits
+**Approach**: Paired AB/BA benchmarks with bootstrap CI
 
 **Execution**:
-
-```bash
+\`\`\`bash
 pnpm run bench:overhead
-```
+\`\`\`
 
-**Scenarios tested**:
+**Method**:
 
-- `createCell()` paths (cache hit/miss/blank)
-- `textCellWidth()` ASCII fast-path
-- `textCellWidth()` CJK hot/unique
-- `wrapByCells()` hot/unique
-- Complex grapheme segmentation
+- 10 paired AB/BA runs in alternating order
+- Full Phase 2 baseline per run (warmup=50, samples=500)
+- Extract p95 from each run
+- Compute paired p95 ratio (B/A) per pair
+- Bootstrap 95% CI on paired ratios
+- Point estimate: median of paired ratios
 
-**Statistical method**:
+**Decision gate** (non-inferiority per #119):
 
-- Independent process runs
-- Multiple samples per commit
-- p50/p95/p99 comparison
-- Ratio analysis (B/A)
+- **FAIL**: 95% CI lower bound > 1.05 (proven regression > 5%)
+- **PASS**: 95% CI upper bound <= 1.05 (proven regression <= 5%)
+- **INCONCLUSIVE**: CI crosses 1.05 threshold
 
 ### Bundle Size
 
-**Approach**: Compare production bundle sizes
+**Approach**: Per-entry gzip comparison
 
 **Execution**:
-
-```bash
+\`\`\`bash
 pnpm run bench:bundle-size
-```
+\`\`\`
 
 **Measured**:
 
-- `dist/core.js` (raw, gzip)
-- `dist/vue.js` (raw, gzip)
-- `dist/index.js` (raw, gzip)
+- dist/core.js, dist/core.cjs
+- dist/vue.js, dist/vue.cjs
+- dist/index.js, dist/index.cjs
 
----
+**Decision gate** (per entry):
 
-## Decision Gates
+- **ACCEPTABLE**: Δ <= +2KB gzip
+- **WARNING**: +2KB < Δ <= +5KB gzip
+- **FAIL**: Δ > +5KB gzip
 
-### Runtime Performance
-
-**Pass**: p95 ratio <= 1.05 (5% regression threshold)
-
-**Fail**: p95 ratio > 1.10 (10% regression)
-
-**Warning**: 1.05 < p95 ratio <= 1.10
-
-### Bundle Size
-
-**Pass**: Total gzip delta <= +2 KB per entry
-
-**Fail**: Total gzip delta > +5 KB
-
----
-
-## Results
-
-> **Note**: Results will be populated after running benchmarks
-
-### Runtime Performance
-
-See: `docs/perf/phase3.3-overhead-results.json`
-
-### Bundle Size
-
-See: `docs/perf/phase3.3-bundle-sizes.json`
+**Note**: Negative deltas (size reductions) are always acceptable.
 
 ---
 
 ## Remediation Options (If Fails)
 
-1. **Reduce hook calls**: Minimize instrumentation call sites
-2. **Compile-time stripping**: Build-time flag to remove hooks
-3. **Separate profiling build**: `@simon_he/vue-tui-profiling` package
+Per #119, if runtime regression > 5% proven:
+
+1. **Reduce hooks**: Remove from hottest paths
+2. **Compile-time strip**: Build flag to remove instrumentation
+3. **Separate build**: \`@simon_he/vue-tui-profiling\` package
 4. **Rollback**: Revert Phase 3 instrumentation
+
+---
+
+## Results
+
+> **Status**: Pending execution (30-60min)
+
+See: \`docs/perf/phase3.3-overhead-results.json\`  
+See: \`docs/perf/phase3.3-bundle-sizes.json\`
 
 ---
 
@@ -121,18 +99,16 @@ See: `docs/perf/phase3.3-bundle-sizes.json`
 
 ### Environment
 
-- **Node**: `${process.version}`
-- **OS**: `${process.platform}`
-- **Arch**: `${process.arch}`
-- **Date**: `${new Date().toISOString()}`
+- **Node**: TBD
+- **V8**: TBD
+- **OS**: TBD
+- **CPU**: TBD
+- **Date**: TBD
 
 ### Steps
 
-- [ ] Setup completed
-- [ ] Commit A benchmarked
-- [ ] Commit B benchmarked
-- [ ] Runtime comparison completed
-- [ ] Bundle size comparison completed
+- [ ] Framework validated
+- [ ] Benchmarks executed
 - [ ] Results analyzed
 - [ ] Decision made
 
@@ -144,9 +120,9 @@ See: `docs/perf/phase3.3-bundle-sizes.json`
 
 **Status**: TBD
 
-- [ ] ✅ PASS - No significant overhead
-- [ ] ⚠️ WARNING - Minor regression, review needed
-- [ ] ❌ FAIL - Significant regression, remediation required
+- [ ] ✅ PASS - Proven regression <= 5%
+- [ ] ⚠️ INCONCLUSIVE - CI crosses threshold, more samples needed
+- [ ] ❌ FAIL - Proven regression > 5%, remediation required
 
 **Decision**: TBD
 
@@ -156,8 +132,7 @@ See: `docs/perf/phase3.3-bundle-sizes.json`
 
 ## References
 
-- Issue: #119
-- Phase 4.0 Checkpoint: #118 (merged)
-- Phase 3.1: #116 (instrumentation foundation)
-- Phase 3.2: #117 (complete instrumentation)
-- Phase 2 Baseline: #115
+- Issue: #119 (Phase 3.3 overhead validation)
+- Phase 4.0: #118 (identified this as required)
+- Phase 3.1: #116, Phase 3.2: #117
+- Phase 2: #115 (baseline harness)
