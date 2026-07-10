@@ -467,10 +467,12 @@ const useRenderPassCache =
 
 ### Baseline PR
 
-- ✅ 新增 baseline harness (现有脚本不足)
+- ✅ 新增统一 statistical baseline harness
 - ✅ JSON 包含: commit, Unicode version, Node, V8, OS, CPU, p50/p95/p99/mean/stdev/CV
-- ✅ 多次运行数据稳定（CV < 10%）
-- ✅ DOM benchmark 区分 happy-dom vs 真实浏览器
+- ⚠️ Stability: 7 stable / 8 noisy / 3 unstable scenarios
+- ⚠️ 不稳定场景仅供参考，不可用于回归门禁
+- ⏸️ Real-browser DOM benchmark 超出 Phase 2 范围（仅涵盖 Unicode/text microbenchmarks）
+- ⏸️ 声明用户可见 DOM 改进前仍需 browser benchmark
 
 ---
 

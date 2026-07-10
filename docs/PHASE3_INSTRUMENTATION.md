@@ -84,7 +84,7 @@ console.log('Cell cache hit rate:',
 ### Run Profiler Benchmark
 
 ```bash
-pnpm run bench:profiler
+pnpm run bench:profiler  # Counter-only snapshot
 ```
 
 ## Workloads
@@ -204,7 +204,7 @@ Only after analyzing instrumentation data:
 - `src/core/buffer/buffer.ts`: Cell cache instrumentation
 - `src/vue/utils/text.ts`: Text cache instrumentation
 - `src/utils/grapheme.ts`: Grapheme instrumentation
-- `scripts/bench-profiler.ts`: New profiler benchmark
+- `scripts/bench-profiler-complete.ts (counter-only snapshot)`: New profiler benchmark
 - `package.json`: Added `bench:profiler` script
 
 ## Verification
@@ -217,7 +217,7 @@ pnpm run typecheck
 
 # Run profiler
 
-pnpm run bench:profiler
+pnpm run bench:profiler  # Counter-only snapshot
 
 # Smoke-check benchmark correctness only
 # This does not validate pre-Phase-3 vs post-Phase-3 overhead (see #119)
