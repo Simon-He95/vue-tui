@@ -32,7 +32,7 @@
 
 ## Key Findings from Measured Workloads
 
-### Realistic Workloads
+### Representative Synthetic Workloads
 
 **Repeated CJK** (typical terminal logs):
 
@@ -46,7 +46,7 @@
 - Hit rate: **37.49%**
 - Cache clears: **0**
 - Bucket P95: **10 (w1), 6 (w2)** (vs MAX=128)
-- Assessment: **Good performance**
+- Assessment: **Per-bucket sizing healthy; style-cardinality should remain monitored**
 
 **Text Cache**:
 

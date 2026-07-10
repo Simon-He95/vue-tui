@@ -45,15 +45,19 @@ Based on Phase 3.2 instrumentation data from measured profiler workloads, this r
 ```
 Command: pnpm run bench:profiler:complete:gc
 Node: v24.18.0
+V8: 13.6.233.17-node.50
+Platform: darwin (macOS)
+Arch: arm64
+CPU: Apple M1 Pro
 GC: Enabled (--expose-gc)
 Date: 2026-07-10
-Commit: Phase 3.2 merged
+Commit: c4182b6c2f449423739851c335feb5932f9d5b40
 Output: docs/perf/phase4-profiler-output.txt
 ```
 
 ### Workload Classification
 
-**Realistic Workloads** (representative of typical usage):
+**Representative Synthetic Workloads** (measured scenarios):
 
 1. Repeated CJK - typical terminal logs
 2. Mixed workload - varied log lines
@@ -217,6 +221,7 @@ registered bucket count: 2000 (1000 w1 + 1000 w2)
 bucket P50: 9 (w1), 6 (w2)
 bucket P95: 10 (w1), 6 (w2)
 bucket Max: 10 (w1), 6 (w2)
+heap delta: 1.62 MB (GC-enabled, advisory; instrumentation retains registered buckets)
 ```
 
 **Assessment**: ✅ Acceptable performance for per-bucket size
@@ -525,10 +530,8 @@ GC: Enabled (--expose-gc)
 Generated: 2026-07-10
 ```
 
-Commit: Phase 3.2 merged (main branch)
-Platform: darwin (macOS)
+**All 8 workloads completed successfully with GC-enabled heap measurements.**
 
 ```
 
-**All 8 workloads completed successfully with GC-enabled heap measurements.**
 ```
