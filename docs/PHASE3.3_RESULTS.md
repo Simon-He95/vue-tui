@@ -1,74 +1,104 @@
 # Phase 3.3: Instrumentation Overhead Validation - Results
 
-**Status**: ⚠️ INCONCLUSIVE  
-**Date**: 2026-01-09  
-**Issue**: #119
+**Status**: ⚠️ ACTION REQUIRED  
+**Date**: 2026-07-10  
+**Issue**: #119 (remains open)
 
 ---
 
 ## Executive Summary
 
-### ✅ Bundle Size: PASS
-**All 24 public exports < +2KB threshold**
+### ⚠️ Overall: ACTION REQUIRED
 
-### ⚠️ Runtime Overhead: INCONCLUSIVE  
-**8 of 9 gating scenarios INCONCLUSIVE (wide CI), 1 PASS, 0 FAIL**
+**Formal p95 gate**: INCONCLUSIVE  
+**Critical p50 finding**: Clear ASCII fast-path regression (~14.5%)  
+**Bundle**: Public exports pass, aggregate +9.06 KB, chunk comparison needs correction
 
-**Key Finding**: No evidence of significant regression > 5%, but CIs too wide to conclusively prove <= 5%
+**Conclusion**: Instrumentation disabled-path cost must be remediated before Phase 3 can be considered complete.
 
 ---
 
-## Runtime Overhead Results
+## Critical Finding: ASCII Fast Path Regression
+
+### p50 Analysis
+
+**Scenario**: `textCellWidth_ascii_long_fast_path` (100-char ASCII)
+
+**Results**:
+
+- **All 10 paired p50 ratios**: 1.133 – 1.157 (consistently elevated)
+- **Median ratio**: 1.1451 (+14.51%)
+- **Bootstrap 95% CI**: [1.1417, 1.1503]
+- **Interpretation**: **Stable, clear regression, not measurement noise**
+
+**Comparison**:
+
+- This scenario: p50 +14.5%, CI very narrow
+- Other stable scenarios (e.g., wrapByCells_cjk_long_hot): p50 +3.76%, CI [1.0345, 1.0412]
+
+**Root cause**: Disabled instrumentation still executes function calls and branches:
+
+```typescript
+// Pre-Phase-3
+if (hasAsciiFastPath(provider) && isAscii(text)) return text.length;
+
+// Post-Phase-3 (disabled state)
+if (hasAsciiFastPath(provider) && isAscii(text)) {
+  if (isInstrumentationEnabled()) {
+    // ← Always false in production
+    textInstr.recordTextCellWidthCall(text.length, true);
+  }
+  return text.length;
+}
+```
+
+**Impact**:
+
+- ASCII text is the most common case
+- `textCellWidth` called by multiple components
+- 14.5% overhead on fast path is significant
+
+**Remediation required**: See recommendations below.
+
+---
+
+## Formal p95 Gate Results
 
 ### Configuration
 
-- **Commit A** (Pre-Phase-3): `697472b0` 
+- **Commit A** (Pre-Phase-3): `697472b0`
 - **Commit B** (Post-Phase-3): `4d543ff7`
 - **Pairs**: 10 (AB/BA alternating)
-- **Warmup**: 50 iterations per sample
-- **Samples**: 500 iterations per sample
+- **Warmup**: 50, **Samples**: 500 per pair
 - **Bootstrap**: 10,000 iterations, seed: 0x33120202
 - **Environment**: Node v24.18.0, V8 13.6, macOS arm64, Apple M1 Pro
+- **Date**: 2026-07-10
 
 ### Gating Scenarios Results
 
-| Scenario | Status | p95 Ratio | 95% CI | Regression % |
-|----------|--------|-----------|--------|--------------|
-| textCellWidth_ascii_long_fast_path | ⚠️ INCONCLUSIVE | 1.033 | [0.970, 1.388] | +3.26% |
-| textCellWidth_cjk_long_hot | ⚠️ INCONCLUSIVE | 0.972 | [0.844, 1.493] | -2.84% |
-| textCellWidth_cjk_unique | ⚠️ INCONCLUSIVE | 0.964 | [0.862, 1.341] | -3.61% |
-| textCellWidth_complex_grapheme_hot | ⚠️ INCONCLUSIVE | 1.013 | [0.972, 1.077] | +1.26% |
-| textCellWidth_complex_grapheme_unique | ⚠️ INCONCLUSIVE | 1.052 | [0.547, 1.114] | +5.18% |
-| **wrapByCells_cjk_long_hot** | ✅ **PASS** | 1.017 | [0.820, 1.023] | +1.71% |
-| wrapByCells_cjk_unique | ⚠️ INCONCLUSIVE | 0.915 | [0.747, 1.062] | -8.50% |
-| terminal_write_supplementary_cjk_hot | ⚠️ INCONCLUSIVE | 1.082 | [0.989, 1.298] | +8.16% |
-| terminal_write_supplementary_cjk_cycling_rows | ⚠️ INCONCLUSIVE | 1.065 | [0.828, 1.208] | +6.48% |
+| Scenario                                      | p95 Ratio | 95% CI         | Status          | Notes                                   |
+| --------------------------------------------- | --------- | -------------- | --------------- | --------------------------------------- |
+| textCellWidth_ascii_long_fast_path            | 1.033     | [0.970, 1.388] | ⚠️ INCONCLUSIVE | **p50 shows clear +14.5% regression**   |
+| textCellWidth_cjk_long_hot                    | 0.972     | [0.844, 1.493] | ⚠️ INCONCLUSIVE | Wide CI                                 |
+| textCellWidth_cjk_unique                      | 0.964     | [0.862, 1.341] | ⚠️ INCONCLUSIVE | Wide CI                                 |
+| textCellWidth_complex_grapheme_hot            | 1.013     | [0.972, 1.077] | ⚠️ INCONCLUSIVE | Narrow CI, close to threshold           |
+| textCellWidth_complex_grapheme_unique         | 1.052     | [0.547, 1.114] | ⚠️ INCONCLUSIVE | Extreme variability (CV 149%)           |
+| **wrapByCells_cjk_long_hot**                  | 1.017     | [0.820, 1.023] | ✅ **PASS**     | Only scenario proven <= 5%              |
+| wrapByCells_cjk_unique                        | 0.915     | [0.747, 1.062] | ⚠️ INCONCLUSIVE | Wide CI                                 |
+| terminal_write_supplementary_cjk_hot          | 1.082     | [0.989, 1.298] | ⚠️ INCONCLUSIVE | Extreme swings (0.74–2.55 across pairs) |
+| terminal_write_supplementary_cjk_cycling_rows | 1.065     | [0.828, 1.208] | ⚠️ INCONCLUSIVE | High variability                        |
 
-### Summary Statistics
+### Summary
 
-- **Total gating scenarios**: 9
 - **PASS**: 1 (11%)
-- **FAIL**: 0 (0%) ✅
 - **INCONCLUSIVE**: 8 (89%)
+- **FAIL**: 0 (0%)
 
-### Analysis
+**Interpretation**:
 
-**Positive findings**:
-1. ✅ **No failures**: No scenario proven > 5% regression
-2. ✅ **One definitive pass**: wrapByCells_cjk_long_hot proven <= 5%
-3. ✅ **Most point estimates acceptable**: 7/9 scenarios have p95 ratio < 1.05
-4. ✅ **No major regressions**: Largest point estimate +8.16%
-
-**Challenges**:
-1. ⚠️ **Wide confidence intervals**: CI ranges span both sides of 1.05 threshold
-2. ⚠️ **High variability**: Especially in terminal_write and grapheme_unique scenarios
-3. ⚠️ **Inconclusive for certification**: Cannot conclusively prove <= 5% overhead
-
-**Root causes of INCONCLUSIVE**:
-- High inherent variability in some workloads (CV 40-150% from Phase 2)
-- Only 10 paired samples
-- System noise (background processes, thermal throttling)
-- Measurement precision for sub-microsecond operations
+- **Formal result**: No scenario met the pre-registered p95 FAIL criterion (CI lower > 1.05)
+- **Engineering reality**: p50 analysis reveals clear ASCII fast-path regression
+- **Decision**: Cannot proceed without remediation
 
 ---
 
@@ -77,96 +107,245 @@
 ### Configuration
 
 - Same commits as runtime test
-- All emitted JS/CJS files scanned
+- All emitted JS/CJS files scanned (59 total)
 - Per-file and aggregate analysis
 
-### Public Exports (24 files)
+### Public Exports (24 files): Pass Per-Entry Gate
 
-**All exports ACCEPTABLE (< +2KB)**
+**All public exports < +2KB threshold** ✅
 
 Largest increases:
+
 - `vue.cjs`: +1.30 KB (+0.79%)
 - `index.cjs`: +1.32 KB (+1.03%)
 - `cli.cjs`: +790 B (+0.73%)
 - `core.cjs`: +774 B (+3.51%)
 
-### Aggregate
+### Aggregate: +9.06 KB gzip (+0.55%)
 
-- **Total files**: 59 (24 exports + 35 chunks)
-- **Total gzip increase**: +9.06 KB
-- **Per-export average**: ~0.38 KB
+- **Total files**: 59
+- **Commit A total**: 1648.18 KB gzip
+- **Commit B total**: 1657.24 KB gzip
+- **Delta**: +9,278 bytes gzip
 
-### Non-Export Files Note
+### Non-Export Chunk Comparison: Needs Correction
 
-9 files flagged as "fail" are actually **hash-renamed chunks** (rolldown behavior):
-- TTree, TSelect, TMermaidText, etc. - same content, different hash
-- Not actual size regressions
+**Issue**: Hash-named chunks compared by filename, not logical content:
 
-### Bundle Size Decision: ✅ PASS
+- `create-terminal-DXuZ2fci.js` (A) vs `create-terminal-D4mGjAYO.js` (B)
+- `width-GqllnV8C.js` (A) vs `width-DnZjDPPc.js` (B)
+
+**Observed**:
+
+- Some chunks show real size growth (e.g., width: 3.37 KB → 4.39 KB gzip)
+- Others are rename-only
+
+**Conclusion**: Cannot definitively classify all non-export chunk changes without logical pairing.
+
+### Bundle Decision: Provisionally Acceptable / Manual Review Required
 
 **Rationale**:
-- All public exports well under threshold
-- Total increase reasonable for instrumentation framework
-- No unexpected bloat
+
+- ✅ Public export gate: **PASS**
+- ✅ Aggregate growth: **+9.06 KB is acceptable for instrumentation framework**
+- ⚠️ Non-export logical chunk matching: **Needs bundler metafile or content hash pairing**
 
 ---
 
-## Overall Decision
+## Overall Decision Per #119
 
-### Per #119 Requirements
+### Requirements vs Results
 
-**Decision gates**:
-1. **Bundle size**: ✅ PASS - All entries acceptable
-2. **Runtime overhead**: ⚠️ INCONCLUSIVE - Cannot conclusively prove <= 5%
+| Requirement                   | Result                                                        | Status               |
+| ----------------------------- | ------------------------------------------------------------- | -------------------- |
+| Bundle size acceptable        | Public exports pass, aggregate +9.06 KB                       | ⚠️ Pass with caveats |
+| Runtime overhead proven <= 5% | p95 gate: INCONCLUSIVE<br/>p50: Clear ASCII +14.5% regression | ❌ Not met           |
 
-### Status: ⚠️ INCONCLUSIVE (Not Ready to Close #119)
+### Status: ⚠️ ACTION REQUIRED
 
-**Next steps required**:
+**#119 remains open** pending:
 
-#### Option 1: Increase Sample Size (Recommended)
-```bash
-# Increase pairs to narrow CI
-# Target: 20-30 pairs for more statistical power
-pnpm run bench:overhead -- --pairs 20
+1. Remediation of ASCII fast-path overhead
+2. Re-validation after remediation
+3. Bundle chunk logical comparison fix
+
+---
+
+## Root Cause Analysis
+
+### Why p95 Gate is INCONCLUSIVE
+
+**Problem**: Measurement windows too short for sub-microsecond operations
+
+- ASCII 100-char: ~300 ns/op
+- Sample window: 100 iterations × 300 ns = ~30 μs
+- p95 dominated by scheduler/GC/JIT noise, not instrumentation cost
+
+**Evidence**: Extreme swings in p95 ratios
+
+- `terminal_write` pairs range from 0.74 to 2.55
+- `textCellWidth_cjk_unique` single pair reached 3.07
+
+**Conclusion**: p95 gate appropriate for integration workloads (ms-scale), not microbenchmarks (μs-scale)
+
+### Why p50 Shows Clear Signal
+
+**p50 is stable** because:
+
+- Median filters outliers
+- Central tendency less affected by scheduler noise
+- ASCII fast-path regression is consistent (+14.5%)
+
+---
+
+## Recommendations
+
+### Priority 1: Remediate Disabled-Path Overhead
+
+**Do NOT immediately increase pairs to 20**. Problem is overhead, not sample size.
+
+#### Option A: Optional Hook Binding (Recommended)
+
+```typescript
+// perf-hooks.ts - minimal module
+export let perfHooks: PerfHooks | undefined;
+
+export function installPerfHooks(hooks: PerfHooks | undefined): void {
+  perfHooks = hooks;
+}
+
+// Hot paths - single nullable check
+const hooks = perfHooks;
+hooks?.recordTextCellWidthCall(text.length, true);
 ```
 
-#### Option 2: Targeted Stable Scenarios
-- Create dedicated stable grapheme workload
-- Focus on lower-variance terminal_write scenarios
-- Remove or downgrade highly unstable scenarios
+**Benefits**:
 
-#### Option 3: Accept INCONCLUSIVE with Justification
-- Document that no evidence of >5% regression found
-- Bundle size clearly acceptable
-- Instrumentation overhead likely minimal but not proven
-- Proceed to Phase 4 with monitoring
+- Disabled: single nullable binding check (~1-2 ns)
+- Production bundle: no metrics collector
+- Enabled: full instrumentation works
 
-### Recommendation
+#### Option B: Compile-Time Stripping
 
-**Proceed with Option 1**: Run extended benchmark (20 pairs) to narrow CIs.
+```typescript
+// Normal build: strips instrumentation
+// Profiling build: includes hooks
+if (import.meta.env.PROFILING) {
+  recordTextCellWidthCall();
+}
+```
 
-**Rationale**:
-- Point estimates look good (7/9 < 1.05)
-- No failures detected
-- Just needs more statistical power
-- Worth investment for conclusive result
+**Benefits**:
+
+- Zero disabled-path cost
+- Cleanest final state
+
+#### Option C: Remove ASCII Fast-Path Hook
+
+```typescript
+// Don't instrument trivial fast paths
+if (hasAsciiFastPath(provider) && isAscii(text)) {
+  return text.length; // No hook
+}
+```
+
+**Trade-off**: Loses ASCII call count data
+
+### Priority 2: Fix Validation Method
+
+**Microbenchmark gate changes**:
+
+- Use **p50 ratio + absolute ns/op delta**, not p95
+- Auto-calibrate sample batch to 1-5 ms duration
+- Add ASCII length variations (1, 8, 32, 100 chars)
+
+**Integration gate changes**:
+
+- Use p95 for complete workloads:
+  - Full render pass
+  - Terminal frame update
+  - TLogView append burst
+  - VirtualList scroll frame
+
+**Bundle gate changes**:
+
+- Logical chunk pairing (bundler metafile or content hash)
+- Pre-register aggregate threshold
+- Don't rely on hash-based filename matching
+
+### Priority 3: Re-validate After Remediation
+
+Only run extended benchmark (20+ pairs) after:
+
+- ASCII p50 regression eliminated
+- Bundle logical comparison fixed
+- CI green
+
+### Priority 4: Stop Cache Tuning
+
+**Current evidence does NOT support**:
+
+- Increasing cache size from 128 to 512
+- Changing clear-all to LRU
+- Adding long-text admission policy
+- Provider-aware cache separation
+
+**Correct next step**: Pick real user workload for profiling, not synthetic optimization.
+
+---
+
+## What This Work Achieved
+
+### Clear Wins ✅
+
+1. **Unicode correctness** (#114): Supplementary plane CJK width fixed
+2. **Measurement capability** (#115): Baseline harness with stability classification
+3. **Avoided premature optimization** (#118): Recognized insufficient evidence for cache tuning
+4. **Exposed real cost** (#120, #121): Discovered instrumentation overhead
+
+### Current Status ⚠️
+
+| Dimension                  | Conclusion                          |
+| -------------------------- | ----------------------------------- |
+| Unicode correctness        | **明确提升** ✅                     |
+| User-perceived performance | **尚无证明提升**                    |
+| Cache tuning               | **没有证据支持，未实施是正确的** ✅ |
+| Measurement capability     | **明显提升** ✅                     |
+| Production runtime         | **发现 ASCII fast path 回归** ⚠️    |
+| Bundle size                | **存在小幅但真实增长** ⚠️           |
+| Engineering complexity     | **已经明显增加** ⚠️                 |
 
 ---
 
 ## Detailed Files
 
-- Runtime results: `docs/perf/phase3.3-overhead-results.json`
-- Bundle results: `docs/perf/phase3.3-bundle-sizes.json`
+- **This document**: `docs/PHASE3.3_RESULTS.md`
+- **Runtime results**: `docs/perf/phase3.3-overhead-results.json` (207KB, full data)
+- **Bundle results**: `docs/perf/phase3.3-bundle-sizes.json` (18KB)
 
 ---
 
 ## Conclusion
 
-**Phase 3.3 validation**: ⚠️ **INCONCLUSIVE**
+**Phase 3.3 validation**: ⚠️ **ACTION REQUIRED**
 
-**Bundle**: ✅ **PASS**  
-**Runtime**: ⚠️ **INCONCLUSIVE** (needs more samples)
+**Key findings**:
 
-**#119 status**: Remains open pending conclusive runtime results
+1. ✅ **No p95 FAIL**: No scenario proven > 5% under formal gate
+2. ⚠️ **Clear p50 regression**: ASCII fast path +14.5% (stable, not noise)
+3. ⚠️ **Bundle acceptable**: Public exports pass, aggregate +9KB, chunk comparison needs fix
+4. ⚠️ **Method refinement needed**: p95 gate inappropriate for μs-scale microbenchmarks
 
-**Recommended action**: Increase sample size (20+ pairs) for conclusive validation
+**Recommended actions**:
+
+1. Remediate disabled instrumentation cost (optional hook binding or compile-time strip)
+2. Fix bundle chunk logical pairing
+3. Refine validation method (p50 for microbenchmarks, p95 for integration)
+4. Re-validate after remediation
+5. Stop cache tuning pending real workload evidence
+
+**#119 status**: **Remains open** pending remediation and re-validation
+
+---
+
+**This is an audit record of valuable measurement work that exposed real engineering trade-offs requiring resolution.**
