@@ -330,4 +330,4 @@ Before claiming comprehensive cache validation, add:
 
 **Note**: Profiler data collected at c4182b6c. Subsequent commits are documentation updates only.
 
-**Output**: `docs/perf/phase4-profiler-output.txt` (annotated with environment metadata)
+**Output**: `docs/perf/phase4-profiler-output-c4182b6c-annotated.txt` (annotated with environment metadata)

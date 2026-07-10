@@ -104,13 +104,40 @@ No per-style Cell cache capacity or eviction change is justified by the currentl
 
 ## Next Steps
 
-### Option 1: Proceed with Other Work
+### Required: Phase 3 Disabled-Path Overhead Validation
 
-Accept current checkpoint and focus elsewhere.
+**This is mandatory** and independent of cache-tuning decisions.
 
-### Option 2: Phase 4.1 Targeted Workloads
+Phase 3 instrumentation hooks are in production hot paths (`createCell`, `textCellWidth`, `wrapByCells`). The disabled-path production overhead must be validated.
 
-Before claiming comprehensive validation:
+**Compare**:
+
+- Pre-Phase-3 commit (before PR #116)
+- Current main with instrumentation disabled
+
+**Requirements**:
+
+- Isolated processes or separate worktrees
+- Randomized/alternating execution order
+- Warmup + multiple samples
+- p50/p95 comparison with confidence intervals
+- Use Phase 2 baseline harness
+
+**Track separately** with dedicated issue/PR.
+
+---
+
+### Optional: Phase 4.1 Cache Workload Validation
+
+Phase 4.1 is optional **only if** cache optimization is explicitly deferred.
+
+Required before:
+
+- Claiming cache strategy is validated
+- Changing cache capacity or eviction
+- Closing cache evaluation as complete
+
+**If pursued**, add:
 
 - Stable style + high diversity + multiple passes
 - Eviction-sensitive patterns

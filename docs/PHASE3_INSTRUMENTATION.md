@@ -1,5 +1,15 @@
 # Phase 3: Performance Instrumentation
 
+> **⚠️ SUPERSEDED BY PHASE 4.0 CHECKPOINT**
+>
+> This document describes the Phase 3 instrumentation foundation completed in PR #116 and #117.
+>
+> **Important updates from Phase 4.0**:
+>
+> - Disabled-path runtime overhead has not yet been validated against the pre-Phase-3 implementation
+> - Previous overhead and heap conclusions from single-shot profiler must not be used
+> - See `docs/PHASE4.0_CHECKPOINT.md` for current status and required follow-ups
+
 ## Overview
 
 Phase 3 adds **observation-only instrumentation** to measure cache behavior, allocation patterns, and grapheme processing costs. This phase does NOT include any optimizations - it only collects metrics to identify actual bottlenecks.

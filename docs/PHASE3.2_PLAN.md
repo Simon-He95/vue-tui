@@ -1,5 +1,15 @@
 # Phase 3.2: Complete Instrumentation for Phase 4 Readiness
 
+> **⚠️ SUPERSEDED BY PHASE 4.0 CHECKPOINT**
+>
+> This document reflects the Phase 3.2 planning at the time of completion.
+>
+> **Important updates from Phase 4.0**:
+>
+> - Overhead ratio and heap delta measurements were not decision-grade
+> - Disabled-path overhead requires separate validation (see Phase 4.0 checkpoint)
+> - Cell cache tuning questions addressed in `docs/PHASE4.0_CHECKPOINT.md`
+
 ## Overview
 
 Phase 3.2 completes the instrumentation work started in Phase 3.1, adding the missing pieces needed to support Phase 4 cache tuning decisions.
