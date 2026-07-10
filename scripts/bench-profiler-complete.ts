@@ -1,13 +1,13 @@
 /**
- * Phase 3.2 Complete Profiler Benchmark
+ * Phase 3.2 Complete Profiler Benchmark - CORRECTED VERSION
  *
- * Enhanced version with:
- * - Cache overflow workloads
- * - Cached/uncached grapheme variants
- * - Width churn workload
- * - Duration with/without instrumentation
- * - Heap measurement
- * - Robust error handling
+ * Fixes all review issues:
+ * 1. clearTextCaches() between runs to avoid cache pollution
+ * 2. Unique styles per run (href with runId) to isolate bucket creation
+ * 3. Fixed w1 overflow to use 200 truly unique width=1 chars (Latin Extended)
+ * 4. withTerminal() helper for robust cleanup
+ * 5. Fixed style type issues (href instead of fg: number)
+ * 6. Added P50/P95/Max bucket size output
  */
 
 import { createTerminal } from "../src/core/index.js";
@@ -21,6 +21,10 @@ import {
   type PerformanceMetrics,
 } from "../src/core/perf/instrumentation.js";
 
+interface WorkloadContext {
+  runId: string;
+}
+
 interface WorkloadResult {
   name: string;
   description: string;
@@ -33,11 +37,6 @@ interface WorkloadResult {
   metrics: PerformanceMetrics;
 }
 
-interface ProfilerReport {
-  timestamp: string;
-  workloads: WorkloadResult[];
-}
-
 // Helper: Force GC if available
 function forceGC() {
   const maybeGc = (globalThis as any).gc;
@@ -46,105 +45,118 @@ function forceGC() {
   }
 }
 
-// Helper: Measure workload with robust error handling
+// Helper: Robust terminal lifecycle management
+function withTerminal<T>(
+  options: Parameters<typeof createTerminal>[0],
+  fn: (terminal: ReturnType<typeof createTerminal>) => T,
+): T {
+  const terminal = createTerminal(options);
+  try {
+    return fn(terminal);
+  } finally {
+    terminal.dispose();
+  }
+}
+
+// Helper: Measure workload with proper cache isolation
 function measureWorkload(
   name: string,
   description: string,
-  workloadFn: () => void,
+  workloadFn: (ctx: WorkloadContext) => void,
 ): WorkloadResult {
-  let terminal: any = null;
+  // Measure WITHOUT instrumentation
+  clearTextCaches();
+  forceGC();
+  disableInstrumentation();
+
+  const startDisabled = performance.now();
+  workloadFn({ runId: `control-${Date.now()}` });
+  const durationWithout = performance.now() - startDisabled;
+
+  // Clear caches between runs to avoid pollution
+  clearTextCaches();
+  forceGC();
+
+  // Measure WITH instrumentation
+  const heapBefore = getHeapUsed();
+
+  resetMetrics();
+  enableInstrumentation();
+  const startEnabled = performance.now();
 
   try {
-    // Measure WITHOUT instrumentation
-    disableInstrumentation();
-    const startDisabled = performance.now();
-    workloadFn();
-    const durationWithout = performance.now() - startDisabled;
+    workloadFn({ runId: `instrumented-${Date.now()}` });
+    const durationWith = performance.now() - startEnabled;
 
-    // Measure WITH instrumentation
     forceGC();
-    const heapBefore = getHeapUsed();
+    const heapAfter = getHeapUsed();
 
-    resetMetrics();
-    enableInstrumentation();
-    const startEnabled = performance.now();
+    const metrics = getMetrics();
+    const overheadPercent = durationWithout > 0 ? (durationWith / durationWithout - 1) * 100 : 0;
+    const heapDelta = heapBefore !== null && heapAfter !== null ? heapAfter - heapBefore : null;
 
-    try {
-      workloadFn();
-      const durationWith = performance.now() - startEnabled;
-
-      forceGC();
-      const heapAfter = getHeapUsed();
-
-      const metrics = getMetrics();
-      const overheadPercent = (durationWith / durationWithout - 1) * 100;
-      const heapDelta = heapBefore !== null && heapAfter !== null ? heapAfter - heapBefore : null;
-
-      return {
-        name,
-        description,
-        durationWithoutInstrumentation: durationWithout,
-        durationWithInstrumentation: durationWith,
-        overheadPercent,
-        heapBefore,
-        heapAfter,
-        heapDelta,
-        metrics,
-      };
-    } finally {
-      disableInstrumentation();
-    }
+    return {
+      name,
+      description,
+      durationWithoutInstrumentation: durationWithout,
+      durationWithInstrumentation: durationWith,
+      overheadPercent,
+      heapBefore,
+      heapAfter,
+      heapDelta,
+      metrics,
+    };
   } finally {
-    if (terminal?.dispose) {
-      terminal.dispose();
-    }
+    disableInstrumentation();
   }
 }
 
 // ============================================================================
-// WORKLOADS
+// WORKLOADS - All fixed per review
 // ============================================================================
 
-// Workload 1: Cell Cache Overflow Width=1
-function workload_cellCacheOverflowWidth1() {
-  const terminal = createTerminal({ cols: 80, rows: 24 });
-  // Write 200 unique printable ASCII chars (exceeds MAX=128)
-  for (let i = 0; i < 200; i++) {
-    const ch = String.fromCharCode(0x21 + (i % 94));
-    terminal.write(ch, { x: i % 80, y: Math.floor(i / 80) });
-  }
-  terminal.dispose();
+// Workload 1: Cell Cache Overflow Width=1 (FIXED - 200 unique width=1 chars)
+function workload_cellCacheOverflowWidth1(ctx: WorkloadContext) {
+  withTerminal({ cols: 80, rows: 24 }, (terminal) => {
+    const style = { href: `perf:w1:${ctx.runId}` };
+    // Write 200 unique width=1 chars (Latin Extended-A and beyond)
+    for (let i = 0; i < 200; i++) {
+      const ch = String.fromCharCode(0x0100 + i);
+      terminal.write(ch, { x: i % 80, y: Math.floor(i / 80), style });
+    }
+  });
 }
 
 // Workload 2: Cell Cache Overflow Width=2
-function workload_cellCacheOverflowWidth2() {
-  const terminal = createTerminal({ cols: 80, rows: 24 });
-  // Write 200 unique CJK chars (exceeds MAX=128)
-  for (let i = 0; i < 200; i++) {
-    const ch = String.fromCodePoint(0x4e00 + i);
-    const x = (i * 2) % 80;
-    const y = Math.floor((i * 2) / 80);
-    terminal.write(ch, { x, y });
-  }
-  terminal.dispose();
+function workload_cellCacheOverflowWidth2(ctx: WorkloadContext) {
+  withTerminal({ cols: 80, rows: 24 }, (terminal) => {
+    const style = { href: `perf:w2:${ctx.runId}` };
+    // Write 200 unique CJK chars
+    for (let i = 0; i < 200; i++) {
+      const ch = String.fromCodePoint(0x4e00 + i);
+      const x = (i * 2) % 80;
+      const y = Math.floor((i * 2) / 80);
+      terminal.write(ch, { x, y, style });
+    }
+  });
 }
 
-// Workload 3: Many Styles Many Chars
-function workload_manyStylesManyChars() {
-  const terminal = createTerminal({ cols: 80, rows: 24 });
-  // 50 styles × 10 chars each = stress bucket count
-  for (let styleIdx = 0; styleIdx < 50; styleIdx++) {
-    const style = { fg: styleIdx };
-    for (let charIdx = 0; charIdx < 10; charIdx++) {
-      const ch = String.fromCodePoint(0x4e00 + styleIdx * 10 + charIdx);
-      terminal.write(ch, { x: charIdx * 2, y: styleIdx % 24, style });
+// Workload 3: Many Styles Many Chars (FIXED - proper href style)
+function workload_manyStylesManyChars(ctx: WorkloadContext) {
+  withTerminal({ cols: 80, rows: 24 }, (terminal) => {
+    // 50 styles × 10 chars each
+    for (let styleIdx = 0; styleIdx < 50; styleIdx++) {
+      const style = { href: `perf:style:${ctx.runId}:${styleIdx}` };
+      for (let charIdx = 0; charIdx < 10; charIdx++) {
+        const ch = String.fromCodePoint(0x4e00 + styleIdx * 10 + charIdx);
+        terminal.write(ch, { x: charIdx * 2, y: styleIdx % 24, style });
+      }
     }
-  }
-  terminal.dispose();
+  });
 }
 
 // Workload 4: Complex Grapheme Cached
-function workload_complexGraphemeCached() {
+function workload_complexGraphemeCached(_ctx: WorkloadContext) {
   const lines = [
     "👩\u200d💻 Developer",
     "👨\u200d👩\u200d👧\u200d👦 Family",
@@ -152,7 +164,6 @@ function workload_complexGraphemeCached() {
     "e\u0301 café",
   ];
 
-  // Call 500 times - should mostly hit cache
   for (let i = 0; i < 500; i++) {
     for (const line of lines) {
       textCellWidth(line);
@@ -160,51 +171,53 @@ function workload_complexGraphemeCached() {
   }
 }
 
-// Workload 5: Complex Grapheme Uncached
-function workload_complexGraphemeUncached() {
-  // Generate 1000 unique complex strings
+// Workload 5: Complex Grapheme Uncached (unique per run)
+function workload_complexGraphemeUncached(ctx: WorkloadContext) {
+  // Generate 1000 unique complex strings per run
   for (let i = 0; i < 1000; i++) {
-    const text = `👨\u200d💻-${i} e\u0301-${i}`;
+    const text = `👨\u200d💻-${ctx.runId}-${i} e\u0301-${ctx.runId}-${i}`;
     textCellWidth(text);
   }
 }
 
 // Workload 6: Wrap Width Churn
-function workload_wrapWidthChurn() {
+function workload_wrapWidthChurn(_ctx: WorkloadContext) {
   const longLine = "这是一个很长的中文文本行，用来测试文本换行缓存的行为。".repeat(10);
 
-  // Wrap at 50 different widths (exceeds MAX_WRAP_CACHE_BUCKETS=32)
+  // 50 widths exceeds MAX_WRAP_CACHE_BUCKETS=32
   for (let width = 20; width <= 70; width++) {
     wrapByCells(longLine, width);
   }
 }
 
-// Workload 7: Repeated CJK (baseline from Phase 3.1)
-function workload_repeatedCJK() {
-  const terminal = createTerminal({ cols: 80, rows: 24 });
-  const line = "日志行：中文测试内容".repeat(5);
+// Workload 7: Repeated CJK (baseline)
+function workload_repeatedCJK(ctx: WorkloadContext) {
+  withTerminal({ cols: 80, rows: 24 }, (terminal) => {
+    const style = { href: `perf:repeated:${ctx.runId}` };
+    const line = "日志行：中文测试内容".repeat(5);
 
-  for (let i = 0; i < 1000; i++) {
-    terminal.write(line, { x: 0, y: i % 24 });
-  }
-  terminal.dispose();
+    for (let i = 0; i < 1000; i++) {
+      terminal.write(line, { x: 0, y: i % 24, style });
+    }
+  });
 }
 
 // Workload 8: Mixed Workload
-function workload_mixed() {
-  const terminal = createTerminal({ cols: 80, rows: 24 });
-  const prefixes = ["INFO", "WARN", "ERROR", "DEBUG"];
+function workload_mixed(ctx: WorkloadContext) {
+  withTerminal({ cols: 80, rows: 24 }, (terminal) => {
+    const prefixes = ["INFO", "WARN", "ERROR", "DEBUG"];
 
-  for (let i = 0; i < 1000; i++) {
-    const prefix = prefixes[i % prefixes.length];
-    const content = `${prefix}: 日志消息 ${i} - ${"内容".repeat(5)}`;
-    terminal.write(content, { x: 0, y: i % 24 });
-  }
-  terminal.dispose();
+    for (let i = 0; i < 1000; i++) {
+      const prefix = prefixes[i % prefixes.length]!;
+      const style = { href: `perf:mixed:${ctx.runId}:${prefix}` };
+      const content = `${prefix}: 日志消息 ${i} - ${"内容".repeat(5)}`;
+      terminal.write(content, { x: 0, y: i % 24, style });
+    }
+  });
 }
 
 // ============================================================================
-// FORMATTING
+// FORMATTING - Enhanced with P50/P95
 // ============================================================================
 
 function formatMetrics(result: WorkloadResult): string {
@@ -218,14 +231,13 @@ function formatMetrics(result: WorkloadResult): string {
   lines.push(`Duration with instrumentation: ${result.durationWithInstrumentation.toFixed(2)}ms`);
   lines.push(`Instrumentation overhead: ${result.overheadPercent.toFixed(2)}%`);
 
-  // Heap
   if (result.heapDelta !== null) {
     lines.push(`Heap delta: ${(result.heapDelta / 1024 / 1024).toFixed(2)} MB`);
   }
 
   lines.push("");
 
-  // Cell cache
+  // Cell cache with bucket distribution
   lines.push("Cell Cache:");
   lines.push(`  createCell calls: ${metrics.cell.createCellCalls}`);
   lines.push(`  new cells: ${metrics.cell.newCellCount}`);
@@ -236,14 +248,31 @@ function formatMetrics(result: WorkloadResult): string {
     )}`,
   );
   lines.push(
-    `  cache clears: ${metrics.cell.cellCacheClearWidth1 + metrics.cell.cellCacheClearWidth2}`,
+    `  cache clears (w1/w2): ${metrics.cell.cellCacheClearWidth1}/${metrics.cell.cellCacheClearWidth2}`,
   );
+
   lines.push(
-    `  bucket count (w1/w2): ${metrics.cell.registeredBucketCountWidth1}/${metrics.cell.registeredBucketCountWidth2}`,
+    `  registered bucket count (w1/w2): ${metrics.cell.registeredBucketCountWidth1}/${metrics.cell.registeredBucketCountWidth2}`,
   );
-  lines.push(`  estimated retained cells: ${metrics.cell.estimatedRegisteredBucketCells}`);
+
+  if (
+    metrics.cell.registeredBucketCountWidth1 > 0 ||
+    metrics.cell.registeredBucketCountWidth2 > 0
+  ) {
+    lines.push(
+      `  bucket size P50 (w1/w2): ${metrics.cell.registeredBucketSizeP50Width1}/${metrics.cell.registeredBucketSizeP50Width2}`,
+    );
+    lines.push(
+      `  bucket size P95 (w1/w2): ${metrics.cell.registeredBucketSizeP95Width1}/${metrics.cell.registeredBucketSizeP95Width2}`,
+    );
+    lines.push(
+      `  bucket size Max (w1/w2): ${metrics.cell.registeredBucketSizeMaxWidth1}/${metrics.cell.registeredBucketSizeMaxWidth2}`,
+    );
+  }
+
+  lines.push(`  estimated registered cells: ${metrics.cell.estimatedRegisteredBucketCells}`);
   lines.push(
-    `  max single bucket size (w1/w2): ${metrics.cell.maxCacheSizeWidth1}/${metrics.cell.maxCacheSizeWidth2}`,
+    `  max observed cache size (w1/w2): ${metrics.cell.maxCacheSizeWidth1}/${metrics.cell.maxCacheSizeWidth2}`,
   );
 
   lines.push("");
@@ -252,16 +281,10 @@ function formatMetrics(result: WorkloadResult): string {
   lines.push("Text Cache:");
   lines.push(`  textCellWidth calls: ${metrics.text.textCellWidthCalls}`);
   lines.push(
-    `  text cache hit rate: ${calculateHitRate(
-      metrics.text.textWidthCacheHit,
-      metrics.text.textWidthCacheMiss,
-    )}`,
+    `  text cache hit rate: ${calculateHitRate(metrics.text.textWidthCacheHit, metrics.text.textWidthCacheMiss)}`,
   );
   lines.push(
-    `  wrap cache hit rate: ${calculateHitRate(
-      metrics.text.wrapCacheHit,
-      metrics.text.wrapCacheMiss,
-    )}`,
+    `  wrap cache hit rate: ${calculateHitRate(metrics.text.wrapCacheHit, metrics.text.wrapCacheMiss)}`,
   );
   lines.push(`  wrap width bucket clears: ${metrics.text.wrapWidthBucketMapClear}`);
 
@@ -271,7 +294,6 @@ function formatMetrics(result: WorkloadResult): string {
   lines.push("Grapheme:");
   lines.push(`  segmentation required: ${metrics.grapheme.graphemeSegmentationRequiredCalls}`);
   lines.push(`  Intl.Segmenter used: ${metrics.grapheme.intlSegmenterUsed}`);
-  lines.push(`  fallback used: ${metrics.grapheme.fallbackSegmenterUsed}`);
 
   return lines.join("\n");
 }
@@ -287,14 +309,21 @@ function calculateHitRate(hits: number, misses: number): string {
 // ============================================================================
 
 async function main() {
-  console.log("Phase 3.2 Complete Profiler Benchmark");
-  console.log("======================================\n");
+  console.log("Phase 3.2 Complete Profiler Benchmark (Corrected)");
+  console.log("==================================================\n");
+  console.log("Fixes applied:");
+  console.log("- clearTextCaches() between runs");
+  console.log("- Unique styles per run (isolated bucket creation)");
+  console.log("- Fixed w1 overflow (200 unique width=1 chars)");
+  console.log("- withTerminal() for robust cleanup");
+  console.log("- P50/P95/Max bucket size metrics");
+  console.log("");
 
   const workloads = [
     {
       fn: workload_cellCacheOverflowWidth1,
       name: "cell_cache_overflow_w1",
-      desc: "Cell cache overflow width=1 (200 unique ASCII)",
+      desc: "Cell cache overflow width=1 (200 unique Latin Extended)",
     },
     {
       fn: workload_cellCacheOverflowWidth2,
@@ -304,7 +333,7 @@ async function main() {
     {
       fn: workload_manyStylesManyChars,
       name: "many_styles_many_chars",
-      desc: "Many styles with many chars (50 styles × 10 chars)",
+      desc: "Many styles (50) with many chars (10 each)",
     },
     {
       fn: workload_complexGraphemeCached,
@@ -314,22 +343,18 @@ async function main() {
     {
       fn: workload_complexGraphemeUncached,
       name: "complex_grapheme_uncached",
-      desc: "Complex grapheme uncached (1000 unique strings)",
+      desc: "Complex grapheme uncached (1000 unique per run)",
     },
     {
       fn: workload_wrapWidthChurn,
       name: "wrap_width_churn",
-      desc: "Wrap width churn (50 widths, exceeds bucket limit)",
+      desc: "Wrap width churn (50 widths > 32 bucket limit)",
     },
-    {
-      fn: workload_repeatedCJK,
-      name: "repeated_cjk",
-      desc: "Repeated CJK baseline (1000 same lines)",
-    },
+    { fn: workload_repeatedCJK, name: "repeated_cjk", desc: "Repeated CJK baseline (1000 lines)" },
     {
       fn: workload_mixed,
       name: "mixed_workload",
-      desc: "Mixed workload (1000 log lines with repeated prefixes)",
+      desc: "Mixed workload (1000 log lines, 4 prefixes)",
     },
   ];
 
@@ -341,21 +366,16 @@ async function main() {
     results.push(result);
 
     console.log(formatMetrics(result));
-    console.log("─".repeat(60));
+    console.log("─".repeat(70));
   }
-
-  const report: ProfilerReport = {
-    timestamp: new Date().toISOString(),
-    workloads: results,
-  };
 
   console.log("\n✅ Profiler benchmark completed");
   console.log(`Total workloads: ${results.length}`);
   console.log(
-    `\nAverage overhead: ${(results.reduce((sum, r) => sum + r.overheadPercent, 0) / results.length).toFixed(2)}%`,
+    `Average overhead: ${(results.reduce((sum, r) => sum + r.overheadPercent, 0) / results.length).toFixed(2)}%`,
   );
 
-  return report;
+  return results;
 }
 
 main().catch((error) => {

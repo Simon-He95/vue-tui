@@ -13,6 +13,7 @@ Reviewer identified 6 critical issues affecting Phase 4 readiness. This document
 **Problem**: `cellCacheBucketCountWidth1/2` and `estimatedRetainedCells` imply "live" Style count, but are actually strong-referenced registered buckets
 
 **Fix**: Renamed all metrics to `registered*`:
+
 - `registeredBucketCountWidth1/2`
 - `estimatedRegisteredBucketCells`
 
@@ -25,21 +26,24 @@ Reviewer identified 6 critical issues affecting Phase 4 readiness. This document
 ### Issue #1: Cache Pollution Between Runs (CRITICAL)
 
 **Problem**:
+
 ```typescript
 // Current: without runs first, then with
 disableInstrumentation();
-measure(workload);  // Populates text/wrap cache, creates cell buckets
+measure(workload); // Populates text/wrap cache, creates cell buckets
 
 enableInstrumentation();
-measure(workload);  // Gets polluted cache hits, may not register buckets
+measure(workload); // Gets polluted cache hits, may not register buckets
 ```
 
 **Impact**:
+
 - Text cache hits hide true grapheme segmentation cost
 - Cell buckets created in disabled run won't be registered
 - Bucket distribution data incomplete/wrong
 
 **Fix Required**:
+
 ```typescript
 // Clear caches between runs
 clearTextCaches();
@@ -54,8 +58,9 @@ const style = { href: `perf:${runId}` };
 ### Issue #2: W1 Overflow Workload Invalid (CRITICAL)
 
 **Problem**:
+
 ```typescript
-const ch = String.fromCharCode(0x21 + (i % 94));  // Only 94 unique!
+const ch = String.fromCharCode(0x21 + (i % 94)); // Only 94 unique!
 ```
 
 Only generates 94 printable ASCII, can't exceed MAX=128
@@ -63,9 +68,10 @@ Only generates 94 printable ASCII, can't exceed MAX=128
 **Impact**: Can't test width=1 cache overflow behavior
 
 **Fix Required**:
+
 ```typescript
 // Use 200 truly unique width=1 chars
-const ch = String.fromCharCode(0x0100 + i);  // Latin Extended-A
+const ch = String.fromCharCode(0x0100 + i); // Latin Extended-A
 ```
 
 ---
@@ -75,6 +81,7 @@ const ch = String.fromCharCode(0x0100 + i);  // Latin Extended-A
 **Problem**: `getCacheBucketDistribution()` calculates P50/P95/Max but doesn't expose them
 
 **Current**:
+
 ```typescript
 interface CellCacheMetrics {
   registeredBucketCountWidth1: number;
@@ -85,6 +92,7 @@ interface CellCacheMetrics {
 **Impact**: Can't answer "typical bucket size" or "is 128 limit appropriate for most?"
 
 **Fix Required**:
+
 ```typescript
 interface CellCacheMetrics {
   // Add distribution fields
@@ -108,6 +116,7 @@ interface CellCacheMetrics {
 **Impact**: Terminal not disposed if workload throws
 
 **Fix Required**:
+
 ```typescript
 function withTerminal<T>(options, fn: (terminal) => T): T {
   const terminal = createTerminal(options);
@@ -133,6 +142,7 @@ withTerminal({ cols: 80, rows: 24 }, (terminal) => {
 **Impact**: Type-unsafe but doesn't break at runtime
 
 **Fix Required**:
+
 ```typescript
 const style = { href: `perf:style:${runId}:${styleIdx}` };
 ```
@@ -144,6 +154,7 @@ const style = { href: `perf:style:${runId}:${styleIdx}` };
 ### Part 2 Commit (All Remaining Fixes)
 
 **Files to modify**:
+
 1. `src/core/perf/instrumentation.ts`:
    - Add P50/P95/Max fields to interface
    - Update initialization
@@ -160,12 +171,14 @@ const style = { href: `perf:style:${runId}:${styleIdx}` };
    - Update output format for P50/P95
 
 **Testing**:
+
 ```bash
 pnpm run typecheck
 pnpm run bench:profiler:complete
 ```
 
 **Expected outcomes**:
+
 - ✅ W1 overflow triggers cache clears
 - ✅ Bucket counts populated correctly
 - ✅ P50/P95/Max显示 in output
@@ -177,6 +190,7 @@ pnpm run bench:profiler:complete
 ## Phase 4 Readiness
 
 **After Part 2 fixes**:
+
 - ✅ Can trust bucket distribution data
 - ✅ Can identify典型 vs extreme bucket sizes
 - ✅ Can evaluate if MAX=128 is appropriate
@@ -184,6 +198,7 @@ pnpm run bench:profiler:complete
 - ✅ Can safely proceed with Phase 4 decisions
 
 **Current State (after Part 1 only)**:
+
 - ⚠️ Data may be inaccurate due to cache pollution
 - ⚠️ W1 overflow not testing correctly
 - ⚠️ Missing P50/P95 for distribution analysis

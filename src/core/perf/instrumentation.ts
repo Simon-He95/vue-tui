@@ -21,9 +21,16 @@ export interface CellCacheMetrics {
   continuationCellCacheMiss: number;
   maxCacheSizeWidth1: number;
   maxCacheSizeWidth2: number;
-  // TODO Phase 3.2: Not populated until bucket tracking is implemented
+  // Registered bucket metrics (populated when instrumentation enabled)
+  // Note: These count buckets registered since last resetMetrics(), not truly "live" buckets
   registeredBucketCountWidth1: number;
   registeredBucketCountWidth2: number;
+  registeredBucketSizeP50Width1: number;
+  registeredBucketSizeP95Width1: number;
+  registeredBucketSizeMaxWidth1: number;
+  registeredBucketSizeP50Width2: number;
+  registeredBucketSizeP95Width2: number;
+  registeredBucketSizeMaxWidth2: number;
   estimatedRegisteredBucketCells: number;
 }
 
@@ -84,9 +91,14 @@ const cellMetrics: CellCacheMetrics = {
   continuationCellCacheMiss: 0,
   maxCacheSizeWidth1: 0,
   maxCacheSizeWidth2: 0,
-  // TODO Phase 3.2: Not populated until bucket tracking is implemented
   registeredBucketCountWidth1: 0,
   registeredBucketCountWidth2: 0,
+  registeredBucketSizeP50Width1: 0,
+  registeredBucketSizeP95Width1: 0,
+  registeredBucketSizeMaxWidth1: 0,
+  registeredBucketSizeP50Width2: 0,
+  registeredBucketSizeP95Width2: 0,
+  registeredBucketSizeMaxWidth2: 0,
   estimatedRegisteredBucketCells: 0,
 };
 
@@ -167,7 +179,17 @@ export function resetMetrics(): void {
   cellMetrics.maxCacheSizeWidth2 = 0;
   cellMetrics.registeredBucketCountWidth1 = 0;
   cellMetrics.registeredBucketCountWidth2 = 0;
+  cellMetrics.registeredBucketSizeP50Width1 = 0;
+  cellMetrics.registeredBucketSizeP95Width1 = 0;
+  cellMetrics.registeredBucketSizeMaxWidth1 = 0;
+  cellMetrics.registeredBucketSizeP50Width2 = 0;
+  cellMetrics.registeredBucketSizeP95Width2 = 0;
+  cellMetrics.registeredBucketSizeMaxWidth2 = 0;
   cellMetrics.estimatedRegisteredBucketCells = 0;
+
+  // Clear bucket tracking
+  cellCacheBucketsWidth1.length = 0;
+  cellCacheBucketsWidth2.length = 0;
 
   // Text metrics
   textMetrics.textCellWidthCalls = 0;
@@ -242,7 +264,14 @@ export function getMetrics(): PerformanceMetrics {
     const distribution = getCacheBucketDistribution();
     cellMetricsSnapshot.registeredBucketCountWidth1 = distribution.bucketCountWidth1;
     cellMetricsSnapshot.registeredBucketCountWidth2 = distribution.bucketCountWidth2;
-    cellMetricsSnapshot.estimatedRegisteredBucketCells = distribution.estimatedRegisteredBucketCells;
+    cellMetricsSnapshot.registeredBucketSizeP50Width1 = distribution.sizeP50Width1;
+    cellMetricsSnapshot.registeredBucketSizeP95Width1 = distribution.sizeP95Width1;
+    cellMetricsSnapshot.registeredBucketSizeMaxWidth1 = distribution.sizeMaxWidth1;
+    cellMetricsSnapshot.registeredBucketSizeP50Width2 = distribution.sizeP50Width2;
+    cellMetricsSnapshot.registeredBucketSizeP95Width2 = distribution.sizeP95Width2;
+    cellMetricsSnapshot.registeredBucketSizeMaxWidth2 = distribution.sizeMaxWidth2;
+    cellMetricsSnapshot.estimatedRegisteredBucketCells =
+      distribution.estimatedRegisteredBucketCells;
   }
 
   return {
