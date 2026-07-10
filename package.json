@@ -311,7 +311,8 @@
     "bench:perf-baseline:json": "tsx scripts/bench-perf-baseline.ts --output .tmp/perf-baseline.json",
     "bench:perf-baseline:smoke": "BENCH_SMOKE=1 tsx scripts/bench-perf-baseline.ts --output .tmp/perf-baseline-smoke.json",
     "bench:profiler": "tsx scripts/bench-profiler.ts",
-    "bench:profiler:complete": "tsx scripts/bench-profiler-complete.ts"
+    "bench:profiler:complete": "tsx scripts/bench-profiler-complete.ts",
+    "bench:profiler:complete:gc": "node --expose-gc --import=tsx scripts/bench-profiler-complete.ts"
   },
   "dependencies": {
     "katex": "^0.16.47",

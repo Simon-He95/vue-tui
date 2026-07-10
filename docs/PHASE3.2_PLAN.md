@@ -81,7 +81,7 @@ function workload_cellCacheOverflowWidth1() {
   const terminal = createTerminal({ cols: 80, rows: 24 });
   // Write 200 unique ASCII/Latin-1 chars
   for (let i = 0; i < 200; i++) {
-    const ch = String.fromCharCode(0x21 + (i % 94)); // Printable ASCII
+    const ch = String.fromCharCode(0x0100 + i); // Latin Extended-A // Printable ASCII
     terminal.write(ch, { x: i % 80, y: 0 });
   }
 }
@@ -103,7 +103,7 @@ function workload_manyStylesManyChars() {
   const terminal = createTerminal({ cols: 80, rows: 24 });
   // 50 unique styles × 10 unique chars each
   for (let styleIdx = 0; styleIdx < 50; styleIdx++) {
-    const style = { fg: styleIdx };
+    const style = { href: `perf:style:${runId}:${styleIdx}` };
     for (let charIdx = 0; charIdx < 10; charIdx++) {
       const ch = String.fromCodePoint(0x4e00 + styleIdx * 10 + charIdx);
       terminal.write(ch, { x: charIdx * 2, y: styleIdx % 24, style });
@@ -141,7 +141,7 @@ function workload_complexGraphemeCached() {
 // Workload: Complex Grapheme Uncached (true cost)
 function workload_complexGraphemeUncached() {
   // Generate 2000 unique complex strings
-  for (let i = 0; i < 2000; i++) {
+  for (let i = 0; i < 1000; i++) {
     const text = `👨\u200d💻-${i} e\u0301-${i}`;
     textCellWidth(text);
   }

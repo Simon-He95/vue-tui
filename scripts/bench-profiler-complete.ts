@@ -70,7 +70,7 @@ function measureWorkload(
   disableInstrumentation();
 
   const startDisabled = performance.now();
-  workloadFn({ runId: `control-${Date.now()}` });
+  workloadFn({ runId: "control-run-00000" });
   const durationWithout = performance.now() - startDisabled;
 
   // Clear caches between runs to avoid pollution
@@ -85,7 +85,7 @@ function measureWorkload(
   const startEnabled = performance.now();
 
   try {
-    workloadFn({ runId: `instrumented-${Date.now()}` });
+    workloadFn({ runId: "profile-run-00000" });
     const durationWith = performance.now() - startEnabled;
 
     forceGC();
@@ -309,14 +309,29 @@ function calculateHitRate(hits: number, misses: number): string {
 // ============================================================================
 
 async function main() {
+  const gcAvailable = typeof (globalThis as any).gc === "function";
+
   console.log("Phase 3.2 Complete Profiler Benchmark (Corrected)");
   console.log("==================================================\n");
+  console.log("Environment:");
+  console.log(`- Node: ${process.version}`);
+  console.log(`- GC available: ${gcAvailable}`);
+  if (!gcAvailable) {
+    console.log(
+      "  ⚠️  Heap delta is advisory only. Run with --expose-gc for accurate GC measurements.",
+    );
+  }
+  console.log("");
   console.log("Fixes applied:");
   console.log("- clearTextCaches() between runs");
   console.log("- Unique styles per run (isolated bucket creation)");
   console.log("- Fixed w1 overflow (200 unique width=1 chars)");
   console.log("- withTerminal() for robust cleanup");
   console.log("- P50/P95/Max bucket size metrics");
+  console.log("- Fixed runId consistency (same length for overhead measurement)");
+  console.log("");
+  console.log("⚠️  Note: Overhead percentages are smoke signals only.");
+  console.log("   For rigorous performance measurement, use Phase 2 baseline harness.");
   console.log("");
 
   const workloads = [

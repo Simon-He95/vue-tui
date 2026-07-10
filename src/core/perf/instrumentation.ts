@@ -21,8 +21,10 @@ export interface CellCacheMetrics {
   continuationCellCacheMiss: number;
   maxCacheSizeWidth1: number;
   maxCacheSizeWidth2: number;
-  // Registered bucket metrics (populated when instrumentation enabled)
-  // Note: These count buckets registered since last resetMetrics(), not truly "live" buckets
+  // Registered bucket metrics (populated from bucket registry)
+  // IMPORTANT: Buckets are only registered when created while instrumentation is enabled.
+  // After resetMetrics(), existing buckets won't re-register.
+  // For accurate distribution profiling: use fresh terminal or unique styles per run.
   registeredBucketCountWidth1: number;
   registeredBucketCountWidth2: number;
   registeredBucketSizeP50Width1: number;
@@ -259,20 +261,18 @@ function getCacheBucketDistribution() {
 export function getMetrics(): PerformanceMetrics {
   const cellMetricsSnapshot = { ...cellMetrics };
 
-  // Populate bucket distribution if instrumentation enabled
-  if (instrumentationEnabled) {
-    const distribution = getCacheBucketDistribution();
-    cellMetricsSnapshot.registeredBucketCountWidth1 = distribution.bucketCountWidth1;
-    cellMetricsSnapshot.registeredBucketCountWidth2 = distribution.bucketCountWidth2;
-    cellMetricsSnapshot.registeredBucketSizeP50Width1 = distribution.sizeP50Width1;
-    cellMetricsSnapshot.registeredBucketSizeP95Width1 = distribution.sizeP95Width1;
-    cellMetricsSnapshot.registeredBucketSizeMaxWidth1 = distribution.sizeMaxWidth1;
-    cellMetricsSnapshot.registeredBucketSizeP50Width2 = distribution.sizeP50Width2;
-    cellMetricsSnapshot.registeredBucketSizeP95Width2 = distribution.sizeP95Width2;
-    cellMetricsSnapshot.registeredBucketSizeMaxWidth2 = distribution.sizeMaxWidth2;
-    cellMetricsSnapshot.estimatedRegisteredBucketCells =
-      distribution.estimatedRegisteredBucketCells;
-  }
+  // Always populate bucket distribution from registered buckets
+  // (even if instrumentation is disabled, to support enable->run->disable->getMetrics pattern)
+  const distribution = getCacheBucketDistribution();
+  cellMetricsSnapshot.registeredBucketCountWidth1 = distribution.bucketCountWidth1;
+  cellMetricsSnapshot.registeredBucketCountWidth2 = distribution.bucketCountWidth2;
+  cellMetricsSnapshot.registeredBucketSizeP50Width1 = distribution.sizeP50Width1;
+  cellMetricsSnapshot.registeredBucketSizeP95Width1 = distribution.sizeP95Width1;
+  cellMetricsSnapshot.registeredBucketSizeMaxWidth1 = distribution.sizeMaxWidth1;
+  cellMetricsSnapshot.registeredBucketSizeP50Width2 = distribution.sizeP50Width2;
+  cellMetricsSnapshot.registeredBucketSizeP95Width2 = distribution.sizeP95Width2;
+  cellMetricsSnapshot.registeredBucketSizeMaxWidth2 = distribution.sizeMaxWidth2;
+  cellMetricsSnapshot.estimatedRegisteredBucketCells = distribution.estimatedRegisteredBucketCells;
 
   return {
     cell: cellMetricsSnapshot,
