@@ -328,6 +328,6 @@ Before claiming comprehensive cache validation, add:
 - Date: 2026-07-10
 - Code commit: c4182b6c2f449423739851c335feb5932f9d5b40
 
-**Note**: Profiler data collected at c4182b6c. Subsequent commits are documentation updates only.
+**Note**: Profiler data collected at c4182b6c. Workload definitions and counter-collection logic used by this report have not changed since that data commit. Later commits removed invalid timing/heap/control-arm measurements from the profiler tool and updated documentation and output labeling.
 
-**Output**: `docs/perf/phase4-profiler-output-c4182b6c-annotated.txt` (annotated with environment metadata)
+**Output**: `docs/perf/phase4-profiler-output-c4182b6c-annotated.txt` (annotated historical transcript)

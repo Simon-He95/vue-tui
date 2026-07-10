@@ -266,7 +266,9 @@ async function main() {
   console.log(`- Node: ${process.version}`);
   console.log(`- GC available: ${gcAvailable}`);
   if (!gcAvailable) {
-    console.log("  ⚠️  Heap delta and overhead are INVALID without GC. Run with --expose-gc.");
+    console.log(
+      "  ℹ️  GC unavailable. Counter snapshots remain valid; cross-workload memory isolation not evaluated.",
+    );
   }
   console.log("");
   console.log("⚠️  COUNTER SNAPSHOT ONLY:");
