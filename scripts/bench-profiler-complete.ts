@@ -1,13 +1,10 @@
 /**
- * Phase 3.2 Complete Profiler Benchmark - CORRECTED VERSION
+ * Phase 3.2 Instrumentation Counter Snapshot
  *
- * Fixes all review issues:
- * 1. clearTextCaches() between runs to avoid cache pollution
- * 2. Unique styles per run (href with runId) to isolate bucket creation
- * 3. Fixed w1 overflow to use 200 truly unique width=1 chars (Latin Extended)
- * 4. withTerminal() helper for robust cleanup
- * 5. Fixed style type issues (href instead of fg: number)
- * 6. Added P50/P95/Max bucket size output
+ * Provides counter-only snapshots of instrumentation metrics.
+ * Does NOT measure disabled-path overhead or validate heap retention.
+ *
+ * For cross-commit overhead comparison, see issue #119.
  */
 
 import { createTerminal } from "../src/core/index.js";
@@ -17,7 +14,6 @@ import {
   disableInstrumentation,
   resetMetrics,
   getMetrics,
-  getHeapUsed,
   type PerformanceMetrics,
 } from "../src/core/perf/instrumentation.js";
 
@@ -28,16 +24,10 @@ interface WorkloadContext {
 interface WorkloadResult {
   name: string;
   description: string;
-  durationWithoutInstrumentation: number;
-  durationWithInstrumentation: number;
-  overheadPercent: number;
-  heapBefore: number | null;
-  heapAfter: number | null;
-  heapDelta: number | null;
   metrics: PerformanceMetrics;
 }
 
-// Helper: Force GC if available
+// Helper: Force GC if available (helps release previous capture buckets)
 function forceGC() {
   const maybeGc = (globalThis as any).gc;
   if (typeof maybeGc === "function") {
@@ -64,47 +54,19 @@ function measureWorkload(
   description: string,
   workloadFn: (ctx: WorkloadContext) => void,
 ): WorkloadResult {
-  // Measure WITHOUT instrumentation
+  // Clear previous state
   clearTextCaches();
-  forceGC();
-  disableInstrumentation();
-
-  const startDisabled = performance.now();
-  workloadFn({ runId: "control-run-00000" });
-  const durationWithout = performance.now() - startDisabled;
-
-  // Clear caches between runs to avoid pollution
-  clearTextCaches();
-  forceGC();
-
-  // Measure WITH instrumentation
-  const heapBefore = getHeapUsed();
-
   resetMetrics();
-  enableInstrumentation();
-  const startEnabled = performance.now();
+  forceGC(); // Optional: help release buckets from previous capture
 
+  // Single instrumentation-enabled run for counter snapshot
+  enableInstrumentation();
   try {
     workloadFn({ runId: "profile-run-00000" });
-    const durationWith = performance.now() - startEnabled;
-
-    forceGC();
-    const heapAfter = getHeapUsed();
-
-    const metrics = getMetrics();
-    const overheadPercent = durationWithout > 0 ? (durationWith / durationWithout - 1) * 100 : 0;
-    const heapDelta = heapBefore !== null && heapAfter !== null ? heapAfter - heapBefore : null;
-
     return {
       name,
       description,
-      durationWithoutInstrumentation: durationWithout,
-      durationWithInstrumentation: durationWith,
-      overheadPercent,
-      heapBefore,
-      heapAfter,
-      heapDelta,
-      metrics,
+      metrics: getMetrics(),
     };
   } finally {
     disableInstrumentation();
@@ -224,20 +186,6 @@ function formatMetrics(result: WorkloadResult): string {
   const lines: string[] = [];
   const { metrics } = result;
 
-  // Duration and overhead - INVALID for production overhead estimation
-  lines.push(
-    `INVALID single-shot enabled-vs-disabled timing: ${result.durationWithoutInstrumentation.toFixed(2)}ms → ${result.durationWithInstrumentation.toFixed(2)}ms`,
-  );
-  lines.push(`INVALID overhead: ${result.overheadPercent.toFixed(2)}% (measurement artifact)`);
-
-  if (result.heapDelta !== null) {
-    lines.push(
-      `INVALID heap delta (audit only): ${(result.heapDelta / 1024 / 1024).toFixed(2)} MB`,
-    );
-  }
-
-  lines.push("");
-
   // Cell cache with bucket distribution
   lines.push("Cell Cache:");
   lines.push(`  createCell calls: ${metrics.cell.createCellCalls}`);
@@ -321,20 +269,10 @@ async function main() {
     console.log("  ⚠️  Heap delta and overhead are INVALID without GC. Run with --expose-gc.");
   }
   console.log("");
-  console.log("⚠️  CRITICAL WARNINGS:");
-  console.log("   1. Heap delta is INVALID for retained-memory analysis (measurement order issue)");
-  console.log("   2. Overhead percentages are INVALID (single-shot, fixed-order comparison)");
-  console.log("   3. Both arms execute instrumentation hooks - not pre-Phase-3 vs post-Phase-3");
-  console.log("   4. Use Phase 2 baseline harness for rigorous performance measurement");
-  console.log("   5. This script provides COUNTER SNAPSHOTS ONLY");
-  console.log("");
-  console.log("Fixes applied:");
-  console.log("- clearTextCaches() between runs");
-  console.log("- Unique styles per run (isolated bucket creation)");
-  console.log("- Fixed w1 overflow (200 unique width=1 chars)");
-  console.log("- withTerminal() for robust cleanup");
-  console.log("- P50/P95/Max bucket size metrics");
-  console.log("- Fixed runId consistency (same length for overhead measurement)");
+  console.log("⚠️  COUNTER SNAPSHOT ONLY:");
+  console.log("   This script provides instrumentation counter snapshots only.");
+  console.log("   It does NOT measure disabled-path overhead or validate heap retention.");
+  console.log("   For cross-commit overhead comparison, see issue #119.");
   console.log("");
 
   const workloads = [
@@ -389,9 +327,6 @@ async function main() {
 
   console.log("\n✅ Instrumentation counter snapshot completed");
   console.log(`Total workloads: ${results.length}`);
-  console.log(
-    `INVALID average overhead: ${(results.reduce((sum, r) => sum + r.overheadPercent, 0) / results.length).toFixed(2)}% (measurement artifact, not production overhead)`,
-  );
 
   return results;
 }
