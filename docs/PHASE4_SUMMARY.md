@@ -123,9 +123,10 @@
 
 **Why**:
 
-- Segmentation cost: **0.0085-0.0089ms per string** (negligible)
+- Observed timing in Node v24.18.0 / V8 13.6 / arm64: **0.0085-0.0089ms per string**
+- Advisory only; not a cross-runtime guarantee
 - Text cache already provides 99.80% hit rate
-- NOT a measured performance hotspot
+- NOT a measured hotspot under current workloads
 
 ---
 
@@ -176,21 +177,22 @@ All proposed optimizations failed evaluation gates:
 - Data collected with GC-enabled profiler
 - Analysis performed with workload classification
 - Decisions made with clear rationale
-- **Conclusion: No code changes needed**
+- **Conclusion: No per-bucket cache-size tuning needed**
 
 ### For the Project
 
-✅ **Cache implementation validated for measured scenarios**
+✅ **Per-bucket cache-size tuning not justified by measured workloads**
 
 - Phase 3 instrumentation proved valuable
-- Data shows current design performs well
-- No immediate performance work needed for cache
+- Per-style bucket limits (MAX=128) not pressured in measured scenarios
+- Bucket P95 sizes far below current limits (10 vs 128)
+- No immediate per-bucket size tuning needed
 
 ⚠️ **Limitations acknowledged**
 
-- Decisions based on synthetic workloads
+- Decisions based on synthetic profiler workloads, not production traces
 - Should revisit if production data differs
-- Some areas (inline cache, long text pollution) not fully tested
+- Some areas not evaluated: inlineLineCache, unique-long-text pollution, style-cardinality long-term
 
 ---
 
@@ -247,7 +249,9 @@ Since cache optimization is not needed based on current data, future development
 
 ## Commits
 
-**Single commit**: Decision report with no code changes
+**PR branch contains multiple documentation commits; final diff is docs-only.**
+
+**Note**: Profiler data was collected at commit `c4182b6c`, which represents the code-under-test state. Subsequent commits only update documentation/report text and do not change runtime code.
 
 ---
 

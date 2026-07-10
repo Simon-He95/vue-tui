@@ -384,7 +384,7 @@ for (let i = 0; i < 2000; i++) {
 
 // grapheme-heavy variant
 for (let i = 0; i < 2000; i++) {
-  textCellWidth(`complex-${i}-${"👨‍💻é".repeat(1000)}`);
+  textCellWidth(`complex-${i}-${"\u{1F468}\u200D\u{1F4BB}e\u0301".repeat(1000)}`);
 }
 ```
 
@@ -496,6 +496,76 @@ Since cache optimization is not justified by current data, Phase 4 development e
 
 ---
 
+## Recommended Follow-ups
+
+Based on this Phase 4.0 evaluation, the following areas should be investigated before claiming comprehensive cache validation:
+
+### Follow-up 1: Long Text Cache Admission Profiling
+
+**Scope**: Evaluate unique non-ASCII long text behavior
+
+**Workloads needed**:
+
+```typescript
+// textWidthCache pollution: non-ASCII, unique, long
+for (let i = 0; i < 2000; i++) {
+  textCellWidth(`长文本-${i}-${"内容".repeat(2000)}`);
+}
+
+// wrap cache pollution: unique long wrapped lines
+for (let i = 0; i < 2000; i++) {
+  wrapByCells(`长文本-${i}-${"内容".repeat(2000)}`, 80);
+}
+
+// repeated long text (counter-case)
+const longText = `长文本-${"内容".repeat(2000)}`;
+for (let i = 0; i < 2000; i++) {
+  textCellWidth(longText);
+}
+```
+
+**Decision gate**: Only introduce max-cacheable-length if unique long text shows retained memory growth or p95/p99 regression
+
+---
+
+### Follow-up 2: Style Identity Churn Investigation
+
+**Scope**: Track style-cardinality dimension
+
+**What to monitor**:
+
+- Live style identities over time
+- Bucket count growth with scrollback
+- Total cached cells across all buckets
+- Heap correlation with style object churn
+- Long-running terminal sessions
+
+**Important**: Do NOT solve with `MAX_CACHED_CELLS_PER_STYLE` increase. This is a cardinality problem (many buckets), not a per-bucket limit problem.
+
+**Potential solutions if needed**:
+
+- Style canonicalization / structural equality
+- Bucket lifecycle management
+- Style identity pooling
+
+---
+
+### Follow-up 3: inlineLineCacheByWidth Instrumentation
+
+**Scope**: Evaluate `formatInlineCellLine` cache behavior
+
+**Current state**: Not instrumented in Phase 3.2
+
+**Structure**: 32 width buckets × 512 entries per bucket
+
+**Workloads needed**:
+
+- Unique inline text at various widths
+- Repeated inline text (hit rate)
+- Width churn (bucket clearing)
+
+---
+
 ## Conclusion
 
 **Phase 4.0 Status**: ✅ Complete as cache tuning decision report
@@ -544,8 +614,6 @@ GC: Enabled (--expose-gc)
 Generated: 2026-07-10
 ```
 
+**Note**: Profiler data was collected at commit `c4182b6c`, which represents the code-under-test state. Subsequent commits in this PR only update documentation/report text and do not change runtime code.
+
 **All 8 workloads completed successfully with GC-enabled heap measurements.**
-
-```
-
-```
