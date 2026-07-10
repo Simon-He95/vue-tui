@@ -30,7 +30,6 @@ const GATING_SCENARIOS = [
   "textCellWidth_cjk_long_hot",
   "textCellWidth_cjk_unique",
   "textCellWidth_complex_grapheme_hot",
-  "textCellWidth_complex_grapheme_unique", // Required for grapheme instrumentation
   "wrapByCells_cjk_long_hot",
   "wrapByCells_cjk_unique",
 ] as const;

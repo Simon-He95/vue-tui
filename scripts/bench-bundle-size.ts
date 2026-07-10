@@ -1,16 +1,24 @@
 /**
- * Phase 3.3: Bundle Size Comparison (v4 - Final)
+ * Phase 3.3: Bundle Size Comparison (v5 - Final)
  *
  * Fixes:
- * - Derives entries from package.json exports
- * - Tests all published JS/CJS files
- * - Robust cleanup
+ * - Tests ALL emitted JS/CJS files in dist/
+ * - Validates no unexpected files
+ * - Compares both exports and aggregate
  */
 
 import { execFileSync } from "node:child_process";
-import { statSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from "node:fs";
+import {
+  statSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  rmSync,
+  readdirSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { gzipSync } from "node:zlib";
 
 const COMMIT_A = "697472b0cc5c000fb46baf16e85c60d84ee22471";
@@ -46,6 +54,23 @@ function getSize(p: string): BundleStats {
   return { raw, gzip };
 }
 
+function listRuntimeFiles(distDir: string): string[] {
+  const files: string[] = [];
+  function scan(dir: string) {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const ent of entries) {
+      const full = join(dir, ent.name);
+      if (ent.isDirectory()) {
+        scan(full);
+      } else if (ent.name.endsWith(".js") || ent.name.endsWith(".cjs")) {
+        files.push(relative(distDir, full));
+      }
+    }
+  }
+  scan(distDir);
+  return files.sort();
+}
+
 function extractExportPaths(pkgPath: string): string[] {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
   const paths = new Set<string>();
@@ -53,7 +78,7 @@ function extractExportPaths(pkgPath: string): string[] {
   function walk(obj: any) {
     if (typeof obj === "string") {
       if (obj.startsWith("./dist/") && (obj.endsWith(".js") || obj.endsWith(".cjs"))) {
-        paths.add(obj.substring(2)); // Remove leading ./
+        paths.add(obj.substring(7)); // Remove ./dist/
       }
     } else if (typeof obj === "object" && obj !== null) {
       for (const v of Object.values(obj)) {
@@ -91,7 +116,7 @@ function setup(wA: string, wB: string) {
 
 function main() {
   console.log("=".repeat(80));
-  console.log("Phase 3.3: Bundle Size Comparison (v4)");
+  console.log("Phase 3.3: Bundle Size Comparison (v5)");
   console.log("=".repeat(80) + "\n");
 
   const base = join(tmpdir(), `bundle-${Date.now()}`);
@@ -103,20 +128,42 @@ function main() {
   try {
     setup(wA, wB);
 
-    // Extract entries from package.json
-    const entriesA = extractExportPaths(join(wA, "package.json"));
-    const entriesB = extractExportPaths(join(wB, "package.json"));
+    // List all emitted runtime files
+    const emittedA = listRuntimeFiles(join(wA, "dist"));
+    const emittedB = listRuntimeFiles(join(wB, "dist"));
 
-    if (entriesA.sort().join() !== entriesB.sort().join()) {
+    if (emittedA.join() !== emittedB.join()) {
+      throw new Error("Emitted file set changed between commits");
+    }
+
+    log(`Found ${emittedA.length} emitted JS/CJS files\n`);
+
+    // Extract export targets for focused reporting
+    const exportsA = extractExportPaths(join(wA, "package.json"));
+    const exportsB = extractExportPaths(join(wB, "package.json"));
+
+    if (exportsA.sort().join() !== exportsB.sort().join()) {
       throw new Error("Export paths changed between commits");
     }
 
-    log(`Found ${entriesA.length} published entries\n`);
-
+    // Compare all emitted files
     const comps: EntryComp[] = [];
-    for (const entry of entriesA) {
-      const a = getSize(join(wA, entry));
-      const b = getSize(join(wB, entry));
+    let totalRawA = 0;
+    let totalRawB = 0;
+    let totalGzipA = 0;
+    let totalGzipB = 0;
+
+    console.log("PUBLIC EXPORTS:");
+    console.log("=".repeat(80) + "\n");
+
+    for (const entry of exportsA) {
+      const a = getSize(join(wA, "dist", entry));
+      const b = getSize(join(wB, "dist", entry));
+
+      totalRawA += a.raw;
+      totalRawB += b.raw;
+      totalGzipA += a.gzip;
+      totalGzipB += b.gzip;
 
       const raw = b.raw - a.raw;
       const gzip = b.gzip - a.gzip;
@@ -137,9 +184,45 @@ function main() {
       console.log();
     }
 
-    if (comps.length !== entriesA.length) {
-      throw new Error("Incomplete bundle comparison");
+    // Check for non-export emitted files
+    const nonExports = emittedA.filter((f) => !exportsA.includes(f));
+    if (nonExports.length > 0) {
+      console.log("\n" + "=".repeat(80));
+      console.log("NON-EXPORT RUNTIME FILES:");
+      console.log("=".repeat(80) + "\n");
+
+      for (const entry of nonExports) {
+        const a = getSize(join(wA, "dist", entry));
+        const b = getSize(join(wB, "dist", entry));
+
+        totalRawA += a.raw;
+        totalRawB += b.raw;
+        totalGzipA += a.gzip;
+        totalGzipB += b.gzip;
+
+        const gzip = b.gzip - a.gzip;
+        console.log(
+          `ℹ️  ${entry}: ${fmt(a.gzip)} → ${fmt(b.gzip)} (${gzip >= 0 ? "+" : ""}${fmt(gzip)})`,
+        );
+      }
+      console.log();
     }
+
+    // Aggregate comparison
+    const aggRawDelta = totalRawB - totalRawA;
+    const aggGzipDelta = totalGzipB - totalGzipA;
+
+    console.log("=".repeat(80));
+    console.log("AGGREGATE (All Emitted JS/CJS)");
+    console.log("=".repeat(80));
+    console.log(`Total files: ${emittedA.length}`);
+    console.log(
+      `Total raw: ${fmt(totalRawA)} → ${fmt(totalRawB)} (${aggRawDelta >= 0 ? "+" : ""}${fmt(aggRawDelta)})`,
+    );
+    console.log(
+      `Total gzip: ${fmt(totalGzipA)} → ${fmt(totalGzipB)} (${aggGzipDelta >= 0 ? "+" : ""}${fmt(aggGzipDelta)})`,
+    );
+    console.log();
 
     mkdirSync("docs/perf", { recursive: true });
     writeFileSync(
@@ -153,7 +236,14 @@ function main() {
             failThreshold: FAIL_THRESHOLD,
           },
           timestamp: new Date().toISOString(),
-          comparisons: comps,
+          exports: comps,
+          aggregate: {
+            totalFiles: emittedA.length,
+            commitA: { raw: totalRawA, gzip: totalGzipA },
+            commitB: { raw: totalRawB, gzip: totalGzipB },
+            delta: { raw: aggRawDelta, gzip: aggGzipDelta },
+          },
+          nonExportFiles: nonExports,
         },
         null,
         2,
@@ -162,18 +252,17 @@ function main() {
 
     const fail = comps.filter((c) => c.status === "fail").length;
     const warn = comps.filter((c) => c.status === "warning").length;
-    const totalIncrease = comps.reduce((sum, c) => sum + Math.max(0, c.delta.gzip), 0);
 
     console.log("=".repeat(80));
     console.log("SUMMARY");
     console.log("=".repeat(80));
-    console.log(`Entries: ${comps.length}, Fail: ${fail}, Warning: ${warn}`);
-    console.log(`Total gzip increase: +${fmt(totalIncrease)}\n`);
+    console.log(`Exports tested: ${comps.length}, Fail: ${fail}, Warning: ${warn}`);
+    console.log(`Aggregate gzip delta: ${aggGzipDelta >= 0 ? "+" : ""}${fmt(aggGzipDelta)}\n`);
 
     if (fail > 0) {
       console.log("❌ BUNDLE SIZE FAIL");
       process.exitCode = 1;
-    } else if (warn > 0) {
+    } else if (warn > 0 || aggGzipDelta > 10240) {
       console.log("⚠️  BUNDLE SIZE WARNING");
     } else {
       console.log("✅ BUNDLE SIZE ACCEPTABLE");
