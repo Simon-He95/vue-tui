@@ -157,11 +157,12 @@ segmentation required: 1000
 Observed duration: ~8.5-8.9ms for 1000 strings (~0.0085-0.0089ms per string)
 ```
 
-**Assessment**: ✅ Low cost
+**Assessment**: ✅ Low cost in this environment
 
-- Segmentation is fast even without cache
-- Cost is still negligible (0.0085-0.0089ms per string)
+- Segmentation is fast in this Node v24.18.0 / V8 13.6 / arm64 profiler run
+- Observed timing: ~0.0085-0.0089ms per string
 - Advisory timing only (use Phase 2 baseline for rigorous benchmarks)
+- **Not a cross-runtime guarantee**: Cost depends on Intl.Segmenter availability and ICU version
 
 ---
 
@@ -218,12 +219,27 @@ bucket P95: 10 (w1), 6 (w2)
 bucket Max: 10 (w1), 6 (w2)
 ```
 
-**Assessment**: ✅ Acceptable performance
+**Assessment**: ✅ Acceptable performance for per-bucket size
 
 - Moderate hit rate (37.49%)
 - Bucket sizes far below MAX=128 (P95: 10 vs 128)
 - No cache clears despite varied content
 - Note: Creates unique style per log line - more extreme than typical apps
+
+**Important**: This workload also exposes a **style-cardinality dimension**:
+
+- 2000 registered buckets (1000 w1 + 1000 w2)
+- 14,620 estimated registered cells
+- Each style object identity creates a separate bucket
+
+**Implication**:
+
+- Per-bucket P95 being healthy doesn't mean total retained cells is bounded
+- Bucket count can grow with style object churn (even if content similar)
+- This is NOT fixed by increasing `MAX_CACHED_CELLS_PER_STYLE`
+- Future monitoring should track: bucket count, total retained cells, heap correlation
+
+**This does NOT justify optimization now**, but highlights that "many small buckets" is a separate dimension from "large single bucket".
 
 ---
 
@@ -366,12 +382,14 @@ for (let i = 0; i < 2000; i++) {
 **Rationale**:
 
 - Width bucket clear only in artificial 50-width stress test
-- Real window resize: ~5-10 widths (well below MAX=32)
-- No evidence of wrap cache being a bottleneck
+- 50-width churn is intentionally synthetic and exceeds the current 32 bucket limit
+- No real resize traces were collected to validate typical width change patterns
+- This should be treated as instrumentation validation, not evidence that production resize is harmless
 
 **Gate Evaluation**: ❌ FAILED
 
-- ❌ Bucket clear only in unrealistic scenario
+- ❌ Bucket clear only in synthetic scenario
+- ❌ No production resize data
 - ❌ No performance impact from current limits
 
 ---
@@ -403,6 +421,9 @@ The measured Phase 3.2 profiler workloads show:
 
 - Production or realistic traces show frequent cell cache clears
 - Registered bucket P95 approaches MAX=128 (e.g., >80)
+- **Registered bucket count grows unexpectedly** (style-cardinality issue)
+- **Estimated registered cells grows with style object churn** (many small buckets)
+- **Heap delta correlates with style cardinality** (memory pressure from bucket count)
 - Long unique text causes textWidthCache/wrapCache retained memory growth
 - `inlineLineCacheByWidth` shows churn or pollution after instrumentation
 - Phase 2 baseline p95/p99 regresses in text/wrap/render scenarios
@@ -458,7 +479,7 @@ Since cache optimization is not justified by current data, Phase 4 development e
 
 ## Conclusion
 
-**Phase 4.0 Status**: ✅ Complete as cache optimization decision report
+**Phase 4.0 Status**: ✅ Complete as cache tuning decision report
 
 **What was decided**: No cache tuning is justified by the measured Phase 3.2 profiler workloads.
 
@@ -468,12 +489,21 @@ Since cache optimization is not justified by current data, Phase 4 development e
 - This does NOT cover production traces or long-running sessions
 - This does NOT evaluate `inlineLineCacheByWidth`
 - Long text admission policy remains inconclusive without unique-long-text pollution test
+- Grapheme timing is specific to Node v24.18.0 / V8 13.6 / arm64 environment
+
+**This does NOT close**:
+
+- `inlineLineCacheByWidth` evaluation
+- Unique-long-text / wrap pollution evaluation
+- Production trace validation
+- Long-running session validation
+- Style-cardinality / bucket-count monitoring
 
 **Value Delivered**: Phase 3 instrumentation enabled a data-driven decision to not optimize without evidence.
 
 **Result**: Avoided adding complexity to address problems not demonstrated in measured workloads.
 
-**Next Steps**: Monitor production usage. Revisit cache tuning if real-world data shows different patterns.
+**Next Steps**: Monitor production usage. Revisit cache tuning if real-world data shows different patterns (see revisit gates above).
 
 ---
 
@@ -485,11 +515,20 @@ Since cache optimization is not justified by current data, Phase 4 development e
 
 ```
 Command: pnpm run bench:profiler:complete:gc
+Commit: c4182b6c2f449423739851c335feb5932f9d5b40
 Node: v24.18.0
+V8: 13.6.233.17-node.50
+Platform: darwin (macOS)
+Arch: arm64
+CPU: Apple M1 Pro
 GC: Enabled (--expose-gc)
 Generated: 2026-07-10
+```
+
 Commit: Phase 3.2 merged (main branch)
 Platform: darwin (macOS)
+
 ```
 
 **All 8 workloads completed successfully with GC-enabled heap measurements.**
+```

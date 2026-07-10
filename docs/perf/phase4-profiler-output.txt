@@ -7,7 +7,13 @@ Phase 3.2 Complete Profiler Benchmark (Corrected)
 
 Environment:
 - Node: v24.18.0
-- GC available: true
+- V8: 13.6.233.17-node.50
+- Platform: darwin (macOS)
+- Arch: arm64
+- CPU: Apple M1 Pro
+- GC: enabled (--expose-gc)
+- Commit: c4182b6c2f449423739851c335feb5932f9d5b40
+- Date: 2026-07-10
 
 Fixes applied:
 - clearTextCaches() between runs

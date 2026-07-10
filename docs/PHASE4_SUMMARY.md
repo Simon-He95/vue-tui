@@ -1,14 +1,16 @@
-# Phase 4: Performance Optimization - Summary
+# Phase 4.0: Cache Optimization Decision Report - Summary
 
 ## Status
 
-**Phase 4.0 Status**: ✅ **Complete as cache decision report**
+**Phase 4.0 Status**: ✅ **Complete as cache tuning decision report**
 
 **Decision**: ❌ **No cache tuning implemented**
 
-**Rationale**: Measured profiler workloads show cache performs well. No tuning justified by current data.
+**Rationale**: Measured profiler workloads show cache performs well for measured scenarios. No tuning justified by current data.
 
-**Not Claimed**: Does NOT prove global optimality, cover production traces, or evaluate all cache types.
+**Not Claimed**: Does NOT prove global optimality, cover production traces, or evaluate all cache types (inlineLineCache not tested).
+
+**Does NOT Close**: inlineLineCache evaluation, long-text pollution testing, production trace validation, style-cardinality monitoring.
 
 ---
 
