@@ -246,6 +246,8 @@ heap delta: 1.62 MB (GC-enabled, advisory; instrumentation retains registered bu
 
 **This does NOT justify optimization now**, but highlights that "many small buckets" is a separate dimension from "large single bucket".
 
+**Important**: This report rejects **per-bucket cache-size tuning**, not style identity churn / style canonicalization investigation. Style-cardinality requires separate evaluation with long-running/production traces.
+
 ---
 
 ## Key Findings
@@ -370,11 +372,23 @@ heap delta: 1.62 MB (GC-enabled, advisory; instrumentation retains registered bu
 **Limitation**: Would need additional workload:
 
 ```typescript
-// Unique long text pollution test
+// textWidthCache pollution: non-ASCII, unique, long
 for (let i = 0; i < 2000; i++) {
-  textCellWidth(`long-${i}-${"content".repeat(2000)}`);
+  textCellWidth(`长文本-${i}-${"内容".repeat(2000)}`);
+}
+
+// wrap cache pollution: long wrapped lines, unique keys
+for (let i = 0; i < 2000; i++) {
+  wrapByCells(`长文本-${i}-${"内容".repeat(2000)}`, 80);
+}
+
+// grapheme-heavy variant
+for (let i = 0; i < 2000; i++) {
+  textCellWidth(`complex-${i}-${"👨‍💻é".repeat(1000)}`);
 }
 ```
+
+**Note**: ASCII-only strings would hit fast path and not test cache pollution.
 
 **Decision**: Do not implement without additional evidence. Remains a future candidate if production traces show many unique long wrapped lines.
 
